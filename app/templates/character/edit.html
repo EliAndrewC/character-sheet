@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+
+{% block title %}L7R — Edit {{ character.name }}{% endblock %}
+
+{% block content %}
+<div x-data="characterForm()" x-init="init()">
+    <h1 class="text-3xl font-bold mb-6">Edit: {{ character.name }}</h1>
+
+    <form method="POST" action="/characters/{{ character.id }}" class="space-y-8">
+
+        <!-- BASICS -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">Basics</h2>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Character Name</label>
+                    <input type="text" name="name" required value="{{ character.name }}"
+                           class="w-full border rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Player Name</label>
+                    <input type="text" name="player_name" value="{{ character.player_name or '' }}"
+                           class="w-full border rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Starting XP</label>
+                    <input type="number" name="starting_xp" value="{{ character.starting_xp }}" min="0"
+                           x-model.number="startingXp"
+                           class="w-full border rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Earned XP</label>
+                    <input type="number" name="earned_xp" value="{{ character.earned_xp }}" min="0"
+                           x-model.number="earnedXp"
+                           class="w-full border rounded px-3 py-2">
+                </div>
+            </div>
+        </section>
+
+        <!-- SCHOOL -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">School</h2>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">School</label>
+                <select name="school" x-model="school"
+                        hx-get=""
+                        hx-trigger="change"
+                        hx-swap="innerHTML"
+                        hx-target="#school-details"
+                        @change="onSchoolChange($event)"
+                        class="w-full border rounded px-3 py-2">
+                    <option value="">-- Choose a school --</option>
+                    {% for category, cat_schools in schools_by_category.items() %}
+                    <optgroup label="{{ category.replace('_', ' ').title() }}">
+                        {% for s in cat_schools %}
+                        <option value="{{ s.id }}" {{ 'selected' if s.id == character.school else '' }}>{{ s.name }}</option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endfor %}
+                </select>
+            </div>
+            <div id="school-details">
+                {% if school %}
+                {% include "character/partials/school_info.html" %}
+                {% endif %}
+            </div>
+            <input type="hidden" name="school_ring_choice" x-model="schoolRingChoice">
+        </section>
+
+        <!-- RINGS -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">Rings</h2>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                {% for ring in rings %}
+                {% set val = char_dict.rings[ring] %}
+                <div class="text-center">
+                    <label class="block text-sm font-medium mb-2">{{ ring }}</label>
+                    <select name="ring_{{ ring.lower() }}"
+                            x-model.number="rings.{{ ring }}"
+                            class="block mx-auto border rounded px-4 py-2 text-lg font-bold text-center w-20">
+                        {% for v in range(2, 7) %}
+                        <option value="{{ v }}" {{ 'selected' if v == val else '' }}>{{ v }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-ink/50 mt-1" x-text="ringCost('{{ ring }}') + ' XP'"></p>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- HONOR / RANK / RECOGNITION -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">Honor, Rank & Recognition</h2>
+            <div class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Honor</label>
+                    <select name="honor" x-model.number="honor" class="w-full border rounded px-3 py-2">
+                        {% for h in range(2, 11) %}
+                        <option value="{{ h * 0.5 }}" {{ 'selected' if h * 0.5 == character.honor else '' }}>{{ h * 0.5 }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Rank</label>
+                    <input type="number" name="rank" x-model.number="rank" step="0.5" min="0.5" value="{{ character.rank }}"
+                           class="w-full border rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Recognition</label>
+                    <input type="number" name="recognition" x-model.number="recognition" step="0.5" min="0" value="{{ character.recognition }}"
+                           class="w-full border rounded px-3 py-2">
+                </div>
+            </div>
+            <div class="mt-2">
+                <label class="inline-flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="recognition_halved" x-model="recognitionHalved"
+                           {{ 'checked' if character.recognition_halved else '' }}
+                           class="rounded">
+                    Halve starting Recognition (+3 XP)
+                </label>
+            </div>
+        </section>
+
+        <!-- SKILLS -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">Skills</h2>
+            {% set char_skills = character.skills or {} %}
+
+            {% for section_label, cat, advanced in [
+                ('Social Skills (Basic — Air)', 'social', false),
+                ('Social Skills (Advanced — Air)', 'social', true),
+                ('Knowledge Skills (Basic — Water)', 'knowledge', false),
+                ('Knowledge Skills (Advanced — Water)', 'knowledge', true),
+            ] %}
+            <div class="mb-4">
+                <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">{{ section_label }}</h3>
+                <div class="grid gap-2">
+                    {% for sid, skill in skills.items() %}
+                    {% if skill.category == cat and skill.is_advanced == advanced %}
+                    {% set rank = char_skills.get(sid, 0) %}
+                    <div class="flex items-center gap-3 tooltip-trigger relative">
+                        <label class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</label>
+                        <select name="skill_{{ sid }}" x-model.number="skills.{{ sid }}"
+                                class="border rounded px-2 py-1 text-sm w-16">
+                            {% for v in range(0, 6) %}
+                            <option value="{{ v }}" {{ 'selected' if v == rank else '' }}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                        <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', {{ 'true' if advanced else 'false' }})"></span>
+                        <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                            <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
+                            <p>{{ skill.description }}</p>
+                            <p class="mt-1 text-gold">{{ skill.roll_description }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </section>
+
+        <!-- ADVANTAGES & DISADVANTAGES -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">Advantages & Disadvantages</h2>
+            <div class="grid gap-6 md:grid-cols-2">
+                <div>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Advantages</h3>
+                    {% set char_advs = character.advantages or [] %}
+                    {% for aid, adv in advantages.items() %}
+                    <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
+                        <input type="checkbox" name="adv_{{ aid }}"
+                               x-model="advantages.{{ aid }}"
+                               {{ 'checked' if aid in char_advs else '' }}
+                               class="rounded text-accent">
+                        <span>{{ adv.name }}</span>
+                        <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
+                        <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                            {{ adv.description }}
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Disadvantages</h3>
+                    {% set char_dises = character.disadvantages or [] %}
+                    {% for did, dis in disadvantages.items() %}
+                    <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
+                        <input type="checkbox" name="dis_{{ did }}"
+                               x-model="disadvantages.{{ did }}"
+                               {{ 'checked' if did in char_dises else '' }}
+                               class="rounded text-accent">
+                        <span>{{ dis.name }}</span>
+                        <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
+                        <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                            {{ dis.description }}
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <!-- NOTES -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">Notes</h2>
+            <textarea name="notes" rows="4"
+                      class="w-full border rounded px-3 py-2">{{ character.notes or '' }}</textarea>
+        </section>
+
+        <!-- XP SUMMARY (sticky) -->
+        <div class="sticky bottom-0 bg-parchment/95 backdrop-blur border-t border-ink/20 -mx-4 px-4 py-4 shadow-lg">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex-1">
+                    <h3 class="text-sm font-bold mb-1">XP Summary</h3>
+                    <div class="text-sm">
+                        <span>Spent: <strong class="font-mono" x-text="totalXp()"></strong></span>
+                        <span class="mx-2">/</span>
+                        <span>Budget: <strong class="font-mono" x-text="startingXp + earnedXp"></strong></span>
+                        <span class="mx-2">—</span>
+                        <span :class="remainingXp() >= 0 ? 'text-green-700' : 'text-red-600 font-bold'">
+                            Remaining: <strong class="font-mono" x-text="remainingXp()"></strong>
+                        </span>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <a href="/characters/{{ character.id }}"
+                       class="bg-ink/20 hover:bg-ink/30 text-ink px-6 py-3 rounded font-medium transition-colors">
+                        Cancel
+                    </a>
+                    <button type="submit"
+                            class="bg-accent hover:bg-red-900 text-parchment px-8 py-3 rounded font-medium transition-colors">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </form>
+</div>
+
+<script>
+const BASIC_COSTS = [0, 2, 2, 3, 3, 3];
+const ADVANCED_COSTS = [0, 4, 4, 6, 8, 10];
+
+const SCHOOLS_DATA = {
+    {% for sid, s in schools.items() %}
+    '{{ sid }}': {ring: '{{ s.school_ring }}', knacks: {{ s.school_knacks | tojson }}},
+    {% endfor %}
+};
+
+function totalSkillCost(rank, isAdvanced) {
+    const table = isAdvanced ? ADVANCED_COSTS : BASIC_COSTS;
+    let cost = 0;
+    for (let r = 1; r <= rank; r++) cost += table[r];
+    return cost;
+}
+
+function totalKnackCost(rank) {
+    let cost = 0;
+    for (let r = 2; r <= rank; r++) cost += ADVANCED_COSTS[r];
+    return cost;
+}
+
+function characterForm() {
+    return {
+        school: '{{ character.school }}',
+        schoolRingChoice: '{{ character.school_ring_choice }}',
+        startingXp: {{ character.starting_xp }},
+        earnedXp: {{ character.earned_xp }},
+        rings: {{ char_dict.rings | tojson }},
+        skills: {
+            {% for sid in skills %}
+            {{ sid }}: {{ (character.skills or {}).get(sid, 0) }},
+            {% endfor %}
+        },
+        advantages: {
+            {% for aid in advantages %}
+            {{ aid }}: {{ 'true' if aid in (character.advantages or []) else 'false' }},
+            {% endfor %}
+        },
+        disadvantages: {
+            {% for did in disadvantages %}
+            {{ did }}: {{ 'true' if did in (character.disadvantages or []) else 'false' }},
+            {% endfor %}
+        },
+        honor: {{ character.honor }},
+        rank: {{ character.rank }},
+        recognition: {{ character.recognition }},
+        recognitionHalved: {{ 'true' if character.recognition_halved else 'false' }},
+
+        init() {},
+
+        onSchoolChange(event) {
+            const schoolId = event.target.value;
+            if (!schoolId) return;
+            event.target.setAttribute('hx-get', '/characters/api/school-info/' + schoolId);
+            htmx.trigger(event.target, 'change');
+            const info = SCHOOLS_DATA[schoolId];
+            if (info) {
+                const fixedRings = ['Air', 'Fire', 'Earth', 'Water', 'Void'];
+                this.schoolRingChoice = fixedRings.includes(info.ring) ? info.ring : '';
+            }
+        },
+
+        getSchoolRing() { return this.schoolRingChoice || ''; },
+
+        ringCost(ringName) {
+            const start = (ringName === this.getSchoolRing()) ? 3 : 2;
+            const val = this.rings[ringName] || 2;
+            let cost = 0;
+            for (let v = start + 1; v <= val; v++) cost += 5 * v;
+            return cost;
+        },
+
+        skillXpLabel(skillId, isAdvanced) {
+            const rank = this.skills[skillId] || 0;
+            if (rank === 0) return '';
+            return totalSkillCost(rank, isAdvanced) + ' XP';
+        },
+
+        totalRingXp() {
+            let cost = 0;
+            for (const r of ['Air', 'Fire', 'Earth', 'Water', 'Void']) cost += this.ringCost(r);
+            return cost;
+        },
+
+        totalSkillXp() {
+            const ADVANCED_SKILLS = ['acting', 'interrogation', 'manipulation', 'commerce', 'history', 'underworld'];
+            let cost = 0;
+            for (const [sid, rank] of Object.entries(this.skills)) {
+                if (rank > 0) cost += totalSkillCost(rank, ADVANCED_SKILLS.includes(sid));
+            }
+            return cost;
+        },
+
+        totalKnackXp() {
+            const info = SCHOOLS_DATA[this.school];
+            if (!info) return 0;
+            let cost = 0;
+            for (const kid of info.knacks) {
+                const el = document.querySelector(`[name="knack_${kid}"]`);
+                const rank = el ? parseInt(el.value) || 1 : 1;
+                cost += totalKnackCost(rank);
+            }
+            return cost;
+        },
+
+        totalAdvXp() {
+            const ADV_COSTS = { {% for aid, adv in advantages.items() %}'{{ aid }}': {{ adv.xp_cost }}, {% endfor %} };
+            let cost = 0;
+            for (const [aid, checked] of Object.entries(this.advantages)) { if (checked) cost += ADV_COSTS[aid] || 0; }
+            return cost;
+        },
+
+        totalDisXp() {
+            const DIS_VALUES = { {% for did, dis in disadvantages.items() %}'{{ did }}': {{ dis.xp_value }}, {% endfor %} };
+            let gained = 0;
+            for (const [did, checked] of Object.entries(this.disadvantages)) { if (checked) gained += DIS_VALUES[did] || 0; }
+            return gained;
+        },
+
+        honorXp() { return Math.max(0, Math.round((this.honor - 1.0) / 0.5)); },
+        rankXp() { return Math.max(0, Math.round((this.rank - 1.0) / 0.5)); },
+        recognitionXp() {
+            if (this.recognitionHalved) return -3;
+            return Math.max(0, Math.round(this.recognition - this.rank));
+        },
+
+        totalXp() {
+            return this.totalRingXp() + this.totalSkillXp() + this.totalKnackXp()
+                 + this.honorXp() + this.rankXp() + this.recognitionXp()
+                 + this.totalAdvXp() - this.totalDisXp();
+        },
+
+        remainingXp() { return (this.startingXp + this.earnedXp) - this.totalXp(); },
+    };
+}
+</script>
+{% endblock %}

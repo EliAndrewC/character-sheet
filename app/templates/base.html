@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}L7R Character Builder{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .tooltip-content { display: none; }
+        .tooltip-trigger:hover .tooltip-content,
+        .tooltip-trigger:focus-within .tooltip-content { display: block; }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        parchment: '#f5f0e8',
+                        ink: '#2c1810',
+                        accent: '#8b0000',
+                        gold: '#b8860b',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-parchment text-ink min-h-screen">
+    <nav class="bg-ink text-parchment px-6 py-3 shadow-lg">
+        <div class="max-w-6xl mx-auto flex items-center justify-between">
+            <a href="/" class="text-xl font-bold tracking-wide hover:text-gold transition-colors">
+                L7R Character Builder
+            </a>
+            <a href="/characters/new"
+               class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                New Character
+            </a>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="text-center text-sm text-ink/50 py-4 mt-8 border-t border-ink/10">
+        L7R &mdash; Legend of the Five Rings Homebrew System
+    </footer>
+</body>
+</html>
