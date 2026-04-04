@@ -1,0 +1,112 @@
+"""Tests for game_data helper functions."""
+
+from app.game_data import (
+    DAN_XP_THRESHOLDS,
+    HONOR_COST_PER_HALF,
+    RANK_COST_PER_HALF,
+    RECOGNITION_COST_PER_ONE,
+    RECOGNITION_MAX_FACTOR,
+    Ring,
+    dan_for_xp,
+    honor_raise_cost,
+    max_recognition,
+    rank_raise_cost,
+    recognition_raise_cost,
+    ring_max,
+    starting_recognition,
+    starting_rings,
+    void_points_max,
+    void_points_max_shugenja,
+    void_regen_per_night,
+    void_regen_per_night_shugenja,
+    void_spend_cap_shugenja,
+)
+
+
+class TestStartingRings:
+    def test_school_ring_starts_at_3(self):
+        rings = starting_rings("Water")
+        assert rings["Water"] == 3
+        assert rings["Air"] == 2
+        assert rings["Fire"] == 2
+
+    def test_all_non_school_rings_at_2(self):
+        rings = starting_rings("Fire")
+        assert rings["Fire"] == 3
+        for name in ["Air", "Earth", "Water", "Void"]:
+            assert rings[name] == 2
+
+    def test_invalid_school_ring_all_at_2(self):
+        rings = starting_rings("Nonsense")
+        for name in ["Air", "Fire", "Earth", "Water", "Void"]:
+            assert rings[name] == 2
+
+
+class TestRingMax:
+    def test_school_ring_max_6(self):
+        assert ring_max("Water", "Water") == 6
+
+    def test_non_school_ring_max_5(self):
+        assert ring_max("Air", "Water") == 5
+
+
+class TestVoidPoints:
+    def test_standard_max(self):
+        rings = {"Air": 3, "Fire": 2, "Earth": 4, "Water": 3, "Void": 2}
+        assert void_points_max(rings) == 2
+
+    def test_shugenja_max(self):
+        rings = {"Air": 3, "Fire": 2, "Earth": 4, "Water": 3, "Void": 2}
+        assert void_points_max_shugenja(rings, school_rank=2) == 6  # 4 + 2
+
+    def test_standard_regen(self):
+        rings = {"Air": 3, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2}
+        assert void_regen_per_night(rings) == 1
+
+    def test_shugenja_regen(self):
+        rings = {"Air": 3, "Fire": 2, "Earth": 4, "Water": 3, "Void": 2}
+        assert void_regen_per_night_shugenja(rings) == 2
+
+    def test_shugenja_spend_cap(self):
+        rings = {"Air": 3, "Fire": 2, "Earth": 4, "Water": 3, "Void": 2}
+        assert void_spend_cap_shugenja(rings) == 1  # min(2) - 1
+
+
+class TestHonorRankRecognitionHelpers:
+    def test_honor_raise_cost(self):
+        assert honor_raise_cost(1.0, 3.0) == 4  # 4 steps of 0.5
+
+    def test_honor_raise_cost_zero(self):
+        assert honor_raise_cost(2.0, 2.0) == 0
+
+    def test_rank_raise_cost(self):
+        assert rank_raise_cost(1.0, 2.5) == 3  # 3 steps of 0.5
+
+    def test_recognition_raise_cost(self):
+        assert recognition_raise_cost(1.0, 3.0) == 2  # 2 steps of 1.0
+
+    def test_starting_recognition_normal(self):
+        assert starting_recognition(2.0) == 2.0
+
+    def test_starting_recognition_halved(self):
+        assert starting_recognition(2.0, halved=True) == 1.0
+
+    def test_max_recognition(self):
+        assert max_recognition(2.0) == 3.0  # 150% of 2.0
+
+
+class TestDan:
+    def test_dan_at_0_xp(self):
+        assert dan_for_xp(0) == 1
+
+    def test_dan_at_50_xp(self):
+        assert dan_for_xp(50) == 2
+
+    def test_dan_at_49_xp(self):
+        assert dan_for_xp(49) == 1
+
+    def test_dan_at_250_xp(self):
+        assert dan_for_xp(250) == 5
+
+    def test_dan_at_999_xp(self):
+        assert dan_for_xp(999) == 5
