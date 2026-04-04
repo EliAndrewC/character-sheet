@@ -43,10 +43,6 @@
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-1">School</label>
                 <select name="school" x-model="school"
-                        hx-get=""
-                        hx-trigger="change"
-                        hx-swap="innerHTML"
-                        hx-target="#school-details"
                         @change="onSchoolChange($event)"
                         class="w-full border rounded px-3 py-2">
                     <option value="">-- Choose a school --</option>
@@ -294,8 +290,7 @@ function characterForm() {
         onSchoolChange(event) {
             const schoolId = event.target.value;
             if (!schoolId) return;
-            event.target.setAttribute('hx-get', '/characters/api/school-info/' + schoolId);
-            htmx.trigger(event.target, 'change');
+            htmx.ajax('GET', '/characters/api/school-info/' + schoolId, '#school-details');
             const info = SCHOOLS_DATA[schoolId];
             if (info) {
                 const fixedRings = ['Air', 'Fire', 'Earth', 'Water', 'Void'];

@@ -73,7 +73,7 @@ def calculate_skill_xp(skills: Dict[str, int]) -> int:
             is_advanced = True
         else:
             is_advanced = skill_def.is_advanced
-        xp += total_skill_cost(rank, is_advanced)
+        xp += total_skill_cost(min(rank, SKILL_MAX), is_advanced)
     return xp
 
 
@@ -89,7 +89,7 @@ def calculate_knack_xp(knacks: Dict[str, int]) -> int:
         if rank <= 1:
             continue
         # Sum advanced costs from rank 2 up to target rank
-        for new_rank in range(2, rank + 1):
+        for new_rank in range(2, min(rank, KNACK_MAX) + 1):
             xp += KNACK_COSTS[new_rank]
     return xp
 
