@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}L7R — Characters{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <h1 class="text-3xl font-bold">Characters</h1>
+
+    {% if characters %}
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {% for char in characters %}
+        <a href="/characters/{{ char.id }}"
+           class="block bg-white rounded-lg shadow hover:shadow-md transition-shadow p-5 border border-ink/10">
+            <h2 class="text-lg font-bold text-accent">{{ char.name }}</h2>
+            {% if char.player_name %}
+            <p class="text-sm text-ink/60">Player: {{ char.player_name }}</p>
+            {% endif %}
+            <p class="text-sm mt-1">{{ char.school.replace('_', ' ').title() }}</p>
+            <div class="mt-3 flex gap-3 text-xs text-ink/70">
+                <span>Earned XP: {{ char.earned_xp }}</span>
+                <span>Honor: {{ char.honor }}</span>
+                <span>Rank: {{ char.rank }}</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-ink/50">
+        <p class="text-lg mb-4">No characters yet.</p>
+        <a href="/characters/new"
+           class="inline-block bg-accent hover:bg-red-900 text-parchment px-6 py-3 rounded font-medium transition-colors">
+            Create Your First Character
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

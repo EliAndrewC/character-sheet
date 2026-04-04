@@ -1,0 +1,35 @@
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+    <div class="flex justify-between px-2 py-1 bg-white/60 rounded">
+        <span>Rings</span><span class="font-mono">{{ xp.rings }}</span>
+    </div>
+    <div class="flex justify-between px-2 py-1 bg-white/60 rounded">
+        <span>Skills</span><span class="font-mono">{{ xp.skills }}</span>
+    </div>
+    <div class="flex justify-between px-2 py-1 bg-white/60 rounded">
+        <span>Knacks</span><span class="font-mono">{{ xp.knacks }}</span>
+    </div>
+    <div class="flex justify-between px-2 py-1 bg-white/60 rounded">
+        <span>Honor</span><span class="font-mono">{{ xp.honor }}</span>
+    </div>
+    <div class="flex justify-between px-2 py-1 bg-white/60 rounded">
+        <span>Rank</span><span class="font-mono">{{ xp.rank }}</span>
+    </div>
+    <div class="flex justify-between px-2 py-1 bg-white/60 rounded">
+        <span>Recognition</span><span class="font-mono">{{ xp.recognition }}</span>
+    </div>
+    <div class="flex justify-between px-2 py-1 bg-white/60 rounded">
+        <span>Advantages</span><span class="font-mono">{{ xp.advantages }}</span>
+    </div>
+    <div class="flex justify-between px-2 py-1 bg-white/60 rounded">
+        <span>Disadvantages</span><span class="font-mono text-green-700">{{ xp.disadvantages }}</span>
+    </div>
+    <div class="flex justify-between px-2 py-1 bg-ink/10 rounded font-bold">
+        <span>Total Spent</span><span class="font-mono">{{ xp.total }}</span>
+    </div>
+</div>
+<div class="mt-3 flex gap-4 text-sm font-medium">
+    <span>Budget: <span class="font-mono">{{ available }}</span></span>
+    <span class="{{ 'text-green-700' if remaining >= 0 else 'text-red-600 font-bold' }}">
+        Remaining: <span class="font-mono">{{ remaining }}</span>
+    </span>
+</div>

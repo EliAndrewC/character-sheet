@@ -1,0 +1,18 @@
+app = 'l7r-character-sheet'
+primary_region = 'ewr'
+
+[build]
+
+[env]
+  DATABASE_URL = "/data/l7r.db"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[mounts]
+  source = "l7r_data"
+  destination = "/data"

@@ -1,0 +1,59 @@
+<div class="space-y-3">
+    <div>
+        <p class="text-sm font-medium">School Ring:
+            {% if school.school_ring in ['Air', 'Fire', 'Earth', 'Water', 'Void'] %}
+                <span class="font-bold text-accent">{{ school.school_ring }}</span>
+            {% else %}
+                <span class="text-ink/70">{{ school.school_ring }}</span>
+                — choose:
+                <select name="school_ring_choice" class="ml-1 border rounded px-2 py-0.5 text-sm">
+                    {% for r in rings %}
+                        {% if r != 'Void' or school.school_ring == 'Void' or 'Void' in school.school_ring %}
+                        <option value="{{ r }}">{{ r }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            {% endif %}
+        </p>
+    </div>
+
+    <div>
+        <p class="text-sm font-medium mb-1">Special Ability:</p>
+        <p class="text-sm bg-white/60 rounded p-2 italic">{{ school.special_ability }}</p>
+    </div>
+
+    <div>
+        <p class="text-sm font-medium mb-1">School Knacks:</p>
+        {% for knack_id, knack in knacks.items() %}
+        {% if knack %}
+        <div class="text-sm mb-2">
+            <div class="flex items-center gap-2">
+                <span class="font-medium">{{ knack.name }}</span>
+                {% if knack.ring %}
+                <span class="text-xs bg-ink/10 rounded px-1.5 py-0.5">{{ knack.ring }}</span>
+                {% endif %}
+                <label class="ml-auto text-xs">
+                    Rank:
+                    <select name="knack_{{ knack_id }}" class="border rounded px-1 py-0.5 text-sm w-14">
+                        {% for i in range(1, 6) %}
+                        <option value="{{ i }}">{{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+            <p class="text-xs text-ink/60 mt-0.5">{{ knack.description }}</p>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <div>
+        <p class="text-sm font-medium mb-1">Techniques:</p>
+        {% for dan, desc in school.techniques.items() %}
+        <div class="text-sm mb-1">
+            <span class="font-medium">{{ dan }}{{ 'st' if dan == 1 else ('nd' if dan == 2 else ('rd' if dan == 3 else 'th')) }} Dan:</span>
+            <span class="text-ink/80">{{ desc }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>

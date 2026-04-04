@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}L7R — {{ character.name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- HEADER -->
+    <div class="flex items-start justify-between">
+        <div>
+            <h1 class="text-3xl font-bold">{{ character.name }}</h1>
+            {% if character.player_name %}
+            <p class="text-ink/60">Player: {{ character.player_name }}</p>
+            {% endif %}
+        </div>
+        <div class="flex gap-2">
+            <a href="/characters/{{ character.id }}/edit"
+               class="bg-ink hover:bg-ink/80 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                Edit
+            </a>
+            <form method="POST" action="/characters/{{ character.id }}/delete"
+                  onsubmit="return confirm('Delete this character?')">
+                <button type="submit"
+                        class="bg-red-800 hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                    Delete
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- SCHOOL & DAN -->
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <div class="flex items-baseline gap-4 mb-4">
+            <h2 class="text-xl font-bold text-accent">
+                {% if school %}{{ school.name }}{% else %}{{ character.school }}{% endif %}
+            </h2>
+            <span class="text-sm bg-accent/10 text-accent rounded-full px-3 py-0.5 font-medium">
+                {{ dan }}{{ 'st' if dan == 1 else ('nd' if dan == 2 else ('rd' if dan == 3 else 'th')) }} Dan
+            </span>
+            {% if school %}
+            <span class="text-sm text-ink/60">School Ring: {{ character.school_ring_choice }}</span>
+            {% endif %}
+        </div>
+
+        {% if school %}
+        <div class="mb-4">
+            <p class="text-sm font-medium">Special Ability:</p>
+            <p class="text-sm bg-parchment rounded p-2 italic mt-1">{{ school.special_ability }}</p>
+        </div>
+
+        <!-- Techniques up to current Dan -->
+        <div x-data="{ showAll: false }">
+            <p class="text-sm font-medium mb-1">Techniques:</p>
+            {% for d, desc in school.techniques.items() %}
+            <div class="text-sm mb-2 {{ 'opacity-40' if d > dan else '' }}"
+                 x-show="showAll || {{ d }} <= {{ dan }}">
+                <span class="font-medium {{ 'text-accent' if d <= dan else '' }}">
+                    {{ d }}{{ 'st' if d == 1 else ('nd' if d == 2 else ('rd' if d == 3 else 'th')) }} Dan:
+                </span>
+                {{ desc }}
+            </div>
+            {% endfor %}
+            {% if dan < 5 %}
+            <button @click="showAll = !showAll" class="text-xs text-accent hover:underline mt-1" type="button">
+                <span x-text="showAll ? 'Hide higher techniques' : 'Show all techniques'"></span>
+            </button>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- RINGS -->
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Rings</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
+            {% set ring_map = character.rings %}
+            {% for ring_name in ['Air', 'Fire', 'Earth', 'Water', 'Void'] %}
+            <div class="p-3 rounded-lg {{ 'bg-accent/10 ring-2 ring-accent/30' if ring_name == character.school_ring_choice else 'bg-parchment' }}">
+                <div class="text-sm font-medium text-ink/70">{{ ring_name }}</div>
+                <div class="text-3xl font-bold">{{ ring_map[ring_name] }}</div>
+                {% if ring_name == character.school_ring_choice %}
+                <div class="text-xs text-accent">School Ring</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+            <div class="bg-parchment rounded p-2">
+                <span class="text-ink/60">Void Points:</span>
+                <span class="font-bold">{{ [ring_map['Air'], ring_map['Fire'], ring_map['Earth'], ring_map['Water'], ring_map['Void']] | min }}</span>
+            </div>
+            <div class="bg-parchment rounded p-2">
+                <span class="text-ink/60">Crippled at:</span>
+                <span class="font-bold">{{ ring_map['Earth'] }} serious wounds</span>
+            </div>
+            <div class="bg-parchment rounded p-2">
+                <span class="text-ink/60">Mortal at:</span>
+                <span class="font-bold">{{ ring_map['Earth'] * 2 }} serious wounds</span>
+            </div>
+            <div class="bg-parchment rounded p-2">
+                <span class="text-ink/60">Initiative:</span>
+                <span class="font-bold">{{ ring_map['Void'] + 1 }} dice, keep {{ ring_map['Void'] }}</span>
+            </div>
+            <div class="bg-parchment rounded p-2">
+                <span class="text-ink/60">Base TN to hit:</span>
+                <span class="font-bold">{{ 5 + 5 * 1 }}</span>
+                <span class="text-xs text-ink/50">(parry 1)</span>
+            </div>
+            <div class="bg-parchment rounded p-2">
+                <span class="text-ink/60">Wound Check:</span>
+                <span class="font-bold">{{ ring_map['Water'] + 1 }}k{{ ring_map['Water'] }}</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- HONOR / RANK / RECOGNITION -->
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Status</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+            <div class="bg-parchment rounded-lg p-3">
+                <div class="text-sm text-ink/60">Honor</div>
+                <div class="text-2xl font-bold">{{ character.honor }}</div>
+            </div>
+            <div class="bg-parchment rounded-lg p-3">
+                <div class="text-sm text-ink/60">Rank</div>
+                <div class="text-2xl font-bold">{{ character.rank }}</div>
+            </div>
+            <div class="bg-parchment rounded-lg p-3">
+                <div class="text-sm text-ink/60">Recognition</div>
+                <div class="text-2xl font-bold">{{ character.recognition }}</div>
+            </div>
+            <div class="bg-parchment rounded-lg p-3">
+                <div class="text-sm text-ink/60">Stipend</div>
+                <div class="text-2xl font-bold">{{ "%.1f" | format(character.rank ** 2) }}</div>
+                <div class="text-xs text-ink/50">koku/year</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SCHOOL KNACKS -->
+    {% if char_knacks %}
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">School Knacks</h2>
+        <div class="space-y-3">
+            {% for kid, info in char_knacks.items() %}
+            {% if info.data %}
+            <div class="bg-parchment rounded-lg p-3" x-data="{ expanded: false }">
+                <div class="flex items-center justify-between cursor-pointer" @click="expanded = !expanded">
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium">{{ info.data.name }}</span>
+                        {% if info.data.ring %}
+                        <span class="text-xs bg-ink/10 rounded px-1.5 py-0.5">{{ info.data.ring }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg font-bold text-accent">{{ info.rank }}</span>
+                        <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div x-show="expanded" x-cloak class="mt-2 text-sm text-ink/80">
+                    {{ info.data.description }}
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- SKILLS -->
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Skills</h2>
+
+        {% set char_skills = character.skills or {} %}
+
+        {% for section_label, cat, advanced in [
+            ('Social Skills (Basic)', 'social', false),
+            ('Social Skills (Advanced)', 'social', true),
+            ('Knowledge Skills (Basic)', 'knowledge', false),
+            ('Knowledge Skills (Advanced)', 'knowledge', true),
+        ] %}
+        <div class="mb-4">
+            <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">{{ section_label }}</h3>
+            <div class="grid gap-1">
+                {% for sid, skill in skills.items() %}
+                {% if skill.category == cat and skill.is_advanced == advanced %}
+                {% set rank = char_skills.get(sid, 0) %}
+                <div class="flex items-center gap-3 py-1 tooltip-trigger relative {{ 'opacity-40' if rank == 0 else '' }}">
+                    <span class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</span>
+                    <div class="flex gap-0.5">
+                        {% for i in range(1, 6) %}
+                        <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= rank else 'border-ink/30' }}"></div>
+                        {% endfor %}
+                    </div>
+                    {% if rank > 0 %}
+                    <span class="text-xs text-ink/60 ml-2">
+                        Roll: {{ rank + char_dict.rings[skill.ring.value] }}k{{ char_dict.rings[skill.ring.value] }}
+                    </span>
+                    {% endif %}
+                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
+                        <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
+                        <p>{{ skill.description }}</p>
+                        <p class="mt-1 text-gold">{{ skill.roll_description }}</p>
+                        {% if rank > 0 %}
+                        <p class="mt-1 text-white/80">You roll: {{ rank + char_dict.rings[skill.ring.value] }}k{{ char_dict.rings[skill.ring.value] }}
+                            {% if rank == 0 and advanced %} (untrained: -10 penalty){% endif %}
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+
+    <!-- ADVANTAGES & DISADVANTAGES -->
+    {% if character.advantages or character.disadvantages %}
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Advantages & Disadvantages</h2>
+        <div class="grid gap-6 md:grid-cols-2">
+            {% if character.advantages %}
+            <div>
+                <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Advantages</h3>
+                {% for aid in character.advantages %}
+                {% set adv = advantages.get(aid) %}
+                {% if adv %}
+                <div class="mb-2 tooltip-trigger relative">
+                    <span class="text-sm font-medium cursor-help">{{ adv.name }}</span>
+                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                        {{ adv.description }}
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if character.disadvantages %}
+            <div>
+                <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Disadvantages</h3>
+                {% for did in character.disadvantages %}
+                {% set dis = disadvantages.get(did) %}
+                {% if dis %}
+                <div class="mb-2 tooltip-trigger relative">
+                    <span class="text-sm font-medium cursor-help">{{ dis.name }}</span>
+                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                        {{ dis.description }}
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- XP SUMMARY -->
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">XP Summary</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm mb-4">
+            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
+                <span>Rings</span><span class="font-mono font-bold">{{ xp.rings }}</span>
+            </div>
+            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
+                <span>Skills</span><span class="font-mono font-bold">{{ xp.skills }}</span>
+            </div>
+            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
+                <span>Knacks</span><span class="font-mono font-bold">{{ xp.knacks }}</span>
+            </div>
+            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
+                <span>Honor</span><span class="font-mono font-bold">{{ xp.honor }}</span>
+            </div>
+            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
+                <span>Rank</span><span class="font-mono font-bold">{{ xp.rank }}</span>
+            </div>
+            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
+                <span>Recognition</span><span class="font-mono font-bold">{{ xp.recognition }}</span>
+            </div>
+            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
+                <span>Advantages</span><span class="font-mono font-bold">{{ xp.advantages }}</span>
+            </div>
+            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
+                <span>Disadvantages</span><span class="font-mono font-bold text-green-700">{{ xp.disadvantages }}</span>
+            </div>
+            <div class="flex justify-between px-3 py-2 bg-ink/10 rounded font-bold">
+                <span>Total Spent</span><span class="font-mono">{{ xp.total }}</span>
+            </div>
+        </div>
+        {% set available = character.starting_xp + character.earned_xp %}
+        {% set remaining = available - xp.total %}
+        <div class="flex gap-6 text-sm font-medium">
+            <span>Starting: <span class="font-mono">{{ character.starting_xp }}</span></span>
+            <span>Earned: <span class="font-mono">{{ character.earned_xp }}</span></span>
+            <span>Budget: <span class="font-mono">{{ available }}</span></span>
+            <span class="{{ 'text-green-700' if remaining >= 0 else 'text-red-600 font-bold' }}">
+                Remaining: <span class="font-mono">{{ remaining }}</span>
+            </span>
+        </div>
+
+        {% if errors %}
+        <div class="mt-4 bg-red-50 border border-red-200 rounded p-3">
+            <p class="text-sm font-bold text-red-800 mb-1">Validation Issues:</p>
+            <ul class="text-sm text-red-700 list-disc list-inside">
+                {% for err in errors %}
+                <li>{{ err }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- NOTES -->
+    {% if character.notes %}
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Notes</h2>
+        <div class="text-sm whitespace-pre-wrap">{{ character.notes }}</div>
+    </section>
+    {% endif %}
+
+</div>
+{% endblock %}
