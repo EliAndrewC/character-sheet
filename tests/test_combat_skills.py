@@ -120,11 +120,17 @@ class TestCombatSkillsOnModel:
 
 
 class TestCombatSkillsInRoutes:
-    def test_create_stores_combat_skills(self, client):
-        from tests.conftest import make_character_form, query_db
-        form = make_character_form(attack="3", parry="2")
-        client.post("/characters", data=form)
-        char = query_db(client).first()
+    def test_autosave_stores_combat_skills(self, client):
+        from tests.conftest import query_db
+        from app.models import Character
+        session = client._test_session_factory()
+        c = Character(name="Combat", owner_discord_id="183026066498125825",
+                      knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+        session.add(c)
+        session.commit()
+
+        client.post(f"/characters/{c.id}/autosave", json={"attack": 3, "parry": 2})
+        char = query_db(client).filter(Character.id == c.id).first()
         assert char.attack == 3
         assert char.parry == 2
 

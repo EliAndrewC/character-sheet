@@ -12,6 +12,8 @@ from typing import Dict, List
 from app.game_data import (
     ADVANCED_SKILL_COSTS,
     ADVANTAGES,
+    CAMPAIGN_ADVANTAGES,
+    CAMPAIGN_DISADVANTAGES,
     COMBAT_SKILL_MAX,
     COMBAT_SKILL_START,
     DISADVANTAGES,
@@ -38,24 +40,38 @@ from app.game_data import (
     skill_raise_cost,
     total_skill_cost,
 )
+from app.services.rolls import compute_dan
 
 
 # ---------------------------------------------------------------------------
 # Individual cost functions
 # ---------------------------------------------------------------------------
 
-def calculate_ring_xp(rings: Dict[str, int], school_ring: str) -> int:
+def calculate_ring_xp(rings: Dict[str, int], school_ring: str, dan: int = 0) -> int:
     """Return total XP spent on raising rings above their free starting values.
 
     *school_ring* is the resolved ring name (e.g. ``"Water"``).  The school
     ring starts at 3 for free; all others start at 2.  Cost to raise from
     current to current+1 is ``5 * (current + 1)``.
+
+    At 4th Dan, the school ring gets a 5 XP discount per raise, and the
+    raise from 3 to 4 is free (part of the 4th Dan technique).
     """
     xp = 0
     for ring_name, target in rings.items():
-        base = RING_SCHOOL_DEFAULT if ring_name == school_ring else RING_DEFAULT
+        is_school = ring_name == school_ring
+        base = RING_SCHOOL_DEFAULT if is_school else RING_DEFAULT
+
+        # 4th Dan auto-raises school ring to 4 for free
+        if is_school and dan >= 4:
+            base = max(base, 4)  # 3->4 is free from 4th Dan technique
+
         for new_val in range(base + 1, target + 1):
-            xp += ring_raise_cost(new_val)
+            cost = ring_raise_cost(new_val)
+            # 4th Dan: school ring costs 5 less per raise
+            if is_school and dan >= 4:
+                cost = max(0, cost - 5)
+            xp += cost
     return xp
 
 
@@ -173,6 +189,26 @@ def calculate_disadvantage_xp(disadvantages: List[str]) -> int:
     return -xp
 
 
+def calculate_campaign_advantage_xp(campaign_advantages: List[str]) -> int:
+    """Return total XP spent on campaign-specific advantages."""
+    xp = 0
+    for adv_id in campaign_advantages:
+        adv = CAMPAIGN_ADVANTAGES.get(adv_id)
+        if adv is not None:
+            xp += adv.xp_cost
+    return xp
+
+
+def calculate_campaign_disadvantage_xp(campaign_disadvantages: List[str]) -> int:
+    """Return XP gained from campaign-specific disadvantages (as negative)."""
+    xp = 0
+    for dis_id in campaign_disadvantages:
+        dis = CAMPAIGN_DISADVANTAGES.get(dis_id)
+        if dis is not None:
+            xp += dis.xp_value
+    return -xp
+
+
 # ---------------------------------------------------------------------------
 # Aggregation helpers
 # ---------------------------------------------------------------------------
@@ -200,9 +236,13 @@ def calculate_total_xp(character_data: dict) -> dict:
     """
     school_ring = character_data.get("school_ring_choice", "")
 
-    rings = calculate_ring_xp(character_data.get("rings", {}), school_ring)
+    # Compute Dan for 4th Dan ring discount
+    knack_data = character_data.get("knacks", {})
+    dan = compute_dan(knack_data) if knack_data else 0
+
+    rings = calculate_ring_xp(character_data.get("rings", {}), school_ring, dan=dan)
     skills = calculate_skill_xp(character_data.get("skills", {}))
-    knacks = calculate_knack_xp(character_data.get("knacks", {}))
+    knacks = calculate_knack_xp(knack_data)
     combat_skills = calculate_combat_skill_xp(
         attack=character_data.get("attack", COMBAT_SKILL_START),
         parry=character_data.get("parry", COMBAT_SKILL_START),
@@ -224,10 +264,16 @@ def calculate_total_xp(character_data: dict) -> dict:
     disadvantages = calculate_disadvantage_xp(
         character_data.get("disadvantages", []),
     )
+    campaign_advs = calculate_campaign_advantage_xp(
+        character_data.get("campaign_advantages", []),
+    )
+    campaign_dises = calculate_campaign_disadvantage_xp(
+        character_data.get("campaign_disadvantages", []),
+    )
 
     total = (
         rings + skills + knacks + combat_skills + honor + rank + recognition
-        + advantages + disadvantages
+        + advantages + disadvantages + campaign_advs + campaign_dises
     )
 
     return {
@@ -240,6 +286,8 @@ def calculate_total_xp(character_data: dict) -> dict:
         "recognition": recognition,
         "advantages": advantages,
         "disadvantages": disadvantages,
+        "campaign_advantages": campaign_advs,
+        "campaign_disadvantages": campaign_dises,
         "total": total,
     }
 
@@ -284,12 +332,14 @@ def validate_character(character_data: dict) -> List[str]:
         )
 
     # -- Rings --
+    knack_data = character_data.get("knacks", {})
+    dan = compute_dan(knack_data) if knack_data else 0
     rings = character_data.get("rings", {})
     for ring_name in RING_NAMES:
         value = rings.get(ring_name, RING_DEFAULT)
-        # School ring cannot go below 3 (it starts at 3 for free)
+        # School ring minimum: 3 (base) or 4 (at 4th Dan)
         if ring_name == school_ring:
-            min_val = RING_SCHOOL_DEFAULT
+            min_val = 4 if dan >= 4 else RING_SCHOOL_DEFAULT
         else:
             min_val = RING_DEFAULT
         max_val = RING_MAX_SCHOOL if ring_name == school_ring else RING_MAX_NORMAL

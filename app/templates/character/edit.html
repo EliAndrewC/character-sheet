@@ -6,7 +6,7 @@
 <div x-data="characterForm()" x-init="init()">
     <h1 class="text-3xl font-bold mb-6">Edit: {{ character.name }}</h1>
 
-    <form method="POST" action="/characters/{{ character.id }}" class="space-y-8">
+    <form class="space-y-8">
 
         <!-- BASICS -->
         <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
@@ -15,11 +15,13 @@
                 <div>
                     <label class="block text-sm font-medium mb-1">Character Name</label>
                     <input type="text" name="name" required value="{{ character.name }}"
+                           @input="markDirty()"
                            class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Player Name</label>
                     <input type="text" name="player_name" value="{{ character.player_name or '' }}"
+                           @input="markDirty()"
                            class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
                 </div>
                 <div>
@@ -31,6 +33,7 @@
                     <label class="block text-sm font-medium mb-1">Earned XP</label>
                     <input type="number" name="earned_xp" value="{{ character.earned_xp }}" min="0"
                            x-model.number="earnedXp"
+                           @input="markDirty()"
                            class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
                 </div>
             </div>
@@ -52,6 +55,16 @@
                         {% endfor %}
                     </optgroup>
                     {% endfor %}
+                </select>
+            </div>
+
+            <div x-show="school && SCHOOL_RING_OPTIONS[school] && SCHOOL_RING_OPTIONS[school].length > 1" class="mt-3">
+                <label class="block text-sm font-medium mb-1">Choose School Ring</label>
+                <select x-model="schoolRingChoice" @change="onSchoolRingChange()"
+                        class="border rounded px-3 py-2">
+                    <template x-for="ring in (SCHOOL_RING_OPTIONS[school] || [])">
+                        <option :value="ring" x-text="ring"></option>
+                    </template>
                 </select>
             </div>
 
@@ -109,9 +122,9 @@
                     <label class="block text-sm font-medium mb-2">{{ ring }}</label>
                     <div class="flex items-center justify-center gap-1">
                         <button type="button"
-                                @click="rings.{{ ring }} = Math.max(getSchoolRing() === '{{ ring }}' ? 3 : 2, rings.{{ ring }} - 1)"
-                                :disabled="rings.{{ ring }} <= (getSchoolRing() === '{{ ring }}' ? 3 : 2)"
-                                :title="rings.{{ ring }} <= (getSchoolRing() === '{{ ring }}' ? 3 : 2) ? (getSchoolRing() === '{{ ring }}' ? 'School ring cannot go below 3' : '') : 'Lower to ' + (rings.{{ ring }}-1) + ' (refund ' + (5 * rings.{{ ring }}) + ' XP)'"
+                                @click="rings.{{ ring }} = Math.max(getSchoolRing() === '{{ ring }}' ? schoolRingMin() : 2, rings.{{ ring }} - 1)"
+                                :disabled="rings.{{ ring }} <= (getSchoolRing() === '{{ ring }}' ? schoolRingMin() : 2)"
+                                :title="rings.{{ ring }} <= (getSchoolRing() === '{{ ring }}' ? schoolRingMin() : 2) ? (getSchoolRing() === '{{ ring }}' ? 'School ring cannot go below ' + schoolRingMin() : '') : 'Lower to ' + (rings.{{ ring }}-1) + ' (refund ' + (5 * rings.{{ ring }}) + ' XP)'"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
                         <span class="w-8 text-center font-bold text-lg" x-text="rings.{{ ring }}"></span>
                         <input type="hidden" name="ring_{{ ring.lower() }}" :value="rings.{{ ring }}">
@@ -426,6 +439,8 @@
                             <input type="checkbox" name="adv_{{ aid }}"
                                    x-model="advantages.{{ aid }}"
                                    {{ 'checked' if aid in (character.advantages or []) else '' }}
+                                   {% if aid == 'wealthy' %}:disabled="true" title="Disabled for Wasp Bounty Hunters campaign — use Household Wealth instead"{% endif %}
+                                   {% if aid == 'poor' %}:disabled="true" title="Automatically applied in Wasp Bounty Hunters campaign"{% endif %}
                                    class="rounded text-accent">
                             <span>{{ adv.name }}</span>
                             <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
@@ -444,6 +459,50 @@
                             <input type="checkbox" name="dis_{{ did }}"
                                    x-model="disadvantages.{{ did }}"
                                    {{ 'checked' if did in (character.disadvantages or []) else '' }}
+                                   {% if did == 'poor' %}:disabled="true" title="Automatically applied in Wasp Bounty Hunters campaign"{% endif %}
+                                   class="rounded text-accent">
+                            <span>{{ dis.name }}</span>
+                            <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
+                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                                {{ dis.description }}
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WASP CAMPAIGN ADVANTAGES & DISADVANTAGES -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">Wasp Campaign Advantages & Disadvantages</h2>
+            <div class="grid gap-6 md:grid-cols-2">
+                <div>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Campaign Advantages</h3>
+                    <div class="space-y-1">
+                        {% for aid, adv in campaign_advantages.items() %}
+                        <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
+                            <input type="checkbox" name="camp_adv_{{ aid }}"
+                                   x-model="campaignAdvantages.{{ aid }}"
+                                   @change="markDirty()"
+                                   class="rounded text-accent">
+                            <span>{{ adv.name }}</span>
+                            <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
+                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                                {{ adv.description }}
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Campaign Disadvantages</h3>
+                    <div class="space-y-1">
+                        {% for did, dis in campaign_disadvantages.items() %}
+                        <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
+                            <input type="checkbox" name="camp_dis_{{ did }}"
+                                   x-model="campaignDisadvantages.{{ did }}"
+                                   @change="markDirty()"
                                    class="rounded text-accent">
                             <span>{{ dis.name }}</span>
                             <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
@@ -461,6 +520,7 @@
         <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
             <h2 class="text-xl font-bold mb-4 text-accent">Notes</h2>
             <textarea name="notes" rows="4"
+                      @input="markDirty()"
                       class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">{{ character.notes or '' }}</textarea>
         </section>
 
@@ -474,23 +534,24 @@
                         <span class="mx-2">/</span>
                         <span>Budget: <strong class="font-mono" x-text="budgetWithDis()"></strong>
                             <span class="text-xs text-ink/50" x-show="totalDisXp() > 0"
-                                  x-text="'(' + startingXp + ' + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
+                                  x-text="'(' + 150 + ' + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
                         </span>
-                        <span class="mx-2">—</span>
+                        <span class="mx-2">&mdash;</span>
                         <span :class="remainingXp() >= 0 ? 'text-green-700' : 'text-red-600 font-bold'">
                             Remaining: <strong class="font-mono" x-text="remainingXp()"></strong>
                         </span>
                     </div>
                 </div>
-                <div class="flex gap-2">
-                    <a href="/characters/{{ character.id }}"
-                       class="bg-ink/20 hover:bg-ink/30 text-ink px-6 py-3 rounded font-medium transition-colors">
-                        Cancel
-                    </a>
-                    <button type="submit"
-                            class="bg-accent hover:bg-red-900 text-parchment px-8 py-3 rounded font-medium transition-colors">
-                        Save Changes
+                <div class="flex items-center gap-3">
+                    <span class="text-sm text-ink/60" x-text="saveStatus"></span>
+                    <button type="button" @click="doPublish()"
+                            class="bg-accent hover:bg-red-900 text-parchment px-6 py-3 rounded font-medium transition-colors">
+                        Publish Changes
                     </button>
+                    <a href="/characters/{{ character.id }}"
+                       class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-3 rounded font-medium transition-colors text-sm">
+                        View Sheet
+                    </a>
                 </div>
             </div>
         </div>
@@ -502,6 +563,13 @@
 // XP cost tables (mirrored from Python for client-side calculation)
 const BASIC_COSTS = [0, 2, 2, 3, 3, 3];   // index = new rank
 const ADVANCED_COSTS = [0, 4, 4, 6, 8, 10];
+
+// School ring options for variable-ring schools
+const SCHOOL_RING_OPTIONS = {
+    {% for sid, opts in school_ring_options.items() %}
+    '{{ sid }}': {{ opts | tojson }},
+    {% endfor %}
+};
 
 // Schools data for ring resolution and knack initialization
 const SCHOOLS_DATA = {
@@ -601,6 +669,16 @@ function characterForm() {
             {{ did }}: {{ 'true' if did in (character.disadvantages or []) else 'false' }},
             {% endfor %}
         },
+        campaignAdvantages: {
+            {% for aid in campaign_advantages %}
+            {{ aid }}: {{ 'true' if aid in (character.campaign_advantages or []) else 'false' }},
+            {% endfor %}
+        },
+        campaignDisadvantages: {
+            {% for did in campaign_disadvantages %}
+            {{ did }}: {{ 'true' if did in (character.campaign_disadvantages or []) else 'false' }},
+            {% endfor %}
+        },
         attack: {{ character.attack }},
         parry: {{ character.parry }},
         honor: {{ character.honor }},
@@ -608,6 +686,7 @@ function characterForm() {
         recognition: {{ character.recognition }},
         recognitionHalved: {{ 'true' if character.recognition_halved else 'false' }},
         rankLocked: {{ 'true' if character.rank_locked else 'false' }},
+        saveStatus: '',
 
         init() {
             this.$watch('knacks', () => this.styleTechniques(), { deep: true });
@@ -622,6 +701,25 @@ function characterForm() {
             });
             // Style on initial load since school is already selected
             this.$nextTick(() => this.styleTechniques());
+
+            // Auto-save: debounce with wait-for-completion
+            this._saveTimeout = null;
+            this._saving = false;
+            this._dirty = false;
+            this._charId = {{ character.id }};
+
+            this.$watch('rings', () => this.markDirty(), { deep: true });
+            this.$watch('skills', () => this.markDirty(), { deep: true });
+            this.$watch('knacks', () => this.markDirty(), { deep: true });
+            this.$watch('attack', () => this.markDirty());
+            this.$watch('parry', () => this.markDirty());
+            this.$watch('honor', () => this.markDirty());
+            this.$watch('rank', () => this.markDirty());
+            this.$watch('recognition', () => this.markDirty());
+            this.$watch('advantages', () => this.markDirty(), { deep: true });
+            this.$watch('disadvantages', () => this.markDirty(), { deep: true });
+            this.$watch('campaignAdvantages', () => this.markDirty(), { deep: true });
+            this.$watch('campaignDisadvantages', () => this.markDirty(), { deep: true });
         },
 
         styleTechniques() {
@@ -636,6 +734,84 @@ function characterForm() {
                     el.classList.remove('font-semibold');
                 }
             });
+        },
+
+        markDirty() {
+            this._dirty = true;
+            this.debounceSave();
+        },
+
+        debounceSave() {
+            if (this._saveTimeout) clearTimeout(this._saveTimeout);
+            this._saveTimeout = setTimeout(() => this.doSave(), 1500);
+        },
+
+        async doSave() {
+            if (this._saving || !this._dirty) return;
+            this._saving = true;
+            this._dirty = false;
+            this.saveStatus = 'Saving...';
+
+            try {
+                const body = {
+                    name: document.querySelector('input[name="name"]')?.value || this.school || 'New Character',
+                    player_name: document.querySelector('input[name="player_name"]')?.value || '',
+                    school: this.school,
+                    school_ring_choice: this.schoolRingChoice,
+                    rings: this.rings,
+                    attack: this.attack,
+                    parry: this.parry,
+                    skills: Object.fromEntries(Object.entries(this.skills).filter(([k, v]) => v > 0)),
+                    knacks: this.knacks,
+                    advantages: Object.keys(this.advantages).filter(k => this.advantages[k]),
+                    disadvantages: Object.keys(this.disadvantages).filter(k => this.disadvantages[k]),
+                    campaign_advantages: Object.keys(this.campaignAdvantages).filter(k => this.campaignAdvantages[k]),
+                    campaign_disadvantages: Object.keys(this.campaignDisadvantages).filter(k => this.campaignDisadvantages[k]),
+                    honor: this.honor,
+                    rank: this.rank,
+                    rank_locked: this.rankLocked,
+                    recognition: this.recognition,
+                    recognition_halved: this.recognitionHalved,
+                    earned_xp: parseInt(document.querySelector('input[name="earned_xp"]')?.value || '0'),
+                    notes: document.querySelector('textarea[name="notes"]')?.value || '',
+                };
+
+                const resp = await fetch('/characters/' + this._charId + '/autosave', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body),
+                });
+
+                if (resp.ok) {
+                    this.saveStatus = 'Saved';
+                    setTimeout(() => { if (this.saveStatus === 'Saved') this.saveStatus = ''; }, 2000);
+                } else {
+                    this.saveStatus = 'Save failed';
+                }
+            } catch (e) {
+                this.saveStatus = 'Save failed';
+            }
+            this._saving = false;
+            if (this._dirty) this.debounceSave();
+        },
+
+        async doPublish() {
+            await this.doSave();
+            this.saveStatus = 'Publishing...';
+            try {
+                const resp = await fetch('/characters/' + this._charId + '/publish', {
+                    method: 'POST',
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.saveStatus = 'Published (v' + data.version_number + ')';
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    this.saveStatus = 'Publish failed';
+                }
+            } catch (e) {
+                this.saveStatus = 'Publish failed';
+            }
         },
 
         onSchoolChange(event) {
@@ -657,7 +833,8 @@ function characterForm() {
                     this.rings[info.ring] = Math.max(this.rings[info.ring], 3);
                 } else {
                     // "any non-Void" or "Air or Water" — user must pick
-                    this.schoolRingChoice = '';
+                    this.schoolRingChoice = 'Water'; // default
+                    this.rings['Water'] = Math.max(this.rings['Water'], 3);
                 }
 
                 // Initialize knacks from school data
@@ -669,8 +846,19 @@ function characterForm() {
             }
         },
 
+        onSchoolRingChange() {
+            if (this.schoolRingChoice) {
+                this.rings[this.schoolRingChoice] = Math.max(this.rings[this.schoolRingChoice], 3);
+            }
+            this.markDirty();
+        },
+
         getSchoolRing() {
             return this.schoolRingChoice || '';
+        },
+
+        schoolRingMin() {
+            return this.currentDan() >= 4 ? 4 : 3;
         },
 
         ringMax(ringName) {
@@ -841,6 +1029,20 @@ function characterForm() {
             return gained;
         },
 
+        totalCampaignAdvXp() {
+            const COSTS = { {% for aid, adv in campaign_advantages.items() %}'{{ aid }}': {{ adv.xp_cost }}, {% endfor %} };
+            let cost = 0;
+            for (const [aid, checked] of Object.entries(this.campaignAdvantages)) { if (checked) cost += COSTS[aid] || 0; }
+            return cost;
+        },
+
+        totalCampaignDisXp() {
+            const VALUES = { {% for did, dis in campaign_disadvantages.items() %}'{{ did }}': {{ dis.xp_value }}, {% endfor %} };
+            let gained = 0;
+            for (const [did, checked] of Object.entries(this.campaignDisadvantages)) { if (checked) gained += VALUES[did] || 0; }
+            return gained;
+        },
+
         honorXp() {
             return Math.max(0, Math.round((this.honor - 1.0) / 0.5));
         },
@@ -857,13 +1059,12 @@ function characterForm() {
 
         grossSpent() {
             return this.totalRingXp() + this.totalSkillXp() + this.totalKnackXp()
-                 + this.totalCombatSkillXp()
-                 + this.honorXp() + this.rankXp() + this.recognitionXp()
-                 + this.totalAdvXp();
+                 + this.totalCombatSkillXp() + this.honorXp() + this.rankXp()
+                 + this.recognitionXp() + this.totalAdvXp() + this.totalCampaignAdvXp();
         },
 
         budgetWithDis() {
-            return this.startingXp + this.earnedXp + this.totalDisXp();
+            return 150 + this.earnedXp + this.totalDisXp() + this.totalCampaignDisXp();
         },
 
         totalXp() {

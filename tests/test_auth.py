@@ -185,9 +185,9 @@ class TestUnauthenticatedGuards:
         client._cleanup = (transaction, connection)
         return client
 
-    def test_create_page_redirects(self, engine):
+    def test_create_post_requires_auth(self, engine):
         c = self._unauth_client(engine)
-        resp = c.get("/characters/new", follow_redirects=False)
+        resp = c.post("/characters", follow_redirects=False)
         assert resp.status_code == 303
         assert "/auth/login" in resp.headers["location"]
         c._cleanup[0].rollback()
@@ -217,9 +217,7 @@ class TestUnauthenticatedGuards:
 class TestTestAuthBypass:
     def test_bypass_sets_user(self, client):
         """In test mode, X-Test-User header should authenticate."""
-        resp = client.get(
-            "/characters/new",
-            headers={"X-Test-User": "183026066498125825:eliandrewc"},
-        )
-        assert resp.status_code == 200
-        assert "Create Character" in resp.text
+        # Creating a character requires auth — should redirect to edit page
+        resp = client.post("/characters", follow_redirects=False)
+        assert resp.status_code == 303
+        assert "/edit" in resp.headers["location"]

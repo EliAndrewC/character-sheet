@@ -3,9 +3,14 @@
 from tests.e2e.helpers import select_school
 
 
+def _go_to_editor(page, live_server_url):
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('text="Publish Changes"')
+
+
 def test_school_selection_loads_details(page, live_server_url):
-    """Selecting a school should load its details via HTMX."""
-    page.goto(f"{live_server_url}/characters/new")
+    _go_to_editor(page, live_server_url)
 
     details = page.text_content("#school-details")
     assert "Special Ability" not in details
@@ -18,14 +23,16 @@ def test_school_selection_loads_details(page, live_server_url):
 
 
 def test_switching_schools_updates_details(page, live_server_url):
-    """Changing the school should replace the details panel."""
-    page.goto(f"{live_server_url}/characters/new")
+    _go_to_editor(page, live_server_url)
 
     select_school(page, "akodo_bushi")
     assert "feint" in page.text_content("#school-details").lower()
 
-    page.locator('select[name="school"]').select_option("kakita_duelist")
-    page.locator('select[name="school"]').dispatch_event("change")
+    page.evaluate("""() => {
+        const sel = document.querySelector('select[name="school"]');
+        sel.value = 'kakita_duelist';
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }""")
     page.wait_for_selector("#school-details :text('Phase 0')", timeout=10000)
     details = page.text_content("#school-details")
     assert "Fire" in details
@@ -33,8 +40,7 @@ def test_switching_schools_updates_details(page, live_server_url):
 
 
 def test_school_knack_controls_appear(page, live_server_url):
-    """School selection should show knack +/- controls managed by Alpine."""
-    page.goto(f"{live_server_url}/characters/new")
+    _go_to_editor(page, live_server_url)
 
     select_school(page, "mirumoto_bushi")
 
@@ -44,8 +50,7 @@ def test_school_knack_controls_appear(page, live_server_url):
 
 
 def test_school_techniques_shown(page, live_server_url):
-    """School details should show all 5 Dan techniques."""
-    page.goto(f"{live_server_url}/characters/new")
+    _go_to_editor(page, live_server_url)
 
     select_school(page, "courtier")
 

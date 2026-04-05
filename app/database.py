@@ -58,12 +58,28 @@ def _migrate_add_columns():
         ("rank_locked", "BOOLEAN", "0"),
         ("owner_discord_id", "TEXT", "NULL"),
         ("editor_discord_ids", "TEXT", "'[]'"),
+        ("is_published", "BOOLEAN", "0"),
+        ("published_state", "TEXT", "NULL"),
+        ("campaign_advantages", "TEXT", "'[]'"),
+        ("campaign_disadvantages", "TEXT", "'[]'"),
     ]
 
     for col_name, col_type, default in needed:
         if col_name not in existing:
             cursor.execute(
                 f"ALTER TABLE characters ADD COLUMN {col_name} {col_type} DEFAULT {default}"
+            )
+
+    # Users table migrations
+    cursor.execute("PRAGMA table_info(users)")
+    user_cols = {row[1] for row in cursor.fetchall()}
+    user_needed = [
+        ("granted_account_ids", "TEXT", "'[]'"),
+    ]
+    for col_name, col_type, default in user_needed:
+        if user_cols and col_name not in user_cols:
+            cursor.execute(
+                f"ALTER TABLE users ADD COLUMN {col_name} {col_type} DEFAULT {default}"
             )
 
     conn.commit()

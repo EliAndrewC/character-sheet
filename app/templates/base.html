@@ -36,10 +36,12 @@
             </a>
             <div class="flex items-center gap-3">
                 {% if request.state.user %}
-                <a href="/characters/new"
-                   class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
-                    New Character
-                </a>
+                <form method="POST" action="/characters" class="inline">
+                    <button type="submit"
+                       class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                        New Character
+                    </button>
+                </form>
                 <span class="text-sm text-parchment/70">{{ request.state.user.display_name }}</span>
                 <a href="/auth/logout"
                    class="text-sm text-parchment/50 hover:text-parchment transition-colors">

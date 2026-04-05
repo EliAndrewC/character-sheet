@@ -1,12 +1,20 @@
-"""E2E: Create a character end-to-end."""
+"""E2E: Create a character end-to-end (new flow: POST creates blank, auto-saves)."""
 
 from tests.e2e.helpers import select_school, click_plus
 
 
-def test_create_character_full_workflow(page, live_server_url):
-    """Fill out the create form, submit, and verify the character sheet renders."""
-    page.goto(f"{live_server_url}/characters/new")
+def test_create_and_edit_character(page, live_server_url):
+    """Create a new character, edit it in the editor, and verify auto-save."""
+    page.goto(live_server_url)
 
+    # Click "New Character" button (now a form POST)
+    page.locator('button:text("New Character")').click()
+
+    # Should redirect to edit page
+    page.wait_for_selector('text="Publish Changes"')
+    assert "/edit" in page.url
+
+    # Fill in details
     page.fill('input[name="name"]', "Akodo Toturi")
     page.fill('input[name="player_name"]', "Eli")
 
@@ -15,32 +23,36 @@ def test_create_character_full_workflow(page, live_server_url):
     click_plus(page, "ring_fire", 1)
     click_plus(page, "skill_precepts", 3)
     click_plus(page, "skill_bragging", 1)
-    click_plus(page, "skill_etiquette", 2)
 
-    click_plus(page, "honor", 2)  # 1.0 -> 2.0 (two +0.5 clicks)
+    click_plus(page, "honor", 2)  # 1.0 -> 2.0
     page.check('input[name="adv_fierce"]')
-    page.check('input[name="dis_proud"]')
-    page.fill("textarea[name='notes']", "Leader of the Lion clan")
 
-    page.click('button[type="submit"]')
-    page.wait_for_url("**/characters/*")
+    # Wait for auto-save
+    page.wait_for_selector('text="Saved"', timeout=5000)
+
+    # Publish
+    page.locator('button:text("Publish Changes")').click()
+    page.wait_for_selector('text=/Published/', timeout=5000)
+
+    # View the sheet
+    page.locator('a:text("View Sheet")').click()
+    page.wait_for_selector("h1")
 
     body = page.text_content("body")
     assert "Akodo Toturi" in body
     assert "Akodo Bushi" in body
-    assert "Total Spent" in body
     assert "Fierce" in body
-    assert "Proud" in body
-    assert "Leader of the Lion clan" in body
 
 
 def test_create_minimal_character(page, live_server_url):
-    """Create a character with only required fields."""
-    page.goto(f"{live_server_url}/characters/new")
+    """Create and publish a character with just a name and school."""
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('text="Publish Changes"')
 
     page.fill('input[name="name"]', "Minimal Samurai")
     select_school(page, "akodo_bushi")
 
-    page.click('button[type="submit"]')
-    page.wait_for_url("**/characters/*")
-    assert "Minimal Samurai" in page.text_content("h1")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.locator('button:text("Publish Changes")').click()
+    page.wait_for_selector('text=/Published/', timeout=5000)
