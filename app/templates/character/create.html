@@ -24,9 +24,8 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Starting XP</label>
-                    <input type="number" name="starting_xp" value="150" min="0"
-                           x-model.number="startingXp"
-                           class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                    <input type="hidden" name="starting_xp" value="150">
+                    <span class="text-lg font-bold">150</span>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Earned XP</label>
@@ -110,9 +109,9 @@
                     <label class="block text-sm font-medium mb-2">{{ ring }}</label>
                     <div class="flex items-center justify-center gap-1">
                         <button type="button"
-                                @click="rings.{{ ring }} = Math.max(2, rings.{{ ring }} - 1)"
-                                :disabled="rings.{{ ring }} <= 2"
-                                :title="rings.{{ ring }} <= 2 ? '' : 'Lower to ' + (rings.{{ ring }}-1) + ' (refund ' + (5 * rings.{{ ring }}) + ' XP)'"
+                                @click="rings.{{ ring }} = Math.max(getSchoolRing() === '{{ ring }}' ? 3 : 2, rings.{{ ring }} - 1)"
+                                :disabled="rings.{{ ring }} <= (getSchoolRing() === '{{ ring }}' ? 3 : 2)"
+                                :title="rings.{{ ring }} <= (getSchoolRing() === '{{ ring }}' ? 3 : 2) ? (getSchoolRing() === '{{ ring }}' ? 'School ring cannot go below 3' : '') : 'Lower to ' + (rings.{{ ring }}-1) + ' (refund ' + (5 * rings.{{ ring }}) + ' XP)'"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
                         <span class="w-8 text-center font-bold text-lg" x-text="rings.{{ ring }}"></span>
                         <input type="hidden" name="ring_{{ ring.lower() }}" :value="rings.{{ ring }}">
@@ -191,24 +190,70 @@
             <div class="grid gap-4 sm:grid-cols-3">
                 <div>
                     <label class="block text-sm font-medium mb-1">Honor</label>
-                    <select name="honor" x-model.number="honor"
-                            class="w-full border rounded px-3 py-2">
-                        {% for h in range(2, 11) %}
-                        <option value="{{ h * 0.5 }}">{{ h * 0.5 }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="flex items-center justify-center gap-1">
+                        <button type="button"
+                                @click="honor = Math.max(1.0, +(honor - 0.5).toFixed(1))"
+                                :disabled="honor <= 1.0"
+                                :title="honor <= 1.0 ? '' : 'Lower to ' + (honor - 0.5).toFixed(1) + ' (refund 1 XP)'"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                        <span class="w-8 text-center font-bold text-lg" x-text="honor.toFixed(1)"></span>
+                        <input type="hidden" name="honor" :value="honor">
+                        <button type="button"
+                                @click="honor = Math.min(5.0, +(honor + 0.5).toFixed(1))"
+                                :disabled="honor >= 5.0"
+                                :title="honor >= 5.0 ? '' : 'Raise to ' + (honor + 0.5).toFixed(1) + ' (1 XP)'"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                    </div>
                     <p class="text-xs text-ink/50 mt-1">Starts at 1.0. Cost: 1 XP per 0.5</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Rank</label>
-                    <input type="number" name="rank" x-model.number="rank" step="0.5" min="0.5"
-                           class="w-full border rounded px-3 py-2">
+                    <div class="flex items-center justify-center gap-1">
+                        <button type="button"
+                                @click="rank = Math.max(0.5, +(rank - 0.5).toFixed(1))"
+                                :disabled="rank <= 0.5 || rankLocked"
+                                :title="rankLocked ? 'Rank is locked for this campaign' : (rank <= 0.5 ? '' : 'Lower to ' + (rank - 0.5).toFixed(1) + ' (refund 1 XP)')"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                        <span class="w-8 text-center font-bold text-lg" x-text="rank.toFixed(1)"></span>
+                        <input type="hidden" name="rank" :value="rank">
+                        <button type="button"
+                                @click="rank = +(rank + 0.5).toFixed(1)"
+                                :disabled="rankLocked"
+                                :title="rankLocked ? 'Rank is locked for this campaign' : 'Raise to ' + (rank + 0.5).toFixed(1) + ' (1 XP)'"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                    </div>
+                    <input type="hidden" name="rank_locked" :value="rankLocked ? '1' : '0'">
+                    <label class="inline-flex items-center gap-2 text-xs mt-1">
+                        <input type="checkbox" x-model="rankLocked" class="rounded">
+                        Rank locked for this campaign
+                    </label>
                     <p class="text-xs text-ink/50 mt-1">Same cost as Honor</p>
+                    <template x-if="advantages.good_reputation">
+                        <div class="text-xs text-ink/50">+2.0 Rank with those familiar with your reputation</div>
+                    </template>
+                    <template x-if="advantages.imperial_favor">
+                        <div class="text-xs text-ink/50">+3.0 Rank/Recognition with Imperial family; +1.0 with Imperial post holders</div>
+                    </template>
+                    <template x-if="disadvantages.bad_reputation">
+                        <div class="text-xs text-ink/50">-1.5 Rank with those aware; +1.0 Recognition for identification</div>
+                    </template>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Recognition</label>
-                    <input type="number" name="recognition" x-model.number="recognition" step="0.5" min="0"
-                           class="w-full border rounded px-3 py-2">
+                    <div class="flex items-center justify-center gap-1">
+                        <button type="button"
+                                @click="recognition = Math.max(recognitionHalved ? +(rank / 2).toFixed(1) : 0, +(recognition - 0.5).toFixed(1))"
+                                :disabled="recognition <= (recognitionHalved ? +(rank / 2).toFixed(1) : 0)"
+                                :title="recognition <= (recognitionHalved ? +(rank / 2).toFixed(1) : 0) ? '' : 'Lower to ' + (recognition - 0.5).toFixed(1)"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                        <span class="w-8 text-center font-bold text-lg" x-text="recognition.toFixed(1)"></span>
+                        <input type="hidden" name="recognition" :value="recognition">
+                        <button type="button"
+                                @click="recognition = Math.min(+(rank * 1.5).toFixed(1), +(recognition + 0.5).toFixed(1))"
+                                :disabled="recognition >= +(rank * 1.5).toFixed(1)"
+                                :title="recognition >= +(rank * 1.5).toFixed(1) ? '' : 'Raise to ' + (recognition + 0.5).toFixed(1)"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                    </div>
                     <p class="text-xs text-ink/50 mt-1">Starts at Rank. Max 150% of Rank. 1 XP per 1.0</p>
                 </div>
             </div>
@@ -250,7 +295,6 @@
                             </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', false)"></span>
                             <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
-                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-ink/40 ml-1" x-text="'(' + skillRollTooltip('{{ sid }}') + ')'"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -286,7 +330,6 @@
                             </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', true)"></span>
                             <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
-                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-ink/40 ml-1" x-text="'(' + skillRollTooltip('{{ sid }}') + ')'"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -322,7 +365,6 @@
                             </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', false)"></span>
                             <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
-                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-ink/40 ml-1" x-text="'(' + skillRollTooltip('{{ sid }}') + ')'"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -358,7 +400,6 @@
                             </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', true)"></span>
                             <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
-                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-ink/40 ml-1" x-text="'(' + skillRollTooltip('{{ sid }}') + ')'"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -427,9 +468,12 @@
                 <div class="flex-1">
                     <h3 class="text-sm font-bold mb-1">XP Summary</h3>
                     <div class="text-sm">
-                        <span>Spent: <strong class="font-mono" x-text="totalXp()"></strong></span>
+                        <span>Spent: <strong class="font-mono" x-text="grossSpent()"></strong></span>
                         <span class="mx-2">/</span>
-                        <span>Budget: <strong class="font-mono" x-text="startingXp + earnedXp"></strong></span>
+                        <span>Budget: <strong class="font-mono" x-text="budgetWithDis()"></strong>
+                            <span class="text-xs text-ink/50" x-show="totalDisXp() > 0"
+                                  x-text="'(' + startingXp + ' + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
+                        </span>
                         <span class="mx-2">—</span>
                         <span :class="remainingXp() >= 0 ? 'text-green-700' : 'text-red-600 font-bold'">
                             Remaining: <strong class="font-mono" x-text="remainingXp()"></strong>
@@ -555,8 +599,34 @@ function characterForm() {
         rank: 1.0,
         recognition: 1.0,
         recognitionHalved: false,
+        rankLocked: false,
 
-        init() {},
+        init() {
+            this.$watch('knacks', () => this.styleTechniques(), { deep: true });
+            this.$watch('rank', (newVal, oldVal) => {
+                // Recognition defaults to Rank - keep them in sync if recognition was at the old rank
+                if (this.recognition === oldVal || this.recognition < newVal) {
+                    this.recognition = newVal;
+                }
+            });
+            document.addEventListener('htmx:afterSwap', () => {
+                this.$nextTick(() => this.styleTechniques());
+            });
+        },
+
+        styleTechniques() {
+            const dan = this.currentDan();
+            document.querySelectorAll('.technique-item').forEach(el => {
+                const itemDan = parseInt(el.dataset.dan);
+                if (itemDan <= dan) {
+                    el.classList.remove('opacity-40');
+                    el.classList.add('font-semibold');
+                } else {
+                    el.classList.add('opacity-40');
+                    el.classList.remove('font-semibold');
+                }
+            });
+        },
 
         onSchoolChange(event) {
             const schoolId = event.target.value;
@@ -632,128 +702,70 @@ function characterForm() {
 
             let rolled = rank + ringVal;
             let kept = ringVal;
-            let bonus = 0;
-            let freeRaises = 0;
-            let parts = [];
+            let flatBonus = 0;
+            let parts = [];  // descriptions for the parenthetical
 
-            // Honor bonuses
-            if (skillId === 'bragging') {
-                bonus += 2 * this.honor + 2 * this.recognition;
-            }
-            if (skillId === 'precepts') {
-                bonus += 2 * this.honor;
-            }
-            if (skillId === 'sincerity') {
-                bonus += 2 * this.honor;
-            }
-
-            // Advantage free raises
-            for (const [advId, targetSkills] of Object.entries(ADVANTAGE_FREE_RAISES)) {
-                if (this.advantages[advId] && targetSkills.includes(skillId)) {
-                    freeRaises += 1;
-                    parts.push(advId + ' +1FR');
-                }
-            }
-
-            // Skill synergies
-            for (const [sourceSkill, targetSkills] of Object.entries(SKILL_SYNERGIES)) {
-                if (targetSkills.includes(skillId)) {
-                    const sourceRank = this.skills[sourceSkill] || 0;
-                    if (sourceRank > 0) {
-                        freeRaises += sourceRank;
-                        parts.push(sourceSkill + ' +' + sourceRank + 'FR');
-                    }
-                }
-            }
-
-            // Technique bonuses (1st Dan extra die)
+            // 1st Dan: extra die
             const dan = this.currentDan();
             const techBonus = this.school ? TECHNIQUE_BONUSES[this.school] : null;
-            if (techBonus && dan >= 1 && techBonus.firstDanExtraDie) {
-                if (techBonus.firstDanExtraDie.includes(skillId)) {
-                    rolled += 1;
-                    parts.push('1st Dan +1 die');
-                }
+            if (techBonus && dan >= 1 && techBonus.firstDanExtraDie && techBonus.firstDanExtraDie.includes(skillId)) {
+                rolled += 1;
+                parts.push('+1 rolled die from 1st Dan technique');
             }
 
-            // 2nd Dan free raise
-            if (techBonus && dan >= 2 && techBonus.secondDanFreeRaise) {
-                if (techBonus.secondDanFreeRaise === skillId) {
-                    freeRaises += 1;
-                    parts.push('2nd Dan +1FR');
-                }
-            }
-
-            // Build display string
-            let display = rolled + 'k' + kept;
-            if (bonus > 0) display += ' + ' + bonus;
-
-            // 3rd Dan info
-            let thirdDanNote = '';
-            if (techBonus && dan >= 3 && techBonus.thirdDan) {
-                if (techBonus.thirdDan.applicableTo.includes(skillId)) {
-                    const sourceRank = this.skills[techBonus.thirdDan.sourceSkill] || 0;
-                    const pool = 2 * sourceRank;
-                    thirdDanNote = ' [' + pool + ' FR/adventure, max ' + techBonus.thirdDan.maxPerRoll + '/roll]';
-                }
-            }
-
-            if (freeRaises > 0) display += ' +' + freeRaises + 'FR';
-            if (thirdDanNote) display += thirdDanNote;
-
-            return display;
-        },
-
-        skillRollTooltip(skillId) {
-            const rank = this.skills[skillId] || 0;
-            if (rank === 0) return '';
-            const ringName = SKILL_RINGS[skillId];
-            const ringVal = this.rings[ringName] || 2;
-
-            let parts = [];
-            parts.push('Base: ' + rank + '+' + ringVal + 'k' + ringVal);
-
-            if (skillId === 'bragging') {
-                parts.push('Honor+Recog: +' + (2*this.honor + 2*this.recognition));
-            }
-            if (skillId === 'precepts') {
-                parts.push('Honor: +' + (2*this.honor));
-            }
-            if (skillId === 'sincerity') {
-                parts.push('Honor: +' + (2*this.honor));
-            }
-
-            for (const [advId, targetSkills] of Object.entries(ADVANTAGE_FREE_RAISES)) {
-                if (this.advantages[advId] && targetSkills.includes(skillId)) {
-                    parts.push(advId + ': +1FR');
-                }
-            }
-
-            for (const [sourceSkill, targetSkills] of Object.entries(SKILL_SYNERGIES)) {
-                if (targetSkills.includes(skillId)) {
-                    const sourceRank = this.skills[sourceSkill] || 0;
-                    if (sourceRank > 0) {
-                        parts.push(sourceSkill + ' rank ' + sourceRank + ': +' + sourceRank + 'FR');
-                    }
-                }
-            }
-
-            const dan = this.currentDan();
-            const techBonus = this.school ? TECHNIQUE_BONUSES[this.school] : null;
-            if (techBonus && dan >= 1 && techBonus.firstDanExtraDie) {
-                if (techBonus.firstDanExtraDie.includes(skillId)) {
-                    parts.push('1st Dan: +1 rolled die');
-                }
-            }
+            // 2nd Dan: free raise = +5
             if (techBonus && dan >= 2 && techBonus.secondDanFreeRaise === skillId) {
-                parts.push('2nd Dan: +1FR');
+                flatBonus += 5;
+                parts.push('+5 from 2nd Dan technique');
             }
+
+            // Advantage free raises = +5 each
+            for (const [advId, targetSkills] of Object.entries(ADVANTAGE_FREE_RAISES)) {
+                if (this.advantages[advId] && targetSkills.includes(skillId)) {
+                    flatBonus += 5;
+                    const advName = advId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    parts.push('+5 from ' + advName);
+                }
+            }
+
+            // Skill synergies: free raises = +5 per rank
+            for (const [sourceSkill, targetSkills] of Object.entries(SKILL_SYNERGIES)) {
+                if (targetSkills.includes(skillId)) {
+                    const sourceRank = this.skills[sourceSkill] || 0;
+                    if (sourceRank > 0) {
+                        const amount = sourceRank * 5;
+                        flatBonus += amount;
+                        const name = sourceSkill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                        parts.push('+' + amount + ' from ' + name);
+                    }
+                }
+            }
+
+            // Honor bonus
+            const HONOR_SKILLS = {'bragging': 2, 'precepts': 2, 'sincerity': 2};
+            if (HONOR_SKILLS[skillId]) {
+                const bonus = Math.floor(HONOR_SKILLS[skillId] * this.honor);
+                if (bonus > 0) { flatBonus += bonus; parts.push('+' + bonus + ' from Honor'); }
+            }
+
+            // Recognition bonus
+            if (skillId === 'bragging') {
+                const bonus = Math.floor(2 * this.recognition);
+                if (bonus > 0) { flatBonus += bonus; parts.push('+' + bonus + ' from Recognition'); }
+            }
+
+            // 3rd Dan adventure raises
             if (techBonus && dan >= 3 && techBonus.thirdDan && techBonus.thirdDan.applicableTo.includes(skillId)) {
                 const sourceRank = this.skills[techBonus.thirdDan.sourceSkill] || 0;
-                parts.push('3rd Dan: ' + (2*sourceRank) + 'FR/adv (max ' + techBonus.thirdDan.maxPerRoll + '/roll)');
+                if (sourceRank > 0) {
+                    parts.push(sourceRank*2 + ' free raises/adventure, max ' + sourceRank + '/roll');
+                }
             }
 
-            return parts.join('; ');
+            let display = rolled + 'k' + kept;
+            if (flatBonus > 0) display += ' + ' + flatBonus;
+            if (parts.length > 0) display += ' (' + parts.join(', ') + ')';
+            return display;
         },
 
         totalRingXp() {
@@ -824,6 +836,7 @@ function characterForm() {
         },
 
         rankXp() {
+            if (this.rankLocked) return 0;
             return Math.max(0, Math.round((this.rank - 1.0) / 0.5));
         },
 
@@ -832,15 +845,23 @@ function characterForm() {
             return Math.max(0, Math.round(this.recognition - this.rank));
         },
 
-        totalXp() {
+        grossSpent() {
             return this.totalRingXp() + this.totalSkillXp() + this.totalKnackXp()
                  + this.totalCombatSkillXp()
                  + this.honorXp() + this.rankXp() + this.recognitionXp()
-                 + this.totalAdvXp() - this.totalDisXp();
+                 + this.totalAdvXp();
+        },
+
+        budgetWithDis() {
+            return this.startingXp + this.earnedXp + this.totalDisXp();
+        },
+
+        totalXp() {
+            return this.grossSpent() - this.totalDisXp();
         },
 
         remainingXp() {
-            return (this.startingXp + this.earnedXp) - this.totalXp();
+            return this.budgetWithDis() - this.grossSpent();
         },
     };
 }

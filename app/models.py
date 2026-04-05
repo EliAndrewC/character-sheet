@@ -9,12 +9,58 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    discord_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    discord_name: Mapped[str] = mapped_column(String, default="")
+    display_name: Mapped[str] = mapped_column(String, default="")
+    granted_account_ids: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "discord_id": self.discord_id,
+            "discord_name": self.discord_name,
+            "display_name": self.display_name or self.discord_name,
+            "granted_account_ids": self.granted_account_ids or [],
+        }
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    discord_id: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class CharacterVersion(Base):
+    __tablename__ = "character_versions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    character_id: Mapped[int] = mapped_column(nullable=False, index=True)
+    version_number: Mapped[int] = mapped_column(nullable=False)
+    state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    summary: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class Character(Base):
     __tablename__ = "characters"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     player_name: Mapped[str] = mapped_column(String, default="")
+    owner_discord_id: Mapped[Optional[str]] = mapped_column(String, default=None)
+    editor_discord_ids: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
+
+    # Draft/publish state
+    is_published: Mapped[bool] = mapped_column(default=False)
+    published_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=None)
     school: Mapped[str] = mapped_column(String, default="")
     school_ring_choice: Mapped[str] = mapped_column(String, default="")
 
@@ -38,6 +84,7 @@ class Character(Base):
     # Honor / Rank / Recognition
     honor: Mapped[float] = mapped_column(Float, default=1.0)
     rank: Mapped[float] = mapped_column(Float, default=1.0)
+    rank_locked: Mapped[bool] = mapped_column(default=False)
     recognition: Mapped[float] = mapped_column(Float, default=1.0)
     recognition_halved: Mapped[bool] = mapped_column(default=False)
 
@@ -83,6 +130,8 @@ class Character(Base):
             "id": self.id,
             "name": self.name,
             "player_name": self.player_name,
+            "owner_discord_id": self.owner_discord_id,
+            "editor_discord_ids": self.editor_discord_ids or [],
             "school": self.school,
             "school_ring_choice": self.school_ring_choice,
             "rings": self.rings,
@@ -94,6 +143,7 @@ class Character(Base):
             "disadvantages": self.disadvantages or [],
             "honor": self.honor,
             "rank": self.rank,
+            "rank_locked": self.rank_locked,
             "recognition": self.recognition,
             "recognition_halved": self.recognition_halved,
             "starting_xp": self.starting_xp,
@@ -133,6 +183,7 @@ class Character(Base):
             disadvantages=data.get("disadvantages", []),
             honor=data.get("honor", 1.0),
             rank=data.get("rank", 1.0),
+            rank_locked=data.get("rank_locked", False),
             recognition=data.get("recognition", 1.0),
             recognition_halved=data.get("recognition_halved", False),
             starting_xp=data.get("starting_xp", 150),

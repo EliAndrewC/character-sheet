@@ -73,6 +73,8 @@ New features follow this cycle:
 
 The key distinction: unit tests use TDD (tests first), clicktests are written after the feature works. Clicktests are run selectively, not as part of every iteration loop.
 
+6. **Deploy after UI changes.** Any change that touches the frontend (templates, CSS, client-side JS) should be deployed to Fly.io after tests pass so the live site stays current.
+
 ## Project Structure
 
 ```

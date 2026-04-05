@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}L7R — Terms of Service{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <h1 class="text-3xl font-bold">Terms of Service</h1>
+    <p class="text-sm text-ink/60">Last updated: April 5, 2026</p>
+
+    <section class="space-y-3 text-sm leading-relaxed">
+        <h2 class="text-xl font-bold text-accent">1. What This Is</h2>
+        <p>
+            L7R Character Builder is a small, invitation-only web application for managing
+            character sheets in a homebrew Legend of the Five Rings tabletop RPG campaign.
+            Access is limited to a whitelisted set of players personally invited by the game master (GM).
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">2. Accounts</h2>
+        <p>
+            You sign in using your Discord account. Only whitelisted Discord accounts may log in.
+            We request only the minimal "identify" scope from Discord &mdash; we learn your Discord
+            user ID and display name, nothing else. We do not access your Discord messages,
+            friend list, or server memberships.
+        </p>
+        <p>
+            You may set a different display name within this application if you prefer not to
+            use your Discord name.
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">3. Character Data</h2>
+        <p>
+            Character sheets you create are stored on our server. You retain ownership of your
+            characters and may delete them at any time. The GM has administrative access to all
+            character sheets for campaign management purposes.
+        </p>
+        <p>
+            <strong>Character sheets are publicly viewable.</strong> Anyone with the URL can view
+            any character sheet without logging in. Only you, users you explicitly grant access to,
+            and the GM can edit your character sheets.
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">4. Acceptable Use</h2>
+        <p>
+            This is a collaborative tool for our RPG group. Use it for its intended purpose.
+            Don't attempt to access or modify other players' characters without permission.
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">5. No Warranty</h2>
+        <p>
+            This application is provided as-is, as a hobby project. We make no guarantees about
+            uptime or data durability, though we do our best. Back up anything important to you.
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">6. Changes</h2>
+        <p>
+            These terms may be updated occasionally. Since we all know each other, we'll
+            communicate any meaningful changes directly.
+        </p>
+    </section>
+</div>
+{% endblock %}

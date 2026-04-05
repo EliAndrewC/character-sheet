@@ -48,23 +48,17 @@
             <p class="text-sm bg-parchment rounded p-2 italic mt-1">{{ school.special_ability }}</p>
         </div>
 
-        <!-- Techniques up to current Dan -->
-        <div x-data="{ showAll: false }">
+        <!-- Techniques — bold if attained, grayed if not -->
+        <div>
             <p class="text-sm font-medium mb-1">Techniques:</p>
             {% for d, desc in school.techniques.items() %}
-            <div class="text-sm mb-2 {{ 'opacity-40' if d > dan else '' }}"
-                 x-show="showAll || {{ d }} <= {{ dan }}">
+            <div class="text-sm mb-2 {{ 'font-semibold' if d <= dan else 'opacity-40' }}">
                 <span class="font-medium {{ 'text-accent' if d <= dan else '' }}">
                     {{ d }}{{ 'st' if d == 1 else ('nd' if d == 2 else ('rd' if d == 3 else 'th')) }} Dan:
                 </span>
                 {{ desc }}
             </div>
             {% endfor %}
-            {% if dan < 5 %}
-            <button @click="showAll = !showAll" class="text-xs text-accent hover:underline mt-1" type="button">
-                <span x-text="showAll ? 'Hide higher techniques' : 'Show all techniques'"></span>
-            </button>
-            {% endif %}
         </div>
         {% endif %}
     </section>
@@ -169,17 +163,36 @@
                 <div class="text-sm text-ink/60">Honor</div>
                 <div class="text-2xl font-bold">{{ character.honor }}</div>
             </div>
-            <div class="bg-parchment rounded-lg p-3">
+            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative">
                 <div class="text-sm text-ink/60">Rank</div>
                 <div class="text-2xl font-bold">{{ character.rank }}</div>
+                {% if character.rank_locked %}
+                <div class="text-xs text-ink/50">locked</div>
+                {% endif %}
+                {% if effective.rank_modifiers %}
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs text-left">
+                    <p class="font-medium mb-1">Effective Rank in context:</p>
+                    {% for m in effective.rank_modifiers %}
+                    <p>{{ m.source }}: {{ "+" if m.value > 0 else "" }}{{ m.value }} ({{ m.context }})</p>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
-            <div class="bg-parchment rounded-lg p-3">
+            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative">
                 <div class="text-sm text-ink/60">Recognition</div>
                 <div class="text-2xl font-bold">{{ character.recognition }}</div>
+                {% if effective.recognition_modifiers %}
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs text-left">
+                    <p class="font-medium mb-1">Effective Recognition in context:</p>
+                    {% for m in effective.recognition_modifiers %}
+                    <p>{{ m.source }}: {{ "+" if m.value > 0 else "" }}{{ m.value }} ({{ m.context }})</p>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
             <div class="bg-parchment rounded-lg p-3">
                 <div class="text-sm text-ink/60">Stipend</div>
-                <div class="text-2xl font-bold">{{ "%.1f" | format(character.rank ** 2) }}</div>
+                <div class="text-2xl font-bold">{{ "%.1f" | format(effective.stipend) }}</div>
                 <div class="text-xs text-ink/50">koku/year</div>
             </div>
         </div>
@@ -242,20 +255,18 @@
                         <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= rank else 'border-ink/30' }}"></div>
                         {% endfor %}
                     </div>
-                    {% if rank > 0 %}
-                    <span class="text-xs text-ink/60 ml-2">
-                        Roll: {{ rank + char_dict.rings[skill.ring.value] }}k{{ char_dict.rings[skill.ring.value] }}
+                    {% if rank > 0 and sid in skill_rolls %}
+                    {% set roll = skill_rolls[sid] %}
+                    <span class="text-xs text-accent font-medium ml-2">
+                        {{ roll.display }}
+                        {% if roll.tooltip_lines|length > 1 %}
+                        ({{ roll.tooltip_lines[1:] | join(', ') }})
+                        {% endif %}
                     </span>
                     {% endif %}
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                         <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                         <p>{{ skill.description }}</p>
-                        <p class="mt-1 text-gold">{{ skill.roll_description }}</p>
-                        {% if rank > 0 %}
-                        <p class="mt-1 text-white/80">You roll: {{ rank + char_dict.rings[skill.ring.value] }}k{{ char_dict.rings[skill.ring.value] }}
-                            {% if rank == 0 and advanced %} (untrained: -10 penalty){% endif %}
-                        </p>
-                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -341,12 +352,17 @@
                 <span>Total Spent</span><span class="font-mono">{{ xp.total }}</span>
             </div>
         </div>
-        {% set available = character.starting_xp + character.earned_xp %}
-        {% set remaining = available - xp.total %}
-        <div class="flex gap-6 text-sm font-medium">
-            <span>Starting: <span class="font-mono">{{ character.starting_xp }}</span></span>
-            <span>Earned: <span class="font-mono">{{ character.earned_xp }}</span></span>
-            <span>Budget: <span class="font-mono">{{ available }}</span></span>
+        {% set dis_xp = xp.disadvantages | abs %}
+        {% set gross_spent = xp.total + dis_xp %}
+        {% set budget = character.starting_xp + character.earned_xp + dis_xp %}
+        {% set remaining = budget - gross_spent %}
+        <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm font-medium">
+            <span>Spent: <span class="font-mono">{{ gross_spent }}</span></span>
+            <span>Budget: <span class="font-mono">{{ budget }}</span>
+                {% if dis_xp > 0 %}
+                <span class="text-xs text-ink/50">({{ character.starting_xp }} + {{ character.earned_xp }} earned + {{ dis_xp }} disadvantages)</span>
+                {% endif %}
+            </span>
             <span class="{{ 'text-green-700' if remaining >= 0 else 'text-red-600 font-bold' }}">
                 Remaining: <span class="font-mono">{{ remaining }}</span>
             </span>

@@ -208,10 +208,13 @@ def calculate_total_xp(character_data: dict) -> dict:
         parry=character_data.get("parry", COMBAT_SKILL_START),
     )
     honor = calculate_honor_xp(character_data.get("honor", HONOR_START))
-    rank = calculate_rank_xp(
-        character_data.get("rank", RANK_START),
-        campaign_default=RANK_START,
-    )
+    if character_data.get("rank_locked", False):
+        rank = 0
+    else:
+        rank = calculate_rank_xp(
+            character_data.get("rank", RANK_START),
+            campaign_default=RANK_START,
+        )
     recognition = calculate_recognition_xp(
         character_data.get("recognition", 0.0),
         character_data.get("rank", RANK_START),
@@ -284,11 +287,16 @@ def validate_character(character_data: dict) -> List[str]:
     rings = character_data.get("rings", {})
     for ring_name in RING_NAMES:
         value = rings.get(ring_name, RING_DEFAULT)
-        min_val = RING_DEFAULT
+        # School ring cannot go below 3 (it starts at 3 for free)
+        if ring_name == school_ring:
+            min_val = RING_SCHOOL_DEFAULT
+        else:
+            min_val = RING_DEFAULT
         max_val = RING_MAX_SCHOOL if ring_name == school_ring else RING_MAX_NORMAL
         if value < min_val:
             errors.append(
-                f"Ring {ring_name} ({value}) is below minimum ({min_val})."
+                f"Ring {ring_name} ({value}) is below minimum ({min_val})"
+                f"{' (school ring)' if ring_name == school_ring else ''}."
             )
         if value > max_val:
             errors.append(

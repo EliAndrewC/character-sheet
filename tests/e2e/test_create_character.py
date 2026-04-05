@@ -17,7 +17,7 @@ def test_create_character_full_workflow(page, live_server_url):
     click_plus(page, "skill_bragging", 1)
     click_plus(page, "skill_etiquette", 2)
 
-    page.select_option('select[name="honor"]', "2.0")
+    click_plus(page, "honor", 2)  # 1.0 -> 2.0 (two +0.5 clicks)
     page.check('input[name="adv_fierce"]')
     page.check('input[name="dis_proud"]')
     page.fill("textarea[name='notes']", "Leader of the Lion clan")

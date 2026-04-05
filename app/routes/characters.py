@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.game_data import ADVANTAGES, DISADVANTAGES, SCHOOLS, SKILLS, SCHOOL_KNACKS, Ring
 from app.models import Character
+from app.services.auth import can_edit_character, get_admin_ids
 from app.services.xp import calculate_total_xp
 
 router = APIRouter(prefix="/characters")
@@ -31,6 +32,7 @@ def _parse_form_to_dict(form_data: dict) -> dict:
         "disadvantages": [],
         "honor": float(form_data.get("honor", 1.0)),
         "rank": float(form_data.get("rank", 1.0)),
+        "rank_locked": form_data.get("rank_locked") == "on",
         "recognition": float(form_data.get("recognition", 1.0)),
         "recognition_halved": form_data.get("recognition_halved") == "on",
         "starting_xp": int(form_data.get("starting_xp", 150)),
@@ -73,11 +75,16 @@ def _parse_form_to_dict(form_data: dict) -> dict:
 
 @router.post("")
 async def create_character(request: Request, db: Session = Depends(get_db)):
+    user = getattr(request.state, "user", None)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=303)
+
     form = await request.form()
     form_data = dict(form)
     data = _parse_form_to_dict(form_data)
 
     character = Character.from_dict(data)
+    character.owner_discord_id = user["discord_id"]
     db.add(character)
     db.commit()
     db.refresh(character)
@@ -89,9 +96,20 @@ async def create_character(request: Request, db: Session = Depends(get_db)):
 async def update_character(
     request: Request, char_id: int, db: Session = Depends(get_db)
 ):
+    user = getattr(request.state, "user", None)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=303)
+
     character = db.query(Character).filter(Character.id == char_id).first()
     if not character:
         return HTMLResponse("Character not found", status_code=404)
+
+    if not can_edit_character(
+        user["discord_id"],
+        character.owner_discord_id,
+        character.editor_discord_ids or [],
+    ):
+        return HTMLResponse("You don't have permission to edit this character.", status_code=403)
 
     form = await request.form()
     form_data = dict(form)
@@ -115,6 +133,7 @@ async def update_character(
     character.disadvantages = data["disadvantages"]
     character.honor = data["honor"]
     character.rank = data["rank"]
+    character.rank_locked = data["rank_locked"]
     character.recognition = data["recognition"]
     character.recognition_halved = data["recognition_halved"]
     character.starting_xp = data["starting_xp"]
@@ -127,9 +146,19 @@ async def update_character(
 
 
 @router.post("/{char_id}/delete")
-def delete_character(char_id: int, db: Session = Depends(get_db)):
+def delete_character(request: Request, char_id: int, db: Session = Depends(get_db)):
+    user = getattr(request.state, "user", None)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=303)
+
     character = db.query(Character).filter(Character.id == char_id).first()
     if character:
+        if not can_edit_character(
+            user["discord_id"],
+            character.owner_discord_id,
+            character.editor_discord_ids or [],
+        ):
+            return HTMLResponse("You don't have permission to delete this character.", status_code=403)
         db.delete(character)
         db.commit()
     return RedirectResponse("/", status_code=303)
