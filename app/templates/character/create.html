@@ -89,6 +89,44 @@
             </p>
         </section>
 
+        <!-- COMBAT SKILLS -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">Combat Skills</h2>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div class="tooltip-trigger relative">
+                    <label class="block text-sm font-medium mb-1 cursor-help">Attack (Fire)</label>
+                    <select name="attack" x-model.number="attack"
+                            class="border rounded px-4 py-2 text-lg font-bold text-center w-20">
+                        {% for v in range(1, 6) %}
+                        <option value="{{ v }}">{{ v }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="text-xs text-ink/50 ml-2" x-text="combatSkillXp(attack) + ' XP'"></span>
+                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
+                        <p class="font-medium mb-1">Attack (Fire)</p>
+                        <p>Roll Attack + Fire to hit. TN to hit = 5 + 5 * defender's Parry. Extra damage die per 5 over TN.</p>
+                    </div>
+                </div>
+                <div class="tooltip-trigger relative">
+                    <label class="block text-sm font-medium mb-1 cursor-help">Parry (Air)</label>
+                    <select name="parry" x-model.number="parry"
+                            class="border rounded px-4 py-2 text-lg font-bold text-center w-20">
+                        {% for v in range(1, 6) %}
+                        <option value="{{ v }}">{{ v }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="text-xs text-ink/50 ml-2" x-text="combatSkillXp(parry) + ' XP'"></span>
+                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
+                        <p class="font-medium mb-1">Parry (Air)</p>
+                        <p>Roll Parry + Air to parry. TN to be hit = 5 + 5 * Parry. Declaring parry before attack roll grants a free raise.</p>
+                    </div>
+                </div>
+            </div>
+            <p class="text-sm text-ink/60 mt-3">
+                Start at 1. Raised using advanced skill costs (4/4/6/8/10 XP).
+            </p>
+        </section>
+
         <!-- HONOR / RANK / RECOGNITION -->
         <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
             <h2 class="text-xl font-bold mb-4 text-accent">Honor, Rank & Recognition</h2>
@@ -358,6 +396,8 @@ function characterForm() {
             {{ did }}: false,
             {% endfor %}
         },
+        attack: 1,
+        parry: 1,
         honor: 1.0,
         rank: 1.0,
         recognition: 1.0,
@@ -435,6 +475,17 @@ function characterForm() {
             return cost;
         },
 
+        combatSkillXp(rank) {
+            // Advanced cost for ranks above 1
+            let cost = 0;
+            for (let r = 2; r <= rank; r++) cost += ADVANCED_COSTS[r];
+            return cost;
+        },
+
+        totalCombatSkillXp() {
+            return this.combatSkillXp(this.attack) + this.combatSkillXp(this.parry);
+        },
+
         totalAdvXp() {
             const ADV_COSTS = {
                 {% for aid, adv in advantages.items() %}
@@ -476,6 +527,7 @@ function characterForm() {
 
         totalXp() {
             return this.totalRingXp() + this.totalSkillXp() + this.totalKnackXp()
+                 + this.totalCombatSkillXp()
                  + this.honorXp() + this.rankXp() + this.recognitionXp()
                  + this.totalAdvXp() - this.totalDisXp();
         },

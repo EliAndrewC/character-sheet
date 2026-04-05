@@ -103,13 +103,60 @@
                 <span class="font-bold">{{ ring_map['Void'] + 1 }} dice, keep {{ ring_map['Void'] }}</span>
             </div>
             <div class="bg-parchment rounded p-2">
-                <span class="text-ink/60">Base TN to hit:</span>
-                <span class="font-bold">{{ 5 + 5 * 1 }}</span>
-                <span class="text-xs text-ink/50">(parry 1)</span>
+                <span class="text-ink/60">TN to be hit:</span>
+                <span class="font-bold">{{ 5 + 5 * character.parry }}</span>
+                <span class="text-xs text-ink/50">(parry {{ character.parry }})</span>
             </div>
             <div class="bg-parchment rounded p-2">
                 <span class="text-ink/60">Wound Check:</span>
                 <span class="font-bold">{{ ring_map['Water'] + 1 }}k{{ ring_map['Water'] }}</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- COMBAT SKILLS -->
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Combat Skills</h2>
+        <div class="grid gap-3 sm:grid-cols-2">
+            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative">
+                <div class="flex items-center justify-between">
+                    <span class="font-medium">Attack</span>
+                    <div class="flex items-center gap-2">
+                        <div class="flex gap-0.5">
+                            {% for i in range(1, 6) %}
+                            <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= character.attack else 'border-ink/30' }}"></div>
+                            {% endfor %}
+                        </div>
+                        <span class="text-sm text-ink/60">
+                            Roll: {{ character.attack + ring_map['Fire'] }}k{{ ring_map['Fire'] }}
+                        </span>
+                    </div>
+                </div>
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
+                    <p class="font-medium mb-1">Attack (Fire)</p>
+                    <p>Roll Attack + Fire to hit. TN to hit = 5 + 5 * defender's Parry skill. Extra damage die for every 5 points exceeding the TN.</p>
+                    <p class="mt-1 text-gold">You roll: {{ character.attack + ring_map['Fire'] }}k{{ ring_map['Fire'] }}</p>
+                </div>
+            </div>
+            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative">
+                <div class="flex items-center justify-between">
+                    <span class="font-medium">Parry</span>
+                    <div class="flex items-center gap-2">
+                        <div class="flex gap-0.5">
+                            {% for i in range(1, 6) %}
+                            <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= character.parry else 'border-ink/30' }}"></div>
+                            {% endfor %}
+                        </div>
+                        <span class="text-sm text-ink/60">
+                            Roll: {{ character.parry + ring_map['Air'] }}k{{ ring_map['Air'] }}
+                        </span>
+                    </div>
+                </div>
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
+                    <p class="font-medium mb-1">Parry (Air)</p>
+                    <p>Roll Parry + Air to deflect an attack. TN = attacker's roll result. Your TN to be hit = 5 + 5 * Parry. Declaring parry before attack roll grants a free raise.</p>
+                    <p class="mt-1 text-gold">You roll: {{ character.parry + ring_map['Air'] }}k{{ ring_map['Air'] }}. Your TN to be hit: {{ 5 + 5 * character.parry }}</p>
+                </div>
             </div>
         </div>
     </section>
@@ -271,6 +318,9 @@
             </div>
             <div class="flex justify-between px-3 py-2 bg-parchment rounded">
                 <span>Knacks</span><span class="font-mono font-bold">{{ xp.knacks }}</span>
+            </div>
+            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
+                <span>Combat Skills</span><span class="font-mono font-bold">{{ xp.combat_skills }}</span>
             </div>
             <div class="flex justify-between px-3 py-2 bg-parchment rounded">
                 <span>Honor</span><span class="font-mono font-bold">{{ xp.honor }}</span>

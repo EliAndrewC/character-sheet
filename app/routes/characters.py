@@ -36,6 +36,8 @@ def _parse_form_to_dict(form_data: dict) -> dict:
         "starting_xp": int(form_data.get("starting_xp", 150)),
         "earned_xp": int(form_data.get("earned_xp", 0)),
         "notes": form_data.get("notes", ""),
+        "attack": int(form_data.get("attack", 1)),
+        "parry": int(form_data.get("parry", 1)),
     }
 
     # Rings
@@ -105,6 +107,8 @@ async def update_character(
     character.ring_earth = data["rings"]["Earth"]
     character.ring_water = data["rings"]["Water"]
     character.ring_void = data["rings"]["Void"]
+    character.attack = data["attack"]
+    character.parry = data["parry"]
     character.skills = data["skills"]
     character.knacks = data["knacks"]
     character.advantages = data["advantages"]
@@ -148,6 +152,8 @@ async def xp_calc_partial(request: Request):
         "school": data["school"],
         "school_ring_choice": data["school_ring_choice"],
         "rings": data["rings"],
+        "attack": data["attack"],
+        "parry": data["parry"],
         "skills": data["skills"],
         "knacks": data["knacks"],
         "advantages": data["advantages"],
