@@ -10,7 +10,10 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.game_data import ADVANTAGES, DISADVANTAGES, SKILLS, SCHOOL_KNACKS
+from app.game_data import (
+    ADVANTAGES, CAMPAIGN_ADVANTAGES, CAMPAIGN_DISADVANTAGES,
+    DISADVANTAGES, SKILLS, SCHOOL_KNACKS,
+)
 from app.models import Character, CharacterVersion
 from app.services.rolls import compute_dan
 
@@ -125,6 +128,30 @@ def compute_diff_summary(old_state: Dict[str, Any], new_state: Dict[str, Any]) -
         dis = DISADVANTAGES.get(did)
         name = dis.name if dis else _label(did)
         diffs.append(f"Removed disadvantage: {name}")
+
+    # Campaign advantages
+    old_camp_advs = set(old_state.get("campaign_advantages", []))
+    new_camp_advs = set(new_state.get("campaign_advantages", []))
+    for aid in sorted(new_camp_advs - old_camp_advs):
+        adv = CAMPAIGN_ADVANTAGES.get(aid)
+        name = adv.name if adv else _label(aid)
+        diffs.append(f"Added campaign advantage: {name}")
+    for aid in sorted(old_camp_advs - new_camp_advs):
+        adv = CAMPAIGN_ADVANTAGES.get(aid)
+        name = adv.name if adv else _label(aid)
+        diffs.append(f"Removed campaign advantage: {name}")
+
+    # Campaign disadvantages
+    old_camp_dises = set(old_state.get("campaign_disadvantages", []))
+    new_camp_dises = set(new_state.get("campaign_disadvantages", []))
+    for did in sorted(new_camp_dises - old_camp_dises):
+        dis = CAMPAIGN_DISADVANTAGES.get(did)
+        name = dis.name if dis else _label(did)
+        diffs.append(f"Added campaign disadvantage: {name}")
+    for did in sorted(old_camp_dises - new_camp_dises):
+        dis = CAMPAIGN_DISADVANTAGES.get(did)
+        name = dis.name if dis else _label(did)
+        diffs.append(f"Removed campaign disadvantage: {name}")
 
     # Earned XP
     old_xp = old_state.get("earned_xp", 0)
@@ -244,6 +271,8 @@ def _restore_character_from_state(character: Character, state: Dict[str, Any]):
     character.knacks = state.get("knacks", {})
     character.advantages = state.get("advantages", [])
     character.disadvantages = state.get("disadvantages", [])
+    character.campaign_advantages = state.get("campaign_advantages", [])
+    character.campaign_disadvantages = state.get("campaign_disadvantages", [])
     character.honor = state.get("honor", 1.0)
     character.rank = state.get("rank", 1.0)
     character.rank_locked = state.get("rank_locked", False)

@@ -80,6 +80,8 @@ class Character(Base):
     knacks: Mapped[Optional[Dict[str, int]]] = mapped_column(JSON, default=dict)
     advantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
     disadvantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
+    campaign_advantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
+    campaign_disadvantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
 
     # Honor / Rank / Recognition
     honor: Mapped[float] = mapped_column(Float, default=1.0)
@@ -141,6 +143,8 @@ class Character(Base):
             "knacks": self.knacks or {},
             "advantages": self.advantages or [],
             "disadvantages": self.disadvantages or [],
+            "campaign_advantages": self.campaign_advantages or [],
+            "campaign_disadvantages": self.campaign_disadvantages or [],
             "honor": self.honor,
             "rank": self.rank,
             "rank_locked": self.rank_locked,
@@ -181,6 +185,8 @@ class Character(Base):
             knacks=data.get("knacks", {}),
             advantages=data.get("advantages", []),
             disadvantages=data.get("disadvantages", []),
+            campaign_advantages=data.get("campaign_advantages", []),
+            campaign_disadvantages=data.get("campaign_disadvantages", []),
             honor=data.get("honor", 1.0),
             rank=data.get("rank", 1.0),
             rank_locked=data.get("rank_locked", False),

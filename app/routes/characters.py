@@ -1,13 +1,17 @@
-"""Character API routes — CRUD and HTMX partial endpoints."""
+"""Character API routes — CRUD, auto-save, publish, revert, and HTMX partials."""
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.game_data import ADVANTAGES, DISADVANTAGES, SCHOOLS, SKILLS, SCHOOL_KNACKS, Ring
-from app.models import Character
-from app.services.auth import can_edit_character, get_admin_ids
+from app.game_data import (
+    ADVANTAGES, CAMPAIGN_ADVANTAGES, CAMPAIGN_DISADVANTAGES,
+    DISADVANTAGES, SCHOOLS, SKILLS, SCHOOL_KNACKS, Ring,
+)
+from app.models import Character, CharacterVersion, User
+from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids
+from app.services.versions import publish_character, revert_character
 from app.services.xp import calculate_total_xp
 
 router = APIRouter(prefix="/characters")
@@ -75,21 +79,21 @@ def _parse_form_to_dict(form_data: dict) -> dict:
 
 @router.post("")
 async def create_character(request: Request, db: Session = Depends(get_db)):
+    """Create a blank draft character and redirect to the editor."""
     user = getattr(request.state, "user", None)
     if not user:
         return RedirectResponse("/auth/login", status_code=303)
 
-    form = await request.form()
-    form_data = dict(form)
-    data = _parse_form_to_dict(form_data)
-
-    character = Character.from_dict(data)
-    character.owner_discord_id = user["discord_id"]
+    character = Character(
+        name="New Character",
+        owner_discord_id=user["discord_id"],
+        player_name=user.get("display_name", ""),
+    )
     db.add(character)
     db.commit()
     db.refresh(character)
 
-    return RedirectResponse(f"/characters/{character.id}", status_code=303)
+    return RedirectResponse(f"/characters/{character.id}/edit", status_code=303)
 
 
 @router.post("/{char_id}")
@@ -162,6 +166,179 @@ def delete_character(request: Request, char_id: int, db: Session = Depends(get_d
         db.delete(character)
         db.commit()
     return RedirectResponse("/", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Auto-save, publish, revert
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{char_id}/autosave")
+async def autosave_character(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Auto-save draft character from JSON payload."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    # Check edit permission using account-level grants
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    owner_granted = owner.granted_account_ids or [] if owner else []
+    if not can_edit_character(
+        user["discord_id"],
+        character.owner_discord_id,
+        owner_granted,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    body = await request.json()
+
+    # Update character fields from JSON
+    if "name" in body:
+        character.name = body["name"]
+    if "player_name" in body:
+        character.player_name = body["player_name"]
+    if "school" in body:
+        character.school = body["school"]
+    if "school_ring_choice" in body:
+        character.school_ring_choice = body["school_ring_choice"]
+    if "rings" in body:
+        rings = body["rings"]
+        character.ring_air = rings.get("Air", character.ring_air)
+        character.ring_fire = rings.get("Fire", character.ring_fire)
+        character.ring_earth = rings.get("Earth", character.ring_earth)
+        character.ring_water = rings.get("Water", character.ring_water)
+        character.ring_void = rings.get("Void", character.ring_void)
+    if "attack" in body:
+        character.attack = body["attack"]
+    if "parry" in body:
+        character.parry = body["parry"]
+    if "skills" in body:
+        character.skills = body["skills"]
+    if "knacks" in body:
+        character.knacks = body["knacks"]
+    if "advantages" in body:
+        character.advantages = body["advantages"]
+    if "campaign_advantages" in body:
+        character.campaign_advantages = body["campaign_advantages"]
+    if "campaign_disadvantages" in body:
+        character.campaign_disadvantages = body["campaign_disadvantages"]
+    if "disadvantages" in body:
+        character.disadvantages = body["disadvantages"]
+    if "honor" in body:
+        character.honor = body["honor"]
+    if "rank" in body:
+        character.rank = body["rank"]
+    if "rank_locked" in body:
+        character.rank_locked = body["rank_locked"]
+    if "recognition" in body:
+        character.recognition = body["recognition"]
+    if "recognition_halved" in body:
+        character.recognition_halved = body["recognition_halved"]
+    if "earned_xp" in body:
+        character.earned_xp = body["earned_xp"]
+    if "notes" in body:
+        character.notes = body["notes"]
+
+    db.commit()
+    return JSONResponse({"status": "saved"})
+
+
+@router.post("/{char_id}/publish")
+async def publish_character_route(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Publish the current draft as a new version."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    owner_granted = owner.granted_account_ids or [] if owner else []
+    if not can_edit_character(
+        user["discord_id"],
+        character.owner_discord_id,
+        owner_granted,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    version = publish_character(character, db)
+    db.commit()
+
+    return JSONResponse({
+        "status": "published",
+        "version_number": version.version_number,
+        "summary": version.summary,
+    })
+
+
+@router.post("/{char_id}/revert/{version_id}")
+async def revert_character_route(
+    request: Request, char_id: int, version_id: int, db: Session = Depends(get_db)
+):
+    """Revert character to a previous version."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    owner_granted = owner.granted_account_ids or [] if owner else []
+    if not can_edit_character(
+        user["discord_id"],
+        character.owner_discord_id,
+        owner_granted,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    version = revert_character(character, version_id, db)
+    db.commit()
+
+    return JSONResponse({
+        "status": "reverted",
+        "version_number": version.version_number,
+    })
+
+
+@router.get("/{char_id}/versions")
+def get_versions(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Get version history for a character."""
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    versions = (
+        db.query(CharacterVersion)
+        .filter(CharacterVersion.character_id == char_id)
+        .order_by(CharacterVersion.version_number.desc())
+        .all()
+    )
+
+    return JSONResponse({
+        "versions": [
+            {
+                "id": v.id,
+                "version_number": v.version_number,
+                "summary": v.summary,
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+            }
+            for v in versions
+        ]
+    })
 
 
 # ---------------------------------------------------------------------------

@@ -95,6 +95,8 @@ def make_character_data(**overrides) -> dict:
         "rank": 1.0,
         "recognition": 1.0,
         "recognition_halved": False,
+        "campaign_advantages": [],
+        "campaign_disadvantages": [],
         "earned_xp": 0,
         "starting_xp": 150,
     }

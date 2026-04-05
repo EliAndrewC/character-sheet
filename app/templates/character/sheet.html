@@ -388,5 +388,39 @@
     </section>
     {% endif %}
 
+    <!-- VERSION HISTORY -->
+    {% if viewer_can_edit and versions %}
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Version History</h2>
+        <div class="space-y-2">
+            {% for v in versions %}
+            <div class="flex items-start justify-between text-sm bg-parchment rounded p-3">
+                <div>
+                    <span class="font-bold">v{{ v.version_number }}</span>
+                    <span class="text-ink/50 ml-2">{{ v.created_at.strftime('%Y-%m-%d %H:%M') if v.created_at else '' }}</span>
+                    <p class="text-ink/70 mt-1">{{ v.summary }}</p>
+                </div>
+                {% if v.version_number != versions[0].version_number %}
+                <form method="POST" action="/characters/{{ character.id }}/revert/{{ v.id }}"
+                      onsubmit="return confirm('Revert to version {{ v.version_number }}?')">
+                    <button type="submit"
+                            class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">
+                        Revert
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- DRAFT INDICATOR -->
+    {% if not character.is_published %}
+    <div class="text-center text-sm text-ink/50 py-2 italic">
+        This character has not been published yet. Changes are only visible to you and those with access.
+    </div>
+    {% endif %}
+
 </div>
 {% endblock %}

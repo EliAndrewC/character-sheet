@@ -1909,6 +1909,116 @@ SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
 
 
 # ---------------------------------------------------------------------------
+# SCHOOL RING OPTIONS
+# ---------------------------------------------------------------------------
+
+SCHOOL_RING_OPTIONS: Dict[str, List[str]] = {}
+for _sid, _school in SCHOOLS.items():
+    if _school.school_ring in ("Air", "Fire", "Earth", "Water", "Void"):
+        SCHOOL_RING_OPTIONS[_sid] = [_school.school_ring]
+    elif _school.school_ring == "any non-Void":
+        SCHOOL_RING_OPTIONS[_sid] = ["Air", "Fire", "Earth", "Water"]
+    elif _school.school_ring == "Air or Water":
+        SCHOOL_RING_OPTIONS[_sid] = ["Air", "Water"]
+    else:
+        SCHOOL_RING_OPTIONS[_sid] = ["Air", "Fire", "Earth", "Water", "Void"]
+
+
+# ---------------------------------------------------------------------------
+# CAMPAIGN ADVANTAGES & DISADVANTAGES (Wasp Bounty Hunters)
+# ---------------------------------------------------------------------------
+
+_CAMPAIGN_ADVANTAGES_LIST: List[Advantage] = [
+    Advantage(
+        "family_reckoning_righteous_sting",
+        "Family Reckoning: Righteous Sting",
+        5,
+        "Your kin acted honorably; +2.0 Rank for yourself and +1.0 Rank for the party.",
+    ),
+    Advantage(
+        "highest_regard",
+        "Highest Regard",
+        4,
+        "A written letter of introduction grants +2.0 Rank/Recognition with Wasp, "
+        "4 free raises on bragging/intimidation with Wasp (2 with others).",
+    ),
+    Advantage(
+        "household_wealth",
+        "Household Wealth",
+        4,
+        "Replaces Wealthy; you receive the income of a 10th-rank samurai (100 koku/year).",
+    ),
+    Advantage(
+        "minor_clan_major_ally_sparrow",
+        "Minor Clan Major Ally: Sparrow",
+        2,
+        "+3.0 Rank/Recognition with Sparrow; can call on Sparrow allies to delay proceedings.",
+    ),
+    Advantage(
+        "minor_clan_major_ally_fox",
+        "Minor Clan Major Ally: Fox",
+        4,
+        "+3.0 Rank/Recognition with Fox; access to shugenja specialists.",
+    ),
+    Advantage(
+        "minor_clan_major_ally_mantis",
+        "Minor Clan Major Ally: Mantis",
+        6,
+        "+3.0 Rank/Recognition with Mantis; access to discreet warriors.",
+    ),
+    Advantage(
+        "streetwise",
+        "Streetwise",
+        5,
+        "Free raise on etiquette, law, intimidation, and underworld rolls related to bounty hunter authority.",
+    ),
+]
+
+CAMPAIGN_ADVANTAGES: Dict[str, Advantage] = {a.id: a for a in _CAMPAIGN_ADVANTAGES_LIST}
+
+_CAMPAIGN_DISADVANTAGES_LIST: List[Disadvantage] = [
+    Disadvantage(
+        "crane_indebted",
+        "Crane-indebted",
+        4,
+        "Obligation to Crane patrons; failure results in Bad Reputation.",
+    ),
+    Disadvantage(
+        "family_reckoning_venomous_sting",
+        "Family Reckoning: Venomous Sting",
+        5,
+        "Your kin acted questionably; -2.0 Rank for yourself and -1.0 Rank for the party.",
+    ),
+    Disadvantage(
+        "imperial_disdain",
+        "Imperial Disdain",
+        2,
+        "No Recognition on bragging with Imperial posts; -1.0 Rank for the party with Imperial posts.",
+    ),
+    Disadvantage(
+        "lion_enmity",
+        "Lion Enmity",
+        4,
+        "-10 to rolls with Zenji house, -5 with other Matsu.",
+    ),
+    Disadvantage(
+        "peasantborn",
+        "Peasantborn",
+        2,
+        "Never considered peer standing with samurai-born; restrictions on dueling, arrest, and initiating violence.",
+    ),
+    Disadvantage(
+        "scorpion_advocate",
+        "Scorpion Advocate",
+        2,
+        "A Scorpion connection directs you to thwart dishonorable Wasp bounty hunters.",
+    ),
+]
+
+CAMPAIGN_DISADVANTAGES: Dict[str, Disadvantage] = {d.id: d for d in _CAMPAIGN_DISADVANTAGES_LIST}
+
+
+# ---------------------------------------------------------------------------
 # CONVENIENCE: all data in one place for iteration
 # ---------------------------------------------------------------------------
 
