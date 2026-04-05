@@ -1,5 +1,5 @@
 app = 'l7r-character-sheet'
-primary_region = 'ewr'
+primary_region = 'iad'
 
 [build]
 

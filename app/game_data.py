@@ -1669,6 +1669,246 @@ def dan_for_xp(total_xp_spent: int) -> int:
 
 
 # ---------------------------------------------------------------------------
+# SCHOOL TECHNIQUE BONUSES (structured data for 1st/2nd/3rd Dan)
+# ---------------------------------------------------------------------------
+#
+# Keys:
+#   first_dan_extra_die  – list of roll-type IDs that gain +1 rolled die
+#   second_dan_free_raise – single roll-type ID that gains a free raise
+#   third_dan            – present ONLY when the 3rd Dan follows the standard
+#                          "Gain 2X free raises per adventure" pattern
+#       source_skill   – skill whose rank = X
+#       applicable_to  – list of skill / roll-type IDs the raises apply to
+#       formula        – always "2X"
+#       max_per_roll   – always "X"
+#
+# Roll-type IDs for combat: attack, parry, wound_check, damage, initiative,
+#   counterattack, double_attack, iaijutsu, lunge, athletics
+# Skill IDs match the SKILLS dict (e.g. tact, manipulation, sincerity …).
+# Schools whose 1st/2nd Dan say "chosen" or are otherwise non-standard
+# use None for the relevant field.
+
+SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
+    # ======================== BUSHI SCHOOLS ========================
+    "akodo_bushi": {
+        "first_dan_extra_die": ["attack", "double_attack", "wound_check"],
+        "second_dan_free_raise": "wound_check",
+        # 3rd Dan: non-standard (excess from wound checks → attack bonus)
+    },
+    "bayushi_bushi": {
+        "first_dan_extra_die": ["iaijutsu", "double_attack", "wound_check"],
+        "second_dan_free_raise": "double_attack",
+        # 3rd Dan: non-standard (feints deal damage)
+    },
+    "hida_bushi": {
+        "first_dan_extra_die": ["attack", "counterattack", "wound_check"],
+        "second_dan_free_raise": "counterattack",
+        # 3rd Dan: non-standard (reroll dice on counterattacks/attacks)
+    },
+    "mirumoto_bushi": {
+        "first_dan_extra_die": ["attack", "double_attack", "parry"],
+        "second_dan_free_raise": "parry",
+        # 3rd Dan: non-standard (gain points to decrease action phases)
+    },
+    "matsu_bushi": {
+        "first_dan_extra_die": ["double_attack", "iaijutsu", "wound_check"],
+        "second_dan_free_raise": "iaijutsu",
+        # 3rd Dan: non-standard (spend void to add to wound check)
+    },
+    "otaku_bushi": {
+        "first_dan_extra_die": ["iaijutsu", "lunge", "wound_check"],
+        "second_dan_free_raise": "wound_check",
+        # 3rd Dan: non-standard (increase attacker's next action dice)
+    },
+    "shinjo_bushi": {
+        "first_dan_extra_die": ["double_attack", "initiative", "parry"],
+        "second_dan_free_raise": "parry",
+        # 3rd Dan: non-standard (decrease action dice after parry)
+    },
+    "yogo_warden": {
+        "first_dan_extra_die": ["attack", "damage", "wound_check"],
+        "second_dan_free_raise": "wound_check",
+        # 3rd Dan: non-standard (spend void to reduce light wounds)
+    },
+
+    # =================== COUNTERATTACK SCHOOLS ====================
+    "daidoji_yojimbo": {
+        "first_dan_extra_die": ["attack", "counterattack", "wound_check"],
+        "second_dan_free_raise": "counterattack",
+        # 3rd Dan: non-standard (add free raises to wound checks from counterattack damage)
+    },
+    "shiba_bushi": {
+        "first_dan_extra_die": ["double_attack", "parry", "wound_check"],
+        "second_dan_free_raise": "parry",
+        # 3rd Dan: non-standard (parries deal damage)
+    },
+
+    # ===================== DUELIST SCHOOLS ========================
+    "isawa_duelist": {
+        "first_dan_extra_die": ["double_attack", "lunge", "wound_check"],
+        "second_dan_free_raise": "wound_check",
+        # 3rd Dan: non-standard (trade TN for attack bonus)
+    },
+    "kakita_duelist": {
+        "first_dan_extra_die": ["double_attack", "iaijutsu", "initiative"],
+        "second_dan_free_raise": "iaijutsu",
+        # 3rd Dan: non-standard (attacks gain bonus per phase)
+    },
+
+    # ====================== MONK SCHOOLS ==========================
+    "brotherhood_of_shinsei_monk": {
+        "first_dan_extra_die": ["attack", "damage", "wound_check"],
+        "second_dan_free_raise": "attack",
+        "third_dan": {
+            "source_skill": "precepts",
+            "applicable_to": [
+                "history", "law", "precepts", "wound_check", "attack",
+            ],
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
+    },
+    "togashi_ise_zumi": {
+        "first_dan_extra_die": ["attack", "parry", "athletics"],
+        "second_dan_free_raise": "athletics",
+        # 3rd Dan: non-standard (4X free raises daily for athletics only)
+    },
+
+    # ============== INVESTIGATOR / SUPPORT SCHOOLS ================
+    "hiruma_scout": {
+        "first_dan_extra_die": ["initiative", "parry", "wound_check"],
+        "second_dan_free_raise": "parry",
+        # 3rd Dan: non-standard (add bonus to next attack after parry)
+    },
+    "kitsuki_magistrate": {
+        "first_dan_extra_die": ["investigation", "interrogation", "wound_check"],
+        "second_dan_free_raise": "interrogation",
+        "third_dan": {
+            "source_skill": "investigation",
+            "applicable_to": [
+                "interrogation", "intimidation", "law", "underworld",
+                "attack", "wound_check",
+            ],
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
+    },
+    "kuni_witch_hunter": {
+        "first_dan_extra_die": ["damage", "interrogation", "wound_check"],
+        "second_dan_free_raise": "interrogation",
+        "third_dan": {
+            "source_skill": "investigation",
+            "applicable_to": [
+                "interrogation", "intimidation", "law", "underworld",
+                "attack", "wound_check", "damage",
+            ],
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
+    },
+
+    # ================ COURT & MERCHANT SCHOOLS ====================
+    "courtier": {
+        "first_dan_extra_die": ["tact", "manipulation", "wound_check"],
+        "second_dan_free_raise": "manipulation",
+        "third_dan": {
+            "source_skill": "tact",
+            "applicable_to": [
+                "heraldry", "manipulation", "sincerity", "tact",
+                "attack", "wound_check",
+            ],
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
+    },
+    "doji_artisan": {
+        "first_dan_extra_die": ["counterattack", "manipulation", "wound_check"],
+        "second_dan_free_raise": "manipulation",
+        "third_dan": {
+            "source_skill": "culture",
+            "applicable_to": [
+                "bragging", "culture", "heraldry", "manipulation",
+                "counterattack", "wound_check",
+            ],
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
+    },
+    "ide_diplomat": {
+        "first_dan_extra_die": None,   # "precepts and two chosen roll types"
+        "second_dan_free_raise": None,  # "any chosen roll type"
+        # 3rd Dan: non-standard (spend void to subtract Xk1 after any roll)
+    },
+    "merchant": {
+        "first_dan_extra_die": ["interrogation", "sincerity", "wound_check"],
+        "second_dan_free_raise": "interrogation",
+        "third_dan": {
+            "source_skill": "sincerity",
+            "applicable_to": [
+                "commerce", "heraldry", "interrogation", "sincerity",
+                "attack", "wound_check",
+            ],
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
+    },
+    "shosuro_actor": {
+        "first_dan_extra_die": ["attack", "sincerity", "wound_check"],
+        "second_dan_free_raise": "sincerity",
+        "third_dan": {
+            "source_skill": "sincerity",
+            "applicable_to": [
+                "acting", "heraldry", "sincerity", "sneaking",
+                "attack", "wound_check",
+            ],
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
+    },
+
+    # =============== ARTISAN / KNOWLEDGE SCHOOLS ===================
+    "ikoma_bard": {
+        "first_dan_extra_die": ["attack", "bragging", "wound_check"],
+        "second_dan_free_raise": "attack",
+        "third_dan": {
+            "source_skill": "bragging",
+            "applicable_to": [
+                "bragging", "culture", "heraldry", "intimidation",
+                "attack", "wound_check",
+            ],
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
+    },
+
+    # ================== SPELLCASTER SCHOOLS =======================
+    "isawa_ishi": {
+        "first_dan_extra_die": None,   # "precepts and two chosen skill rolls"
+        "second_dan_free_raise": None,  # "all rolls for a chosen skill"
+        # 3rd Dan: non-standard (spend void to add Xk1 to ally's roll)
+    },
+    "priest": {
+        "first_dan_extra_die": None,   # "precepts, one chosen skill, one combat roll type"
+        "second_dan_free_raise": None,  # "all Honor bonus rolls" (special)
+        # 3rd Dan: non-standard (roll dice at combat start; swap for rolled dice)
+    },
+    "shugenja": {
+        "first_dan_extra_die": None,   # "precepts or commune/spellcasting for a chosen element"
+        "second_dan_free_raise": None,  # "precepts or commune/spellcasting for a chosen element"
+        "third_dan": {
+            "source_skill": "precepts",
+            "applicable_to": [
+                "bragging", "intimidation", "precepts", "tact",
+                "wound_check", "spellcasting",
+            ],
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
+    },
+}
+
+
+# ---------------------------------------------------------------------------
 # CONVENIENCE: all data in one place for iteration
 # ---------------------------------------------------------------------------
 

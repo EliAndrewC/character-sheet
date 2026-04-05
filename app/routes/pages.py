@@ -10,6 +10,7 @@ from app.game_data import (
     DISADVANTAGES,
     SCHOOLS,
     SCHOOLS_BY_CATEGORY,
+    SCHOOL_TECHNIQUE_BONUSES,
     SKILLS,
     SCHOOL_KNACKS,
     SPELLS_BY_ELEMENT,
@@ -49,6 +50,7 @@ def new_character(request: Request):
             "advantages": ADVANTAGES,
             "disadvantages": DISADVANTAGES,
             "school_knacks": SCHOOL_KNACKS,
+            "technique_bonuses": SCHOOL_TECHNIQUE_BONUSES,
         },
     )
 
@@ -127,5 +129,6 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "disadvantages": DISADVANTAGES,
             "school_knacks": SCHOOL_KNACKS,
             "knacks": knacks,
+            "technique_bonuses": SCHOOL_TECHNIQUE_BONUSES,
         },
     )
