@@ -84,6 +84,33 @@
             </div>
         </section>
 
+        <!-- COMBAT SKILLS -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">Combat Skills</h2>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Attack (Fire)</label>
+                    <select name="attack" x-model.number="attack"
+                            class="border rounded px-4 py-2 text-lg font-bold text-center w-20">
+                        {% for v in range(1, 6) %}
+                        <option value="{{ v }}" {{ 'selected' if v == character.attack else '' }}>{{ v }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="text-xs text-ink/50 ml-2" x-text="combatSkillXp(attack) + ' XP'"></span>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Parry (Air)</label>
+                    <select name="parry" x-model.number="parry"
+                            class="border rounded px-4 py-2 text-lg font-bold text-center w-20">
+                        {% for v in range(1, 6) %}
+                        <option value="{{ v }}" {{ 'selected' if v == character.parry else '' }}>{{ v }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="text-xs text-ink/50 ml-2" x-text="combatSkillXp(parry) + ' XP'"></span>
+                </div>
+            </div>
+        </section>
+
         <!-- HONOR / RANK / RECOGNITION -->
         <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
             <h2 class="text-xl font-bold mb-4 text-accent">Honor, Rank & Recognition</h2>
@@ -280,6 +307,8 @@ function characterForm() {
             {{ did }}: {{ 'true' if did in (character.disadvantages or []) else 'false' }},
             {% endfor %}
         },
+        attack: {{ character.attack }},
+        parry: {{ character.parry }},
         honor: {{ character.honor }},
         rank: {{ character.rank }},
         recognition: {{ character.recognition }},
@@ -341,6 +370,16 @@ function characterForm() {
             return cost;
         },
 
+        combatSkillXp(rank) {
+            let cost = 0;
+            for (let r = 2; r <= rank; r++) cost += ADVANCED_COSTS[r];
+            return cost;
+        },
+
+        totalCombatSkillXp() {
+            return this.combatSkillXp(this.attack) + this.combatSkillXp(this.parry);
+        },
+
         totalAdvXp() {
             const ADV_COSTS = { {% for aid, adv in advantages.items() %}'{{ aid }}': {{ adv.xp_cost }}, {% endfor %} };
             let cost = 0;
@@ -364,6 +403,7 @@ function characterForm() {
 
         totalXp() {
             return this.totalRingXp() + this.totalSkillXp() + this.totalKnackXp()
+                 + this.totalCombatSkillXp()
                  + this.honorXp() + this.rankXp() + this.recognitionXp()
                  + this.totalAdvXp() - this.totalDisXp();
         },

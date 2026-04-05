@@ -25,6 +25,10 @@ class Character(Base):
     ring_water: Mapped[int] = mapped_column(default=2)
     ring_void: Mapped[int] = mapped_column(default=2)
 
+    # Combat skills
+    attack: Mapped[int] = mapped_column(default=1)
+    parry: Mapped[int] = mapped_column(default=1)
+
     # Variable collections as JSON
     skills: Mapped[Optional[Dict[str, int]]] = mapped_column(JSON, default=dict)
     knacks: Mapped[Optional[Dict[str, int]]] = mapped_column(JSON, default=dict)
@@ -82,6 +86,8 @@ class Character(Base):
             "school": self.school,
             "school_ring_choice": self.school_ring_choice,
             "rings": self.rings,
+            "attack": self.attack,
+            "parry": self.parry,
             "skills": self.skills or {},
             "knacks": self.knacks or {},
             "advantages": self.advantages or [],
@@ -119,6 +125,8 @@ class Character(Base):
             ring_earth=rings.get("Earth", data.get("ring_earth", 2)),
             ring_water=rings.get("Water", data.get("ring_water", 2)),
             ring_void=rings.get("Void", data.get("ring_void", 2)),
+            attack=data.get("attack", 1),
+            parry=data.get("parry", 1),
             skills=data.get("skills", {}),
             knacks=data.get("knacks", {}),
             advantages=data.get("advantages", []),

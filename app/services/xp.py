@@ -12,6 +12,8 @@ from typing import Dict, List
 from app.game_data import (
     ADVANCED_SKILL_COSTS,
     ADVANTAGES,
+    COMBAT_SKILL_MAX,
+    COMBAT_SKILL_START,
     DISADVANTAGES,
     HONOR_COST_PER_HALF,
     HONOR_MAX,
@@ -91,6 +93,18 @@ def calculate_knack_xp(knacks: Dict[str, int]) -> int:
         # Sum advanced costs from rank 2 up to target rank
         for new_rank in range(2, min(rank, KNACK_MAX) + 1):
             xp += KNACK_COSTS[new_rank]
+    return xp
+
+
+def calculate_combat_skill_xp(attack: int = 1, parry: int = 1) -> int:
+    """Return total XP spent on Attack and Parry above the free starting rank of 1.
+
+    Both use the advanced skill cost table.
+    """
+    xp = 0
+    for rank in (attack, parry):
+        for new_rank in range(2, min(rank, COMBAT_SKILL_MAX) + 1):
+            xp += ADVANCED_SKILL_COSTS[new_rank]
     return xp
 
 
@@ -189,6 +203,10 @@ def calculate_total_xp(character_data: dict) -> dict:
     rings = calculate_ring_xp(character_data.get("rings", {}), school_ring)
     skills = calculate_skill_xp(character_data.get("skills", {}))
     knacks = calculate_knack_xp(character_data.get("knacks", {}))
+    combat_skills = calculate_combat_skill_xp(
+        attack=character_data.get("attack", COMBAT_SKILL_START),
+        parry=character_data.get("parry", COMBAT_SKILL_START),
+    )
     honor = calculate_honor_xp(character_data.get("honor", HONOR_START))
     rank = calculate_rank_xp(
         character_data.get("rank", RANK_START),
@@ -205,7 +223,7 @@ def calculate_total_xp(character_data: dict) -> dict:
     )
 
     total = (
-        rings + skills + knacks + honor + rank + recognition
+        rings + skills + knacks + combat_skills + honor + rank + recognition
         + advantages + disadvantages
     )
 
@@ -213,6 +231,7 @@ def calculate_total_xp(character_data: dict) -> dict:
         "rings": rings,
         "skills": skills,
         "knacks": knacks,
+        "combat_skills": combat_skills,
         "honor": honor,
         "rank": rank,
         "recognition": recognition,
@@ -241,6 +260,20 @@ def validate_character(character_data: dict) -> List[str]:
     school_id = character_data.get("school", "")
     school = SCHOOLS.get(school_id)
     school_ring = character_data.get("school_ring_choice", "")
+
+    # -- Combat skills (Attack / Parry) --
+    for cs_name in ("attack", "parry"):
+        cs_val = character_data.get(cs_name, COMBAT_SKILL_START)
+        if cs_val < COMBAT_SKILL_START:
+            errors.append(
+                f"{cs_name.title()} ({cs_val}) must be at least "
+                f"{COMBAT_SKILL_START}."
+            )
+        if cs_val > COMBAT_SKILL_MAX:
+            errors.append(
+                f"{cs_name.title()} ({cs_val}) exceeds maximum "
+                f"({COMBAT_SKILL_MAX})."
+            )
 
     # -- Rings --
     rings = character_data.get("rings", {})

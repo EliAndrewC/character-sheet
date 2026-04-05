@@ -97,6 +97,37 @@ RECOGNITION_HALVE_START_XP = 3  # 3 XP to halve starting Recognition
 # COMBAT REFERENCE
 # ---------------------------------------------------------------------------
 
+COMBAT_SKILLS = {
+    "attack": {
+        "name": "Attack",
+        "ring": "Fire",
+        "start": 1,
+        "max": 5,
+        "cost_table": ADVANCED_SKILL_COSTS,
+        "description": (
+            "Roll Attack + Fire to hit. TN to hit = 5 + 5 * defender's Parry skill. "
+            "Extra damage die for every 5 points exceeding the TN."
+        ),
+        "roll_description": "Roll Attack + Fire.",
+    },
+    "parry": {
+        "name": "Parry",
+        "ring": "Air",
+        "start": 1,
+        "max": 5,
+        "cost_table": ADVANCED_SKILL_COSTS,
+        "description": (
+            "Roll Parry + Air to deflect an attack. TN = attacker's roll result. "
+            "Your TN to be hit = 5 + 5 * Parry. Declaring parry before attack roll grants a free raise."
+        ),
+        "roll_description": "Roll Parry + Air. Your TN to be hit: 5 + 5 * Parry.",
+    },
+}
+
+COMBAT_SKILL_START = 1
+COMBAT_SKILL_MAX = 5
+
+
 COMBAT_REFERENCE = {
     "attack_ring": Ring.FIRE,
     "attack_skill_start": 1,
