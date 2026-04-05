@@ -55,6 +55,13 @@
                     {% endfor %}
                 </select>
             </div>
+
+            <!-- Dan indicator -->
+            <div x-show="school && Object.keys(knacks).length > 0" class="mb-3">
+                <span class="text-sm font-medium">Current Dan:</span>
+                <span class="text-lg font-bold text-accent" x-text="currentDan()"></span>
+            </div>
+
             <div id="school-details"
                  hx-trigger="load"
                  class="text-sm text-ink/70 italic">
@@ -64,6 +71,36 @@
             <input type="hidden" name="school_ring_choice" x-model="schoolRingChoice">
         </section>
 
+        <!-- KNACKS (managed by Alpine, outside school-details) -->
+        <section x-show="school && Object.keys(knacks).length > 0" class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4 text-accent">School Knacks</h2>
+            <p class="text-sm text-ink/60 mb-3">
+                Dan = lowest knack rank. Current Dan: <strong x-text="currentDan()"></strong>
+            </p>
+            <div class="grid gap-3">
+                <template x-for="kid in Object.keys(knacks)" :key="kid">
+                    <div class="flex items-center gap-3">
+                        <span class="w-40 text-sm font-medium" x-text="KNACK_NAMES[kid] || kid"></span>
+                        <div class="flex items-center gap-1">
+                            <button type="button"
+                                    @click="knacks[kid] = Math.max(1, knacks[kid] - 1)"
+                                    :disabled="knacks[kid] <= 1"
+                                    :title="knacks[kid] <= 1 ? '' : 'Lower to ' + (knacks[kid]-1) + ' (refund ' + ADVANCED_COSTS[knacks[kid]] + ' XP)'"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                            <span class="w-8 text-center font-bold text-lg" x-text="knacks[kid]"></span>
+                            <input type="hidden" :name="'knack_' + kid" :value="knacks[kid]">
+                            <button type="button"
+                                    @click="knacks[kid] = Math.min(5, knacks[kid] + 1)"
+                                    :disabled="knacks[kid] >= 5"
+                                    :title="knacks[kid] >= 5 ? '' : 'Raise to ' + (knacks[kid]+1) + ' (' + ADVANCED_COSTS[knacks[kid]+1] + ' XP)'"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                        </div>
+                        <span class="text-xs text-ink/50" x-text="totalKnackCostSingle(knacks[kid]) + ' XP'"></span>
+                    </div>
+                </template>
+            </div>
+        </section>
+
         <!-- RINGS -->
         <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
             <h2 class="text-xl font-bold mb-4 text-accent">Rings</h2>
@@ -71,14 +108,19 @@
                 {% for ring in rings %}
                 <div class="text-center">
                     <label class="block text-sm font-medium mb-2">{{ ring }}</label>
-                    <div class="relative inline-block">
-                        <select name="ring_{{ ring.lower() }}"
-                                x-model.number="rings.{{ ring }}"
-                                class="block border rounded px-4 py-2 text-lg font-bold text-center appearance-none focus:ring-2 focus:ring-accent/30 focus:border-accent w-20">
-                            {% for v in range(2, 7) %}
-                            <option value="{{ v }}">{{ v }}</option>
-                            {% endfor %}
-                        </select>
+                    <div class="flex items-center justify-center gap-1">
+                        <button type="button"
+                                @click="rings.{{ ring }} = Math.max(2, rings.{{ ring }} - 1)"
+                                :disabled="rings.{{ ring }} <= 2"
+                                :title="rings.{{ ring }} <= 2 ? '' : 'Lower to ' + (rings.{{ ring }}-1) + ' (refund ' + (5 * rings.{{ ring }}) + ' XP)'"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                        <span class="w-8 text-center font-bold text-lg" x-text="rings.{{ ring }}"></span>
+                        <input type="hidden" name="ring_{{ ring.lower() }}" :value="rings.{{ ring }}">
+                        <button type="button"
+                                @click="rings.{{ ring }} = Math.min(ringMax('{{ ring }}'), rings.{{ ring }} + 1)"
+                                :disabled="rings.{{ ring }} >= ringMax('{{ ring }}')"
+                                :title="rings.{{ ring }} >= ringMax('{{ ring }}') ? '' : 'Raise to ' + (rings.{{ ring }}+1) + ' (' + (5 * (rings.{{ ring }}+1)) + ' XP)'"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                     </div>
                     <p class="text-xs text-ink/50 mt-1" x-text="ringCost('{{ ring }}') + ' XP'"></p>
                 </div>
@@ -95,13 +137,21 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="tooltip-trigger relative">
                     <label class="block text-sm font-medium mb-1 cursor-help">Attack (Fire)</label>
-                    <select name="attack" x-model.number="attack"
-                            class="border rounded px-4 py-2 text-lg font-bold text-center w-20">
-                        {% for v in range(1, 6) %}
-                        <option value="{{ v }}">{{ v }}</option>
-                        {% endfor %}
-                    </select>
-                    <span class="text-xs text-ink/50 ml-2" x-text="combatSkillXp(attack) + ' XP'"></span>
+                    <div class="flex items-center gap-1">
+                        <button type="button"
+                                @click="attack = Math.max(1, attack - 1)"
+                                :disabled="attack <= 1 || attack <= parry - 1"
+                                :title="attack <= 1 ? '' : (attack <= parry - 1 ? 'Parry cannot exceed Attack + 1' : 'Lower to ' + (attack-1) + ' (refund ' + ADVANCED_COSTS[attack] + ' XP)')"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                        <span class="w-8 text-center font-bold text-lg" x-text="attack"></span>
+                        <input type="hidden" name="attack" :value="attack">
+                        <button type="button"
+                                @click="attack = Math.min(5, attack + 1)"
+                                :disabled="attack >= 5"
+                                :title="attack >= 5 ? '' : 'Raise to ' + (attack+1) + ' (' + ADVANCED_COSTS[attack+1] + ' XP)'"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                    </div>
+                    <span class="text-xs text-ink/50" x-text="combatSkillXp(attack) + ' XP'"></span>
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                         <p class="font-medium mb-1">Attack (Fire)</p>
                         <p>Roll Attack + Fire to hit. TN to hit = 5 + 5 * defender's Parry. Extra damage die per 5 over TN.</p>
@@ -109,13 +159,21 @@
                 </div>
                 <div class="tooltip-trigger relative">
                     <label class="block text-sm font-medium mb-1 cursor-help">Parry (Air)</label>
-                    <select name="parry" x-model.number="parry"
-                            class="border rounded px-4 py-2 text-lg font-bold text-center w-20">
-                        {% for v in range(1, 6) %}
-                        <option value="{{ v }}">{{ v }}</option>
-                        {% endfor %}
-                    </select>
-                    <span class="text-xs text-ink/50 ml-2" x-text="combatSkillXp(parry) + ' XP'"></span>
+                    <div class="flex items-center gap-1">
+                        <button type="button"
+                                @click="parry = Math.max(1, parry - 1)"
+                                :disabled="parry <= 1"
+                                :title="parry <= 1 ? '' : 'Lower to ' + (parry-1) + ' (refund ' + ADVANCED_COSTS[parry] + ' XP)'"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                        <span class="w-8 text-center font-bold text-lg" x-text="parry"></span>
+                        <input type="hidden" name="parry" :value="parry">
+                        <button type="button"
+                                @click="parry = Math.min(5, parry + 1)"
+                                :disabled="parry >= 5 || parry >= attack + 1"
+                                :title="parry >= attack + 1 ? 'Parry cannot exceed Attack + 1' : (parry >= 5 ? '' : 'Raise to ' + (parry+1) + ' (' + ADVANCED_COSTS[parry+1] + ' XP)')"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                    </div>
+                    <span class="text-xs text-ink/50" x-text="combatSkillXp(parry) + ' XP'"></span>
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                         <p class="font-medium mb-1">Parry (Air)</p>
                         <p>Roll Parry + Air to parry. TN to be hit = 5 + 5 * Parry. Declaring parry before attack roll grants a free raise.</p>
@@ -123,7 +181,7 @@
                 </div>
             </div>
             <p class="text-sm text-ink/60 mt-3">
-                Start at 1. Raised using advanced skill costs (4/4/6/8/10 XP).
+                Start at 1. Raised using advanced skill costs (4/4/6/8/10 XP). Parry cannot exceed Attack + 1.
             </p>
         </section>
 
@@ -176,13 +234,23 @@
                         {% if skill.category == "social" and not skill.is_advanced %}
                         <div class="flex items-center gap-3 tooltip-trigger relative">
                             <label class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</label>
-                            <select name="skill_{{ sid }}" x-model.number="skills.{{ sid }}"
-                                    class="border rounded px-2 py-1 text-sm w-16">
-                                {% for v in range(0, 6) %}
-                                <option value="{{ v }}">{{ v }}</option>
-                                {% endfor %}
-                            </select>
+                            <div class="flex items-center gap-1">
+                                <button type="button"
+                                        @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
+                                        :disabled="skills.{{ sid }} <= 0"
+                                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + BASIC_COSTS[skills.{{ sid }}] + ' XP)'"
+                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                                <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
+                                <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
+                                <button type="button"
+                                        @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
+                                        :disabled="skills.{{ sid }} >= 5"
+                                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + BASIC_COSTS[skills.{{ sid }}+1] + ' XP)'"
+                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                            </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', false)"></span>
+                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
+                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-ink/40 ml-1" x-text="'(' + skillRollTooltip('{{ sid }}') + ')'"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -202,13 +270,23 @@
                         {% if skill.category == "social" and skill.is_advanced %}
                         <div class="flex items-center gap-3 tooltip-trigger relative">
                             <label class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</label>
-                            <select name="skill_{{ sid }}" x-model.number="skills.{{ sid }}"
-                                    class="border rounded px-2 py-1 text-sm w-16">
-                                {% for v in range(0, 6) %}
-                                <option value="{{ v }}">{{ v }}</option>
-                                {% endfor %}
-                            </select>
+                            <div class="flex items-center gap-1">
+                                <button type="button"
+                                        @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
+                                        :disabled="skills.{{ sid }} <= 0"
+                                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + ADVANCED_COSTS[skills.{{ sid }}] + ' XP)'"
+                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                                <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
+                                <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
+                                <button type="button"
+                                        @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
+                                        :disabled="skills.{{ sid }} >= 5"
+                                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + ADVANCED_COSTS[skills.{{ sid }}+1] + ' XP)'"
+                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                            </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', true)"></span>
+                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
+                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-ink/40 ml-1" x-text="'(' + skillRollTooltip('{{ sid }}') + ')'"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -228,13 +306,23 @@
                         {% if skill.category == "knowledge" and not skill.is_advanced %}
                         <div class="flex items-center gap-3 tooltip-trigger relative">
                             <label class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</label>
-                            <select name="skill_{{ sid }}" x-model.number="skills.{{ sid }}"
-                                    class="border rounded px-2 py-1 text-sm w-16">
-                                {% for v in range(0, 6) %}
-                                <option value="{{ v }}">{{ v }}</option>
-                                {% endfor %}
-                            </select>
+                            <div class="flex items-center gap-1">
+                                <button type="button"
+                                        @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
+                                        :disabled="skills.{{ sid }} <= 0"
+                                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + BASIC_COSTS[skills.{{ sid }}] + ' XP)'"
+                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                                <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
+                                <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
+                                <button type="button"
+                                        @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
+                                        :disabled="skills.{{ sid }} >= 5"
+                                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + BASIC_COSTS[skills.{{ sid }}+1] + ' XP)'"
+                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                            </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', false)"></span>
+                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
+                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-ink/40 ml-1" x-text="'(' + skillRollTooltip('{{ sid }}') + ')'"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -254,13 +342,23 @@
                         {% if skill.category == "knowledge" and skill.is_advanced %}
                         <div class="flex items-center gap-3 tooltip-trigger relative">
                             <label class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</label>
-                            <select name="skill_{{ sid }}" x-model.number="skills.{{ sid }}"
-                                    class="border rounded px-2 py-1 text-sm w-16">
-                                {% for v in range(0, 6) %}
-                                <option value="{{ v }}">{{ v }}</option>
-                                {% endfor %}
-                            </select>
+                            <div class="flex items-center gap-1">
+                                <button type="button"
+                                        @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
+                                        :disabled="skills.{{ sid }} <= 0"
+                                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + ADVANCED_COSTS[skills.{{ sid }}] + ' XP)'"
+                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                                <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
+                                <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
+                                <button type="button"
+                                        @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
+                                        :disabled="skills.{{ sid }} >= 5"
+                                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + ADVANCED_COSTS[skills.{{ sid }}+1] + ' XP)'"
+                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                            </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', true)"></span>
+                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
+                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-ink/40 ml-1" x-text="'(' + skillRollTooltip('{{ sid }}') + ')'"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -353,11 +451,65 @@
 const BASIC_COSTS = [0, 2, 2, 3, 3, 3];   // index = new rank
 const ADVANCED_COSTS = [0, 4, 4, 6, 8, 10];
 
-// Schools data for ring resolution
+// Schools data for ring resolution and knack initialization
 const SCHOOLS_DATA = {
     {% for sid, s in schools.items() %}
-    '{{ sid }}': {ring: '{{ s.school_ring }}', knacks: {{ s.school_knacks | tojson }}},
+    '{{ sid }}': {
+        ring: '{{ s.school_ring }}',
+        knacks: {{ s.school_knacks | tojson }},
+    },
     {% endfor %}
+};
+
+// Knack display names
+const KNACK_NAMES = {
+    {% for kid, k in school_knacks.items() %}
+    '{{ kid }}': '{{ k.name }}',
+    {% endfor %}
+};
+
+// Skill -> Ring mapping
+const SKILL_RINGS = {
+    {% for sid, skill in skills.items() %}
+    '{{ sid }}': '{{ skill.ring.value }}',
+    {% endfor %}
+};
+
+const ADVANCED_SKILLS = ['acting', 'interrogation', 'manipulation', 'commerce', 'history', 'underworld'];
+
+// Technique bonuses per school
+const TECHNIQUE_BONUSES = {
+    {% for sid, bonuses in technique_bonuses.items() %}
+    '{{ sid }}': {
+        firstDanExtraDie: {{ bonuses.first_dan_extra_die | tojson if bonuses.first_dan_extra_die else 'null' }},
+        secondDanFreeRaise: {{ bonuses.second_dan_free_raise | tojson if bonuses.second_dan_free_raise else 'null' }},
+        {% if bonuses.get('third_dan') %}
+        thirdDan: {
+            sourceSkill: {{ bonuses.third_dan.source_skill | tojson }},
+            applicableTo: {{ bonuses.third_dan.applicable_to | tojson }},
+            maxPerRoll: 'X',
+        },
+        {% else %}
+        thirdDan: null,
+        {% endif %}
+    },
+    {% endfor %}
+};
+
+// Advantage free raise mappings
+const ADVANTAGE_FREE_RAISES = {
+    'charming': ['etiquette', 'culture'],
+    'fierce': ['bragging', 'intimidation'],
+    'discerning': ['interrogation', 'investigation'],
+    'genealogist': ['heraldry'],
+    'tactician': ['strategy', 'history'],
+    'worldly': ['commerce', 'underworld'],
+};
+
+// Skill synergy mappings: source skill -> target skills (1 free raise per rank of source)
+const SKILL_SYNERGIES = {
+    'history': ['culture', 'law', 'strategy'],
+    'acting': ['sincerity', 'intimidation', 'sneaking'],
 };
 
 function totalSkillCost(rank, isAdvanced) {
@@ -386,6 +538,7 @@ function characterForm() {
             {{ sid }}: 0,
             {% endfor %}
         },
+        knacks: {},
         advantages: {
             {% for aid in advantages %}
             {{ aid }}: false,
@@ -407,25 +560,42 @@ function characterForm() {
 
         onSchoolChange(event) {
             const schoolId = event.target.value;
-            if (!schoolId) return;
-            // Fetch school details via HTMX
+            if (!schoolId) {
+                this.knacks = {};
+                return;
+            }
+            // Fetch school details via HTMX (description, special ability, techniques)
             htmx.ajax('GET', '/characters/api/school-info/' + schoolId, '#school-details');
 
-            // Auto-set school ring
+            // Auto-set school ring and knacks
             const info = SCHOOLS_DATA[schoolId];
             if (info) {
                 const fixedRings = ['Air', 'Fire', 'Earth', 'Water', 'Void'];
                 if (fixedRings.includes(info.ring)) {
                     this.schoolRingChoice = info.ring;
+                    // Auto-set school ring to at least 3
+                    this.rings[info.ring] = Math.max(this.rings[info.ring], 3);
                 } else {
                     // "any non-Void" or "Air or Water" — user must pick
                     this.schoolRingChoice = '';
                 }
+
+                // Initialize knacks from school data
+                const newKnacks = {};
+                for (const kid of info.knacks) {
+                    newKnacks[kid] = 1;
+                }
+                this.knacks = newKnacks;
             }
         },
 
         getSchoolRing() {
             return this.schoolRingChoice || '';
+        },
+
+        ringMax(ringName) {
+            const schoolRing = this.getSchoolRing();
+            return (ringName === schoolRing) ? 6 : 5;
         },
 
         ringCost(ringName) {
@@ -443,6 +613,149 @@ function characterForm() {
             return totalSkillCost(rank, isAdvanced) + ' XP';
         },
 
+        currentDan() {
+            const vals = Object.values(this.knacks);
+            if (vals.length === 0) return 0;
+            return Math.min(...vals);
+        },
+
+        totalKnackCostSingle(rank) {
+            return totalKnackCost(rank);
+        },
+
+        // --- Skill Roll Display ---
+        skillRollDisplay(skillId) {
+            const rank = this.skills[skillId] || 0;
+            if (rank === 0) return '';
+            const ringName = SKILL_RINGS[skillId];
+            const ringVal = this.rings[ringName] || 2;
+
+            let rolled = rank + ringVal;
+            let kept = ringVal;
+            let bonus = 0;
+            let freeRaises = 0;
+            let parts = [];
+
+            // Honor bonuses
+            if (skillId === 'bragging') {
+                bonus += 2 * this.honor + 2 * this.recognition;
+            }
+            if (skillId === 'precepts') {
+                bonus += 2 * this.honor;
+            }
+            if (skillId === 'sincerity') {
+                bonus += 2 * this.honor;
+            }
+
+            // Advantage free raises
+            for (const [advId, targetSkills] of Object.entries(ADVANTAGE_FREE_RAISES)) {
+                if (this.advantages[advId] && targetSkills.includes(skillId)) {
+                    freeRaises += 1;
+                    parts.push(advId + ' +1FR');
+                }
+            }
+
+            // Skill synergies
+            for (const [sourceSkill, targetSkills] of Object.entries(SKILL_SYNERGIES)) {
+                if (targetSkills.includes(skillId)) {
+                    const sourceRank = this.skills[sourceSkill] || 0;
+                    if (sourceRank > 0) {
+                        freeRaises += sourceRank;
+                        parts.push(sourceSkill + ' +' + sourceRank + 'FR');
+                    }
+                }
+            }
+
+            // Technique bonuses (1st Dan extra die)
+            const dan = this.currentDan();
+            const techBonus = this.school ? TECHNIQUE_BONUSES[this.school] : null;
+            if (techBonus && dan >= 1 && techBonus.firstDanExtraDie) {
+                if (techBonus.firstDanExtraDie.includes(skillId)) {
+                    rolled += 1;
+                    parts.push('1st Dan +1 die');
+                }
+            }
+
+            // 2nd Dan free raise
+            if (techBonus && dan >= 2 && techBonus.secondDanFreeRaise) {
+                if (techBonus.secondDanFreeRaise === skillId) {
+                    freeRaises += 1;
+                    parts.push('2nd Dan +1FR');
+                }
+            }
+
+            // Build display string
+            let display = rolled + 'k' + kept;
+            if (bonus > 0) display += ' + ' + bonus;
+
+            // 3rd Dan info
+            let thirdDanNote = '';
+            if (techBonus && dan >= 3 && techBonus.thirdDan) {
+                if (techBonus.thirdDan.applicableTo.includes(skillId)) {
+                    const sourceRank = this.skills[techBonus.thirdDan.sourceSkill] || 0;
+                    const pool = 2 * sourceRank;
+                    thirdDanNote = ' [' + pool + ' FR/adventure, max ' + techBonus.thirdDan.maxPerRoll + '/roll]';
+                }
+            }
+
+            if (freeRaises > 0) display += ' +' + freeRaises + 'FR';
+            if (thirdDanNote) display += thirdDanNote;
+
+            return display;
+        },
+
+        skillRollTooltip(skillId) {
+            const rank = this.skills[skillId] || 0;
+            if (rank === 0) return '';
+            const ringName = SKILL_RINGS[skillId];
+            const ringVal = this.rings[ringName] || 2;
+
+            let parts = [];
+            parts.push('Base: ' + rank + '+' + ringVal + 'k' + ringVal);
+
+            if (skillId === 'bragging') {
+                parts.push('Honor+Recog: +' + (2*this.honor + 2*this.recognition));
+            }
+            if (skillId === 'precepts') {
+                parts.push('Honor: +' + (2*this.honor));
+            }
+            if (skillId === 'sincerity') {
+                parts.push('Honor: +' + (2*this.honor));
+            }
+
+            for (const [advId, targetSkills] of Object.entries(ADVANTAGE_FREE_RAISES)) {
+                if (this.advantages[advId] && targetSkills.includes(skillId)) {
+                    parts.push(advId + ': +1FR');
+                }
+            }
+
+            for (const [sourceSkill, targetSkills] of Object.entries(SKILL_SYNERGIES)) {
+                if (targetSkills.includes(skillId)) {
+                    const sourceRank = this.skills[sourceSkill] || 0;
+                    if (sourceRank > 0) {
+                        parts.push(sourceSkill + ' rank ' + sourceRank + ': +' + sourceRank + 'FR');
+                    }
+                }
+            }
+
+            const dan = this.currentDan();
+            const techBonus = this.school ? TECHNIQUE_BONUSES[this.school] : null;
+            if (techBonus && dan >= 1 && techBonus.firstDanExtraDie) {
+                if (techBonus.firstDanExtraDie.includes(skillId)) {
+                    parts.push('1st Dan: +1 rolled die');
+                }
+            }
+            if (techBonus && dan >= 2 && techBonus.secondDanFreeRaise === skillId) {
+                parts.push('2nd Dan: +1FR');
+            }
+            if (techBonus && dan >= 3 && techBonus.thirdDan && techBonus.thirdDan.applicableTo.includes(skillId)) {
+                const sourceRank = this.skills[techBonus.thirdDan.sourceSkill] || 0;
+                parts.push('3rd Dan: ' + (2*sourceRank) + 'FR/adv (max ' + techBonus.thirdDan.maxPerRoll + '/roll)');
+            }
+
+            return parts.join('; ');
+        },
+
         totalRingXp() {
             let cost = 0;
             for (const r of ['Air', 'Fire', 'Earth', 'Water', 'Void']) {
@@ -452,7 +765,6 @@ function characterForm() {
         },
 
         totalSkillXp() {
-            const ADVANCED_SKILLS = ['acting', 'interrogation', 'manipulation', 'commerce', 'history', 'underworld'];
             let cost = 0;
             for (const [sid, rank] of Object.entries(this.skills)) {
                 if (rank > 0) {
@@ -463,13 +775,8 @@ function characterForm() {
         },
 
         totalKnackXp() {
-            const info = SCHOOLS_DATA[this.school];
-            if (!info) return 0;
             let cost = 0;
-            // Knack values come from the school-info partial selects
-            for (const kid of info.knacks) {
-                const el = document.querySelector(`[name="knack_${kid}"]`);
-                const rank = el ? parseInt(el.value) || 1 : 1;
+            for (const [kid, rank] of Object.entries(this.knacks)) {
                 cost += totalKnackCost(rank);
             }
             return cost;

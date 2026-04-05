@@ -262,8 +262,9 @@ def validate_character(character_data: dict) -> List[str]:
     school_ring = character_data.get("school_ring_choice", "")
 
     # -- Combat skills (Attack / Parry) --
-    for cs_name in ("attack", "parry"):
-        cs_val = character_data.get(cs_name, COMBAT_SKILL_START)
+    attack_val = character_data.get("attack", COMBAT_SKILL_START)
+    parry_val = character_data.get("parry", COMBAT_SKILL_START)
+    for cs_name, cs_val in [("attack", attack_val), ("parry", parry_val)]:
         if cs_val < COMBAT_SKILL_START:
             errors.append(
                 f"{cs_name.title()} ({cs_val}) must be at least "
@@ -274,6 +275,10 @@ def validate_character(character_data: dict) -> List[str]:
                 f"{cs_name.title()} ({cs_val}) exceeds maximum "
                 f"({COMBAT_SKILL_MAX})."
             )
+    if parry_val > attack_val + 1:
+        errors.append(
+            f"Parry ({parry_val}) cannot exceed Attack ({attack_val}) + 1."
+        )
 
     # -- Rings --
     rings = character_data.get("rings", {})
