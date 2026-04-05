@@ -20,6 +20,14 @@ playwright install chromium
 playwright install-deps chromium
 ```
 
+## Environment Variables
+
+A `.env` file (gitignored) holds credentials for deployment and external services:
+
+- `FLY_API_TOKEN` — Fly.io API token for deployments
+
+Values with spaces or special characters must be quoted (e.g. `KEY="value with spaces"`). Load before deploying: `set -a && source .env && set +a`
+
 ## Running the App
 
 ```bash
@@ -108,7 +116,12 @@ The canonical rules live at: https://github.com/EliAndrewC/l7r/tree/master/rules
 
 ## Deployment
 
+The Fly CLI is not pre-installed in the sandbox container. Install it and authenticate before deploying:
+
 ```bash
+curl -L https://fly.io/install.sh | sh
+export PATH="$HOME/.fly/bin:$PATH"
+fly auth login                          # interactive login (requires browser or token)
 fly deploy
 ```
 
