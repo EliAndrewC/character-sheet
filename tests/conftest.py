@@ -1,8 +1,14 @@
 """Shared fixtures for the L7R test suite."""
 
+import os
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+
+# Set auth env vars before importing app
+os.environ.setdefault("DISCORD_WHITELIST_IDS", "183026066498125825")
+os.environ.setdefault("ADMIN_DISCORD_IDS", "183026066498125825")
+os.environ.setdefault("TEST_AUTH_BYPASS", "true")
 
 from app.database import Base, get_db
 from app.main import app
@@ -55,7 +61,7 @@ def client(engine):
             session.close()
 
     app.dependency_overrides[get_db] = _override_get_db
-    with TestClient(app) as c:
+    with TestClient(app, headers={"X-Test-User": "183026066498125825:testplayer"}) as c:
         # Attach a helper to query the same connection
         c._test_session_factory = TestSession
         yield c

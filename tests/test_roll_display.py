@@ -80,68 +80,68 @@ class TestHonorBonus:
 
 class TestAdvantageBonus:
     def test_charming_etiquette(self):
-        """Charming gives free raise on etiquette."""
+        """Charming gives free raise (+5) on etiquette."""
         data = make_character_data(
             skills={"etiquette": 2},
             advantages=["charming"],
         )
         result = compute_skill_roll("etiquette", data)
-        assert result.free_raises >= 1
+        assert result.flat_bonus >= 5
         assert "Charming" in result.tooltip
 
     def test_fierce_bragging(self):
-        """Fierce gives free raise on bragging."""
+        """Fierce gives free raise (+5) on bragging."""
         data = make_character_data(
             skills={"bragging": 1},
             advantages=["fierce"],
         )
         result = compute_skill_roll("bragging", data)
-        assert result.free_raises >= 1
+        assert result.flat_bonus >= 5
 
     def test_discerning_investigation(self):
-        """Discerning gives 2 free raises on investigation."""
+        """Discerning gives 2 free raises (+10) on investigation."""
         data = make_character_data(
             skills={"investigation": 1},
             advantages=["discerning"],
         )
         result = compute_skill_roll("investigation", data)
-        assert result.free_raises >= 2
+        assert result.flat_bonus >= 10
 
     def test_no_advantage_no_bonus(self):
-        """Without the advantage, no free raises."""
+        """Without the advantage, no bonus."""
         data = make_character_data(skills={"etiquette": 2})
         result = compute_skill_roll("etiquette", data)
-        assert result.free_raises == 0
+        assert result.flat_bonus == 0
 
 
 class TestSkillSynergies:
     def test_history_boosts_culture(self):
-        """History rank gives free raises on culture."""
+        """History 3 gives 3 free raises (+15) on culture."""
         data = make_character_data(
             skills={"culture": 2, "history": 3},
         )
         result = compute_skill_roll("culture", data)
-        assert result.free_raises >= 3
+        assert result.flat_bonus >= 15
         assert "History" in result.tooltip
 
     def test_history_boosts_law(self):
         data = make_character_data(skills={"law": 1, "history": 2})
         result = compute_skill_roll("law", data)
-        assert result.free_raises >= 2
+        assert result.flat_bonus >= 10
 
     def test_acting_boosts_sincerity(self):
-        """Acting rank gives free raises on sincerity."""
+        """Acting 2 gives 2 free raises (+10) on sincerity."""
         data = make_character_data(
             skills={"sincerity": 1, "acting": 2},
         )
         result = compute_skill_roll("sincerity", data)
-        assert result.free_raises >= 2
+        assert result.flat_bonus >= 10
         assert "Acting" in result.tooltip
 
     def test_acting_boosts_sneaking(self):
         data = make_character_data(skills={"sneaking": 1, "acting": 3})
         result = compute_skill_roll("sneaking", data)
-        assert result.free_raises >= 3
+        assert result.flat_bonus >= 15
 
 
 class TestFirstDanBonus:
@@ -174,7 +174,7 @@ class TestFirstDanBonus:
 
 class TestSecondDanBonus:
     def test_courtier_free_raise_on_manipulation(self):
-        """Courtier 2nd Dan: free raise on manipulation."""
+        """Courtier 2nd Dan: free raise (+5) on manipulation."""
         data = make_character_data(
             school="courtier",
             school_ring_choice="Air",
@@ -183,7 +183,7 @@ class TestSecondDanBonus:
             knacks={"discern_honor": 2, "oppose_social": 2, "worldliness": 2},
         )
         result = compute_skill_roll("manipulation", data)
-        assert result.free_raises >= 1
+        assert result.flat_bonus >= 5
         assert "2nd Dan" in result.tooltip
 
     def test_second_dan_not_reached(self):
@@ -213,7 +213,7 @@ class TestThirdDanFreeRaises:
         # 3rd Dan: 2*3=6 free raises per adventure, max 3 per roll
         assert result.adventure_raises_available == 6
         assert result.adventure_raises_max_per_roll == 3
-        assert "3rd Dan" in result.tooltip
+        assert "adventure" in result.tooltip.lower()
 
 
 class TestRollResultDisplay:
@@ -238,13 +238,13 @@ class TestRollResultDisplay:
         assert isinstance(result.tooltip, str)
 
     def test_discerning_interrogation(self):
-        """Discerning gives 1 free raise on interrogation."""
+        """Discerning gives 1 free raise (+5) on interrogation."""
         data = make_character_data(
             skills={"interrogation": 1},
             advantages=["discerning"],
         )
         result = compute_skill_roll("interrogation", data)
-        assert result.free_raises >= 1
+        assert result.flat_bonus >= 5
 
 
 class TestDanComputation:

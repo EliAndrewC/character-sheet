@@ -34,10 +34,24 @@
             <a href="/" class="text-xl font-bold tracking-wide hover:text-gold transition-colors">
                 L7R Character Builder
             </a>
-            <a href="/characters/new"
-               class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
-                New Character
-            </a>
+            <div class="flex items-center gap-3">
+                {% if request.state.user %}
+                <a href="/characters/new"
+                   class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                    New Character
+                </a>
+                <span class="text-sm text-parchment/70">{{ request.state.user.display_name }}</span>
+                <a href="/auth/logout"
+                   class="text-sm text-parchment/50 hover:text-parchment transition-colors">
+                    Logout
+                </a>
+                {% else %}
+                <a href="/auth/login"
+                   class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                    Login with Discord
+                </a>
+                {% endif %}
+            </div>
         </div>
     </nav>
 
@@ -47,6 +61,10 @@
 
     <footer class="text-center text-sm text-ink/50 py-4 mt-8 border-t border-ink/10">
         L7R &mdash; Legend of the Five Rings Homebrew System
+        <span class="mx-2">&middot;</span>
+        <a href="/terms" class="hover:text-ink/70">Terms</a>
+        <span class="mx-1">&middot;</span>
+        <a href="/privacy" class="hover:text-ink/70">Privacy</a>
     </footer>
 </body>
 </html>

@@ -1,6 +1,6 @@
 """E2E: Edit a character and verify changes persist."""
 
-from tests.e2e.helpers import select_school
+from tests.e2e.helpers import select_school, click_plus
 
 
 def _create_character(page, live_server_url):
@@ -20,7 +20,7 @@ def test_edit_changes_persist(page, live_server_url):
 
     page.fill('input[name="name"]', "Bayushi Kachiko")
     page.fill('input[name="earned_xp"]', "50")
-    page.select_option('select[name="honor"]', "3.0")
+    click_plus(page, "honor", 4)  # 1.0 -> 3.0 (four +0.5 clicks)
 
     page.click('button:text("Save Changes")')
     page.wait_for_selector("h1")

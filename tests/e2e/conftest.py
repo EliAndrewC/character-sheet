@@ -27,6 +27,9 @@ def live_server_url():
 
     env = os.environ.copy()
     env["DATABASE_URL"] = db_path
+    env["TEST_AUTH_BYPASS"] = "true"
+    env["DISCORD_WHITELIST_IDS"] = "183026066498125825"
+    env["ADMIN_DISCORD_IDS"] = "183026066498125825"
 
     proc = subprocess.Popen(
         [
@@ -63,3 +66,14 @@ def live_server_url():
     proc.wait(timeout=5)
     if os.path.exists(db_path):
         os.remove(db_path)
+
+
+@pytest.fixture()
+def page(live_server_url, browser):
+    """Yield a Playwright page with the auth bypass header set."""
+    ctx = browser.new_context(
+        extra_http_headers={"X-Test-User": "183026066498125825:eliandrewc"}
+    )
+    p = ctx.new_page()
+    yield p
+    ctx.close()

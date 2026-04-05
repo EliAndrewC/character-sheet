@@ -2,6 +2,8 @@
 
 Computes the dice rolled, dice kept, flat bonuses, and free raises for
 any skill given a full character data dict.
+
+A "free raise" is a flat +5 bonus to the roll.
 """
 
 from __future__ import annotations
@@ -16,13 +18,14 @@ from app.game_data import (
     SKILLS,
 )
 
+FREE_RAISE_VALUE = 5
+
 
 @dataclass
 class RollResult:
     rolled: int = 0
     kept: int = 0
     flat_bonus: int = 0
-    free_raises: int = 0
     adventure_raises_available: int = 0
     adventure_raises_max_per_roll: int = 0
     tooltip_lines: List[str] = field(default_factory=list)
@@ -52,7 +55,7 @@ def compute_dan(knacks: dict) -> int:
 _ADVANTAGE_SKILL_BONUSES = {
     "charming": (["etiquette", "culture"], 1),
     "fierce": (["bragging", "intimidation"], 1),
-    "discerning": (["interrogation"], 1),  # +2 on investigation handled separately
+    "discerning": (["interrogation"], 1),  # investigation handled separately
     "genealogist": (["heraldry"], 2),
     "tactician": (["strategy", "history"], 1),
     "worldly_advantage": (["commerce", "underworld"], 1),
@@ -63,7 +66,7 @@ _DISCERNING_BONUSES = {"interrogation": 1, "investigation": 2}
 
 # Skill synergies: skill_id -> (boosted_skills, raises_per_rank)
 _SKILL_SYNERGIES = {
-    "history": (["culture", "law", "strategy"], 1),  # 1 free raise per rank
+    "history": (["culture", "law", "strategy"], 1),
     "acting": (["sincerity", "intimidation", "sneaking"], 1),
 }
 
@@ -80,7 +83,11 @@ _RECOGNITION_BONUS_SKILLS = {
 
 
 def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
-    """Compute the full roll for a given skill based on character state."""
+    """Compute the full roll for a given skill based on character state.
+
+    Free raises are converted to +5 flat bonus each and included in
+    flat_bonus. The tooltip shows each source with its contribution.
+    """
     skill_def = SKILLS.get(skill_id)
     if skill_def is None:
         return RollResult()
@@ -96,58 +103,12 @@ def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
     result = RollResult()
     result.rolled = rank + ring_val
     result.kept = ring_val
-    result.tooltip_lines.append(
-        f"Base: {rank} ({skill_def.name}) + {ring_val} ({skill_def.ring.value}) = {result.rolled}k{result.kept}"
-    )
 
-    # --- Honor bonus ---
-    honor = character_data.get("honor", 1.0)
-    if skill_id in _HONOR_BONUS_SKILLS:
-        mult = _HONOR_BONUS_SKILLS[skill_id]
-        bonus = int(mult * honor)
-        if bonus > 0:
-            result.flat_bonus += bonus
-            result.tooltip_lines.append(f"Honor: +{bonus} ({mult}x {honor})")
+    # We'll collect bonus explanations, then build the tooltip at the end
+    bonus_parts = []  # list of (amount, description) for the parenthetical
 
-    # --- Recognition bonus ---
-    recognition = character_data.get("recognition", 1.0)
-    if skill_id in _RECOGNITION_BONUS_SKILLS:
-        mult = _RECOGNITION_BONUS_SKILLS[skill_id]
-        bonus = int(mult * recognition)
-        if bonus > 0:
-            result.flat_bonus += bonus
-            result.tooltip_lines.append(f"Recognition: +{bonus} ({mult}x {recognition})")
-
-    # --- Advantage bonuses ---
-    advantages = character_data.get("advantages", [])
-    for adv_id in advantages:
-        if adv_id == "discerning" and skill_id in _DISCERNING_BONUSES:
-            raises = _DISCERNING_BONUSES[skill_id]
-            result.free_raises += raises
-            adv_name = ADVANTAGES[adv_id].name
-            result.tooltip_lines.append(f"Discerning: +{raises} free raise{'s' if raises > 1 else ''}")
-        elif adv_id in _ADVANTAGE_SKILL_BONUSES:
-            skill_list, raises = _ADVANTAGE_SKILL_BONUSES[adv_id]
-            if skill_id in skill_list:
-                result.free_raises += raises
-                adv_name = ADVANTAGES[adv_id].name
-                result.tooltip_lines.append(f"{adv_name}: +{raises} free raise{'s' if raises > 1 else ''}")
-
-    # --- Skill synergies ---
-    for source_id, (boosted, per_rank) in _SKILL_SYNERGIES.items():
-        if skill_id in boosted:
-            source_rank = skills.get(source_id, 0)
-            if source_rank > 0:
-                raises = source_rank * per_rank
-                source_name = SKILLS[source_id].name
-                result.free_raises += raises
-                result.tooltip_lines.append(
-                    f"{source_name}: +{raises} free raise{'s' if raises > 1 else ''} ({source_rank} rank{'s' if source_rank > 1 else ''})"
-                )
-
-    # --- School technique bonuses ---
+    # --- School technique bonuses (extra dice) ---
     school_id = character_data.get("school", "")
-    school = SCHOOLS.get(school_id)
     knacks = character_data.get("knacks", {})
     dan = compute_dan(knacks) if knacks else 0
     bonuses = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
@@ -156,15 +117,61 @@ def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
     if dan >= 1 and bonuses.get("first_dan_extra_die"):
         if skill_id in bonuses["first_dan_extra_die"]:
             result.rolled += 1
-            result.tooltip_lines.append("1st Dan: +1 rolled die")
+            bonus_parts.append((0, "+1 rolled die from 1st Dan technique"))
 
-    # 2nd Dan: free raise
+    # 2nd Dan: free raise = +5
     if dan >= 2 and bonuses.get("second_dan_free_raise"):
         if skill_id == bonuses["second_dan_free_raise"]:
-            result.free_raises += 1
-            result.tooltip_lines.append("2nd Dan: +1 free raise")
+            result.flat_bonus += FREE_RAISE_VALUE
+            bonus_parts.append((FREE_RAISE_VALUE, "+5 from 2nd Dan technique"))
 
-    # 3rd Dan: adventure free raises
+    # --- Advantage bonuses (free raises = +5 each) ---
+    advantages = character_data.get("advantages", [])
+    for adv_id in advantages:
+        if adv_id == "discerning" and skill_id in _DISCERNING_BONUSES:
+            raises = _DISCERNING_BONUSES[skill_id]
+            amount = raises * FREE_RAISE_VALUE
+            result.flat_bonus += amount
+            adv_name = ADVANTAGES[adv_id].name
+            bonus_parts.append((amount, f"+{amount} from {adv_name}"))
+        elif adv_id in _ADVANTAGE_SKILL_BONUSES:
+            skill_list, raises = _ADVANTAGE_SKILL_BONUSES[adv_id]
+            if skill_id in skill_list:
+                amount = raises * FREE_RAISE_VALUE
+                result.flat_bonus += amount
+                adv_name = ADVANTAGES[adv_id].name
+                bonus_parts.append((amount, f"+{amount} from {adv_name}"))
+
+    # --- Skill synergies (free raises = +5 per rank) ---
+    for source_id, (boosted, per_rank) in _SKILL_SYNERGIES.items():
+        if skill_id in boosted:
+            source_rank = skills.get(source_id, 0)
+            if source_rank > 0:
+                raises = source_rank * per_rank
+                amount = raises * FREE_RAISE_VALUE
+                source_name = SKILLS[source_id].name
+                result.flat_bonus += amount
+                bonus_parts.append((amount, f"+{amount} from {source_name}"))
+
+    # --- Honor bonus ---
+    honor = character_data.get("honor", 1.0)
+    if skill_id in _HONOR_BONUS_SKILLS:
+        mult = _HONOR_BONUS_SKILLS[skill_id]
+        bonus = int(mult * honor)
+        if bonus > 0:
+            result.flat_bonus += bonus
+            bonus_parts.append((bonus, f"+{bonus} from Honor"))
+
+    # --- Recognition bonus ---
+    recognition = character_data.get("recognition", 1.0)
+    if skill_id in _RECOGNITION_BONUS_SKILLS:
+        mult = _RECOGNITION_BONUS_SKILLS[skill_id]
+        bonus = int(mult * recognition)
+        if bonus > 0:
+            result.flat_bonus += bonus
+            bonus_parts.append((bonus, f"+{bonus} from Recognition"))
+
+    # --- 3rd Dan: adventure free raises (not added to flat_bonus, shown separately) ---
     if dan >= 3 and bonuses.get("third_dan"):
         t3 = bonuses["third_dan"]
         if skill_id in t3["applicable_to"]:
@@ -176,8 +183,15 @@ def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
                 result.adventure_raises_max_per_roll = max_per_roll
                 source_name = SKILLS.get(t3["source_skill"])
                 sname = source_name.name if source_name else t3["source_skill"]
-                result.tooltip_lines.append(
-                    f"3rd Dan: {available} free raises/adventure (max {max_per_roll}/roll, from {sname})"
+                bonus_parts.append(
+                    (0, f"{available} free raises/adventure, max {max_per_roll}/roll from {sname}")
                 )
+
+    # Build tooltip: "4k2 + 9 (breakdown)"
+    result.tooltip_lines.append(
+        f"Base: {rank} ({skill_def.name}) + {ring_val} ({skill_def.ring.value})"
+    )
+    for _, desc in bonus_parts:
+        result.tooltip_lines.append(desc)
 
     return result

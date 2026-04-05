@@ -24,11 +24,11 @@ def test_combat_skill_xp_live_calculation(page, live_server_url):
     page.goto(f"{live_server_url}/characters/new")
     select_school(page, "akodo_bushi")
 
-    assert page.text_content('[x-text="totalXp()"]').strip() == "0"
+    assert page.text_content('[x-text="grossSpent()"]').strip() == "0"
     click_plus(page, "attack", 2)  # 4+6 = 10 XP
-    assert page.text_content('[x-text="totalXp()"]').strip() == "10"
+    assert page.text_content('[x-text="grossSpent()"]').strip() == "10"
     click_plus(page, "parry", 1)  # +4 = 14
-    assert page.text_content('[x-text="totalXp()"]').strip() == "14"
+    assert page.text_content('[x-text="grossSpent()"]').strip() == "14"
 
 
 def test_parry_cannot_exceed_attack_plus_1(page, live_server_url):

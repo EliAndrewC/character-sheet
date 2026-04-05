@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}L7R — Privacy Policy{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <h1 class="text-3xl font-bold">Privacy Policy</h1>
+    <p class="text-sm text-ink/60">Last updated: April 5, 2026</p>
+
+    <section class="space-y-3 text-sm leading-relaxed">
+        <h2 class="text-xl font-bold text-accent">Who We Are</h2>
+        <p>
+            L7R Character Builder is a small, invitation-only web application run by the
+            game master of a tabletop RPG group. All users are personally known to each other
+            in real life. This is not a commercial service.
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">What We Collect</h2>
+        <p>When you log in with Discord, we receive and store:</p>
+        <ul class="list-disc list-inside ml-4 space-y-1">
+            <li>Your Discord user ID (a numeric identifier)</li>
+            <li>Your Discord display name (username)</li>
+        </ul>
+        <p>
+            We request only the <code>identify</code> scope from Discord. We do <strong>not</strong>
+            access your email, friend list, server memberships, messages, or any other Discord data.
+        </p>
+        <p>
+            We also store any character data you create within the application (names, stats,
+            notes, etc.).
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">What Is Public</h2>
+        <p>
+            <strong>All character sheets are publicly viewable</strong> without requiring a login.
+            Anyone with the URL can see character names, stats, notes, and other sheet data.
+            Do not put sensitive personal information in your character sheets.
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">What We Don't Do</h2>
+        <ul class="list-disc list-inside ml-4 space-y-1">
+            <li>We do not sell or share your data with third parties</li>
+            <li>We do not use analytics or tracking services</li>
+            <li>We do not serve advertisements</li>
+            <li>We do not send emails or notifications</li>
+        </ul>
+
+        <h2 class="text-xl font-bold text-accent">Data Storage</h2>
+        <p>
+            Your data is stored in a SQLite database on a server hosted by
+            <a href="https://fly.io" class="text-accent hover:underline">Fly.io</a>
+            in the United States. Session data is stored server-side; we use a
+            secure cookie containing only a session identifier.
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">Data Deletion</h2>
+        <p>
+            You can delete any character you created at any time. If you'd like your account
+            data removed entirely, ask the GM and we'll take care of it.
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">Changes</h2>
+        <p>
+            This policy may be updated occasionally. Since this is an invitation-only
+            application for a group of friends, we'll communicate any meaningful changes directly.
+        </p>
+
+        <h2 class="text-xl font-bold text-accent">Contact</h2>
+        <p>
+            If you have questions, talk to the GM. You know who they are.
+        </p>
+    </section>
+</div>
+{% endblock %}
