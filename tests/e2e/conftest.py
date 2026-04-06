@@ -28,7 +28,7 @@ def live_server_url():
     env = os.environ.copy()
     env["DATABASE_URL"] = db_path
     env["TEST_AUTH_BYPASS"] = "true"
-    env["DISCORD_WHITELIST_IDS"] = "183026066498125825"
+    env["DISCORD_WHITELIST_IDS"] = "183026066498125825,test_user_1,test_user_2"
     env["ADMIN_DISCORD_IDS"] = "183026066498125825"
 
     proc = subprocess.Popen(
@@ -70,10 +70,30 @@ def live_server_url():
 
 @pytest.fixture()
 def page(live_server_url, browser):
-    """Yield a Playwright page with the auth bypass header set."""
+    """Yield a Playwright page with the auth bypass header set (admin user)."""
     ctx = browser.new_context(
         extra_http_headers={"X-Test-User": "183026066498125825:eliandrewc"}
     )
+    p = ctx.new_page()
+    yield p
+    ctx.close()
+
+
+@pytest.fixture()
+def page_nonadmin(live_server_url, browser):
+    """Yield a Playwright page as a non-admin test user."""
+    ctx = browser.new_context(
+        extra_http_headers={"X-Test-User": "test_user_1:Test User 1"}
+    )
+    p = ctx.new_page()
+    yield p
+    ctx.close()
+
+
+@pytest.fixture()
+def page_anon(live_server_url, browser):
+    """Yield a Playwright page with no auth (anonymous visitor)."""
+    ctx = browser.new_context()
     p = ctx.new_page()
     yield p
     ctx.close()

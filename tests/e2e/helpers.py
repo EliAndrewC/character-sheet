@@ -28,6 +28,29 @@ def click_minus(page, name, times=1):
         page.locator(f'input[name="{name}"]').locator('..').locator('button:text("-")').click(force=True)
 
 
+def create_and_apply(page, live_server_url, name="Test Character", school="akodo_bushi",
+                     summary="Initial character creation", **kwargs):
+    """Create a character, select a school, optionally set fields, apply changes.
+
+    Returns the character sheet URL after apply.
+    """
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, school)
+
+    # Apply any optional interactions
+    for adv in kwargs.get("advantages", []):
+        page.check(f'input[name="adv_{adv}"]')
+    for dis in kwargs.get("disadvantages", []):
+        page.check(f'input[name="dis_{dis}"]')
+
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, summary)
+    return page.url
+
+
 def apply_changes(page, summary="Test version"):
     """Click Apply Changes, fill in the modal summary, and confirm.
 
