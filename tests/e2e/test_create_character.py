@@ -29,13 +29,10 @@ def test_create_and_edit_character(page, live_server_url):
     # Wait for auto-save
     page.wait_for_selector('text="Saved"', timeout=5000)
 
-    # Publish
+    # Publish — redirects to view sheet
     page.locator('button:text("Publish Changes")').click()
-    page.wait_for_selector('text=/Published/', timeout=5000)
-
-    # View the sheet
-    page.locator('a:text("View Sheet")').click()
-    page.wait_for_selector("h1")
+    page.wait_for_url("**/characters/*", timeout=10000)
+    assert "/edit" not in page.url
 
     body = page.text_content("body")
     assert "Akodo Toturi" in body
@@ -54,4 +51,5 @@ def test_create_minimal_character(page, live_server_url):
 
     page.wait_for_selector('text="Saved"', timeout=5000)
     page.locator('button:text("Publish Changes")').click()
-    page.wait_for_selector('text=/Published/', timeout=5000)
+    page.wait_for_url("**/characters/*", timeout=10000)
+    assert "/edit" not in page.url

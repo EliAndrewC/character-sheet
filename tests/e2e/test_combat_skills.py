@@ -52,8 +52,7 @@ def test_create_with_combat_skills_and_publish(page, live_server_url):
 
     page.wait_for_selector('text="Saved"', timeout=5000)
     page.locator('button:text("Publish Changes")').click()
-    page.wait_for_selector('text=/Published/', timeout=5000)
-    page.locator('a:text("View Sheet")').click()
+    page.wait_for_url("**/characters/*", timeout=10000)
     page.wait_for_selector("h1")
 
     body = page.text_content("body")

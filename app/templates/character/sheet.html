@@ -423,13 +423,11 @@
                     <p class="text-ink/70 mt-1">{{ v.summary }}</p>
                 </div>
                 {% if v.version_number != versions[0].version_number %}
-                <form method="POST" action="/characters/{{ character.id }}/revert/{{ v.id }}"
-                      onsubmit="return confirm('Revert to version {{ v.version_number }}?')">
-                    <button type="submit"
-                            class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">
-                        Revert
-                    </button>
-                </form>
+                <button type="button"
+                        onclick="if(confirm('Revert to version {{ v.version_number }}?')){fetch('/characters/{{ character.id }}/revert/{{ v.id }}',{method:'POST'}).then(r=>{if(r.ok)window.location.reload();else alert('Revert failed');})}"
+                        class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">
+                    Revert
+                </button>
                 {% endif %}
             </div>
             {% endfor %}

@@ -12,8 +12,7 @@ def _create_and_publish(page, live_server_url, name="Edit Target"):
     select_school(page, "bayushi_bushi")
     page.wait_for_selector('text="Saved"', timeout=5000)
     page.locator('button:text("Publish Changes")').click()
-    page.wait_for_selector('text=/Published/', timeout=5000)
-    page.locator('a:text("View Sheet")').click()
+    page.wait_for_url("**/characters/*", timeout=10000)
     page.wait_for_selector("h1")
     return page.url
 

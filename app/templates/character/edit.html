@@ -4,6 +4,14 @@
 
 {% block content %}
 <div x-data="characterForm()" x-init="init()">
+    <!-- Publishing overlay -->
+    <div x-show="publishing" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+        <div class="bg-white rounded-lg shadow-xl px-8 py-6 text-center">
+            <div class="text-lg font-bold mb-2" x-text="publishMessage"></div>
+        </div>
+    </div>
+
     <h1 class="text-3xl font-bold mb-6">Edit: {{ character.name }}</h1>
 
     <form class="space-y-8">
@@ -825,22 +833,28 @@ function characterForm() {
             if (this._dirty) this.debounceSave();
         },
 
+        publishing: false,
+        publishMessage: '',
+
         async doPublish() {
             await this.doSave();
-            this.saveStatus = 'Publishing...';
+            this.publishing = true;
+            this.publishMessage = 'Publishing...';
             try {
                 const resp = await fetch('/characters/' + this._charId + '/publish', {
                     method: 'POST',
                 });
                 if (resp.ok) {
                     const data = await resp.json();
-                    this.saveStatus = 'Published (v' + data.version_number + ')';
-                    setTimeout(() => window.location.reload(), 1000);
+                    this.publishMessage = 'Published (v' + data.version_number + '). Redirecting...';
+                    window.location.href = '/characters/' + this._charId;
                 } else {
-                    this.saveStatus = 'Publish failed';
+                    this.publishMessage = 'Publish failed';
+                    this.publishing = false;
                 }
             } catch (e) {
-                this.saveStatus = 'Publish failed';
+                this.publishMessage = 'Publish failed';
+                this.publishing = false;
             }
         },
 

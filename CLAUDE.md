@@ -70,6 +70,8 @@ Clicktests start a live uvicorn server on a random port with a temp database, th
 - `test_edit_character.py` — editing and cancel workflows
 - `test_live_xp.py` — client-side Alpine.js XP calculation (rings, skills, advantages, disadvantages, honor, overspend)
 - `test_school_selection.py` — HTMX school details loading, knack selectors, techniques
+- `test_combat_skills.py` — attack/parry skill editing and XP
+- `test_publish_revert.py` — publish redirect, unpublished banner, version revert
 
 ### Coverage Policy
 
@@ -84,10 +86,10 @@ New features follow this cycle:
 1. **Write failing unit tests (TDD red).** Define the expected behavior in `tests/` before writing any implementation.
 2. **Implement the feature.** Write the code to make the tests pass.
 3. **Iterate until unit tests pass (TDD green).** Check coverage to ensure all new branches are covered.
-4. **Write clicktests for frontend changes.** If the feature touches the frontend, add e2e tests in `tests/e2e/` that exercise the workflow in a real browser.
+4. **Write clicktests for frontend changes (REQUIRED).** Any feature that touches templates, client-side JS, HTMX interactions, or user-facing workflows MUST have corresponding e2e tests in `tests/e2e/`. Clicktests validate that the full user flow works end-to-end in a real browser — things like AJAX handlers returning JSON instead of rendering a page, redirects landing on the right URL, and interactive UI state (overlays, disabled buttons, tooltips) behaving correctly. These catch bugs that unit tests cannot.
 5. **Run relevant clicktests.** Only run the specific clicktest file(s) related to this change — not the entire e2e suite. Iterate until they pass.
 
-The key distinction: unit tests use TDD (tests first), clicktests are written after the feature works. Clicktests are run selectively, not as part of every iteration loop.
+The key distinction: unit tests use TDD (tests first), clicktests are written after the feature works. Clicktests are run selectively, not as part of every iteration loop. **Do not skip clicktests** — if a feature changes frontend behavior, it needs a clicktest.
 
 6. **Deploy after UI changes.** Any change that touches the frontend (templates, CSS, client-side JS) should be deployed to Fly.io after tests pass so the live site stays current.
 
