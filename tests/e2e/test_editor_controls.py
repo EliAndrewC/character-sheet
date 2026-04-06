@@ -186,3 +186,107 @@ def test_poor_disadvantage_disabled(page, live_server_url):
     """Poor disadvantage checkbox is disabled for Wasp campaign."""
     _go_to_editor(page, live_server_url)
     assert page.locator('input[name="dis_poor"]').is_disabled()
+
+
+# --- Recognition max ---
+
+def test_recognition_max(page, live_server_url):
+    """Recognition + disabled once it can't go higher without exceeding rank * 1.5."""
+    _go_to_editor(page, live_server_url)
+    # Max is rank(7.5) * 1.5 = 11.25. Click until we can't anymore.
+    plus = page.locator('input[name="recognition"]').locator('..').locator('button', has_text="+")
+    for _ in range(20):  # more than enough
+        if plus.is_disabled():
+            break
+        plus.click(force=True)
+    assert plus.is_disabled()
+    val = float(page.locator('input[name="recognition"]').input_value())
+    assert val <= 11.5  # JS rounds rank*1.5 to 11.3 via toFixed(1)
+
+
+def test_recognition_halved_can_raise(page, live_server_url):
+    """With halve checked, recognition can be raised above 3.5 (costs XP)."""
+    _go_to_editor(page, live_server_url)
+    page.check('input[name="recognition_halved"]')
+    page.wait_for_timeout(300)
+    click_plus(page, "recognition", 2)  # 3.5 → 4.5
+    val = page.locator('input[name="recognition"]').input_value()
+    assert float(val) == 4.5
+    # Should cost XP: -3 (halve) + 1 (raised 1.0 above base) = -2
+    spent = page.text_content('[x-text="grossSpent()"]').strip()
+    assert int(spent) == -2
+
+
+# --- Earned XP / Notes ---
+
+def test_earned_xp_updates_budget(page, live_server_url):
+    """Changing earned XP updates the total budget."""
+    _go_to_editor(page, live_server_url)
+    budget_before = page.text_content('[x-text="budgetWithDis()"]').strip()
+    page.fill('input[name="earned_xp"]', "20")
+    page.wait_for_timeout(300)
+    budget_after = page.text_content('[x-text="budgetWithDis()"]').strip()
+    assert int(budget_after) == int(budget_before) + 20
+
+
+def test_notes_saves(page, live_server_url):
+    """Notes textarea auto-saves."""
+    _go_to_editor(page, live_server_url)
+    page.fill('textarea[name="notes"]', "These are my test notes")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.reload()
+    page.wait_for_selector('textarea[name="notes"]')
+    assert page.locator('textarea[name="notes"]').input_value() == "These are my test notes"
+
+
+# --- Save status ---
+
+def test_save_status_indicator(page, live_server_url):
+    """Save status shows 'Saved' after a change."""
+    _go_to_editor(page, live_server_url)
+    page.fill('input[name="name"]', "Status Test")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+
+
+# --- Campaign advantages/disadvantages ---
+
+def test_campaign_advantage_toggles_xp(page, live_server_url):
+    """Campaign advantage checkbox updates XP."""
+    _go_to_editor(page, live_server_url)
+    spent_before = int(page.text_content('[x-text="grossSpent()"]').strip())
+    page.check('input[name="camp_adv_streetwise"]')
+    page.wait_for_timeout(300)
+    spent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
+    assert spent_after > spent_before
+
+
+def test_campaign_disadvantage_toggles_xp(page, live_server_url):
+    """Campaign disadvantage checkbox adds XP to budget."""
+    _go_to_editor(page, live_server_url)
+    budget_before = int(page.text_content('[x-text="budgetWithDis()"]').strip())
+    page.check('input[name="camp_dis_peasantborn"]')
+    page.wait_for_timeout(300)
+    budget_after = int(page.text_content('[x-text="budgetWithDis()"]').strip())
+    assert budget_after > budget_before
+
+
+# --- Skill XP costs ---
+
+def test_basic_skill_xp_cost(page, live_server_url):
+    """Adding a basic skill rank increases XP spent."""
+    _go_to_editor(page, live_server_url)
+    page.wait_for_timeout(500)
+    spent_before = int(page.text_content('[x-text="grossSpent()"]').strip())
+    click_plus(page, "skill_bragging", 1)
+    page.wait_for_timeout(300)
+    spent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
+    assert spent_after > spent_before
+
+
+def test_advanced_skill_costs_more(page, live_server_url):
+    """Advanced skill at rank 1 costs more than basic skill at rank 1."""
+    _go_to_editor(page, live_server_url)
+    spent_before = int(page.text_content('[x-text="grossSpent()"]').strip())
+    click_plus(page, "skill_precepts", 1)
+    spent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
+    assert spent_after - spent_before > 1  # Advanced cost 2 at rank 1
