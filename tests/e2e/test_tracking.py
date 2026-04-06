@@ -1,18 +1,60 @@
 """E2E: Live tracking of wounds, void points, and per-adventure abilities."""
 
-from tests.e2e.helpers import select_school
+from tests.e2e.helpers import select_school, apply_changes
 
 
 def _create_published_character(page, live_server_url, name="Track Test", school="akodo_bushi"):
     """Create, publish, and navigate to character sheet."""
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
-    page.wait_for_selector('text="Publish Changes"')
+    page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, school)
     page.wait_for_selector('text="Saved"', timeout=5000)
-    page.locator('button:text("Publish Changes")').click()
-    page.wait_for_url("**/characters/*", timeout=10000)
+    apply_changes(page, "Initial character creation")
+
+
+def test_tracking_renders_with_per_adventure_abilities(page, live_server_url):
+    """Tracking section renders correctly even with per-adventure JSON data."""
+    # Use a school that doesn't have per-adventure abilities but add Lucky
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Lucky Tracker")
+    select_school(page, "akodo_bushi")
+    page.check('input[name="adv_lucky"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Initial character creation")
+
+    # The tracking section should render with Lucky toggle
+    page.wait_for_selector('text="Tracking"')
+    page.wait_for_timeout(500)
+
+    # Numbers should be visible
+    light = page.locator('text="Light Wounds"').locator('..').locator('span.text-2xl')
+    assert light.text_content().strip() == "0"
+
+    # Lucky toggle should be visible
+    assert page.locator('text="Lucky (re-roll)"').is_visible()
+
+
+def test_tracking_shows_initial_values(page, live_server_url):
+    """The tracking section should show 0 for all counters on a fresh character."""
+    _create_published_character(page, live_server_url, "Initial Values")
+
+    # Wait for Alpine to initialize
+    page.wait_for_selector('text="Tracking"')
+    page.wait_for_timeout(500)
+
+    # Check that the numbers are visible and show 0
+    light = page.locator('text="Light Wounds"').locator('..').locator('span.text-2xl')
+    assert light.text_content().strip() == "0", f"Light wounds showed: {light.text_content()!r}"
+
+    serious = page.locator('text="Serious Wounds"').locator('..').locator('span.text-2xl')
+    assert serious.text_content().strip() == "0", f"Serious wounds showed: {serious.text_content()!r}"
+
+    void = page.locator('text="Void Points"').locator('..').locator('span.text-2xl')
+    assert void.text_content().strip() == "0", f"Void points showed: {void.text_content()!r}"
 
 
 def test_wound_tracking_persists(page, live_server_url):

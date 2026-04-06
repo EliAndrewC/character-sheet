@@ -249,6 +249,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "all_players": all_players,
             "exclusive_pairs": EXCLUSIVE_PAIRS,
             "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
+            "is_first_version": not character.is_published,
         },
     )
 

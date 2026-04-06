@@ -1,6 +1,6 @@
 """E2E: Create a character end-to-end (new flow: POST creates blank, auto-saves)."""
 
-from tests.e2e.helpers import select_school, click_plus
+from tests.e2e.helpers import select_school, click_plus, apply_changes
 
 
 def test_create_and_edit_character(page, live_server_url):
@@ -11,7 +11,7 @@ def test_create_and_edit_character(page, live_server_url):
     page.locator('button:text("New Character")').click()
 
     # Should redirect to edit page
-    page.wait_for_selector('text="Publish Changes"')
+    page.wait_for_selector('input[name="name"]')
     assert "/edit" in page.url
 
     # Fill in details
@@ -29,9 +29,8 @@ def test_create_and_edit_character(page, live_server_url):
     # Wait for auto-save
     page.wait_for_selector('text="Saved"', timeout=5000)
 
-    # Publish — redirects to view sheet
-    page.locator('button:text("Publish Changes")').click()
-    page.wait_for_url("**/characters/*", timeout=10000)
+    # Apply changes — modal + redirect to view sheet
+    apply_changes(page, "Initial character creation")
     assert "/edit" not in page.url
 
     body = page.text_content("body")
@@ -44,12 +43,11 @@ def test_create_minimal_character(page, live_server_url):
     """Create and publish a character with just a name and school."""
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
-    page.wait_for_selector('text="Publish Changes"')
+    page.wait_for_selector('input[name="name"]')
 
     page.fill('input[name="name"]', "Minimal Samurai")
     select_school(page, "akodo_bushi")
 
     page.wait_for_selector('text="Saved"', timeout=5000)
-    page.locator('button:text("Publish Changes")').click()
-    page.wait_for_url("**/characters/*", timeout=10000)
+    apply_changes(page, "Initial character creation")
     assert "/edit" not in page.url

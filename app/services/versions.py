@@ -162,21 +162,27 @@ def compute_diff_summary(old_state: Dict[str, Any], new_state: Dict[str, Any]) -
     return diffs
 
 
-def publish_character(character: Character, db: Session) -> CharacterVersion:
-    """Publish the current draft as a new version.
+def publish_character(
+    character: Character,
+    db: Session,
+    summary: str = "",
+    author_discord_id: str | None = None,
+) -> CharacterVersion:
+    """Apply the current draft as a new version.
 
-    Snapshots the character's current state, computes a diff summary
-    against the previous published state, and creates a new version record.
+    Snapshots the character's current state, uses the provided summary
+    (or auto-generates one from the diff), and creates a version record.
     """
     current_state = character.to_dict()
     old_state = character.published_state or {}
 
-    # Compute diff
-    if old_state:
-        diff_lines = compute_diff_summary(old_state, current_state)
-        summary = "; ".join(diff_lines) if diff_lines else "No changes"
-    else:
-        summary = "Initial creation"
+    # Use provided summary, or auto-generate from diff
+    if not summary:
+        if old_state:
+            diff_lines = compute_diff_summary(old_state, current_state)
+            summary = "; ".join(diff_lines) if diff_lines else "No changes"
+        else:
+            summary = "Initial character creation"
 
     # Determine version number
     latest = (
@@ -193,6 +199,7 @@ def publish_character(character: Character, db: Session) -> CharacterVersion:
         version_number=version_number,
         state=current_state,
         summary=summary,
+        author_discord_id=author_discord_id,
     )
     db.add(version)
 
@@ -205,13 +212,16 @@ def publish_character(character: Character, db: Session) -> CharacterVersion:
 
 
 def revert_character(
-    character: Character, version_id: int, db: Session
+    character: Character,
+    version_id: int,
+    db: Session,
+    summary: str = "",
+    author_discord_id: str | None = None,
 ) -> CharacterVersion:
     """Revert a character to a previous version.
 
     Creates a new version that's a copy of the specified old version,
-    updates the character's draft and published state to match, and
-    notes the revert in the summary.
+    updates the character's draft and published state to match.
     """
     old_version = (
         db.query(CharacterVersion)
@@ -236,11 +246,15 @@ def revert_character(
     )
     new_version_number = (latest.version_number + 1) if latest else 1
 
+    if not summary:
+        summary = f"Reverted to version {old_version.version_number}"
+
     version = CharacterVersion(
         character_id=character.id,
         version_number=new_version_number,
         state=old_state,
-        summary=f"Reverted to version {old_version.version_number}",
+        summary=summary,
+        author_discord_id=author_discord_id,
     )
     db.add(version)
 

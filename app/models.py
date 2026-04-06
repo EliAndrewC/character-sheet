@@ -46,6 +46,7 @@ class CharacterVersion(Base):
     version_number: Mapped[int] = mapped_column(nullable=False)
     state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=False)
     summary: Mapped[str] = mapped_column(String, default="")
+    author_discord_id: Mapped[Optional[str]] = mapped_column(String, default=None)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 

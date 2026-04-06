@@ -62,6 +62,8 @@ def _migrate_add_columns():
         ("published_state", "TEXT", "NULL"),
         ("campaign_advantages", "TEXT", "'[]'"),
         ("campaign_disadvantages", "TEXT", "'[]'"),
+        ("advantage_details", "TEXT", "'{}'"),
+        ("adventure_state", "TEXT", "'{}'"),
     ]
 
     for col_name, col_type, default in needed:
@@ -69,6 +71,14 @@ def _migrate_add_columns():
             cursor.execute(
                 f"ALTER TABLE characters ADD COLUMN {col_name} {col_type} DEFAULT {default}"
             )
+
+    # Character versions table migrations
+    cursor.execute("PRAGMA table_info(character_versions)")
+    version_cols = {row[1] for row in cursor.fetchall()}
+    if version_cols and "author_discord_id" not in version_cols:
+        cursor.execute(
+            "ALTER TABLE character_versions ADD COLUMN author_discord_id TEXT DEFAULT NULL"
+        )
 
     # Users table migrations
     cursor.execute("PRAGMA table_info(users)")

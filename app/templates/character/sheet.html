@@ -5,14 +5,14 @@
 {% block content %}
 <div class="space-y-6">
 
-    <!-- PUBLISH STATUS BANNER -->
+    <!-- DRAFT STATUS BANNER -->
     {% if not character.is_published %}
     <div class="bg-amber-100 border border-amber-400 text-amber-800 rounded px-4 py-2 text-sm">
-        <strong>Draft</strong> — This character has not been published yet.
+        <strong>Draft</strong> — This is a new character draft. No versions have been applied yet.
     </div>
     {% elif character.has_unpublished_changes %}
     <div class="bg-blue-100 border border-blue-400 text-blue-800 rounded px-4 py-2 text-sm">
-        <strong>Unpublished changes</strong> — This character has been edited since it was last published.
+        <strong>Draft changes</strong> — This character has been edited since the last version.
     </div>
     {% endif %}
 
@@ -122,11 +122,12 @@
     </section>
 
     <!-- LIVE TRACKING -->
-    <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
-             x-data="{
-                lightWounds: {{ character.current_light_wounds }},
-                seriousWounds: {{ character.current_serious_wounds }},
-                voidPoints: {{ character.current_void_points }},
+    <script>
+        function trackingData() {
+            return {
+                lightWounds: {{ character.current_light_wounds or 0 }},
+                seriousWounds: {{ character.current_serious_wounds or 0 }},
+                voidPoints: {{ character.current_void_points or 0 }},
                 voidMax: {{ void_max }},
                 adventureState: {{ (adventure_state or {})|tojson }},
                 perAdventure: {{ per_adventure|tojson }},
@@ -161,7 +162,11 @@
                     }
                     this.save();
                 },
-             }">
+            };
+        }
+    </script>
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
+             x-data="trackingData()">
         <h2 class="text-xl font-bold mb-4 text-accent">Tracking</h2>
 
         <!-- Wounds & Void -->
@@ -550,37 +555,127 @@
 
     <!-- VERSION HISTORY -->
     {% if viewer_can_edit and versions %}
-    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
-        <h2 class="text-xl font-bold mb-4 text-accent">Version History</h2>
-        <div class="space-y-2">
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
+             x-data="{
+                open: false,
+                revertModal: false,
+                revertVersionId: null,
+                revertVersionNum: null,
+                revertReason: '',
+                editingSummary: null,
+                editSummaryText: '',
+                _charId: {{ character.id }},
+
+                openRevert(vid, vnum) {
+                    this.revertVersionId = vid;
+                    this.revertVersionNum = vnum;
+                    this.revertReason = '';
+                    this.revertModal = true;
+                },
+
+                async doRevert() {
+                    if (!this.revertReason.trim()) return;
+                    const summary = 'Reverting to version ' + this.revertVersionNum + ' because ' + this.revertReason.trim();
+                    const resp = await fetch('/characters/' + this._charId + '/revert/' + this.revertVersionId, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({summary}),
+                    });
+                    if (resp.ok) window.location.reload();
+                    else alert('Revert failed');
+                },
+
+                startEditSummary(vid, currentText) {
+                    this.editingSummary = vid;
+                    this.editSummaryText = currentText;
+                },
+
+                async saveEditSummary(vid) {
+                    await fetch('/characters/' + this._charId + '/versions/' + vid + '/summary', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({summary: this.editSummaryText}),
+                    });
+                    this.editingSummary = null;
+                    window.location.reload();
+                },
+             }">
+        <h2 class="text-xl font-bold text-accent cursor-pointer flex items-center gap-2"
+            @click="open = !open">
+            <span x-text="open ? '▾' : '▸'" class="text-sm"></span>
+            Version History
+            <span class="text-sm font-normal text-ink/50">({{ versions|length }})</span>
+        </h2>
+        <div x-show="open" x-cloak class="space-y-2 mt-4">
             {% for v in versions %}
             <div class="flex items-start justify-between text-sm bg-parchment rounded p-3">
-                <div>
+                <div class="flex-1 min-w-0">
                     <span class="font-bold">v{{ v.version_number }}</span>
                     <span class="text-ink/50 ml-2">{{ v.created_at.strftime('%Y-%m-%d %H:%M') if v.created_at else '' }}</span>
-                    <p class="text-ink/70 mt-1">{{ v.summary }}</p>
+                    {% if v.author_discord_id and v.author_discord_id in player_names %}
+                    <span class="text-ink/50 ml-1">by {{ player_names[v.author_discord_id] }}</span>
+                    {% endif %}
+                    <template x-if="editingSummary !== {{ v.id }}">
+                        <p class="text-ink/70 mt-1 cursor-pointer hover:text-ink"
+                           @click="startEditSummary({{ v.id }}, {{ v.summary|tojson }})">{{ v.summary }}</p>
+                    </template>
+                    <template x-if="editingSummary === {{ v.id }}">
+                        <div class="mt-1 flex gap-2">
+                            <input type="text" x-model="editSummaryText"
+                                   class="flex-1 text-sm border border-ink/20 rounded px-2 py-1 bg-white"
+                                   @keydown.enter="saveEditSummary({{ v.id }})"
+                                   @keydown.escape="editingSummary = null">
+                            <button @click="saveEditSummary({{ v.id }})"
+                                    class="text-xs bg-accent text-parchment px-2 py-1 rounded">Save</button>
+                            <button @click="editingSummary = null"
+                                    class="text-xs bg-ink/10 px-2 py-1 rounded">Cancel</button>
+                        </div>
+                    </template>
                 </div>
                 {% if v.version_number != versions[0].version_number %}
                 <button type="button"
-                        onclick="if(confirm('Revert to version {{ v.version_number }}?')){fetch('/characters/{{ character.id }}/revert/{{ v.id }}',{method:'POST'}).then(r=>{if(r.ok)window.location.reload();else alert('Revert failed');})}"
-                        class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">
+                        @click="openRevert({{ v.id }}, {{ v.version_number }})"
+                        class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded ml-2 shrink-0">
                     Revert
                 </button>
                 {% endif %}
             </div>
             {% endfor %}
         </div>
+
+        <!-- Revert modal -->
+        <div x-show="revertModal" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+            <div class="bg-white rounded-lg shadow-xl px-8 py-6 max-w-lg w-full mx-4" @click.outside="revertModal = false">
+                <h3 class="text-lg font-bold mb-3">Revert to Version <span x-text="revertVersionNum"></span></h3>
+                <p class="text-sm text-ink/60 mb-2">Why are you reverting?</p>
+                <div class="flex items-baseline gap-1 mb-3">
+                    <span class="text-sm text-ink/50 shrink-0">Reverting to version <span x-text="revertVersionNum"></span> because</span>
+                    <input type="text" x-model="revertReason" required
+                           class="flex-1 border border-ink/20 rounded px-2 py-1 bg-parchment text-sm"
+                           placeholder="...">
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" @click="revertModal = false"
+                            class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
+                    <button type="button" @click="doRevert()" :disabled="!revertReason.trim()"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                        Revert
+                    </button>
+                </div>
+            </div>
+        </div>
     </section>
     {% endif %}
 
-    <!-- PUBLISH STATUS (bottom) -->
+    <!-- DRAFT STATUS (bottom) -->
     {% if not character.is_published %}
     <div class="text-center text-sm text-ink/50 py-2 italic">
-        This character has not been published yet.
+        New character draft — no versions applied yet.
     </div>
     {% elif character.has_unpublished_changes %}
     <div class="text-center text-sm text-ink/50 py-2 italic">
-        This character has unpublished changes.
+        Draft changes since the last version.
     </div>
     {% endif %}
 
