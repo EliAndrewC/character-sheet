@@ -162,6 +162,50 @@
                     }
                     this.save();
                 },
+
+                // Light wound modals
+                lwPlusModal: false,
+                lwMinusMenu: false,
+                lwSetModal: false,
+                lwSeriousCount: 1,
+                lwAddAmount: '',
+                lwNewTotal: '',
+                lwSetValue: '',
+
+                lwTakeSeriousAndReset() {
+                    this.seriousWounds += this.lwSeriousCount;
+                    this.lightWounds = 0;
+                    this.lwPlusModal = false;
+                    this.lwSeriousCount = 1;
+                    this.save();
+                },
+                lwAddToTotal() {
+                    const add = parseInt(this.lwAddAmount) || 0;
+                    if (add > 0) { this.lightWounds += add; }
+                    this.lwPlusModal = false;
+                    this.lwAddAmount = '';
+                    this.save();
+                },
+                lwSetToTotal() {
+                    const val = parseInt(this.lwNewTotal);
+                    if (!isNaN(val) && val >= 0) { this.lightWounds = val; }
+                    this.lwPlusModal = false;
+                    this.lwNewTotal = '';
+                    this.save();
+                },
+                lwResetToZero() {
+                    this.lightWounds = 0;
+                    this.lwMinusMenu = false;
+                    this.save();
+                },
+                lwSetViaModal() {
+                    const val = parseInt(this.lwSetValue);
+                    if (!isNaN(val) && val >= 0) { this.lightWounds = val; }
+                    this.lwSetModal = false;
+                    this.lwMinusMenu = false;
+                    this.lwSetValue = '';
+                    this.save();
+                },
             };
         }
     </script>
@@ -171,15 +215,100 @@
 
         <!-- Wounds & Void -->
         <div class="grid grid-cols-3 gap-4 mb-4">
-            <div class="text-center">
+            <div class="text-center relative">
                 <div class="text-sm text-ink/60 mb-1">Light Wounds</div>
                 <div class="flex items-center justify-center gap-2">
-                    <button @click="lightWounds = Math.max(0, lightWounds - 1); save()"
+                    <button @click="lwMinusMenu = !lwMinusMenu"
                             :disabled="lightWounds <= 0"
+                            data-action="lw-minus"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
                     <span class="text-2xl font-bold w-8 text-center" x-text="lightWounds"></span>
-                    <button @click="lightWounds++; save()"
+                    <button @click="lwPlusModal = true"
+                            data-action="lw-plus"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                </div>
+
+                <!-- Minus dropdown menu -->
+                <div x-show="lwMinusMenu" x-cloak @click.outside="lwMinusMenu = false"
+                     class="absolute left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm w-48">
+                    <button @click="lwResetToZero()"
+                            class="block w-full text-left px-3 py-2 hover:bg-parchment">Reset to 0</button>
+                    <button @click="lwSetModal = true; lwMinusMenu = false; lwSetValue = String(lightWounds)"
+                            class="block w-full text-left px-3 py-2 hover:bg-parchment">Enter new total...</button>
+                </div>
+
+                <!-- Set total mini-modal -->
+                <div x-show="lwSetModal" x-cloak
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+                    <div class="bg-white rounded-lg shadow-xl px-6 py-4 w-64" @click.outside="lwSetModal = false">
+                        <h3 class="text-sm font-bold mb-2">Set Light Wounds</h3>
+                        <input type="number" x-model="lwSetValue" min="0"
+                               class="w-full border border-ink/20 rounded px-2 py-1 text-sm mb-3"
+                               @keydown.enter="lwSetViaModal()">
+                        <div class="flex justify-end gap-2">
+                            <button @click="lwSetModal = false" class="text-xs text-ink/50 hover:text-ink px-2 py-1">Cancel</button>
+                            <button @click="lwSetViaModal()" class="text-xs bg-accent text-parchment px-3 py-1 rounded">Set</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plus modal -->
+                <div x-show="lwPlusModal" x-cloak
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+                    <div class="bg-white rounded-lg shadow-xl px-6 py-5 w-80" @click.outside="lwPlusModal = false">
+                        <h3 class="text-base font-bold mb-4">Light Wounds</h3>
+
+                        <!-- Option 1: Take serious wounds and reset -->
+                        <div class="mb-4 pb-4 border-b border-ink/10">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm">Take serious wounds & reset light to 0</span>
+                            </div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <button @click="lwSeriousCount = Math.max(1, lwSeriousCount - 1)"
+                                        :disabled="lwSeriousCount <= 1"
+                                        class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                                <span class="text-lg font-bold w-6 text-center" x-text="lwSeriousCount"></span>
+                                <button @click="lwSeriousCount++"
+                                        class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-xs font-bold">+</button>
+                                <span class="text-xs text-ink/50">serious wound(s)</span>
+                            </div>
+                            <button @click="lwTakeSeriousAndReset()"
+                                    class="w-full text-xs bg-red-700 text-parchment px-3 py-1.5 rounded hover:bg-red-800">
+                                Take <span x-text="lwSeriousCount"></span> serious wound(s) & reset light to 0
+                            </button>
+                        </div>
+
+                        <!-- Option 2: Add to existing total -->
+                        <div class="mb-4 pb-4 border-b border-ink/10">
+                            <label class="text-sm block mb-1">Add to current total</label>
+                            <div class="flex gap-2">
+                                <input type="number" x-model="lwAddAmount" min="1" placeholder="Amount"
+                                       class="flex-1 border border-ink/20 rounded px-2 py-1 text-sm"
+                                       @keydown.enter="lwAddToTotal()">
+                                <button @click="lwAddToTotal()"
+                                        :disabled="!lwAddAmount || parseInt(lwAddAmount) <= 0"
+                                        class="text-xs bg-accent text-parchment px-3 py-1 rounded disabled:opacity-30">Add</button>
+                            </div>
+                        </div>
+
+                        <!-- Option 3: Set new total directly -->
+                        <div class="mb-3">
+                            <label class="text-sm block mb-1">Set total to</label>
+                            <div class="flex gap-2">
+                                <input type="number" x-model="lwNewTotal" min="0" placeholder="New total"
+                                       class="flex-1 border border-ink/20 rounded px-2 py-1 text-sm"
+                                       @keydown.enter="lwSetToTotal()">
+                                <button @click="lwSetToTotal()"
+                                        :disabled="lwNewTotal === '' || parseInt(lwNewTotal) < 0"
+                                        class="text-xs bg-accent text-parchment px-3 py-1 rounded disabled:opacity-30">Set</button>
+                            </div>
+                        </div>
+
+                        <div class="text-right">
+                            <button @click="lwPlusModal = false; lwAddAmount = ''; lwNewTotal = ''; lwSeriousCount = 1"
+                                    class="text-xs text-ink/50 hover:text-ink px-2 py-1">Cancel</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="text-center">

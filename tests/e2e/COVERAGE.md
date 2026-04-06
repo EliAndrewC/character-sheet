@@ -190,7 +190,15 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 ## Character Sheet — Tracking
 
 - [x] Initial values show 0 → `test_tracking.py::test_tracking_shows_initial_values`
-- [x] Light wounds +/- and persist → `test_tracking.py::test_wound_tracking_persists`
+- [x] Light wounds + opens modal → `test_light_wounds.py::test_plus_opens_modal`
+- [x] Light wounds modal: add to total → `test_light_wounds.py::test_modal_add_to_total`
+- [x] Light wounds modal: set total directly → `test_light_wounds.py::test_modal_set_total`
+- [x] Light wounds modal: take serious wounds and reset → `test_light_wounds.py::test_modal_take_serious_and_reset`
+- [x] Light wounds - opens dropdown → `test_light_wounds.py::test_minus_dropdown_reset`
+- [x] Light wounds - dropdown: reset to 0 → `test_light_wounds.py::test_minus_dropdown_reset`
+- [x] Light wounds - dropdown: enter new total → `test_light_wounds.py::test_minus_dropdown_enter_new_total`
+- [x] Light wounds - disabled at 0 → `test_light_wounds.py::test_minus_disabled_at_zero`
+- [x] Light wounds persist via modal → `test_tracking.py::test_wound_tracking_persists`
 - [x] Serious wounds +/- works → `test_tracking_advanced.py::test_serious_wounds_increment_decrement`
 - [x] Serious wounds persist → `test_tracking_advanced.py::test_serious_wounds_persist`
 - [x] Void points +/- works → `test_tracking.py::test_void_points_tracking`
@@ -259,9 +267,46 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 ---
 
+## Pytest Marks
+
+Tests are tagged with `pytest.mark.<mark>` so you can run a subset by feature area:
+```bash
+python3 -m pytest tests/e2e/ -m tracking --browser chromium
+python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
+```
+
+| Mark | Sections covered | Test files |
+|------|-----------------|------------|
+| `navigation` | Navigation | `test_smoke.py`, `test_navigation.py` |
+| `homepage` | Homepage | `test_banners.py` |
+| `profile` | Profile | `test_profile_e2e.py` |
+| `school` | School Selection | `test_school_selection.py` |
+| `school_rings` | School ring dropdown/interactions | `test_school_rings.py` |
+| `rings` | Rings +/- | `test_live_xp.py`, `test_editor_controls.py` |
+| `knacks` | Knacks +/- | `test_live_xp.py`, `test_editor_controls.py` |
+| `combat_skills` | Attack/Parry | `test_combat_skills.py`, `test_live_xp.py`, `test_editor_controls.py` |
+| `skills` | Skills +/- | `test_live_xp.py`, `test_editor_controls.py` |
+| `honor_rank_recognition` | Honor/Rank/Recognition controls | `test_live_xp.py`, `test_editor_controls.py` |
+| `advantages` | Advantage/disadvantage checkboxes | `test_live_xp.py`, `test_editor_controls.py` |
+| `exclusive_pairs` | Mutually exclusive pairs | `test_exclusive_pairs.py` |
+| `advantage_details` | Detail fields (text, skills, dropdowns) | `test_advantage_details.py` |
+| `autosave` | Auto-save, save status | `test_edit_character.py` |
+| `apply_changes` | Apply Changes modal | `test_create_character.py`, `test_publish_revert.py`, `test_apply_modal.py` |
+| `permissions` | Edit/delete visibility, non-editor | `test_permissions.py` |
+| `banners` | Draft status banners | `test_banners.py` |
+| `status_display` | Status section on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
+| `tracking` | Wounds, void points, per-adventure | `test_tracking.py`, `test_tracking_advanced.py`, `test_light_wounds.py`, `test_sheet_advanced.py` |
+| `skill_rolls` | Skill roll display with bonuses | `test_sheet_display.py`, `test_skill_rolls_display.py` |
+| `xp_summary` | XP breakdown on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
+| `version_history` | Version list, revert, inline edit | `test_publish_revert.py`, `test_sheet_display.py`, `test_sheet_advanced.py` |
+
+Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pytestmark` at module level and add it to this table.
+
+---
+
 ## Coverage Summary
 
-**Covered:** ~175 features across 163 test functions (16 test files)
+**Covered:** ~180 features across 170 test functions (17 test files)
 **Uncovered:** 0
 
 All interactive UI features are covered by at least one e2e clicktest.

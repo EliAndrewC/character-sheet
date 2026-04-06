@@ -105,7 +105,7 @@ def test_wound_minus_disabled_at_zero(page, live_server_url):
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Test")
 
-    light_minus = page.locator('text="Light Wounds"').locator('..').locator('button', has_text="-")
+    light_minus = page.locator('[data-action="lw-minus"]')
     assert light_minus.is_disabled()
     serious_minus = page.locator('text="Serious Wounds"').locator('..').locator('button', has_text="-")
     assert serious_minus.is_disabled()
