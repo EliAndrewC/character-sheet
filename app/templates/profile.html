@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}L7R — Profile{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+    <h1 class="text-3xl font-bold">Profile</h1>
+
+    <form method="POST" action="/profile" class="space-y-8">
+
+        <!-- Display Name -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4">Display Name</h2>
+            <p class="text-sm text-ink/60 mb-3">
+                This is the name other players see next to your characters.
+            </p>
+            <input type="text" name="display_name"
+                   value="{{ user_obj.display_name or user_obj.discord_name }}"
+                   class="w-full border border-ink/20 rounded px-3 py-2 bg-parchment">
+            <p class="text-xs text-ink/40 mt-1">Discord username: {{ user_obj.discord_name }}</p>
+        </section>
+
+        <!-- Account Access -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4">Character Edit Access</h2>
+            <p class="text-sm text-ink/60 mb-4">
+                Grant other accounts permission to edit characters you own.
+            </p>
+
+            {% if other_users %}
+            <div class="space-y-2">
+                {% for u in other_users %}
+                <label class="flex items-center gap-3 py-2 px-3 rounded
+                              {% if u.discord_id in admin_ids %}bg-amber-50{% else %}hover:bg-parchment{% endif %}">
+                    {% if u.discord_id in admin_ids %}
+                    <input type="checkbox" checked disabled
+                           class="rounded border-ink/30 accent-accent cursor-not-allowed">
+                    {% else %}
+                    <input type="checkbox" name="grant_{{ u.discord_id }}"
+                           {% if u.discord_id in granted_ids %}checked{% endif %}
+                           class="rounded border-ink/30 accent-accent">
+                    {% endif %}
+                    <div class="flex-1">
+                        <span class="font-medium">{{ u.display_name or u.discord_name }}</span>
+                        {% if u.discord_id in admin_ids %}
+                        <span class="ml-2 text-xs font-medium bg-amber-200 text-amber-800 px-2 py-0.5 rounded">GM</span>
+                        {% endif %}
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-ink/50 italic">No other accounts registered yet.</p>
+            {% endif %}
+
+            {% if admin_ids %}
+            <p class="text-xs text-ink/40 mt-4">
+                GM accounts always have edit access to all characters and cannot be revoked.
+            </p>
+            {% endif %}
+        </section>
+
+        <!-- Save -->
+        <div class="flex justify-end">
+            <button type="submit"
+                    class="bg-accent hover:bg-red-900 text-parchment px-6 py-3 rounded font-medium transition-colors">
+                Save Changes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
 # Set auth env vars before importing app
-os.environ.setdefault("DISCORD_WHITELIST_IDS", "183026066498125825")
+os.environ.setdefault("DISCORD_WHITELIST_IDS", "183026066498125825,test_user_1,test_user_2")
 os.environ.setdefault("ADMIN_DISCORD_IDS", "183026066498125825")
 os.environ.setdefault("TEST_AUTH_BYPASS", "true")
 
@@ -92,8 +92,9 @@ def make_character_data(**overrides) -> dict:
         "advantages": [],
         "disadvantages": [],
         "honor": 1.0,
-        "rank": 1.0,
-        "recognition": 1.0,
+        "rank": 7.5,
+        "rank_locked": True,
+        "recognition": 7.5,
         "recognition_halved": False,
         "campaign_advantages": [],
         "campaign_disadvantages": [],
@@ -122,8 +123,9 @@ def make_character_form(**overrides) -> dict:
         "knack_feint": "1",
         "knack_iaijutsu": "1",
         "honor": "1.0",
-        "rank": "1.0",
-        "recognition": "1.0",
+        "rank": "7.5",
+        "rank_locked": "1",
+        "recognition": "7.5",
         "starting_xp": "150",
         "earned_xp": "0",
     }

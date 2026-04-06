@@ -83,12 +83,12 @@ class TestRankLockedXP:
         assert result["rank"] == 0
 
     def test_rank_unlocked_costs_normally(self):
-        data = make_character_data(rank=3.0, rank_locked=False)
+        data = make_character_data(rank=9.0, rank_locked=False)
         result = calculate_total_xp(data)
-        assert result["rank"] == 4  # (3.0 - 1.0) / 0.5 = 4
+        assert result["rank"] == 3  # (9.0 - 7.5) / 0.5 = 3
 
     def test_rank_locked_high_value(self):
-        """Even rank 7.5 costs 0 when locked."""
-        data = make_character_data(rank=7.5, rank_locked=True, starting_xp=150)
+        """Even rank 9.0 costs 0 when locked."""
+        data = make_character_data(rank=9.0, rank_locked=True, starting_xp=150)
         result = calculate_total_xp(data)
         assert result["rank"] == 0

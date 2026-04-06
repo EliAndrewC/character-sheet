@@ -85,9 +85,9 @@ class Character(Base):
 
     # Honor / Rank / Recognition
     honor: Mapped[float] = mapped_column(Float, default=1.0)
-    rank: Mapped[float] = mapped_column(Float, default=1.0)
-    rank_locked: Mapped[bool] = mapped_column(default=False)
-    recognition: Mapped[float] = mapped_column(Float, default=1.0)
+    rank: Mapped[float] = mapped_column(Float, default=7.5)
+    rank_locked: Mapped[bool] = mapped_column(default=True)
+    recognition: Mapped[float] = mapped_column(Float, default=7.5)
     recognition_halved: Mapped[bool] = mapped_column(default=False)
 
     # XP tracking
@@ -120,6 +120,30 @@ class Character(Base):
             "Water": self.ring_water,
             "Void": self.ring_void,
         }
+
+    @property
+    def has_unpublished_changes(self) -> bool:
+        """True when the current draft differs from the published snapshot."""
+        if not self.is_published or self.published_state is None:
+            return False
+        current = self.to_dict()
+        # Compare only the fields that matter for content (skip timestamps)
+        skip = {"created_at", "updated_at"}
+        for key in current:
+            if key in skip:
+                continue
+            if current.get(key) != self.published_state.get(key):
+                return True
+        return False
+
+    @property
+    def publish_status(self) -> str:
+        """Return 'unpublished', 'published', or 'modified'."""
+        if not self.is_published:
+            return "unpublished"
+        if self.has_unpublished_changes:
+            return "modified"
+        return "published"
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a dict matching the shape expected by the XP engine.

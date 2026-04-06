@@ -20,7 +20,7 @@ from app.game_data import (
     Ring,
 )
 from app.models import Character, CharacterVersion, User as UserModel
-from app.services.auth import can_view_drafts
+from app.services.auth import can_view_drafts, get_admin_ids, is_admin, can_edit_character
 from app.services.rolls import compute_skill_roll
 from app.services.status import compute_effective_status
 from app.services.xp import calculate_total_xp, validate_character
@@ -50,26 +50,15 @@ def index(request: Request, db: Session = Depends(get_db)):
 
     all_characters = db.query(Character).order_by(Character.updated_at.desc()).all()
 
-    # Filter: show published characters to everyone,
-    # unpublished only to owner/admin/granted
-    from app.services.auth import get_admin_ids
-    admin_ids = get_admin_ids()
-    visible = []
-    for char in all_characters:
-        if char.is_published:
-            visible.append(char)
-        elif user_id:
-            owner = db.query(UserModel).filter(
-                UserModel.discord_id == char.owner_discord_id
-            ).first()
-            owner_granted = owner.granted_account_ids or [] if owner else []
-            if can_view_drafts(user_id, char.owner_discord_id, owner_granted, admin_ids):
-                visible.append(char)
+    # Build owner display name lookup
+    owner_ids = {c.owner_discord_id for c in all_characters if c.owner_discord_id}
+    owners = db.query(UserModel).filter(UserModel.discord_id.in_(owner_ids)).all() if owner_ids else []
+    owner_names = {u.discord_id: u.display_name or u.discord_name for u in owners}
 
     return _templates().TemplateResponse(
         request=request,
         name="index.html",
-        context={"characters": visible},
+        context={"characters": all_characters, "owner_names": owner_names},
     )
 
 
@@ -88,18 +77,15 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     user = getattr(request.state, "user", None)
     user_id = user["discord_id"] if user else None
 
-    # Determine if viewer can see draft or only published
+    # Determine if viewer can edit
     from app.services.auth import can_view_drafts
     from app.models import User as UserModel
     owner = db.query(UserModel).filter(UserModel.discord_id == character.owner_discord_id).first()
     owner_granted = owner.granted_account_ids or [] if owner else []
     viewer_can_edit = can_view_drafts(user_id, character.owner_discord_id, owner_granted)
 
-    # Show published state for public viewers, draft for editors
-    if viewer_can_edit or not character.is_published:
-        char_dict = character.to_dict()
-    else:
-        char_dict = character.published_state or character.to_dict()
+    # Everyone sees the current draft state
+    char_dict = character.to_dict()
 
     xp_breakdown = calculate_total_xp(char_dict)
     errors = validate_character(char_dict)
@@ -154,6 +140,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "skill_rolls": skill_rolls,
             "viewer_can_edit": viewer_can_edit,
             "versions": versions,
+            "owner_display_name": (owner.display_name or owner.discord_name) if owner else character.player_name,
         },
     )
 
@@ -168,7 +155,6 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
     if not character:
         return HTMLResponse("Character not found", status_code=404)
 
-    from app.services.auth import can_edit_character
     if not can_edit_character(
         user["discord_id"],
         character.owner_discord_id,
@@ -184,6 +170,12 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
     knacks = {}
     if school:
         knacks = {kid: SCHOOL_KNACKS.get(kid) for kid in school.school_knacks}
+
+    viewer_is_admin = is_admin(user["discord_id"])
+    all_players = (
+        db.query(UserModel).order_by(UserModel.display_name).all()
+        if viewer_is_admin else []
+    )
 
     return _templates().TemplateResponse(
         request=request,
@@ -205,5 +197,75 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "campaign_advantages": CAMPAIGN_ADVANTAGES,
             "campaign_disadvantages": CAMPAIGN_DISADVANTAGES,
             "school_ring_options": SCHOOL_RING_OPTIONS,
+            "viewer_is_admin": viewer_is_admin,
+            "all_players": all_players,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Profile & Account Access
+# ---------------------------------------------------------------------------
+
+
+@router.get("/profile", response_class=HTMLResponse)
+def profile(request: Request, db: Session = Depends(get_db)):
+    user = getattr(request.state, "user", None)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=303)
+
+    user_obj = db.query(UserModel).filter(
+        UserModel.discord_id == user["discord_id"]
+    ).first()
+
+    # All other registered users (for grant/revoke UI)
+    all_users = db.query(UserModel).order_by(UserModel.discord_name).all()
+    other_users = [u for u in all_users if u.discord_id != user["discord_id"]]
+
+    admin_ids = get_admin_ids()
+    granted_ids = set(user_obj.granted_account_ids or [])
+
+    return _templates().TemplateResponse(
+        request=request,
+        name="profile.html",
+        context={
+            "user_obj": user_obj,
+            "other_users": other_users,
+            "admin_ids": admin_ids,
+            "granted_ids": granted_ids,
+        },
+    )
+
+
+@router.post("/profile", response_class=HTMLResponse)
+async def update_profile(request: Request, db: Session = Depends(get_db)):
+    user = getattr(request.state, "user", None)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=303)
+
+    user_obj = db.query(UserModel).filter(
+        UserModel.discord_id == user["discord_id"]
+    ).first()
+
+    form = await request.form()
+    new_name = form.get("display_name", "").strip()
+    if new_name:
+        user_obj.display_name = new_name
+
+    # Parse granted account checkboxes
+    admin_ids = get_admin_ids()
+    all_users = db.query(UserModel).filter(
+        UserModel.discord_id != user["discord_id"]
+    ).all()
+    granted = []
+    for u in all_users:
+        # Admins always have access — don't store them in the list
+        if u.discord_id in admin_ids:
+            continue
+        if form.get(f"grant_{u.discord_id}") == "on":
+            granted.append(u.discord_id)
+    user_obj.granted_account_ids = granted
+
+    db.commit()
+
+    return RedirectResponse("/profile", status_code=303)
