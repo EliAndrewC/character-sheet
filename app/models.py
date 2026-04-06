@@ -127,12 +127,19 @@ class Character(Base):
         if not self.is_published or self.published_state is None:
             return False
         current = self.to_dict()
-        # Compare only the fields that matter for content (skip timestamps)
-        skip = {"created_at", "updated_at"}
+        # Skip metadata fields; compare only game-relevant content
+        skip = {"id", "created_at", "updated_at", "owner_discord_id", "editor_discord_ids"}
+        # Default values for keys that may be absent from older snapshots
+        defaults = {"campaign_advantages": [], "campaign_disadvantages": [],
+                    "attack": 1, "parry": 1, "rank_locked": False,
+                    "current_light_wounds": 0, "current_serious_wounds": 0,
+                    "current_void_points": 0, "notes": ""}
         for key in current:
             if key in skip:
                 continue
-            if current.get(key) != self.published_state.get(key):
+            cur_val = current[key]
+            pub_val = self.published_state.get(key, defaults.get(key))
+            if cur_val != pub_val:
                 return True
         return False
 
