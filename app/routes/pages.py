@@ -10,6 +10,7 @@ from app.game_data import (
     CAMPAIGN_ADVANTAGES,
     CAMPAIGN_DISADVANTAGES,
     DISADVANTAGES,
+    EXCLUSIVE_PAIRS,
     SCHOOLS,
     SCHOOLS_BY_CATEGORY,
     SCHOOL_RING_OPTIONS,
@@ -199,6 +200,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "school_ring_options": SCHOOL_RING_OPTIONS,
             "viewer_is_admin": viewer_is_admin,
             "all_players": all_players,
+            "exclusive_pairs": EXCLUSIVE_PAIRS,
         },
     )
 

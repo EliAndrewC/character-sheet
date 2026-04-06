@@ -90,6 +90,19 @@ RANK_COST_PER_HALF = 1  # same as Honor
 
 RECOGNITION_START = 7.5  # Wasp campaign starting Recognition (free)
 CAMPAIGN_STIPEND_RANK = 4  # Wasp campaign: characters considered 4th rank for stipend
+
+# Mutually exclusive advantage/disadvantage pairs.
+# Each tuple is (id_a, name_a, id_b, name_b).  Spans regular and campaign lists.
+EXCLUSIVE_PAIRS = [
+    ("vain", "Vain", "unkempt", "Unkempt"),
+    ("lucky", "Lucky", "unlucky", "Unlucky"),
+    ("imperial_favor", "Imperial Favor", "imperial_disdain", "Imperial Disdain"),
+    ("quick_healer", "Quick Healer", "slow_healer", "Slow Healer"),
+    ("virtue", "Virtue", "unconventional", "Unconventional"),
+    ("wealthy", "Wealthy", "poor", "Poor"),
+    ("family_reckoning_righteous_sting", "Family Reckoning: Righteous Sting",
+     "family_reckoning_venomous_sting", "Family Reckoning: Venomous Sting"),
+]
 RECOGNITION_MAX_FACTOR = 1.5  # up to 150% of Rank
 RECOGNITION_COST_PER_ONE = 1  # 1 XP per 1.0 Recognition
 RECOGNITION_HALVE_START_XP = 3  # 3 XP to halve starting Recognition
@@ -1432,39 +1445,49 @@ SCHOOLS: Dict[str, School] = {s.id: s for s in _SCHOOLS_LIST}
 
 _ADVANTAGES_LIST: List[Advantage] = [
     Advantage("charming", "Charming", 2,
-              "You are naturally likable and put others at ease."),
+              "You get a free raise on etiquette and culture rolls."),
     Advantage("discerning", "Discerning", 5,
-              "You have a keen eye for detail and rarely miss important nuances."),
+              "You get a free raise on interrogation rolls and 2 free raises on investigation rolls."),
     Advantage("fierce", "Fierce", 2,
-              "Your presence on the battlefield is intimidating."),
+              "You get a free raise on bragging and intimidation rolls."),
     Advantage("genealogist", "Genealogist", 2,
-              "You have extensive knowledge of family lineages and histories."),
+              "You get 2 free raises on heraldry rolls."),
     Advantage("good_reputation", "Good Reputation", 3,
-              "You are well-regarded and your name carries positive weight."),
+              "Your Recognition is considered 1.0 higher for the purposes of being recognized, "
+              "and your Rank is considered to be 2.0 higher when dealing with anyone who knows your reputation."),
     Advantage("great_destiny", "Great Destiny", 8,
-              "Fate has marked you for greatness; you are protected from premature death."),
+              "It takes one additional serious wound to kill you."),
     Advantage("higher_purpose", "Higher Purpose", 2,
-              "You are driven by a noble goal that gives you strength."),
+              "You are devoted to some noble cause, and you get a free raise on any roll made "
+              "to advocate a position which furthers this cause."),
     Advantage("imperial_favor", "Imperial Favor", 2,
-              "You have gained the attention and favor of the Imperial court."),
+              "Your Rank and Recognition are considered to be 3.0 higher when dealing with anyone "
+              "from an Imperial family, and are considered 1.0 higher when dealing with anyone else "
+              "serving in Imperial posts."),
     Advantage("kind_eye", "Kind Eye", 3,
-              "Others sense your genuine compassion and trust you more readily."),
+              "You get 4 free raises on tact and open sincerity rolls when talking to peasant characters "
+              "such as servants who are often treated badly by samurai."),
     Advantage("lucky", "Lucky", 5,
-              "Fortune smiles upon you; you may reroll dice in critical moments."),
+              "You may re-roll any roll once per adventure."),
     Advantage("quick_healer", "Quick Healer", 3,
-              "Your body recovers from injury faster than normal."),
+              "You heal two serious wounds instead of one the first night after being wounded."),
     Advantage("specialization", "Specialization", 2,
-              "You excel in a specific narrow application of a skill."),
+              "You get 2 free raises to a chosen subset of a skill, to be discussed with the GM. "
+              "This may be taken multiple times."),
     Advantage("strength_of_the_earth", "Strength of the Earth", 8,
-              "Your resilience is legendary; you shrug off wounds that would fell others."),
+              "You get a free raise on wound checks."),
     Advantage("tactician", "Tactician", 2,
-              "You have a natural gift for battlefield strategy."),
+              "You get a free raise on strategy and history rolls."),
     Advantage("virtue", "Virtue", 3,
-              "You embody one of the tenets of Bushido to an exceptional degree."),
+              "You have cultivated a particular virtue, such as courage or loyalty. When someone uses "
+              "the discern Honor knack on you, instead of adding 0.5 × (1k1 − 5) they add the absolute "
+              "value of that."),
     Advantage("wealthy", "Wealthy", 2,
-              "Disabled for Wasp Campaign — all characters are considered 4th rank for stipend (16 koku/year). Take Household Wealth instead."),
+              "Disabled for Wasp Campaign — all characters are considered 4th rank for stipend "
+              "(16 koku/year). Take Household Wealth instead. "
+              "Normal rules: Your Rank is considered to be 3.0 higher when calculating your stipend."),
     Advantage("worldly", "Worldly", 4,
-              "You have traveled widely and understand diverse customs and perspectives."),
+              "You get a free raise on commerce and underworld rolls."),
 ]
 
 ADVANTAGES: Dict[str, Advantage] = {a.id: a for a in _ADVANTAGES_LIST}
@@ -1476,49 +1499,81 @@ ADVANTAGES: Dict[str, Advantage] = {a.id: a for a in _ADVANTAGES_LIST}
 
 _DISADVANTAGES_LIST: List[Disadvantage] = [
     Disadvantage("bad_reputation", "Bad Reputation", 3,
-                 "You are known for something negative that colors others' perceptions."),
+                 "Your Recognition is considered 1.0 higher for the purposes of being recognized, "
+                 "but your Rank is considered 1.5 lower to anyone who knows about this reputation."),
     Disadvantage("contrary", "Contrary", 5,
-                 "You reflexively argue against whatever position others take."),
+                 "You cannot remain a neutral third party in any disagreement; you must actively take a side."),
     Disadvantage("dark_secret", "Dark Secret", 6,
-                 "You harbor a secret that would destroy you if revealed."),
+                 "You have done something in the past which is considered disgraceful, and one of the PCs "
+                 "and a small number of NPCs (chosen by the GM) know about it. Characters who know your "
+                 "secret treat you as if your Rank and Recognition were 6.0 lower."),
     Disadvantage("discordant", "Discordant", 12,
-                 "You are fundamentally at odds with the social order around you."),
+                 "You are spiritually unbalanced in a way that affects the harmony of the five elements. "
+                 "Because of this, you may not spend void points on skills."),
     Disadvantage("driven", "Driven", 5,
-                 "An obsessive goal consumes you, sometimes to your detriment."),
+                 "You have some ultimate goal which you want to achieve so badly that you'll disregard "
+                 "the adventure goal in order to pursue it."),
     Disadvantage("emotional", "Emotional", 3,
-                 "You have difficulty controlling a particular emotion."),
+                 "You do not exhibit the emotional reserve appropriate to a samurai. Instead, you are very "
+                 "quick to let your emotions show, which will make some people uncomfortable. NPCs will tend "
+                 "to not address your character directly and instead talk to other PCs in conversations."),
     Disadvantage("humble", "Humble", 2,
-                 "You downplay your accomplishments and defer to others excessively."),
+                 "Bragging rolls about your accomplishments are unaffected by this disadvantage, as are "
+                 "the Rank and Recognition bonuses you receive for them. However, while you may speak well "
+                 "of your accomplishments, you are self-deprecating about your skills and talents. Rokugan "
+                 "considers humility a vice, or at least an unfortunate eccentricity, so this will be "
+                 "frowned upon by many."),
     Disadvantage("jealousy", "Jealousy", 3,
-                 "You covet what others possess, whether status, skill, or affection."),
+                 "You have some skill by which you measure yourself against everyone else. You must "
+                 "constantly size up everyone you meet to determine roughly how they fare compared to you "
+                 "at this skill."),
     Disadvantage("long_temper", "Long Temper", 5,
-                 "You suppress anger until it explodes in disproportionate outbursts."),
+                 "You hold grudges over perceived insults, especially over matters of honor. Although you "
+                 "need not react immediately, you will not forget the insult and will burn with the need "
+                 "to extract payback."),
     Disadvantage("meddler", "Meddler", 2,
-                 "You cannot resist involving yourself in others' affairs."),
+                 "You want to know everything that's going on and investigate every interesting event "
+                 "around. Any intriguing goings on simply have to be looked into, no matter how sensitive "
+                 "the issue."),
     Disadvantage("permanent_wound", "Permanent Wound", 12,
-                 "You carry a grievous injury that will never fully heal."),
+                 "It takes one fewer serious wound to kill you. You may not take the Great Destiny advantage."),
     Disadvantage("poor", "Poor", 4,
-                 "Disabled for Wasp Campaign — all characters are considered 4th rank for stipend (16 koku/year)."),
+                 "Disabled for Wasp Campaign — all characters are considered 4th rank for stipend "
+                 "(16 koku/year). Normal rules: Divide your Rank in half for the purpose of calculating "
+                 "your stipend."),
     Disadvantage("proud", "Proud", 2,
-                 "Your pride makes it difficult to accept help or admit fault."),
+                 "You are a shameless self-promoter who will never be self-deprecating or play down "
+                 "accomplishments. You will never directly apologize or admit a mistake even when actually "
+                 "at fault."),
     Disadvantage("slow_healer", "Slow Healer", 3,
-                 "Your body recovers from injury slower than normal."),
+                 "You do not heal the first night after being wounded, but heal normally after that."),
     Disadvantage("short_temper", "Short Temper", 8,
-                 "You are easily provoked to anger and rash action."),
+                 "You are easily insulted and must react immediately against perceived slights, "
+                 "particularly when they are related to matters of honor."),
     Disadvantage("thoughtless", "Thoughtless", 5,
-                 "You speak and act without considering the consequences."),
+                 "You don't think before you speak, and sometimes you cross lines you didn't see. "
+                 "People have 4 free raises when using Manipulation on you, and 2 free raises when "
+                 "rolling Manipulation against anyone on your side of an argument."),
     Disadvantage("transparent", "Transparent", 12,
-                 "Your emotions and intentions are an open book to everyone."),
+                 "You are always considered to have rolled a 5 on sincerity rolls when lying or "
+                 "otherwise concealing information."),
     Disadvantage("unconventional", "Unconventional", 4,
-                 "Your methods and behavior defy the norms of your station."),
+                 "You have a slightly unusual way of approaching some aspect of bushido which can "
+                 "sometimes make you seem less honorable than you are at first. Whenever someone uses the "
+                 "discern Honor knack on you, instead of adding 0.5 × (1k1 − 5) to your honor, the GM "
+                 "subtracts the absolute value of that number."),
     Disadvantage("unkempt", "Unkempt", 4,
-                 "You neglect your appearance in a culture that values presentation."),
+                 "You are less diligent about cleanliness and grooming than is considered proper. As a "
+                 "result, some characters will view you as uncivilized or undisciplined, and you get a "
+                 "-10 penalty to all culture rolls."),
     Disadvantage("unlucky", "Unlucky", 8,
-                 "Misfortune follows you; fate conspires against you at critical moments."),
+                 "Once per adventure, the GM may apply a -5 penalty to any non-initiative roll."),
     Disadvantage("vain", "Vain", 2,
-                 "You are excessively concerned with your appearance and reputation."),
+                 "You clearly care a great deal about your appearance, which to some is unseemly and unmanly."),
     Disadvantage("withdrawn", "Withdrawn", 4,
-                 "You avoid social interaction and struggle in group settings."),
+                 "You are very reserved and only speak when you feel you have something to say, and even "
+                 "then you express it as succinctly as possible without giving much regard to social niceties. "
+                 "As a result, your etiquette and open sincerity rolls are never considered to be higher than 15."),
 ]
 
 DISADVANTAGES: Dict[str, Disadvantage] = {d.id: d for d in _DISADVANTAGES_LIST}
@@ -1958,44 +2013,53 @@ _CAMPAIGN_ADVANTAGES_LIST: List[Advantage] = [
         "family_reckoning_righteous_sting",
         "Family Reckoning: Righteous Sting",
         5,
-        "Your kin acted honorably; +2.0 Rank for yourself and +1.0 Rank for the party.",
+        "Your family's actions during the Wasp clan's founding are remembered favorably. "
+        "Your Rank is considered 2.0 higher, and the Rank of your entire party is considered "
+        "1.0 higher when dealing with those who know this history.",
     ),
     Advantage(
         "highest_regard",
         "Highest Regard",
         4,
-        "A written letter of introduction grants +2.0 Rank/Recognition with Wasp, "
-        "4 free raises on bragging/intimidation with Wasp (2 with others).",
+        "You carry a written letter of introduction from a notable Wasp figure. Your Rank and "
+        "Recognition are considered 2.0 higher when dealing with Wasp clan members. You get "
+        "4 free raises on bragging and intimidation rolls with Wasp (2 free raises with others).",
     ),
     Advantage(
         "household_wealth",
         "Household Wealth",
         4,
-        "Base stipend rank is 10 instead of 4 (100 koku/year). With Merchant or Shosuro Actor school, stipend rank is 15 (225 koku/year).",
+        "Replaces Wealthy. Your base stipend rank is 10 instead of the campaign default of 4, "
+        "giving you 100 koku/year. If you are a Merchant or Shosuro Actor, your stipend rank "
+        "is 15 (225 koku/year).",
     ),
     Advantage(
         "minor_clan_major_ally_sparrow",
         "Minor Clan Major Ally: Sparrow",
         2,
-        "+3.0 Rank/Recognition with Sparrow; can call on Sparrow allies to delay proceedings.",
+        "Your Rank and Recognition are considered 3.0 higher when dealing with Sparrow clan "
+        "members. You can call on Sparrow allies to delay legal proceedings or investigations.",
     ),
     Advantage(
         "minor_clan_major_ally_fox",
         "Minor Clan Major Ally: Fox",
         4,
-        "+3.0 Rank/Recognition with Fox; access to shugenja specialists.",
+        "Your Rank and Recognition are considered 3.0 higher when dealing with Fox clan members. "
+        "You have access to Fox shugenja specialists who may assist with spiritual matters.",
     ),
     Advantage(
         "minor_clan_major_ally_mantis",
         "Minor Clan Major Ally: Mantis",
         6,
-        "+3.0 Rank/Recognition with Mantis; access to discreet warriors.",
+        "Your Rank and Recognition are considered 3.0 higher when dealing with Mantis clan members. "
+        "You have access to discreet Mantis warriors who can be called upon for assistance.",
     ),
     Advantage(
         "streetwise",
         "Streetwise",
         5,
-        "Free raise on etiquette, law, intimidation, and underworld rolls related to bounty hunter authority.",
+        "You get a free raise on etiquette, law, intimidation, and underworld rolls when they "
+        "are related to your authority as a bounty hunter.",
     ),
 ]
 
@@ -2006,37 +2070,46 @@ _CAMPAIGN_DISADVANTAGES_LIST: List[Disadvantage] = [
         "crane_indebted",
         "Crane-indebted",
         4,
-        "Obligation to Crane patrons; failure results in Bad Reputation.",
+        "You owe a debt to Crane patrons who supported the Wasp clan. You are expected to "
+        "act in their interests when called upon. Failure to honor this obligation results "
+        "in gaining the Bad Reputation disadvantage.",
     ),
     Disadvantage(
         "family_reckoning_venomous_sting",
         "Family Reckoning: Venomous Sting",
         5,
-        "Your kin acted questionably; -2.0 Rank for yourself and -1.0 Rank for the party.",
+        "Your family's actions during the Wasp clan's founding are remembered unfavorably. "
+        "Your Rank is considered 2.0 lower, and the Rank of your entire party is considered "
+        "1.0 lower when dealing with those who know this history.",
     ),
     Disadvantage(
         "imperial_disdain",
         "Imperial Disdain",
         2,
-        "No Recognition on bragging with Imperial posts; -1.0 Rank for the party with Imperial posts.",
+        "You do not gain Recognition bonuses from bragging when dealing with those serving in "
+        "Imperial posts. Additionally, the Rank of your entire party is considered 1.0 lower "
+        "when dealing with Imperial post holders.",
     ),
     Disadvantage(
         "lion_enmity",
         "Lion Enmity",
         4,
-        "-10 to rolls with Zenji house, -5 with other Matsu.",
+        "You have earned the enmity of the Lion clan. You suffer a -10 penalty to all rolls "
+        "when dealing with the Zenji house, and a -5 penalty with other Matsu families.",
     ),
     Disadvantage(
         "peasantborn",
         "Peasantborn",
         2,
-        "Never considered peer standing with samurai-born; restrictions on dueling, arrest, and initiating violence.",
+        "You are never considered to have peer standing with samurai-born characters. You face "
+        "restrictions on dueling, making arrests, and initiating violence against samurai.",
     ),
     Disadvantage(
         "scorpion_advocate",
         "Scorpion Advocate",
         2,
-        "A Scorpion connection directs you to thwart dishonorable Wasp bounty hunters.",
+        "A Scorpion contact has leverage over you and periodically directs you to thwart Wasp "
+        "bounty hunters who are acting dishonorably or outside the bounds of their authority.",
     ),
 ]
 
