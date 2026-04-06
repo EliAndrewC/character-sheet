@@ -1,65 +1,80 @@
-"""E2E: Publish redirects to view sheet, revert works via AJAX."""
+"""E2E: Apply Changes redirects to view sheet, revert works via modal."""
 
-from tests.e2e.helpers import select_school
+from tests.e2e.helpers import select_school, apply_changes
 
 
 def _create_character(page, live_server_url, name="Test Character"):
     """Create a character, fill name and school, wait for autosave."""
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
-    page.wait_for_selector('text="Publish Changes"')
+    page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "akodo_bushi")
     page.wait_for_selector('text="Saved"', timeout=5000)
 
 
-def test_publish_redirects_to_view_sheet(page, live_server_url):
-    """Publishing should show overlay and redirect to the character sheet."""
-    _create_character(page, live_server_url, "Publish Redirect Test")
+def test_apply_redirects_to_view_sheet(page, live_server_url):
+    """Applying changes should show modal and redirect to the character sheet."""
+    _create_character(page, live_server_url, "Apply Redirect Test")
 
-    page.locator('button:text("Publish Changes")').click()
-
-    # Should redirect to view sheet (not edit page)
-    page.wait_for_url("**/characters/*", timeout=10000)
+    apply_changes(page, "Initial character creation")
     assert "/edit" not in page.url
-    assert "Publish Redirect Test" in page.text_content("h1")
+    assert "Apply Redirect Test" in page.text_content("h1")
 
 
-def test_publish_then_no_unpublished_banner(page, live_server_url):
-    """After publishing, the view sheet should NOT show unpublished changes banner."""
+def test_apply_then_no_draft_banner(page, live_server_url):
+    """After applying, the view sheet should NOT show draft changes banner."""
     _create_character(page, live_server_url, "No Banner Test")
 
-    page.locator('button:text("Publish Changes")').click()
-    page.wait_for_url("**/characters/*", timeout=10000)
+    apply_changes(page, "Initial character creation")
 
     body = page.text_content("body")
-    assert "Unpublished changes" not in body
-    assert "has not been published" not in body
+    assert "Draft changes" not in body
+    assert "no versions" not in body
 
 
-def test_revert_reloads_page(page, live_server_url):
-    """Reverting to a previous version should reload the page with old data."""
+def test_revert_with_reason(page, live_server_url):
+    """Reverting shows a modal asking for a reason, then reloads with old data."""
     _create_character(page, live_server_url, "Version 1 Name")
 
-    # Publish v1
-    page.locator('button:text("Publish Changes")').click()
-    page.wait_for_url("**/characters/*", timeout=10000)
+    # Apply v1
+    apply_changes(page, "Initial character creation")
     char_url = page.url
 
-    # Edit and publish v2 with a new name
+    # Edit and apply v2
     page.locator('a:text-is("Edit")').click()
-    page.wait_for_selector('text="Publish Changes"')
+    page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Version 2 Name")
     page.wait_for_selector('text="Saved"', timeout=5000)
-    page.locator('button:text("Publish Changes")').click()
-    page.wait_for_url("**/characters/*", timeout=10000)
+    apply_changes(page, "Updated name")
 
     assert "Version 2 Name" in page.text_content("h1")
 
-    # Revert to v1 — click the Revert button and accept the confirm dialog
-    page.on("dialog", lambda dialog: dialog.accept())
-    page.locator('button:text("Revert")').first.click()
+    # Expand version history
+    page.locator('text="Version History"').click()
 
-    # Page should reload and show v1 name
+    # Click revert — fills in the modal reason
+    page.locator('button:text("Revert")').first.click()
+    page.wait_for_selector('input[placeholder="..."]', timeout=3000)
+    page.fill('input[placeholder="..."]', "testing revert")
+    page.locator('div.fixed button:text("Revert")').click()
+
+    # Page should reload with v1 name
     page.wait_for_timeout(2000)
     assert "Version 1 Name" in page.text_content("h1")
+
+
+def test_version_history_collapsed_by_default(page, live_server_url):
+    """Version history section should be collapsed by default."""
+    _create_character(page, live_server_url, "Collapse Test")
+    apply_changes(page, "Initial character creation")
+
+    # History heading should exist but content hidden
+    assert page.locator('text="Version History"').is_visible()
+    # Version entries should not be visible until clicked
+    assert not page.locator('text="Initial character creation"').is_visible()
+
+    # Click to expand
+    page.locator('text="Version History"').click()
+    page.wait_for_timeout(300)
+    assert page.locator('text="Initial character creation"').is_visible()

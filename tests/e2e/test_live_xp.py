@@ -7,7 +7,7 @@ def _go_to_editor(page, live_server_url):
     """Create a new character and go to the editor."""
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
-    page.wait_for_selector('text="Publish Changes"')
+    page.wait_for_selector('input[name="name"]')
 
 
 def test_xp_updates_on_ring_change(page, live_server_url):

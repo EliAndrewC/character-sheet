@@ -1,12 +1,12 @@
 """E2E: Combat skills (Attack and Parry) in the editor."""
 
-from tests.e2e.helpers import select_school, click_plus, click_minus
+from tests.e2e.helpers import select_school, click_plus, click_minus, apply_changes
 
 
 def _go_to_editor(page, live_server_url):
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
-    page.wait_for_selector('text="Publish Changes"')
+    page.wait_for_selector('input[name="name"]')
 
 
 def test_combat_skill_xp_live_calculation(page, live_server_url):
@@ -51,8 +51,7 @@ def test_create_with_combat_skills_and_publish(page, live_server_url):
     click_plus(page, "parry", 1)
 
     page.wait_for_selector('text="Saved"', timeout=5000)
-    page.locator('button:text("Publish Changes")').click()
-    page.wait_for_url("**/characters/*", timeout=10000)
+    apply_changes(page, "Added combat skills")
     page.wait_for_selector("h1")
 
     body = page.text_content("body")

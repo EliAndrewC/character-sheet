@@ -6,7 +6,7 @@ from tests.e2e.helpers import select_school
 def _go_to_editor(page, live_server_url):
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
-    page.wait_for_selector('text="Publish Changes"')
+    page.wait_for_selector('input[name="name"]')
 
 
 def test_school_selection_loads_details(page, live_server_url):

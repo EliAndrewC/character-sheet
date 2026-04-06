@@ -26,3 +26,16 @@ def click_minus(page, name, times=1):
     """Click the - button for a +/- control."""
     for _ in range(times):
         page.locator(f'input[name="{name}"]').locator('..').locator('button:text("-")').click(force=True)
+
+
+def apply_changes(page, summary="Test version"):
+    """Click Apply Changes, fill in the modal summary, and confirm.
+
+    Waits for redirect to the character sheet view.
+    """
+    page.locator('[data-action="apply-changes"]').click()
+    page.wait_for_selector('textarea[placeholder="Describe your changes..."]', timeout=3000)
+    page.fill('textarea[placeholder="Describe your changes..."]', summary)
+    # Click the modal's confirm button (inside the fixed overlay)
+    page.locator('div.fixed button:text("Apply Changes")').click()
+    page.wait_for_url("**/characters/*", timeout=10000)

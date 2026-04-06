@@ -4,11 +4,38 @@
 
 {% block content %}
 <div x-data="characterForm()" x-init="init()">
-    <!-- Publishing overlay -->
-    <div x-show="publishing" x-cloak
+    <!-- Apply Changes modal -->
+    <div x-show="showApplyModal" x-cloak
          class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
-        <div class="bg-white rounded-lg shadow-xl px-8 py-6 text-center">
-            <div class="text-lg font-bold mb-2" x-text="publishMessage"></div>
+        <div class="bg-white rounded-lg shadow-xl px-8 py-6 max-w-lg w-full mx-4" @click.outside="if(!publishing) showApplyModal=false">
+            <template x-if="!publishing">
+                <div>
+                    <h3 class="text-lg font-bold mb-3">Apply Changes</h3>
+                    <p class="text-sm text-ink/60 mb-3">Describe what changed in this version:</p>
+                    <textarea x-model="applySummary" rows="3" required
+                              class="w-full border border-ink/20 rounded px-3 py-2 bg-parchment text-sm mb-3"
+                              placeholder="Describe your changes..."></textarea>
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <button type="button" @click="applySummary = 'Spending XP from the latest adventure'"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">Spending XP from the latest adventure</button>
+                        <button type="button" @click="applySummary = 'Spending some leftover XP mid-adventure'"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">Spending some leftover XP mid-adventure</button>
+                    </div>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" @click="showApplyModal = false"
+                                class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
+                        <button type="button" @click="doApply()" :disabled="!applySummary.trim()"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                            Apply Changes
+                        </button>
+                    </div>
+                </div>
+            </template>
+            <template x-if="publishing">
+                <div class="text-center">
+                    <div class="text-lg font-bold" x-text="publishMessage"></div>
+                </div>
+            </template>
         </div>
     </div>
 
@@ -627,9 +654,9 @@
                 </div>
                 <div class="flex items-center gap-3">
                     <span class="text-sm text-ink/60" x-text="saveStatus"></span>
-                    <button type="button" @click="doPublish()"
+                    <button type="button" @click="openApplyModal()" data-action="apply-changes"
                             class="bg-accent hover:bg-red-900 text-parchment px-6 py-3 rounded font-medium transition-colors">
-                        Publish Changes
+                        Apply Changes
                     </button>
                     <a href="/characters/{{ character.id }}"
                        class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-3 rounded font-medium transition-colors text-sm">
@@ -901,25 +928,35 @@ function characterForm() {
 
         publishing: false,
         publishMessage: '',
+        showApplyModal: false,
+        applySummary: '',
 
-        async doPublish() {
+        openApplyModal() {
+            this.applySummary = {{ 'true' if is_first_version else 'false' }} ? 'Initial character creation' : '';
+            this.showApplyModal = true;
+        },
+
+        async doApply() {
+            if (!this.applySummary.trim()) return;
             await this.doSave();
             this.publishing = true;
-            this.publishMessage = 'Publishing...';
+            this.publishMessage = 'Applying changes...';
             try {
                 const resp = await fetch('/characters/' + this._charId + '/publish', {
                     method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({summary: this.applySummary.trim()}),
                 });
                 if (resp.ok) {
                     const data = await resp.json();
-                    this.publishMessage = 'Published (v' + data.version_number + '). Redirecting...';
+                    this.publishMessage = 'Applied (v' + data.version_number + '). Redirecting...';
                     window.location.href = '/characters/' + this._charId;
                 } else {
-                    this.publishMessage = 'Publish failed';
+                    this.publishMessage = 'Failed to apply changes';
                     this.publishing = false;
                 }
             } catch (e) {
-                this.publishMessage = 'Publish failed';
+                this.publishMessage = 'Failed to apply changes';
                 this.publishing = false;
             }
         },

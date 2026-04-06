@@ -247,6 +247,53 @@ class TestPublish:
         assert char.is_published is True
         assert char.published_state is not None
 
+    def test_publish_with_custom_summary(self, client):
+        cid = _seed_character(client, name="Custom Summary", is_published=False)
+        resp = client.post(
+            f"/characters/{cid}/publish",
+            json={"summary": "Spending XP from the latest adventure"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["summary"] == "Spending XP from the latest adventure"
+
+    def test_publish_records_author(self, client):
+        from app.models import CharacterVersion
+        cid = _seed_character(client, name="Author Test", is_published=False)
+        client.post(f"/characters/{cid}/publish", json={"summary": "test"})
+        session = client._test_session_factory()
+        v = session.query(CharacterVersion).filter(
+            CharacterVersion.character_id == cid
+        ).first()
+        assert v.author_discord_id == "183026066498125825"
+
+
+class TestUpdateVersionSummary:
+    def test_update_summary(self, client):
+        from app.models import CharacterVersion
+        cid = _seed_character(client, name="Edit Summary")
+        client.post(f"/characters/{cid}/publish", json={"summary": "original"})
+        session = client._test_session_factory()
+        v = session.query(CharacterVersion).filter(
+            CharacterVersion.character_id == cid
+        ).first()
+
+        resp = client.post(
+            f"/characters/{cid}/versions/{v.id}/summary",
+            json={"summary": "updated summary"},
+        )
+        assert resp.status_code == 200
+        session.refresh(v)
+        assert v.summary == "updated summary"
+
+    def test_update_nonexistent_version_404(self, client):
+        cid = _seed_character(client, name="No Version")
+        resp = client.post(
+            f"/characters/{cid}/versions/999/summary",
+            json={"summary": "nope"},
+        )
+        assert resp.status_code == 404
+
 
 class TestRevert:
     def test_revert_to_previous_version(self, client):
