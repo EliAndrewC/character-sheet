@@ -58,7 +58,7 @@ _ADVANTAGE_SKILL_BONUSES = {
     "discerning": (["interrogation"], 1),  # investigation handled separately
     "genealogist": (["heraldry"], 2),
     "tactician": (["strategy", "history"], 1),
-    "worldly_advantage": (["commerce", "underworld"], 1),
+    "worldly": (["commerce", "underworld"], 1),
 }
 
 # Discerning gives different bonuses to different skills
