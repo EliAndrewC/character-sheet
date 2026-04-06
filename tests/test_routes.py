@@ -185,6 +185,54 @@ class TestAutoSave:
         assert char.player_name == "Other Player"
 
 
+class TestTrackState:
+    def test_track_wounds(self, client):
+        cid = _seed_character(client, name="Track Test")
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"current_light_wounds": 3, "current_serious_wounds": 1},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.current_light_wounds == 3
+        assert char.current_serious_wounds == 1
+
+    def test_track_void_points(self, client):
+        cid = _seed_character(client, name="Void Test")
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"current_void_points": 2},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.current_void_points == 2
+
+    def test_track_adventure_state(self, client):
+        cid = _seed_character(client, name="Adventure Test")
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"adventure_state": {"lucky_used": True, "adventure_raises_used": 3}},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.adventure_state["lucky_used"] is True
+        assert char.adventure_state["adventure_raises_used"] == 3
+
+    def test_track_nonexistent_404(self, client):
+        resp = client.post("/characters/999/track", json={"current_light_wounds": 1})
+        assert resp.status_code == 404
+
+    def test_track_clamps_negative(self, client):
+        cid = _seed_character(client, name="Clamp Test")
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"current_light_wounds": -5},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.current_light_wounds == 0
+
+
 class TestPublish:
     def test_publish_creates_version(self, client):
         cid = _seed_character(client, name="Publish Me", is_published=False)

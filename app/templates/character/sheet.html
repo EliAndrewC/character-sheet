@@ -121,6 +121,130 @@
         </div>
     </section>
 
+    <!-- LIVE TRACKING -->
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
+             x-data="{
+                lightWounds: {{ character.current_light_wounds }},
+                seriousWounds: {{ character.current_serious_wounds }},
+                voidPoints: {{ character.current_void_points }},
+                voidMax: {{ void_max }},
+                adventureState: {{ (adventure_state or {})|tojson }},
+                perAdventure: {{ per_adventure|tojson }},
+                _charId: {{ character.id }},
+                _saving: false,
+
+                async save() {
+                    if (this._saving) return;
+                    this._saving = true;
+                    await fetch('/characters/' + this._charId + '/track', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            current_light_wounds: this.lightWounds,
+                            current_serious_wounds: this.seriousWounds,
+                            current_void_points: this.voidPoints,
+                            adventure_state: this.adventureState,
+                        }),
+                    });
+                    this._saving = false;
+                },
+
+                getCount(id) { return this.adventureState[id + '_used'] || 0; },
+                setCount(id, val) { this.adventureState[id + '_used'] = val; this.save(); },
+                getToggle(id) { return !!this.adventureState[id]; },
+                setToggle(id, val) { this.adventureState[id] = val; this.save(); },
+
+                resetAdventure() {
+                    for (const a of this.perAdventure) {
+                        if (a.type === 'counter') this.adventureState[a.id + '_used'] = 0;
+                        if (a.type === 'toggle') this.adventureState[a.id] = false;
+                    }
+                    this.save();
+                },
+             }">
+        <h2 class="text-xl font-bold mb-4 text-accent">Tracking</h2>
+
+        <!-- Wounds & Void -->
+        <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="text-center">
+                <div class="text-sm text-ink/60 mb-1">Light Wounds</div>
+                <div class="flex items-center justify-center gap-2">
+                    <button @click="lightWounds = Math.max(0, lightWounds - 1); save()"
+                            :disabled="lightWounds <= 0"
+                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                    <span class="text-2xl font-bold w-8 text-center" x-text="lightWounds"></span>
+                    <button @click="lightWounds++; save()"
+                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                </div>
+            </div>
+            <div class="text-center">
+                <div class="text-sm text-ink/60 mb-1">Serious Wounds</div>
+                <div class="flex items-center justify-center gap-2">
+                    <button @click="seriousWounds = Math.max(0, seriousWounds - 1); save()"
+                            :disabled="seriousWounds <= 0"
+                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                    <span class="text-2xl font-bold w-8 text-center" x-text="seriousWounds"></span>
+                    <button @click="seriousWounds++; save()"
+                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                </div>
+            </div>
+            <div class="text-center">
+                <div class="text-sm text-ink/60 mb-1">Void Points</div>
+                <div class="flex items-center justify-center gap-2">
+                    <button @click="voidPoints = Math.max(0, voidPoints - 1); save()"
+                            :disabled="voidPoints <= 0"
+                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                    <span class="text-2xl font-bold w-8 text-center" x-text="voidPoints"></span>
+                    <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); save()"
+                            :disabled="voidPoints >= voidMax"
+                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">+</button>
+                </div>
+                <div class="text-xs text-ink/50" x-text="'max ' + voidMax"></div>
+            </div>
+        </div>
+
+        <!-- Per-Adventure Abilities -->
+        {% if per_adventure %}
+        <div class="border-t border-ink/10 pt-4">
+            <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-3">Per-Adventure Abilities</h3>
+            <div class="space-y-3">
+                {% for ability in per_adventure %}
+                {% if ability.type == 'counter' %}
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium">{{ ability.name }}</span>
+                    <div class="flex items-center gap-2">
+                        <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
+                                :disabled="getCount('{{ ability.id }}') <= 0"
+                                class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                        <span class="text-sm font-bold w-16 text-center"
+                              x-text="({{ ability.max }} - getCount('{{ ability.id }}')) + ' / {{ ability.max }}'"></span>
+                        <button @click="setCount('{{ ability.id }}', Math.min({{ ability.max }}, getCount('{{ ability.id }}') + 1))"
+                                :disabled="getCount('{{ ability.id }}') >= {{ ability.max }}"
+                                class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
+                    </div>
+                </div>
+                {% elif ability.type == 'toggle' %}
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium">{{ ability.name }}</span>
+                    <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox"
+                               :checked="getToggle('{{ ability.id }}')"
+                               @change="setToggle('{{ ability.id }}', $event.target.checked)"
+                               class="rounded text-accent">
+                        <span x-text="getToggle('{{ ability.id }}') ? 'Used' : 'Available'" class="text-xs"></span>
+                    </label>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            <button @click="if(confirm('Reset all per-adventure abilities?')) resetAdventure()"
+                    class="mt-4 text-sm bg-ink/10 hover:bg-ink/20 px-3 py-1.5 rounded transition-colors">
+                Reset Per-Adventure Abilities
+            </button>
+        </div>
+        {% endif %}
+    </section>
+
     <!-- COMBAT SKILLS -->
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">Combat Skills</h2>
@@ -309,8 +433,15 @@
                 {% for aid in character.advantages %}
                 {% set adv = advantages.get(aid) %}
                 {% if adv %}
+                {% set detail = advantage_details.get(aid, {}) %}
                 <div class="mb-2 tooltip-trigger relative">
                     <span class="text-sm font-medium cursor-help">{{ adv.name }}</span>
+                    {% if detail.get('text') %}
+                    <span class="text-sm text-ink/60">— {{ detail.text }}</span>
+                    {% endif %}
+                    {% if detail.get('player') and detail.player in player_names %}
+                    <span class="text-xs text-ink/50">(known by {{ player_names[detail.player] }})</span>
+                    {% endif %}
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                         {{ adv.description }}
                     </div>
@@ -325,8 +456,15 @@
                 {% for did in character.disadvantages %}
                 {% set dis = disadvantages.get(did) %}
                 {% if dis %}
+                {% set detail = advantage_details.get(did, {}) %}
                 <div class="mb-2 tooltip-trigger relative">
                     <span class="text-sm font-medium cursor-help">{{ dis.name }}</span>
+                    {% if detail.get('text') %}
+                    <span class="text-sm text-ink/60">— {{ detail.text }}</span>
+                    {% endif %}
+                    {% if detail.get('player') and detail.player in player_names %}
+                    <span class="text-xs text-ink/50">(known by {{ player_names[detail.player] }})</span>
+                    {% endif %}
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                         {{ dis.description }}
                     </div>

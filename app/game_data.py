@@ -93,6 +93,22 @@ CAMPAIGN_STIPEND_RANK = 4  # Wasp campaign: characters considered 4th rank for s
 
 # Mutually exclusive advantage/disadvantage pairs.
 # Each tuple is (id_a, name_a, id_b, name_b).  Spans regular and campaign lists.
+# Advantages/disadvantages that require extra detail fields.
+# Each entry maps an ID to a dict describing what's needed:
+#   "text": label for the freeform text field
+#   "skills": True if the player must select skills (multi for many, single for one)
+#   "player": True if the player must select another player character
+ADVANTAGE_DETAIL_FIELDS = {
+    "virtue": {"text": "Which virtue?"},
+    "jealousy": {"text": "Which skill do you measure yourself by?"},
+    "unconventional": {"text": "What aspect of bushido?"},
+    "good_reputation": {"text": "What are you known for?"},
+    "bad_reputation": {"text": "What are you known for?"},
+    "dark_secret": {"text": "What is your secret?", "player": True},
+    "higher_purpose": {"text": "What is your cause?", "skills": "multi"},
+    "specialization": {"text": "What specialization?", "skills": "single"},
+}
+
 EXCLUSIVE_PAIRS = [
     ("vain", "Vain", "unkempt", "Unkempt"),
     ("lucky", "Lucky", "unlucky", "Unlucky"),

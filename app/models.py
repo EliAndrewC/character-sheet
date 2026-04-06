@@ -82,6 +82,9 @@ class Character(Base):
     disadvantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
     campaign_advantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
     campaign_disadvantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
+    # Extra details for advantages/disadvantages that need text or skill selections
+    # Format: {"advantage_id": {"text": "...", "skills": ["skill_id", ...], "player": "discord_id"}}
+    advantage_details: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
 
     # Honor / Rank / Recognition
     honor: Mapped[float] = mapped_column(Float, default=1.0)
@@ -98,6 +101,9 @@ class Character(Base):
     current_light_wounds: Mapped[int] = mapped_column(default=0)
     current_serious_wounds: Mapped[int] = mapped_column(default=0)
     current_void_points: Mapped[int] = mapped_column(default=0)
+    # Per-adventure state: {"lucky_used": false, "unlucky_used": false,
+    #   "adventure_raises_used": 0, "conviction_used": 0, ...}
+    adventure_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
 
     # Metadata
     notes: Mapped[str] = mapped_column(String, default="")
@@ -131,6 +137,7 @@ class Character(Base):
         skip = {"id", "created_at", "updated_at", "owner_discord_id", "editor_discord_ids"}
         # Default values for keys that may be absent from older snapshots
         defaults = {"campaign_advantages": [], "campaign_disadvantages": [],
+                    "advantage_details": {},
                     "attack": 1, "parry": 1, "rank_locked": False,
                     "current_light_wounds": 0, "current_serious_wounds": 0,
                     "current_void_points": 0, "notes": ""}
@@ -176,6 +183,7 @@ class Character(Base):
             "disadvantages": self.disadvantages or [],
             "campaign_advantages": self.campaign_advantages or [],
             "campaign_disadvantages": self.campaign_disadvantages or [],
+            "advantage_details": self.advantage_details or {},
             "honor": self.honor,
             "rank": self.rank,
             "rank_locked": self.rank_locked,
