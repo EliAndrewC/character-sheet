@@ -218,16 +218,21 @@
             <div class="text-center relative">
                 <div class="text-sm text-ink/60 mb-1">Light Wounds</div>
                 <div class="flex items-center justify-center gap-2">
+                    {% if viewer_can_edit %}
                     <button @click="lwMinusMenu = !lwMinusMenu"
                             :disabled="lightWounds <= 0"
                             data-action="lw-minus"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                    {% endif %}
                     <span class="text-2xl font-bold w-8 text-center" x-text="lightWounds"></span>
+                    {% if viewer_can_edit %}
                     <button @click="lwPlusModal = true"
                             data-action="lw-plus"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                    {% endif %}
                 </div>
 
+                {% if viewer_can_edit %}
                 <!-- Minus dropdown menu -->
                 <div x-show="lwMinusMenu" x-cloak @click.outside="lwMinusMenu = false"
                      class="absolute left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm w-48">
@@ -310,28 +315,37 @@
                         </div>
                     </div>
                 </div>
+                {% endif %}
             </div>
             <div class="text-center">
                 <div class="text-sm text-ink/60 mb-1">Serious Wounds</div>
                 <div class="flex items-center justify-center gap-2">
+                    {% if viewer_can_edit %}
                     <button @click="seriousWounds = Math.max(0, seriousWounds - 1); save()"
                             :disabled="seriousWounds <= 0"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                    {% endif %}
                     <span class="text-2xl font-bold w-8 text-center" x-text="seriousWounds"></span>
+                    {% if viewer_can_edit %}
                     <button @click="seriousWounds++; save()"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                    {% endif %}
                 </div>
             </div>
             <div class="text-center">
                 <div class="text-sm text-ink/60 mb-1">Void Points</div>
                 <div class="flex items-center justify-center gap-2">
+                    {% if viewer_can_edit %}
                     <button @click="voidPoints = Math.max(0, voidPoints - 1); save()"
                             :disabled="voidPoints <= 0"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                    {% endif %}
                     <span class="text-2xl font-bold w-8 text-center" x-text="voidPoints"></span>
+                    {% if viewer_can_edit %}
                     <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); save()"
                             :disabled="voidPoints >= voidMax"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">+</button>
+                    {% endif %}
                 </div>
                 <div class="text-xs text-ink/50" x-text="'max ' + voidMax"></div>
             </div>
@@ -347,23 +361,28 @@
                 <div class="flex items-center justify-between">
                     <span class="text-sm font-medium">{{ ability.name }}</span>
                     <div class="flex items-center gap-2">
+                        {% if viewer_can_edit %}
                         <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
                                 :disabled="getCount('{{ ability.id }}') <= 0"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                        {% endif %}
                         <span class="text-sm font-bold w-16 text-center"
                               x-text="({{ ability.max }} - getCount('{{ ability.id }}')) + ' / {{ ability.max }}'"></span>
+                        {% if viewer_can_edit %}
                         <button @click="setCount('{{ ability.id }}', Math.min({{ ability.max }}, getCount('{{ ability.id }}') + 1))"
                                 :disabled="getCount('{{ ability.id }}') >= {{ ability.max }}"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
+                        {% endif %}
                     </div>
                 </div>
                 {% elif ability.type == 'toggle' %}
                 <div class="flex items-center justify-between">
                     <span class="text-sm font-medium">{{ ability.name }}</span>
-                    <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
+                    <label class="inline-flex items-center gap-2 text-sm {% if viewer_can_edit %}cursor-pointer{% endif %}">
                         <input type="checkbox"
                                :checked="getToggle('{{ ability.id }}')"
                                @change="setToggle('{{ ability.id }}', $event.target.checked)"
+                               {% if not viewer_can_edit %}disabled{% endif %}
                                class="rounded text-accent">
                         <span x-text="getToggle('{{ ability.id }}') ? 'Used' : 'Available'" class="text-xs"></span>
                     </label>
@@ -371,10 +390,12 @@
                 {% endif %}
                 {% endfor %}
             </div>
+            {% if viewer_can_edit %}
             <button @click="if(confirm('Reset all per-adventure abilities?')) resetAdventure()"
                     class="mt-4 text-sm bg-ink/10 hover:bg-ink/20 px-3 py-1.5 rounded transition-colors">
                 Reset Per-Adventure Abilities
             </button>
+            {% endif %}
         </div>
         {% endif %}
     </section>

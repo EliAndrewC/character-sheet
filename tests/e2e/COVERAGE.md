@@ -210,7 +210,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Lucky toggle persists → `test_tracking_advanced.py::test_lucky_toggle_persists`
 - [x] Unlucky toggle shown → `test_sheet_advanced.py::test_unlucky_toggle`
 - [x] Reset per-adventure → `test_tracking_advanced.py::test_reset_per_adventure`
-- [x] Tracking functional for non-editors → `test_permissions.py::test_tracking_functional_for_nonadmin`
+- [x] Tracking buttons hidden for non-editors → `test_permissions.py::test_tracking_buttons_hidden_for_nonadmin`
 
 ## Character Sheet — Skill Roll Display
 
@@ -262,7 +262,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Edit hidden → `test_permissions.py::test_edit_delete_hidden_for_nonadmin`
 - [x] Delete hidden → `test_permissions.py::test_edit_delete_hidden_for_nonadmin`
 - [x] Version history hidden → `test_permissions.py::test_version_history_hidden_for_nonadmin`
-- [x] Tracking functional → `test_permissions.py::test_tracking_functional_for_nonadmin`
+- [x] Tracking +/- buttons hidden for non-editors → `test_permissions.py::test_tracking_buttons_hidden_for_nonadmin`
+- [x] /track endpoint forbidden for non-editors → `test_permissions.py::test_track_endpoint_forbidden_for_nonadmin`
 - [x] Data visible → `test_permissions.py::test_character_visible_to_nonadmin`
 
 ---

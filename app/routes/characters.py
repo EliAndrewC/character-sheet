@@ -427,9 +427,22 @@ async def track_state(
     request: Request, char_id: int, db: Session = Depends(get_db)
 ):
     """Update mutable combat/adventure state from the character sheet."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
     character = db.query(Character).filter(Character.id == char_id).first()
     if not character:
         return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    owner_granted = owner.granted_account_ids or [] if owner else []
+    if not can_edit_character(
+        user["discord_id"],
+        character.owner_discord_id,
+        owner_granted,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
 
     body = await request.json()
 

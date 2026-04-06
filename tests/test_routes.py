@@ -232,6 +232,30 @@ class TestTrackState:
         char = query_db(client).filter(Character.id == cid).first()
         assert char.current_light_wounds == 0
 
+    def test_track_requires_auth(self, client):
+        cid = _seed_character(client, name="Track Auth Test")
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"current_light_wounds": 1},
+            headers={"X-Test-User": ""},
+        )
+        assert resp.status_code == 401
+
+    def test_track_forbidden_for_non_editor(self, client):
+        from app.models import User
+        # Seed a character owned by a different user
+        session = client._test_session_factory()
+        session.add(User(discord_id="999", discord_name="other", display_name="Other"))
+        session.commit()
+        cid = _seed_character(client, name="Track Permission", owner_discord_id="999")
+        # Use a different non-admin test user
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"current_light_wounds": 1},
+            headers={"X-Test-User": "test_user_1:Test User 1"},
+        )
+        assert resp.status_code == 403
+
 
 class TestPublish:
     def test_publish_creates_version(self, client):
