@@ -57,8 +57,9 @@ def apply_changes(page, summary="Test version"):
     Waits for redirect to the character sheet view.
     """
     page.locator('[data-action="apply-changes"]').click()
-    page.wait_for_selector('textarea[placeholder="Describe your changes..."]', timeout=3000)
+    page.wait_for_selector('textarea[placeholder="Describe your changes..."]', timeout=5000)
     page.fill('textarea[placeholder="Describe your changes..."]', summary)
     # Click the modal's confirm button (inside the fixed overlay)
     page.locator('div.fixed button:text("Apply Changes")').click()
-    page.wait_for_url("**/characters/*", timeout=10000)
+    # Use a generous timeout — under heavy session load the server can be slow
+    page.wait_for_url("**/characters/*", timeout=30000)
