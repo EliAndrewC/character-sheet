@@ -1,11 +1,14 @@
 """E2E: Skill roll display on character sheet — advantage bonuses, synergies, disadvantage notes."""
 
 from tests.e2e.helpers import select_school, click_plus, apply_changes
+import pytest
 
+pytestmark = pytest.mark.skill_rolls
 
 def _create_char_with_skills(page, live_server_url, advantages=None, disadvantages=None,
                               skills=None, school="akodo_bushi", name="Roll Test"):
     """Create a character with specific skills and advantages, apply, return URL."""
+
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     page.wait_for_selector('input[name="name"]')

@@ -1,7 +1,9 @@
 """E2E: School selection via HTMX and its effects on the form."""
 
 from tests.e2e.helpers import select_school
+import pytest
 
+pytestmark = pytest.mark.school
 
 def _go_to_editor(page, live_server_url):
     page.goto(live_server_url)
@@ -29,6 +31,7 @@ def test_switching_schools_updates_details(page, live_server_url):
     assert "feint" in page.text_content("#school-details").lower()
 
     page.evaluate("""() => {
+
         const sel = document.querySelector('select[name="school"]');
         sel.value = 'kakita_duelist';
         sel.dispatchEvent(new Event('change', { bubbles: true }));

@@ -1,10 +1,13 @@
 """E2E: Advanced tracking — per-adventure counters, toggles, reset, boundary conditions."""
 
 from tests.e2e.helpers import select_school, click_plus, apply_changes
+import pytest
 
+pytestmark = pytest.mark.tracking
 
 def _create_character_with_lucky(page, live_server_url):
     """Create and apply a character with the Lucky advantage."""
+
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     page.wait_for_selector('input[name="name"]')

@@ -1,10 +1,13 @@
 """E2E: Verify client-side (Alpine.js) live XP calculation."""
 
 from tests.e2e.helpers import select_school, click_plus
+import pytest
 
+pytestmark = [pytest.mark.rings, pytest.mark.skills, pytest.mark.knacks, pytest.mark.combat_skills, pytest.mark.advantages, pytest.mark.honor_rank_recognition]
 
 def _go_to_editor(page, live_server_url):
     """Create a new character and go to the editor."""
+
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     page.wait_for_selector('input[name="name"]')

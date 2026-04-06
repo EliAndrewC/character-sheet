@@ -1,7 +1,9 @@
 """E2E: Mutually exclusive advantage/disadvantage pairs."""
 
 from tests.e2e.helpers import select_school
+import pytest
 
+pytestmark = pytest.mark.exclusive_pairs
 
 def _go_to_editor(page, live_server_url):
     page.goto(live_server_url)
@@ -12,6 +14,7 @@ def _go_to_editor(page, live_server_url):
 
 def _check_pair(page, check_id, expect_disabled_id):
     """Check one of a pair and verify the other is disabled."""
+
     page.check(f'input[name="{check_id}"]')
     page.wait_for_timeout(200)
     disabled = page.locator(f'input[name="{expect_disabled_id}"]').is_disabled()

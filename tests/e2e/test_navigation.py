@@ -1,10 +1,13 @@
 """E2E: Navigation — logout, login link, test-login, empty state."""
 
 import os
+import pytest
 
+pytestmark = pytest.mark.navigation
 
 def test_logout_link_exists(page, live_server_url):
     """Logout link visible and navigates to /auth/logout."""
+
     page.goto(live_server_url)
     logout = page.locator('a:text("Logout")')
     assert logout.is_visible()

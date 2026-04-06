@@ -1,10 +1,13 @@
 """E2E: Advantage detail fields (text, skill selection) appear and auto-save."""
 
 from tests.e2e.helpers import select_school, apply_changes
+import pytest
 
+pytestmark = pytest.mark.advantage_details
 
 def test_higher_purpose_shows_detail_fields(page, live_server_url):
     """Checking Higher Purpose reveals text field and skill checkboxes."""
+
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     page.wait_for_selector('input[name="name"]')

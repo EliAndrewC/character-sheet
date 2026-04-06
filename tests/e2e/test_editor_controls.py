@@ -1,7 +1,9 @@
 """E2E: Editor field controls — min/max, disabled states, recognition halving, rank lock."""
 
 from tests.e2e.helpers import select_school, click_plus, click_minus
+import pytest
 
+pytestmark = [pytest.mark.rings, pytest.mark.knacks, pytest.mark.combat_skills, pytest.mark.skills, pytest.mark.honor_rank_recognition, pytest.mark.advantages]
 
 def _go_to_editor(page, live_server_url, school="akodo_bushi"):
     page.goto(live_server_url)
@@ -14,6 +16,7 @@ def _go_to_editor(page, live_server_url, school="akodo_bushi"):
 
 def test_nonschool_ring_min_2(page, live_server_url):
     """Non-school ring cannot go below 2."""
+
     _go_to_editor(page, live_server_url)  # Water is school ring for akodo
     # Air is non-school, starts at 2 — minus should be disabled
     minus = page.locator('input[name="ring_air"]').locator('..').locator('button', has_text="-")

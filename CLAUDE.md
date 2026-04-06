@@ -55,23 +55,45 @@ python3 -m pytest tests/ --ignore=tests/e2e --cov=app --cov-report=term-missing 
 
 Unit tests use an in-memory SQLite database and FastAPI's TestClient (via httpx). No external services needed.
 
-### E2E clicktests (slower, run selectively)
+### E2E clicktests (slower, run selectively by feature area)
 
 ```bash
-python3 -m pytest tests/e2e/ -v --browser chromium                    # run all clicktests
-python3 -m pytest tests/e2e/test_live_xp.py -v --browser chromium     # run one file
-python3 -m pytest tests/e2e/ -v --browser chromium -k "school"        # run by keyword
+python3 -m pytest tests/e2e/ -v --browser chromium                    # run ALL clicktests (~5 min)
+python3 -m pytest tests/e2e/ -v --browser chromium -m tracking        # run by feature mark (~15 sec)
+python3 -m pytest tests/e2e/ -v --browser chromium -m advantages      # another mark example
+python3 -m pytest tests/e2e/ -v --browser chromium -m "skills or rings"  # combine marks
 ```
 
-Clicktests start a live uvicorn server on a random port with a temp database, then drive headless Chromium via Playwright. They are organized by workflow:
+Clicktests start a live uvicorn server on a random port with a temp database, then drive headless Chromium via Playwright. Tests are tagged with `pytest.mark` by feature area. **When developing a feature, run only the relevant mark(s)** — not the full suite.
 
-- `test_smoke.py` — basic infrastructure check
-- `test_create_character.py` — full character creation flow
-- `test_edit_character.py` — editing and cancel workflows
-- `test_live_xp.py` — client-side Alpine.js XP calculation (rings, skills, advantages, disadvantages, honor, overspend)
-- `test_school_selection.py` — HTMX school details loading, knack selectors, techniques
-- `test_combat_skills.py` — attack/parry skill editing and XP
-- `test_publish_revert.py` — publish redirect, unpublished banner, version revert
+Available marks (defined in `pytest.ini`):
+
+| Mark | What it covers | ~Tests |
+|------|---------------|--------|
+| `navigation` | Nav bar, login, logout, profile link | 5 |
+| `homepage` | Character list, badges, empty state | 7 |
+| `profile` | Profile page, display name, access grants | 5 |
+| `school` | School selection, HTMX, techniques | 4 |
+| `school_rings` | School ring dropdown, fixed vs multi-ring | 7 |
+| `rings` | Ring +/- controls, min/max | 16 |
+| `knacks` | Knack +/- controls, min/max | 12 |
+| `combat_skills` | Attack/parry controls and constraints | 18 |
+| `skills` | Skill +/- controls, XP costs | 16 |
+| `honor_rank_recognition` | Honor/rank/recognition controls | 18 |
+| `advantages` | Advantage checkboxes, XP toggle | 18 |
+| `exclusive_pairs` | Mutually exclusive pairs | 14 |
+| `advantage_details` | Detail fields (text, skills, dropdowns) | 11 |
+| `autosave` | Auto-save, save status | 2 |
+| `apply_changes` | Apply changes modal, quick-fill, redirect | 12 |
+| `permissions` | Edit/delete visibility, owner dropdown | 9 |
+| `banners` | Draft status banners on sheet and homepage | 7 |
+| `status_display` | Honor/rank/recognition/stipend on sheet | 20 |
+| `tracking` | Wounds, void points, per-adventure | 23 |
+| `skill_rolls` | Skill roll display with bonuses and notes | 27 |
+| `xp_summary` | XP breakdown and budget on sheet | 20 |
+| `version_history` | Version list, revert, inline edit, author | 22 |
+
+Feature coverage is tracked in `tests/e2e/COVERAGE.md`.
 
 ### Coverage Policy
 
@@ -87,12 +109,13 @@ New features follow this cycle:
 2. **Implement the feature.** Write the code to make the tests pass.
 3. **Iterate until unit tests pass (TDD green).** Check coverage to ensure all new branches are covered.
 4. **Update the clicktest coverage checklist.** Before writing code, add new lines to `tests/e2e/COVERAGE.md` for each interactive behavior the feature introduces (buttons, fields, toggles, conditional visibility, AJAX calls). Mark them `[ ]`. This makes missing coverage visible.
-5. **Write clicktests for frontend changes (REQUIRED).** Any feature that touches templates, client-side JS, HTMX interactions, or user-facing workflows MUST have corresponding e2e tests in `tests/e2e/`. Clicktests validate that the full user flow works end-to-end in a real browser — things like AJAX handlers returning JSON instead of rendering a page, redirects landing on the right URL, and interactive UI state (overlays, disabled buttons, tooltips) behaving correctly. These catch bugs that unit tests cannot. After writing tests, mark the corresponding lines in `COVERAGE.md` as `[x]` with the test reference.
-6. **Run relevant clicktests.** Only run the specific clicktest file(s) related to this change — not the entire e2e suite. Iterate until they pass.
+5. **Write clicktests for frontend changes (REQUIRED).** Any feature that touches templates, client-side JS, HTMX interactions, or user-facing workflows MUST have corresponding e2e tests in `tests/e2e/`. Clicktests validate that the full user flow works end-to-end in a real browser — things like AJAX handlers returning JSON instead of rendering a page, redirects landing on the right URL, and interactive UI state (overlays, disabled buttons, tooltips) behaving correctly. These catch bugs that unit tests cannot. Tag new tests with the appropriate `pytest.mark` for the feature area. After writing tests, mark the corresponding lines in `COVERAGE.md` as `[x]` with the test reference.
+6. **Run relevant clicktests by mark.** Use `pytest -m <mark>` to run only the tests for the feature area you changed — not the full suite. Example: `pytest tests/e2e/ -m advantages --browser chromium`. Iterate until they pass.
 
 The key distinction: unit tests use TDD (tests first), clicktests are written after the feature works. Clicktests are run selectively, not as part of every iteration loop. **Do not skip clicktests** — if a feature changes frontend behavior, it needs a clicktest. The coverage checklist in `tests/e2e/COVERAGE.md` is the source of truth for what's tested.
 
-6. **Deploy after UI changes.** Any change that touches the frontend (templates, CSS, client-side JS) should be deployed to Fly.io after tests pass so the live site stays current.
+7. **Deploy after UI changes.** Any change that touches the frontend (templates, CSS, client-side JS) should be deployed to Fly.io after tests pass so the live site stays current.
+8. **Background full clicktest suite.** Immediately after deploying, kick off the full e2e suite in the background (`run_in_background`). Report "done" to the user without waiting. If the background run fails, investigate and notify the user immediately.
 
 ## Project Structure
 

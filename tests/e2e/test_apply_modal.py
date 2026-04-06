@@ -1,7 +1,9 @@
 """E2E: Apply Changes modal — pre-population, quick-fill, disabled state."""
 
 from tests.e2e.helpers import select_school, apply_changes
+import pytest
 
+pytestmark = pytest.mark.apply_changes
 
 def _go_to_new_editor(page, live_server_url):
     page.goto(live_server_url)
@@ -14,6 +16,7 @@ def _go_to_new_editor(page, live_server_url):
 
 def test_first_version_prepopulates(page, live_server_url):
     """First version pre-populates with 'Initial character creation'."""
+
     _go_to_new_editor(page, live_server_url)
     page.locator('[data-action="apply-changes"]').click()
     page.wait_for_selector('textarea[placeholder="Describe your changes..."]', timeout=3000)

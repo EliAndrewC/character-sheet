@@ -1,7 +1,9 @@
 """E2E: School ring interactions — fixed ring, multi-ring dropdown, changing schools."""
 
 from tests.e2e.helpers import select_school
+import pytest
 
+pytestmark = pytest.mark.school_rings
 
 def _go_to_editor(page, live_server_url):
     page.goto(live_server_url)
@@ -11,6 +13,7 @@ def _go_to_editor(page, live_server_url):
 
 def test_fixed_ring_school_sets_ring(page, live_server_url):
     """School with fixed ring (Akodo Bushi = Water) auto-sets school ring."""
+
     _go_to_editor(page, live_server_url)
     select_school(page, "akodo_bushi")
     val = page.locator('input[name="school_ring_choice"]').input_value()
