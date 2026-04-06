@@ -1,10 +1,13 @@
 """E2E: Permission-based visibility — edit/delete buttons, version history, owner dropdown."""
 
 from tests.e2e.helpers import create_and_apply
+import pytest
 
+pytestmark = pytest.mark.permissions
 
 def test_edit_delete_visible_for_editor(page, live_server_url):
     """Edit and Delete buttons visible when viewer has edit permission."""
+
     create_and_apply(page, live_server_url, "Editable Char")
     assert page.locator('a:text-is("Edit")').is_visible()
     assert page.locator('button:text("Delete")').is_visible()

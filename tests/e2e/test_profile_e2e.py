@@ -1,8 +1,11 @@
 """E2E: Profile page — display name, access grants, login required."""
+import pytest
 
+pytestmark = pytest.mark.profile
 
 def test_profile_loads(page, live_server_url):
     """Profile page loads for logged-in user."""
+
     page.goto(f"{live_server_url}/profile")
     assert page.locator('text="Display Name"').is_visible()
     assert page.locator('text="Character Edit Access"').is_visible()

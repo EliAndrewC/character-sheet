@@ -1,7 +1,9 @@
 """E2E: Combat skills (Attack and Parry) in the editor."""
 
 from tests.e2e.helpers import select_school, click_plus, click_minus, apply_changes
+import pytest
 
+pytestmark = pytest.mark.combat_skills
 
 def _go_to_editor(page, live_server_url):
     page.goto(live_server_url)

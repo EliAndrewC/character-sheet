@@ -1,10 +1,13 @@
 """E2E: Character sheet display — status, skills, XP, advantages, version history details."""
 
 from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply
+import pytest
 
+pytestmark = [pytest.mark.status_display, pytest.mark.skill_rolls, pytest.mark.xp_summary, pytest.mark.version_history]
 
 def _create_full_character(page, live_server_url):
     """Create a character with skills, advantages, and details for display testing."""
+
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     page.wait_for_selector('input[name="name"]')

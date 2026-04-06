@@ -1,10 +1,13 @@
 """E2E: Draft status banners on character sheet and homepage badges."""
 
 from tests.e2e.helpers import select_school, apply_changes, create_and_apply
+import pytest
 
+pytestmark = [pytest.mark.banners, pytest.mark.homepage]
 
 def test_draft_banner_for_new_character(page, live_server_url):
     """Never-applied character shows 'Draft' banner."""
+
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     page.wait_for_selector('input[name="name"]')

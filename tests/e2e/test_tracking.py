@@ -1,10 +1,13 @@
 """E2E: Live tracking of wounds, void points, and per-adventure abilities."""
 
 from tests.e2e.helpers import select_school, apply_changes
+import pytest
 
+pytestmark = pytest.mark.tracking
 
 def _create_published_character(page, live_server_url, name="Track Test", school="akodo_bushi"):
     """Create, publish, and navigate to character sheet."""
+
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     page.wait_for_selector('input[name="name"]')

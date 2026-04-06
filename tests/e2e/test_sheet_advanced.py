@@ -1,10 +1,13 @@
 """E2E: Advanced sheet display — stipend, tooltips, XP colors, version editing, disadvantage display."""
 
 from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply
+import pytest
 
+pytestmark = [pytest.mark.status_display, pytest.mark.xp_summary, pytest.mark.version_history, pytest.mark.tracking]
 
 def test_stipend_tooltip(page, live_server_url):
     """Stipend tooltip shows calculation breakdown."""
+
     create_and_apply(page, live_server_url, "Stipend Tooltip")
     stipend = page.locator('div', has=page.locator('text="Stipend"')).first
     # Hover to see tooltip
