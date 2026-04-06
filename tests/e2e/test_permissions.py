@@ -39,17 +39,35 @@ def test_character_visible_to_nonadmin(page, page_nonadmin, live_server_url):
     assert "Viewable Char" in page_nonadmin.text_content("h1")
 
 
-def test_tracking_functional_for_nonadmin(page, page_nonadmin, live_server_url):
-    """Tracking section works for non-editor viewers."""
-    url = create_and_apply(page, live_server_url, "Track By Anyone")
+def test_tracking_buttons_hidden_for_nonadmin(page, page_nonadmin, live_server_url):
+    """Tracking section is read-only for non-editor viewers (no +/- buttons)."""
+    url = create_and_apply(page, live_server_url, "Track Read Only")
     page_nonadmin.goto(url)
     page_nonadmin.wait_for_selector('text="Tracking"')
-    light = page_nonadmin.locator('text="Light Wounds"').locator('..').locator('span.text-2xl')
-    assert light.text_content().strip() == "0"
-    # Click + and verify it works
-    page_nonadmin.locator('text="Light Wounds"').locator('..').locator('button', has_text="+").click()
-    page_nonadmin.wait_for_timeout(500)
-    assert light.text_content().strip() == "1"
+    # Values still visible
+    serious = page_nonadmin.locator('text="Serious Wounds"').locator('..').locator('span.text-2xl')
+    assert serious.text_content().strip() == "0"
+    # But +/- buttons should not be present
+    assert page_nonadmin.locator('text="Serious Wounds"').locator('..').locator('button', has_text="+").count() == 0
+    assert page_nonadmin.locator('text="Light Wounds"').locator('..').locator('button', has_text="+").count() == 0
+    assert page_nonadmin.locator('text="Void Points"').locator('..').locator('button', has_text="+").count() == 0
+
+
+def test_track_endpoint_forbidden_for_nonadmin(page, page_nonadmin, live_server_url):
+    """The /track endpoint returns 403 for non-editors."""
+    url = create_and_apply(page, live_server_url, "Track Endpoint Test")
+    char_id = url.rstrip("/").split("/")[-1]
+    page_nonadmin.goto(live_server_url)
+    # Try to POST to /track via fetch
+    result = page_nonadmin.evaluate("""async (charId) => {
+        const resp = await fetch('/characters/' + charId + '/track', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({current_light_wounds: 5}),
+        });
+        return resp.status;
+    }""", char_id)
+    assert result == 403
 
 
 def test_delete_confirmation_dialog(page, live_server_url):
