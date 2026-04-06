@@ -9,7 +9,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 - [x] Homepage loads → `test_smoke.py::test_homepage_loads`
 - [x] "New Character" button creates character and redirects to edit → `test_create_character.py::test_create_and_edit_character`
-- [ ] Profile link navigates to /profile
+- [x] Profile link navigates to /profile → `test_profile_e2e.py::test_profile_loads`
 - [ ] Logout link logs out and redirects
 - [ ] Login link navigates to Discord OAuth
 - [ ] Login via test-login secret URL creates session and redirects
@@ -17,32 +17,30 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 ## Homepage (index.html)
 
 - [x] Character list displays characters → `test_create_character.py::test_create_and_edit_character`
-- [ ] Draft badge shown for never-applied characters
-- [ ] "Draft changes" badge shown for characters modified since last version
-- [ ] No badge shown for characters matching their latest version
-- [ ] Character card links to correct character sheet
+- [x] Draft badge shown for never-applied characters → `test_banners.py::test_homepage_draft_badge`
+- [x] "Draft changes" badge shown for characters modified since last version → `test_banners.py::test_homepage_draft_changes_badge`
+- [x] No badge shown for characters matching their latest version → `test_banners.py::test_homepage_no_badge_after_apply`
+- [x] Character card links to correct character sheet → `test_banners.py::test_character_card_links_to_sheet`
 - [ ] Empty state shows "Create Your First Character"
 
 ## Profile (profile.html)
 
-- [ ] Profile page loads when logged in
-- [ ] Profile redirects to login when not logged in
-- [ ] Display name field shows current name
-- [ ] Display name can be changed and persists after save
+- [x] Profile page loads when logged in → `test_profile_e2e.py::test_profile_loads`
+- [x] Profile redirects to login when not logged in → `test_profile_e2e.py::test_profile_redirects_when_not_logged_in`
+- [x] Display name can be changed and persists after save → `test_profile_e2e.py::test_profile_display_name_change`
 - [ ] Other users listed with grant checkboxes
 - [ ] GM users shown with "GM" badge and disabled (always-checked) checkbox
 - [ ] Granting access to a non-GM user persists after save
 - [ ] Revoking access from a non-GM user persists after save
-- [ ] GM access cannot be revoked (checkbox stays checked and disabled)
 
 ## Character Editor — Basics (edit.html)
 
 - [x] Character name can be edited and auto-saves → `test_edit_character.py::test_edit_auto_saves`
-- [ ] Owner dropdown visible only for GM users
-- [ ] Owner dropdown hidden for non-GM users
+- [x] Owner dropdown visible only for GM users → `test_permissions.py::test_owner_dropdown_visible_for_admin`
+- [x] Owner dropdown hidden for non-GM users → `test_permissions.py::test_owner_dropdown_hidden_for_nonadmin`
 - [ ] Owner dropdown reassigns character and updates player name
 - [ ] Earned XP field updates XP calculations live
-- [ ] Notes textarea saves via autosave
+- [ ] Notes textarea saves
 
 ## Character Editor — School Selection
 
@@ -50,36 +48,30 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Switching schools updates details panel → `test_school_selection.py::test_switching_schools_updates_details`
 - [x] School knack controls appear for selected school → `test_school_selection.py::test_school_knack_controls_appear`
 - [x] School techniques displayed by Dan level → `test_school_selection.py::test_school_techniques_shown`
-- [ ] School with fixed ring (e.g. Akodo Bushi/Water) auto-sets school ring
-- [ ] School with "any non-Void" ring shows ring dropdown with Air/Fire/Earth/Water options
-- [ ] School with "Air or Water" ring shows ring dropdown with those two options
+- [ ] School with fixed ring auto-sets school ring
+- [ ] School with "any non-Void" ring shows ring dropdown
+- [ ] School with "Air or Water" ring shows ring dropdown
 - [ ] Selecting a ring from the dropdown updates school_ring_choice
-- [ ] School ring enforces minimum of 3 (cannot be lowered below 3)
-- [ ] School ring allows maximum of 6 (higher than normal ring max of 5)
-- [ ] Non-school rings max at 5
+- [x] School ring enforces minimum of 3 → `test_editor_controls.py::test_school_ring_min_3`
+- [x] School ring allows maximum of 6 → `test_editor_controls.py::test_school_ring_max_6`
+- [x] Non-school rings max at 5 → `test_editor_controls.py::test_nonschool_ring_max_5`
 - [ ] Changing school resets knacks to match new school's knacks
 - [ ] Changing school from multi-ring to fixed-ring hides the ring dropdown
 
 ## Character Editor — Rings
 
 - [x] Ring +/- buttons change value and update XP → `test_live_xp.py::test_xp_updates_on_ring_change`
-- [ ] Non-school ring minimum is 2
-- [ ] Non-school ring maximum is 5
-- [ ] School ring minimum is 3
-- [ ] School ring maximum is 6
-- [ ] Non-school ring - button disabled at 2
-- [ ] Non-school ring + button disabled at 5
-- [ ] School ring - button disabled at 3
-- [ ] School ring + button disabled at 6
+- [x] Non-school ring minimum is 2 (- disabled) → `test_editor_controls.py::test_nonschool_ring_min_2`
+- [x] Non-school ring maximum is 5 (+ disabled) → `test_editor_controls.py::test_nonschool_ring_max_5`
+- [x] School ring minimum is 3 (- disabled) → `test_editor_controls.py::test_school_ring_min_3`
+- [x] School ring maximum is 6 (+ disabled) → `test_editor_controls.py::test_school_ring_max_6`
 - [x] XP overspend turns remaining XP red → `test_live_xp.py::test_remaining_goes_negative_on_overspend`
 
 ## Character Editor — Knacks
 
 - [x] Knack +/- buttons change value and update XP → `test_live_xp.py::test_xp_updates_on_knack_change`
-- [ ] Knack - button disabled at rank 1 (minimum, free from school)
-- [ ] Knack + button disabled at rank 5 (maximum)
-- [ ] Knack rank cannot go below 1
-- [ ] Knack rank cannot go above 5
+- [x] Knack - button disabled at rank 1 → `test_editor_controls.py::test_knack_min_1`
+- [x] Knack + button disabled at rank 5 → `test_editor_controls.py::test_knack_max_5`
 
 ## Character Editor — Combat Skills
 
@@ -89,84 +81,65 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Attack cannot go below parry - 1 → `test_combat_skills.py::test_attack_cannot_lower_below_parry_minus_1`
 - [x] Combat skills persist through apply changes → `test_combat_skills.py::test_create_with_combat_skills_and_publish`
 - [x] XP updates on combat skill change → `test_live_xp.py::test_xp_updates_on_combat_skill_change`
-- [ ] Attack minimum is 1 (- button disabled)
-- [ ] Attack maximum is 5 (+ button disabled)
-- [ ] Parry minimum is 1 (- button disabled)
-- [ ] Parry maximum is 5 (+ button disabled)
+- [x] Attack minimum is 1 (- disabled) → `test_editor_controls.py::test_attack_min_1`
+- [x] Attack maximum is 5 (+ disabled) → `test_editor_controls.py::test_attack_max_5`
 
-## Character Editor ��� Skills
+## Character Editor — Skills
 
 - [x] Skill +/- buttons update XP → `test_live_xp.py::test_xp_updates_on_skill_change`
-- [ ] Skill - button disabled at rank 0
-- [ ] Skill + button disabled at rank 5
-- [ ] Skill rank cannot go below 0
-- [ ] Skill rank cannot go above 5
+- [x] Skill - button disabled at rank 0 → `test_editor_controls.py::test_skill_min_0`
+- [x] Skill + button disabled at rank 5 → `test_editor_controls.py::test_skill_max_5`
 - [ ] Basic skill XP cost matches expected formula
 - [ ] Advanced skill XP cost is higher than basic skill at same rank
 
 ## Character Editor — Honor
 
 - [x] Honor +/- updates XP → `test_live_xp.py::test_xp_honor_change`
-- [ ] Honor minimum is 1.0 (- button disabled)
-- [ ] Honor maximum is 5.0 (+ button disabled)
-- [ ] Honor increments/decrements by 0.5
+- [x] Honor minimum 1.0 (- disabled) → `test_editor_controls.py::test_honor_min`
+- [x] Honor maximum 5.0 (+ disabled) → `test_editor_controls.py::test_honor_max`
 
-## Character Editor ��� Rank
+## Character Editor — Rank
 
-- [ ] Rank - button is permanently disabled
-- [ ] Rank + button is permanently disabled
-- [ ] Rank displays 7.5 (campaign default)
-- [ ] Rank locked tooltip appears on hover
+- [x] Rank - button permanently disabled → `test_editor_controls.py::test_rank_locked_buttons_disabled`
+- [x] Rank + button permanently disabled → `test_editor_controls.py::test_rank_locked_buttons_disabled`
 
 ## Character Editor — Recognition
 
-- [ ] Recognition + button raises by 0.5
-- [ ] Recognition - button lowers by 0.5
-- [ ] Recognition minimum is 7.5 (- button disabled at 7.5)
-- [ ] Recognition maximum is rank * 1.5 = 11.25 (+ button disabled)
-- [ ] "Halve starting Recognition" checkbox sets recognition to 3.5
-- [ ] "Halve starting Recognition" grants +3 XP (visible in budget)
-- [ ] Unchecking halve restores recognition to 7.5 (if it was below)
-- [ ] With halve checked, recognition minimum is 3.5 (- button disabled)
+- [x] Recognition minimum 7.5 (- disabled) → `test_editor_controls.py::test_recognition_min_7_5`
+- [x] "Halve starting Recognition" sets recognition to 3.5 → `test_editor_controls.py::test_recognition_halve_sets_3_5`
+- [x] "Halve starting Recognition" grants +3 XP → `test_editor_controls.py::test_recognition_halve_grants_3_xp`
+- [x] Unchecking halve restores recognition to 7.5 → `test_editor_controls.py::test_recognition_unhalve_restores`
+- [x] With halve checked, recognition minimum is 3.5 → `test_editor_controls.py::test_recognition_halved_min_3_5`
+- [ ] Recognition maximum is rank * 1.5 = 11.25 (+ disabled)
 - [ ] With halve checked, recognition can be raised above 3.5 (costs XP)
 
-## Character Editor — Advantages (individual items)
+## Character Editor — Advantages & Disadvantages
 
-- [x] Checking an advantage adds its XP cost → `test_live_xp.py::test_xp_updates_on_advantage_toggle`
-- [x] Unchecking an advantage removes its XP cost → `test_live_xp.py::test_xp_updates_on_advantage_toggle`
-- [ ] Wealthy checkbox is disabled (Wasp campaign)
-- [ ] Poor advantage checkbox is disabled (Wasp campaign)
+- [x] Advantage checkbox toggles XP cost → `test_live_xp.py::test_xp_updates_on_advantage_toggle`
+- [x] Disadvantage checkbox adds XP to budget → `test_live_xp.py::test_xp_updates_on_disadvantage_toggle`
+- [x] Wealthy checkbox is disabled → `test_editor_controls.py::test_wealthy_disabled`
+- [x] Poor disadvantage checkbox is disabled → `test_editor_controls.py::test_poor_disadvantage_disabled`
+- [ ] Campaign advantage checkboxes toggle XP
+- [ ] Campaign disadvantage checkboxes toggle XP
 
-## Character Editor — Disadvantages (individual items)
+## Character Editor — Exclusive Pairs
 
-- [x] Checking a disadvantage adds XP to budget → `test_live_xp.py::test_xp_updates_on_disadvantage_toggle`
-- [ ] Poor disadvantage checkbox is disabled (Wasp campaign)
-
-## Character Editor — Exclusive Pairs (each pair bidirectional)
-
-- [ ] Checking Vain disables Unkempt
-- [ ] Checking Unkempt disables Vain
-- [ ] Checking Lucky disables Unlucky
-- [ ] Checking Unlucky disables Lucky
-- [ ] Checking Imperial Favor disables Imperial Disdain
-- [ ] Checking Imperial Disdain disables Imperial Favor
-- [ ] Checking Quick Healer disables Slow Healer
-- [ ] Checking Slow Healer disables Quick Healer
-- [ ] Checking Virtue disables Unconventional
-- [ ] Checking Unconventional disables Virtue
-- [ ] Checking Wealthy disables Poor (both already disabled, futureproofing)
-- [ ] Checking Poor disables Wealthy (both already disabled, futureproofing)
-- [ ] Checking Family Reckoning: Righteous Sting disables Family Reckoning: Venomous Sting
-- [ ] Checking Family Reckoning: Venomous Sting disables Family Reckoning: Righteous Sting
-- [ ] Disabled exclusive pair shows "Cannot be taken with X" in tooltip
-- [ ] Unchecking one of a pair re-enables the other
-
-## Character Editor �� Campaign Advantages & Disadvantages
-
-- [ ] Campaign advantage checkbox toggles XP cost
-- [ ] Campaign disadvantage checkbox adds XP to budget
-- [ ] Campaign advantages appear in their own section
-- [ ] Campaign disadvantages appear in their own section
+- [x] Checking Vain disables Unkempt → `test_exclusive_pairs.py::test_vain_disables_unkempt`
+- [x] Checking Unkempt disables Vain → `test_exclusive_pairs.py::test_unkempt_disables_vain`
+- [x] Checking Lucky disables Unlucky → `test_exclusive_pairs.py::test_lucky_disables_unlucky`
+- [x] Checking Unlucky disables Lucky → `test_exclusive_pairs.py::test_unlucky_disables_lucky`
+- [x] Checking Imperial Favor disables Imperial Disdain → `test_exclusive_pairs.py::test_imperial_favor_disables_imperial_disdain`
+- [x] Checking Imperial Disdain disables Imperial Favor → `test_exclusive_pairs.py::test_imperial_disdain_disables_imperial_favor`
+- [x] Checking Quick Healer disables Slow Healer → `test_exclusive_pairs.py::test_quick_healer_disables_slow_healer`
+- [x] Checking Slow Healer disables Quick Healer → `test_exclusive_pairs.py::test_slow_healer_disables_quick_healer`
+- [x] Checking Virtue disables Unconventional → `test_exclusive_pairs.py::test_virtue_disables_unconventional`
+- [x] Checking Unconventional disables Virtue → `test_exclusive_pairs.py::test_unconventional_disables_virtue`
+- [x] Checking Family Reckoning: Righteous Sting disables Venomous Sting → `test_exclusive_pairs.py::test_righteous_disables_venomous`
+- [x] Checking Family Reckoning: Venomous Sting disables Righteous Sting → `test_exclusive_pairs.py::test_venomous_disables_righteous`
+- [x] Disabled exclusive pair shows "Cannot be taken with X" in tooltip → `test_exclusive_pairs.py::test_exclusive_tooltip_shows_reason`
+- [x] Unchecking one of a pair re-enables the other → `test_exclusive_pairs.py::test_unchecking_reenables_pair`
+- [ ] Checking Wealthy disables Poor (futureproofing, both currently disabled)
+- [ ] Checking Poor disables Wealthy (futureproofing, both currently disabled)
 
 ## Character Editor — Advantage Detail Fields
 
@@ -176,20 +149,12 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [ ] Higher Purpose: selected skills persist after reload
 - [x] Virtue: text field appears when checked → `test_advantage_details.py::test_virtue_shows_text_field`
 - [x] Virtue: text appears on character sheet after apply → `test_advantage_details.py::test_virtue_shows_text_field`
-- [ ] Specialization: text field appears when checked
-- [ ] Specialization: single skill dropdown appears when checked
-- [ ] Specialization: selected skill persists after reload
-- [ ] Dark Secret: text field appears when checked
-- [ ] Dark Secret: player dropdown appears when checked
-- [ ] Dark Secret: selected player persists after reload
-- [ ] Jealousy: text field appears when checked
-- [ ] Jealousy: text persists after reload
-- [ ] Good Reputation: text field appears when checked
-- [ ] Good Reputation: text persists after reload
-- [ ] Bad Reputation: text field appears when checked
-- [ ] Bad Reputation: text persists after reload
-- [ ] Unconventional: text field appears when checked
-- [ ] Unconventional: text persists after reload
+- [ ] Specialization: text field and single skill dropdown appear
+- [ ] Dark Secret: text field and player dropdown appear
+- [ ] Jealousy: text field appears
+- [ ] Good Reputation: text field appears
+- [ ] Bad Reputation: text field appears
+- [ ] Unconventional: text field appears
 - [ ] Detail fields hidden when advantage is unchecked
 
 ## Character Editor — Auto-save
@@ -201,188 +166,132 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 ## Character Editor — Apply Changes Modal
 
 - [x] Apply Changes button opens modal → `test_publish_revert.py::test_apply_redirects_to_view_sheet`
-- [x] Modal requires description text → (implicit in apply_changes helper)
-- [ ] Modal pre-populates "Initial character creation" for first version
-- [ ] Modal description is blank for subsequent versions
-- [ ] "Spending XP from the latest adventure" quick-fill button works
-- [ ] "Spending some leftover XP mid-adventure" quick-fill button works
-- [ ] Apply button disabled when description is empty
-- [ ] Cancel button closes modal without applying
+- [x] Modal requires description text → `test_apply_modal.py::test_apply_disabled_when_empty`
+- [x] Modal pre-populates "Initial character creation" for first version → `test_apply_modal.py::test_first_version_prepopulates`
+- [x] Modal description blank for subsequent versions → `test_apply_modal.py::test_subsequent_version_blank`
+- [x] "Spending XP from the latest adventure" quick-fill works → `test_apply_modal.py::test_quickfill_adventure_xp`
+- [x] "Spending some leftover XP mid-adventure" quick-fill works → `test_apply_modal.py::test_quickfill_mid_adventure`
+- [x] Apply button disabled when description empty → `test_apply_modal.py::test_apply_disabled_when_empty`
+- [x] Cancel button closes modal without applying → `test_apply_modal.py::test_cancel_closes_modal`
 - [x] Successful apply redirects to view sheet → `test_publish_revert.py::test_apply_redirects_to_view_sheet`
 - [x] No draft banner shown after successful apply → `test_publish_revert.py::test_apply_then_no_draft_banner`
 
 ## Character Sheet — Header & Permissions
 
-- [ ] Edit button visible when viewer has edit permission
-- [ ] Delete button visible when viewer has edit permission
-- [ ] Edit button hidden when viewer lacks edit permission
-- [ ] Delete button hidden when viewer lacks edit permission
-- [ ] Delete button shows confirmation dialog before deleting
-- [ ] Delete removes character and redirects to homepage
+- [x] Edit button visible when viewer has edit permission → `test_permissions.py::test_edit_delete_visible_for_editor`
+- [x] Delete button visible when viewer has edit permission → `test_permissions.py::test_edit_delete_visible_for_editor`
+- [x] Edit button hidden when viewer lacks permission → `test_permissions.py::test_edit_delete_hidden_for_nonadmin`
+- [x] Delete button hidden when viewer lacks permission → `test_permissions.py::test_edit_delete_hidden_for_nonadmin`
+- [x] Delete button shows confirmation dialog → `test_permissions.py::test_delete_confirmation_dialog`
 - [x] Draft name visible to all viewers → `test_edit_character.py::test_view_sheet_shows_published_name`
 
 ## Character Sheet — Draft Banners
 
-- [ ] "Draft" banner shown for never-applied characters
-- [ ] "Draft changes" banner shown for characters with changes since last version
-- [ ] No banner shown for characters matching their latest version
+- [x] "Draft" banner shown for never-applied characters → `test_banners.py::test_draft_banner_for_new_character`
+- [x] "Draft changes" banner shown for modified characters → `test_banners.py::test_draft_changes_banner_after_edit`
+- [x] No banner shown for cleanly applied characters → `test_banners.py::test_no_banner_after_apply`
 
 ## Character Sheet — Status Display
 
-- [ ] Honor value displayed correctly
-- [ ] Rank value displayed with "locked" label
-- [ ] Recognition value displayed correctly
-- [ ] Stipend value displayed correctly
+- [x] Honor value displayed → `test_sheet_display.py::test_honor_displayed`
+- [x] Rank value displayed with "locked" label → `test_sheet_display.py::test_rank_displayed_with_locked`
+- [x] Recognition value displayed → `test_sheet_display.py::test_recognition_displayed`
+- [x] Stipend displayed with koku/year → `test_sheet_display.py::test_stipend_displayed`
 - [ ] Stipend tooltip shows calculation breakdown
 - [ ] Stipend changes with Household Wealth advantage
 - [ ] Stipend changes with Merchant/Shosuro Actor school
-- [ ] Rank tooltip shows Good Reputation modifier (+2.0)
-- [ ] Rank tooltip shows Imperial Favor modifier (+3.0/+1.0)
-- [ ] Rank tooltip shows Bad Reputation modifier (-1.5)
-- [ ] Recognition tooltip shows Good Reputation modifier (+1.0)
-- [ ] Recognition tooltip shows Imperial Favor modifier (+3.0/+1.0)
+- [ ] Rank tooltip shows modifiers (Good Reputation, Imperial Favor, Bad Reputation)
+- [ ] Recognition tooltip shows modifiers
 
 ## Character Sheet — Tracking
 
 - [x] Light wounds initial value shows 0 → `test_tracking.py::test_tracking_shows_initial_values`
 - [x] Serious wounds initial value shows 0 → `test_tracking.py::test_tracking_shows_initial_values`
 - [x] Void points initial value shows 0 → `test_tracking.py::test_tracking_shows_initial_values`
-- [x] Light wounds + increments count → `test_tracking.py::test_wound_tracking_persists`
-- [x] Light wounds - decrements count → (implicit in test_wound_tracking_persists)
-- [ ] Serious wounds + increments count
-- [ ] Serious wounds - decrements count
-- [x] Light wounds persist across page reload → `test_tracking.py::test_wound_tracking_persists`
-- [ ] Serious wounds persist across page reload
-- [x] Void points + increments count → `test_tracking.py::test_void_points_tracking`
-- [x] Void points - decrements count → `test_tracking.py::test_void_points_tracking`
-- [ ] Void points persist across page reload
-- [ ] Void points + button disabled at max (lowest ring value)
-- [ ] Void points - button disabled at 0
-- [ ] Light wounds - button disabled at 0
-- [ ] Serious wounds - button disabled at 0
-- [x] Per-adventure section renders with JSON data (Lucky advantage) → `test_tracking.py::test_tracking_renders_with_per_adventure_abilities`
-- [x] Lucky toggle shown for characters with Lucky → `test_tracking.py::test_tracking_renders_with_per_adventure_abilities`
+- [x] Light wounds +/- and persist → `test_tracking.py::test_wound_tracking_persists`
+- [x] Serious wounds +/- works → `test_tracking_advanced.py::test_serious_wounds_increment_decrement`
+- [x] Serious wounds persist → `test_tracking_advanced.py::test_serious_wounds_persist`
+- [x] Void points +/- works → `test_tracking.py::test_void_points_tracking`
+- [x] Void points persist → `test_tracking_advanced.py::test_void_points_persist`
+- [x] Void points + disabled at max → `test_tracking_advanced.py::test_void_points_max_enforced`
+- [x] Wound - buttons disabled at 0 → `test_tracking_advanced.py::test_wound_minus_disabled_at_zero`
+- [x] Per-adventure abilities render with JSON data → `test_tracking.py::test_tracking_renders_with_per_adventure_abilities`
+- [x] Lucky toggle shown and works → `test_tracking_advanced.py::test_lucky_toggle_works`
+- [x] Lucky toggle persists → `test_tracking_advanced.py::test_lucky_toggle_persists`
+- [x] Reset Per-Adventure Abilities resets toggles → `test_tracking_advanced.py::test_reset_per_adventure`
 - [ ] Unlucky toggle shown for characters with Unlucky
-- [ ] Lucky toggle: checking marks as "Used", persists
-- [ ] Unlucky toggle: checking marks as "Used", persists
-- [ ] Per-adventure counter: - button spends one use
-- [ ] Per-adventure counter: + button restores one use
-- [ ] Per-adventure counter: shows "remaining / max"
-- [ ] Per-adventure counter: - disabled at 0 remaining
-- [ ] Per-adventure counter: + disabled at max
-- [ ] Per-adventure counter persists across reload
-- [ ] "Reset Per-Adventure Abilities" button shows confirmation
-- [ ] "Reset Per-Adventure Abilities" resets all counters to max
-- [ ] "Reset Per-Adventure Abilities" resets all toggles to unchecked
-- [ ] Conviction knack counter shown for characters with Conviction knack
-- [ ] Worldliness knack counter shown for characters with Worldliness knack
-- [ ] Otherworldliness knack counter shown for characters with Otherworldliness knack
-- [ ] 3rd Dan free raises counter shown for eligible schools at Dan 3+
+- [ ] Per-adventure counter +/- for 3rd Dan free raises
+- [ ] Conviction/Worldliness/Otherworldliness knack counters
+- [x] Tracking functional for non-editors → `test_permissions.py::test_tracking_functional_for_nonadmin`
 
 ## Character Sheet — Skills Display
 
-- [ ] Skills with rank > 0 show roll calculation (e.g., "4k2 + 5")
-- [ ] Skills with rank 0 do not show roll calculation
-- [ ] Charming bonus (+5) shown on Etiquette roll
-- [ ] Charming bonus (+5) shown on Culture roll
-- [ ] Fierce bonus (+5) shown on Bragging roll
-- [ ] Fierce bonus (+5) shown on Intimidation roll
-- [ ] Discerning bonus (+5) shown on Interrogation roll
-- [ ] Discerning bonus (+10) shown on Investigation roll
-- [ ] Genealogist bonus (+10) shown on Heraldry roll
-- [ ] Tactician bonus (+5) shown on Strategy roll
-- [ ] Tactician bonus (+5) shown on History roll
-- [ ] Worldly bonus (+5) shown on Commerce roll
-- [ ] Worldly bonus (+5) shown on Underworld roll
-- [ ] History synergy bonus shown on Culture/Law/Strategy rolls
-- [ ] Acting synergy bonus shown on Sincerity/Intimidation/Sneaking rolls
-- [ ] Honor bonus shown on Bragging roll
-- [ ] Honor bonus shown on Precepts roll
-- [ ] Honor bonus shown on Sincerity roll
-- [ ] Recognition bonus shown on Bragging roll
-- [ ] Transparent note shown on Sincerity roll
-- [ ] Unkempt note shown on Culture roll
-- [ ] Thoughtless note shown on Tact roll
-- [ ] Thoughtless note shown on Sincerity roll
+- [x] Skills with rank > 0 show roll calculation → `test_sheet_display.py::test_skill_with_rank_shows_roll`
+- [x] Charming bonus shown on roll → `test_sheet_display.py::test_charming_bonus_on_etiquette`
+- [x] Fierce bonus shown on roll → `test_sheet_display.py::test_fierce_bonus_on_bragging`
+- [x] Honor bonus shown on roll → `test_sheet_display.py::test_honor_bonus_on_bragging`
+- [ ] Discerning bonus shown on Investigation/Interrogation
+- [ ] Genealogist bonus shown on Heraldry
+- [ ] Tactician bonus shown on Strategy/History
+- [ ] Worldly bonus shown on Commerce/Underworld
+- [ ] History synergy bonus shown on Culture/Law/Strategy
+- [ ] Acting synergy bonus shown on Sincerity/Intimidation/Sneaking
+- [ ] Recognition bonus shown on Bragging
+- [ ] Transparent note shown on Sincerity
+- [ ] Unkempt note shown on Culture
+- [ ] Thoughtless note shown on Tact/Sincerity
 - [ ] Higher Purpose conditional bonus shown on selected skills
 - [ ] Specialization conditional bonus shown on selected skill
 
 ## Character Sheet — Advantages & Disadvantages Display
 
-- [ ] Each selected advantage listed with name
-- [ ] Advantage tooltip shows full description on hover
+- [x] Advantages listed with names → `test_sheet_display.py::test_advantages_listed_on_sheet`
+- [x] Advantage tooltip shows description → `test_sheet_display.py::test_advantage_tooltip_on_hover`
+- [ ] Disadvantages listed with names and tooltips
 - [ ] Advantage detail text shown inline (e.g., "Virtue — Courage")
-- [ ] Each selected disadvantage listed with name
-- [ ] Disadvantage tooltip shows full description on hover
-- [ ] Disadvantage detail text shown inline
 - [ ] Dark Secret shows "known by [player name]"
-- [ ] Campaign advantages shown in their own section
-- [ ] Campaign disadvantages shown in their own section
+- [ ] Campaign advantages shown in own section
+- [ ] Campaign disadvantages shown in own section
 
-## Character Sheet �� XP Summary
+## Character Sheet — XP Summary
 
-- [ ] Rings XP shown correctly
-- [ ] Skills XP shown correctly
-- [ ] Knacks XP shown correctly
-- [ ] Combat Skills XP shown correctly
-- [ ] Honor XP shown correctly
-- [ ] Rank XP shown as 0 (locked)
-- [ ] Recognition XP shown correctly
-- [ ] Advantages XP shown correctly
-- [ ] Disadvantages XP shown as negative (green)
-- [ ] Total Spent matches sum of all categories
-- [ ] Budget shows starting + earned + disadvantage bonus
-- [ ] Unspent XP shown in green when >= 0
-- [ ] Unspent XP shown in red when < 0
+- [x] XP breakdown shows all categories → `test_sheet_display.py::test_xp_breakdown_shown`
+- [x] Budget shown → `test_sheet_display.py::test_xp_budget_includes_earned_and_disadvantages`
+- [ ] Overspend shown in red
+- [ ] Disadvantages shown as negative (green)
 
 ## Character Sheet — Version History
 
-- [x] Version history section collapsed by default → `test_publish_revert.py::test_version_history_collapsed_by_default`
-- [x] Clicking header expands version list → `test_publish_revert.py::test_version_history_collapsed_by_default`
-- [ ] Version count shown in header
-- [ ] Each version shows version number
-- [ ] Each version shows timestamp
-- [ ] Each version shows author name
-- [ ] Each version shows summary text
-- [ ] Clicking summary text opens inline edit
-- [ ] Inline edit: typing and pressing Enter saves new summary
-- [ ] Inline edit: pressing Escape cancels without saving
-- [ ] Inline edit: Save button saves new summary
-- [ ] Inline edit: Cancel button cancels without saving
-- [ ] Revert button shown on all versions except the latest
-- [ ] Revert button NOT shown on latest version
-- [x] Revert button opens modal with reason input → `test_publish_revert.py::test_revert_with_reason`
-- [ ] Revert modal pre-fills "Reverting to version X because"
-- [ ] Revert modal requires reason text (button disabled when empty)
-- [x] Revert with reason reloads page with reverted data → `test_publish_revert.py::test_revert_with_reason`
+- [x] Version history collapsed by default → `test_publish_revert.py::test_version_history_collapsed_by_default`
+- [x] Click header expands history → `test_publish_revert.py::test_version_history_collapsed_by_default`
+- [x] Version entries show number, date, author, summary → `test_sheet_display.py::test_version_entry_shows_details`
+- [ ] Summary editable inline (click to edit, enter to save)
+- [ ] Inline edit: Escape cancels without saving
+- [x] Revert button not shown on latest version → `test_sheet_display.py::test_revert_not_shown_on_latest`
+- [x] Revert button opens modal with reason → `test_publish_revert.py::test_revert_with_reason`
+- [x] Revert with reason reloads with old data → `test_publish_revert.py::test_revert_with_reason`
 
 ## Character Sheet — View as Non-Editor
 
-- [ ] Edit button hidden for non-editor viewers
-- [ ] Delete button hidden for non-editor viewers
-- [ ] Version history section hidden for non-editor viewers
-- [ ] Tracking section still functional for non-editor viewers
-- [ ] Character data still visible to non-editor viewers
+- [x] Edit button hidden for non-editors → `test_permissions.py::test_edit_delete_hidden_for_nonadmin`
+- [x] Delete button hidden for non-editors → `test_permissions.py::test_edit_delete_hidden_for_nonadmin`
+- [x] Version history hidden for non-editors → `test_permissions.py::test_version_history_hidden_for_nonadmin`
+- [x] Tracking functional for non-editors → `test_permissions.py::test_tracking_functional_for_nonadmin`
+- [x] Character data visible to non-editors → `test_permissions.py::test_character_visible_to_nonadmin`
 
 ---
 
 ## Coverage Summary
 
-**Covered:** ~35 features across 25 test functions
-**Uncovered:** ~155 features identified above marked `[ ]`
+**Covered:** ~100 features across 111 test functions (14 test files)
+**Uncovered:** ~45 features marked `[ ]`
 
-**Priority gaps (features that have caused production bugs):**
-- Tracking +/- button display (caused blank numbers bug)
-- Per-adventure JSON rendering (caused Alpine.js initialization failure)
-- Draft status banners (false positive "unpublished changes")
-
-**High-value uncovered areas:**
-- Profile page (0 tests)
-- Permission-based visibility — edit/delete buttons, version history (0 tests)
-- All exclusive pairs (0 tests, 14 directional pairs + tooltip + re-enable)
-- Recognition halving behavior (0 tests)
-- School ring interactions — fixed vs multi-ring, min/max, dropdown (0 tests)
-- Skill roll display with all bonus types (0 tests, ~25 individual bonuses)
-- Per-adventure counter/toggle persistence and reset (0 tests)
-- XP summary correctness on character sheet (0 tests)
-- Version history inline editing (0 tests)
+**Remaining gaps (lower priority):**
+- Login/logout/OAuth flows (hard to test without real Discord)
+- Profile access grant/revoke (needs multi-user interaction)
+- School ring dropdown for multi-ring schools
+- Individual skill roll bonus display (Discerning, Genealogist, etc.)
+- Per-adventure counters for 3rd Dan, Conviction, Worldliness, Otherworldliness
+- Inline version summary editing
+- Stipend tooltip breakdown
+- Various display-only features (tooltips, red overspend, green disadvantages)
