@@ -446,12 +446,12 @@
                             <input type="checkbox" name="adv_{{ aid }}"
                                    x-model="advantages.{{ aid }}"
                                    {{ 'checked' if aid in (character.advantages or []) else '' }}
-                                   {% if aid == 'wealthy' %}:disabled="true" title="Disabled for Wasp Bounty Hunters campaign — use Household Wealth instead"{% endif %}
-                                   {% if aid == 'poor' %}:disabled="true" title="Automatically applied in Wasp Bounty Hunters campaign"{% endif %}
+                                   :disabled="{% if aid == 'wealthy' %}true{% elif aid == 'poor' %}true{% else %}exclusionReason('{{ aid }}') !== null{% endif %}"
                                    class="rounded text-accent">
                             <span>{{ adv.name }}</span>
                             <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
+                                 x-text="exclusionReason('{{ aid }}') || '{{ adv.description|e }}'">
                                 {{ adv.description }}
                             </div>
                         </label>
@@ -466,11 +466,12 @@
                             <input type="checkbox" name="dis_{{ did }}"
                                    x-model="disadvantages.{{ did }}"
                                    {{ 'checked' if did in (character.disadvantages or []) else '' }}
-                                   {% if did == 'poor' %}:disabled="true" title="Automatically applied in Wasp Bounty Hunters campaign"{% endif %}
+                                   :disabled="{% if did == 'poor' %}true{% else %}exclusionReason('{{ did }}') !== null{% endif %}"
                                    class="rounded text-accent">
                             <span>{{ dis.name }}</span>
                             <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
+                                 x-text="exclusionReason('{{ did }}') || '{{ dis.description|e }}'">
                                 {{ dis.description }}
                             </div>
                         </label>
@@ -492,10 +493,12 @@
                             <input type="checkbox" name="camp_adv_{{ aid }}"
                                    x-model="campaignAdvantages.{{ aid }}"
                                    @change="markDirty()"
+                                   :disabled="exclusionReason('{{ aid }}') !== null"
                                    class="rounded text-accent">
                             <span>{{ adv.name }}</span>
                             <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
+                                 x-text="exclusionReason('{{ aid }}') || '{{ adv.description|e }}'">
                                 {{ adv.description }}
                             </div>
                         </label>
@@ -510,10 +513,12 @@
                             <input type="checkbox" name="camp_dis_{{ did }}"
                                    x-model="campaignDisadvantages.{{ did }}"
                                    @change="markDirty()"
+                                   :disabled="exclusionReason('{{ did }}') !== null"
                                    class="rounded text-accent">
                             <span>{{ dis.name }}</span>
                             <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
+                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
+                                 x-text="exclusionReason('{{ did }}') || '{{ dis.description|e }}'">
                                 {{ dis.description }}
                             </div>
                         </label>
@@ -694,6 +699,23 @@ function characterForm() {
         recognitionHalved: {{ 'true' if character.recognition_halved else 'false' }},
         rankLocked: {{ 'true' if character.rank_locked else 'false' }},
         saveStatus: '',
+        _exclusivePairs: [
+            {% for a_id, a_name, b_id, b_name in exclusive_pairs %}
+            ["{{ a_id }}", "{{ a_name }}", "{{ b_id }}", "{{ b_name }}"],
+            {% endfor %}
+        ],
+
+        exclusionReason(id) {
+            for (const [aId, aName, bId, bName] of this._exclusivePairs) {
+                if (id === aId && (this.advantages[bId] || this.disadvantages[bId] || this.campaignAdvantages[bId] || this.campaignDisadvantages[bId])) {
+                    return 'Cannot be taken with ' + bName;
+                }
+                if (id === bId && (this.advantages[aId] || this.disadvantages[aId] || this.campaignAdvantages[aId] || this.campaignDisadvantages[aId])) {
+                    return 'Cannot be taken with ' + aName;
+                }
+            }
+            return null;
+        },
 
         init() {
             this.$watch('knacks', () => this.styleTechniques(), { deep: true });

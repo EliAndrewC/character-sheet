@@ -420,6 +420,8 @@
                         <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
                             <input type="checkbox" name="adv_{{ aid }}"
                                    x-model="advantages.{{ aid }}"
+                                   :disabled="{% if aid == 'wealthy' %}true{% elif aid == 'poor' %}true{% else %}exclusionReason('{{ aid }}') !== null{% endif %}"
+                                   :title="{% if aid == 'wealthy' %}'Disabled for Wasp campaign — use Household Wealth instead'{% elif aid == 'poor' %}'Disabled for Wasp campaign'{% else %}exclusionReason('{{ aid }}') || ''{% endif %}"
                                    class="rounded text-accent">
                             <span>{{ adv.name }}</span>
                             <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
@@ -437,6 +439,8 @@
                         <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
                             <input type="checkbox" name="dis_{{ did }}"
                                    x-model="disadvantages.{{ did }}"
+                                   :disabled="{% if did == 'poor' %}true{% else %}exclusionReason('{{ did }}') !== null{% endif %}"
+                                   :title="{% if did == 'poor' %}'Disabled for Wasp campaign'{% else %}exclusionReason('{{ did }}') || ''{% endif %}"
                                    class="rounded text-accent">
                             <span>{{ dis.name }}</span>
                             <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
@@ -596,6 +600,23 @@ function characterForm() {
         recognition: 7.5,
         recognitionHalved: false,
         rankLocked: true,
+        _exclusivePairs: [
+            {% for a_id, a_name, b_id, b_name in exclusive_pairs %}
+            ["{{ a_id }}", "{{ a_name }}", "{{ b_id }}", "{{ b_name }}"],
+            {% endfor %}
+        ],
+
+        exclusionReason(id) {
+            for (const [aId, aName, bId, bName] of this._exclusivePairs) {
+                if (id === aId && (this.advantages[bId] || this.disadvantages[bId])) {
+                    return 'Cannot be taken with ' + bName;
+                }
+                if (id === bId && (this.advantages[aId] || this.disadvantages[aId])) {
+                    return 'Cannot be taken with ' + aName;
+                }
+            }
+            return null;
+        },
 
         init() {
             this.$watch('knacks', () => this.styleTechniques(), { deep: true });
