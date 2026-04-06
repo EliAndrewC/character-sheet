@@ -5,14 +5,26 @@
 {% block content %}
 <div class="space-y-6">
 
+    <!-- PUBLISH STATUS BANNER -->
+    {% if not character.is_published %}
+    <div class="bg-amber-100 border border-amber-400 text-amber-800 rounded px-4 py-2 text-sm">
+        <strong>Draft</strong> — This character has not been published yet.
+    </div>
+    {% elif character.has_unpublished_changes %}
+    <div class="bg-blue-100 border border-blue-400 text-blue-800 rounded px-4 py-2 text-sm">
+        <strong>Unpublished changes</strong> — This character has been edited since it was last published.
+    </div>
+    {% endif %}
+
     <!-- HEADER -->
     <div class="flex items-start justify-between">
         <div>
             <h1 class="text-3xl font-bold">{{ character.name }}</h1>
-            {% if character.player_name %}
-            <p class="text-ink/60">Player: {{ character.player_name }}</p>
+            {% if owner_display_name %}
+            <p class="text-ink/60">Player: {{ owner_display_name }}</p>
             {% endif %}
         </div>
+        {% if viewer_can_edit %}
         <div class="flex gap-2">
             <a href="/characters/{{ character.id }}/edit"
                class="bg-ink hover:bg-ink/80 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
@@ -26,6 +38,7 @@
                 </button>
             </form>
         </div>
+        {% endif %}
     </div>
 
     <!-- SCHOOL & DAN -->
@@ -190,10 +203,19 @@
                 </div>
                 {% endif %}
             </div>
-            <div class="bg-parchment rounded-lg p-3">
+            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative">
                 <div class="text-sm text-ink/60">Stipend</div>
-                <div class="text-2xl font-bold">{{ "%.1f" | format(effective.stipend) }}</div>
+                <div class="text-2xl font-bold">{{ effective.stipend }}</div>
                 <div class="text-xs text-ink/50">koku/year</div>
+                {% if effective.stipend_modifiers %}
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs text-left">
+                    <p class="font-medium mb-1">Stipend calculation:</p>
+                    {% for m in effective.stipend_modifiers %}
+                    <p>{{ m.source }}: {{ m.detail }}</p>
+                    {% endfor %}
+                    <p class="mt-1 font-medium">= {{ effective.stipend }} koku/year</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </section>
@@ -358,13 +380,13 @@
         {% set remaining = budget - gross_spent %}
         <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm font-medium">
             <span>Spent: <span class="font-mono">{{ gross_spent }}</span></span>
-            <span>Budget: <span class="font-mono">{{ budget }}</span>
+            <span>Total: <span class="font-mono">{{ budget }}</span>
                 {% if dis_xp > 0 %}
                 <span class="text-xs text-ink/50">({{ character.starting_xp }} + {{ character.earned_xp }} earned + {{ dis_xp }} disadvantages)</span>
                 {% endif %}
             </span>
             <span class="{{ 'text-green-700' if remaining >= 0 else 'text-red-600 font-bold' }}">
-                Remaining: <span class="font-mono">{{ remaining }}</span>
+                Unspent: <span class="font-mono">{{ remaining }}</span>
             </span>
         </div>
 
@@ -415,10 +437,14 @@
     </section>
     {% endif %}
 
-    <!-- DRAFT INDICATOR -->
+    <!-- PUBLISH STATUS (bottom) -->
     {% if not character.is_published %}
     <div class="text-center text-sm text-ink/50 py-2 italic">
-        This character has not been published yet. Changes are only visible to you and those with access.
+        This character has not been published yet.
+    </div>
+    {% elif character.has_unpublished_changes %}
+    <div class="text-center text-sm text-ink/50 py-2 italic">
+        This character has unpublished changes.
     </div>
     {% endif %}
 

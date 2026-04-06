@@ -145,18 +145,23 @@ class TestRankXP:
 
 
 class TestRecognitionXP:
-    def test_recognition_at_rank_free(self):
-        assert calculate_recognition_xp(1.0, rank=1.0) == 0
+    def test_recognition_at_start_free(self):
+        assert calculate_recognition_xp(7.5, rank=7.5) == 0
 
-    def test_recognition_above_rank(self):
-        # 1 XP per 1.0 above rank
-        assert calculate_recognition_xp(2.0, rank=1.0) == 1
+    def test_recognition_above_start(self):
+        # 1 XP per 1.0 above 7.5
+        assert calculate_recognition_xp(8.5, rank=7.5) == 1
 
     def test_recognition_halved_gives_xp(self):
-        assert calculate_recognition_xp(0.5, rank=1.0, halved=True) == -3
+        # Halved base is 3.5, at 3.5 -> just the -3 bonus
+        assert calculate_recognition_xp(3.5, rank=7.5, halved=True) == -3
 
-    def test_recognition_below_rank_no_cost(self):
-        assert calculate_recognition_xp(0.5, rank=1.0) == 0
+    def test_recognition_halved_raised_above_base(self):
+        # Halved base is 3.5, raised to 5.5 -> -3 + round((5.5 - 3.5) * 1) = -3 + 2 = -1
+        assert calculate_recognition_xp(5.5, rank=7.5, halved=True) == -1
+
+    def test_recognition_below_start_no_cost(self):
+        assert calculate_recognition_xp(5.0, rank=7.5) == 0
 
 
 class TestAdvantageXP:
@@ -278,7 +283,7 @@ class TestValidation:
         assert any("Honor" in e and "exceeds" in e for e in errors)
 
     def test_recognition_too_high(self):
-        data = make_character_data(rank=1.0, recognition=2.0)
+        data = make_character_data(rank=7.5, recognition=12.0)
         errors = validate_character(data)
         assert any("Recognition" in e and "exceeds" in e for e in errors)
 
@@ -299,7 +304,7 @@ class TestValidation:
 
     def test_recognition_halved_valid(self):
         data = make_character_data(
-            recognition=0.5,
+            recognition=3.5,
             recognition_halved=True,
         )
         errors = validate_character(data)
@@ -330,6 +335,6 @@ class TestValidation:
         assert any("Honor" in e and "below minimum" in e for e in errors)
 
     def test_recognition_below_minimum_not_halved(self):
-        data = make_character_data(rank=2.0, recognition=1.0, recognition_halved=False)
+        data = make_character_data(rank=7.5, recognition=5.0, recognition_halved=False)
         errors = validate_character(data)
         assert any("Recognition" in e and "below minimum" in e for e in errors)

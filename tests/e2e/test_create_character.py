@@ -16,7 +16,6 @@ def test_create_and_edit_character(page, live_server_url):
 
     # Fill in details
     page.fill('input[name="name"]', "Akodo Toturi")
-    page.fill('input[name="player_name"]', "Eli")
 
     select_school(page, "akodo_bushi")
 

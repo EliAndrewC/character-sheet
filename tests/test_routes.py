@@ -83,7 +83,7 @@ class TestViewCharacter:
 
         resp = client.get(f"/characters/{cid}")
         assert "Total Spent" in resp.text
-        assert "Remaining" in resp.text
+        assert "Unspent" in resp.text
 
     def test_view_nonexistent_404(self, client):
         resp = client.get("/characters/999")
@@ -163,6 +163,28 @@ class TestAutoSave:
         assert char.name == "Original"  # unchanged
 
 
+    def test_autosave_owner_reassignment_by_admin(self, client):
+        """Admin can reassign character ownership via autosave."""
+        from app.models import User
+        session = client._test_session_factory()
+        # Create the admin user and another user
+        session.add(User(discord_id="183026066498125825", discord_name="admin", display_name="Admin"))
+        session.add(User(discord_id="999", discord_name="other", display_name="Other Player"))
+        session.commit()
+
+        cid = _seed_character(client, name="Reassign Me")
+
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"owner_discord_id": "999"},
+        )
+        assert resp.status_code == 200
+
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.owner_discord_id == "999"
+        assert char.player_name == "Other Player"
+
+
 class TestPublish:
     def test_publish_creates_version(self, client):
         cid = _seed_character(client, name="Publish Me", is_published=False)
@@ -238,4 +260,4 @@ class TestXPCalcPartial:
         form = make_character_form(ring_fire="3", skill_precepts="3")
         resp = client.post("/characters/api/xp-calc", data=form)
         assert resp.status_code == 200
-        assert "Remaining" in resp.text
+        assert "Unspent" in resp.text

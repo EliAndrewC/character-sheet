@@ -130,6 +130,34 @@ async def callback(request: Request, code: str = "", state: str = "", db: DBSess
     return response
 
 
+@router.get("/test-login/{token}")
+def test_login(token: str, db: DBSession = Depends(get_db)):
+    """Secret-URL login for test users. Token is a UUID stored as a Fly secret."""
+    from app.services.auth import get_test_login_tokens
+
+    tokens = get_test_login_tokens()
+    discord_id = tokens.get(token)
+    if not discord_id:
+        return HTMLResponse("Invalid token.", status_code=403)
+
+    user = db.query(User).filter(User.discord_id == discord_id).first()
+    if not user:
+        return HTMLResponse("Test user not found.", status_code=404)
+
+    session_id = secrets.token_urlsafe(32)
+    auth_session = AuthSession(session_id=session_id, discord_id=discord_id)
+    db.add(auth_session)
+    db.commit()
+
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie(
+        "session_id", session_id,
+        httponly=True, max_age=60 * 60 * 24 * 30,
+        samesite="lax", secure=True,
+    )
+    return response
+
+
 @router.get("/logout")
 def logout(request: Request, db: DBSession = Depends(get_db)):
     """Clear the session cookie and delete the server-side session."""

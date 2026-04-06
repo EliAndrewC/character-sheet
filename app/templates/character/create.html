@@ -18,9 +18,8 @@
                            class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">Player Name</label>
-                    <input type="text" name="player_name"
-                           class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                    <label class="block text-sm font-medium mb-1">Player</label>
+                    <span class="text-lg">{{ request.state.user.display_name }}</span>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Starting XP</label>
@@ -209,25 +208,22 @@
                 <div>
                     <label class="block text-sm font-medium mb-1">Rank</label>
                     <div class="flex items-center justify-center gap-1">
-                        <button type="button"
-                                @click="rank = Math.max(0.5, +(rank - 0.5).toFixed(1))"
-                                :disabled="rank <= 0.5 || rankLocked"
-                                :title="rankLocked ? 'Rank is locked for this campaign' : (rank <= 0.5 ? '' : 'Lower to ' + (rank - 0.5).toFixed(1) + ' (refund 1 XP)')"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                        <button type="button" disabled
+                                title="Rank is locked for this campaign"
+                                class="w-7 h-7 rounded bg-ink/10 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
                         <span class="w-8 text-center font-bold text-lg" x-text="rank.toFixed(1)"></span>
                         <input type="hidden" name="rank" :value="rank">
-                        <button type="button"
-                                @click="rank = +(rank + 0.5).toFixed(1)"
-                                :disabled="rankLocked"
-                                :title="rankLocked ? 'Rank is locked for this campaign' : 'Raise to ' + (rank + 0.5).toFixed(1) + ' (1 XP)'"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                        <button type="button" disabled
+                                title="Rank is locked for this campaign"
+                                class="w-7 h-7 rounded bg-ink/10 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                     </div>
-                    <input type="hidden" name="rank_locked" :value="rankLocked ? '1' : '0'">
-                    <label class="inline-flex items-center gap-2 text-xs mt-1">
-                        <input type="checkbox" x-model="rankLocked" class="rounded">
-                        Rank locked for this campaign
-                    </label>
-                    <p class="text-xs text-ink/50 mt-1">Same cost as Honor</p>
+                    <input type="hidden" name="rank_locked" value="1">
+                    <p class="text-xs text-ink/50 mt-1 tooltip-trigger relative cursor-help">
+                        Locked at campaign starting Rank
+                        <span class="tooltip-content absolute bottom-full left-0 mb-1 bg-ink text-parchment text-xs rounded px-3 py-2 w-64 z-10">
+                            Rank should only be raised or lowered when awarded or rescinded within the campaign based on in-character actions.
+                        </span>
+                    </p>
                     <template x-if="advantages.good_reputation">
                         <div class="text-xs text-ink/50">+2.0 Rank with those familiar with your reputation</div>
                     </template>
@@ -242,9 +238,9 @@
                     <label class="block text-sm font-medium mb-1">Recognition</label>
                     <div class="flex items-center justify-center gap-1">
                         <button type="button"
-                                @click="recognition = Math.max(recognitionHalved ? +(rank / 2).toFixed(1) : 0, +(recognition - 0.5).toFixed(1))"
-                                :disabled="recognition <= (recognitionHalved ? +(rank / 2).toFixed(1) : 0)"
-                                :title="recognition <= (recognitionHalved ? +(rank / 2).toFixed(1) : 0) ? '' : 'Lower to ' + (recognition - 0.5).toFixed(1)"
+                                @click="recognition = Math.max(recognitionMin(), +(recognition - 0.5).toFixed(1))"
+                                :disabled="recognition <= recognitionMin()"
+                                :title="recognition <= recognitionMin() ? '' : 'Lower to ' + (recognition - 0.5).toFixed(1)"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
                         <span class="w-8 text-center font-bold text-lg" x-text="recognition.toFixed(1)"></span>
                         <input type="hidden" name="recognition" :value="recognition">
@@ -254,7 +250,7 @@
                                 :title="recognition >= +(rank * 1.5).toFixed(1) ? '' : 'Raise to ' + (recognition + 0.5).toFixed(1)"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                     </div>
-                    <p class="text-xs text-ink/50 mt-1">Starts at Rank. Max 150% of Rank. 1 XP per 1.0</p>
+                    <p class="text-xs text-ink/50 mt-1">Starts at 7.5. Max 150% of Rank. 1 XP per 1.0</p>
                 </div>
             </div>
             <div class="mt-2">
@@ -470,13 +466,13 @@
                     <div class="text-sm">
                         <span>Spent: <strong class="font-mono" x-text="grossSpent()"></strong></span>
                         <span class="mx-2">/</span>
-                        <span>Budget: <strong class="font-mono" x-text="budgetWithDis()"></strong>
+                        <span>Total: <strong class="font-mono" x-text="budgetWithDis()"></strong>
                             <span class="text-xs text-ink/50" x-show="totalDisXp() > 0"
                                   x-text="'(' + startingXp + ' + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
                         </span>
                         <span class="mx-2">—</span>
                         <span :class="remainingXp() >= 0 ? 'text-green-700' : 'text-red-600 font-bold'">
-                            Remaining: <strong class="font-mono" x-text="remainingXp()"></strong>
+                            Unspent: <strong class="font-mono" x-text="remainingXp()"></strong>
                         </span>
                     </div>
                 </div>
@@ -596,17 +592,18 @@ function characterForm() {
         attack: 1,
         parry: 1,
         honor: 1.0,
-        rank: 1.0,
-        recognition: 1.0,
+        rank: 7.5,
+        recognition: 7.5,
         recognitionHalved: false,
-        rankLocked: false,
+        rankLocked: true,
 
         init() {
             this.$watch('knacks', () => this.styleTechniques(), { deep: true });
-            this.$watch('rank', (newVal, oldVal) => {
-                // Recognition defaults to Rank - keep them in sync if recognition was at the old rank
-                if (this.recognition === oldVal || this.recognition < newVal) {
-                    this.recognition = newVal;
+            this.$watch('recognitionHalved', (halved) => {
+                if (halved) {
+                    this.recognition = 3.5;
+                } else if (this.recognition < 7.5) {
+                    this.recognition = 7.5;
                 }
             });
             document.addEventListener('htmx:afterSwap', () => {
@@ -837,12 +834,20 @@ function characterForm() {
 
         rankXp() {
             if (this.rankLocked) return 0;
-            return Math.max(0, Math.round((this.rank - 1.0) / 0.5));
+            return Math.max(0, Math.round((this.rank - 7.5) / 0.5));
+        },
+
+        recognitionMin() {
+            return this.recognitionHalved ? 3.5 : 7.5;
         },
 
         recognitionXp() {
-            if (this.recognitionHalved) return -3;
-            return Math.max(0, Math.round(this.recognition - this.rank));
+            const base = this.recognitionHalved ? 3.5 : 7.5;
+            let xp = this.recognitionHalved ? -3 : 0;
+            if (this.recognition > base) {
+                xp += Math.round((this.recognition - base) * 1);
+            }
+            return xp;
         },
 
         grossSpent() {

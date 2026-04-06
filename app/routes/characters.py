@@ -121,7 +121,15 @@ async def update_character(
 
     # Update fields
     character.name = data["name"]
-    character.player_name = data["player_name"]
+    # Handle owner reassignment (GM only)
+    new_owner_id = form_data.get("owner_discord_id")
+    if new_owner_id:
+        from app.services.auth import is_admin
+        if is_admin(user["discord_id"]):
+            new_owner = db.query(User).filter(User.discord_id == new_owner_id).first()
+            if new_owner:
+                character.owner_discord_id = new_owner.discord_id
+                character.player_name = new_owner.display_name or new_owner.discord_name
     character.school = data["school"]
     character.school_ring_choice = data["school_ring_choice"]
     character.ring_air = data["rings"]["Air"]
@@ -201,8 +209,16 @@ async def autosave_character(
     # Update character fields from JSON
     if "name" in body:
         character.name = body["name"]
-    if "player_name" in body:
-        character.player_name = body["player_name"]
+    if body.get("owner_discord_id"):
+        # Only admins can reassign ownership
+        from app.services.auth import is_admin
+        if is_admin(user["discord_id"]):
+            new_owner = db.query(User).filter(
+                User.discord_id == body["owner_discord_id"]
+            ).first()
+            if new_owner:
+                character.owner_discord_id = new_owner.discord_id
+                character.player_name = new_owner.display_name or new_owner.discord_name
     if "school" in body:
         character.school = body["school"]
     if "school_ring_choice" in body:

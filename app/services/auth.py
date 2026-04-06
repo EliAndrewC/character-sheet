@@ -7,7 +7,7 @@ character edit permissions.
 from __future__ import annotations
 
 import os
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 def _get_list_from_env(key: str) -> List[str]:
@@ -22,6 +22,21 @@ def get_whitelisted_ids() -> List[str]:
 
 def get_admin_ids() -> List[str]:
     return _get_list_from_env("ADMIN_DISCORD_IDS")
+
+
+def get_test_login_tokens() -> Dict[str, str]:
+    """Parse TEST_LOGIN_TOKENS env var into {token: discord_id} mapping.
+
+    Format: ``uuid1:discord_id,uuid2:discord_id``
+    """
+    val = os.environ.get("TEST_LOGIN_TOKENS", "")
+    result: Dict[str, str] = {}
+    for entry in val.split(","):
+        entry = entry.strip()
+        if ":" in entry:
+            token, discord_id = entry.split(":", 1)
+            result[token.strip()] = discord_id.strip()
+    return result
 
 
 def is_whitelisted(discord_id: str) -> bool:

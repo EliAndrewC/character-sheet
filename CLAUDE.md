@@ -25,8 +25,16 @@ playwright install-deps chromium
 A `.env` file (gitignored) holds credentials for deployment and external services:
 
 - `FLY_API_TOKEN` — Fly.io API token for deployments
+- `TEST_LOGIN_TOKENS` — UUID-to-discord-id mapping for test user login (format: `uuid:discord_id,uuid:discord_id`)
 
 Values with spaces or special characters must be quoted (e.g. `KEY="value with spaces"`). Load before deploying: `set -a && source .env && set +a`
+
+The following are stored as **Fly secrets** (not in `.env`):
+
+- `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` — Discord OAuth credentials
+- `DISCORD_WHITELIST_IDS` — comma-separated Discord IDs allowed to log in
+- `ADMIN_DISCORD_IDS` — comma-separated Discord IDs with GM/admin privileges
+- `TEST_LOGIN_TOKENS` — also set as a Fly secret (same value as in `.env`)
 
 ## Running the App
 
@@ -126,3 +134,13 @@ fly deploy
 ```
 
 Requires a persistent volume named `l7r_data` mounted at `/data`. The `DATABASE_URL` env var is set to `/data/l7r.db` in fly.toml.
+
+## Test Users
+
+Two non-admin test users ("Test User 1" and "Test User 2") are pre-seeded on startup for testing the site as a regular player. Log in via secret URLs:
+
+```
+https://l7r-character-sheet.fly.dev/auth/test-login/<uuid>
+```
+
+The UUIDs are stored in the `TEST_LOGIN_TOKENS` Fly secret and in `.env`. The route pattern is public; only the UUID tokens are secret. Test users are NOT admins — use them to test granting edit access, viewing as a non-GM, etc.

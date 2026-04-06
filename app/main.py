@@ -79,3 +79,24 @@ app.include_router(auth.router)
 @app.on_event("startup")
 def on_startup():
     init_db()
+    _seed_campaign_players()
+
+
+def _seed_campaign_players():
+    """Pre-create User records for all campaign players so they appear in
+    dropdowns even before they log in via Discord."""
+    from app.game_data import CAMPAIGN_PLAYERS
+
+    db = SessionLocal()
+    try:
+        for discord_id, display_name in CAMPAIGN_PLAYERS.items():
+            existing = db.query(User).filter(User.discord_id == discord_id).first()
+            if not existing:
+                db.add(User(
+                    discord_id=discord_id,
+                    discord_name=display_name,
+                    display_name=display_name,
+                ))
+        db.commit()
+    finally:
+        db.close()

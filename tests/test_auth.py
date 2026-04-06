@@ -214,6 +214,47 @@ class TestUnauthenticatedGuards:
         app.dependency_overrides.clear()
 
 
+class TestTestLoginTokens:
+    def test_parse_tokens(self, monkeypatch):
+        from app.services.auth import get_test_login_tokens
+        monkeypatch.setenv("TEST_LOGIN_TOKENS", "abc-123:test_user_1, def-456:test_user_2")
+        tokens = get_test_login_tokens()
+        assert tokens == {"abc-123": "test_user_1", "def-456": "test_user_2"}
+
+    def test_empty_env(self, monkeypatch):
+        from app.services.auth import get_test_login_tokens
+        monkeypatch.setenv("TEST_LOGIN_TOKENS", "")
+        assert get_test_login_tokens() == {}
+
+
+class TestTestLoginRoute:
+    def test_valid_token_creates_session(self, client, monkeypatch):
+        monkeypatch.setenv("TEST_LOGIN_TOKENS", "fake-uuid-1:test_user_1")
+        session = client._test_session_factory()
+        session.add(User(discord_id="test_user_1", discord_name="Test User 1", display_name="Test User 1"))
+        session.commit()
+
+        resp = client.get("/auth/test-login/fake-uuid-1", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
+        assert "session_id" in resp.cookies
+
+    def test_invalid_token_returns_403(self, client, monkeypatch):
+        monkeypatch.setenv("TEST_LOGIN_TOKENS", "fake-uuid-1:test_user_1")
+        resp = client.get("/auth/test-login/wrong-token", follow_redirects=False)
+        assert resp.status_code == 403
+
+    def test_no_tokens_configured(self, client, monkeypatch):
+        monkeypatch.setenv("TEST_LOGIN_TOKENS", "")
+        resp = client.get("/auth/test-login/anything", follow_redirects=False)
+        assert resp.status_code == 403
+
+    def test_user_not_found(self, client, monkeypatch):
+        monkeypatch.setenv("TEST_LOGIN_TOKENS", "fake-uuid:nonexistent_user")
+        resp = client.get("/auth/test-login/fake-uuid", follow_redirects=False)
+        assert resp.status_code == 404
+
+
 class TestTestAuthBypass:
     def test_bypass_sets_user(self, client):
         """In test mode, X-Test-User header should authenticate."""

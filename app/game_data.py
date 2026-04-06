@@ -85,12 +85,37 @@ HONOR_START = 1.0
 HONOR_MAX = 5.0
 HONOR_COST_PER_HALF = 1  # 1 XP per 0.5 Honor
 
-RANK_START = 1.0
+RANK_START = 7.5  # Wasp campaign starting Rank (free, locked)
 RANK_COST_PER_HALF = 1  # same as Honor
 
+RECOGNITION_START = 7.5  # Wasp campaign starting Recognition (free)
+CAMPAIGN_STIPEND_RANK = 4  # Wasp campaign: characters considered 4th rank for stipend
 RECOGNITION_MAX_FACTOR = 1.5  # up to 150% of Rank
 RECOGNITION_COST_PER_ONE = 1  # 1 XP per 1.0 Recognition
 RECOGNITION_HALVE_START_XP = 3  # 3 XP to halve starting Recognition
+
+
+# ---------------------------------------------------------------------------
+# CAMPAIGN PLAYER ROSTER
+# Discord ID -> default display name for all campaign participants.
+# Used to pre-seed User records and populate the owner dropdown.
+# ---------------------------------------------------------------------------
+CAMPAIGN_PLAYERS = {
+    "183026066498125825": "Eli",
+    "282617191147241474": "Chris Russo",
+    "143899133680418818": "Phil",
+    "551647271423574026": "Julie",
+    "316306960855072769": "Marshall",
+    "832037313558609930": "Alex",
+    "829461716525514762": "Patrick",
+    "741082265404047481": "Craig",
+    "209412082351734785": "Sean",
+    "153227112633860097": "Chris Larkin",
+    "213078006250340353": "Joel",
+    "193187249708335105": "Jack",
+    "test_user_1": "Test User 1",
+    "test_user_2": "Test User 2",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -1437,7 +1462,7 @@ _ADVANTAGES_LIST: List[Advantage] = [
     Advantage("virtue", "Virtue", 3,
               "You embody one of the tenets of Bushido to an exceptional degree."),
     Advantage("wealthy", "Wealthy", 2,
-              "You have access to greater financial resources than your rank suggests."),
+              "Disabled for Wasp Campaign — all characters are considered 4th rank for stipend (16 koku/year). Take Household Wealth instead."),
     Advantage("worldly", "Worldly", 4,
               "You have traveled widely and understand diverse customs and perspectives."),
 ]
@@ -1473,7 +1498,7 @@ _DISADVANTAGES_LIST: List[Disadvantage] = [
     Disadvantage("permanent_wound", "Permanent Wound", 12,
                  "You carry a grievous injury that will never fully heal."),
     Disadvantage("poor", "Poor", 4,
-                 "Your financial resources are significantly below your station."),
+                 "Disabled for Wasp Campaign — all characters are considered 4th rank for stipend (16 koku/year)."),
     Disadvantage("proud", "Proud", 2,
                  "Your pride makes it difficult to accept help or admit fault."),
     Disadvantage("slow_healer", "Slow Healer", 3,
@@ -1946,7 +1971,7 @@ _CAMPAIGN_ADVANTAGES_LIST: List[Advantage] = [
         "household_wealth",
         "Household Wealth",
         4,
-        "Replaces Wealthy; you receive the income of a 10th-rank samurai (100 koku/year).",
+        "Base stipend rank is 10 instead of 4 (100 koku/year). With Merchant or Shosuro Actor school, stipend rank is 15 (225 koku/year).",
     ),
     Advantage(
         "minor_clan_major_ally_sparrow",

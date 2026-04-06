@@ -9,16 +9,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List
 
+from app.game_data import CAMPAIGN_STIPEND_RANK
+
 
 @dataclass
 class EffectiveStatus:
     rank: float = 1.0
     recognition: float = 1.0
     honor: float = 1.0
-    stipend: float = 1.0
+    stipend: int = 0
     rank_modifiers: List[dict] = field(default_factory=list)
     recognition_modifiers: List[dict] = field(default_factory=list)
     honor_modifiers: List[dict] = field(default_factory=list)
+    stipend_modifiers: List[dict] = field(default_factory=list)
 
 
 def compute_effective_status(character_data: dict) -> EffectiveStatus:
@@ -27,10 +30,34 @@ def compute_effective_status(character_data: dict) -> EffectiveStatus:
     honor = character_data.get("honor", 1.0)
     advantages = character_data.get("advantages", [])
     disadvantages = character_data.get("disadvantages", [])
+    campaign_advantages = character_data.get("campaign_advantages", [])
+    school = character_data.get("school", "")
 
     status = EffectiveStatus(rank=rank, recognition=recognition, honor=honor)
 
-    stipend_rank = rank
+    # --- Stipend calculation (Wasp campaign rules) ---
+    stipend_rank = CAMPAIGN_STIPEND_RANK
+    status.stipend_modifiers.append({
+        "source": "Wasp campaign base",
+        "detail": f"considered {CAMPAIGN_STIPEND_RANK}th rank",
+    })
+
+    if "household_wealth" in campaign_advantages:
+        stipend_rank = 10
+        status.stipend_modifiers.append({
+            "source": "Household Wealth",
+            "detail": "base stipend rank 10",
+        })
+
+    if school in ("merchant", "shosuro_actor"):
+        stipend_rank += 5
+        school_name = "Merchant" if school == "merchant" else "Shosuro Actor"
+        status.stipend_modifiers.append({
+            "source": school_name,
+            "detail": "+5 stipend rank",
+        })
+
+    status.stipend = int(stipend_rank) ** 2
 
     # --- Advantages ---
     if "good_reputation" in advantages:
@@ -73,9 +100,6 @@ def compute_effective_status(character_data: dict) -> EffectiveStatus:
             "source": "Imperial Favor",
         })
 
-    if "wealthy" in advantages:
-        stipend_rank += 3.0
-
     # --- Disadvantages ---
     if "bad_reputation" in disadvantages:
         status.recognition_modifiers.append({
@@ -90,10 +114,5 @@ def compute_effective_status(character_data: dict) -> EffectiveStatus:
             "value": -1.5,
             "source": "Bad Reputation",
         })
-
-    if "poor" in disadvantages:
-        stipend_rank = stipend_rank / 2.0
-
-    status.stipend = stipend_rank ** 2
 
     return status

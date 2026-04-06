@@ -24,6 +24,7 @@ from app.game_data import (
     KNACK_MAX,
     RANK_COST_PER_HALF,
     RANK_START,
+    RECOGNITION_START,
     RECOGNITION_HALVE_START_XP,
     RECOGNITION_MAX_FACTOR,
     RECOGNITION_COST_PER_ONE,
@@ -146,6 +147,12 @@ def calculate_rank_xp(rank: float, campaign_default: float = 1.0) -> int:
     return round(increments) * RANK_COST_PER_HALF
 
 
+def _halved_recognition_base() -> float:
+    """Return the starting Recognition when halved, rounded down to nearest 0.5."""
+    import math
+    return math.floor(RECOGNITION_START / 2 * 2) / 2
+
+
 def calculate_recognition_xp(
     recognition: float,
     rank: float,
@@ -153,16 +160,22 @@ def calculate_recognition_xp(
 ) -> int:
     """Return XP cost (or gain) for Recognition.
 
-    * Normal: Recognition starts equal to Rank.  Raising costs 1 XP per 1.0
-      above Rank, up to 150 % of Rank.
-    * Halved (``halved=True``): Recognition starts at ``rank / 2`` and the
-      character *gains* 3 XP (returned as a negative number).
+    * Normal: Recognition starts at ``RECOGNITION_START`` for free.  Raising
+      costs 1 XP per 1.0 above that base, up to 150 % of Rank.
+    * Halved (``halved=True``): Recognition starts at half of
+      ``RECOGNITION_START`` (rounded down to nearest 0.5) and the character
+      *gains* 3 XP (returned as a negative number).  Any amount above the
+      halved base still costs XP to raise.
     """
     if halved:
-        return -RECOGNITION_HALVE_START_XP
-    if recognition <= rank:
+        base = _halved_recognition_base()
+        xp = -RECOGNITION_HALVE_START_XP
+        if recognition > base:
+            xp += round((recognition - base) * RECOGNITION_COST_PER_ONE)
+        return xp
+    if recognition <= RECOGNITION_START:
         return 0
-    cost = (recognition - rank) * RECOGNITION_COST_PER_ONE
+    cost = (recognition - RECOGNITION_START) * RECOGNITION_COST_PER_ONE
     return round(cost)
 
 
@@ -402,10 +415,10 @@ def validate_character(character_data: dict) -> List[str]:
 
     # -- Recognition --
     rank_val = character_data.get("rank", RANK_START)
-    recognition = character_data.get("recognition", rank_val)
+    recognition = character_data.get("recognition", RECOGNITION_START)
     halved = character_data.get("recognition_halved", False)
     max_recognition = rank_val * RECOGNITION_MAX_FACTOR
-    min_recognition = rank_val / 2.0 if halved else rank_val
+    min_recognition = _halved_recognition_base() if halved else RECOGNITION_START
 
     if recognition > max_recognition:
         errors.append(

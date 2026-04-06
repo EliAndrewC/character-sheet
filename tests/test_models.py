@@ -124,6 +124,35 @@ class TestCharacterFromDict:
         assert d["notes"] == "Some notes"
 
 
+class TestPublishStatus:
+    def test_unpublished_character(self):
+        c = Character(name="Test", is_published=False)
+        assert c.has_unpublished_changes is False
+        assert c.publish_status == "unpublished"
+
+    def test_published_no_changes(self, db):
+        c = Character(name="Test", school="akodo_bushi", is_published=True)
+        db.add(c)
+        db.flush()
+        c.published_state = c.to_dict()
+        assert c.has_unpublished_changes is False
+        assert c.publish_status == "published"
+
+    def test_published_with_changes(self, db):
+        c = Character(name="Test", school="akodo_bushi", honor=1.0, is_published=True)
+        db.add(c)
+        db.flush()
+        c.published_state = c.to_dict()
+        c.honor = 3.0
+        assert c.has_unpublished_changes is True
+        assert c.publish_status == "modified"
+
+    def test_published_state_none(self):
+        c = Character(name="Test", is_published=True, published_state=None)
+        assert c.has_unpublished_changes is False
+        assert c.publish_status == "published"
+
+
 class TestCharacterDB:
     def test_create_and_query(self, db):
         c = Character(name="DB Test", school="akodo_bushi", school_ring_choice="Water")

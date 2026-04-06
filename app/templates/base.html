@@ -42,7 +42,10 @@
                         New Character
                     </button>
                 </form>
-                <span class="text-sm text-parchment/70">{{ request.state.user.display_name }}</span>
+                <a href="/profile"
+                   class="text-sm text-parchment/70 hover:text-parchment transition-colors">
+                    {{ request.state.user.display_name }}
+                </a>
                 <a href="/auth/logout"
                    class="text-sm text-parchment/50 hover:text-parchment transition-colors">
                     Logout

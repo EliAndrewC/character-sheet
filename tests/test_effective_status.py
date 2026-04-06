@@ -13,9 +13,14 @@ class TestBaseStatus:
         assert status.rank_modifiers == []
 
     def test_stipend_base(self):
-        data = make_character_data(rank=3.0)
+        data = make_character_data()
         status = compute_effective_status(data)
-        assert status.stipend == 9.0  # 3.0 ** 2
+        assert status.stipend == 16  # campaign base rank 4 -> 4^2
+
+    def test_stipend_ignores_actual_rank(self):
+        data = make_character_data(rank=7.5)
+        status = compute_effective_status(data)
+        assert status.stipend == 16  # still 4^2, actual rank doesn't matter
 
 
 class TestGoodReputation:
@@ -87,19 +92,72 @@ class TestBadReputation:
 
 
 class TestWealthy:
-    def test_stipend_rank_plus_3(self):
-        data = make_character_data(rank=2.0, advantages=["wealthy"])
+    def test_wealthy_no_stipend_effect(self):
+        """Wealthy is disabled for Wasp campaign — no stipend impact."""
+        data = make_character_data(advantages=["wealthy"])
         status = compute_effective_status(data)
-        # Stipend uses rank+3 = 5.0, so 5.0^2 = 25.0
-        assert status.stipend == 25.0
+        assert status.stipend == 16  # still campaign base
 
 
 class TestPoor:
-    def test_stipend_rank_halved(self):
-        data = make_character_data(rank=4.0, disadvantages=["poor"])
+    def test_poor_no_stipend_effect(self):
+        """Poor is disabled for Wasp campaign — no stipend impact."""
+        data = make_character_data(disadvantages=["poor"])
         status = compute_effective_status(data)
-        # Stipend uses rank/2 = 2.0, so 2.0^2 = 4.0
-        assert status.stipend == 4.0
+        assert status.stipend == 16  # still campaign base
+
+
+class TestHouseholdWealth:
+    def test_household_wealth_stipend(self):
+        data = make_character_data(campaign_advantages=["household_wealth"])
+        status = compute_effective_status(data)
+        assert status.stipend == 100  # 10^2
+
+    def test_household_wealth_with_merchant(self):
+        data = make_character_data(
+            school="merchant", campaign_advantages=["household_wealth"]
+        )
+        status = compute_effective_status(data)
+        assert status.stipend == 225  # (10+5)^2
+
+    def test_household_wealth_with_shosuro_actor(self):
+        data = make_character_data(
+            school="shosuro_actor", campaign_advantages=["household_wealth"]
+        )
+        status = compute_effective_status(data)
+        assert status.stipend == 225  # (10+5)^2
+
+
+class TestMerchantStipend:
+    def test_merchant_school_stipend(self):
+        data = make_character_data(school="merchant")
+        status = compute_effective_status(data)
+        assert status.stipend == 81  # (4+5)^2
+
+    def test_shosuro_actor_stipend(self):
+        data = make_character_data(school="shosuro_actor")
+        status = compute_effective_status(data)
+        assert status.stipend == 81  # (4+5)^2
+
+
+class TestStipendModifiers:
+    def test_base_has_modifier(self):
+        data = make_character_data()
+        status = compute_effective_status(data)
+        assert len(status.stipend_modifiers) >= 1
+        assert status.stipend_modifiers[0]["source"] == "Wasp campaign base"
+
+    def test_household_wealth_modifier(self):
+        data = make_character_data(campaign_advantages=["household_wealth"])
+        status = compute_effective_status(data)
+        sources = [m["source"] for m in status.stipend_modifiers]
+        assert "Household Wealth" in sources
+
+    def test_school_modifier(self):
+        data = make_character_data(school="merchant")
+        status = compute_effective_status(data)
+        sources = [m["source"] for m in status.stipend_modifiers]
+        assert "Merchant" in sources
 
 
 class TestCombined:
