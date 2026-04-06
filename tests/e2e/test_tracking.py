@@ -61,24 +61,25 @@ def test_tracking_shows_initial_values(page, live_server_url):
 
 
 def test_wound_tracking_persists(page, live_server_url):
-    """Clicking +/- on wounds persists across page reload."""
+    """Adding light wounds via modal persists across page reload."""
     _create_published_character(page, live_server_url, "Wound Tracker")
 
-    # Add 2 light wounds
-    plus_btn = page.locator('text="Light Wounds"').locator('..').locator('button:text("+")')
-    plus_btn.click()
-    plus_btn.click()
+    # Click + to open modal, use "Add to current total"
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('text="Add to current total"', timeout=3000)
+    page.locator('input[placeholder="Amount"]').fill("5")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button', has_text="Add").click()
     page.wait_for_timeout(500)
 
-    # Verify display shows 2
     wound_display = page.locator('text="Light Wounds"').locator('..').locator('span.text-2xl')
-    assert wound_display.text_content().strip() == "2"
+    assert wound_display.text_content().strip() == "5"
 
     # Reload and verify persistence
     page.reload()
     page.wait_for_selector('text="Light Wounds"')
+    page.wait_for_timeout(500)
     wound_display = page.locator('text="Light Wounds"').locator('..').locator('span.text-2xl')
-    assert wound_display.text_content().strip() == "2"
+    assert wound_display.text_content().strip() == "5"
 
 
 def test_void_points_tracking(page, live_server_url):

@@ -66,34 +66,7 @@ python3 -m pytest tests/e2e/ -v --browser chromium -m "skills or rings"  # combi
 
 Clicktests start a live uvicorn server on a random port with a temp database, then drive headless Chromium via Playwright. Tests are tagged with `pytest.mark` by feature area. **When developing a feature, run only the relevant mark(s)** — not the full suite.
 
-Available marks (defined in `pytest.ini`):
-
-| Mark | What it covers | ~Tests |
-|------|---------------|--------|
-| `navigation` | Nav bar, login, logout, profile link | 5 |
-| `homepage` | Character list, badges, empty state | 7 |
-| `profile` | Profile page, display name, access grants | 5 |
-| `school` | School selection, HTMX, techniques | 4 |
-| `school_rings` | School ring dropdown, fixed vs multi-ring | 7 |
-| `rings` | Ring +/- controls, min/max | 16 |
-| `knacks` | Knack +/- controls, min/max | 12 |
-| `combat_skills` | Attack/parry controls and constraints | 18 |
-| `skills` | Skill +/- controls, XP costs | 16 |
-| `honor_rank_recognition` | Honor/rank/recognition controls | 18 |
-| `advantages` | Advantage checkboxes, XP toggle | 18 |
-| `exclusive_pairs` | Mutually exclusive pairs | 14 |
-| `advantage_details` | Detail fields (text, skills, dropdowns) | 11 |
-| `autosave` | Auto-save, save status | 2 |
-| `apply_changes` | Apply changes modal, quick-fill, redirect | 12 |
-| `permissions` | Edit/delete visibility, owner dropdown | 9 |
-| `banners` | Draft status banners on sheet and homepage | 7 |
-| `status_display` | Honor/rank/recognition/stipend on sheet | 20 |
-| `tracking` | Wounds, void points, per-adventure | 23 |
-| `skill_rolls` | Skill roll display with bonuses and notes | 27 |
-| `xp_summary` | XP breakdown and budget on sheet | 20 |
-| `version_history` | Version list, revert, inline edit, author | 22 |
-
-Feature coverage is tracked in `tests/e2e/COVERAGE.md`.
+Available marks, which features they cover, and which test files they map to are all documented in `tests/e2e/COVERAGE.md` (the "Pytest Marks" section). Marks are defined in `pytest.ini`.
 
 ### Coverage Policy
 
