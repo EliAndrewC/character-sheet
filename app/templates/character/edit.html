@@ -450,19 +450,61 @@
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Advantages (cost XP)</h3>
                     <div class="space-y-1">
                         {% for aid, adv in advantages.items() %}
-                        <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
-                            <input type="checkbox" name="adv_{{ aid }}"
-                                   x-model="advantages.{{ aid }}"
-                                   {{ 'checked' if aid in (character.advantages or []) else '' }}
-                                   :disabled="{% if aid == 'wealthy' %}true{% elif aid == 'poor' %}true{% else %}exclusionReason('{{ aid }}') !== null{% endif %}"
-                                   class="rounded text-accent">
-                            <span>{{ adv.name }}</span>
-                            <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
-                                 x-text="exclusionReason('{{ aid }}') || '{{ adv.description|e }}'">
-                                {{ adv.description }}
+                        <div>
+                            <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
+                                <input type="checkbox" name="adv_{{ aid }}"
+                                       x-model="advantages.{{ aid }}"
+                                       {{ 'checked' if aid in (character.advantages or []) else '' }}
+                                       :disabled="{% if aid == 'wealthy' %}true{% elif aid == 'poor' %}true{% else %}exclusionReason('{{ aid }}') !== null{% endif %}"
+                                       class="rounded text-accent">
+                                <span>{{ adv.name }}</span>
+                                <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
+                                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
+                                     x-text="exclusionReason('{{ aid }}') || '{{ adv.description|e }}'">
+                                    {{ adv.description }}
+                                </div>
+                            </label>
+                            {% if aid in advantage_detail_fields %}
+                            {% set df = advantage_detail_fields[aid] %}
+                            <div x-show="advantages.{{ aid }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1">
+                                <input type="text" placeholder="{{ df.text }}"
+                                       x-model="advantageDetails['{{ aid }}'] ? advantageDetails['{{ aid }}'].text : ''"
+                                       @input="if(!advantageDetails['{{ aid }}']) advantageDetails['{{ aid }}']={};advantageDetails['{{ aid }}'].text=$event.target.value;markDirty()"
+                                       :value="(advantageDetails['{{ aid }}'] || {}).text || ''"
+                                       class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
+                                {% if df.get('skills') == 'multi' %}
+                                <div class="flex flex-wrap gap-1">
+                                    {% for sid, skill in skills.items() %}
+                                    <label class="inline-flex items-center gap-1 text-xs">
+                                        <input type="checkbox"
+                                               :checked="(advantageDetails['{{ aid }}'] || {}).skills && advantageDetails['{{ aid }}'].skills.includes('{{ sid }}')"
+                                               @change="if(!advantageDetails['{{ aid }}']) advantageDetails['{{ aid }}']={};if(!advantageDetails['{{ aid }}'].skills) advantageDetails['{{ aid }}'].skills=[];if($event.target.checked){advantageDetails['{{ aid }}'].skills.push('{{ sid }}')}else{advantageDetails['{{ aid }}'].skills=advantageDetails['{{ aid }}'].skills.filter(s=>s!=='{{ sid }}')};markDirty()"
+                                               class="rounded text-accent">
+                                        {{ skill.name }}
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                                {% elif df.get('skills') == 'single' %}
+                                <select @change="if(!advantageDetails['{{ aid }}']) advantageDetails['{{ aid }}']={};advantageDetails['{{ aid }}'].skills=[$event.target.value];markDirty()"
+                                        class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
+                                    <option value="">Select skill...</option>
+                                    {% for sid, skill in skills.items() %}
+                                    <option value="{{ sid }}" :selected="(advantageDetails['{{ aid }}'] || {}).skills && advantageDetails['{{ aid }}'].skills[0] === '{{ sid }}'">{{ skill.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                                {% if df.get('player') %}
+                                <select @change="if(!advantageDetails['{{ aid }}']) advantageDetails['{{ aid }}']={};advantageDetails['{{ aid }}'].player=$event.target.value;markDirty()"
+                                        class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
+                                    <option value="">Select player who knows...</option>
+                                    {% for p in all_players %}
+                                    <option value="{{ p.discord_id }}" :selected="(advantageDetails['{{ aid }}'] || {}).player === '{{ p.discord_id }}'">{{ p.display_name or p.discord_name }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
                             </div>
-                        </label>
+                            {% endif %}
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -470,19 +512,40 @@
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Disadvantages (give XP)</h3>
                     <div class="space-y-1">
                         {% for did, dis in disadvantages.items() %}
-                        <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
-                            <input type="checkbox" name="dis_{{ did }}"
-                                   x-model="disadvantages.{{ did }}"
-                                   {{ 'checked' if did in (character.disadvantages or []) else '' }}
-                                   :disabled="{% if did == 'poor' %}true{% else %}exclusionReason('{{ did }}') !== null{% endif %}"
-                                   class="rounded text-accent">
-                            <span>{{ dis.name }}</span>
-                            <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
-                                 x-text="exclusionReason('{{ did }}') || '{{ dis.description|e }}'">
-                                {{ dis.description }}
+                        <div>
+                            <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
+                                <input type="checkbox" name="dis_{{ did }}"
+                                       x-model="disadvantages.{{ did }}"
+                                       {{ 'checked' if did in (character.disadvantages or []) else '' }}
+                                       :disabled="{% if did == 'poor' %}true{% else %}exclusionReason('{{ did }}') !== null{% endif %}"
+                                       class="rounded text-accent">
+                                <span>{{ dis.name }}</span>
+                                <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
+                                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
+                                     x-text="exclusionReason('{{ did }}') || '{{ dis.description|e }}'">
+                                    {{ dis.description }}
+                                </div>
+                            </label>
+                            {% if did in advantage_detail_fields %}
+                            {% set df = advantage_detail_fields[did] %}
+                            <div x-show="disadvantages.{{ did }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1">
+                                <input type="text" placeholder="{{ df.text }}"
+                                       x-model="advantageDetails['{{ did }}'] ? advantageDetails['{{ did }}'].text : ''"
+                                       @input="if(!advantageDetails['{{ did }}']) advantageDetails['{{ did }}']={};advantageDetails['{{ did }}'].text=$event.target.value;markDirty()"
+                                       :value="(advantageDetails['{{ did }}'] || {}).text || ''"
+                                       class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
+                                {% if df.get('player') %}
+                                <select @change="if(!advantageDetails['{{ did }}']) advantageDetails['{{ did }}']={};advantageDetails['{{ did }}'].player=$event.target.value;markDirty()"
+                                        class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
+                                    <option value="">Select player who knows...</option>
+                                    {% for p in all_players %}
+                                    <option value="{{ p.discord_id }}" :selected="(advantageDetails['{{ did }}'] || {}).player === '{{ p.discord_id }}'">{{ p.display_name or p.discord_name }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
                             </div>
-                        </label>
+                            {% endif %}
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -699,6 +762,7 @@ function characterForm() {
             {{ did }}: {{ 'true' if did in (character.campaign_disadvantages or []) else 'false' }},
             {% endfor %}
         },
+        advantageDetails: {{ (character.advantage_details or {})|tojson }},
         attack: {{ character.attack }},
         parry: {{ character.parry }},
         honor: {{ character.honor }},
@@ -758,6 +822,7 @@ function characterForm() {
             this.$watch('disadvantages', () => this.markDirty(), { deep: true });
             this.$watch('campaignAdvantages', () => this.markDirty(), { deep: true });
             this.$watch('campaignDisadvantages', () => this.markDirty(), { deep: true });
+            this.$watch('advantageDetails', () => this.markDirty(), { deep: true });
         },
 
         styleTechniques() {
@@ -805,6 +870,7 @@ function characterForm() {
                     disadvantages: Object.keys(this.disadvantages).filter(k => this.disadvantages[k]),
                     campaign_advantages: Object.keys(this.campaignAdvantages).filter(k => this.campaignAdvantages[k]),
                     campaign_disadvantages: Object.keys(this.campaignDisadvantages).filter(k => this.campaignDisadvantages[k]),
+                    advantage_details: this.advantageDetails,
                     honor: this.honor,
                     rank: this.rank,
                     rank_locked: this.rankLocked,

@@ -246,6 +246,8 @@ async def autosave_character(
         character.campaign_disadvantages = body["campaign_disadvantages"]
     if "disadvantages" in body:
         character.disadvantages = body["disadvantages"]
+    if "advantage_details" in body:
+        character.advantage_details = body["advantage_details"]
     if "honor" in body:
         character.honor = body["honor"]
     if "rank" in body:
@@ -355,6 +357,35 @@ def get_versions(
             for v in versions
         ]
     })
+
+
+# ---------------------------------------------------------------------------
+# Live tracking (combat state, per-adventure abilities)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{char_id}/track")
+async def track_state(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Update mutable combat/adventure state from the character sheet."""
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    body = await request.json()
+
+    if "current_light_wounds" in body:
+        character.current_light_wounds = max(0, int(body["current_light_wounds"]))
+    if "current_serious_wounds" in body:
+        character.current_serious_wounds = max(0, int(body["current_serious_wounds"]))
+    if "current_void_points" in body:
+        character.current_void_points = max(0, int(body["current_void_points"]))
+    if "adventure_state" in body:
+        character.adventure_state = body["adventure_state"]
+
+    db.commit()
+    return JSONResponse({"status": "ok"})
 
 
 # ---------------------------------------------------------------------------

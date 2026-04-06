@@ -142,6 +142,44 @@ def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
                 adv_name = ADVANTAGES[adv_id].name
                 bonus_parts.append((amount, f"+{amount} from {adv_name}"))
 
+    # --- Higher Purpose & Specialization (conditional bonuses from advantage_details) ---
+    advantage_details = character_data.get("advantage_details", {})
+    if "higher_purpose" in advantages:
+        hp = advantage_details.get("higher_purpose", {})
+        hp_skills = hp.get("skills", [])
+        hp_text = hp.get("text", "your cause")
+        if skill_id in hp_skills:
+            result.flat_bonus += FREE_RAISE_VALUE
+            bonus_parts.append(
+                (FREE_RAISE_VALUE, f"+{FREE_RAISE_VALUE} from Higher Purpose when related to {hp_text}")
+            )
+
+    if "specialization" in advantages:
+        sp = advantage_details.get("specialization", {})
+        sp_skills = sp.get("skills", [])
+        sp_text = sp.get("text", "your specialization")
+        if skill_id in sp_skills:
+            amount = 2 * FREE_RAISE_VALUE
+            result.flat_bonus += amount
+            bonus_parts.append(
+                (amount, f"+{amount} from Specialization when related to {sp_text}")
+            )
+
+    # --- Disadvantage notes (no mechanical roll change, but contextual info) ---
+    disadvantages = character_data.get("disadvantages", [])
+    if "transparent" in disadvantages and skill_id == "sincerity":
+        bonus_parts.append(
+            (0, "roll always considered 5 for the purpose of lying or concealing information")
+        )
+    if "unkempt" in disadvantages and skill_id == "culture":
+        bonus_parts.append(
+            (0, "-10 in the eyes of those who judge the unkempt")
+        )
+    if "thoughtless" in disadvantages and skill_id in ("tact", "sincerity"):
+        bonus_parts.append(
+            (0, "+20 to opponents' Manipulation against you (+10 against your allies)")
+        )
+
     # --- Skill synergies (free raises = +5 per rank) ---
     for source_id, (boosted, per_rank) in _SKILL_SYNERGIES.items():
         if skill_id in boosted:

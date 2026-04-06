@@ -10,6 +10,7 @@ from app.game_data import (
     CAMPAIGN_ADVANTAGES,
     CAMPAIGN_DISADVANTAGES,
     DISADVANTAGES,
+    ADVANTAGE_DETAIL_FIELDS,
     EXCLUSIVE_PAIRS,
     SCHOOLS,
     SCHOOLS_BY_CATEGORY,
@@ -113,6 +114,48 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         if roll.rolled > 0:
             skill_rolls[sid] = roll
 
+    # Compute per-adventure abilities
+    per_adventure = []
+    advantages = character.advantages or []
+    disadvantages = character.disadvantages or []
+
+    # 3rd Dan free raises
+    tech_bonuses = SCHOOL_TECHNIQUE_BONUSES.get(character.school, {})
+    if dan >= 3 and tech_bonuses.get("third_dan"):
+        t3 = tech_bonuses["third_dan"]
+        source_skill = t3["source_skill"]
+        source_rank = (character.skills or {}).get(source_skill, 0)
+        if source_rank > 0:
+            skill_name = SKILLS[source_skill].name if source_skill in SKILLS else source_skill
+            per_adventure.append({
+                "id": "adventure_raises",
+                "name": f"3rd Dan Free Raises ({skill_name})",
+                "type": "counter",
+                "max": 2 * source_rank,
+            })
+
+    # Lucky / Unlucky
+    if "lucky" in advantages:
+        per_adventure.append({"id": "lucky_used", "name": "Lucky (re-roll)", "type": "toggle"})
+    if "unlucky" in disadvantages:
+        per_adventure.append({"id": "unlucky_used", "name": "Unlucky (GM penalty)", "type": "toggle"})
+
+    # Spendable knacks: conviction, otherworldliness, worldliness
+    for knack_id in ("conviction", "otherworldliness", "worldliness"):
+        if knack_id in char_knacks:
+            knack_rank = char_knacks[knack_id]["rank"]
+            knack_name = char_knacks[knack_id]["data"].name
+            per_adventure.append({
+                "id": knack_id,
+                "name": knack_name,
+                "type": "counter",
+                "max": knack_rank,
+            })
+
+    # Compute void points max
+    ring_vals = [char_dict["rings"].get(r, 2) for r in ("Air", "Fire", "Earth", "Water", "Void")]
+    void_max = min(ring_vals)
+
     # Get version history
     versions = (
         db.query(CharacterVersion)
@@ -142,6 +185,13 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "viewer_can_edit": viewer_can_edit,
             "versions": versions,
             "owner_display_name": (owner.display_name or owner.discord_name) if owner else character.player_name,
+            "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
+            "advantage_details": character.advantage_details or {},
+            "player_names": {u.discord_id: u.display_name or u.discord_name
+                             for u in db.query(UserModel).all()},
+            "per_adventure": per_adventure,
+            "void_max": void_max,
+            "adventure_state": character.adventure_state or {},
         },
     )
 
@@ -173,10 +223,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
         knacks = {kid: SCHOOL_KNACKS.get(kid) for kid in school.school_knacks}
 
     viewer_is_admin = is_admin(user["discord_id"])
-    all_players = (
-        db.query(UserModel).order_by(UserModel.display_name).all()
-        if viewer_is_admin else []
-    )
+    all_players = db.query(UserModel).order_by(UserModel.display_name).all()
 
     return _templates().TemplateResponse(
         request=request,
@@ -201,6 +248,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "viewer_is_admin": viewer_is_admin,
             "all_players": all_players,
             "exclusive_pairs": EXCLUSIVE_PAIRS,
+            "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
         },
     )
 

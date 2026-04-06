@@ -144,6 +144,94 @@ class TestSkillSynergies:
         assert result.flat_bonus >= 15
 
 
+class TestHigherPurpose:
+    def test_higher_purpose_bonus_on_selected_skill(self):
+        data = make_character_data(
+            skills={"precepts": 2},
+            advantages=["higher_purpose"],
+            advantage_details={"higher_purpose": {"text": "oppose the Shadowlands", "skills": ["precepts", "law"]}},
+        )
+        result = compute_skill_roll("precepts", data)
+        assert result.flat_bonus >= 5
+        assert "Higher Purpose" in result.tooltip
+        assert "oppose the Shadowlands" in result.tooltip
+
+    def test_higher_purpose_no_bonus_on_unselected_skill(self):
+        data = make_character_data(
+            skills={"bragging": 1},
+            advantages=["higher_purpose"],
+            advantage_details={"higher_purpose": {"text": "oppose the Shadowlands", "skills": ["precepts"]}},
+        )
+        result = compute_skill_roll("bragging", data)
+        assert "Higher Purpose" not in result.tooltip
+
+    def test_higher_purpose_no_details(self):
+        """Higher Purpose with no details stored should not crash."""
+        data = make_character_data(
+            skills={"precepts": 2},
+            advantages=["higher_purpose"],
+        )
+        result = compute_skill_roll("precepts", data)
+        assert "Higher Purpose" not in result.tooltip
+
+
+class TestSpecialization:
+    def test_specialization_bonus_on_selected_skill(self):
+        data = make_character_data(
+            skills={"culture": 2},
+            advantages=["specialization"],
+            advantage_details={"specialization": {"text": "poetry", "skills": ["culture"]}},
+        )
+        result = compute_skill_roll("culture", data)
+        assert result.flat_bonus >= 10
+        assert "Specialization" in result.tooltip
+        assert "poetry" in result.tooltip
+
+    def test_specialization_no_bonus_on_other_skill(self):
+        data = make_character_data(
+            skills={"bragging": 1},
+            advantages=["specialization"],
+            advantage_details={"specialization": {"text": "poetry", "skills": ["culture"]}},
+        )
+        result = compute_skill_roll("bragging", data)
+        assert "Specialization" not in result.tooltip
+
+
+class TestDisadvantageNotes:
+    def test_transparent_sincerity_note(self):
+        data = make_character_data(
+            skills={"sincerity": 2},
+            disadvantages=["transparent"],
+        )
+        result = compute_skill_roll("sincerity", data)
+        assert "always considered 5" in result.tooltip
+
+    def test_transparent_no_note_on_other_skill(self):
+        data = make_character_data(
+            skills={"bragging": 1},
+            disadvantages=["transparent"],
+        )
+        result = compute_skill_roll("bragging", data)
+        assert "always considered 5" not in result.tooltip
+
+    def test_unkempt_culture_note(self):
+        data = make_character_data(
+            skills={"culture": 2},
+            disadvantages=["unkempt"],
+        )
+        result = compute_skill_roll("culture", data)
+        assert "-10" in result.tooltip
+        assert "unkempt" in result.tooltip
+
+    def test_thoughtless_tact_note(self):
+        data = make_character_data(
+            skills={"tact": 1},
+            disadvantages=["thoughtless"],
+        )
+        result = compute_skill_roll("tact", data)
+        assert "Manipulation" in result.tooltip
+
+
 class TestFirstDanBonus:
     def test_courtier_extra_die_on_tact(self):
         """Courtier 1st Dan: extra die on tact."""
