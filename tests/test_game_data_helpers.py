@@ -94,6 +94,16 @@ class TestHonorRankRecognitionHelpers:
     def test_max_recognition(self):
         assert max_recognition(2.0) == 3.0  # 150% of 2.0
 
+    def test_max_recognition_rounds_down_to_half(self):
+        # rank 7.5 * 1.5 = 11.25 -> rounded down to 11.0
+        assert max_recognition(7.5) == 11.0
+        # rank 6.5 * 1.5 = 9.75 -> rounded down to 9.5
+        assert max_recognition(6.5) == 9.5
+        # rank 5.5 * 1.5 = 8.25 -> rounded down to 8.0
+        assert max_recognition(5.5) == 8.0
+        # rank 3.5 * 1.5 = 5.25 -> rounded down to 5.0
+        assert max_recognition(3.5) == 5.0
+
 
 class TestDan:
     def test_dan_at_0_xp(self):

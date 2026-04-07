@@ -12,6 +12,7 @@ from typing import Dict, List
 from app.game_data import (
     ADVANCED_SKILL_COSTS,
     ADVANTAGES,
+    BASIC_SKILL_COSTS,
     CAMPAIGN_ADVANTAGES,
     CAMPAIGN_DISADVANTAGES,
     COMBAT_SKILL_MAX,
@@ -26,7 +27,6 @@ from app.game_data import (
     RANK_START,
     RECOGNITION_START,
     RECOGNITION_HALVE_START_XP,
-    RECOGNITION_MAX_FACTOR,
     RECOGNITION_COST_PER_ONE,
     RING_DEFAULT,
     RING_MAX_NORMAL,
@@ -37,6 +37,7 @@ from app.game_data import (
     SCHOOLS,
     SKILL_MAX,
     SKILLS,
+    max_recognition,
     ring_raise_cost,
     skill_raise_cost,
     total_skill_cost,
@@ -220,6 +221,307 @@ def calculate_campaign_disadvantage_xp(campaign_disadvantages: List[str]) -> int
         if dis is not None:
             xp += dis.xp_value
     return -xp
+
+
+# ---------------------------------------------------------------------------
+# Per-item breakdown helpers (used by the expandable XP Summary on the sheet)
+# ---------------------------------------------------------------------------
+#
+# Each item is a plain dict so it serialises naturally and Jinja can read it.
+# Three shapes are used:
+#
+#   Rank-up item:    {"xp": int, "label": str, "from_val": num, "to_val": num}
+#   Flat-cost item:  {"xp": int, "label": str}
+#   Note item:       {"xp": 0, "label": str, "note": True}
+
+
+def ring_xp_items(
+    rings: Dict[str, int],
+    school_ring: str,
+    dan: int = 0,
+) -> List[dict]:
+    """One item per individual ring raise. Mirrors ``calculate_ring_xp``."""
+    items: List[dict] = []
+    for ring_name, target in rings.items():
+        is_school = ring_name == school_ring
+        base = RING_SCHOOL_DEFAULT if is_school else RING_DEFAULT
+        if is_school and dan >= 4:
+            base = max(base, 4)  # 3->4 free at 4th Dan
+        for new_val in range(base + 1, target + 1):
+            cost = ring_raise_cost(new_val)
+            if is_school and dan >= 4:
+                cost = max(0, cost - 5)
+            items.append({
+                "xp": cost,
+                "label": ring_name,
+                "from_val": new_val - 1,
+                "to_val": new_val,
+            })
+    items.sort(key=lambda i: (i["from_val"], i["label"]))
+    return items
+
+
+def school_knack_xp_items(knacks: Dict[str, int]) -> List[dict]:
+    """One item per knack raise above the free rank 1."""
+    items: List[dict] = []
+    for knack_id, rank in knacks.items():
+        if rank <= 1:
+            continue
+        knack_def = SCHOOL_KNACKS.get(knack_id)
+        label = knack_def.name if knack_def else knack_id
+        for new_rank in range(2, min(rank, KNACK_MAX) + 1):
+            items.append({
+                "xp": KNACK_COSTS[new_rank],
+                "label": label,
+                "from_val": new_rank - 1,
+                "to_val": new_rank,
+            })
+    items.sort(key=lambda i: (i["from_val"], i["label"]))
+    return items
+
+
+def skill_xp_items(skills: Dict[str, int]) -> dict:
+    """Per-skill items split into ``basic`` and ``advanced`` lists."""
+    basic_items: List[dict] = []
+    advanced_items: List[dict] = []
+    for skill_id, rank in skills.items():
+        if rank <= 0:
+            continue
+        skill_def = SKILLS.get(skill_id)
+        if skill_def is None:
+            is_advanced = True
+            label = skill_id
+        else:
+            is_advanced = skill_def.is_advanced
+            label = skill_def.name
+        target_list = advanced_items if is_advanced else basic_items
+        cost_table = ADVANCED_SKILL_COSTS if is_advanced else BASIC_SKILL_COSTS
+        for new_rank in range(1, min(rank, SKILL_MAX) + 1):
+            target_list.append({
+                "xp": cost_table[new_rank],
+                "label": label,
+                "from_val": new_rank - 1,
+                "to_val": new_rank,
+            })
+    basic_items.sort(key=lambda i: (i["from_val"], i["label"]))
+    advanced_items.sort(key=lambda i: (i["from_val"], i["label"]))
+    return {"basic": basic_items, "advanced": advanced_items}
+
+
+def combat_skill_xp_items(attack: int = 1, parry: int = 1) -> List[dict]:
+    """Per-rank items for Attack and Parry, sorted by ``from_val`` then label.
+
+    With the ``(from_val, label)`` sort, the order interleaves the two skills:
+    Attack 1->2, Parry 1->2, Attack 2->3, Parry 2->3, ... — matching the
+    user-stated requirement that lower-rank raises always appear before
+    higher-rank raises.
+    """
+    items: List[dict] = []
+    for label, rank in (("Attack", attack), ("Parry", parry)):
+        for new_rank in range(2, min(rank, COMBAT_SKILL_MAX) + 1):
+            items.append({
+                "xp": ADVANCED_SKILL_COSTS[new_rank],
+                "label": label,
+                "from_val": new_rank - 1,
+                "to_val": new_rank,
+            })
+    items.sort(key=lambda i: (i["from_val"], i["label"]))
+    return items
+
+
+def advantage_items(
+    advantages: List[str],
+    campaign_advantages: List[str],
+) -> List[dict]:
+    """One item per advantage (regular + campaign), alphabetised."""
+    items: List[dict] = []
+    for adv_id in advantages:
+        adv = ADVANTAGES.get(adv_id)
+        if adv is not None:
+            items.append({"xp": adv.xp_cost, "label": adv.name})
+    for adv_id in campaign_advantages:
+        adv = CAMPAIGN_ADVANTAGES.get(adv_id)
+        if adv is not None:
+            items.append({"xp": adv.xp_cost, "label": adv.name})
+    items.sort(key=lambda i: i["label"])
+    return items
+
+
+def disadvantage_items(
+    disadvantages: List[str],
+    campaign_disadvantages: List[str],
+) -> List[dict]:
+    """One item per disadvantage (regular + campaign), alphabetised. XP is negative."""
+    items: List[dict] = []
+    for dis_id in disadvantages:
+        dis = DISADVANTAGES.get(dis_id)
+        if dis is not None:
+            items.append({"xp": -dis.xp_value, "label": dis.name})
+    for dis_id in campaign_disadvantages:
+        dis = CAMPAIGN_DISADVANTAGES.get(dis_id)
+        if dis is not None:
+            items.append({"xp": -dis.xp_value, "label": dis.name})
+    items.sort(key=lambda i: i["label"])
+    return items
+
+
+def hrr_items(
+    honor: float,
+    rank: float,
+    rank_locked: bool,
+    recognition: float,
+    recognition_halved: bool,
+) -> List[dict]:
+    """Honor / Rank / Recognition summary items, plus a permanent Wasp note."""
+    items: List[dict] = []
+
+    honor_xp = calculate_honor_xp(honor)
+    if honor_xp != 0:
+        items.append({
+            "xp": honor_xp,
+            "label": "Honor",
+            "from_val": HONOR_START,
+            "to_val": honor,
+        })
+
+    if not rank_locked:
+        rank_xp = calculate_rank_xp(rank, campaign_default=RANK_START)
+        if rank_xp != 0:
+            items.append({
+                "xp": rank_xp,
+                "label": "Rank",
+                "from_val": RANK_START,
+                "to_val": rank,
+            })
+
+    if recognition_halved:
+        items.append({
+            "xp": -RECOGNITION_HALVE_START_XP,
+            "label": "Recognition halved",
+        })
+        base = _halved_recognition_base()
+        if recognition > base:
+            extra = round((recognition - base) * RECOGNITION_COST_PER_ONE)
+            if extra != 0:
+                items.append({
+                    "xp": extra,
+                    "label": "Recognition",
+                    "from_val": base,
+                    "to_val": recognition,
+                })
+    else:
+        rec_xp = calculate_recognition_xp(recognition, rank, halved=False)
+        if rec_xp != 0:
+            items.append({
+                "xp": rec_xp,
+                "label": "Recognition",
+                "from_val": RECOGNITION_START,
+                "to_val": recognition,
+            })
+
+    items.append({
+        "xp": 0,
+        "label": "Wasp Campaign characters begin at 7.5 Rank at no XP cost.",
+        "note": True,
+    })
+    return items
+
+
+def calculate_xp_breakdown(character_data: dict) -> dict:
+    """Rich per-item breakdown for the expandable XP Summary on the sheet.
+
+    Each category entry has shape ``{"label", "total", "items"}`` (or
+    ``{"label", "total", "subsections"}`` for Skills). Campaign advantages and
+    disadvantages are merged into the regular Advantages / Disadvantages
+    categories. ``grand_total`` is the sum across all categories and matches
+    ``calculate_total_xp(...)["total"]``.
+    """
+    school_ring = character_data.get("school_ring_choice", "")
+    knack_data = character_data.get("knacks", {})
+    dan = compute_dan(knack_data) if knack_data else 0
+
+    rings_list = ring_xp_items(
+        character_data.get("rings", {}), school_ring, dan=dan,
+    )
+    knacks_list = school_knack_xp_items(knack_data)
+    skills_split = skill_xp_items(character_data.get("skills", {}))
+    combat_list = combat_skill_xp_items(
+        attack=character_data.get("attack", COMBAT_SKILL_START),
+        parry=character_data.get("parry", COMBAT_SKILL_START),
+    )
+    adv_list = advantage_items(
+        character_data.get("advantages", []),
+        character_data.get("campaign_advantages", []),
+    )
+    dis_list = disadvantage_items(
+        character_data.get("disadvantages", []),
+        character_data.get("campaign_disadvantages", []),
+    )
+    hrr_list = hrr_items(
+        honor=character_data.get("honor", HONOR_START),
+        rank=character_data.get("rank", RANK_START),
+        rank_locked=character_data.get("rank_locked", False),
+        recognition=character_data.get("recognition", RECOGNITION_START),
+        recognition_halved=character_data.get("recognition_halved", False),
+    )
+
+    rings_total = sum(i["xp"] for i in rings_list)
+    knacks_total = sum(i["xp"] for i in knacks_list)
+    skills_total = (
+        sum(i["xp"] for i in skills_split["basic"])
+        + sum(i["xp"] for i in skills_split["advanced"])
+    )
+    combat_total = sum(i["xp"] for i in combat_list)
+    adv_total = sum(i["xp"] for i in adv_list)
+    dis_total = sum(i["xp"] for i in dis_list)
+    hrr_total = sum(i["xp"] for i in hrr_list if not i.get("note"))
+
+    grand_total = (
+        rings_total + knacks_total + skills_total + combat_total
+        + adv_total + dis_total + hrr_total
+    )
+
+    return {
+        "rings": {
+            "label": "Rings",
+            "total": rings_total,
+            "rows": rings_list,
+        },
+        "school_knacks": {
+            "label": "School Knacks",
+            "total": knacks_total,
+            "rows": knacks_list,
+        },
+        "skills": {
+            "label": "Skills",
+            "total": skills_total,
+            "subsections": [
+                {"label": "Basic Skills", "rows": skills_split["basic"]},
+                {"label": "Advanced Skills", "rows": skills_split["advanced"]},
+            ],
+        },
+        "combat_skills": {
+            "label": "Attack / Parry",
+            "total": combat_total,
+            "rows": combat_list,
+        },
+        "advantages": {
+            "label": "Advantages",
+            "total": adv_total,
+            "rows": adv_list,
+        },
+        "honor_rank_recognition": {
+            "label": "Honor / Rank / Recognition",
+            "total": hrr_total,
+            "rows": hrr_list,
+        },
+        "disadvantages": {
+            "label": "Disadvantages",
+            "total": dis_total,
+            "rows": dis_list,
+        },
+        "grand_total": grand_total,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -417,13 +719,13 @@ def validate_character(character_data: dict) -> List[str]:
     rank_val = character_data.get("rank", RANK_START)
     recognition = character_data.get("recognition", RECOGNITION_START)
     halved = character_data.get("recognition_halved", False)
-    max_recognition = rank_val * RECOGNITION_MAX_FACTOR
+    max_rec = max_recognition(rank_val)
     min_recognition = _halved_recognition_base() if halved else RECOGNITION_START
 
-    if recognition > max_recognition:
+    if recognition > max_rec:
         errors.append(
             f"Recognition ({recognition}) exceeds 150% of Rank "
-            f"({max_recognition})."
+            f"({max_rec})."
         )
     if recognition < min_recognition:
         errors.append(

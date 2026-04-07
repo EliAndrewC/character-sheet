@@ -3,6 +3,25 @@
 {% block title %}L7R — {{ character.name }}{% endblock %}
 
 {% block content %}
+
+{# Macro: render a flat list of XP line rows as a 3-column grid (XP | label | from→to). #}
+{% macro render_rows(rows) %}
+<div class="grid gap-x-3 gap-y-0.5 text-sm font-mono items-baseline"
+     style="grid-template-columns: auto auto 1fr;">
+{% for row in rows %}
+    {% if row.note %}
+        <div class="col-span-3 text-xs text-ink/60 italic font-sans">{{ row.label }}</div>
+    {% else %}
+        <div class="text-right whitespace-nowrap">{{ row.xp }} XP:</div>
+        <div class="text-center">{{ row.label }}</div>
+        <div class="whitespace-nowrap">
+            {% if 'from_val' in row %}{{ row.from_val }} &rarr; {{ row.to_val }}{% endif %}
+        </div>
+    {% endif %}
+{% endfor %}
+</div>
+{% endmacro %}
+
 <div class="space-y-6">
 
     <!-- DRAFT STATUS BANNER -->
@@ -98,7 +117,7 @@
                 <span class="font-bold">{{ [ring_map['Air'], ring_map['Fire'], ring_map['Earth'], ring_map['Water'], ring_map['Void']] | min }}</span>
             </div>
             <div class="bg-parchment rounded p-2">
-                <span class="text-ink/60">Crippled at:</span>
+                <span class="text-ink/60">Impaired at:</span>
                 <span class="font-bold">{{ ring_map['Earth'] }} serious wounds</span>
             </div>
             <div class="bg-parchment rounded p-2">
@@ -509,10 +528,10 @@
             <div class="bg-parchment rounded-lg p-3" x-data="{ expanded: false }">
                 <div class="flex items-center justify-between cursor-pointer" @click="expanded = !expanded">
                     <div class="flex items-center gap-2">
-                        <span class="font-medium">{{ info.data.name }}</span>
                         {% if info.data.ring %}
                         <span class="text-xs bg-ink/10 rounded px-1.5 py-0.5">{{ info.data.ring }}</span>
                         {% endif %}
+                        <span class="font-medium">{{ info.data.name }}</span>
                     </div>
                     <div class="flex items-center gap-3">
                         <span class="text-lg font-bold text-accent">{{ info.rank }}</span>
@@ -521,8 +540,8 @@
                         </svg>
                     </div>
                 </div>
-                <div x-show="expanded" x-cloak class="mt-2 text-sm text-ink/80">
-                    {{ info.data.description }}
+                <div x-show="expanded" x-cloak class="mt-2 text-sm text-ink/80 whitespace-pre-line">
+                    {{ info.data.rules_text or info.data.description }}
                 </div>
             </div>
             {% endif %}
@@ -633,42 +652,67 @@
     {% endif %}
 
     <!-- XP SUMMARY -->
-    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
+             x-data="{ expanded: null }">
         <h2 class="text-xl font-bold mb-4 text-accent">XP Summary</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm mb-4">
-            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
-                <span>Rings</span><span class="font-mono font-bold">{{ xp.rings }}</span>
+
+        {# Six clickable category cards in a 2/3-column grid #}
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm mb-2">
+            {% for key in ['rings', 'school_knacks', 'skills', 'combat_skills', 'advantages', 'honor_rank_recognition'] %}
+                {% set section = xp_breakdown[key] %}
+                {% set has_detail = section.total != 0 or key == 'honor_rank_recognition' %}
+                <div data-xp-card="{{ key }}"
+                     class="flex justify-between px-3 py-2 bg-parchment rounded select-none{% if has_detail %} cursor-pointer hover:bg-parchment/70{% endif %}"
+                     {% if has_detail %}@click="expanded = expanded === '{{ key }}' ? null : '{{ key }}'"
+                     :class="expanded === '{{ key }}' ? 'ring-2 ring-accent' : ''"{% endif %}>
+                    <span>{{ section.label }}</span>
+                    <span class="font-mono font-bold">{{ section.total }}</span>
+                </div>
+            {% endfor %}
+        </div>
+
+        {# Bottom row: Total Spent (left, full width) + Disadvantages (right, fixed width) #}
+        <div class="flex gap-2 text-sm mb-3">
+            <div class="flex-1 flex justify-between px-3 py-2 bg-ink/10 rounded font-bold">
+                <span>Total Spent</span>
+                <span class="font-mono">{{ xp_breakdown.grand_total }}</span>
             </div>
-            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
-                <span>Skills</span><span class="font-mono font-bold">{{ xp.skills }}</span>
-            </div>
-            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
-                <span>Knacks</span><span class="font-mono font-bold">{{ xp.knacks }}</span>
-            </div>
-            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
-                <span>Combat Skills</span><span class="font-mono font-bold">{{ xp.combat_skills }}</span>
-            </div>
-            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
-                <span>Honor</span><span class="font-mono font-bold">{{ xp.honor }}</span>
-            </div>
-            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
-                <span>Rank</span><span class="font-mono font-bold">{{ xp.rank }}</span>
-            </div>
-            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
-                <span>Recognition</span><span class="font-mono font-bold">{{ xp.recognition }}</span>
-            </div>
-            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
-                <span>Advantages</span><span class="font-mono font-bold">{{ xp.advantages }}</span>
-            </div>
-            <div class="flex justify-between px-3 py-2 bg-parchment rounded">
-                <span>Disadvantages</span><span class="font-mono font-bold text-green-700">{{ xp.disadvantages }}</span>
-            </div>
-            <div class="flex justify-between px-3 py-2 bg-ink/10 rounded font-bold">
-                <span>Total Spent</span><span class="font-mono">{{ xp.total }}</span>
+            {% set dis_section = xp_breakdown.disadvantages %}
+            {% set dis_clickable = dis_section.total != 0 %}
+            <div data-xp-card="disadvantages"
+                 class="flex justify-between px-3 py-2 bg-parchment rounded select-none w-48{% if dis_clickable %} cursor-pointer hover:bg-parchment/70{% endif %}"
+                 {% if dis_clickable %}@click="expanded = expanded === 'disadvantages' ? null : 'disadvantages'"
+                 :class="expanded === 'disadvantages' ? 'ring-2 ring-accent' : ''"{% endif %}>
+                <span>Disadvantages</span>
+                <span class="font-mono font-bold text-green-700">{{ dis_section.total }}</span>
             </div>
         </div>
-        {% set dis_xp = xp.disadvantages | abs %}
-        {% set gross_spent = xp.total + dis_xp %}
+
+        {# Single shared expansion panel #}
+        <div x-show="expanded !== null" x-cloak
+             data-xp-panel
+             class="bg-parchment/40 rounded p-3 mb-3 border border-ink/10">
+            {% for key in ['rings', 'school_knacks', 'skills', 'combat_skills', 'advantages', 'honor_rank_recognition', 'disadvantages'] %}
+                {% set section = xp_breakdown[key] %}
+                <div x-show="expanded === '{{ key }}'" x-cloak data-xp-detail="{{ key }}">
+                    <h3 class="font-bold text-sm text-accent mb-2">{{ section.label }}</h3>
+                    {% if section.subsections is defined %}
+                        {% for sub in section.subsections %}
+                            {% if sub.rows %}
+                                <h4 class="text-xs font-semibold text-ink/60 mt-2 mb-1">{{ sub.label }}</h4>
+                                {{ render_rows(sub.rows) }}
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        {{ render_rows(section.rows) }}
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+
+        {# Budget summary line #}
+        {% set dis_xp = xp_breakdown.disadvantages.total | abs %}
+        {% set gross_spent = xp_breakdown.grand_total + dis_xp %}
         {% set budget = character.starting_xp + character.earned_xp + dis_xp %}
         {% set remaining = budget - gross_spent %}
         <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm font-medium">

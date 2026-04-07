@@ -12,6 +12,7 @@ from app.services.xp import (
     calculate_ring_xp,
     calculate_skill_xp,
     calculate_total_xp,
+    calculate_xp_breakdown,
     calculate_available_xp,
     validate_character,
 )
@@ -338,3 +339,304 @@ class TestValidation:
         data = make_character_data(rank=7.5, recognition=5.0, recognition_halved=False)
         errors = validate_character(data)
         assert any("Recognition" in e and "below minimum" in e for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# Per-item breakdown for the expandable XP Summary (calculate_xp_breakdown)
+# ---------------------------------------------------------------------------
+
+
+class TestXpBreakdown:
+    """The rich per-item breakdown used by the sheet's expandable XP Summary."""
+
+    def test_default_character_has_only_wasp_note(self):
+        """A fresh character has empty per-category rows but the HRR Wasp note is always present."""
+        breakdown = calculate_xp_breakdown(make_character_data())
+        assert breakdown["rings"]["rows"] == []
+        assert breakdown["school_knacks"]["rows"] == []
+        assert breakdown["skills"]["subsections"][0]["rows"] == []
+        assert breakdown["skills"]["subsections"][1]["rows"] == []
+        assert breakdown["combat_skills"]["rows"] == []
+        assert breakdown["advantages"]["rows"] == []
+        assert breakdown["disadvantages"]["rows"] == []
+        # HRR has the note even when totals are zero
+        hrr_rows = breakdown["honor_rank_recognition"]["rows"]
+        assert len(hrr_rows) == 1
+        assert hrr_rows[0]["note"] is True
+        assert "7.5 Rank" in hrr_rows[0]["label"]
+        assert breakdown["honor_rank_recognition"]["total"] == 0
+        assert breakdown["grand_total"] == 0
+
+    def test_section_labels(self):
+        """Display labels are user-facing and use the new naming."""
+        breakdown = calculate_xp_breakdown(make_character_data())
+        assert breakdown["rings"]["label"] == "Rings"
+        assert breakdown["school_knacks"]["label"] == "School Knacks"
+        assert breakdown["skills"]["label"] == "Skills"
+        assert breakdown["combat_skills"]["label"] == "Attack / Parry"
+        assert breakdown["advantages"]["label"] == "Advantages"
+        assert breakdown["honor_rank_recognition"]["label"] == "Honor / Rank / Recognition"
+        assert breakdown["disadvantages"]["label"] == "Disadvantages"
+
+    def test_ring_rows_emit_each_raise(self):
+        data = make_character_data(
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+        )
+        rows = calculate_xp_breakdown(data)["rings"]["rows"]
+        # Air 2->3 (15), Air 3->4 (20), Water 3->4 (20). school_ring=Water so Water
+        # starts at 3 and only its 3->4 raise costs. Sorted by (from_val, label):
+        #   (2, "Air"), (3, "Air"), (3, "Water").
+        assert [(r["label"], r["from_val"], r["to_val"], r["xp"]) for r in rows] == [
+            ("Air", 2, 3, 15),
+            ("Air", 3, 4, 20),
+            ("Water", 3, 4, 20),
+        ]
+
+    def test_school_knack_rows(self):
+        data = make_character_data(
+            knacks={"double_attack": 3, "feint": 1, "iaijutsu": 1},
+        )
+        rows = calculate_xp_breakdown(data)["school_knacks"]["rows"]
+        # Double Attack: 1->2 (4), 2->3 (6). Other knacks at rank 1 produce nothing.
+        assert [(r["label"], r["from_val"], r["to_val"], r["xp"]) for r in rows] == [
+            ("Double Attack", 1, 2, 4),
+            ("Double Attack", 2, 3, 6),
+        ]
+
+    def test_skill_rows_split_basic_advanced(self):
+        data = make_character_data(
+            skills={"bragging": 2, "acting": 1},  # Bragging is basic, Acting is advanced
+        )
+        skills = calculate_xp_breakdown(data)["skills"]
+        assert skills["subsections"][0]["label"] == "Basic Skills"
+        assert skills["subsections"][1]["label"] == "Advanced Skills"
+        basic = skills["subsections"][0]["rows"]
+        advanced = skills["subsections"][1]["rows"]
+        assert [(r["label"], r["from_val"], r["to_val"], r["xp"]) for r in basic] == [
+            ("Bragging", 0, 1, 2),
+            ("Bragging", 1, 2, 2),
+        ]
+        assert [(r["label"], r["from_val"], r["to_val"], r["xp"]) for r in advanced] == [
+            ("Acting", 0, 1, 4),
+        ]
+        assert skills["total"] == 8  # 2+2+4
+
+    def test_combat_skill_rows_interleaved_by_from_rank(self):
+        """Sort is by (from_val, label) so Attack 1->2 comes before Parry 1->2,
+        then Attack 2->3 before Parry 2->3, etc."""
+        data = make_character_data(attack=3, parry=4)
+        rows = calculate_xp_breakdown(data)["combat_skills"]["rows"]
+        assert [(r["label"], r["from_val"]) for r in rows] == [
+            ("Attack", 1),
+            ("Parry", 1),
+            ("Attack", 2),
+            ("Parry", 2),
+            ("Parry", 3),
+        ]
+
+    def test_advantage_rows_merge_campaign(self):
+        data = make_character_data(
+            advantages=["lucky"],
+            campaign_advantages=["streetwise"],
+        )
+        section = calculate_xp_breakdown(data)["advantages"]
+        labels = [r["label"] for r in section["rows"]]
+        assert "Lucky" in labels
+        assert "Streetwise" in labels
+        # Total covers both
+        assert section["total"] == sum(r["xp"] for r in section["rows"])
+
+    def test_disadvantage_rows_merge_campaign(self):
+        data = make_character_data(
+            disadvantages=["proud"],
+            campaign_disadvantages=["crane_indebted"],
+        )
+        section = calculate_xp_breakdown(data)["disadvantages"]
+        labels = [r["label"] for r in section["rows"]]
+        assert "Proud" in labels
+        assert any("Crane" in lbl or "Indebted" in lbl for lbl in labels)
+        assert section["total"] < 0  # disadvantages give XP back
+
+    def test_hrr_honor_row(self):
+        data = make_character_data(honor=2.5)
+        rows = calculate_xp_breakdown(data)["honor_rank_recognition"]["rows"]
+        non_note = [r for r in rows if not r.get("note")]
+        assert len(non_note) == 1
+        assert non_note[0]["label"] == "Honor"
+        assert non_note[0]["from_val"] == 1.0
+        assert non_note[0]["to_val"] == 2.5
+        assert non_note[0]["xp"] == 3  # (2.5-1.0)/0.5 = 3 steps
+
+    def test_hrr_rank_row_when_unlocked(self):
+        data = make_character_data(rank=8.5, rank_locked=False)
+        rows = calculate_xp_breakdown(data)["honor_rank_recognition"]["rows"]
+        rank_rows = [r for r in rows if not r.get("note") and r["label"] == "Rank"]
+        assert len(rank_rows) == 1
+        assert rank_rows[0]["from_val"] == 7.5
+        assert rank_rows[0]["to_val"] == 8.5
+        assert rank_rows[0]["xp"] == 2  # (8.5-7.5)/0.5 = 2 steps
+
+    def test_hrr_rank_locked_emits_no_rank_row(self):
+        data = make_character_data(rank=8.5, rank_locked=True)
+        rows = calculate_xp_breakdown(data)["honor_rank_recognition"]["rows"]
+        rank_rows = [r for r in rows if not r.get("note") and r["label"] == "Rank"]
+        assert rank_rows == []
+
+    def test_hrr_recognition_row(self):
+        data = make_character_data(recognition=8.5)
+        rows = calculate_xp_breakdown(data)["honor_rank_recognition"]["rows"]
+        rec_rows = [r for r in rows if not r.get("note") and r["label"] == "Recognition"]
+        assert len(rec_rows) == 1
+        assert rec_rows[0]["from_val"] == 7.5
+        assert rec_rows[0]["to_val"] == 8.5
+        assert rec_rows[0]["xp"] == 1
+
+    def test_hrr_recognition_halved(self):
+        data = make_character_data(recognition=3.5, recognition_halved=True)
+        rows = calculate_xp_breakdown(data)["honor_rank_recognition"]["rows"]
+        # Should have a "Recognition halved" row with -3 XP and the Wasp note
+        halved_rows = [r for r in rows if r.get("label") == "Recognition halved"]
+        assert len(halved_rows) == 1
+        assert halved_rows[0]["xp"] == -3
+
+    def test_hrr_recognition_halved_then_raised(self):
+        data = make_character_data(recognition=5.5, recognition_halved=True)
+        rows = calculate_xp_breakdown(data)["honor_rank_recognition"]["rows"]
+        # halved -3 row, plus a Recognition raise row from 3.5 -> 5.5 (+2 XP)
+        labels = [r.get("label") for r in rows]
+        assert "Recognition halved" in labels
+        rec_raise = [r for r in rows if r.get("label") == "Recognition" and r.get("from_val") is not None]
+        assert len(rec_raise) == 1
+        assert rec_raise[0]["xp"] == 2
+
+    def test_wasp_note_always_present_in_hrr(self):
+        for data in [
+            make_character_data(),                              # zero everything
+            make_character_data(honor=3.0),                     # honor only
+            make_character_data(rank=8.5, rank_locked=False),   # rank only
+            make_character_data(recognition=10.0),              # recognition only
+        ]:
+            rows = calculate_xp_breakdown(data)["honor_rank_recognition"]["rows"]
+            note_rows = [r for r in rows if r.get("note")]
+            assert len(note_rows) == 1
+            assert "Wasp" in note_rows[0]["label"]
+
+    def test_grand_total_invariant(self):
+        """grand_total must equal calculate_total_xp(...)['total'] for any character."""
+        cases = [
+            make_character_data(),
+            make_character_data(
+                rings={"Air": 4, "Fire": 3, "Earth": 2, "Water": 4, "Void": 2},
+                skills={"bragging": 3},
+                knacks={"double_attack": 2, "feint": 1, "iaijutsu": 3},
+                attack=3, parry=2,
+                advantages=["lucky"],
+                disadvantages=["proud"],
+                honor=2.0,
+                recognition=8.5,
+            ),
+            make_character_data(
+                campaign_advantages=["streetwise"],
+                campaign_disadvantages=["crane_indebted"],
+            ),
+            make_character_data(
+                rank=8.5, rank_locked=False,
+                recognition=3.5, recognition_halved=True,
+            ),
+        ]
+        for data in cases:
+            breakdown = calculate_xp_breakdown(data)
+            totals = calculate_total_xp(data)
+            assert breakdown["grand_total"] == totals["total"], (
+                f"grand_total mismatch for {data}: "
+                f"breakdown={breakdown['grand_total']} totals={totals['total']}"
+            )
+
+    def test_section_total_matches_row_sum(self):
+        """Each non-skills section total equals sum of its rows' xp."""
+        data = make_character_data(
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 5, "Void": 2},
+            knacks={"double_attack": 4, "feint": 1, "iaijutsu": 1},
+            attack=4, parry=3,
+            advantages=["lucky", "fierce"],
+            disadvantages=["proud"],
+        )
+        breakdown = calculate_xp_breakdown(data)
+        for key in ("rings", "school_knacks", "combat_skills", "advantages", "disadvantages"):
+            section = breakdown[key]
+            assert section["total"] == sum(r["xp"] for r in section["rows"]), (
+                f"{key} total mismatch"
+            )
+
+    def test_skills_total_matches_subsection_sums(self):
+        data = make_character_data(
+            skills={"bragging": 2, "spellcraft": 3},  # basic + advanced
+        )
+        skills = calculate_xp_breakdown(data)["skills"]
+        basic_sum = sum(r["xp"] for r in skills["subsections"][0]["rows"])
+        advanced_sum = sum(r["xp"] for r in skills["subsections"][1]["rows"])
+        assert skills["total"] == basic_sum + advanced_sum
+
+    def test_skill_rows_use_display_names(self):
+        """Skill row labels use the human-readable name from SKILLS, not the id."""
+        data = make_character_data(skills={"bragging": 1})
+        breakdown = calculate_xp_breakdown(data)
+        basic_rows = breakdown["skills"]["subsections"][0]["rows"]
+        assert basic_rows[0]["label"] == "Bragging"
+
+    def test_unknown_skill_falls_back_to_id_label(self):
+        """A skill id not in SKILLS still appears (treated as advanced) with its id as label."""
+        data = make_character_data(skills={"nonexistent_skill": 2})
+        breakdown = calculate_xp_breakdown(data)
+        advanced_rows = breakdown["skills"]["subsections"][1]["rows"]
+        labels = [r["label"] for r in advanced_rows]
+        assert "nonexistent_skill" in labels
+
+    def test_unknown_knack_falls_back_to_id_label(self):
+        data = make_character_data(knacks={"made_up_knack": 2})
+        breakdown = calculate_xp_breakdown(data)
+        rows = breakdown["school_knacks"]["rows"]
+        assert any(r["label"] == "made_up_knack" for r in rows)
+
+    def test_4th_dan_school_ring_discount(self):
+        """4th Dan: school ring 3->4 free, all other school ring raises -5 XP."""
+        data = make_character_data(
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},  # min knack=4 -> dan 4
+            school_ring_choice="Water",
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 5, "Void": 2},
+        )
+        breakdown = calculate_xp_breakdown(data)
+        rings_rows = breakdown["rings"]["rows"]
+        # Water 3->4 should be free (skipped), Water 4->5 should cost 25-5=20
+        water_rows = [r for r in rings_rows if r["label"] == "Water"]
+        assert len(water_rows) == 1  # only the 4->5 raise (3->4 is free at 4th Dan)
+        assert water_rows[0]["from_val"] == 4
+        assert water_rows[0]["to_val"] == 5
+        assert water_rows[0]["xp"] == 20  # 25 - 5 discount
+
+    def test_unknown_advantage_ignored(self):
+        data = make_character_data(advantages=["nonexistent_advantage"])
+        breakdown = calculate_xp_breakdown(data)
+        assert breakdown["advantages"]["rows"] == []
+
+    def test_unknown_disadvantage_ignored(self):
+        data = make_character_data(disadvantages=["nonexistent_disadvantage"])
+        breakdown = calculate_xp_breakdown(data)
+        assert breakdown["disadvantages"]["rows"] == []
+
+    def test_unknown_campaign_advantage_ignored(self):
+        data = make_character_data(campaign_advantages=["nonexistent"])
+        breakdown = calculate_xp_breakdown(data)
+        assert breakdown["advantages"]["rows"] == []
+
+    def test_unknown_campaign_disadvantage_ignored(self):
+        data = make_character_data(campaign_disadvantages=["nonexistent"])
+        breakdown = calculate_xp_breakdown(data)
+        assert breakdown["disadvantages"]["rows"] == []
+
+    def test_zero_rank_skill_skipped(self):
+        """Skills with rank 0 or below produce no rows."""
+        data = make_character_data(skills={"bragging": 0})
+        breakdown = calculate_xp_breakdown(data)
+        assert breakdown["skills"]["subsections"][0]["rows"] == []
+        assert breakdown["skills"]["subsections"][1]["rows"] == []

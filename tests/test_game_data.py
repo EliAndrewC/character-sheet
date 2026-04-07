@@ -162,6 +162,7 @@ class TestSchoolKnacks:
             assert knack.id == kid
             assert knack.name
             assert knack.description
+            assert knack.rules_text
 
 
 class TestAdvantagesAndDisadvantages:

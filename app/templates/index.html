@@ -28,11 +28,6 @@
             <p class="text-sm text-ink/60">Player: {{ owner_display }}</p>
             {% endif %}
             <p class="text-sm mt-1">{{ char.school.replace('_', ' ').title() }}</p>
-            <div class="mt-3 flex gap-3 text-xs text-ink/70">
-                <span>Earned XP: {{ char.earned_xp }}</span>
-                <span>Honor: {{ char.honor }}</span>
-                <span>Rank: {{ char.rank }}</span>
-            </div>
         </a>
         {% endfor %}
     </div>
