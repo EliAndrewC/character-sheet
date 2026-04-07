@@ -14,6 +14,18 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Login link visible when anonymous → `test_navigation.py::test_login_link_visible_when_anonymous`
 - [x] Test-login URL returns 403 without valid token → `test_navigation.py::test_test_login_creates_session`
 
+## Sections (rich-text panels)
+
+- [x] Add a single section, type body, persist after reload → `test_sections.py::test_add_single_section_persists`
+- [x] Section labels can be any user-chosen string (Backstory, Allies, etc.) → `test_sections.py::test_section_label_can_be_anything`
+- [x] Sections render on the character sheet with their label and HTML body → `test_sections.py::test_section_renders_on_sheet`
+- [x] Delete a section (with confirm) → `test_sections.py::test_delete_section`
+- [x] Reorder sections via up/down arrow buttons → `test_sections.py::test_reorder_sections_with_arrows`
+- [x] Move-up disabled at top, move-down disabled at bottom → `test_sections.py::test_move_up_disabled_at_top_and_move_down_disabled_at_bottom`
+- [x] Empty hint shown when no sections; hidden after first add → `test_sections.py::test_empty_sections_list_shows_hint`
+- [x] Dangerous HTML (script tags, javascript: links) sanitized server-side → `test_sections.py::test_dangerous_html_is_sanitized`
+- [x] Bold formatting via Quill toolbar persists round-trip and renders on sheet → `test_sections.py::test_section_with_formatting_persists`
+
 ## Gaming Groups
 
 - [x] Set group via editor dropdown persists → `test_groups.py::test_set_group_via_editor_persists`

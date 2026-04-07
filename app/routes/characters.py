@@ -11,6 +11,7 @@ from app.game_data import (
 )
 from app.models import Character, CharacterVersion, GamingGroup, User
 from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids
+from app.services.sanitize import sanitize_sections
 from app.services.versions import publish_character, revert_character
 from app.services.xp import calculate_total_xp
 
@@ -262,6 +263,8 @@ async def autosave_character(
         character.earned_xp = body["earned_xp"]
     if "notes" in body:
         character.notes = body["notes"]
+    if "sections" in body:
+        character.sections = sanitize_sections(body["sections"])
 
     db.commit()
     return JSONResponse({"status": "saved"})

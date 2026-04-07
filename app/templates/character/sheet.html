@@ -755,13 +755,13 @@
         {% endif %}
     </section>
 
-    <!-- NOTES -->
-    {% if character.notes %}
+    <!-- SECTIONS (rich-text panels: Notes, Backstory, Allies, etc.) -->
+    {% for sec in (character.sections or []) %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
-        <h2 class="text-xl font-bold mb-4 text-accent">Notes</h2>
-        <div class="text-sm whitespace-pre-wrap">{{ character.notes }}</div>
+        <h2 class="text-xl font-bold mb-4 text-accent">{{ sec.label or "Section" }}</h2>
+        <div class="prose prose-sm max-w-none text-ink rich-section">{{ sec.html | safe }}</div>
     </section>
-    {% endif %}
+    {% endfor %}
 
     <!-- VERSION HISTORY -->
     {% if viewer_can_edit and versions %}

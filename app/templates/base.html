@@ -11,6 +11,24 @@
         [x-cloak] { display: none !important; }
         .tooltip-content { display: none; }
         .tooltip-trigger:hover .tooltip-content { display: block; }
+        /* Rich-text section content (sanitized HTML rendered on the sheet) */
+        .rich-section { font-size: 0.95rem; line-height: 1.6; }
+        .rich-section p { margin: 0.5em 0; }
+        .rich-section h1, .rich-section h2, .rich-section h3 { font-weight: bold; margin: 0.75em 0 0.4em; }
+        .rich-section h1 { font-size: 1.5em; }
+        .rich-section h2 { font-size: 1.25em; }
+        .rich-section h3 { font-size: 1.1em; }
+        .rich-section ul { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
+        .rich-section ol { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }
+        .rich-section li { margin: 0.15em 0; }
+        .rich-section blockquote { border-left: 3px solid rgba(44,24,16,0.25); padding-left: 0.75em; color: rgba(44,24,16,0.7); margin: 0.5em 0; }
+        .rich-section code { background: rgba(44,24,16,0.08); padding: 0.1em 0.35em; border-radius: 0.2em; font-family: ui-monospace, monospace; }
+        .rich-section pre { background: rgba(44,24,16,0.08); padding: 0.75em; border-radius: 0.3em; overflow-x: auto; }
+        .rich-section pre code { background: none; padding: 0; }
+        .rich-section a { color: #8b0000; text-decoration: underline; }
+        .rich-section table { border-collapse: collapse; margin: 0.5em 0; }
+        .rich-section th, .rich-section td { border: 1px solid rgba(44,24,16,0.3); padding: 0.3em 0.6em; }
+        .rich-section th { background: rgba(44,24,16,0.05); font-weight: bold; }
     </style>
     <script>
         tailwind.config = {
