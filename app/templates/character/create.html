@@ -245,9 +245,9 @@
                         <span class="w-8 text-center font-bold text-lg" x-text="recognition.toFixed(1)"></span>
                         <input type="hidden" name="recognition" :value="recognition">
                         <button type="button"
-                                @click="recognition = Math.min(+(rank * 1.5).toFixed(1), +(recognition + 0.5).toFixed(1))"
-                                :disabled="recognition >= +(rank * 1.5).toFixed(1)"
-                                :title="recognition >= +(rank * 1.5).toFixed(1) ? '' : 'Raise to ' + (recognition + 0.5).toFixed(1)"
+                                @click="recognition = Math.min(Math.floor(rank * 3) / 2, +(recognition + 0.5).toFixed(1))"
+                                :disabled="recognition >= Math.floor(rank * 3) / 2"
+                                :title="recognition >= Math.floor(rank * 3) / 2 ? '' : 'Raise to ' + (recognition + 0.5).toFixed(1)"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                     </div>
                     <p class="text-xs text-ink/50 mt-1">Starts at 7.5. Max 150% of Rank. 1 XP per 1.0</p>

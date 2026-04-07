@@ -194,7 +194,7 @@ COMBAT_REFERENCE = {
     "initiative_roll": "(Void+1) dice, keep all but highest, no reroll 10s",
     "void_points_max": "lowest_ring",
     "void_regen": "1 per 8 hours sleep",
-    "crippled_threshold": "serious_wounds >= Earth",
+    "impaired_threshold": "serious_wounds >= Earth",
     "mortally_wounded_threshold": "serious_wounds >= 2 * Earth",
     "weapons": {
         "katana": "4k2",
@@ -228,6 +228,7 @@ class SchoolKnack:
     name: str
     ring: Optional[str]  # Ring value, "varies", or None
     description: str
+    rules_text: str = ""  # full canonical rules text from upstream rules repo
 
 
 @dataclass(frozen=True)
@@ -529,6 +530,16 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Ability to absorb and redirect void energy. "
             "Used by Isawa Ishi shugenja."
         ),
+        rules_text=(
+            "A number of times per day equal to your rank in this knack, you may "
+            "draw void from your surroundings and regain a spent void point. If "
+            "you target a character when doing this, that character loses a void "
+            "point; if that character has no void points then the next time they "
+            "would regain one they do not. You may do this either while conversing "
+            "with that character or when attacking or being attacked by that "
+            "character in combat, but you may not target the same character more "
+            "than once per day."
+        ),
     ),
     SchoolKnack(
         id="athletics",
@@ -536,6 +547,13 @@ _KNACKS_LIST: List[SchoolKnack] = [
         ring="varies",
         description=(
             "Physical feats of agility, climbing, running, swimming, and acrobatics."
+        ),
+        rules_text=(
+            "When performing generic athletic tasks, roll extra dice equal to "
+            "this knack. You may also use this knack to attack or parry. If you "
+            "use it to attack, your TN is equal to 5 plus 10 times the defender's "
+            "parry skill. If you use it to parry, then your TN is raised by 5 "
+            "times the attack skill of the attacker."
         ),
     ),
     SchoolKnack(
@@ -546,6 +564,20 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Commune with the elemental kami of a chosen element. "
             "Rolled with the ring of the element communed with."
         ),
+        rules_text=(
+            "You may ask the elemental spirits about events which they have "
+            "recently witnessed. Spend a void point and roll this knack with the "
+            "Ring of the element of the spirits you are questioning. This is an "
+            "open roll, and the GM weighs it against the time passed since the "
+            "events in question and how much has happened here since then."
+            "\n\n"
+            "Different elemental spirits perceive humans differently and give "
+            "different types of information about them. Fire spirits read surface "
+            "thoughts, Air spirits sense emotional states, Earth spirits perceive "
+            "the motives behind actions, and Water spirits see the directions of "
+            "comings and goings. The higher your roll, the more details about "
+            "these things you receive."
+        ),
     ),
     SchoolKnack(
         id="conviction",
@@ -554,6 +586,11 @@ _KNACKS_LIST: List[SchoolKnack] = [
         description=(
             "Inner spiritual resolve. Used by monks and priests to fuel "
             "special abilities and resist spiritual corruption."
+        ),
+        rules_text=(
+            "You receive 2X points per day, where X is equal to the rank of this "
+            "knack. After you make any roll, you may spend up to X of these "
+            "points to raise the roll by the number of points spent."
         ),
     ),
     SchoolKnack(
@@ -565,6 +602,12 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Normally costs 2 action dice as an interrupt action; "
             "some schools reduce this to 1."
         ),
+        rules_text=(
+            "When an opponent attacks you, roll this knack to make an attack "
+            "against them before they roll theirs. If you counterattack an attack "
+            "directed at someone else, the TN is raised by 5 times the attacker's "
+            "parry skill. You may counterattack as an interrupt action."
+        ),
     ),
     SchoolKnack(
         id="detect_taint",
@@ -573,6 +616,42 @@ _KNACKS_LIST: List[SchoolKnack] = [
         description=(
             "Sense the presence and degree of Shadowlands Taint in a target. "
             "Rolled with Earth."
+        ),
+        rules_text=(
+            "This knack is used to detect the Shadowlands Taint in humans. To "
+            "use it, you must spend a full minute concentrating on someone, who "
+            "cannot leave your sight during this time. Success is automatic "
+            "against anyone without the ability to conceal their Shadowlands "
+            "Taint, although you must still roll the knack every time."
+            "\n\n"
+            "Against bloodspeakers, this is a contested roll against their Fear "
+            "knack. If successful, the GM secretly rolls 1k1, and the Witch "
+            "Hunter successfully detects the Shadowlands Taint if the roll is "
+            "greater than twice the bloodspeaker's School Rank."
+            "\n\n"
+            "The following bonuses and penalties apply to the contested roll:"
+            "\n"
+            "\u2022 The bloodspeaker gets a bonus of 10 * (7 \u2013 X) to their "
+            "roll, where X is the bloodspeaker's Shadowlands Taint."
+            "\n"
+            "\u2022 If forced to swallow a piece of jade, this bonus is "
+            "eliminated entirely."
+            "\n"
+            "\u2022 If stabbed by a jade object enough to draw blood during the "
+            "roll, bloodspeakers can't reroll 10s."
+            "\n"
+            "\u2022 Because servants of the Dark Lord cannot stand to be bound, "
+            "if you tie the hands of a bloodspeaker, they are unable to receive "
+            "any other bonuses to their roll, such as their Desire knack, or "
+            "their Rank 3 Technique."
+            "\n"
+            "\u2022 By tying a bloodspeaker's arms tightly to their body as well "
+            "as tightly tying their legs together, Witch Hunters receive two "
+            "free raises per hour in which the bloodspeaker was tied in this "
+            "manner before the detect Taint roll is made."
+            "\n"
+            "\u2022 By spending extra time concentrating on a single target, the "
+            "Witch Hunter receives two free raises per hour."
         ),
     ),
     SchoolKnack(
@@ -583,6 +662,14 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Sense the approximate Honor level of another character. "
             "No roll required; passive ability."
         ),
+        rules_text=(
+            "By engaging another character in conversation you may gain insight "
+            "into that character's Honor. When you use this knack the GM tells "
+            "you that that character's honor + 0.5 * (1k1 \u2013 0.5). After "
+            "each conversation past the first, you get a more accurate idea of "
+            "their honor, and the GM tells you a number which is 0.X closer to "
+            "the truth, where X is your rank in this knack."
+        ),
     ),
     SchoolKnack(
         id="double_attack",
@@ -591,6 +678,14 @@ _KNACKS_LIST: List[SchoolKnack] = [
         description=(
             "Make two attacks in a single action. Rolled with Fire. "
             "Each attack is rolled separately."
+        ),
+        rules_text=(
+            "The TN to hit your target is raised by 20. If successful, roll "
+            "extra damage dice as if the TN hadn't been raised, and inflict a "
+            "serious wound in addition to the normal damage roll. On an "
+            "unsuccessful parry, this extra serious wound becomes 2 extra rolled "
+            "damage dice, or 4 extra rolled damage dice if someone else "
+            "unsucessfully parried for the target."
         ),
     ),
     SchoolKnack(
@@ -601,6 +696,13 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Mystical tattoos of the Togashi order that grant supernatural abilities. "
             "Each tattoo has a unique effect."
         ),
+        rules_text=(
+            "At the beginning of each combat round, you may breath spiritual "
+            "fire which extends around you 10 feet in every direction. These "
+            "flames do not harm physical objects, except that they deal (2X)k1 "
+            "damage to any characters you choose to be harmed, where X is your "
+            "rank in this knack."
+        ),
     ),
     SchoolKnack(
         id="feint",
@@ -609,6 +711,13 @@ _KNACKS_LIST: List[SchoolKnack] = [
         description=(
             "A deceptive attack that sets up future strikes. Rolled with Fire. "
             "May grant temporary void points or TN reductions depending on school."
+        ),
+        rules_text=(
+            "This attack does no damage, but if successful it yields a temporary "
+            "void point which may be used this round. Your highest action is "
+            "then moved to the current phase. The target is not told whether the "
+            "attack against them is a feint until after they see whether it "
+            "hits, and after any parries are resolved."
         ),
     ),
     SchoolKnack(
@@ -620,6 +729,9 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "The iaijutsu stance phase uses Air. "
             "Used in formal duels and surprise attacks."
         ),
+        rules_text=(
+            "The iaijutsu rules are explained with the other combat rules."
+        ),
     ),
     SchoolKnack(
         id="kharmic_spin",
@@ -628,6 +740,17 @@ _KNACKS_LIST: List[SchoolKnack] = [
         description=(
             "Manipulate fate and kharmic energy. Rolled with Void. "
             "Used by Isawa Ishi shugenja."
+        ),
+        rules_text=(
+            "Spend a void and roll this knack to swap the highest and second "
+            "highest Ring ranks of the target character for the remainder of one "
+            "conversation or fight. In the case of a tie for the second-lowest "
+            "Ring, the target chooses which Ring is switched with the highest "
+            "one. You roll this knack against a secret TN equal to 5 times the "
+            "sum of the ranks of the target character's two highest Rings. You "
+            "may do this either while conversing with that character or when "
+            "attacking or being attacked by that character in combat, but you "
+            "may not target the same character more than once per day."
         ),
     ),
     SchoolKnack(
@@ -638,6 +761,11 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "An aggressive, committed attack that sacrifices defense for offense. "
             "Rolled with Fire."
         ),
+        rules_text=(
+            "Roll this knack instead of attack when attacking someone to roll an "
+            "extra die of damage if you hit. Everyone fighting you gets a free "
+            "raise on their next attack against you this round."
+        ),
     ),
     SchoolKnack(
         id="oppose_knowledge",
@@ -646,6 +774,13 @@ _KNACKS_LIST: List[SchoolKnack] = [
         description=(
             "Counter or undermine another character's knowledge-based arguments. "
             "Rolled with Air."
+        ),
+        rules_text=(
+            "You have such command over factual arguments that you can trip "
+            "others up. Once per conversation you may target a character, roll "
+            "this knack, and divide the result by 5, rounding down. Subtract "
+            "that amount from all skill rolls made by that character for the "
+            "rest of the conversation which roll with Water."
         ),
     ),
     SchoolKnack(
@@ -656,6 +791,13 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Counter or undermine another character's social maneuvers. "
             "Rolled with Water."
         ),
+        rules_text=(
+            "You have such command over social situations that you can trip "
+            "others up. Once per conversation you may target a character, roll "
+            "this knack, and divide the result by 5, rounding down. Subtract "
+            "that amount from all skill rolls made by that character for the "
+            "rest of the conversation which roll with Air."
+        ),
     ),
     SchoolKnack(
         id="otherworldliness",
@@ -664,6 +806,12 @@ _KNACKS_LIST: List[SchoolKnack] = [
         description=(
             "An aura of spiritual detachment and mystical presence. "
             "Passive social effect; no roll required."
+        ),
+        rules_text=(
+            "When rolling a basic skill, you may increase the skill's rank by "
+            "one, to a maximum of five. This may be done multiple times on the "
+            "same roll, but only a number of times per adventure equal to twice "
+            "your rank in this knack."
         ),
     ),
     SchoolKnack(
@@ -674,6 +822,11 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Deliver lengthy speeches and sermons that inspire or persuade. "
             "Rolled with Water."
         ),
+        rules_text=(
+            "Once per conversation, you may use your practiced aura of "
+            "knowledgeable confidence to roll this knack instead of any basic "
+            "skill when making an uncontested roll."
+        ),
     ),
     SchoolKnack(
         id="presence",
@@ -682,6 +835,11 @@ _KNACKS_LIST: List[SchoolKnack] = [
         description=(
             "Project authority and command attention in a scene. "
             "Rolled with Water."
+        ),
+        rules_text=(
+            "Once per conversation, you may use your practiced presence of "
+            "authority to roll this knack instead of any skill when making a "
+            "contested roll initiated by another character."
         ),
     ),
     SchoolKnack(
@@ -692,6 +850,18 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Cast elemental spells. Rolled with the ring of the element being cast. "
             "Requires the Shugenja school."
         ),
+        rules_text=(
+            "To cast a spell, you spend actions equal to its mastery level minus "
+            "2. You then roll this knack with the Ring of that spell's element "
+            "against a TN of its mastery level times 5. You may not cast the "
+            "same spell more than once per combat round."
+            "\n\n"
+            "After you roll, you lose void points equal to its mastery level. "
+            "For every 5 by which you exceed the TN, this cost is lowered by 1, "
+            "to a minimum of 1. If you end up not having enough void points, "
+            "then all of your void points are lost and you fail to cast the "
+            "spell."
+        ),
     ),
     SchoolKnack(
         id="worldliness",
@@ -700,6 +870,10 @@ _KNACKS_LIST: List[SchoolKnack] = [
         description=(
             "Broad familiarity with the customs, practices, and ways of the world. "
             "Passive benefit; no roll required."
+        ),
+        rules_text=(
+            "Each adventure, you may spend a number of extra void points equal "
+            "to the rank of this knack."
         ),
     ),
 ]
@@ -785,7 +959,7 @@ _SCHOOLS_LIST: List[School] = [
             2: "Free raise on all counterattack rolls.",
             3: (
                 "Reroll 2X dice on counterattacks or X dice on other attacks; "
-                "half effectiveness when crippled but reroll 10s."
+                "half effectiveness when impaired but reroll 10s."
             ),
             4: (
                 "+1 Water; Water ring costs 5 fewer XP to raise; "
@@ -1736,8 +1910,9 @@ def starting_recognition(rank: float, halved: bool = False) -> float:
 
 
 def max_recognition(rank: float) -> float:
-    """Recognition can go up to 150% of Rank."""
-    return rank * RECOGNITION_MAX_FACTOR
+    """Recognition can go up to 150% of Rank, rounded down to the nearest 0.5."""
+    import math
+    return math.floor(rank * RECOGNITION_MAX_FACTOR * 2) / 2
 
 
 # ---------------------------------------------------------------------------

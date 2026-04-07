@@ -25,7 +25,7 @@ from app.models import Character, CharacterVersion, User as UserModel
 from app.services.auth import can_view_drafts, get_admin_ids, is_admin, can_edit_character
 from app.services.rolls import compute_skill_roll
 from app.services.status import compute_effective_status
-from app.services.xp import calculate_total_xp, validate_character
+from app.services.xp import calculate_total_xp, calculate_xp_breakdown, validate_character
 
 router = APIRouter()
 
@@ -89,7 +89,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     # Everyone sees the current draft state
     char_dict = character.to_dict()
 
-    xp_breakdown = calculate_total_xp(char_dict)
+    xp_breakdown = calculate_xp_breakdown(char_dict)
     errors = validate_character(char_dict)
     school = SCHOOLS.get(character.school)
 
@@ -171,7 +171,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "character": character,
             "char_dict": char_dict,
             "school": school,
-            "xp": xp_breakdown,
+            "xp_breakdown": xp_breakdown,
             "errors": errors,
             "skills": SKILLS,
             "advantages": ADVANTAGES,

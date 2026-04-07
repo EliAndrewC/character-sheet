@@ -239,12 +239,23 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Detail text shown inline → `test_sheet_advanced.py::test_advantage_detail_inline_on_sheet`
 - [x] Campaign advantage XP reflected → `test_sheet_advanced.py::test_campaign_advantage_xp_on_sheet`
 
+## Character Sheet — School Knacks
+
+- [x] Expanded view shows full upstream rules text → `test_sheet_display.py::test_school_knack_expanded_shows_full_rules`
+
 ## Character Sheet — XP Summary
 
 - [x] XP breakdown shown → `test_sheet_display.py::test_xp_breakdown_shown`
 - [x] Budget shown → `test_sheet_display.py::test_xp_budget_includes_earned_and_disadvantages`
 - [x] Overspend in red → `test_sheet_advanced.py::test_xp_overspend_red`
 - [x] Disadvantages green → `test_sheet_advanced.py::test_disadvantages_green`
+- [x] New category labels (School Knacks, Attack / Parry, HRR) and ordering → `test_sheet_display.py::test_xp_summary_new_labels_and_ordering`
+- [x] Expansion panel collapsed by default → `test_sheet_display.py::test_xp_summary_collapsed_by_default`
+- [x] Click to expand, switch sections, click same to collapse → `test_sheet_display.py::test_xp_summary_expand_switch_collapse`
+- [x] HRR always shows Wasp Campaign reminder → `test_sheet_display.py::test_xp_summary_hrr_always_shows_wasp_note`
+- [x] Empty categories are not clickable → `test_sheet_display.py::test_xp_summary_empty_categories_not_clickable`
+- [x] Disadvantages box on bottom row, expandable → `test_sheet_display.py::test_xp_summary_disadvantages_on_bottom_row`
+- [x] Grand total equals sum of category totals → `test_sheet_display.py::test_xp_summary_grand_total_matches_categories`
 
 ## Character Sheet — Version History
 

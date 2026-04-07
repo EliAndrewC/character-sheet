@@ -194,9 +194,9 @@ def test_poor_disadvantage_disabled(page, live_server_url):
 # --- Recognition max ---
 
 def test_recognition_max(page, live_server_url):
-    """Recognition + disabled once it can't go higher without exceeding rank * 1.5."""
+    """Recognition + disabled at rank * 1.5 rounded down to nearest 0.5."""
     _go_to_editor(page, live_server_url)
-    # Max is rank(7.5) * 1.5 = 11.25. Click until we can't anymore.
+    # Max is floor(rank(7.5) * 3) / 2 = floor(22.5)/2 = 11.0
     plus = page.locator('input[name="recognition"]').locator('..').locator('button', has_text="+")
     for _ in range(20):  # more than enough
         if plus.is_disabled():
@@ -204,7 +204,7 @@ def test_recognition_max(page, live_server_url):
         plus.click(force=True)
     assert plus.is_disabled()
     val = float(page.locator('input[name="recognition"]').input_value())
-    assert val <= 11.5  # JS rounds rank*1.5 to 11.3 via toFixed(1)
+    assert val == 11.0
 
 
 def test_recognition_halved_can_raise(page, live_server_url):
