@@ -10,6 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
 from app.routes import auth, characters, pages
+from app.services.auth import is_admin
 
 app = FastAPI(title="L7R Character Builder")
 
@@ -17,6 +18,9 @@ app = FastAPI(title="L7R Character Builder")
 templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(__file__), "templates")
 )
+# Make is_admin available to all templates so the admin nav link can be gated
+# without every route having to pass it in the context.
+templates.env.globals["is_admin"] = is_admin
 
 # Static files
 _static_dir = os.path.join(os.path.dirname(__file__), "static")

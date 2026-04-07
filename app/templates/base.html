@@ -45,6 +45,12 @@
                    class="text-sm text-parchment/70 hover:text-parchment transition-colors">
                     {{ request.state.user.display_name }}
                 </a>
+                {% if is_admin(request.state.user.discord_id) %}
+                <a href="/admin/groups"
+                   class="text-sm text-parchment/70 hover:text-parchment transition-colors">
+                    Admin
+                </a>
+                {% endif %}
                 <a href="/auth/logout"
                    class="text-sm text-parchment/50 hover:text-parchment transition-colors">
                     Logout

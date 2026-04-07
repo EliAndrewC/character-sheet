@@ -14,6 +14,23 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Login link visible when anonymous → `test_navigation.py::test_login_link_visible_when_anonymous`
 - [x] Test-login URL returns 403 without valid token → `test_navigation.py::test_test_login_creates_session`
 
+## Gaming Groups
+
+- [x] Set group via editor dropdown persists → `test_groups.py::test_set_group_via_editor_persists`
+- [x] Setting group does not create a "modified" badge → `test_groups.py::test_set_group_does_not_create_modified_badge`
+- [x] Homepage clusters characters by group with section headings → `test_groups.py::test_homepage_clusters_characters_by_group`
+- [x] Party Effects callout shows other party member's disadvantage → `test_groups.py::test_party_effects_callout_shows_other_member_disadvantage`
+- [x] Party Effects callout includes self disadvantages → `test_groups.py::test_party_effects_callout_includes_self`
+- [x] Party Effects callout absent when no group effects → `test_groups.py::test_party_effects_callout_absent_when_no_effects`
+
+## Admin — Manage Gaming Groups
+
+- [x] Admin page renders for admin (lists seeded groups) → `test_groups.py::test_admin_groups_page_renders_for_admin`
+- [x] Admin page forbidden for non-admin → `test_groups.py::test_admin_groups_forbidden_for_non_admin`
+- [x] Admin can create a new group → `test_groups.py::test_admin_create_new_group`
+- [x] Admin can rename a group → `test_groups.py::test_admin_rename_group`
+- [x] Admin can delete a group; member characters become unassigned → `test_groups.py::test_admin_delete_group_unassigns_characters`
+
 ## Homepage (index.html)
 
 - [x] Character list displays characters → `test_create_character.py::test_create_and_edit_character`

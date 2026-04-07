@@ -21,10 +21,10 @@ from app.game_data import (
     SPELLS_BY_ELEMENT,
     Ring,
 )
-from app.models import Character, CharacterVersion, User as UserModel
+from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
 from app.services.auth import can_view_drafts, get_admin_ids, is_admin, can_edit_character
 from app.services.rolls import compute_skill_roll
-from app.services.status import compute_effective_status
+from app.services.status import compute_effective_status, compute_party_effects
 from app.services.xp import calculate_total_xp, calculate_xp_breakdown, validate_character
 
 router = APIRouter()
@@ -51,6 +51,17 @@ def index(request: Request, db: Session = Depends(get_db)):
     user_id = user["discord_id"] if user else None
 
     all_characters = db.query(Character).order_by(Character.updated_at.desc()).all()
+    all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
+
+    # Cluster characters by gaming group; omit empty groups; trailing Unassigned
+    grouped: list = []
+    for group in all_groups:
+        chars_in_group = [c for c in all_characters if c.gaming_group_id == group.id]
+        if chars_in_group:
+            grouped.append((group.name, chars_in_group))
+    unassigned = [c for c in all_characters if c.gaming_group_id is None]
+    if unassigned:
+        grouped.append(("Unassigned", unassigned))
 
     # Build owner display name lookup
     owner_ids = {c.owner_discord_id for c in all_characters if c.owner_discord_id}
@@ -60,7 +71,11 @@ def index(request: Request, db: Session = Depends(get_db)):
     return _templates().TemplateResponse(
         request=request,
         name="index.html",
-        context={"characters": all_characters, "owner_names": owner_names},
+        context={
+            "characters": all_characters,
+            "grouped": grouped,
+            "owner_names": owner_names,
+        },
     )
 
 
@@ -105,7 +120,29 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     knack_ranks = [char_knacks[k]["rank"] for k in char_knacks] if char_knacks else [0]
     dan = min(knack_ranks) if knack_ranks else 0
 
-    effective = compute_effective_status(char_dict)
+    # Load party members in the same gaming group, if any.
+    party_members_data: list = []
+    if character.gaming_group_id:
+        party_chars = (
+            db.query(Character)
+            .filter(
+                Character.gaming_group_id == character.gaming_group_id,
+                Character.id != char_id,
+            )
+            .all()
+        )
+        for p in party_chars:
+            party_members_data.append({
+                "name": p.name,
+                "advantages": p.advantages or [],
+                "disadvantages": p.disadvantages or [],
+                "campaign_advantages": p.campaign_advantages or [],
+                "campaign_disadvantages": p.campaign_disadvantages or [],
+            })
+
+    effective = compute_effective_status(char_dict, party_members=party_members_data)
+    party_effects = compute_party_effects(char_dict, character.name, party_members_data)
+    all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
 
     # Compute roll info for each skill
     skill_rolls = {}
@@ -192,6 +229,8 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "per_adventure": per_adventure,
             "void_max": void_max,
             "adventure_state": character.adventure_state or {},
+            "party_effects": party_effects,
+            "all_groups": all_groups,
         },
     )
 
@@ -224,6 +263,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
 
     viewer_is_admin = is_admin(user["discord_id"])
     all_players = db.query(UserModel).order_by(UserModel.display_name).all()
+    all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
 
     return _templates().TemplateResponse(
         request=request,
@@ -247,6 +287,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "school_ring_options": SCHOOL_RING_OPTIONS,
             "viewer_is_admin": viewer_is_admin,
             "all_players": all_players,
+            "all_groups": all_groups,
             "exclusive_pairs": EXCLUSIVE_PAIRS,
             "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
             "is_first_version": not character.is_published,
@@ -320,3 +361,85 @@ async def update_profile(request: Request, db: Session = Depends(get_db)):
     db.commit()
 
     return RedirectResponse("/profile", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Admin: Manage Gaming Groups
+# ---------------------------------------------------------------------------
+
+
+def _require_admin(request: Request):
+    """Return None if request is from an admin, else an HTMLResponse to return."""
+    user = getattr(request.state, "user", None)
+    if not user or not is_admin(user["discord_id"]):
+        return HTMLResponse("Admin access required", status_code=403)
+    return None
+
+
+@router.get("/admin/groups", response_class=HTMLResponse)
+def admin_groups(request: Request, db: Session = Depends(get_db)):
+    deny = _require_admin(request)
+    if deny is not None:
+        return deny
+    groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
+    counts = {
+        g.id: db.query(Character).filter(Character.gaming_group_id == g.id).count()
+        for g in groups
+    }
+    return _templates().TemplateResponse(
+        request=request,
+        name="admin/groups.html",
+        context={"groups": groups, "counts": counts},
+    )
+
+
+@router.post("/admin/groups/new")
+async def admin_groups_create(request: Request, db: Session = Depends(get_db)):
+    deny = _require_admin(request)
+    if deny is not None:
+        return deny
+    form = await request.form()
+    name = (form.get("name") or "").strip()
+    if not name:
+        return RedirectResponse("/admin/groups", status_code=303)
+    existing = db.query(GamingGroup).filter(GamingGroup.name == name).first()
+    if existing is None:
+        db.add(GamingGroup(name=name))
+        db.commit()
+    return RedirectResponse("/admin/groups", status_code=303)
+
+
+@router.post("/admin/groups/{group_id}/rename")
+async def admin_groups_rename(request: Request, group_id: int, db: Session = Depends(get_db)):
+    deny = _require_admin(request)
+    if deny is not None:
+        return deny
+    form = await request.form()
+    new_name = (form.get("name") or "").strip()
+    group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
+    if group and new_name:
+        # Avoid duplicate-name collisions
+        clash = db.query(GamingGroup).filter(
+            GamingGroup.name == new_name, GamingGroup.id != group_id
+        ).first()
+        if clash is None:
+            group.name = new_name
+            db.commit()
+    return RedirectResponse("/admin/groups", status_code=303)
+
+
+@router.post("/admin/groups/{group_id}/delete")
+async def admin_groups_delete(request: Request, group_id: int, db: Session = Depends(get_db)):
+    deny = _require_admin(request)
+    if deny is not None:
+        return deny
+    group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
+    if group:
+        # SQLite ON DELETE SET NULL requires PRAGMA foreign_keys=ON, which we
+        # don't enable. Manually unassign characters first to be safe.
+        db.query(Character).filter(
+            Character.gaming_group_id == group_id
+        ).update({Character.gaming_group_id: None}, synchronize_session=False)
+        db.delete(group)
+        db.commit()
+    return RedirectResponse("/admin/groups", status_code=303)

@@ -70,6 +70,19 @@
                     {% endif %}
                 </div>
                 <div>
+                    <label class="block text-sm font-medium mb-1">Gaming Group</label>
+                    <select name="gaming_group_id" data-test="gaming-group-select"
+                            @change="setGroup($event.target.value)"
+                            class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent bg-white">
+                        <option value="">— Unassigned —</option>
+                        {% for g in all_groups %}
+                        <option value="{{ g.id }}"
+                                {% if character.gaming_group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-ink/50 mt-1">Saves instantly. Doesn't create a new version.</p>
+                </div>
+                <div>
                     <label class="block text-sm font-medium mb-1">Starting XP</label>
                     <input type="hidden" name="starting_xp" value="150">
                     <span class="text-lg font-bold">150</span>
@@ -869,6 +882,23 @@ function characterForm() {
         markDirty() {
             this._dirty = true;
             this.debounceSave();
+        },
+
+        async setGroup(value) {
+            // Save the gaming group via a dedicated endpoint that bypasses
+            // the version system. Does NOT call markDirty().
+            try {
+                const resp = await fetch('/characters/' + this._charId + '/set-group', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({gaming_group_id: value || null}),
+                });
+                if (!resp.ok) {
+                    console.error('Failed to set group', resp.status);
+                }
+            } catch (err) {
+                console.error('Failed to set group', err);
+            }
         },
 
         debounceSave() {

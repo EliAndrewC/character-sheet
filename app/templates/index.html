@@ -2,35 +2,44 @@
 
 {% block title %}L7R — Characters{% endblock %}
 
+{% macro character_card(char) %}
+    {% set status = char.publish_status %}
+    <a href="/characters/{{ char.id }}"
+       class="block rounded-lg shadow hover:shadow-md transition-shadow p-5
+              {% if status == 'unpublished' %}bg-amber-50 border-2 border-amber-300 border-dashed
+              {% elif status == 'modified' %}bg-white border-2 border-blue-300
+              {% else %}bg-white border border-ink/10{% endif %}">
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-bold text-accent">{{ char.name }}</h2>
+            {% if status == 'unpublished' %}
+            <span class="text-xs font-medium bg-amber-200 text-amber-800 px-2 py-0.5 rounded">Draft</span>
+            {% elif status == 'modified' %}
+            <span class="text-xs font-medium bg-blue-200 text-blue-800 px-2 py-0.5 rounded">Draft changes</span>
+            {% endif %}
+        </div>
+        {% set owner_display = owner_names.get(char.owner_discord_id, char.player_name) %}
+        {% if owner_display %}
+        <p class="text-sm text-ink/60">Player: {{ owner_display }}</p>
+        {% endif %}
+        <p class="text-sm mt-1">{{ char.school.replace('_', ' ').title() }}</p>
+    </a>
+{% endmacro %}
+
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-8">
     <h1 class="text-3xl font-bold">Characters</h1>
 
-    {% if characters %}
-    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {% for char in characters %}
-        {% set status = char.publish_status %}
-        <a href="/characters/{{ char.id }}"
-           class="block rounded-lg shadow hover:shadow-md transition-shadow p-5
-                  {% if status == 'unpublished' %}bg-amber-50 border-2 border-amber-300 border-dashed
-                  {% elif status == 'modified' %}bg-white border-2 border-blue-300
-                  {% else %}bg-white border border-ink/10{% endif %}">
-            <div class="flex items-center justify-between">
-                <h2 class="text-lg font-bold text-accent">{{ char.name }}</h2>
-                {% if status == 'unpublished' %}
-                <span class="text-xs font-medium bg-amber-200 text-amber-800 px-2 py-0.5 rounded">Draft</span>
-                {% elif status == 'modified' %}
-                <span class="text-xs font-medium bg-blue-200 text-blue-800 px-2 py-0.5 rounded">Draft changes</span>
-                {% endif %}
-            </div>
-            {% set owner_display = owner_names.get(char.owner_discord_id, char.player_name) %}
-            {% if owner_display %}
-            <p class="text-sm text-ink/60">Player: {{ owner_display }}</p>
-            {% endif %}
-            <p class="text-sm mt-1">{{ char.school.replace('_', ' ').title() }}</p>
-        </a>
-        {% endfor %}
-    </div>
+    {% if grouped %}
+    {% for group_name, chars in grouped %}
+    <section class="space-y-4" data-group-section="{{ group_name }}">
+        <h2 class="text-2xl font-bold text-accent border-b border-ink/20 pb-2">{{ group_name }}</h2>
+        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {% for char in chars %}
+                {{ character_card(char) }}
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
     {% else %}
     <div class="text-center py-16 text-ink/50">
         <p class="text-lg mb-4">No characters yet.</p>

@@ -64,6 +64,7 @@ def _migrate_add_columns():
         ("campaign_disadvantages", "TEXT", "'[]'"),
         ("advantage_details", "TEXT", "'{}'"),
         ("adventure_state", "TEXT", "'{}'"),
+        ("gaming_group_id", "INTEGER", "NULL"),
     ]
 
     for col_name, col_type, default in needed:
@@ -91,6 +92,14 @@ def _migrate_add_columns():
             cursor.execute(
                 f"ALTER TABLE users ADD COLUMN {col_name} {col_type} DEFAULT {default}"
             )
+
+    # Seed initial gaming groups if the table is empty (first deploy only).
+    cursor.execute("SELECT COUNT(*) FROM gaming_groups")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany(
+            "INSERT INTO gaming_groups (name) VALUES (?)",
+            [("Tuesday Group",), ("Wednesday Group",)],
+        )
 
     conn.commit()
     conn.close()
