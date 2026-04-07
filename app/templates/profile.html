@@ -60,6 +60,28 @@
             {% endif %}
         </section>
 
+        <!-- Roll Settings -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+            <h2 class="text-xl font-bold mb-4">Roll Settings</h2>
+            <p class="text-sm text-ink/60 mb-3">
+                Control the dice animation and sound effects when you roll from a character sheet.
+            </p>
+            <div class="space-y-3">
+                <label class="flex items-center gap-3 py-2 px-3 rounded hover:bg-parchment cursor-pointer">
+                    <input type="checkbox" name="dice_animation"
+                           {% if user_obj.preferences.get('dice_animation_enabled', True) %}checked{% endif %}
+                           class="rounded border-ink/30 accent-accent">
+                    <span class="font-medium">Show dice animations when rolling</span>
+                </label>
+                <label class="flex items-center gap-3 py-2 px-3 rounded hover:bg-parchment cursor-pointer">
+                    <input type="checkbox" name="dice_sound"
+                           {% if user_obj.preferences.get('dice_sound_enabled', True) %}checked{% endif %}
+                           class="rounded border-ink/30 accent-accent">
+                    <span class="font-medium">Play dice sound effects when rolling</span>
+                </label>
+            </div>
+        </section>
+
         <!-- Save -->
         <div class="flex justify-end">
             <button type="submit"

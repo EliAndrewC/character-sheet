@@ -17,6 +17,9 @@ class User(Base):
     discord_name: Mapped[str] = mapped_column(String, default="")
     display_name: Mapped[str] = mapped_column(String, default="")
     granted_account_ids: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
+    # Per-user preferences as a free-form dict; e.g.
+    #   {"dice_animation_enabled": bool, "dice_sound_enabled": bool}
+    preferences: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     def to_dict(self) -> Dict[str, Any]:
@@ -26,6 +29,7 @@ class User(Base):
             "discord_name": self.discord_name,
             "display_name": self.display_name or self.discord_name,
             "granted_account_ids": self.granted_account_ids or [],
+            "preferences": self.preferences or {},
         }
 
 

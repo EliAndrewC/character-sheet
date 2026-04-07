@@ -87,6 +87,7 @@ def _migrate_add_columns():
     user_cols = {row[1] for row in cursor.fetchall()}
     user_needed = [
         ("granted_account_ids", "TEXT", "'[]'"),
+        ("preferences", "TEXT", "'{}'"),
     ]
     for col_name, col_type, default in user_needed:
         if user_cols and col_name not in user_cols:
