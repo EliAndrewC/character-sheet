@@ -121,6 +121,10 @@ class Character(Base):
 
     # Metadata
     notes: Mapped[str] = mapped_column(String, default="")
+    # Rich-text "sections": user-labelled blocks of sanitized HTML.
+    # Replaces the legacy single Notes textarea. Each entry is
+    # ``{"label": str, "html": str}`` with HTML pre-sanitised on the server.
+    sections: Mapped[Optional[List[Dict[str, str]]]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()
@@ -163,7 +167,7 @@ class Character(Base):
                     "advantage_details": {},
                     "attack": 1, "parry": 1, "rank_locked": False,
                     "current_light_wounds": 0, "current_serious_wounds": 0,
-                    "current_void_points": 0, "notes": ""}
+                    "current_void_points": 0, "notes": "", "sections": []}
         for key in current:
             if key in skip:
                 continue
@@ -218,6 +222,7 @@ class Character(Base):
             "current_serious_wounds": self.current_serious_wounds,
             "current_void_points": self.current_void_points,
             "notes": self.notes,
+            "sections": self.sections or [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

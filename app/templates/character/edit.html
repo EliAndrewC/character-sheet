@@ -3,6 +3,14 @@
 {% block title %}L7R — Edit {{ character.name }}{% endblock %}
 
 {% block content %}
+<link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+<style>
+    /* Quill toolbar/editor — keep within the parchment aesthetic */
+    .ql-toolbar.ql-snow { border-top-left-radius: 0.375rem; border-top-right-radius: 0.375rem; border-color: rgba(44,24,16,0.2); }
+    .ql-container.ql-snow { border-bottom-left-radius: 0.375rem; border-bottom-right-radius: 0.375rem; border-color: rgba(44,24,16,0.2); min-height: 8rem; background: white; }
+    .ql-editor { min-height: 8rem; }
+</style>
 <div x-data="characterForm()" x-init="init()">
     <!-- Apply Changes modal -->
     <div x-show="showApplyModal" x-cloak
@@ -639,12 +647,20 @@
             </div>
         </section>
 
-        <!-- NOTES -->
+        <!-- SECTIONS (rich-text panels: Notes, Backstory, Allies, etc.) -->
         <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
-            <h2 class="text-xl font-bold mb-4 text-accent">Notes</h2>
-            <textarea name="notes" rows="4"
-                      @input="markDirty()"
-                      class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">{{ character.notes or '' }}</textarea>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-accent">Sections</h2>
+                <button type="button" id="add-section-btn"
+                        class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                    Add Section
+                </button>
+            </div>
+            <div id="sections-container" class="space-y-4"></div>
+            <p id="sections-empty-hint" class="text-sm text-ink/50 italic">
+                No sections yet. Click "Add Section" to add a Notes, Backstory, or any other freeform section.
+            </p>
+            <script type="application/json" id="sections-initial">{{ (character.sections or []) | tojson }}</script>
         </section>
 
         <!-- XP SUMMARY (sticky) -->
@@ -934,7 +950,7 @@ function characterForm() {
                     recognition: this.recognition,
                     recognition_halved: this.recognitionHalved,
                     earned_xp: parseInt(document.querySelector('input[name="earned_xp"]')?.value || '0'),
-                    notes: document.querySelector('textarea[name="notes"]')?.value || '',
+                    sections: window._sectionsManager ? window._sectionsManager.serialize() : [],
                 };
 
                 const resp = await fetch('/characters/' + this._charId + '/autosave', {
@@ -1261,5 +1277,133 @@ function characterForm() {
         },
     };
 }
+
+// ---------------------------------------------------------------------------
+// Sections (rich-text Notes / Backstory / Allies / etc.)
+// ---------------------------------------------------------------------------
+
+class SectionsManager {
+    constructor(containerId, emptyHintId, initialSections) {
+        this.container = document.getElementById(containerId);
+        this.emptyHint = document.getElementById(emptyHintId);
+        this.sections = []; // [{wrapper, quill}]
+        (initialSections || []).forEach(s => this.addSection(s.label || '', s.html || '', /*fromInit=*/true));
+        this.updateButtons();
+        this.toggleEmptyHint();
+    }
+
+    static escapeAttr(s) {
+        return String(s)
+            .replaceAll('&', '&amp;').replaceAll('"', '&quot;')
+            .replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    }
+
+    addSection(label = '', html = '', fromInit = false) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'border border-ink/20 rounded p-3 bg-parchment/40';
+        wrapper.innerHTML = `
+            <div class="flex items-center gap-2 mb-2">
+                <input type="text" class="section-label flex-1 border rounded px-3 py-2 font-medium"
+                       placeholder="Section title (e.g. Notes, Backstory, Allies)"
+                       value="${SectionsManager.escapeAttr(label)}">
+                <button type="button" class="move-up bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 rounded text-sm" title="Move up">&uarr;</button>
+                <button type="button" class="move-down bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 rounded text-sm" title="Move down">&darr;</button>
+                <button type="button" class="delete bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded text-sm" title="Delete section">Delete</button>
+            </div>
+            <div class="quill-host"></div>
+        `;
+        const editorEl = wrapper.querySelector('.quill-host');
+        const quill = new Quill(editorEl, {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ header: [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ list: 'ordered' }, { list: 'bullet' }],
+                    ['blockquote', 'code-block'],
+                    ['link'],
+                    ['clean'],
+                ],
+            },
+        });
+        if (html) quill.root.innerHTML = html;
+
+        wrapper.querySelector('.section-label').addEventListener('input', () => this.markDirty());
+        quill.on('text-change', () => this.markDirty());
+        wrapper.querySelector('.move-up').addEventListener('click', () => this.move(wrapper, -1));
+        wrapper.querySelector('.move-down').addEventListener('click', () => this.move(wrapper, 1));
+        wrapper.querySelector('.delete').addEventListener('click', () => {
+            if (confirm('Delete this section?')) this.remove(wrapper);
+        });
+
+        this.container.appendChild(wrapper);
+        this.sections.push({ wrapper, quill });
+        if (!fromInit) {
+            this.updateButtons();
+            this.toggleEmptyHint();
+            this.markDirty();
+        }
+    }
+
+    remove(wrapper) {
+        const idx = this.sections.findIndex(s => s.wrapper === wrapper);
+        if (idx < 0) return;
+        this.sections.splice(idx, 1);
+        wrapper.remove();
+        this.updateButtons();
+        this.toggleEmptyHint();
+        this.markDirty();
+    }
+
+    move(wrapper, delta) {
+        const idx = this.sections.findIndex(s => s.wrapper === wrapper);
+        const newIdx = idx + delta;
+        if (newIdx < 0 || newIdx >= this.sections.length) return;
+        const [item] = this.sections.splice(idx, 1);
+        this.sections.splice(newIdx, 0, item);
+        // Re-append in new order
+        this.sections.forEach(s => this.container.appendChild(s.wrapper));
+        this.updateButtons();
+        this.markDirty();
+    }
+
+    updateButtons() {
+        this.sections.forEach((s, i) => {
+            s.wrapper.querySelector('.move-up').disabled = (i === 0);
+            s.wrapper.querySelector('.move-down').disabled = (i === this.sections.length - 1);
+        });
+    }
+
+    toggleEmptyHint() {
+        if (this.emptyHint) {
+            this.emptyHint.style.display = this.sections.length === 0 ? '' : 'none';
+        }
+    }
+
+    serialize() {
+        return this.sections.map(s => ({
+            label: s.wrapper.querySelector('.section-label').value,
+            html: s.quill.root.innerHTML,
+        }));
+    }
+
+    markDirty() {
+        // Hook back into Alpine's characterForm() so the autosave fires
+        const root = document.querySelector('[x-data="characterForm()"]');
+        if (root && window.Alpine) {
+            const data = window.Alpine.$data(root);
+            if (data && typeof data.markDirty === 'function') data.markDirty();
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const initialEl = document.getElementById('sections-initial');
+    const initial = initialEl ? JSON.parse(initialEl.textContent) : [];
+    window._sectionsManager = new SectionsManager('sections-container', 'sections-empty-hint', initial);
+    document.getElementById('add-section-btn').addEventListener('click', () => {
+        window._sectionsManager.addSection();
+    });
+});
 </script>
 {% endblock %}

@@ -232,16 +232,6 @@ def test_earned_xp_updates_budget(page, live_server_url):
     assert int(budget_after) == int(budget_before) + 20
 
 
-def test_notes_saves(page, live_server_url):
-    """Notes textarea auto-saves."""
-    _go_to_editor(page, live_server_url)
-    page.fill('textarea[name="notes"]', "These are my test notes")
-    page.wait_for_selector('text="Saved"', timeout=5000)
-    page.reload()
-    page.wait_for_selector('textarea[name="notes"]')
-    assert page.locator('textarea[name="notes"]').input_value() == "These are my test notes"
-
-
 # --- Save status ---
 
 def test_save_status_indicator(page, live_server_url):
