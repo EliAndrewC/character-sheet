@@ -2308,6 +2308,62 @@ CAMPAIGN_DISADVANTAGES: Dict[str, Disadvantage] = {d.id: d for d in _CAMPAIGN_DI
 
 
 # ---------------------------------------------------------------------------
+# GROUP EFFECTS
+# ---------------------------------------------------------------------------
+#
+# Advantages / disadvantages whose effects also apply to other party members
+# in the same gaming group. Each entry is a dict with:
+#   "name":          display name (used in callout headings + status modifier sources)
+#   "label":         short rule summary shown in the Party Effects callout
+#   "rank_modifier" (optional): tuple of (delta, context_template). When present,
+#                               the effect contributes a Rank modifier to every
+#                               party member's effective status. The context
+#                               template gets ``{name}`` filled with the source
+#                               character's name.
+
+GROUP_EFFECTS: Dict[str, Dict[str, Any]] = {
+    "thoughtless": {
+        "name": "Thoughtless",
+        "label": (
+            "Opponents get +2 free raises on Manipulation rolls against allies "
+            "(in addition to the +4 against the taker)."
+        ),
+    },
+    "lion_enmity": {
+        "name": "Lion Enmity",
+        "label": (
+            "-10 to all rolls dealing with the Zenji house and -5 with other "
+            "Matsu families, for the entire party."
+        ),
+    },
+    "family_reckoning_venomous_sting": {
+        "name": "Family Reckoning: Venomous Sting",
+        "label": (
+            "Party Rank is considered 1.0 lower when dealing with those who "
+            "know this history."
+        ),
+        "rank_modifier": (-1.0, "to those aware of {name}'s family history"),
+    },
+    "family_reckoning_righteous_sting": {
+        "name": "Family Reckoning: Righteous Sting",
+        "label": (
+            "Party Rank is considered 1.0 higher when dealing with those who "
+            "know this history."
+        ),
+        "rank_modifier": (1.0, "to those aware of {name}'s family history"),
+    },
+    "imperial_disdain": {
+        "name": "Imperial Disdain",
+        "label": (
+            "Party Rank is considered 1.0 lower when dealing with Imperial "
+            "post holders."
+        ),
+        "rank_modifier": (-1.0, "vs Imperial post holders ({name}'s Imperial Disdain)"),
+    },
+}
+
+
+# ---------------------------------------------------------------------------
 # CONVENIENCE: all data in one place for iteration
 # ---------------------------------------------------------------------------
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import JSON, Float, String, func
+from sqlalchemy import JSON, Float, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -36,6 +36,19 @@ class Session(Base):
     session_id: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
     discord_id: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class GamingGroup(Base):
+    """A real-world gaming group / session schedule (e.g. "Tuesday Group")."""
+
+    __tablename__ = "gaming_groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"id": self.id, "name": self.name}
 
 
 class CharacterVersion(Base):
@@ -111,6 +124,15 @@ class Character(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()
+    )
+
+    # Gaming group assignment. Real-world session metadata, NOT versioned.
+    # Deliberately excluded from to_dict() so it never enters published_state
+    # snapshots, version diffs, or the "modified" badge.
+    gaming_group_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("gaming_groups.id", ondelete="SET NULL"),
+        nullable=True,
+        default=None,
     )
 
     # ------------------------------------------------------------------
