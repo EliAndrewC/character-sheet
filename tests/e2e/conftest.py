@@ -37,6 +37,10 @@ def live_server_url():
             "app.main:app",
             "--host", "127.0.0.1",
             "--port", str(port),
+            # Access logs go to stdout; without --no-access-log the PIPE fills
+            # up after a few hundred requests and the server deadlocks in
+            # logging.flush() inside the ASGI response path.
+            "--no-access-log",
         ],
         cwd="/workspace",
         env=env,
