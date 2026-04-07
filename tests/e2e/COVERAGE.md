@@ -14,6 +14,20 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Login link visible when anonymous → `test_navigation.py::test_login_link_visible_when_anonymous`
 - [x] Test-login URL returns 403 without valid token → `test_navigation.py::test_test_login_creates_session`
 
+## Dice Rolling
+
+- [x] Click a skill row opens the modal with the skill name → `test_rolls.py::test_click_skill_opens_modal_with_skill_name`
+- [x] Click Attack opens modal with "Attack" title → `test_rolls.py::test_click_attack_opens_modal_with_attack_title`
+- [x] Click Parry opens modal with "Parry" title → `test_rolls.py::test_click_parry_opens_modal`
+- [x] Click a Ring opens an Athletics roll modal → `test_rolls.py::test_click_ring_opens_athletics_modal`
+- [x] Modal shows Total and dice after the animation phase → `test_rolls.py::test_modal_shows_total_and_dice_after_animation`
+- [x] Modal close button hides the modal → `test_rolls.py::test_modal_close_button`
+- [x] Impaired character's roll modal shows "10s not rerolled" note → `test_rolls.py::test_impaired_character_modal_shows_no_reroll_note`
+- [x] Impaired indicator visible on the sheet when wounds ≥ Earth → `test_rolls.py::test_impaired_indicator_visible_on_sheet`
+- [x] Impaired indicator absent when healthy → `test_rolls.py::test_impaired_indicator_absent_when_healthy`
+- [x] Disabling animation in profile shows result panel immediately → `test_rolls.py::test_disable_animation_preference`
+- [x] Athletics roll modal title includes the ring name → `test_rolls.py::test_athletics_label_in_modal`
+
 ## Sections (rich-text panels)
 
 - [x] Add a single section, type body, persist after reload → `test_sections.py::test_add_single_section_persists`

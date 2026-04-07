@@ -23,6 +23,7 @@ from app.game_data import (
 )
 from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
 from app.services.auth import can_view_drafts, get_admin_ids, is_admin, can_edit_character
+from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.rolls import compute_skill_roll
 from app.services.status import compute_effective_status, compute_party_effects
 from app.services.xp import calculate_total_xp, calculate_xp_breakdown, validate_character
@@ -144,6 +145,18 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     party_effects = compute_party_effects(char_dict, character.name, party_members_data)
     all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
 
+    # Pre-compute every roll formula needed by the click-to-roll UI on the sheet.
+    roll_formulas = build_all_roll_formulas(char_dict)
+    is_impaired_now = is_impaired(char_dict)
+
+    # Viewer's dice preferences (default both on if missing)
+    viewer = db.query(UserModel).filter(UserModel.discord_id == user_id).first() if user_id else None
+    viewer_prefs = (viewer.preferences or {}) if viewer else {}
+    user_prefs = {
+        "dice_animation_enabled": viewer_prefs.get("dice_animation_enabled", True),
+        "dice_sound_enabled": viewer_prefs.get("dice_sound_enabled", True),
+    }
+
     # Compute roll info for each skill
     skill_rolls = {}
     for sid in (char_dict.get("skills") or {}):
@@ -231,6 +244,9 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "adventure_state": character.adventure_state or {},
             "party_effects": party_effects,
             "all_groups": all_groups,
+            "roll_formulas": roll_formulas,
+            "is_impaired_now": is_impaired_now,
+            "user_prefs": user_prefs,
         },
     )
 
@@ -343,6 +359,12 @@ async def update_profile(request: Request, db: Session = Depends(get_db)):
     new_name = form.get("display_name", "").strip()
     if new_name:
         user_obj.display_name = new_name
+
+    # Parse dice roll preference checkboxes
+    prefs = dict(user_obj.preferences or {})
+    prefs["dice_animation_enabled"] = form.get("dice_animation") == "on"
+    prefs["dice_sound_enabled"] = form.get("dice_sound") == "on"
+    user_obj.preferences = prefs
 
     # Parse granted account checkboxes
     admin_ids = get_admin_ids()

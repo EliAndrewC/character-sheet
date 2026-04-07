@@ -101,7 +101,9 @@
         <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
             {% set ring_map = character.rings %}
             {% for ring_name in ['Air', 'Fire', 'Earth', 'Water', 'Void'] %}
-            <div class="p-3 rounded-lg {{ 'bg-accent/10 ring-2 ring-accent/30' if ring_name == character.school_ring_choice else 'bg-parchment' }}">
+            <div class="p-3 rounded-lg cursor-pointer hover:ring-2 hover:ring-accent/40 transition-shadow {{ 'bg-accent/10 ring-2 ring-accent/30' if ring_name == character.school_ring_choice else 'bg-parchment' }}"
+                 data-roll-key="athletics:{{ ring_name }}"
+                 title="Click to roll Athletics ({{ ring_name }})">
                 <div class="text-sm font-medium text-ink/70">{{ ring_name }}</div>
                 <div class="text-3xl font-bold">{{ ring_map[ring_name] }}</div>
                 {% if ring_name == character.school_ring_choice %}
@@ -116,9 +118,12 @@
                 <span class="text-ink/60">Void Points:</span>
                 <span class="font-bold">{{ [ring_map['Air'], ring_map['Fire'], ring_map['Earth'], ring_map['Water'], ring_map['Void']] | min }}</span>
             </div>
-            <div class="bg-parchment rounded p-2">
+            <div class="{{ 'bg-red-100 border border-red-300' if is_impaired_now else 'bg-parchment' }} rounded p-2">
                 <span class="text-ink/60">Impaired at:</span>
                 <span class="font-bold">{{ ring_map['Earth'] }} serious wounds</span>
+                {% if is_impaired_now %}
+                <div class="mt-1 text-xs font-bold text-red-800">IMPAIRED — 10s do not reroll</div>
+                {% endif %}
             </div>
             <div class="bg-parchment rounded p-2">
                 <span class="text-ink/60">Mortal at:</span>
@@ -423,7 +428,8 @@
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">Combat Skills</h2>
         <div class="grid gap-3 sm:grid-cols-2">
-            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative">
+            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative cursor-pointer hover:ring-2 hover:ring-accent/40"
+                 data-roll-key="attack" title="Click to roll Attack">
                 <div class="flex items-center justify-between">
                     <span class="font-medium">Attack</span>
                     <div class="flex items-center gap-2">
@@ -443,7 +449,8 @@
                     <p class="mt-1 text-gold">You roll: {{ character.attack + ring_map['Fire'] }}k{{ ring_map['Fire'] }}</p>
                 </div>
             </div>
-            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative">
+            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative cursor-pointer hover:ring-2 hover:ring-accent/40"
+                 data-roll-key="parry" title="Click to roll Parry">
                 <div class="flex items-center justify-between">
                     <span class="font-medium">Parry</span>
                     <div class="flex items-center gap-2">
@@ -534,6 +541,9 @@
                         <span class="font-medium">{{ info.data.name }}</span>
                     </div>
                     <div class="flex items-center gap-3">
+                        <button type="button" data-roll-key="knack:{{ kid }}" @click.stop
+                                title="Click to roll {{ info.data.name }}"
+                                class="text-base hover:scale-110 transition-transform">&#x1F3B2;</button>
                         <span class="text-lg font-bold text-accent">{{ info.rank }}</span>
                         <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -584,8 +594,9 @@
                 {% for sid, skill in skills.items() %}
                 {% if skill.category == cat and skill.is_advanced == advanced %}
                 {% set rank = char_skills.get(sid, 0) %}
-                <div class="flex items-center gap-3 py-1 tooltip-trigger relative {{ 'opacity-40' if rank == 0 else '' }}">
-                    <span class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</span>
+                <div class="flex items-center gap-3 py-1 tooltip-trigger relative {{ 'opacity-40' if rank == 0 else '' }} {{ 'cursor-pointer hover:bg-parchment/50 rounded px-1 -mx-1' if rank > 0 else '' }}"
+                     {% if rank > 0 %}data-roll-key="skill:{{ sid }}" title="Click to roll {{ skill.name }}"{% endif %}>
+                    <span class="w-32 text-sm font-medium">{{ skill.name }}</span>
                     <div class="flex gap-0.5">
                         {% for i in range(1, 6) %}
                         <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= rank else 'border-ink/30' }}"></div>
@@ -888,6 +899,193 @@
         Draft changes since the last version.
     </div>
     {% endif %}
+
+    <!-- DICE ROLLER (click-to-roll modal) -->
+    <script type="application/json" id="roll-formulas">{{ roll_formulas | tojson }}</script>
+    <script type="application/json" id="user-prefs">{{ user_prefs | tojson }}</script>
+    <script src="/static/js/dice.js"></script>
+    <div x-data="diceRoller()" x-init="init()">
+        <div x-show="open" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             @click.self="close()">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent" x-text="title"></h3>
+                    <button type="button" @click="close()"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+
+                {# Animated dice tray (visible while rolling, only if animation enabled) #}
+                <div x-show="prefs.dice_animation_enabled && phase === 'rolling'" x-cloak
+                     id="dice-animation"
+                     class="mb-4 min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+
+                {# Result panel (visible when phase === 'done') #}
+                <div x-show="phase === 'done'" x-cloak class="space-y-3">
+                    {# Inline summary: dice in order with kept ones bold and unkept struck through #}
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+
+                    {# Pool view: unkept on the left, kept on the right with reroll lineage #}
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="bg-parchment/40 rounded p-2">
+                            <div class="text-xs font-bold text-ink/60 mb-1">Unkept dice</div>
+                            <template x-for="(d, i) in unkeptDice" :key="i">
+                                <div class="font-mono">
+                                    <span x-text="d.parts.join(' + ')"></span>
+                                    <template x-if="d.parts.length > 1">
+                                        <span> = <span class="font-bold" x-text="d.value"></span></span>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="unkeptDice.length === 0">
+                                <div class="text-xs italic text-ink/40">none</div>
+                            </template>
+                        </div>
+                        <div class="bg-parchment/40 rounded p-2">
+                            <div class="text-xs font-bold text-ink/60 mb-1">Kept dice</div>
+                            <template x-for="(d, i) in keptDice" :key="i">
+                                <div class="font-mono">
+                                    <span x-text="d.parts.join(' + ')"></span>
+                                    <template x-if="d.parts.length > 1">
+                                        <span> = <span class="font-bold" x-text="d.value"></span></span>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    {# Total + breakdown #}
+                    <div class="bg-ink/5 rounded p-3 text-sm">
+                        <div class="font-bold text-lg mb-1">
+                            Total: <span class="text-accent" x-text="baseTotal"></span>
+                        </div>
+                        <ul class="text-xs text-ink/70 list-disc list-inside space-y-0.5">
+                            <template x-for="line in (formula ? formula.breakdown : [])" :key="line">
+                                <li x-text="line"></li>
+                            </template>
+                            <template x-if="formula && formula.flat > 0">
+                                <li>+<span x-text="formula.flat"></span> total flat bonus</li>
+                            </template>
+                        </ul>
+
+                        <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
+                            <div class="mt-2 pt-2 border-t border-ink/10">
+                                <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
+                                <template x-for="alt in formula.alternatives" :key="alt.label">
+                                    <div class="text-sm">
+                                        <span x-text="alt.label"></span>:
+                                        <span class="font-bold text-accent" x-text="baseTotal + alt.extra_flat"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
+                    {# Impaired note #}
+                    <template x-if="formula && !formula.reroll_tens">
+                        <div class="text-xs italic text-red-700 font-medium">
+                            10s not rerolled due to being impaired.
+                        </div>
+                    </template>
+
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" @click="reroll()"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">Reroll</button>
+                        <button type="button" @click="close()"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function diceRoller() {
+        return {
+            open: false,
+            phase: 'idle',
+            title: '',
+            formula: null,
+            finalDice: [],
+            unkeptDice: [],
+            keptDice: [],
+            baseTotal: 0,
+            formulas: {},
+            prefs: { dice_animation_enabled: true, dice_sound_enabled: true },
+
+            init() {
+                try {
+                    this.formulas = JSON.parse(document.getElementById('roll-formulas').textContent || '{}');
+                } catch (e) { this.formulas = {}; }
+                try {
+                    const p = JSON.parse(document.getElementById('user-prefs').textContent || '{}');
+                    this.prefs.dice_animation_enabled = p.dice_animation_enabled !== false;
+                    this.prefs.dice_sound_enabled = p.dice_sound_enabled !== false;
+                } catch (e) { /* keep defaults */ }
+
+                document.querySelectorAll('[data-roll-key]').forEach(el => {
+                    el.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        ev.preventDefault();
+                        this.startRoll(el.dataset.rollKey);
+                    });
+                });
+            },
+
+            startRoll(key) {
+                const f = this.formulas[key];
+                if (!f) return;
+                this.formula = f;
+                this.title = f.label;
+                this.open = true;
+                this.runRoll();
+            },
+
+            reroll() {
+                if (this.formula) this.runRoll();
+            },
+
+            async runRoll() {
+                this.phase = 'rolling';
+                this.finalDice = [];
+                this.unkeptDice = [];
+                this.keptDice = [];
+                this.baseTotal = 0;
+
+                const { rolled, kept, flat, reroll_tens } = this.formula;
+                if (this.prefs.dice_sound_enabled && window.L7RDice) {
+                    window.L7RDice.playDiceSound(rolled);
+                }
+                const dice = await window.L7RDice.rollAndAnimate(
+                    rolled, reroll_tens, this.prefs.dice_animation_enabled
+                );
+
+                // Determine which dice are kept (top N by total value)
+                const indexed = dice.map((d, i) => ({ ...d, idx: i }));
+                const sorted = [...indexed].sort((a, b) => b.value - a.value);
+                const keptSet = new Set(sorted.slice(0, kept).map(d => d.idx));
+
+                this.finalDice = dice.map((d, i) => ({ value: d.value, kept: keptSet.has(i) }));
+                this.keptDice = indexed.filter(d => keptSet.has(d.idx));
+                this.unkeptDice = indexed.filter(d => !keptSet.has(d.idx));
+                this.baseTotal = this.keptDice.reduce((s, d) => s + d.value, 0) + flat;
+                this.phase = 'done';
+            },
+
+            close() {
+                this.open = false;
+                this.phase = 'idle';
+            },
+        };
+    }
+    </script>
 
 </div>
 {% endblock %}
