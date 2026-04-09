@@ -30,7 +30,7 @@
                                 class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">Spending some leftover XP mid-adventure</button>
                     </div>
                     <div class="flex justify-end gap-3">
-                        <button type="button" @click="showApplyModal = false"
+                        <button type="button" @click="showApplyModal = false" data-action="cancel-apply"
                                 class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
                         <button type="button" @click="doApply()" :disabled="!applySummary.trim()"
                                 class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
