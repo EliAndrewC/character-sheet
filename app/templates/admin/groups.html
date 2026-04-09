@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}L7R — Manage Gaming Groups{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-3xl mx-auto">
+    <div class="flex items-center justify-between">
+        <h1 class="text-3xl font-bold">Manage Gaming Groups</h1>
+        <a href="/" class="text-sm text-ink/60 hover:text-ink">&larr; Back to characters</a>
+    </div>
+
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Add New Group</h2>
+        <form method="POST" action="/admin/groups/new" class="flex gap-2">
+            <input type="text" name="name" required maxlength="64" placeholder="e.g. Friday Group"
+                   class="flex-1 border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+            <button type="submit"
+                    class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded font-medium transition-colors">
+                Add Group
+            </button>
+        </form>
+    </section>
+
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Existing Groups</h2>
+        {% if groups %}
+        <ul class="divide-y divide-ink/10">
+            {% for g in groups %}
+            <li class="py-3" data-group-id="{{ g.id }}">
+                <div class="flex items-center justify-between gap-3">
+                    <form method="POST" action="/admin/groups/{{ g.id }}/rename" class="flex-1 flex gap-2 items-center">
+                        <input type="text" name="name" value="{{ g.name }}" required maxlength="64"
+                               class="flex-1 border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                        <button type="submit"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-2 rounded text-sm font-medium transition-colors">
+                            Rename
+                        </button>
+                    </form>
+                    <span class="text-sm text-ink/60 whitespace-nowrap">{{ counts[g.id] }} character{{ '' if counts[g.id] == 1 else 's' }}</span>
+                    <form method="POST" action="/admin/groups/{{ g.id }}/delete"
+                          onsubmit="return confirm('Delete &quot;{{ g.name }}&quot;? Its characters will become unassigned.');">
+                        <button type="submit"
+                                class="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded text-sm font-medium transition-colors">
+                            Delete
+                        </button>
+                    </form>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-ink/60">No groups defined yet. Use the form above to add one.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

@@ -28,6 +28,27 @@ if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 
+# Cache-busting helper for static assets. Returns the file's mtime as an
+# integer string so that any change to the asset (post-redeploy) gets a fresh
+# URL. Cached per process for O(1) lookup after the first call.
+_static_versions: dict[str, str] = {}
+
+
+def static_v(path: str) -> str:
+    if path in _static_versions:
+        return _static_versions[path]
+    full = os.path.join(_static_dir, path)
+    try:
+        v = str(int(os.path.getmtime(full)))
+    except OSError:
+        v = "0"
+    _static_versions[path] = v
+    return v
+
+
+templates.env.globals["static_v"] = static_v
+
+
 # ---------------------------------------------------------------------------
 # Auth middleware: sets request.state.user from session cookie or test bypass
 # ---------------------------------------------------------------------------

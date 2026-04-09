@@ -54,7 +54,7 @@ def index(request: Request, db: Session = Depends(get_db)):
     all_characters = db.query(Character).order_by(Character.updated_at.desc()).all()
     all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
 
-    # Cluster characters by gaming group; omit empty groups; trailing Unassigned
+    # Cluster characters by gaming group; omit empty groups; trailing "not assigned"
     grouped: list = []
     for group in all_groups:
         chars_in_group = [c for c in all_characters if c.gaming_group_id == group.id]
@@ -62,7 +62,7 @@ def index(request: Request, db: Session = Depends(get_db)):
             grouped.append((group.name, chars_in_group))
     unassigned = [c for c in all_characters if c.gaming_group_id is None]
     if unassigned:
-        grouped.append(("Unassigned", unassigned))
+        grouped.append(("Not assigned to a group", unassigned))
 
     # Build owner display name lookup
     owner_ids = {c.owner_discord_id for c in all_characters if c.owner_discord_id}

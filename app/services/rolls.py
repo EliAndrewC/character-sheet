@@ -225,6 +225,17 @@ def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
                     (0, f"{available} free raises/adventure, max {max_per_roll}/roll from {sname}")
                 )
 
+    # Apply L7R 10k10 caps: rolled past 10 -> kept, kept past 10 -> +2 each.
+    if result.rolled > 10:
+        result.kept += result.rolled - 10
+        result.rolled = 10
+    if result.kept > 10:
+        overflow = result.kept - 10
+        bonus = 2 * overflow
+        result.flat_bonus += bonus
+        bonus_parts.append((bonus, f"+{bonus} from extra dice above 10k10"))
+        result.kept = 10
+
     # Build tooltip: "4k2 + 9 (breakdown)"
     result.tooltip_lines.append(
         f"Base: {rank} ({skill_def.name}) + {ring_val} ({skill_def.ring.value})"

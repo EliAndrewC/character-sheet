@@ -29,30 +29,51 @@
         .rich-section table { border-collapse: collapse; margin: 0.5em 0; }
         .rich-section th, .rich-section td { border: 1px solid rgba(44,24,16,0.3); padding: 0.3em 0.6em; }
         .rich-section th { background: rgba(44,24,16,0.05); font-weight: bold; }
-        /* Dice roll animation */
-        .die {
-            width: 36px; height: 36px;
-            border: 2px solid rgba(44,24,16,0.4);
-            background: white;
-            border-radius: 6px;
-            display: flex; align-items: center; justify-content: center;
+        /* Dice roll animation: each die is an inline SVG of a "regular kite"
+         * pentagonal-trapezohedron face (angles 36/108/108/108, long/short
+         * edge ratio φ²). The polygon's stroke gives a real outline that
+         * follows the kite shape. */
+        svg.die {
+            width: 50px; height: 58px;
+            display: block;
+            overflow: visible;
+        }
+        svg.die .die-shape {
+            fill: white;
+            stroke: rgba(44,24,16,0.55);
+            stroke-width: 5;
+            stroke-linejoin: round;
+        }
+        svg.die .die-text {
             font-family: ui-monospace, monospace;
             font-weight: bold;
-            font-size: 1.05rem;
+            font-size: 70px;
+            fill: #2c1810;
         }
-        .die.rolling {
-            animation: dice-tumble 0.4s linear infinite;
-            color: rgba(44,24,16,0.3);
+        svg.die.rolling {
+            animation: dice-tumble 1.2s linear infinite;
         }
-        .die.is-ten { background: #fff7e0; border-color: #d4a017; color: #8b0000; }
-        .die.unkept { opacity: 0.4; text-decoration: line-through; }
-        .die.reroll { background: #ffe9e9; border-color: #b06060; }
-        .die-cell { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+        svg.die.rolling .die-text {
+            fill: rgba(44,24,16,0.3);
+        }
+        svg.die.is-ten .die-shape {
+            fill: #fff7e0;
+            stroke: #d4a017;
+        }
+        svg.die.is-ten .die-text {
+            fill: #8b0000;
+        }
+        svg.die.unkept { opacity: 0.4; }
+        svg.die.reroll .die-shape {
+            fill: #ffe9e9;
+            stroke: #b06060;
+        }
+        .die-cell { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
         @keyframes dice-tumble {
             0%   { transform: rotate(0deg)  translateY(0); }
-            25%  { transform: rotate(90deg) translateY(-4px); }
+            25%  { transform: rotate(90deg) translateY(-6px); }
             50%  { transform: rotate(180deg) translateY(0); }
-            75%  { transform: rotate(270deg) translateY(-2px); }
+            75%  { transform: rotate(270deg) translateY(-3px); }
             100% { transform: rotate(360deg) translateY(0); }
         }
     </style>
