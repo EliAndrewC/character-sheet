@@ -15,7 +15,7 @@ def test_draft_banner_for_new_character(page, live_server_url):
     select_school(page, "akodo_bushi")
     page.wait_for_selector('text="Saved"', timeout=5000)
     # Navigate to the view sheet
-    page.locator('a:text("View Sheet")').click()
+    page.locator('button:text("View Sheet")').click()
     page.wait_for_selector("h1")
     assert page.locator('text="Draft"').first.is_visible()
     assert "no versions" in page.text_content("body").lower()
@@ -36,7 +36,7 @@ def test_draft_changes_banner_after_edit(page, live_server_url):
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Modified Name")
     page.wait_for_selector('text="Saved"', timeout=5000)
-    page.locator('a:text("View Sheet")').click()
+    page.locator('button:text("View Sheet")').click()
     page.wait_for_selector("h1")
     assert "Draft changes" in page.text_content("body")
 

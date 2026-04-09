@@ -420,6 +420,19 @@ class TestBuildAllRollFormulas:
         assert "knack:feint" in formulas
         assert "knack:iaijutsu" in formulas
 
+    def test_non_rollable_knacks_excluded(self):
+        # Brotherhood of Shinsei Monk's knacks are conviction,
+        # otherworldliness, worldliness — all in NON_ROLLABLE_KNACKS — so
+        # build_all_roll_formulas should produce no knack:* keys for them.
+        char = make_character_data(
+            school="brotherhood_of_shinsei_monk",
+            knacks={"conviction": 1, "otherworldliness": 1, "worldliness": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        assert "knack:conviction" not in formulas
+        assert "knack:otherworldliness" not in formulas
+        assert "knack:worldliness" not in formulas
+
     def test_zero_rank_skills_excluded(self):
         char = make_character_data(skills={"bragging": 0, "etiquette": 1})
         formulas = build_all_roll_formulas(char)
