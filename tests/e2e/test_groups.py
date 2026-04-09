@@ -1,0 +1,251 @@
+"""E2E: gaming groups, party effects callout, and admin manage-groups page."""
+
+import re
+import pytest
+
+from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply
+
+pytestmark = [pytest.mark.groups]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _set_group_via_editor(page, group_name):
+    """Set the gaming group via the edit form's dropdown."""
+    select = page.locator('select[name="gaming_group_id"]')
+    select.select_option(label=group_name)
+    page.wait_for_timeout(300)  # let setGroup() round-trip
+
+
+def _create_admin_group(page, name):
+    """Create a new gaming group via the admin page."""
+    page.goto(f"{page.context.pages[0].url.split('/admin')[0].split('/characters')[0].split('//')[0]}//{page.context.pages[0].url.split('//')[1].split('/')[0]}/admin/groups")
+    page.fill('input[name="name"][placeholder*="Friday"]', name)
+    page.locator('form[action="/admin/groups/new"] button[type="submit"]').click()
+    page.wait_for_load_state("networkidle")
+
+
+# ---------------------------------------------------------------------------
+# Set group via editor
+# ---------------------------------------------------------------------------
+
+
+def test_set_group_via_editor_persists(page, live_server_url):
+    """Selecting a gaming group in the editor saves immediately and survives a reload."""
+    create_and_apply(page, live_server_url, name="GroupSetTest1", school="akodo_bushi")
+    # Now go back to the editor
+    edit_url = page.url + "/edit"
+    page.goto(edit_url)
+    page.wait_for_selector('select[name="gaming_group_id"]')
+
+    select = page.locator('select[name="gaming_group_id"]')
+    select.select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+
+    # Reload the editor and assert the dropdown still shows Tuesday Group
+    page.reload()
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    chosen = page.locator('select[name="gaming_group_id"] option:checked').text_content()
+    assert "Tuesday Group" in chosen
+
+
+def test_set_group_does_not_create_modified_badge(page, live_server_url):
+    """Changing only the gaming group must NOT mark the character as modified."""
+    create_and_apply(page, live_server_url, name="NoBadgeTest1", school="akodo_bushi")
+    edit_url = page.url + "/edit"
+    page.goto(edit_url)
+    page.wait_for_selector('select[name="gaming_group_id"]')
+
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+
+    # Navigate to homepage and look at the card for this character
+    page.goto(live_server_url)
+    card = page.locator('a', has_text="NoBadgeTest1").first
+    # Card should NOT have "Draft changes" badge
+    assert "Draft changes" not in card.text_content()
+
+
+# ---------------------------------------------------------------------------
+# Homepage clustering
+# ---------------------------------------------------------------------------
+
+
+def test_homepage_clusters_characters_by_group(page, live_server_url):
+    """Characters in the same group appear under the same heading; unassigned chars
+    appear under "Not assigned to a group"."""
+    # Create two characters
+    create_and_apply(page, live_server_url, name="ClusterTuesA", school="akodo_bushi")
+    page.goto(page.url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+
+    create_and_apply(page, live_server_url, name="ClusterUnassigned", school="akodo_bushi")
+    # Leave unassigned
+
+    page.goto(live_server_url)
+    body = page.text_content("body")
+    assert "Tuesday Group" in body
+    assert "Not assigned to a group" in body
+    # Ordering: Tuesday Group section appears before the unassigned section
+    assert body.find("Tuesday Group") < body.find("Not assigned to a group")
+    # Section headings exist
+    assert page.locator('[data-group-section="Tuesday Group"]').count() == 1
+    assert page.locator('[data-group-section="Not assigned to a group"]').count() == 1
+    # The Tuesday section contains the Tuesday character
+    tuesday_section = page.locator('[data-group-section="Tuesday Group"]').first
+    assert "ClusterTuesA" in tuesday_section.text_content()
+
+
+# ---------------------------------------------------------------------------
+# Party Effects callout
+# ---------------------------------------------------------------------------
+
+
+def test_party_effects_callout_shows_other_member_disadvantage(page, live_server_url):
+    """If a party member has Lion Enmity, the callout appears on every other
+    character's sheet in the same group."""
+    # Character A: takes Lion Enmity (a campaign disadvantage)
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PartyMemberA")
+    select_school(page, "akodo_bushi")
+    # Lion Enmity is a campaign disadvantage
+    page.check('input[name="camp_dis_lion_enmity"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Lion Enmity character")
+    a_url = page.url
+
+    # Assign A to Tuesday Group
+    page.goto(a_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+
+    # Character B: same group, no disadvantages
+    create_and_apply(page, live_server_url, name="PartyMemberB", school="akodo_bushi")
+    b_url = page.url
+    page.goto(b_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+
+    # Visit B's sheet — Party Effects callout should mention PartyMemberA's Lion Enmity
+    page.goto(b_url)
+    body = page.text_content("body")
+    assert "Party Effects" in body
+    assert "Lion Enmity" in body
+    assert "PartyMemberA" in body
+
+
+def test_party_effects_callout_includes_self(page, live_server_url):
+    """Per UX, the callout lists ALL party effects including the viewing
+    character's own."""
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "SelfThoughtless")
+    select_school(page, "akodo_bushi")
+    # Thoughtless is a regular disadvantage
+    page.check('input[name="dis_thoughtless"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Thoughtless taker")
+    sheet_url = page.url
+
+    # Assign to Tuesday Group (so the party context exists)
+    page.goto(sheet_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+
+    page.goto(sheet_url)
+    callout = page.locator('section', has=page.locator('h2:text("Party Effects")'))
+    assert callout.is_visible()
+    callout_text = callout.text_content()
+    assert "SelfThoughtless" in callout_text
+    assert "Thoughtless" in callout_text
+
+
+def test_party_effects_callout_absent_when_no_effects(page, live_server_url):
+    """A character with no group-effect disadvantages and no party should NOT see the callout."""
+    create_and_apply(page, live_server_url, name="PlainChar", school="akodo_bushi")
+    body = page.text_content("body")
+    assert "Party Effects" not in body
+
+
+# ---------------------------------------------------------------------------
+# Admin Manage Groups page
+# ---------------------------------------------------------------------------
+
+
+def test_admin_groups_page_renders_for_admin(page, live_server_url):
+    page.goto(f"{live_server_url}/admin/groups")
+    assert "Manage Gaming Groups" in page.text_content("body")
+    # Seeded groups appear as input values in the rename forms
+    assert page.locator('input[name="name"][value="Tuesday Group"]').count() == 1
+    assert page.locator('input[name="name"][value="Wednesday Group"]').count() == 1
+
+
+def test_admin_groups_forbidden_for_non_admin(page_nonadmin, live_server_url):
+    page_nonadmin.goto(f"{live_server_url}/admin/groups")
+    assert "Admin access required" in page_nonadmin.text_content("body")
+
+
+def test_admin_create_new_group(page, live_server_url):
+    page.goto(f"{live_server_url}/admin/groups")
+    page.fill('input[name="name"][placeholder*="Friday"]', "AdminCreatedTestGroup")
+    page.locator('form[action="/admin/groups/new"] button[type="submit"]').click()
+    page.wait_for_load_state("networkidle")
+    assert page.locator('input[name="name"][value="AdminCreatedTestGroup"]').count() == 1
+
+
+def test_admin_rename_group(page, live_server_url):
+    # First create a unique group, then rename it (avoids mutating the seeded ones)
+    page.goto(f"{live_server_url}/admin/groups")
+    page.fill('input[name="name"][placeholder*="Friday"]', "RenameTestOriginal")
+    page.locator('form[action="/admin/groups/new"] button[type="submit"]').click()
+    page.wait_for_load_state("networkidle")
+
+    # Find that group's row by its rename input value
+    row = page.locator('li', has=page.locator('input[name="name"][value="RenameTestOriginal"]')).first
+    rename_form = row.locator('form[action*="/rename"]')
+    rename_form.locator('input[name="name"]').fill("RenameTestNew")
+    rename_form.locator('button[type="submit"]').click()
+    page.wait_for_load_state("networkidle")
+
+    assert page.locator('input[name="name"][value="RenameTestNew"]').count() == 1
+    assert page.locator('input[name="name"][value="RenameTestOriginal"]').count() == 0
+
+
+def test_admin_delete_group_unassigns_characters(page, live_server_url):
+    # Create a unique group, assign a character to it, delete the group
+    page.goto(f"{live_server_url}/admin/groups")
+    page.fill('input[name="name"][placeholder*="Friday"]', "DeleteTestGroup")
+    page.locator('form[action="/admin/groups/new"] button[type="submit"]').click()
+    page.wait_for_load_state("networkidle")
+
+    # Create a character and assign to the new group
+    create_and_apply(page, live_server_url, name="DeleteTestChar", school="akodo_bushi")
+    page.goto(page.url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="DeleteTestGroup")
+    page.wait_for_timeout(500)
+
+    # Now delete the group via admin (skip the JS confirm)
+    page.goto(f"{live_server_url}/admin/groups")
+    page.evaluate("window.confirm = () => true")
+    row = page.locator('li', has=page.locator('input[name="name"][value="DeleteTestGroup"]')).first
+    row.locator('form[action*="/delete"] button[type="submit"]').click()
+    page.wait_for_load_state("networkidle")
+
+    assert page.locator('input[name="name"][value="DeleteTestGroup"]').count() == 0
+
+    # The character should now appear in the unassigned section on the homepage
+    page.goto(live_server_url)
+    unassigned_section = page.locator('[data-group-section="Not assigned to a group"]').first
+    assert "DeleteTestChar" in unassigned_section.text_content()

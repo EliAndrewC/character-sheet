@@ -903,7 +903,7 @@
     <!-- DICE ROLLER (click-to-roll modal) -->
     <script type="application/json" id="roll-formulas">{{ roll_formulas | tojson }}</script>
     <script type="application/json" id="user-prefs">{{ user_prefs | tojson }}</script>
-    <script src="/static/js/dice.js"></script>
+    <script src="/static/js/dice.js?v={{ static_v('js/dice.js') }}"></script>
     <div x-data="diceRoller()" x-init="init()">
         <div x-show="open" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
@@ -922,7 +922,10 @@
 
                 {# Result panel (visible when phase === 'done') #}
                 <div x-show="phase === 'done'" x-cloak class="space-y-3">
-                    {# Inline summary: dice in order with kept ones bold and unkept struck through #}
+                    {# Formula header (e.g. "10k7 + 11") #}
+                    <div class="text-base font-mono font-bold text-ink/80" x-text="formulaText"></div>
+
+                    {# Inline dice list (sorted ascending), kept ones bold, unkept struck through #}
                     <div class="text-sm">
                         <span class="text-ink/60">Dice:</span>
                         <template x-for="(d, i) in finalDice" :key="i">
@@ -932,7 +935,7 @@
                         </template>
                     </div>
 
-                    {# Pool view: unkept on the left, kept on the right with reroll lineage #}
+                    {# Pool view: unkept on the left, kept on the right (both sorted) #}
                     <div class="grid grid-cols-2 gap-3 text-sm">
                         <div class="bg-parchment/40 rounded p-2">
                             <div class="text-xs font-bold text-ink/60 mb-1">Unkept dice</div>
@@ -961,19 +964,42 @@
                         </div>
                     </div>
 
-                    {# Total + breakdown #}
+                    {# Total + structured breakdown #}
                     <div class="bg-ink/5 rounded p-3 text-sm">
                         <div class="font-bold text-lg mb-1">
                             Total: <span class="text-accent" x-text="baseTotal"></span>
                         </div>
-                        <ul class="text-xs text-ink/70 list-disc list-inside space-y-0.5">
-                            <template x-for="line in (formula ? formula.breakdown : [])" :key="line">
-                                <li x-text="line"></li>
-                            </template>
-                            <template x-if="formula && formula.flat > 0">
-                                <li>+<span x-text="formula.flat"></span> total flat bonus</li>
-                            </template>
-                        </ul>
+                        {# Only show the breakdown list when there are flat bonuses;
+                           with no bonuses, the Total line above already says
+                           everything (Total = sum of kept dice). #}
+                        <template x-if="formula && formula.bonuses && formula.bonuses.length > 0">
+                            <ul class="text-xs text-ink/70 list-disc list-inside space-y-0.5">
+                                <li><span x-text="keptSum"></span> from the kept dice</li>
+
+                                {# Single bonus: render directly without sub-bullets #}
+                                <template x-if="formula.bonuses.length === 1">
+                                    <li>
+                                        +<span x-text="formula.bonuses[0].amount"></span>
+                                        from <span x-text="formula.bonuses[0].label"></span>
+                                    </li>
+                                </template>
+
+                                {# Multiple bonuses: total line + indented sub-bullets #}
+                                <template x-if="formula.bonuses.length > 1">
+                                    <li>
+                                        +<span x-text="formula.flat"></span> total flat bonus
+                                        <ul class="ml-5 mt-0.5 list-disc list-inside space-y-0.5">
+                                            <template x-for="b in formula.bonuses" :key="b.label">
+                                                <li>
+                                                    +<span x-text="b.amount"></span>
+                                                    from <span x-text="b.label"></span>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </li>
+                                </template>
+                            </ul>
+                        </template>
 
                         <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
                             <div class="mt-2 pt-2 border-t border-ink/10">
@@ -1013,10 +1039,12 @@
             phase: 'idle',
             title: '',
             formula: null,
+            formulaText: '',
             finalDice: [],
             unkeptDice: [],
             keptDice: [],
             baseTotal: 0,
+            keptSum: 0,
             formulas: {},
             prefs: { dice_animation_enabled: true, dice_sound_enabled: true },
 
@@ -1044,6 +1072,9 @@
                 if (!f) return;
                 this.formula = f;
                 this.title = f.label;
+                this.formulaText = f.flat > 0
+                    ? `${f.rolled}k${f.kept} + ${f.flat}`
+                    : `${f.rolled}k${f.kept}`;
                 this.open = true;
                 this.runRoll();
             },
@@ -1058,24 +1089,33 @@
                 this.unkeptDice = [];
                 this.keptDice = [];
                 this.baseTotal = 0;
+                this.keptSum = 0;
 
                 const { rolled, kept, flat, reroll_tens } = this.formula;
-                if (this.prefs.dice_sound_enabled && window.L7RDice) {
-                    window.L7RDice.playDiceSound(rolled);
-                }
+                // Sound is played once per round from inside rollAndAnimate so
+                // each reroll wave gets its own sound.
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n)
+                    : null;
                 const dice = await window.L7RDice.rollAndAnimate(
-                    rolled, reroll_tens, this.prefs.dice_animation_enabled
+                    rolled, reroll_tens, this.prefs.dice_animation_enabled, playSound
                 );
 
-                // Determine which dice are kept (top N by total value)
+                // Sort dice ascending by value, then keep the LAST `kept` items
+                // so ties at the keep boundary always favour the rightmost die
+                // in the displayed list (kept block stays visually contiguous).
                 const indexed = dice.map((d, i) => ({ ...d, idx: i }));
-                const sorted = [...indexed].sort((a, b) => b.value - a.value);
-                const keptSet = new Set(sorted.slice(0, kept).map(d => d.idx));
+                const sortedAsc = [...indexed].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(kept, sortedAsc.length);
+                const keptIdx = new Set(
+                    sortedAsc.slice(sortedAsc.length - keptCount).map(d => d.idx)
+                );
 
-                this.finalDice = dice.map((d, i) => ({ value: d.value, kept: keptSet.has(i) }));
-                this.keptDice = indexed.filter(d => keptSet.has(d.idx));
-                this.unkeptDice = indexed.filter(d => !keptSet.has(d.idx));
-                this.baseTotal = this.keptDice.reduce((s, d) => s + d.value, 0) + flat;
+                this.finalDice = sortedAsc.map(d => ({ value: d.value, kept: keptIdx.has(d.idx) }));
+                this.keptDice = sortedAsc.filter(d => keptIdx.has(d.idx));
+                this.unkeptDice = sortedAsc.filter(d => !keptIdx.has(d.idx));
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = this.keptSum + flat;
                 this.phase = 'done';
             },
 
