@@ -9,6 +9,26 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
+def award_deltas_for_diff(awards: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Strip the freeform ``source`` text from each award before diffing.
+
+    The ``source`` is metadata that the player can edit without triggering a
+    new version, so version comparisons must ignore it. Returns a normalized
+    list of ``{id, rank_delta, recognition_delta}`` dicts in the original
+    order.
+    """
+    if not awards:
+        return []
+    return [
+        {
+            "id": a.get("id"),
+            "rank_delta": a.get("rank_delta", 0),
+            "recognition_delta": a.get("recognition_delta", 0),
+        }
+        for a in awards
+    ]
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -111,6 +131,16 @@ class Character(Base):
     recognition: Mapped[float] = mapped_column(Float, default=7.5)
     recognition_halved: Mapped[bool] = mapped_column(default=False)
 
+    # GM-awarded Rank / Recognition bonuses earned during play. Each entry:
+    #   {"id": str, "rank_delta": float, "recognition_delta": float,
+    #    "source": str, "created_at": str (ISO timestamp)}
+    # The deltas are versioned (changing them triggers a draft + must be
+    # Applied), but the freeform ``source`` text is metadata and may be edited
+    # without creating a new version — see ``award_deltas_for_diff``.
+    rank_recognition_awards: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
+        JSON, default=list
+    )
+
     # XP tracking
     starting_xp: Mapped[int] = mapped_column(default=150)
     earned_xp: Mapped[int] = mapped_column(default=0)
@@ -171,12 +201,20 @@ class Character(Base):
                     "advantage_details": {},
                     "attack": 1, "parry": 1, "rank_locked": False,
                     "current_light_wounds": 0, "current_serious_wounds": 0,
-                    "current_void_points": 0, "notes": "", "sections": []}
+                    "current_void_points": 0, "notes": "", "sections": [],
+                    "rank_recognition_awards": []}
         for key in current:
             if key in skip:
                 continue
             cur_val = current[key]
             pub_val = self.published_state.get(key, defaults.get(key))
+            # Awards: the freeform ``source`` text is metadata, so an
+            # edit-source-only change must NOT trigger a draft. Compare
+            # only the deltas + ids.
+            if key == "rank_recognition_awards":
+                if award_deltas_for_diff(cur_val) != award_deltas_for_diff(pub_val):
+                    return True
+                continue
             if cur_val != pub_val:
                 return True
         return False
@@ -220,6 +258,7 @@ class Character(Base):
             "rank_locked": self.rank_locked,
             "recognition": self.recognition,
             "recognition_halved": self.recognition_halved,
+            "rank_recognition_awards": self.rank_recognition_awards or [],
             "starting_xp": self.starting_xp,
             "earned_xp": self.earned_xp,
             "current_light_wounds": self.current_light_wounds,
@@ -263,6 +302,7 @@ class Character(Base):
             rank_locked=data.get("rank_locked", False),
             recognition=data.get("recognition", 1.0),
             recognition_halved=data.get("recognition_halved", False),
+            rank_recognition_awards=data.get("rank_recognition_awards", []),
             starting_xp=data.get("starting_xp", 150),
             earned_xp=data.get("earned_xp", 0),
             current_light_wounds=data.get("current_light_wounds", 0),

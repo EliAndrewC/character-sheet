@@ -185,6 +185,246 @@ class TestAutoSave:
         assert char.player_name == "Other Player"
 
 
+class TestRankRecognitionAwards:
+    """GM-awarded Rank/Recognition bonuses: persistence, validation, and the
+    metadata-only source endpoint that bypasses the version system."""
+
+    def test_autosave_persists_awards_list(self, client):
+        cid = _seed_character(client, rank=7.5, recognition=7.5)
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={
+                "rank": 8.5,
+                "recognition": 8.0,
+                "rank_recognition_awards": [
+                    {
+                        "id": "a1",
+                        "rank_delta": 1.0,
+                        "recognition_delta": 0.5,
+                        "source": "Defended village",
+                        "created_at": "2026-04-09T00:00:00",
+                    },
+                ],
+            },
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.rank == 8.5
+        assert char.recognition == 8.0
+        assert len(char.rank_recognition_awards) == 1
+        assert char.rank_recognition_awards[0]["source"] == "Defended village"
+        assert char.rank_recognition_awards[0]["rank_delta"] == 1.0
+
+    def test_autosave_rejects_negative_recognition_delta(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={
+                "rank_recognition_awards": [
+                    {"id": "a1", "rank_delta": 0, "recognition_delta": -1.0, "source": "x"},
+                ],
+            },
+        )
+        assert resp.status_code == 400
+        assert "Recognition delta cannot be negative" in resp.json()["error"]
+
+    def test_autosave_rejects_empty_source(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={
+                "rank_recognition_awards": [
+                    {"id": "a1", "rank_delta": 1.0, "recognition_delta": 0, "source": ""},
+                ],
+            },
+        )
+        assert resp.status_code == 400
+        assert "source" in resp.json()["error"].lower()
+
+    def test_autosave_rejects_non_list_awards(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"rank_recognition_awards": "not a list"},
+        )
+        assert resp.status_code == 400
+
+    def test_autosave_rejects_non_dict_award_entry(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"rank_recognition_awards": ["not a dict"]},
+        )
+        assert resp.status_code == 400
+
+    def test_autosave_rejects_non_numeric_delta(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={
+                "rank_recognition_awards": [
+                    {"id": "a1", "rank_delta": "abc", "recognition_delta": 0, "source": "x"},
+                ],
+            },
+        )
+        assert resp.status_code == 400
+
+    def test_set_award_source_updates_only_source(self, client):
+        cid = _seed_character(client)
+        # Seed with one award via autosave
+        client.post(
+            f"/characters/{cid}/autosave",
+            json={
+                "rank_recognition_awards": [
+                    {"id": "a1", "rank_delta": 1.0, "recognition_delta": 0, "source": "old"},
+                ],
+            },
+        )
+        resp = client.post(
+            f"/characters/{cid}/set-award-source",
+            json={"award_id": "a1", "source": "new source"},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.rank_recognition_awards[0]["source"] == "new source"
+        # Deltas untouched
+        assert char.rank_recognition_awards[0]["rank_delta"] == 1.0
+
+    def test_set_award_source_unknown_award_404(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/set-award-source",
+            json={"award_id": "missing", "source": "x"},
+        )
+        assert resp.status_code == 404
+
+    def test_set_award_source_requires_award_id(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/set-award-source",
+            json={"source": "x"},
+        )
+        assert resp.status_code == 400
+
+    def test_set_award_source_requires_source(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/set-award-source",
+            json={"award_id": "a1", "source": ""},
+        )
+        assert resp.status_code == 400
+
+    def test_source_change_does_not_trigger_unpublished(self, client):
+        """Editing only an award's source must not flip the character to
+        'modified' state — that's the whole point of the metadata endpoint."""
+        cid = _seed_character(client)
+        # Add an award and publish so we have a baseline
+        client.post(
+            f"/characters/{cid}/autosave",
+            json={
+                "rank": 8.5,
+                "recognition": 8.0,
+                "rank_recognition_awards": [
+                    {"id": "a1", "rank_delta": 1.0, "recognition_delta": 0.5,
+                     "source": "Original reason", "created_at": "2026-04-09T00:00:00"},
+                ],
+            },
+        )
+        client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.has_unpublished_changes is False
+
+        # Edit only the source via the metadata endpoint
+        client.post(
+            f"/characters/{cid}/set-award-source",
+            json={"award_id": "a1", "source": "Reworded reason"},
+        )
+
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.rank_recognition_awards[0]["source"] == "Reworded reason"
+        assert char.has_unpublished_changes is False, (
+            "Editing only the award source must NOT trigger a draft"
+        )
+
+    def test_delta_change_does_trigger_unpublished(self, client):
+        """In contrast, changing an award's delta IS a versionable change."""
+        cid = _seed_character(client)
+        client.post(
+            f"/characters/{cid}/autosave",
+            json={
+                "rank": 8.5,
+                "recognition": 8.0,
+                "rank_recognition_awards": [
+                    {"id": "a1", "rank_delta": 1.0, "recognition_delta": 0.5,
+                     "source": "Reason", "created_at": "2026-04-09T00:00:00"},
+                ],
+            },
+        )
+        client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.has_unpublished_changes is False
+
+        # Edit the rank delta via the regular autosave path
+        client.post(
+            f"/characters/{cid}/autosave",
+            json={
+                "rank": 9.5,
+                "recognition": 8.0,
+                "rank_recognition_awards": [
+                    {"id": "a1", "rank_delta": 2.0, "recognition_delta": 0.5,
+                     "source": "Reason", "created_at": "2026-04-09T00:00:00"},
+                ],
+            },
+        )
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.has_unpublished_changes is True
+
+    def test_set_award_source_requires_auth(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/set-award-source",
+            json={"award_id": "a1", "source": "x"},
+            headers={"X-Test-User": ""},
+        )
+        assert resp.status_code == 401
+
+    def test_set_award_source_404_for_unknown_character(self, client):
+        resp = client.post(
+            "/characters/9999/set-award-source",
+            json={"award_id": "a1", "source": "x"},
+        )
+        assert resp.status_code == 404
+
+    def test_award_delta_only_diff_marks_unpublished(self, client):
+        """Direct unit-level check that the awards-only diff branch fires.
+
+        The published snapshot has one award with rank_delta=1.0; we mutate
+        the live awards JSON to rank_delta=2.0 *without* touching the
+        character's rank field. The diff comparison must spot this via the
+        rank_recognition_awards branch and return True.
+        """
+        from app.models import award_deltas_for_diff
+        cid = _seed_character(client)
+        char = query_db(client).filter(Character.id == cid).first()
+        # Publish a baseline that already has one award.
+        char.rank_recognition_awards = [
+            {"id": "a1", "rank_delta": 1.0, "recognition_delta": 0.5,
+             "source": "Reason", "created_at": "2026-04-09T00:00:00"},
+        ]
+        char.is_published = True
+        char.published_state = char.to_dict()
+        client._test_session_factory().merge(char)
+        # Now mutate the awards delta but keep everything else identical.
+        char.rank_recognition_awards = [
+            {"id": "a1", "rank_delta": 2.0, "recognition_delta": 0.5,
+             "source": "Reason", "created_at": "2026-04-09T00:00:00"},
+        ]
+        assert char.has_unpublished_changes is True
+        # And the helper itself reports the same deltas after stripping source
+        assert award_deltas_for_diff(char.rank_recognition_awards) != \
+            award_deltas_for_diff(char.published_state["rank_recognition_awards"])
+
+
 class TestTrackState:
     def test_track_wounds(self, client):
         cid = _seed_character(client, name="Track Test")

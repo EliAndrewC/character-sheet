@@ -146,6 +146,20 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Halved min is 3.5 → `test_editor_controls.py::test_recognition_halved_min_3_5`
 - [x] Halved recognition can be raised → `test_editor_controls.py::test_recognition_halved_can_raise`
 
+## Character Editor — GM-awarded Rank/Recognition Bonuses
+
+- [x] GM-award button visible on editor → `test_gm_awards.py::test_award_button_visible_on_editor`
+- [x] Award modal opens and closes → `test_gm_awards.py::test_award_modal_opens_and_closes`
+- [x] Apply disabled without source text → `test_gm_awards.py::test_award_apply_disabled_without_source`
+- [x] Apply disabled when both deltas are zero → `test_gm_awards.py::test_award_apply_disabled_when_both_zero`
+- [x] Applying an award updates rank and recognition → `test_gm_awards.py::test_apply_award_updates_rank_and_recognition`
+- [x] Award appears in history list → `test_gm_awards.py::test_award_appears_in_history_list`
+- [x] First award locks Recognition +/- → `test_gm_awards.py::test_recognition_locked_after_first_award`
+- [x] First award locks "Halve Recognition" checkbox → `test_gm_awards.py::test_recognition_halved_locked_after_first_award`
+- [x] Editing an award's rank delta updates rank → `test_gm_awards.py::test_edit_award_rank_delta_updates_rank`
+- [x] Deleting an award restores rank and recognition → `test_gm_awards.py::test_delete_award_restores_rank`
+- [x] Source text edit does NOT trigger draft → `test_gm_awards.py::test_source_edit_does_not_trigger_modified_badge`
+
 ## Character Editor — Advantages & Disadvantages
 
 - [x] Advantage checkbox toggles XP → `test_live_xp.py::test_xp_updates_on_advantage_toggle`
@@ -341,7 +355,8 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `knacks` | Knacks +/- | `test_live_xp.py`, `test_editor_controls.py` |
 | `combat_skills` | Attack/Parry | `test_combat_skills.py`, `test_live_xp.py`, `test_editor_controls.py` |
 | `skills` | Skills +/- | `test_live_xp.py`, `test_editor_controls.py` |
-| `honor_rank_recognition` | Honor/Rank/Recognition controls | `test_live_xp.py`, `test_editor_controls.py` |
+| `honor_rank_recognition` | Honor/Rank/Recognition controls | `test_live_xp.py`, `test_editor_controls.py`, `test_gm_awards.py` |
+| `gm_awards` | GM-awarded Rank/Recognition bonuses (modal, history, lock) | `test_gm_awards.py` |
 | `advantages` | Advantage/disadvantage checkboxes | `test_live_xp.py`, `test_editor_controls.py` |
 | `exclusive_pairs` | Mutually exclusive pairs | `test_exclusive_pairs.py` |
 | `advantage_details` | Detail fields (text, skills, dropdowns) | `test_advantage_details.py` |
