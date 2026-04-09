@@ -28,13 +28,15 @@ from app.game_data import (
 from app.services.rolls import (
     FREE_RAISE_VALUE,
     _ADVANTAGE_SKILL_BONUSES,
+    _CAMPAIGN_ADVANTAGE_CONDITIONAL_SKILL_BONUSES,
+    _CAMPAIGN_ADVANTAGE_SKILL_BONUSES,
     _DISCERNING_BONUSES,
     _HONOR_BONUS_SKILLS,
     _RECOGNITION_BONUS_SKILLS,
     _SKILL_SYNERGIES,
     compute_dan,
 )
-from app.game_data import ADVANTAGES
+from app.game_data import ADVANTAGES, CAMPAIGN_ADVANTAGES
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +199,27 @@ def build_skill_formula(
             skill_list, raises = _ADVANTAGE_SKILL_BONUSES[adv_id]
             if skill_id in skill_list:
                 _add_flat_bonus(formula, ADVANTAGES[adv_id].name, raises * FREE_RAISE_VALUE)
+
+    # --- Campaign advantage bonuses (e.g. Highest Regard) ---
+    campaign_advantages = character_data.get("campaign_advantages", []) or []
+    for adv_id in campaign_advantages:
+        if adv_id in _CAMPAIGN_ADVANTAGE_SKILL_BONUSES:
+            skill_list, raises = _CAMPAIGN_ADVANTAGE_SKILL_BONUSES[adv_id]
+            if skill_id in skill_list:
+                _add_flat_bonus(
+                    formula,
+                    CAMPAIGN_ADVANTAGES[adv_id].name,
+                    raises * FREE_RAISE_VALUE,
+                )
+        if adv_id in _CAMPAIGN_ADVANTAGE_CONDITIONAL_SKILL_BONUSES:
+            skill_list, extra_raises, cond_text = (
+                _CAMPAIGN_ADVANTAGE_CONDITIONAL_SKILL_BONUSES[adv_id]
+            )
+            if skill_id in skill_list:
+                formula.alternatives.append({
+                    "label": cond_text,
+                    "extra_flat": extra_raises * FREE_RAISE_VALUE,
+                })
 
     # --- Skill synergies (e.g. History → Culture/Law/Strategy) ---
     for source_id, (boosted, per_rank) in _SKILL_SYNERGIES.items():
