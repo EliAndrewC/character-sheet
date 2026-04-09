@@ -77,7 +77,7 @@ def test_cancel_closes_modal(page, live_server_url):
     _go_to_new_editor(page, live_server_url)
     page.locator('[data-action="apply-changes"]').click()
     page.wait_for_selector('textarea[placeholder="Describe your changes..."]', timeout=3000)
-    page.locator('button:text("Cancel")').click()
+    page.locator('[data-action="cancel-apply"]').click()
     page.wait_for_timeout(300)
     assert not page.locator('textarea[placeholder="Describe your changes..."]').is_visible()
     assert "/edit" in page.url  # Still on edit page
