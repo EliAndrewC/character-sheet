@@ -81,6 +81,34 @@ class TestFourthDanAutoRaise:
         # Water 4->5: normally 25, with 5 discount = 20
         assert result["rings"] == 20
 
+    def test_dan_4_school_ring_max_is_7(self):
+        """At 4th Dan the school ring's max value rises from 6 to 7."""
+        data = make_character_data(
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 7, "Void": 2},
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+            starting_xp=500,
+        )
+        errors = validate_character(data)
+        assert not any("Water" in e and "exceeds" in e for e in errors)
+
+    def test_dan_3_school_ring_max_still_6(self):
+        """Below 4th Dan the school ring max is still 6."""
+        data = make_character_data(
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 7, "Void": 2},
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+            starting_xp=500,
+        )
+        errors = validate_character(data)
+        assert any("Water" in e and "exceeds" in e for e in errors)
+
+    def test_ring_max_helper_4th_dan(self):
+        """game_data.ring_max returns 7 for school ring at 4th Dan, 6 otherwise."""
+        from app.game_data import ring_max
+        assert ring_max("Water", "Water", dan=4) == 7
+        assert ring_max("Water", "Water", dan=3) == 6
+        assert ring_max("Water", "Water") == 6  # default dan=0
+        assert ring_max("Air", "Water", dan=4) == 5  # non-school
+
 
 class TestCampaignAdvantages:
     def test_campaign_advantages_exist(self):

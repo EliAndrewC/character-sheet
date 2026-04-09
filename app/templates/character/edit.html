@@ -867,7 +867,12 @@ function characterForm() {
 
             this.$watch('rings', () => this.markDirty(), { deep: true });
             this.$watch('skills', () => this.markDirty(), { deep: true });
-            this.$watch('knacks', () => this.markDirty(), { deep: true });
+            this.$watch('knacks', () => {
+                // 4th Dan technique: school ring is auto-raised to 4 (and
+                // its ceiling drops back to 6 if Dan falls below 4).
+                this.enforceFourthDanRing();
+                this.markDirty();
+            }, { deep: true });
             this.$watch('attack', () => this.markDirty());
             this.$watch('parry', () => this.markDirty());
             this.$watch('honor', () => this.markDirty());
@@ -878,6 +883,10 @@ function characterForm() {
             this.$watch('campaignAdvantages', () => this.markDirty(), { deep: true });
             this.$watch('campaignDisadvantages', () => this.markDirty(), { deep: true });
             this.$watch('advantageDetails', () => this.markDirty(), { deep: true });
+
+            // Reconcile 4th Dan school ring on initial load (legacy
+            // characters that hit 4th Dan before this rule existed).
+            this.enforceFourthDanRing();
         },
 
         styleTechniques() {
@@ -1079,7 +1088,10 @@ function characterForm() {
 
         onSchoolRingChange() {
             if (this.schoolRingChoice) {
-                this.rings[this.schoolRingChoice] = Math.max(this.rings[this.schoolRingChoice], 3);
+                this.rings[this.schoolRingChoice] = Math.max(
+                    this.rings[this.schoolRingChoice],
+                    this.schoolRingMin(),
+                );
             }
             this.markDirty();
         },
@@ -1094,16 +1106,41 @@ function characterForm() {
 
         ringMax(ringName) {
             const schoolRing = this.getSchoolRing();
-            return (ringName === schoolRing) ? 6 : 5;
+            if (ringName !== schoolRing) return 5;
+            // 4th Dan technique raises the school ring's max by 1.
+            return this.currentDan() >= 4 ? 7 : 6;
         },
 
         ringCost(ringName) {
             const schoolRing = this.getSchoolRing();
-            const start = (ringName === schoolRing) ? 3 : 2;
+            const isSchool = ringName === schoolRing;
+            const dan4 = isSchool && this.currentDan() >= 4;
+            // 4th Dan: school ring is auto-raised to 4 for free, so the
+            // cost loop starts from 4 instead of 3.
+            const start = isSchool ? (dan4 ? 4 : 3) : 2;
             const val = this.rings[ringName] || 2;
             let cost = 0;
-            for (let v = start + 1; v <= val; v++) cost += 5 * v;
+            for (let v = start + 1; v <= val; v++) {
+                let raiseCost = 5 * v;
+                // 4th Dan: -5 XP per school ring raise above 4.
+                if (dan4) raiseCost = Math.max(0, raiseCost - 5);
+                cost += raiseCost;
+            }
             return cost;
+        },
+
+        enforceFourthDanRing() {
+            // Reconciles the school ring with the character's current Dan.
+            // At 4th Dan the school ring's floor is 4 (auto-raise) and its
+            // ceiling is 7. Below 4th Dan the ceiling drops back to 6.
+            const schoolRing = this.getSchoolRing();
+            if (!schoolRing) return;
+            const current = this.rings[schoolRing] || 0;
+            if (this.currentDan() >= 4) {
+                if (current < 4) this.rings[schoolRing] = 4;
+            } else {
+                if (current > 6) this.rings[schoolRing] = 6;
+            }
         },
 
         skillXpLabel(skillId, isAdvanced) {
