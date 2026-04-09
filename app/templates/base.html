@@ -51,7 +51,10 @@
             fill: #2c1810;
         }
         svg.die.rolling {
-            animation: dice-tumble 1.2s linear infinite;
+            /* Exactly one full rotation per round; the animation ends
+             * naturally at the 100% keyframe (rotate(360deg) ≡ 0°) so the
+             * dice land oriented correctly with no visual snap-back. */
+            animation: dice-tumble 1.2s linear 1;
         }
         svg.die.rolling .die-text {
             fill: rgba(44,24,16,0.3);

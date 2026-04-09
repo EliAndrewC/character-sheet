@@ -111,11 +111,13 @@
     }
 
     // Each "round" of animation (initial roll, or one reroll wave) lasts
-    // ~2 seconds: dice tumble for ROLLING_MS, then settle and stay visible
-    // for SETTLE_MS so the user can read the values before the next round
-    // (or before the modal swaps to the result panel).
-    const ROLLING_MS = 1300;
-    const SETTLE_MS = 800;
+    // 3.2 seconds. ROLLING_MS matches the CSS animation duration exactly,
+    // so the dice complete one full 360° rotation and the values are
+    // revealed at the moment the rotation lands back on 0° (no snap-back).
+    // SETTLE_MS holds the revealed values for two full seconds before the
+    // next round (or the modal switching to the result panel).
+    const ROLLING_MS = 1200;
+    const SETTLE_MS = 2000;
 
     async function rollAndAnimate(rolled, rerollTens, animate, playSound) {
         const dice = rollAllDice(rolled, rerollTens);
