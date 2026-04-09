@@ -319,29 +319,153 @@
                     <div class="flex items-center justify-center gap-1">
                         <button type="button"
                                 @click="recognition = Math.max(recognitionMin(), +(recognition - 0.5).toFixed(1))"
-                                :disabled="recognition <= recognitionMin()"
-                                :title="recognition <= recognitionMin() ? '' : 'Lower to ' + (recognition - 0.5).toFixed(1)"
+                                :disabled="awardsLocked() || recognition <= recognitionMin()"
+                                :title="awardsLocked() ? 'Locked: GM-awarded bonus exists. Use the Bonus button below.' : (recognition <= recognitionMin() ? '' : 'Lower to ' + (recognition - 0.5).toFixed(1))"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
                         <span class="w-8 text-center font-bold text-lg" x-text="recognition.toFixed(1)"></span>
                         <input type="hidden" name="recognition" :value="recognition">
                         <button type="button"
                                 @click="recognition = Math.min(Math.floor(rank * 3) / 2, +(recognition + 0.5).toFixed(1))"
-                                :disabled="recognition >= Math.floor(rank * 3) / 2"
-                                :title="recognition >= Math.floor(rank * 3) / 2 ? '' : 'Raise to ' + (recognition + 0.5).toFixed(1)"
+                                :disabled="awardsLocked() || recognition >= Math.floor(rank * 3) / 2"
+                                :title="awardsLocked() ? 'Locked: GM-awarded bonus exists. Use the Bonus button below.' : (recognition >= Math.floor(rank * 3) / 2 ? '' : 'Raise to ' + (recognition + 0.5).toFixed(1))"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                     </div>
                     <p class="text-xs text-ink/50 mt-1">Starts at 7.5. Max 150% of Rank. 1 XP per 1.0</p>
                 </div>
             </div>
             <div class="mt-2">
-                <label class="inline-flex items-center gap-2 text-sm">
+                <label class="inline-flex items-center gap-2 text-sm"
+                       :class="awardsLocked() ? 'opacity-40 cursor-not-allowed' : ''">
                     <input type="checkbox" name="recognition_halved" x-model="recognitionHalved"
+                           :disabled="awardsLocked()"
                            {{ 'checked' if character.recognition_halved else '' }}
                            class="rounded">
                     Halve starting Recognition (+3 XP)
                 </label>
             </div>
+
+            <!-- GM-AWARDED RANK / RECOGNITION BONUSES -->
+            <div class="mt-6 pt-4 border-t border-ink/10">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide">GM-Awarded Bonuses</h3>
+                    <button type="button" @click="openAwardModal()" data-action="open-award-modal"
+                            class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium transition-colors">
+                        + GM-awarded Rank / Recognition Bonus
+                    </button>
+                </div>
+                <template x-if="rankRecognitionAwards.length === 0">
+                    <p class="text-xs text-ink/50 italic">
+                        No bonuses awarded yet. Once a bonus is recorded, the
+                        Rank and Recognition values above are locked and any
+                        future changes must come from another GM award.
+                    </p>
+                </template>
+                <template x-if="rankRecognitionAwards.length > 0">
+                    <div class="space-y-2">
+                        <template x-for="(award, idx) in rankRecognitionAwards" :key="award.id">
+                            <div class="bg-parchment rounded-lg p-3 flex flex-wrap items-center gap-3"
+                                 :data-award-row="award.id">
+                                <!-- Rank delta -->
+                                <div class="flex items-center gap-1">
+                                    <span class="text-xs text-ink/60 mr-1">Rank</span>
+                                    <button type="button" data-action="award-row-rank-minus"
+                                            @click="adjustAwardRank(idx, -0.5)"
+                                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">-</button>
+                                    <span class="w-10 text-center font-mono font-bold"
+                                          x-text="(award.rank_delta >= 0 ? '+' : '') + award.rank_delta.toFixed(1)"></span>
+                                    <button type="button" data-action="award-row-rank-plus"
+                                            @click="adjustAwardRank(idx, 0.5)"
+                                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                                </div>
+                                <!-- Recognition delta (≥ 0) -->
+                                <div class="flex items-center gap-1">
+                                    <span class="text-xs text-ink/60 mr-1">Recog</span>
+                                    <button type="button" data-action="award-row-recog-minus"
+                                            @click="adjustAwardRecognition(idx, -0.5)"
+                                            :disabled="award.recognition_delta <= 0"
+                                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                                    <span class="w-10 text-center font-mono font-bold"
+                                          x-text="'+' + award.recognition_delta.toFixed(1)"></span>
+                                    <button type="button" data-action="award-row-recog-plus"
+                                            @click="adjustAwardRecognition(idx, 0.5)"
+                                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                                </div>
+                                <!-- Source (metadata, doesn't trigger draft) -->
+                                <input type="text"
+                                       :value="award.source"
+                                       @input="onAwardSourceInput(award.id, $event.target.value)"
+                                       placeholder="Source"
+                                       class="flex-1 min-w-[12rem] text-sm border border-ink/20 rounded px-2 py-1 bg-white">
+                                <!-- Delete -->
+                                <button type="button" @click="deleteAward(idx)"
+                                        title="Delete this award"
+                                        class="text-red-700 hover:text-red-900 px-2 text-lg leading-none">&times;</button>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
         </section>
+
+        <!-- AWARD MODAL -->
+        <div x-show="showAwardModal" x-cloak
+             data-modal="award"
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             @click.self="closeAwardModal()" @keydown.escape="closeAwardModal()">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4">
+                <h3 class="text-lg font-bold text-accent mb-3">GM-awarded Rank / Recognition Bonus</h3>
+                <div class="space-y-4">
+                    <!-- Rank delta (allows negative) -->
+                    <div data-field="award-modal-rank">
+                        <label class="block text-sm font-medium mb-1">Rank change</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" data-action="award-modal-rank-minus"
+                                    @click="awardModalRank = +(awardModalRank - 0.5).toFixed(1)"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">-</button>
+                            <span class="w-12 text-center font-mono font-bold"
+                                  x-text="(awardModalRank >= 0 ? '+' : '') + awardModalRank.toFixed(1)"></span>
+                            <button type="button" data-action="award-modal-rank-plus"
+                                    @click="awardModalRank = +(awardModalRank + 0.5).toFixed(1)"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                            <span class="text-xs text-ink/50 ml-2">Can be negative (loss of rank).</span>
+                        </div>
+                    </div>
+                    <!-- Recognition delta (≥ 0) -->
+                    <div data-field="award-modal-recognition">
+                        <label class="block text-sm font-medium mb-1">Recognition change</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" data-action="award-modal-recog-minus"
+                                    @click="awardModalRecognition = Math.max(0, +(awardModalRecognition - 0.5).toFixed(1))"
+                                    :disabled="awardModalRecognition <= 0"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                            <span class="w-12 text-center font-mono font-bold"
+                                  x-text="'+' + awardModalRecognition.toFixed(1)"></span>
+                            <button type="button" data-action="award-modal-recog-plus"
+                                    @click="awardModalRecognition = +(awardModalRecognition + 0.5).toFixed(1)"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                            <span class="text-xs text-ink/50 ml-2">Recognition can only increase.</span>
+                        </div>
+                    </div>
+                    <!-- Source (required) -->
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Source <span class="text-red-700">*</span></label>
+                        <input type="text" x-model="awardModalSource"
+                               data-field="award-source"
+                               placeholder="What did they do to earn this?"
+                               class="w-full text-sm border border-ink/20 rounded px-2 py-1.5 bg-white">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-5">
+                    <button type="button" @click="closeAwardModal()" data-action="cancel-award"
+                            class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm">Cancel</button>
+                    <button type="button" @click="applyAwardModal()" data-action="apply-award"
+                            :disabled="!awardModalSource.trim() || (awardModalRank === 0 && awardModalRecognition === 0)"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+                        Apply Bonus
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- SKILLS -->
         <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
@@ -824,6 +948,12 @@ function characterForm() {
         recognition: {{ character.recognition }},
         recognitionHalved: {{ 'true' if character.recognition_halved else 'false' }},
         rankLocked: {{ 'true' if character.rank_locked else 'false' }},
+        rankRecognitionAwards: {{ (character.rank_recognition_awards or [])|tojson }},
+        showAwardModal: false,
+        awardModalRank: 0,
+        awardModalRecognition: 0,
+        awardModalSource: '',
+        _awardSourceTimers: {},
         saveStatus: '',
         _exclusivePairs: [
             {% for a_id, a_name, b_id, b_name in exclusive_pairs %}
@@ -967,6 +1097,7 @@ function characterForm() {
                     rank_locked: this.rankLocked,
                     recognition: this.recognition,
                     recognition_halved: this.recognitionHalved,
+                    rank_recognition_awards: this.rankRecognitionAwards,
                     earned_xp: parseInt(document.querySelector('input[name="earned_xp"]')?.value || '0'),
                     sections: window._sectionsManager ? window._sectionsManager.serialize() : [],
                 };
@@ -1127,6 +1258,97 @@ function characterForm() {
                 cost += raiseCost;
             }
             return cost;
+        },
+
+        // --- GM-awarded Rank / Recognition bonuses ---
+
+        awardsLocked() {
+            // Once any GM bonus has been recorded, the regular Rank /
+            // Recognition controls (and the Halve checkbox) freeze. The only
+            // way to change those values from here on out is by adding,
+            // editing, or deleting awards.
+            return this.rankRecognitionAwards.length > 0;
+        },
+
+        openAwardModal() {
+            this.awardModalRank = 0;
+            this.awardModalRecognition = 0;
+            this.awardModalSource = '';
+            this.showAwardModal = true;
+        },
+
+        closeAwardModal() {
+            this.showAwardModal = false;
+        },
+
+        applyAwardModal() {
+            const source = this.awardModalSource.trim();
+            if (!source) return;
+            if (this.awardModalRank === 0 && this.awardModalRecognition === 0) return;
+            const award = {
+                id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                rank_delta: this.awardModalRank,
+                recognition_delta: this.awardModalRecognition,
+                source: source,
+                created_at: new Date().toISOString(),
+            };
+            this.rankRecognitionAwards.push(award);
+            this.rank = +(this.rank + award.rank_delta).toFixed(1);
+            this.recognition = +(this.recognition + award.recognition_delta).toFixed(1);
+            this.markDirty();
+            this.closeAwardModal();
+        },
+
+        adjustAwardRank(idx, step) {
+            const award = this.rankRecognitionAwards[idx];
+            if (!award) return;
+            const newDelta = +(award.rank_delta + step).toFixed(1);
+            this.rank = +(this.rank + (newDelta - award.rank_delta)).toFixed(1);
+            award.rank_delta = newDelta;
+            this.markDirty();
+        },
+
+        adjustAwardRecognition(idx, step) {
+            const award = this.rankRecognitionAwards[idx];
+            if (!award) return;
+            const newDelta = +(award.recognition_delta + step).toFixed(1);
+            // Per-award delta floor: a recognition award can never become
+            // negative (you can never *take away* recognition).
+            if (newDelta < 0) return;
+            this.recognition = +(this.recognition + (newDelta - award.recognition_delta)).toFixed(1);
+            award.recognition_delta = newDelta;
+            this.markDirty();
+        },
+
+        deleteAward(idx) {
+            const award = this.rankRecognitionAwards[idx];
+            if (!award) return;
+            this.rank = +(this.rank - award.rank_delta).toFixed(1);
+            this.recognition = +(this.recognition - award.recognition_delta).toFixed(1);
+            this.rankRecognitionAwards.splice(idx, 1);
+            this.markDirty();
+        },
+
+        onAwardSourceInput(awardId, newSource) {
+            // Editing the freeform ``source`` text is metadata only — it must
+            // NOT trigger a draft. We update the in-memory copy so the UI
+            // stays in sync, then debounce a metadata-only POST to the
+            // dedicated endpoint that bypasses the version system. We
+            // deliberately do NOT call markDirty().
+            const award = this.rankRecognitionAwards.find(a => a.id === awardId);
+            if (!award) return;
+            award.source = newSource;
+            if (this._awardSourceTimers[awardId]) {
+                clearTimeout(this._awardSourceTimers[awardId]);
+            }
+            this._awardSourceTimers[awardId] = setTimeout(() => {
+                fetch('/characters/' + this._charId + '/set-award-source', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({award_id: awardId, source: newSource.trim()}),
+                }).catch(() => {});
+                delete this._awardSourceTimers[awardId];
+            }, 600);
         },
 
         enforceFourthDanRing() {

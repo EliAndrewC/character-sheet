@@ -259,6 +259,47 @@ async def autosave_character(
         character.recognition = body["recognition"]
     if "recognition_halved" in body:
         character.recognition_halved = body["recognition_halved"]
+    if "rank_recognition_awards" in body:
+        # Validate the shape so the client can't push junk into the JSON
+        # column. Each award must have id + numeric deltas + a non-empty
+        # source. Recognition deltas can never be negative.
+        raw_awards = body["rank_recognition_awards"]
+        if not isinstance(raw_awards, list):
+            return JSONResponse(
+                {"error": "rank_recognition_awards must be a list"},
+                status_code=400,
+            )
+        cleaned: list = []
+        for entry in raw_awards:
+            if not isinstance(entry, dict):
+                return JSONResponse(
+                    {"error": "Each award must be an object"}, status_code=400
+                )
+            try:
+                rank_delta = float(entry.get("rank_delta", 0))
+                recog_delta = float(entry.get("recognition_delta", 0))
+            except (TypeError, ValueError):
+                return JSONResponse(
+                    {"error": "Award deltas must be numbers"}, status_code=400
+                )
+            if recog_delta < 0:
+                return JSONResponse(
+                    {"error": "Recognition delta cannot be negative"},
+                    status_code=400,
+                )
+            source = (entry.get("source") or "").strip()
+            if not source:
+                return JSONResponse(
+                    {"error": "Award source is required"}, status_code=400
+                )
+            cleaned.append({
+                "id": str(entry.get("id") or ""),
+                "rank_delta": rank_delta,
+                "recognition_delta": recog_delta,
+                "source": source,
+                "created_at": entry.get("created_at") or "",
+            })
+        character.rank_recognition_awards = cleaned
     if "earned_xp" in body:
         character.earned_xp = body["earned_xp"]
     if "notes" in body:
@@ -311,6 +352,59 @@ async def set_group(request: Request, char_id: int, db: Session = Depends(get_db
 
     db.commit()
     return JSONResponse({"ok": True, "gaming_group_id": character.gaming_group_id})
+
+
+@router.post("/{char_id}/set-award-source")
+async def set_award_source(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Update only the freeform ``source`` text on a single GM award.
+
+    Bypasses the version system: source text is metadata so editing it must
+    NOT trigger a draft / "modified" badge. ``has_unpublished_changes``
+    explicitly strips ``source`` from each award before diffing.
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    owner_granted = owner.granted_account_ids or [] if owner else []
+    if not can_edit_character(
+        user["discord_id"],
+        character.owner_discord_id,
+        owner_granted,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    body = await request.json()
+    award_id = str(body.get("award_id") or "")
+    new_source = (body.get("source") or "").strip()
+    if not award_id:
+        return JSONResponse({"error": "award_id is required"}, status_code=400)
+    if not new_source:
+        return JSONResponse({"error": "source is required"}, status_code=400)
+
+    # Build a fresh list of fresh dicts so SQLAlchemy detects the JSON column
+    # change. (In-place mutation of nested dicts inside a JSON column does not
+    # mark the column dirty.)
+    new_awards = [dict(a) for a in (character.rank_recognition_awards or [])]
+    found = False
+    for award in new_awards:
+        if award.get("id") == award_id:
+            award["source"] = new_source
+            found = True
+            break
+    if not found:
+        return JSONResponse({"error": "Award not found"}, status_code=404)
+
+    character.rank_recognition_awards = new_awards
+    db.commit()
+    return JSONResponse({"ok": True})
 
 
 @router.post("/{char_id}/publish")

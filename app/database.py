@@ -66,6 +66,7 @@ def _migrate_add_columns():
         ("adventure_state", "TEXT", "'{}'"),
         ("gaming_group_id", "INTEGER", "NULL"),
         ("sections", "TEXT", "'[]'"),
+        ("rank_recognition_awards", "TEXT", "'[]'"),
     ]
 
     for col_name, col_type, default in needed:
