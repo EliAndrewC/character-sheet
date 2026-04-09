@@ -508,7 +508,7 @@
                                 <span>{{ adv.name }}</span>
                                 <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
                                 <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
-                                     x-text="exclusionReason('{{ aid }}') || '{{ adv.description|e }}'">
+                                     x-text='exclusionReason("{{ aid }}") || {{ adv.description|tojson }}'>
                                     {{ adv.description }}
                                 </div>
                             </label>
@@ -516,7 +516,6 @@
                             {% set df = advantage_detail_fields[aid] %}
                             <div x-show="advantages.{{ aid }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1">
                                 <input type="text" placeholder="{{ df.text }}"
-                                       x-model="advantageDetails['{{ aid }}'] ? advantageDetails['{{ aid }}'].text : ''"
                                        @input="if(!advantageDetails['{{ aid }}']) advantageDetails['{{ aid }}']={};advantageDetails['{{ aid }}'].text=$event.target.value;markDirty()"
                                        :value="(advantageDetails['{{ aid }}'] || {}).text || ''"
                                        class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
@@ -570,7 +569,7 @@
                                 <span>{{ dis.name }}</span>
                                 <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
                                 <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
-                                     x-text="exclusionReason('{{ did }}') || '{{ dis.description|e }}'">
+                                     x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
                                     {{ dis.description }}
                                 </div>
                             </label>
@@ -578,7 +577,6 @@
                             {% set df = advantage_detail_fields[did] %}
                             <div x-show="disadvantages.{{ did }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1">
                                 <input type="text" placeholder="{{ df.text }}"
-                                       x-model="advantageDetails['{{ did }}'] ? advantageDetails['{{ did }}'].text : ''"
                                        @input="if(!advantageDetails['{{ did }}']) advantageDetails['{{ did }}']={};advantageDetails['{{ did }}'].text=$event.target.value;markDirty()"
                                        :value="(advantageDetails['{{ did }}'] || {}).text || ''"
                                        class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
@@ -617,7 +615,7 @@
                             <span>{{ adv.name }}</span>
                             <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
-                                 x-text="exclusionReason('{{ aid }}') || '{{ adv.description|e }}'">
+                                 x-text='exclusionReason("{{ aid }}") || {{ adv.description|tojson }}'>
                                 {{ adv.description }}
                             </div>
                         </label>
@@ -637,7 +635,7 @@
                             <span>{{ dis.name }}</span>
                             <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
-                                 x-text="exclusionReason('{{ did }}') || '{{ dis.description|e }}'">
+                                 x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
                                 {{ dis.description }}
                             </div>
                         </label>
