@@ -612,7 +612,7 @@
                     <span class="text-xs text-accent font-medium ml-2">
                         {{ roll.display }}
                         {% if roll.tooltip_lines|length > 1 %}
-                        ({{ roll.tooltip_lines[1:] | join(', ') }})
+                        ({{ roll.parenthetical }})
                         {% endif %}
                     </span>
                     {% endif %}
@@ -703,9 +703,9 @@
             {% endfor %}
         </div>
 
-        {# Bottom row: Total Spent (col 1) + Disadvantages (col 3 on sm+).
-           Uses the same grid as the categories above so all cells line up
-           and Disadvantages stays the same size as Rings/Skills/etc. #}
+        {# Bottom row: Total Spent + Disadvantages, sharing the same grid as
+           the categories above so all cells line up and Disadvantages stays
+           the same size as Rings/Skills/etc. #}
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm mb-3">
             <div class="flex justify-between px-3 py-2 bg-ink/10 rounded font-bold">
                 <span>Total Spent</span>
@@ -714,7 +714,7 @@
             {% set dis_section = xp_breakdown.disadvantages %}
             {% set dis_clickable = dis_section.total != 0 %}
             <div data-xp-card="disadvantages"
-                 class="sm:col-start-3 flex justify-between px-3 py-2 bg-parchment rounded select-none{% if dis_clickable %} cursor-pointer hover:bg-parchment/70{% endif %}"
+                 class="flex justify-between px-3 py-2 bg-parchment rounded select-none{% if dis_clickable %} cursor-pointer hover:bg-parchment/70{% endif %}"
                  {% if dis_clickable %}@click="expanded = expanded === 'disadvantages' ? null : 'disadvantages'"
                  :class="expanded === 'disadvantages' ? 'ring-2 ring-accent' : ''"{% endif %}>
                 <span>Disadvantages</span>

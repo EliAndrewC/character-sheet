@@ -8,11 +8,13 @@ A "free raise" is a flat +5 bonus to the roll.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 from app.game_data import (
     ADVANTAGES,
+    CAMPAIGN_ADVANTAGES,
     SCHOOL_TECHNIQUE_BONUSES,
     SCHOOLS,
     SKILLS,
@@ -43,6 +45,21 @@ class RollResult:
     def tooltip(self) -> str:
         return "\n".join(self.tooltip_lines)
 
+    @property
+    def parenthetical(self) -> str:
+        """Bonus breakdown shown next to the dice formula on the sheet.
+
+        Skips the leading "Base: ..." line. When there is exactly one bonus
+        whose description starts with "+N from ...", strips the redundant
+        "+N " (since N is already in the dice formula) so e.g. ``+5 from
+        Charming`` becomes ``from Charming``. With two or more bonuses, every
+        "+N from ..." stays intact so the player can see each contribution.
+        """
+        parts = list(self.tooltip_lines[1:])
+        if len(parts) == 1:
+            parts[0] = re.sub(r"^\+\d+ from ", "from ", parts[0])
+        return ", ".join(parts)
+
 
 def compute_dan(knacks: dict) -> int:
     """Dan = minimum rank among school knacks."""
@@ -59,6 +76,22 @@ _ADVANTAGE_SKILL_BONUSES = {
     "genealogist": (["heraldry"], 2),
     "tactician": (["strategy", "history"], 1),
     "worldly": (["commerce", "underworld"], 1),
+}
+
+# Campaign advantage -> (skill_ids, unconditional_free_raises). The
+# unconditional portion always applies to flat_bonus. Additional conditional
+# bonuses are listed in _CAMPAIGN_ADVANTAGE_CONDITIONAL_SKILL_BONUSES below.
+_CAMPAIGN_ADVANTAGE_SKILL_BONUSES = {
+    # Highest Regard: 2 free raises on bragging/intimidation with non-Wasp,
+    # 4 free raises with Wasp clan members.
+    "highest_regard": (["bragging", "intimidation"], 2),
+}
+
+# Campaign advantage -> (skill_ids, extra_free_raises, condition_text). The
+# extra raises are added on top of the unconditional portion when the
+# condition applies.
+_CAMPAIGN_ADVANTAGE_CONDITIONAL_SKILL_BONUSES = {
+    "highest_regard": (["bragging", "intimidation"], 2, "vs Wasp"),
 }
 
 # Discerning gives different bonuses to different skills
@@ -117,13 +150,13 @@ def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
     if dan >= 1 and bonuses.get("first_dan_extra_die"):
         if skill_id in bonuses["first_dan_extra_die"]:
             result.rolled += 1
-            bonus_parts.append((0, "+1 rolled die from 1st Dan technique"))
+            bonus_parts.append((0, "+1 rolled die from 1st Dan"))
 
     # 2nd Dan: free raise = +5
     if dan >= 2 and bonuses.get("second_dan_free_raise"):
         if skill_id == bonuses["second_dan_free_raise"]:
             result.flat_bonus += FREE_RAISE_VALUE
-            bonus_parts.append((FREE_RAISE_VALUE, "+5 from 2nd Dan technique"))
+            bonus_parts.append((FREE_RAISE_VALUE, "+5 from 2nd Dan"))
 
     # --- Advantage bonuses (free raises = +5 each) ---
     advantages = character_data.get("advantages", [])
@@ -141,6 +174,24 @@ def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
                 result.flat_bonus += amount
                 adv_name = ADVANTAGES[adv_id].name
                 bonus_parts.append((amount, f"+{amount} from {adv_name}"))
+
+    # --- Campaign advantage bonuses (e.g. Highest Regard) ---
+    campaign_advantages = character_data.get("campaign_advantages", [])
+    for adv_id in campaign_advantages:
+        if adv_id in _CAMPAIGN_ADVANTAGE_SKILL_BONUSES:
+            skill_list, raises = _CAMPAIGN_ADVANTAGE_SKILL_BONUSES[adv_id]
+            if skill_id in skill_list:
+                amount = raises * FREE_RAISE_VALUE
+                result.flat_bonus += amount
+                adv_name = CAMPAIGN_ADVANTAGES[adv_id].name
+                bonus_parts.append((amount, f"+{amount} from {adv_name}"))
+        if adv_id in _CAMPAIGN_ADVANTAGE_CONDITIONAL_SKILL_BONUSES:
+            skill_list, extra_raises, cond_text = (
+                _CAMPAIGN_ADVANTAGE_CONDITIONAL_SKILL_BONUSES[adv_id]
+            )
+            if skill_id in skill_list:
+                extra = extra_raises * FREE_RAISE_VALUE
+                bonus_parts.append((0, f"+{extra} more {cond_text}"))
 
     # --- Higher Purpose & Specialization (conditional bonuses from advantage_details) ---
     advantage_details = character_data.get("advantage_details", {})
@@ -219,10 +270,8 @@ def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
             if available > 0:
                 result.adventure_raises_available = available
                 result.adventure_raises_max_per_roll = max_per_roll
-                source_name = SKILLS.get(t3["source_skill"])
-                sname = source_name.name if source_name else t3["source_skill"]
                 bonus_parts.append(
-                    (0, f"{available} free raises/adventure, max {max_per_roll}/roll from {sname}")
+                    (0, f"{available} free raises/adventure from 3rd Dan")
                 )
 
     # Apply L7R 10k10 caps: rolled past 10 -> kept, kept past 10 -> +2 each.

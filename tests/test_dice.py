@@ -149,6 +149,44 @@ class TestSkillFormula:
         assert f.kept == 2
         assert f.flat == 4  # 2*1 honor + 2*1 recognition
 
+    def test_highest_regard_adds_10_to_intimidation(self):
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"intimidation": 1},
+            campaign_advantages=["highest_regard"],
+        )
+        f = build_skill_formula("intimidation", char)
+        # 2 free raises = +10 unconditional
+        assert f.flat == 10
+        assert any(b["label"] == "Highest Regard" and b["amount"] == 10 for b in f.bonuses)
+
+    def test_highest_regard_conditional_extra_in_alternatives(self):
+        """The 'vs Wasp' bump (extra 2 free raises = +10) must be a conditional alternative, not flat."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"intimidation": 1},
+            campaign_advantages=["highest_regard"],
+        )
+        f = build_skill_formula("intimidation", char)
+        assert any(
+            alt["label"] == "vs Wasp" and alt["extra_flat"] == 10
+            for alt in f.alternatives
+        )
+
+    def test_highest_regard_no_bonus_on_other_skills(self):
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"etiquette": 1},
+            campaign_advantages=["highest_regard"],
+        )
+        f = build_skill_formula("etiquette", char)
+        assert f.flat == 0
+        assert not any(b["label"] == "Highest Regard" for b in f.bonuses)
+        assert not any("Wasp" in alt.get("label", "") for alt in f.alternatives)
+
     def test_charming_advantage_adds_5_to_etiquette(self):
         char = make_character_data(
             skills={"etiquette": 1},
