@@ -115,11 +115,22 @@ _RECOGNITION_BONUS_SKILLS = {
 }
 
 
-def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
+def compute_skill_roll(
+    skill_id: str,
+    character_data: dict,
+    party_members: Optional[List[dict]] = None,
+) -> RollResult:
     """Compute the full roll for a given skill based on character state.
 
     Free raises are converted to +5 flat bonus each and included in
     flat_bonus. The tooltip shows each source with its contribution.
+
+    *party_members* is the optional list of OTHER characters in the same
+    gaming group (each with ``name``, ``advantages``, ``disadvantages``,
+    ``campaign_advantages``, ``campaign_disadvantages``). Some group-wide
+    disadvantages — currently just Thoughtless — surface as inline notes on
+    specific skills (Thoughtless ⇒ +10 to opponents' Manipulation on every
+    other party member's Tact roll).
     """
     skill_def = SKILLS.get(skill_id)
     if skill_def is None:
@@ -226,10 +237,23 @@ def compute_skill_roll(skill_id: str, character_data: dict) -> RollResult:
         bonus_parts.append(
             (0, "-10 in the eyes of those who judge the unkempt")
         )
-    if "thoughtless" in disadvantages and skill_id in ("tact", "sincerity"):
+    if "thoughtless" in disadvantages and skill_id == "tact":
         bonus_parts.append(
-            (0, "+20 to opponents' Manipulation against you (+10 against your allies)")
+            (0, "+20 to opponents' Manipulation from Thoughtless")
         )
+
+    # --- Party-wide disadvantage notes from OTHER members ---
+    # Thoughtless on a teammate adds +10 to opponents' Manipulation rolls
+    # against allies — this character. Only Tact reflects this (Sincerity
+    # is unaffected).
+    if skill_id == "tact" and party_members:
+        for member in party_members:
+            member_disadvantages = member.get("disadvantages") or []
+            if "thoughtless" in member_disadvantages:
+                member_name = member.get("name", "an ally")
+                bonus_parts.append(
+                    (0, f"+10 to opponents' Manipulation from {member_name}'s Thoughtless")
+                )
 
     # --- Skill synergies (free raises = +5 per rank) ---
     for source_id, (boosted, per_rank) in _SKILL_SYNERGIES.items():

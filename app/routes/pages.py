@@ -25,7 +25,7 @@ from app.models import Character, CharacterVersion, GamingGroup, User as UserMod
 from app.services.auth import can_view_drafts, get_admin_ids, is_admin, can_edit_character
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.rolls import compute_skill_roll
-from app.services.status import compute_effective_status, compute_party_effects
+from app.services.status import compute_effective_status
 from app.services.xp import calculate_total_xp, calculate_xp_breakdown, validate_character
 
 router = APIRouter()
@@ -142,7 +142,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             })
 
     effective = compute_effective_status(char_dict, party_members=party_members_data)
-    party_effects = compute_party_effects(char_dict, character.name, party_members_data)
     all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
 
     # Pre-compute every roll formula needed by the click-to-roll UI on the sheet.
@@ -157,10 +156,13 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "dice_sound_enabled": viewer_prefs.get("dice_sound_enabled", True),
     }
 
-    # Compute roll info for each skill
+    # Compute roll info for each skill. Party members are passed in so that
+    # group-wide disadvantage notes (e.g. Thoughtless) surface inline on the
+    # affected skills (just Tact for Thoughtless) instead of as a separate
+    # Party Effects section.
     skill_rolls = {}
     for sid in (char_dict.get("skills") or {}):
-        roll = compute_skill_roll(sid, char_dict)
+        roll = compute_skill_roll(sid, char_dict, party_members=party_members_data)
         if roll.rolled > 0:
             skill_rolls[sid] = roll
 
@@ -242,7 +244,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "per_adventure": per_adventure,
             "void_max": void_max,
             "adventure_state": character.adventure_state or {},
-            "party_effects": party_effects,
             "all_groups": all_groups,
             "roll_formulas": roll_formulas,
             "is_impaired_now": is_impaired_now,

@@ -102,78 +102,87 @@ def test_homepage_clusters_characters_by_group(page, live_server_url):
 
 
 # ---------------------------------------------------------------------------
-# Party Effects callout
+# Inline party effects on skills / rank
 # ---------------------------------------------------------------------------
 
 
-def test_party_effects_callout_shows_other_member_disadvantage(page, live_server_url):
-    """If a party member has Lion Enmity, the callout appears on every other
-    character's sheet in the same group."""
-    # Character A: takes Lion Enmity (a campaign disadvantage)
+def _set_group(page, sheet_url, group_label):
+    """Open a sheet's editor, assign it to *group_label*, and wait for the save."""
+    page.goto(sheet_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label=group_label)
+    page.wait_for_timeout(500)
+
+
+def test_party_thoughtless_inline_on_other_tact(page, live_server_url):
+    """A party member's Thoughtless adds an inline +10 note on every other
+    character's Tact skill row."""
+    # Character A: takes Thoughtless and has Tact rank > 0 (so Tact appears)
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     page.wait_for_selector('input[name="name"]')
-    page.fill('input[name="name"]', "PartyMemberA")
+    page.fill('input[name="name"]', "ThoughtlessOne")
     select_school(page, "akodo_bushi")
-    # Lion Enmity is a campaign disadvantage
-    page.check('input[name="camp_dis_lion_enmity"]')
+    page.check('input[name="dis_thoughtless"]')
     page.wait_for_selector('text="Saved"', timeout=5000)
-    apply_changes(page, "Lion Enmity character")
+    apply_changes(page, "Thoughtless character")
     a_url = page.url
+    _set_group(page, a_url, "Tuesday Group")
 
-    # Assign A to Tuesday Group
-    page.goto(a_url + "/edit")
-    page.wait_for_selector('select[name="gaming_group_id"]')
-    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
-    page.wait_for_timeout(500)
-
-    # Character B: same group, no disadvantages
-    create_and_apply(page, live_server_url, name="PartyMemberB", school="akodo_bushi")
+    # Character B: same group, takes Tact 1
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "TactPartner")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_tact", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Tact partner")
     b_url = page.url
-    page.goto(b_url + "/edit")
-    page.wait_for_selector('select[name="gaming_group_id"]')
-    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
-    page.wait_for_timeout(500)
+    _set_group(page, b_url, "Tuesday Group")
 
-    # Visit B's sheet — Party Effects callout should mention PartyMemberA's Lion Enmity
+    # Visit B's sheet — Tact row should show the inline party-member note
     page.goto(b_url)
     body = page.text_content("body")
-    assert "Party Effects" in body
-    assert "Lion Enmity" in body
-    assert "PartyMemberA" in body
+    assert "ThoughtlessOne's Thoughtless" in body
+    assert "+10 to opponents' Manipulation" in body
 
 
-def test_party_effects_callout_includes_self(page, live_server_url):
-    """Per UX, the callout lists ALL party effects including the viewing
-    character's own."""
+def test_self_thoughtless_inline_on_own_tact(page, live_server_url):
+    """A character with Thoughtless sees the +20 note on their own Tact row,
+    NOT on Sincerity."""
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "SelfThoughtless")
     select_school(page, "akodo_bushi")
-    # Thoughtless is a regular disadvantage
+    click_plus(page, "skill_tact", 1)
+    click_plus(page, "skill_sincerity", 1)
     page.check('input[name="dis_thoughtless"]')
     page.wait_for_selector('text="Saved"', timeout=5000)
-    apply_changes(page, "Thoughtless taker")
+    apply_changes(page, "Self Thoughtless")
     sheet_url = page.url
 
-    # Assign to Tuesday Group (so the party context exists)
-    page.goto(sheet_url + "/edit")
-    page.wait_for_selector('select[name="gaming_group_id"]')
-    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
-    page.wait_for_timeout(500)
-
     page.goto(sheet_url)
-    callout = page.locator('section', has=page.locator('h2:text("Party Effects")'))
-    assert callout.is_visible()
-    callout_text = callout.text_content()
-    assert "SelfThoughtless" in callout_text
-    assert "Thoughtless" in callout_text
+    # The +20 note appears (on Tact)
+    body = page.text_content("body")
+    assert "+20 to opponents' Manipulation from Thoughtless" in body
+    # And the Party Effects section is gone
+    assert "Party Effects" not in body
 
 
-def test_party_effects_callout_absent_when_no_effects(page, live_server_url):
-    """A character with no group-effect disadvantages and no party should NOT see the callout."""
-    create_and_apply(page, live_server_url, name="PlainChar", school="akodo_bushi")
+def test_no_party_effects_section_present(page, live_server_url):
+    """The standalone Party Effects section is removed entirely — no character
+    should ever show it, even with group-effect disadvantages."""
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "NoSectionTest")
+    select_school(page, "akodo_bushi")
+    page.check('input[name="dis_thoughtless"]')
+    page.check('input[name="camp_dis_lion_enmity"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Lots of party effects")
     body = page.text_content("body")
     assert "Party Effects" not in body
 

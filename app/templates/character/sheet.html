@@ -565,22 +565,6 @@
     </section>
     {% endif %}
 
-    <!-- PARTY EFFECTS (group-wide advantages/disadvantages) -->
-    {% if party_effects %}
-    <section class="bg-amber-50 rounded-lg shadow p-6 border border-amber-300">
-        <h2 class="text-xl font-bold mb-4 text-amber-900">Party Effects</h2>
-        <ul class="space-y-2 text-sm">
-            {% for fx in party_effects %}
-            <li>
-                <span class="font-semibold">{{ fx.source_name }}</span>
-                has <span class="font-semibold">{{ fx.effect_name }}</span>:
-                {{ fx.label }}
-            </li>
-            {% endfor %}
-        </ul>
-    </section>
-    {% endif %}
-
     <!-- SKILLS -->
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">Skills</h2>
