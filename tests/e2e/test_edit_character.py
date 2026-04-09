@@ -46,7 +46,7 @@ def test_view_sheet_shows_published_name(page, live_server_url):
     page.wait_for_selector('text="Saved"', timeout=5000)
 
     # View the sheet — should show published name (for the owner, shows draft)
-    page.locator('a:text("View Sheet")').click()
+    page.locator('button:text("View Sheet")').click()
     page.wait_for_selector("h1")
     # As the owner, we see the draft
     assert "Draft Name" in page.text_content("h1")

@@ -4,8 +4,11 @@
 
 {% block content %}
 
-{# Macro: render a flat list of XP line rows as a 3-column grid (XP | label | from→to). #}
-{% macro render_rows(rows) %}
+{# Macro: render a flat list of XP line rows as a 3-column grid (XP | label | from→to).
+   ``align`` controls the horizontal alignment of the label column — most
+   sections look best centered, but advantages/disadvantages have wordy
+   labels that read better left-aligned. #}
+{% macro render_rows(rows, align='center') %}
 <div class="grid gap-x-3 gap-y-0.5 text-sm font-mono items-baseline"
      style="grid-template-columns: auto auto 1fr;">
 {% for row in rows %}
@@ -13,7 +16,7 @@
         <div class="col-span-3 text-xs text-ink/60 italic font-sans">{{ row.label }}</div>
     {% else %}
         <div class="text-right whitespace-nowrap">{{ row.xp }} XP:</div>
-        <div class="text-center">{{ row.label }}</div>
+        <div class="text-{{ align }}">{{ row.label }}</div>
         <div class="whitespace-nowrap">
             {% if 'from_val' in row %}{{ row.from_val }} &rarr; {{ row.to_val }}{% endif %}
         </div>
@@ -386,15 +389,15 @@
                     <span class="text-sm font-medium">{{ ability.name }}</span>
                     <div class="flex items-center gap-2">
                         {% if viewer_can_edit %}
-                        <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
-                                :disabled="getCount('{{ ability.id }}') <= 0"
+                        <button @click="setCount('{{ ability.id }}', Math.min({{ ability.max }}, getCount('{{ ability.id }}') + 1))"
+                                :disabled="getCount('{{ ability.id }}') >= {{ ability.max }}"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
                         {% endif %}
                         <span class="text-sm font-bold w-16 text-center"
                               x-text="({{ ability.max }} - getCount('{{ ability.id }}')) + ' / {{ ability.max }}'"></span>
                         {% if viewer_can_edit %}
-                        <button @click="setCount('{{ ability.id }}', Math.min({{ ability.max }}, getCount('{{ ability.id }}') + 1))"
-                                :disabled="getCount('{{ ability.id }}') >= {{ ability.max }}"
+                        <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
+                                :disabled="getCount('{{ ability.id }}') <= 0"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
                         {% endif %}
                     </div>
@@ -541,9 +544,11 @@
                         <span class="font-medium">{{ info.data.name }}</span>
                     </div>
                     <div class="flex items-center gap-3">
+                        {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction'] %}
                         <button type="button" data-roll-key="knack:{{ kid }}" @click.stop
                                 title="Click to roll {{ info.data.name }}"
                                 class="text-base hover:scale-110 transition-transform">&#x1F3B2;</button>
+                        {% endif %}
                         <span class="text-lg font-bold text-accent">{{ info.rank }}</span>
                         <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -698,16 +703,18 @@
             {% endfor %}
         </div>
 
-        {# Bottom row: Total Spent (left, full width) + Disadvantages (right, fixed width) #}
-        <div class="flex gap-2 text-sm mb-3">
-            <div class="flex-1 flex justify-between px-3 py-2 bg-ink/10 rounded font-bold">
+        {# Bottom row: Total Spent (col 1) + Disadvantages (col 3 on sm+).
+           Uses the same grid as the categories above so all cells line up
+           and Disadvantages stays the same size as Rings/Skills/etc. #}
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm mb-3">
+            <div class="flex justify-between px-3 py-2 bg-ink/10 rounded font-bold">
                 <span>Total Spent</span>
                 <span class="font-mono">{{ xp_breakdown.grand_total }}</span>
             </div>
             {% set dis_section = xp_breakdown.disadvantages %}
             {% set dis_clickable = dis_section.total != 0 %}
             <div data-xp-card="disadvantages"
-                 class="flex justify-between px-3 py-2 bg-parchment rounded select-none w-48{% if dis_clickable %} cursor-pointer hover:bg-parchment/70{% endif %}"
+                 class="sm:col-start-3 flex justify-between px-3 py-2 bg-parchment rounded select-none{% if dis_clickable %} cursor-pointer hover:bg-parchment/70{% endif %}"
                  {% if dis_clickable %}@click="expanded = expanded === 'disadvantages' ? null : 'disadvantages'"
                  :class="expanded === 'disadvantages' ? 'ring-2 ring-accent' : ''"{% endif %}>
                 <span>Disadvantages</span>
@@ -721,17 +728,18 @@
              class="bg-parchment/40 rounded p-3 mb-3 border border-ink/10">
             {% for key in ['rings', 'school_knacks', 'skills', 'combat_skills', 'advantages', 'honor_rank_recognition', 'disadvantages'] %}
                 {% set section = xp_breakdown[key] %}
+                {% set row_align = 'left' if key in ('advantages', 'disadvantages') else 'center' %}
                 <div x-show="expanded === '{{ key }}'" x-cloak data-xp-detail="{{ key }}">
                     <h3 class="font-bold text-sm text-accent mb-2">{{ section.label }}</h3>
                     {% if section.subsections is defined %}
                         {% for sub in section.subsections %}
                             {% if sub.rows %}
                                 <h4 class="text-xs font-semibold text-ink/60 mt-2 mb-1">{{ sub.label }}</h4>
-                                {{ render_rows(sub.rows) }}
+                                {{ render_rows(sub.rows, align=row_align) }}
                             {% endif %}
                         {% endfor %}
                     {% else %}
-                        {{ render_rows(section.rows) }}
+                        {{ render_rows(section.rows, align=row_align) }}
                     {% endif %}
                 </div>
             {% endfor %}

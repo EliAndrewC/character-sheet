@@ -685,10 +685,10 @@
                             class="bg-accent hover:bg-red-900 text-parchment px-6 py-3 rounded font-medium transition-colors">
                         Apply Changes
                     </button>
-                    <a href="/characters/{{ character.id }}"
-                       class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-3 rounded font-medium transition-colors text-sm">
+                    <button type="button" @click="navigateToSheet()" data-action="view-sheet"
+                            class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-3 rounded font-medium transition-colors text-sm">
                         View Sheet
-                    </a>
+                    </button>
                 </div>
             </div>
         </div>
@@ -862,6 +862,7 @@ function characterForm() {
             this._saveTimeout = null;
             this._saving = false;
             this._dirty = false;
+            this._savePromise = null;
             this._charId = {{ character.id }};
 
             this.$watch('rings', () => this.markDirty(), { deep: true });
@@ -920,12 +921,22 @@ function characterForm() {
             this._saveTimeout = setTimeout(() => this.doSave(), 1500);
         },
 
-        async doSave() {
-            if (this._saving || !this._dirty) return;
+        doSave() {
+            // Returns a promise that resolves when this save (and only this
+            // save) finishes. ``flushPendingSave`` relies on this — calling
+            // doSave while another save is in flight returns the in-flight
+            // promise so callers can await it.
+            if (this._saving) return this._savePromise || Promise.resolve();
+            if (!this._dirty) return Promise.resolve();
             this._saving = true;
             this._dirty = false;
+            this._saveTimeout = null;
             this.saveStatus = 'Saving...';
+            this._savePromise = this._runSave();
+            return this._savePromise;
+        },
 
+        async _runSave() {
             try {
                 const body = {
                     name: document.querySelector('input[name="name"]')?.value || this.school || 'New Character',
@@ -967,7 +978,36 @@ function characterForm() {
                 this.saveStatus = 'Save failed';
             }
             this._saving = false;
+            this._savePromise = null;
             if (this._dirty) this.debounceSave();
+        },
+
+        async flushPendingSave() {
+            // Cancel any pending debounce, drain any in-flight save, and
+            // run a fresh save if changes are still buffered. Loops until
+            // there's nothing left to do — protects against the case where
+            // an in-flight save's tail (`if (_dirty) debounceSave()`)
+            // schedules another timer right as we're trying to flush.
+            for (let i = 0; i < 5; i++) {
+                if (this._saveTimeout) {
+                    clearTimeout(this._saveTimeout);
+                    this._saveTimeout = null;
+                }
+                if (this._savePromise) {
+                    try { await this._savePromise; } catch (e) {}
+                    continue;
+                }
+                if (this._dirty) {
+                    try { await this.doSave(); } catch (e) {}
+                    continue;
+                }
+                return;
+            }
+        },
+
+        async navigateToSheet() {
+            await this.flushPendingSave();
+            window.location.href = '/characters/' + this._charId;
         },
 
         publishing: false,
@@ -982,7 +1022,7 @@ function characterForm() {
 
         async doApply() {
             if (!this.applySummary.trim()) return;
-            await this.doSave();
+            await this.flushPendingSave();
             this.publishing = true;
             this.publishMessage = 'Applying changes...';
             try {

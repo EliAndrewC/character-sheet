@@ -42,6 +42,18 @@ from app.game_data import ADVANTAGES
 # ---------------------------------------------------------------------------
 
 
+# Knacks that the character sheet does not allow rolling directly
+# (e.g. passive lookups like Discern Honor / Worldliness, or social
+# probes that don't reduce to a single roll). Mirrors the same list in
+# templates/character/sheet.html.
+NON_ROLLABLE_KNACKS = frozenset({
+    "discern_honor",
+    "worldliness",
+    "otherworldliness",
+    "conviction",
+})
+
+
 @dataclass
 class RollFormula:
     """A roll formula for one clickable item on the sheet.
@@ -362,6 +374,8 @@ def build_all_roll_formulas(
     school = SCHOOLS.get(school_id)
     if school is not None:
         for knack_id in school.school_knacks:
+            if knack_id in NON_ROLLABLE_KNACKS:
+                continue
             formula = build_knack_formula(knack_id, character_data)
             if formula is not None:
                 out[f"knack:{knack_id}"] = formula.to_dict()
