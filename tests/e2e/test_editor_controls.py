@@ -5,6 +5,31 @@ import pytest
 
 pytestmark = [pytest.mark.rings, pytest.mark.knacks, pytest.mark.combat_skills, pytest.mark.skills, pytest.mark.honor_rank_recognition, pytest.mark.advantages]
 
+
+def test_editor_has_no_javascript_console_errors(page, live_server_url):
+    """The editor page should not throw JavaScript errors on load.
+
+    Captures any 'pageerror' (uncaught exception) and 'console.error'
+    messages while navigating to a fresh editor and asserts there are none.
+    """
+    errors: list[str] = []
+    page.on("pageerror", lambda exc: errors.append(f"pageerror: {exc}"))
+    page.on(
+        "console",
+        lambda msg: errors.append(f"console.{msg.type}: {msg.text}")
+        if msg.type == "error"
+        else None,
+    )
+
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    # Pick a school so the full editor renders (school knacks, advantage tooltips, etc.)
+    select_school(page, "akodo_bushi")
+    page.wait_for_timeout(500)
+
+    assert errors == [], "JavaScript errors on the editor page:\n" + "\n".join(errors)
+
 def _go_to_editor(page, live_server_url, school="akodo_bushi"):
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
