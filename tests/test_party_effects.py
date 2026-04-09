@@ -1,7 +1,6 @@
-"""Tests for party-wide group effects integration in compute_effective_status
-and the compute_party_effects helper."""
+"""Tests for party-wide group effects integration in compute_effective_status."""
 
-from app.services.status import compute_effective_status, compute_party_effects
+from app.services.status import compute_effective_status
 
 
 # ---------------------------------------------------------------------------
@@ -121,78 +120,3 @@ class TestPartyNonRankEffects:
         }]
         status = compute_effective_status(_bare_char(), party_members=party)
         assert all("Thoughtless" not in m["source"] for m in status.rank_modifiers)
-
-
-# ---------------------------------------------------------------------------
-# compute_party_effects helper
-# ---------------------------------------------------------------------------
-
-
-class TestComputePartyEffects:
-    def test_empty_when_no_effects_and_no_party(self):
-        effects = compute_party_effects(_bare_char(), "Self", [])
-        assert effects == []
-
-    def test_includes_self_effects(self):
-        self_data = _bare_char(disadvantages=["thoughtless"])
-        effects = compute_party_effects(self_data, "Hero", [])
-        assert len(effects) == 1
-        assert effects[0]["source_name"] == "Hero"
-        assert effects[0]["effect_id"] == "thoughtless"
-        assert effects[0]["effect_name"] == "Thoughtless"
-        assert "Manipulation" in effects[0]["label"]
-
-    def test_includes_other_party_member_effects(self):
-        party = [{
-            "name": "Tanaka",
-            "advantages": [], "disadvantages": [], "campaign_advantages": [],
-            "campaign_disadvantages": ["lion_enmity"],
-        }]
-        effects = compute_party_effects(_bare_char(), "Self", party)
-        assert len(effects) == 1
-        assert effects[0]["source_name"] == "Tanaka"
-        assert effects[0]["effect_id"] == "lion_enmity"
-
-    def test_self_and_other_combined(self):
-        """Per UX, the callout should list ALL effects including self."""
-        self_data = _bare_char(disadvantages=["thoughtless"])
-        party = [{
-            "name": "Tanaka",
-            "advantages": [], "disadvantages": [], "campaign_advantages": [],
-            "campaign_disadvantages": ["lion_enmity"],
-        }]
-        effects = compute_party_effects(self_data, "Hero", party)
-        assert len(effects) == 2
-        source_names = {e["source_name"] for e in effects}
-        assert source_names == {"Hero", "Tanaka"}
-
-    def test_all_five_effect_ids_recognised(self):
-        all_effects_party = [{
-            "name": "Multi",
-            "advantages": [],
-            "disadvantages": ["thoughtless"],
-            "campaign_advantages": ["family_reckoning_righteous_sting"],
-            "campaign_disadvantages": [
-                "lion_enmity",
-                "family_reckoning_venomous_sting",
-                "imperial_disdain",
-            ],
-        }]
-        effects = compute_party_effects(_bare_char(), "Self", all_effects_party)
-        ids = {e["effect_id"] for e in effects}
-        assert ids == {
-            "thoughtless",
-            "lion_enmity",
-            "family_reckoning_righteous_sting",
-            "family_reckoning_venomous_sting",
-            "imperial_disdain",
-        }
-
-    def test_unknown_advantage_is_ignored(self):
-        self_data = _bare_char(advantages=["fierce"])  # Fierce is not in GROUP_EFFECTS
-        effects = compute_party_effects(self_data, "Hero", [])
-        assert effects == []
-
-    def test_party_members_default_none(self):
-        effects = compute_party_effects(_bare_char(disadvantages=["thoughtless"]), "Hero")
-        assert len(effects) == 1

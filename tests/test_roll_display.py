@@ -229,7 +229,78 @@ class TestDisadvantageNotes:
             disadvantages=["thoughtless"],
         )
         result = compute_skill_roll("tact", data)
-        assert "Manipulation" in result.tooltip
+        assert "+20 to opponents' Manipulation from Thoughtless" in result.tooltip
+
+    def test_thoughtless_no_note_on_sincerity(self):
+        """Thoughtless only applies to Tact, not Sincerity."""
+        data = make_character_data(
+            skills={"sincerity": 1},
+            disadvantages=["thoughtless"],
+        )
+        result = compute_skill_roll("sincerity", data)
+        assert "Thoughtless" not in result.tooltip
+        assert "Manipulation" not in result.tooltip
+
+
+class TestPartyMemberInlineEffects:
+    def test_party_thoughtless_appears_on_tact(self):
+        """A party member's Thoughtless adds an inline +10 note on the
+        viewing character's Tact roll."""
+        data = make_character_data(skills={"tact": 1})
+        party = [{
+            "name": "Doji Natsu",
+            "advantages": [],
+            "disadvantages": ["thoughtless"],
+            "campaign_advantages": [],
+            "campaign_disadvantages": [],
+        }]
+        result = compute_skill_roll("tact", data, party_members=party)
+        assert "+10 to opponents' Manipulation from Doji Natsu's Thoughtless" in result.tooltip
+
+    def test_party_thoughtless_does_not_appear_on_sincerity(self):
+        data = make_character_data(skills={"sincerity": 1})
+        party = [{
+            "name": "Doji Natsu",
+            "advantages": [],
+            "disadvantages": ["thoughtless"],
+            "campaign_advantages": [],
+            "campaign_disadvantages": [],
+        }]
+        result = compute_skill_roll("sincerity", data, party_members=party)
+        assert "Thoughtless" not in result.tooltip
+
+    def test_party_without_thoughtless_no_note(self):
+        data = make_character_data(skills={"tact": 1})
+        party = [{
+            "name": "Doji Natsu",
+            "advantages": [],
+            "disadvantages": ["proud"],
+            "campaign_advantages": [],
+            "campaign_disadvantages": [],
+        }]
+        result = compute_skill_roll("tact", data, party_members=party)
+        assert "Thoughtless" not in result.tooltip
+
+    def test_no_party_argument_works(self):
+        """party_members defaults to None — no notes added."""
+        data = make_character_data(skills={"tact": 1})
+        result = compute_skill_roll("tact", data)
+        # No party note (the character has no Thoughtless of their own either)
+        assert "ally" not in result.tooltip
+        assert "Doji" not in result.tooltip
+
+    def test_multiple_party_members_with_thoughtless(self):
+        """Each party member with Thoughtless gets its own inline note."""
+        data = make_character_data(skills={"tact": 1})
+        party = [
+            {"name": "Alice", "advantages": [], "disadvantages": ["thoughtless"],
+             "campaign_advantages": [], "campaign_disadvantages": []},
+            {"name": "Bob", "advantages": [], "disadvantages": ["thoughtless"],
+             "campaign_advantages": [], "campaign_disadvantages": []},
+        ]
+        result = compute_skill_roll("tact", data, party_members=party)
+        assert "Alice's Thoughtless" in result.tooltip
+        assert "Bob's Thoughtless" in result.tooltip
 
 
 class TestFirstDanBonus:

@@ -45,9 +45,9 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Set group via editor dropdown persists → `test_groups.py::test_set_group_via_editor_persists`
 - [x] Setting group does not create a "modified" badge → `test_groups.py::test_set_group_does_not_create_modified_badge`
 - [x] Homepage clusters characters by group with section headings → `test_groups.py::test_homepage_clusters_characters_by_group`
-- [x] Party Effects callout shows other party member's disadvantage → `test_groups.py::test_party_effects_callout_shows_other_member_disadvantage`
-- [x] Party Effects callout includes self disadvantages → `test_groups.py::test_party_effects_callout_includes_self`
-- [x] Party Effects callout absent when no group effects → `test_groups.py::test_party_effects_callout_absent_when_no_effects`
+- [x] Party member's Thoughtless adds inline +10 note on other character's Tact → `test_groups.py::test_party_thoughtless_inline_on_other_tact`
+- [x] Self Thoughtless inline on own Tact (and not on Sincerity) → `test_groups.py::test_self_thoughtless_inline_on_own_tact`
+- [x] Standalone Party Effects section is removed entirely → `test_groups.py::test_no_party_effects_section_present`
 
 ## Admin — Manage Gaming Groups
 
