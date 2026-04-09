@@ -91,6 +91,37 @@ def test_knack_max_5(page, live_server_url):
     assert plus.is_disabled()
 
 
+def test_fourth_dan_auto_raises_school_ring(page, live_server_url):
+    """Reaching 4th Dan (all knacks ≥ 4) auto-raises school ring from 3 to 4."""
+    _go_to_editor(page, live_server_url)
+    # Akodo Bushi: school ring is Water, starts at 3.
+    assert page.locator('input[name="ring_water"]').input_value() == "3"
+    # Raise all three knacks to 4 → currentDan() == 4.
+    click_plus(page, "knack_double_attack", 3)
+    click_plus(page, "knack_feint", 3)
+    click_plus(page, "knack_iaijutsu", 3)
+    page.wait_for_timeout(200)
+    assert page.locator('input[name="ring_water"]').input_value() == "4"
+    # Minus button is disabled at the new floor.
+    minus = page.locator('input[name="ring_water"]').locator('..').locator('button', has_text="-")
+    assert minus.is_disabled()
+
+
+def test_fourth_dan_school_ring_max_7(page, live_server_url):
+    """At 4th Dan the school ring's max climbs from 6 to 7."""
+    _go_to_editor(page, live_server_url)
+    # Reach 4th Dan
+    click_plus(page, "knack_double_attack", 3)
+    click_plus(page, "knack_feint", 3)
+    click_plus(page, "knack_iaijutsu", 3)
+    page.wait_for_timeout(200)
+    # School ring is now 4. Raise it to 7.
+    click_plus(page, "ring_water", 3)  # 4 → 7
+    assert page.locator('input[name="ring_water"]').input_value() == "7"
+    plus = page.locator('input[name="ring_water"]').locator('..').locator('button', has_text="+")
+    assert plus.is_disabled()
+
+
 # --- Combat Skills ---
 
 def test_attack_min_1(page, live_server_url):

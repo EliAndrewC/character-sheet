@@ -652,12 +652,14 @@ def validate_character(character_data: dict) -> List[str]:
     rings = character_data.get("rings", {})
     for ring_name in RING_NAMES:
         value = rings.get(ring_name, RING_DEFAULT)
-        # School ring minimum: 3 (base) or 4 (at 4th Dan)
+        # School ring minimum: 3 (base) or 4 (at 4th Dan).
+        # School ring maximum: 6 normally, 7 at 4th Dan.
         if ring_name == school_ring:
             min_val = 4 if dan >= 4 else RING_SCHOOL_DEFAULT
+            max_val = RING_MAX_SCHOOL + (1 if dan >= 4 else 0)
         else:
             min_val = RING_DEFAULT
-        max_val = RING_MAX_SCHOOL if ring_name == school_ring else RING_MAX_NORMAL
+            max_val = RING_MAX_NORMAL
         if value < min_val:
             errors.append(
                 f"Ring {ring_name} ({value}) is below minimum ({min_val})"
