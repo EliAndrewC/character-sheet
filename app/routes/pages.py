@@ -205,9 +205,15 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                 "max": knack_rank,
             })
 
-    # Compute void points max
+    # Compute void points max and void-spend config
     ring_vals = [char_dict["rings"].get(r, 2) for r in ("Air", "Fire", "Earth", "Water", "Void")]
     void_max = min(ring_vals)
+    void_spend_cap = void_max - (1 if character.school in ("shugenja", "isawa_ishi") else 0)
+    worldliness_max = char_knacks["worldliness"]["rank"] if "worldliness" in char_knacks else 0
+    void_spend_config = {
+        "cap": max(0, void_spend_cap),
+        "worldliness_max": worldliness_max,
+    }
 
     # Get version history
     versions = (
@@ -251,6 +257,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "roll_formulas": roll_formulas,
             "is_impaired_now": is_impaired_now,
             "user_prefs": user_prefs,
+            "void_spend_config": void_spend_config,
             "has_temp_void": character.school in SCHOOLS_WITH_TEMP_VOID,
         },
     )

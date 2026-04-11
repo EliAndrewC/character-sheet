@@ -141,7 +141,9 @@
                  class="rounded p-2">
                 <span class="text-ink/60">Impaired at:</span>
                 <span class="font-bold">{{ ring_map['Earth'] }} serious wounds</span>
-                <div x-show="impaired" x-cloak class="mt-1 text-xs font-bold text-red-800">IMPAIRED - 10s do not reroll</div>
+                <template x-if="impaired">
+                    <div class="mt-1 text-xs font-bold text-red-800">IMPAIRED - 10s do not reroll</div>
+                </template>
             </div>
             {% set dying_base = ring_map['Earth'] * 2 %}
             {% set dying_adj = dying_base
@@ -712,30 +714,9 @@
                     </div>
                     <div class="flex items-center gap-3">
                         {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction'] %}
-                        {% if kid == 'iaijutsu' %}
-                        <div class="relative" x-data="{ iaijutsuMenu: false }" @click.outside="iaijutsuMenu = false">
-                            <button type="button" @click.stop="iaijutsuMenu = !iaijutsuMenu"
-                                    title="Click to roll Iaijutsu"
-                                    class="text-base hover:scale-110 transition-transform">&#x1F3B2;</button>
-                            <div x-show="iaijutsuMenu" x-cloak
-                                 class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-ink/20 py-1 z-20 min-w-[220px]">
-                                <button type="button" data-roll-key="knack:iaijutsu:strike"
-                                        @click="iaijutsuMenu = false"
-                                        class="w-full text-left px-3 py-1.5 text-sm hover:bg-parchment transition-colors">
-                                    Iaijutsu Strike <span class="text-xs text-ink/50">(10s not rerolled)</span>
-                                </button>
-                                <button type="button" data-roll-key="knack:iaijutsu"
-                                        @click="iaijutsuMenu = false"
-                                        class="w-full text-left px-3 py-1.5 text-sm hover:bg-parchment transition-colors">
-                                    Iaijutsu <span class="text-xs text-ink/50">(normal roll)</span>
-                                </button>
-                            </div>
-                        </div>
-                        {% else %}
                         <button type="button" data-roll-key="knack:{{ kid }}"
                                 title="Click to roll {{ info.data.name }}"
                                 class="text-base hover:scale-110 transition-transform">&#x1F3B2;</button>
-                        {% endif %}
                         {% endif %}
                         <span class="text-lg font-bold text-accent">{{ info.rank }}</span>
                         <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1095,12 +1076,38 @@
     <script type="application/json" id="user-prefs">{{ user_prefs | tojson }}</script>
     {% set adv_raises_max = namespace(val=0) %}
     {% for a in per_adventure %}{% if a.id == 'adventure_raises' %}{% set adv_raises_max.val = a.max %}{% endif %}{% endfor %}
+    <script type="application/json" id="void-spend-config">{{ void_spend_config | tojson }}</script>
     <script type="application/json" id="adventure-raises-config">{{ {
         "available": adv_raises_max.val,
         "used": (adventure_state or {}).get('adventure_raises_used', 0),
     } | tojson }}</script>
     <script src="/static/js/dice.js?v={{ static_v('js/dice.js') }}"></script>
     <div x-data="diceRoller()" x-init="init()">
+        {# ── Roll menu (void spending + iaijutsu strike) ── #}
+        <div x-show="rollMenuOpen" x-cloak @click.outside="rollMenuOpen = false"
+             class="fixed z-50 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[240px]"
+             :style="'top:' + rollMenuPos.top + 'px; left:' + rollMenuPos.left + 'px'">
+            <template x-if="rollMenuHasStrike">
+                <button type="button"
+                        @click="executeRoll('knack:iaijutsu:strike', 0, null)"
+                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10">
+                    Iaijutsu Strike <span class="text-xs text-ink/50">(10s not rerolled)</span>
+                </button>
+            </template>
+            <button type="button"
+                    @click="executeRoll(rollMenuKey, 0, null)"
+                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
+                Roll <span x-text="rollMenuTitle"></span>
+            </button>
+            <template x-for="opt in rollMenuOptions" :key="opt.count">
+                <button type="button"
+                        @click="executeRoll(rollMenuKey, opt.count, opt)"
+                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                    <span x-text="opt.label"></span>
+                </button>
+            </template>
+        </div>
+
         <div x-show="open" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
              @click.self="close()">
@@ -1239,6 +1246,23 @@
                             3rd Dan free raise<span x-show="raisesSpentThisRoll > 1">s</span>
                         </div>
 
+                        {# Void points spent on this roll #}
+                        <div x-show="formula?.void_spent > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            Rolled +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span>
+                            from <span x-text="formula?.void_spent"></span>
+                            spent void point<span x-show="formula?.void_spent > 1">s</span>
+                        </div>
+
+                        {# Overflow from rolling above 10k10 #}
+                        <div x-show="formula?.void_overflow_bonus > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="formula?.void_overflow_bonus"></span>
+                            from rolling above 10k10 (+2 per extra rolled or kept die above 10)
+                        </div>
+
                         <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
                             <div class="mt-2 pt-2 border-t border-ink/10">
                                 <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
@@ -1319,6 +1343,14 @@
             // 3rd Dan free raises
             advRaisesConfig: { available: 0, used: 0 },
             raisesSpentThisRoll: 0,
+            // Roll menu (void spending)
+            rollMenuOpen: false,
+            rollMenuKey: '',
+            rollMenuTitle: '',
+            rollMenuPos: { top: 0, left: 0 },
+            rollMenuOptions: [],
+            rollMenuHasStrike: false,
+            voidSpendConfig: { cap: 0, worldliness_max: 0 },
 
             init() {
                 try {
@@ -1334,8 +1366,12 @@
                         document.getElementById('adventure-raises-config').textContent || '{}'
                     );
                 } catch (e) { /* keep defaults */ }
-                // Listen for tracking-section changes (e.g. manual +/- on the
-                // per-adventure counter) so our remaining count stays in sync.
+                try {
+                    this.voidSpendConfig = JSON.parse(
+                        document.getElementById('void-spend-config').textContent || '{}'
+                    );
+                } catch (e) { /* keep defaults */ }
+                // Listen for tracking-section changes
                 window.addEventListener('adventure-state-changed', () => {
                     if (window._trackingBridge) {
                         this.advRaisesConfig.used = window._trackingBridge.getCount('adventure_raises');
@@ -1346,14 +1382,112 @@
                     el.addEventListener('click', (ev) => {
                         ev.stopPropagation();
                         ev.preventDefault();
-                        this.startRoll(el.dataset.rollKey);
+                        this.openRollMenu(el.dataset.rollKey, el);
                     });
                 });
             },
 
-            startRoll(key) {
+            openRollMenu(key, el) {
                 const f = this.formulas[key];
                 if (!f) return;
+
+                // Initiative rolls directly (no void spending)
+                if (f.is_initiative) {
+                    this.executeRoll(key, 0, null);
+                    return;
+                }
+
+                // Compute void options
+                const options = this.computeVoidOptions();
+                // Check if iaijutsu strike variant exists
+                const hasStrike = key === 'knack:iaijutsu' && !!this.formulas['knack:iaijutsu:strike'];
+
+                // If no void options and no strike variant, roll directly
+                if (options.length === 0 && !hasStrike) {
+                    this.executeRoll(key, 0, null);
+                    return;
+                }
+
+                // Position the menu near the clicked element
+                const rect = el.getBoundingClientRect();
+                const menuWidth = 280;
+                let left = rect.left;
+                if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 8;
+                if (left < 8) left = 8;
+
+                this.rollMenuKey = key;
+                this.rollMenuTitle = f.label;
+                this.rollMenuPos = { top: rect.bottom + 4, left };
+                this.rollMenuOptions = options;
+                this.rollMenuHasStrike = hasStrike;
+                this.rollMenuOpen = true;
+            },
+
+            computeVoidOptions() {
+                const t = window._trackingBridge;
+                if (!t) return [];
+                const tempVoid = t.tempVoidPoints || 0;
+                const regularVoid = t.voidPoints || 0;
+                const wMax = this.voidSpendConfig.worldliness_max || 0;
+                const wUsed = wMax > 0 ? (t.getCount('worldliness') || 0) : 0;
+                const wAvail = Math.max(0, wMax - wUsed);
+                const totalAvail = tempVoid + regularVoid + wAvail;
+                const cap = this.voidSpendConfig.cap || 0;
+                const maxSpend = Math.min(totalAvail, cap);
+                if (maxSpend <= 0) return [];
+
+                const options = [];
+                for (let n = 1; n <= maxSpend; n++) {
+                    const fromTemp = Math.min(n, tempVoid);
+                    let rem = n - fromTemp;
+                    const fromRegular = Math.min(rem, regularVoid);
+                    rem -= fromRegular;
+                    const fromWorldliness = rem;
+
+                    // Build label
+                    let label = `Spend ${n} void point${n > 1 ? 's' : ''}`;
+                    const sources = [];
+                    if (fromTemp > 0) sources.push(`${fromTemp} temporary`);
+                    if (fromRegular > 0) sources.push(`${fromRegular} regular`);
+                    if (fromWorldliness > 0) sources.push(`${fromWorldliness} worldliness`);
+                    // Only show breakdown if multiple source types
+                    if (sources.length > 1 || (sources.length === 1 && fromTemp > 0 && (regularVoid > 0 || wAvail > 0))) {
+                        label += ` (${sources.join(', ')})`;
+                    } else if (sources.length === 1 && fromWorldliness > 0) {
+                        label += ' (worldliness)';
+                    } else if (sources.length === 1 && fromTemp > 0 && regularVoid === 0 && wAvail === 0) {
+                        label += ' (temporary)';
+                    }
+
+                    options.push({ count: n, fromTemp, fromRegular, fromWorldliness, label });
+                }
+                return options;
+            },
+
+            executeRoll(key, voidSpent, option) {
+                this.rollMenuOpen = false;
+                const f = { ...this.formulas[key] };
+
+                if (voidSpent > 0 && option) {
+                    f.rolled += voidSpent;
+                    f.kept += voidSpent;
+                    f.void_spent = voidSpent;
+
+                    // Apply 10k10 caps client-side
+                    let overflowBonus = 0;
+                    if (f.rolled > 10) { f.kept += f.rolled - 10; f.rolled = 10; }
+                    if (f.kept > 10) {
+                        const overflow = f.kept - 10;
+                        overflowBonus = 2 * overflow;
+                        f.flat += overflowBonus;
+                        f.kept = 10;
+                    }
+                    f.void_overflow_bonus = overflowBonus;
+
+                    // Deduct void points via tracking bridge
+                    this.deductVoidPoints(option);
+                }
+
                 this.formula = f;
                 this.title = f.label;
                 this.formulaText = f.flat > 0
@@ -1364,11 +1498,15 @@
                 this.runRoll();
             },
 
-            reroll() {
-                if (this.formula) {
-                    this.raisesSpentThisRoll = 0;
-                    this.runRoll();
+            deductVoidPoints(option) {
+                const t = window._trackingBridge;
+                if (!t) return;
+                if (option.fromTemp > 0) t.tempVoidPoints -= option.fromTemp;
+                if (option.fromRegular > 0) t.voidPoints -= option.fromRegular;
+                if (option.fromWorldliness > 0) {
+                    t.setCount('worldliness', (t.getCount('worldliness') || 0) + option.fromWorldliness);
                 }
+                t.save();
             },
 
             async runRoll() {
