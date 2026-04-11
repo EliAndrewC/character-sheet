@@ -357,6 +357,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `skills` | Skills +/- | `test_live_xp.py`, `test_editor_controls.py` |
 | `honor_rank_recognition` | Honor/Rank/Recognition controls | `test_live_xp.py`, `test_editor_controls.py`, `test_gm_awards.py` |
 | `gm_awards` | GM-awarded Rank/Recognition bonuses (modal, history, lock) | `test_gm_awards.py` |
+| `responsive` | Responsive design sanity (overflow, hamburger, label widths) | `test_responsive.py` |
 | `advantages` | Advantage/disadvantage checkboxes | `test_live_xp.py`, `test_editor_controls.py` |
 | `exclusive_pairs` | Mutually exclusive pairs | `test_exclusive_pairs.py` |
 | `advantage_details` | Detail fields (text, skills, dropdowns) | `test_advantage_details.py` |
@@ -371,6 +372,17 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `version_history` | Version list, revert, inline edit | `test_publish_revert.py`, `test_sheet_display.py`, `test_sheet_advanced.py` |
 
 Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pytestmark` at module level and add it to this table.
+
+## Responsive Design Sanity Checks
+
+- [x] Sheet page no horizontal overflow at phone width → `test_responsive.py::test_sheet_no_horizontal_overflow`
+- [x] Edit page no horizontal overflow at phone width → `test_responsive.py::test_edit_no_horizontal_overflow`
+- [x] Homepage no horizontal overflow at phone width → `test_responsive.py::test_homepage_no_horizontal_overflow`
+- [x] Hamburger visible on phone, nav items hidden → `test_responsive.py::test_hamburger_visible_on_phone`
+- [x] Hamburger toggle shows/hides nav items → `test_responsive.py::test_hamburger_toggle_shows_nav`
+- [x] Nav visible without hamburger on desktop → `test_responsive.py::test_nav_visible_without_hamburger_on_desktop`
+- [x] No zero-width truncated labels on editor → `test_responsive.py::test_no_zero_width_labels_on_editor`
+- [x] No zero-width truncated labels on sheet → `test_responsive.py::test_no_zero_width_labels_on_sheet`
 
 ---
 
