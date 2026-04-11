@@ -546,11 +546,32 @@ class TestBuildAllRollFormulas:
         assert "knack:otherworldliness" not in formulas
         assert "knack:worldliness" not in formulas
 
-    def test_zero_rank_skills_excluded(self):
+    def test_zero_rank_skills_included_as_unskilled(self):
         char = make_character_data(skills={"bragging": 0, "etiquette": 1})
         formulas = build_all_roll_formulas(char)
-        assert "skill:bragging" not in formulas
+        # Rank-0 skills are now included as unskilled rolls
+        assert "skill:bragging" in formulas
+        assert formulas["skill:bragging"]["is_unskilled"] is True
+        assert formulas["skill:bragging"]["reroll_tens"] is False
+        # Rank-1+ skills are normal
         assert "skill:etiquette" in formulas
+        assert formulas["skill:etiquette"].get("is_unskilled") is not True
+
+    def test_unskilled_advanced_skill_has_penalty(self):
+        char = make_character_data(skills={})
+        formulas = build_all_roll_formulas(char)
+        # Acting is an advanced skill
+        assert "skill:acting" in formulas
+        assert formulas["skill:acting"]["flat"] == -10
+        assert formulas["skill:acting"]["is_unskilled"] is True
+
+    def test_unskilled_basic_skill_no_penalty(self):
+        char = make_character_data(skills={})
+        formulas = build_all_roll_formulas(char)
+        # Bragging is basic
+        assert "skill:bragging" in formulas
+        assert formulas["skill:bragging"]["flat"] == 0
+        assert formulas["skill:bragging"]["is_unskilled"] is True
 
     def test_each_value_is_a_dict_with_required_keys(self):
         char = make_character_data(skills={"bragging": 2}, attack=2)

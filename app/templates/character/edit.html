@@ -691,7 +691,8 @@
                             {% if aid in advantage_detail_fields %}
                             {% set df = advantage_detail_fields[aid] %}
                             <div x-show="advantages.{{ aid }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1"
-                                 x-effect="if(advantages.{{ aid }}) $nextTick(() => { const i = $el.querySelector('input[type=text]'); if(i) i.focus(); })">
+                                 x-data="{ _ready: false }" x-init="setTimeout(() => _ready = true, 500)"
+                                 x-effect="if(_ready && advantages.{{ aid }}) $nextTick(() => { const i = $el.querySelector('input[type=text]'); if(i) i.focus(); })">
                                 <input type="text" placeholder="{{ df.text }}"
                                        @input="if(!advantageDetails['{{ aid }}']) advantageDetails['{{ aid }}']={};advantageDetails['{{ aid }}'].text=$event.target.value;markDirty()"
                                        :value="(advantageDetails['{{ aid }}'] || {}).text || ''"
@@ -754,7 +755,8 @@
                             {% if did in advantage_detail_fields %}
                             {% set df = advantage_detail_fields[did] %}
                             <div x-show="disadvantages.{{ did }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1"
-                                 x-effect="if(disadvantages.{{ did }}) $nextTick(() => { const i = $el.querySelector('input[type=text]'); if(i) i.focus(); })">
+                                 x-data="{ _ready: false }" x-init="setTimeout(() => _ready = true, 500)"
+                                 x-effect="if(_ready && disadvantages.{{ did }}) $nextTick(() => { const i = $el.querySelector('input[type=text]'); if(i) i.focus(); })">
                                 <input type="text" placeholder="{{ df.text }}"
                                        @input="if(!advantageDetails['{{ did }}']) advantageDetails['{{ did }}']={};advantageDetails['{{ did }}'].text=$event.target.value;markDirty()"
                                        :value="(advantageDetails['{{ did }}'] || {}).text || ''"
