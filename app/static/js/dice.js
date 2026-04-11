@@ -119,7 +119,7 @@
     const ROLLING_MS = 1200;
     const SETTLE_MS = 2000;
 
-    async function rollAndAnimate(rolled, rerollTens, animate, playSound) {
+    async function rollAndAnimate(rolled, rerollTens, animate, playSound, trayId) {
         const dice = rollAllDice(rolled, rerollTens);
         if (!animate) {
             // No animation, but still play one sound burst if enabled.
@@ -127,7 +127,7 @@
             return dice;
         }
 
-        const tray = document.getElementById('dice-animation');
+        const tray = document.getElementById(trayId || 'dice-animation');
         if (!tray) return dice;
         tray.innerHTML = '';
 

@@ -215,6 +215,47 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "worldliness_max": worldliness_max,
     }
 
+    # Compute wound check probability slice for client-side display.
+    # We pre-compute prob[reroll][rolled,kept,X] for X=0..150 at each void
+    # spending level so the client can show a probability table without
+    # downloading the full ~720KB probability tables.
+    from app.data import prob as _prob_table
+    wc_formula = roll_formulas.get("wound_check", {})
+    wc_base_rolled = wc_formula.get("rolled", 3)
+    wc_base_kept = wc_formula.get("kept", 2)
+    wc_flat = wc_formula.get("flat", 0)
+    wc_probs = {"flat": wc_flat, "void_cap": void_spend_cap}
+    max_target = 151
+    # Probability slices for reroll=True (normal) at each void level
+    wc_probs["probs"] = {}
+    for v in range(void_spend_cap + 1):
+        r, k = wc_base_rolled + v, wc_base_kept + v
+        # Apply 10k10 caps
+        if r > 10:
+            k += r - 10
+            r = 10
+        if k > 10:
+            k = 10
+        key = f"{r},{k}"
+        if key not in wc_probs["probs"]:
+            wc_probs["probs"][key] = [
+                round(_prob_table[True][r, k, x], 4) for x in range(max_target)
+            ]
+    # Also include a no-reroll slice for iaijutsu strike wound checks (base only)
+    r, k = wc_base_rolled, wc_base_kept
+    wc_probs["probs_no_reroll"] = {
+        f"{r},{k}": [
+            round(_prob_table[False][r, k, x], 4) for x in range(max_target)
+        ]
+    }
+    # Map void count -> rolled,kept key (after caps)
+    wc_probs["void_keys"] = {}
+    for v in range(void_spend_cap + 1):
+        r, k = wc_base_rolled + v, wc_base_kept + v
+        if r > 10: k += r - 10; r = 10
+        if k > 10: k = 10
+        wc_probs["void_keys"][str(v)] = f"{r},{k}"
+
     # Get version history
     versions = (
         db.query(CharacterVersion)
@@ -258,6 +299,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "is_impaired_now": is_impaired_now,
             "user_prefs": user_prefs,
             "void_spend_config": void_spend_config,
+            "wound_check_probs": wc_probs,
             "has_temp_void": character.school in SCHOOLS_WITH_TEMP_VOID,
         },
     )

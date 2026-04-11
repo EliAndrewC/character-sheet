@@ -14,6 +14,19 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Login link visible when anonymous → `test_navigation.py::test_login_link_visible_when_anonymous`
 - [x] Test-login URL returns 403 without valid token → `test_navigation.py::test_test_login_creates_session`
 
+## Wound Check
+
+- [x] Button visible when light wounds > 0 → `test_wound_check.py::test_wound_check_button_visible_with_light_wounds`
+- [x] Button hidden when light wounds = 0 → `test_wound_check.py::test_wound_check_button_hidden_with_zero_wounds`
+- [x] Pre-roll modal opens with probability table → `test_wound_check.py::test_wound_check_modal_opens`
+- [x] Modal shows TN matching light wound total → `test_wound_check.py::test_wound_check_modal_shows_tn`
+- [x] Dice animation visible during wound check roll → `test_wound_check.py::test_wound_check_shows_dice_animation`
+- [x] Result shows PASSED or FAILED → `test_wound_check.py::test_wound_check_result_shows_pass_or_fail`
+- [x] Pass shows Keep/Take buttons → `test_wound_check.py::test_wound_check_pass_shows_keep_and_take_buttons`
+- [x] Take 1 Serious resets light wounds to 0 → `test_wound_check.py::test_wound_check_take_serious_resets_light`
+- [x] Iaijutsu strike wound check button present → `test_wound_check.py::test_iaijutsu_strike_wound_check_available`
+- [x] Regular roll also shows dice animation → `test_wound_check.py::test_regular_roll_shows_dice_animation`
+
 ## Dice Rolling
 
 - [x] Click a skill row opens the modal with the skill name → `test_rolls.py::test_click_skill_opens_modal_with_skill_name`

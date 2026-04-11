@@ -28,32 +28,32 @@ def test_click_skill_opens_modal_with_skill_name(page, live_server_url):
     _create_roller(page, live_server_url, "ClickSkill")
     # Click the bragging row
     page.locator('[data-roll-key="skill:bragging"]').click()
-    page.wait_for_selector('.fixed.inset-0.z-50 h3.text-accent', state='visible', timeout=5000)
-    title = page.locator('.fixed.inset-0.z-50 h3.text-accent').text_content()
+    _wait_for_roll_result(page)
+    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Bragging" in title
 
 
 def test_click_attack_opens_modal_with_attack_title(page, live_server_url):
     _create_roller(page, live_server_url, "ClickAttack")
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('.fixed.inset-0.z-50 h3.text-accent', state='visible', timeout=5000)
-    title = page.locator('.fixed.inset-0.z-50 h3.text-accent').text_content()
+    page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
+    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Attack" in title
 
 
 def test_click_parry_opens_modal(page, live_server_url):
     _create_roller(page, live_server_url, "ClickParry")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('.fixed.inset-0.z-50 h3.text-accent', state='visible', timeout=5000)
-    title = page.locator('.fixed.inset-0.z-50 h3.text-accent').text_content()
+    page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
+    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Parry" in title
 
 
 def test_click_ring_opens_athletics_modal(page, live_server_url):
     _create_roller(page, live_server_url, "ClickRing")
     page.locator('[data-roll-key="athletics:Earth"]').click()
-    page.wait_for_selector('.fixed.inset-0.z-50 h3.text-accent', state='visible', timeout=5000)
-    title = page.locator('.fixed.inset-0.z-50 h3.text-accent').text_content()
+    page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
+    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Athletics" in title and "Earth" in title
 
 
@@ -73,12 +73,12 @@ def test_modal_shows_total_and_dice_after_animation(page, live_server_url):
 def test_modal_close_button(page, live_server_url):
     _create_roller(page, live_server_url, "CloseChar")
     page.locator('[data-roll-key="skill:bragging"]').click()
-    page.wait_for_selector('.fixed.inset-0.z-50 h3.text-accent', state='visible', timeout=5000)
+    page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
     # Click the × close button inside the modal
-    page.locator('.fixed.inset-0.z-50 button', has_text="×").click()
+    page.locator('[data-modal="dice-roller"] button', has_text="×").click()
     page.wait_for_timeout(300)
     # Modal should be hidden — the h3 inside the modal is no longer visible
-    assert not page.locator('.fixed.inset-0.z-50 h3.text-accent').is_visible()
+    assert not page.locator('[data-modal="dice-roller"] h3.text-accent').is_visible()
 
 
 def test_impaired_character_modal_shows_no_reroll_note(page, live_server_url):
@@ -145,7 +145,7 @@ def test_athletics_label_in_modal(page, live_server_url):
     _create_roller(page, live_server_url, "AthleticsChar")
     page.locator('[data-roll-key="athletics:Water"]').click()
     page.wait_for_selector('text="Total:"', state='visible', timeout=5000)
-    title = page.locator('.fixed.inset-0.z-50 h3.text-accent').text_content()
+    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Athletics" in title and "Water" in title
 
 
@@ -287,10 +287,10 @@ def test_spend_raise_adds_5_to_total(page, live_server_url):
     _create_3rd_dan_courtier(page, live_server_url, "SpendTest")
     page.locator('[data-roll-key="skill:manipulation"]').click()
     _wait_for_roll_result(page)
-    total_before = int(page.locator('.fixed.inset-0 .font-bold.text-lg .text-accent').text_content().strip())
+    total_before = int(page.locator('[data-modal="dice-roller"] .font-bold.text-lg .text-accent').text_content().strip())
     page.locator('[data-action="spend-raise"]').click()
     page.wait_for_timeout(200)
-    total_after = int(page.locator('.fixed.inset-0 .font-bold.text-lg .text-accent').text_content().strip())
+    total_after = int(page.locator('[data-modal="dice-roller"] .font-bold.text-lg .text-accent').text_content().strip())
     assert total_after == total_before + 5
 
 
@@ -298,12 +298,12 @@ def test_undo_raise_reverses_spend(page, live_server_url):
     _create_3rd_dan_courtier(page, live_server_url, "UndoTest")
     page.locator('[data-roll-key="skill:manipulation"]').click()
     _wait_for_roll_result(page)
-    total_before = int(page.locator('.fixed.inset-0 .font-bold.text-lg .text-accent').text_content().strip())
+    total_before = int(page.locator('[data-modal="dice-roller"] .font-bold.text-lg .text-accent').text_content().strip())
     page.locator('[data-action="spend-raise"]').click()
     page.wait_for_timeout(100)
     page.locator('[data-action="undo-raise"]').click()
     page.wait_for_timeout(200)
-    total_after = int(page.locator('.fixed.inset-0 .font-bold.text-lg .text-accent').text_content().strip())
+    total_after = int(page.locator('[data-modal="dice-roller"] .font-bold.text-lg .text-accent').text_content().strip())
     assert total_after == total_before
 
 

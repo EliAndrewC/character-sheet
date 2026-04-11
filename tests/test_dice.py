@@ -498,6 +498,41 @@ class TestBuildAllRollFormulas:
         formulas = build_all_roll_formulas(char)
         assert formulas["skill:manipulation"]["adventure_raises_max_per_roll"] == 0
 
+    def test_wound_check_formula_present(self):
+        char = make_character_data()
+        formulas = build_all_roll_formulas(char)
+        assert "wound_check" in formulas
+        wc = formulas["wound_check"]
+        # Akodo Bushi: 1st Dan extra die on wound_check, 2nd Dan free raise
+        # At Dan 1: rolled = Water+1+1 = 3+1+1 = 5 (but Dan=1, no 2nd Dan)
+        assert wc["rolled"] == 5  # Water(3) + 1 + 1(1st Dan)
+        assert wc["kept"] == 3   # Water(3)
+        assert wc["reroll_tens"] is True  # always
+
+    def test_wound_check_always_rerolls_even_impaired(self):
+        char = make_character_data(
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        char["current_serious_wounds"] = 5  # >= Earth(2)
+        formulas = build_all_roll_formulas(char)
+        assert formulas["wound_check"]["reroll_tens"] is True
+
+    def test_wound_check_strength_of_earth_adds_flat(self):
+        char = make_character_data(advantages=["strength_of_the_earth"])
+        formulas = build_all_roll_formulas(char)
+        assert formulas["wound_check"]["flat"] >= 5
+
+    def test_wound_check_3rd_dan_annotated(self):
+        """Schools with wound_check in 3rd Dan applicable_to get raises."""
+        char = make_character_data(
+            school="brotherhood_of_shinsei_monk",
+            school_ring_choice="Fire",
+            skills={"precepts": 3},
+            knacks={"conviction": 3, "otherworldliness": 3, "worldliness": 3},
+        )
+        formulas = build_all_roll_formulas(char)
+        assert formulas["wound_check"]["adventure_raises_max_per_roll"] == 3
+
     def test_non_rollable_knacks_excluded(self):
         # Brotherhood of Shinsei Monk's knacks are conviction,
         # otherworldliness, worldliness — all in NON_ROLLABLE_KNACKS — so
@@ -568,4 +603,8 @@ class TestBuildAllRollFormulas:
         char["current_serious_wounds"] = 3  # >= Earth(2)
         formulas = build_all_roll_formulas(char)
         for key, formula in formulas.items():
-            assert formula["reroll_tens"] is False
+            if key == "wound_check":
+                # Wound checks ALWAYS reroll 10s even when Impaired
+                assert formula["reroll_tens"] is True
+            else:
+                assert formula["reroll_tens"] is False
