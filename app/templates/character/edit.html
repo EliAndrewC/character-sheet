@@ -154,7 +154,7 @@
             <div class="grid gap-3">
                 <template x-for="kid in Object.keys(knacks)" :key="kid">
                     <div class="flex items-center gap-3">
-                        <span class="w-40 text-sm font-medium" x-text="KNACK_NAMES[kid] || kid"></span>
+                        <span class="w-28 sm:w-40 shrink-0 text-sm font-medium truncate" x-text="KNACK_NAMES[kid] || kid"></span>
                         <div class="flex items-center gap-1">
                             <button type="button"
                                     @click="knacks[kid] = Math.max(1, knacks[kid] - 1)"
@@ -346,7 +346,7 @@
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide">GM-Awarded Bonuses</h3>
                     <button type="button" @click="openAwardModal()" data-action="open-award-modal"
                             class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium transition-colors">
-                        + GM-awarded Rank / Recognition Bonus
+                        + GM-awarded Rank / Recognition
                     </button>
                 </div>
                 <template x-if="rankRecognitionAwards.length === 0">
@@ -361,36 +361,47 @@
                         <template x-for="(award, idx) in rankRecognitionAwards" :key="award.id">
                             <div class="bg-parchment rounded-lg p-3 flex flex-wrap items-center gap-3"
                                  :data-award-row="award.id">
-                                <!-- Rank delta -->
-                                <div class="flex items-center gap-1">
-                                    <span class="text-xs text-ink/60 mr-1">Rank</span>
-                                    <button type="button" data-action="award-row-rank-minus"
-                                            @click="adjustAwardRank(idx, -0.5)"
-                                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">-</button>
-                                    <span class="w-10 text-center font-mono font-bold"
-                                          x-text="(award.rank_delta >= 0 ? '+' : '') + award.rank_delta.toFixed(1)"></span>
-                                    <button type="button" data-action="award-row-rank-plus"
-                                            @click="adjustAwardRank(idx, 0.5)"
-                                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
-                                </div>
-                                <!-- Recognition delta (≥ 0) -->
-                                <div class="flex items-center gap-1">
-                                    <span class="text-xs text-ink/60 mr-1">Recog</span>
-                                    <button type="button" data-action="award-row-recog-minus"
-                                            @click="adjustAwardRecognition(idx, -0.5)"
-                                            :disabled="award.recognition_delta <= 0"
-                                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
-                                    <span class="w-10 text-center font-mono font-bold"
-                                          x-text="'+' + award.recognition_delta.toFixed(1)"></span>
-                                    <button type="button" data-action="award-row-recog-plus"
-                                            @click="adjustAwardRecognition(idx, 0.5)"
-                                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
-                                </div>
+                                <template x-if="!award.type || award.type === 'rank_recognition'">
+                                    <div class="contents">
+                                        <!-- Rank delta -->
+                                        <div class="flex items-center gap-1">
+                                            <span class="text-xs text-ink/60 mr-1">Rank</span>
+                                            <button type="button" data-action="award-row-rank-minus"
+                                                    @click="adjustAwardRank(idx, -0.5)"
+                                                    class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">-</button>
+                                            <span class="w-10 text-center font-mono font-bold"
+                                                  x-text="(award.rank_delta >= 0 ? '+' : '') + award.rank_delta.toFixed(1)"></span>
+                                            <button type="button" data-action="award-row-rank-plus"
+                                                    @click="adjustAwardRank(idx, 0.5)"
+                                                    class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                                        </div>
+                                        <!-- Recognition delta (≥ 0) -->
+                                        <div class="flex items-center gap-1">
+                                            <span class="text-xs text-ink/60 mr-1">Recog</span>
+                                            <button type="button" data-action="award-row-recog-minus"
+                                                    @click="adjustAwardRecognition(idx, -0.5)"
+                                                    :disabled="award.recognition_delta <= 0"
+                                                    class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                                            <span class="w-10 text-center font-mono font-bold"
+                                                  x-text="'+' + award.recognition_delta.toFixed(1)"></span>
+                                            <button type="button" data-action="award-row-recog-plus"
+                                                    @click="adjustAwardRecognition(idx, 0.5)"
+                                                    class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="award.type === 'good_reputation' || award.type === 'bad_reputation'">
+                                    <span class="text-xs font-bold px-2 py-0.5 rounded"
+                                          :class="award.type === 'good_reputation'
+                                              ? 'bg-green-100 text-green-800'
+                                              : 'bg-red-100 text-red-800'"
+                                          x-text="award.type === 'good_reputation' ? 'Good Reputation' : 'Bad Reputation'"></span>
+                                </template>
                                 <!-- Source (metadata, doesn't trigger draft) -->
                                 <input type="text"
                                        :value="award.source"
                                        @input="onAwardSourceInput(award.id, $event.target.value)"
-                                       placeholder="Source"
+                                       :placeholder="(award.type === 'good_reputation' || award.type === 'bad_reputation') ? 'What are you known for?' : 'Source'"
                                        class="flex-1 min-w-[12rem] text-sm border border-ink/20 rounded px-2 py-1 bg-white">
                                 <!-- Delete -->
                                 <button type="button" @click="deleteAward(idx)"
@@ -409,9 +420,20 @@
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
              @click.self="closeAwardModal()" @keydown.escape="closeAwardModal()">
             <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4">
-                <h3 class="text-lg font-bold text-accent mb-3">GM-awarded Rank / Recognition Bonus</h3>
-                <div class="space-y-4">
-                    <!-- Rank delta (allows negative) -->
+                <h3 class="text-lg font-bold text-accent mb-3">GM-awarded Rank / Recognition</h3>
+
+                {# Tab toggle #}
+                <div class="flex gap-1 mb-4 bg-ink/5 rounded p-1">
+                    <button type="button" @click="awardModalTab = 'numeric'" data-action="award-tab-numeric"
+                            :class="awardModalTab === 'numeric' ? 'bg-white shadow font-bold' : 'text-ink/60'"
+                            class="flex-1 text-sm px-3 py-1.5 rounded transition-colors">Rank / Recognition</button>
+                    <button type="button" @click="awardModalTab = 'reputation'" data-action="award-tab-reputation"
+                            :class="awardModalTab === 'reputation' ? 'bg-white shadow font-bold' : 'text-ink/60'"
+                            class="flex-1 text-sm px-3 py-1.5 rounded transition-colors">Award Reputation</button>
+                </div>
+
+                {# ── Numeric rank/recognition tab ── #}
+                <div x-show="awardModalTab === 'numeric'" class="space-y-4">
                     <div data-field="award-modal-rank">
                         <label class="block text-sm font-medium mb-1">Rank change</label>
                         <div class="flex items-center gap-1">
@@ -426,7 +448,6 @@
                             <span class="text-xs text-ink/50 ml-2">Can be negative (loss of rank).</span>
                         </div>
                     </div>
-                    <!-- Recognition delta (≥ 0) -->
                     <div data-field="award-modal-recognition">
                         <label class="block text-sm font-medium mb-1">Recognition change</label>
                         <div class="flex items-center gap-1">
@@ -442,7 +463,6 @@
                             <span class="text-xs text-ink/50 ml-2">Recognition can only increase.</span>
                         </div>
                     </div>
-                    <!-- Source (required) -->
                     <div>
                         <label class="block text-sm font-medium mb-1">Source <span class="text-red-700">*</span></label>
                         <input type="text" x-model="awardModalSource"
@@ -451,13 +471,48 @@
                                class="w-full text-sm border border-ink/20 rounded px-2 py-1.5 bg-white">
                     </div>
                 </div>
+
+                {# ── Reputation tab ── #}
+                <div x-show="awardModalTab === 'reputation'" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Reputation type</label>
+                        <div class="flex gap-2">
+                            <button type="button" @click="awardModalRepType = 'good_reputation'"
+                                    data-action="award-rep-good"
+                                    :class="awardModalRepType === 'good_reputation' ? 'bg-green-100 border-green-500 font-bold' : 'bg-ink/5 border-ink/20'"
+                                    class="flex-1 text-sm border rounded px-3 py-2 transition-colors">
+                                Good Reputation
+                                <div class="text-xs text-ink/50 font-normal mt-0.5">+2.0 Rank, +1.0 Recognition</div>
+                            </button>
+                            <button type="button" @click="awardModalRepType = 'bad_reputation'"
+                                    data-action="award-rep-bad"
+                                    :class="awardModalRepType === 'bad_reputation' ? 'bg-red-100 border-red-400 font-bold' : 'bg-ink/5 border-ink/20'"
+                                    class="flex-1 text-sm border rounded px-3 py-2 transition-colors">
+                                Bad Reputation
+                                <div class="text-xs text-ink/50 font-normal mt-0.5">-1.5 Rank, +1.0 Recognition</div>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">What are you known for? <span class="text-red-700">*</span></label>
+                        <input type="text" x-model="awardModalRepText"
+                               data-field="award-rep-text"
+                               placeholder="e.g. heroism at the Battle of White Stag"
+                               class="w-full text-sm border border-ink/20 rounded px-2 py-1.5 bg-white">
+                    </div>
+                    <p class="text-xs text-ink/50">
+                        GM-awarded reputations do not cost XP. They appear in the
+                        Rank / Recognition tooltips on the character sheet.
+                    </p>
+                </div>
+
                 <div class="flex justify-end gap-2 mt-5">
                     <button type="button" @click="closeAwardModal()" data-action="cancel-award"
                             class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm">Cancel</button>
                     <button type="button" @click="applyAwardModal()" data-action="apply-award"
-                            :disabled="!awardModalSource.trim() || (awardModalRank === 0 && awardModalRecognition === 0)"
+                            :disabled="!canApplyAward()"
                             class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed">
-                        Apply Bonus
+                        Apply
                     </button>
                 </div>
             </div>
@@ -475,7 +530,7 @@
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "social" and not skill.is_advanced %}
                         <div class="flex items-center gap-3 tooltip-trigger relative">
-                            <label class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</label>
+                            <label class="w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
                             <div class="flex items-center gap-1">
                                 <button type="button"
                                         @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
@@ -510,7 +565,7 @@
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "social" and skill.is_advanced %}
                         <div class="flex items-center gap-3 tooltip-trigger relative">
-                            <label class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</label>
+                            <label class="w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
                             <div class="flex items-center gap-1">
                                 <button type="button"
                                         @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
@@ -545,7 +600,7 @@
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "knowledge" and not skill.is_advanced %}
                         <div class="flex items-center gap-3 tooltip-trigger relative">
-                            <label class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</label>
+                            <label class="w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
                             <div class="flex items-center gap-1">
                                 <button type="button"
                                         @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
@@ -580,7 +635,7 @@
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "knowledge" and skill.is_advanced %}
                         <div class="flex items-center gap-3 tooltip-trigger relative">
-                            <label class="w-32 text-sm font-medium cursor-help">{{ skill.name }}</label>
+                            <label class="w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
                             <div class="flex items-center gap-1">
                                 <button type="button"
                                         @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
@@ -786,31 +841,31 @@
         </section>
 
         <!-- XP SUMMARY (sticky) -->
-        <div class="sticky bottom-0 bg-parchment/95 backdrop-blur border-t border-ink/20 -mx-4 px-4 py-4 shadow-lg">
-            <div class="flex items-center justify-between gap-4">
-                <div class="flex-1">
-                    <h3 class="text-sm font-bold mb-1">XP Summary</h3>
-                    <div class="text-sm">
+        <div class="sticky bottom-0 bg-parchment/95 backdrop-blur border-t border-ink/20 -mx-4 px-4 py-3 sm:py-4 shadow-lg">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-xs sm:text-sm font-bold mb-0.5 sm:mb-1">XP Summary</h3>
+                    <div class="text-xs sm:text-sm">
                         <span>Spent: <strong class="font-mono" x-text="grossSpent()"></strong></span>
-                        <span class="mx-2">/</span>
+                        <span class="mx-1 sm:mx-2">/</span>
                         <span>Total: <strong class="font-mono" x-text="budgetWithDis()"></strong>
                             <span class="text-xs text-ink/50" x-show="totalDisXp() > 0"
                                   x-text="'(' + 150 + ' starting + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
                         </span>
-                        <span class="mx-2">&mdash;</span>
+                        <span class="mx-1 sm:mx-2">&mdash;</span>
                         <span :class="remainingXp() >= 0 ? 'text-green-700' : 'text-red-600 font-bold'">
                             Unspent: <strong class="font-mono" x-text="remainingXp()"></strong>
                         </span>
                     </div>
                 </div>
-                <div class="flex items-center gap-3">
-                    <span class="text-sm text-ink/60" x-text="saveStatus"></span>
+                <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                    <span class="text-xs sm:text-sm text-ink/60" x-text="saveStatus"></span>
                     <button type="button" @click="openApplyModal()" data-action="apply-changes"
-                            class="bg-accent hover:bg-red-900 text-parchment px-6 py-3 rounded font-medium transition-colors">
+                            class="bg-accent hover:bg-red-900 text-parchment px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base">
                         Apply Changes
                     </button>
                     <button type="button" @click="navigateToSheet()" data-action="view-sheet"
-                            class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-3 rounded font-medium transition-colors text-sm">
+                            class="bg-ink/20 hover:bg-ink/30 text-ink px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm">
                         View Sheet
                     </button>
                 </div>
@@ -950,9 +1005,12 @@ function characterForm() {
         rankLocked: {{ 'true' if character.rank_locked else 'false' }},
         rankRecognitionAwards: {{ (character.rank_recognition_awards or [])|tojson }},
         showAwardModal: false,
+        awardModalTab: 'numeric',
         awardModalRank: 0,
         awardModalRecognition: 0,
         awardModalSource: '',
+        awardModalRepType: 'good_reputation',
+        awardModalRepText: '',
         _awardSourceTimers: {},
         saveStatus: '',
         _exclusivePairs: [
@@ -1271,9 +1329,12 @@ function characterForm() {
         },
 
         openAwardModal() {
+            this.awardModalTab = 'numeric';
             this.awardModalRank = 0;
             this.awardModalRecognition = 0;
             this.awardModalSource = '';
+            this.awardModalRepType = 'good_reputation';
+            this.awardModalRepText = '';
             this.showAwardModal = true;
         },
 
@@ -1281,20 +1342,41 @@ function characterForm() {
             this.showAwardModal = false;
         },
 
+        canApplyAward() {
+            if (this.awardModalTab === 'numeric') {
+                return this.awardModalSource.trim() &&
+                    (this.awardModalRank !== 0 || this.awardModalRecognition !== 0);
+            }
+            // reputation tab
+            return this.awardModalRepType && this.awardModalRepText.trim();
+        },
+
         applyAwardModal() {
-            const source = this.awardModalSource.trim();
-            if (!source) return;
-            if (this.awardModalRank === 0 && this.awardModalRecognition === 0) return;
-            const award = {
-                id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
-                rank_delta: this.awardModalRank,
-                recognition_delta: this.awardModalRecognition,
-                source: source,
-                created_at: new Date().toISOString(),
-            };
-            this.rankRecognitionAwards.push(award);
-            this.rank = +(this.rank + award.rank_delta).toFixed(1);
-            this.recognition = +(this.recognition + award.recognition_delta).toFixed(1);
+            if (!this.canApplyAward()) return;
+            if (this.awardModalTab === 'numeric') {
+                const award = {
+                    id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                    type: 'rank_recognition',
+                    rank_delta: this.awardModalRank,
+                    recognition_delta: this.awardModalRecognition,
+                    source: this.awardModalSource.trim(),
+                    created_at: new Date().toISOString(),
+                };
+                this.rankRecognitionAwards.push(award);
+                this.rank = +(this.rank + award.rank_delta).toFixed(1);
+                this.recognition = +(this.recognition + award.recognition_delta).toFixed(1);
+            } else {
+                // Reputation award — no direct rank/recognition delta
+                const award = {
+                    id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                    type: this.awardModalRepType,
+                    rank_delta: 0,
+                    recognition_delta: 0,
+                    source: this.awardModalRepText.trim(),
+                    created_at: new Date().toISOString(),
+                };
+                this.rankRecognitionAwards.push(award);
+            }
             this.markDirty();
             this.closeAwardModal();
         },

@@ -372,6 +372,61 @@ def build_athletics_formula(
     return formula
 
 
+def build_initiative_formula(character_data: dict) -> Optional[dict]:
+    """Build the initiative roll formula.
+
+    Initiative: roll (Void+1) dice, keep the *lowest* Void dice (discard
+    the highest). No reroll-10s. The kept dice become action dice — each
+    value is the phase number when the character can act.
+
+    School-specific modifications are encoded as boolean flags so the
+    client can apply them after rolling.
+    """
+    rings = character_data.get("rings", {})
+    void_val = rings.get("Void", 2)
+    rolled = void_val + 1
+    kept = void_val
+
+    school_id = character_data.get("school", "")
+    knacks = character_data.get("knacks", {}) or {}
+    dan = compute_dan(knacks) if knacks else 0
+    bonuses = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
+
+    # Matsu Bushi: always roll 10 dice
+    matsu_override = school_id == "matsu_bushi"
+    if matsu_override:
+        rolled = 10
+
+    # 1st Dan extra die on initiative (Shinjo, Kakita, Hiruma)
+    if dan >= 1 and bonuses.get("first_dan_extra_die"):
+        if "initiative" in (bonuses["first_dan_extra_die"] or []):
+            rolled += 1
+
+    # Kakita Duelist: 10s on initiative are Phase 0
+    kakita_phase_zero = school_id == "kakita_duelist"
+
+    # Shinjo Bushi 4th Dan: highest action die set to 1
+    shinjo_4th_dan = school_id == "shinjo_bushi" and dan >= 4
+
+    # Hiruma Scout 4th Dan: lower action dice by 2 (min 1)
+    hiruma_4th_dan = school_id == "hiruma_scout" and dan >= 4
+
+    return {
+        "label": "Initiative",
+        "rolled": rolled,
+        "kept": kept,
+        "flat": 0,
+        "reroll_tens": False,
+        "is_initiative": True,
+        "kakita_phase_zero": kakita_phase_zero,
+        "shinjo_4th_dan": shinjo_4th_dan,
+        "hiruma_4th_dan": hiruma_4th_dan,
+        "alternatives": [],
+        "bonuses": [],
+        "adventure_raises_max_per_roll": 0,
+    }
+
+
 def build_all_roll_formulas(
     character_data: dict,
 ) -> Dict[str, dict]:
@@ -445,5 +500,10 @@ def build_all_roll_formulas(
         formula = build_athletics_formula(ring_name, character_data)
         if formula is not None:
             out[f"athletics:{ring_name}"] = formula.to_dict()
+
+    # Initiative
+    init_formula = build_initiative_formula(character_data)
+    if init_formula is not None:
+        out["initiative"] = init_formula
 
     return out

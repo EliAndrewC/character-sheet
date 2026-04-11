@@ -11,6 +11,27 @@
         [x-cloak] { display: none !important; }
         .tooltip-content { display: none; }
         .tooltip-trigger:hover .tooltip-content { display: block; }
+        /* Touch devices: show a "?" indicator and use tap-to-toggle */
+        @media (hover: none) {
+            .tooltip-trigger { cursor: pointer; }
+            .tooltip-trigger::after {
+                content: "?";
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 1.1em; height: 1.1em;
+                font-size: 0.6rem;
+                font-weight: 700;
+                color: white;
+                background: #6ba3d6;
+                border-radius: 50%;
+                margin-left: 0.3em;
+                vertical-align: middle;
+                flex-shrink: 0;
+            }
+            .tooltip-trigger:hover .tooltip-content { display: none; }
+        }
+        .tooltip-trigger.tooltip-active > .tooltip-content { display: block !important; }
         /* Rich-text section content (sanitized HTML rendered on the sheet) */
         .rich-section { font-size: 0.95rem; line-height: 1.6; }
         .rich-section p { margin: 0.5em 0; }
@@ -86,6 +107,7 @@
             width: 100%;
             aspect-ratio: 300 / 260;
         }
+        .rings-diamond-size { max-width: 300px; }
         /* Narrow screens: collapse to a centered flex wrap */
         @media (max-width: 479px) {
             .rings-diamond {
@@ -177,16 +199,29 @@
     </script>
 </head>
 <body class="bg-parchment text-ink min-h-screen">
-    <nav class="bg-ink text-parchment px-6 py-3 shadow-lg">
-        <div class="max-w-6xl mx-auto flex items-center justify-between">
+    <nav class="bg-ink text-parchment px-6 py-3 shadow-lg" x-data="{ navOpen: false }">
+        <div class="max-w-6xl mx-auto flex items-center justify-between relative">
             <a href="/" class="text-xl font-bold tracking-wide hover:text-gold transition-colors">
                 L7R Character Builder
             </a>
-            <div class="flex items-center gap-3">
+            {# Hamburger — small screens only #}
+            <button @click="navOpen = !navOpen" class="sm:hidden text-parchment p-1" aria-label="Toggle navigation">
+                <svg x-show="!navOpen" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+                <svg x-show="navOpen" x-cloak class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+            {# Nav items: horizontal on sm+, vertical dropdown on mobile #}
+            <div :class="navOpen ? 'flex' : 'hidden'"
+                 class="sm:flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3
+                        absolute sm:static top-full right-0 bg-ink sm:bg-transparent
+                        p-4 sm:p-0 rounded-b-lg sm:rounded-none shadow-lg sm:shadow-none z-50 min-w-[160px]">
                 {% if request.state.user %}
-                <form method="POST" action="/characters" class="inline">
+                <form method="POST" action="/characters" class="inline w-full sm:w-auto">
                     <button type="submit"
-                       class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                       class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors w-full sm:w-auto">
                         New Character
                     </button>
                 </form>
@@ -225,5 +260,24 @@
         <span class="mx-1">&middot;</span>
         <a href="/privacy" class="hover:text-ink/70">Privacy</a>
     </footer>
+    <script>
+    // Tooltip tap-to-toggle for touch devices (hover: none).
+    // Desktop (hover: hover) is untouched — CSS :hover handles it.
+    if (window.matchMedia('(hover: none)').matches) {
+        document.addEventListener('click', function(e) {
+            var trigger = e.target.closest('.tooltip-trigger');
+            if (trigger) {
+                document.querySelectorAll('.tooltip-trigger.tooltip-active').forEach(function(el) {
+                    if (el !== trigger) el.classList.remove('tooltip-active');
+                });
+                trigger.classList.toggle('tooltip-active');
+            } else {
+                document.querySelectorAll('.tooltip-trigger.tooltip-active').forEach(function(el) {
+                    el.classList.remove('tooltip-active');
+                });
+            }
+        });
+    }
+    </script>
 </body>
 </html>

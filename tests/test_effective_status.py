@@ -23,6 +23,59 @@ class TestBaseStatus:
         assert status.stipend == 16  # still 4^2, actual rank doesn't matter
 
 
+class TestGMAwardedReputation:
+    def test_gm_good_reputation_adds_rank_and_recognition(self):
+        """A GM-awarded Good Reputation in rank_recognition_awards adds the
+        same modifiers as the checkbox version, with the source text."""
+        data = make_character_data()
+        data["rank_recognition_awards"] = [
+            {"id": "a1", "type": "good_reputation", "rank_delta": 0,
+             "recognition_delta": 0, "source": "heroism at White Stag"},
+        ]
+        status = compute_effective_status(data)
+        assert any(
+            m["value"] == 2.0 and "heroism at White Stag" in m["source"]
+            for m in status.rank_modifiers
+        )
+        assert any(
+            m["value"] == 1.0 and "heroism at White Stag" in m["source"]
+            for m in status.recognition_modifiers
+        )
+
+    def test_gm_bad_reputation_adds_rank_and_recognition(self):
+        data = make_character_data()
+        data["rank_recognition_awards"] = [
+            {"id": "a1", "type": "bad_reputation", "rank_delta": 0,
+             "recognition_delta": 0, "source": "cowardice at the bridge"},
+        ]
+        status = compute_effective_status(data)
+        assert any(
+            m["value"] == -1.5 and "cowardice" in m["source"]
+            for m in status.rank_modifiers
+        )
+
+    def test_multiple_gm_reputations_stack(self):
+        data = make_character_data()
+        data["rank_recognition_awards"] = [
+            {"id": "a1", "type": "good_reputation", "rank_delta": 0,
+             "recognition_delta": 0, "source": "valor"},
+            {"id": "a2", "type": "good_reputation", "rank_delta": 0,
+             "recognition_delta": 0, "source": "diplomacy"},
+        ]
+        status = compute_effective_status(data)
+        good_rank = [m for m in status.rank_modifiers if "Good Reputation" in m["source"]]
+        assert len(good_rank) == 2
+
+    def test_numeric_award_does_not_add_reputation_modifier(self):
+        data = make_character_data()
+        data["rank_recognition_awards"] = [
+            {"id": "a1", "type": "rank_recognition", "rank_delta": 1.0,
+             "recognition_delta": 0.5, "source": "promotion"},
+        ]
+        status = compute_effective_status(data)
+        assert not any("promotion" in m.get("source", "") for m in status.rank_modifiers)
+
+
 class TestGoodReputation:
     def test_recognition_plus_1(self):
         data = make_character_data(

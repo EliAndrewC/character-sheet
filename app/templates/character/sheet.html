@@ -103,8 +103,11 @@
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">Rings</h2>
 
+        {# ── Side-by-side on lg+: diamond left, info right. Stacked below lg. ── #}
+        <div class="lg:grid lg:grid-cols-[300px_1fr] lg:gap-6">
+
         {# ── Diamond layout (desktop) / horizontal strip (mobile) ── #}
-        <div class="rings-diamond mx-auto" style="max-width: 300px;">
+        <div class="rings-diamond rings-diamond-size mx-auto lg:mx-0">
 
             {# ── The 5 ring elements ── #}
             {% set ring_colors = {
@@ -131,7 +134,7 @@
             {% endfor %}
         </div>
 
-        <div class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+        <div class="mt-4 lg:mt-0 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-3 text-sm">
             <div class="{{ 'bg-red-100 border border-red-300' if is_impaired_now else 'bg-parchment' }} rounded p-2">
                 <span class="text-ink/60">Impaired at:</span>
                 <span class="font-bold">{{ ring_map['Earth'] }} serious wounds</span>
@@ -159,7 +162,8 @@
                 </div>
                 {% endif %}
             </div>
-            <div class="bg-parchment rounded p-2">
+            <div class="bg-parchment rounded p-2 cursor-pointer hover:ring-2 hover:ring-accent/40 transition-shadow"
+                 data-roll-key="initiative" title="Click to roll Initiative">
                 <span class="text-ink/60">Initiative:</span>
                 <span class="font-bold">{{ ring_map['Void'] + 1 }} dice, keep {{ ring_map['Void'] }}</span>
             </div>
@@ -173,6 +177,7 @@
                 <span class="font-bold">{{ ring_map['Water'] + 1 }}k{{ ring_map['Water'] }}</span>
             </div>
         </div>
+        </div>{# end lg:grid side-by-side wrapper #}
     </section>
 
     <!-- LIVE TRACKING -->
@@ -729,7 +734,7 @@
                 {% set rank = char_skills.get(sid, 0) %}
                 <div class="flex items-center gap-3 py-1 tooltip-trigger relative {{ 'opacity-40' if rank == 0 else '' }} {{ 'cursor-pointer hover:bg-parchment/50 rounded px-1 -mx-1' if rank > 0 else '' }}"
                      {% if rank > 0 %}data-roll-key="skill:{{ sid }}" title="Click to roll {{ skill.name }}"{% endif %}>
-                    <span class="w-32 text-sm font-medium">{{ skill.name }}</span>
+                    <span class="w-24 sm:w-32 shrink-0 text-sm font-medium truncate">{{ skill.name }}</span>
                     <div class="flex gap-0.5">
                         {% for i in range(1, 6) %}
                         <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= rank else 'border-ink/30' }}"></div>
@@ -1087,8 +1092,41 @@
                         </template>
                     </div>
 
-                    {# Pool view: unkept on the left, kept on the right (both sorted) #}
-                    <div class="grid grid-cols-2 gap-3 text-sm">
+                    {# ── INITIATIVE result ── #}
+                    <div x-show="formula && formula.is_initiative" x-cloak>
+                        <div class="bg-ink/5 rounded p-3 text-sm">
+                            <div class="font-bold text-lg mb-2">Action Dice</div>
+                            <div class="flex flex-wrap gap-2 mb-2">
+                                <template x-for="(phase, i) in actionDice" :key="i">
+                                    <span class="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 font-mono font-bold text-lg"
+                                          :class="phase === 0
+                                              ? 'border-gold bg-gold/10 text-gold'
+                                              : phase <= 3
+                                                  ? 'border-accent bg-accent/10 text-accent'
+                                                  : 'border-ink/30 bg-parchment text-ink'"
+                                          x-text="phase === 0 ? '0' : phase"></span>
+                                </template>
+                            </div>
+                            <div class="text-xs text-ink/60">
+                                Lower = act earlier. You act once per action die in that phase.
+                            </div>
+                        </div>
+                        {# School-specific notes #}
+                        <div class="space-y-1 mt-2 text-xs">
+                            <template x-if="formula && formula.kakita_phase_zero && actionDice.includes(0)">
+                                <div class="text-gold font-medium">Phase 0: Kakita interrupt attack (10s on initiative become Phase 0).</div>
+                            </template>
+                            <template x-if="formula && formula.shinjo_4th_dan">
+                                <div class="text-ink/70 italic">Shinjo 4th Dan: highest action die was set to 1.</div>
+                            </template>
+                            <template x-if="formula && formula.hiruma_4th_dan">
+                                <div class="text-ink/70 italic">Hiruma 4th Dan: all action dice lowered by 2 (min 1).</div>
+                            </template>
+                        </div>
+                    </div>
+
+                    {# ── NORMAL (non-initiative) result: Pool view ── #}
+                    <div x-show="!formula || !formula.is_initiative" class="grid grid-cols-2 gap-3 text-sm">
                         <div class="bg-parchment/40 rounded p-2">
                             <div class="text-xs font-bold text-ink/60 mb-1">Unkept dice</div>
                             <template x-for="(d, i) in unkeptDice" :key="i">
@@ -1116,8 +1154,8 @@
                         </div>
                     </div>
 
-                    {# Total + structured breakdown #}
-                    <div class="bg-ink/5 rounded p-3 text-sm">
+                    {# Total + structured breakdown (not shown for initiative) #}
+                    <div x-show="!formula || !formula.is_initiative" class="bg-ink/5 rounded p-3 text-sm">
                         <div class="font-bold text-lg mb-1">
                             Total: <span class="text-accent" x-text="baseTotal"></span>
                         </div>
@@ -1229,6 +1267,7 @@
             keptDice: [],
             baseTotal: 0,
             keptSum: 0,
+            actionDice: [],
             formulas: {},
             prefs: { dice_animation_enabled: true, dice_sound_enabled: true },
             // 3rd Dan free raises
@@ -1304,14 +1343,16 @@
                     rolled, reroll_tens, this.prefs.dice_animation_enabled, playSound
                 );
 
-                // Sort dice ascending by value, then keep the LAST `kept` items
-                // so ties at the keep boundary always favour the rightmost die
-                // in the displayed list (kept block stays visually contiguous).
                 const indexed = dice.map((d, i) => ({ ...d, idx: i }));
                 const sortedAsc = [...indexed].sort((a, b) => a.value - b.value);
                 const keptCount = Math.min(kept, sortedAsc.length);
+
+                const isInit = this.formula.is_initiative;
+                // Initiative: keep LOWEST dice. Normal: keep HIGHEST.
                 const keptIdx = new Set(
-                    sortedAsc.slice(sortedAsc.length - keptCount).map(d => d.idx)
+                    isInit
+                        ? sortedAsc.slice(0, keptCount).map(d => d.idx)
+                        : sortedAsc.slice(sortedAsc.length - keptCount).map(d => d.idx)
                 );
 
                 this.finalDice = sortedAsc.map(d => ({ value: d.value, kept: keptIdx.has(d.idx) }));
@@ -1319,6 +1360,25 @@
                 this.unkeptDice = sortedAsc.filter(d => !keptIdx.has(d.idx));
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
                 this.baseTotal = this.keptSum + flat;
+
+                // Initiative: compute action dice with school effects
+                this.actionDice = [];
+                if (isInit) {
+                    let actions = this.keptDice.map(d => d.value).sort((a, b) => a - b);
+                    // Hiruma 4th Dan: lower all action dice by 2 (min 1)
+                    if (this.formula.hiruma_4th_dan) {
+                        actions = actions.map(v => Math.max(1, v - 2));
+                    }
+                    // Shinjo 4th Dan: highest action die set to 1
+                    if (this.formula.shinjo_4th_dan && actions.length > 0) {
+                        actions[actions.length - 1] = 1;
+                    }
+                    // Kakita: 10s become Phase 0
+                    if (this.formula.kakita_phase_zero) {
+                        actions = actions.map(v => v === 10 ? 0 : v);
+                    }
+                    this.actionDice = actions.sort((a, b) => a - b);
+                }
                 this.phase = 'done';
             },
 

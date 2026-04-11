@@ -14,14 +14,16 @@ def award_deltas_for_diff(awards: Optional[List[Dict[str, Any]]]) -> List[Dict[s
 
     The ``source`` is metadata that the player can edit without triggering a
     new version, so version comparisons must ignore it. Returns a normalized
-    list of ``{id, rank_delta, recognition_delta}`` dicts in the original
-    order.
+    list of ``{id, type, rank_delta, recognition_delta}`` dicts in the
+    original order. The ``type`` field distinguishes numeric rank/recognition
+    awards from reputation awards and IS version-significant.
     """
     if not awards:
         return []
     return [
         {
             "id": a.get("id"),
+            "type": a.get("type", "rank_recognition"),
             "rank_delta": a.get("rank_delta", 0),
             "recognition_delta": a.get("recognition_delta", 0),
         }
