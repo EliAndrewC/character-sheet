@@ -256,6 +256,39 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         if k > 10: k = 10
         wc_probs["void_keys"][str(v)] = f"{r},{k}"
 
+    # Compute attack probability slices for each attack-type formula
+    attack_probs = {}
+    reroll_for_attack = not is_impaired_now
+    for key, formula in roll_formulas.items():
+        if not formula.get("is_attack_type"):
+            continue
+        base_r = formula["rolled"]
+        base_k = formula["kept"]
+        flat = formula.get("flat", 0)
+        ap = {"flat": flat, "void_cap": void_spend_cap}
+        ap["probs"] = {}
+        ap["avgs"] = {}
+        ap["void_keys"] = {}
+        for v in range(void_spend_cap + 1):
+            r, k = base_r + v, base_k + v
+            if r > 10: k += r - 10; r = 10
+            if k > 10: k = 10
+            rk = f"{r},{k}"
+            ap["void_keys"][str(v)] = rk
+            if rk not in ap["probs"]:
+                ap["probs"][rk] = [
+                    round(_prob_table[reroll_for_attack][r, k, x], 4)
+                    for x in range(151)
+                ]
+                ap["avgs"][rk] = round(_prob_table[reroll_for_attack].get((r, k), 0), 2)
+        attack_probs[key] = ap
+
+    # Damage average lookup table: avg of NkM with reroll-10s for reasonable combos
+    damage_avgs = {}
+    for r in range(1, 16):
+        for k in range(1, min(r + 1, 11)):
+            damage_avgs[f"{r},{k}"] = round(_prob_table[True].get((r, k), 0), 2)
+
     # Get version history
     versions = (
         db.query(CharacterVersion)
@@ -300,6 +333,8 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "user_prefs": user_prefs,
             "void_spend_config": void_spend_config,
             "wound_check_probs": wc_probs,
+            "attack_probs": attack_probs,
+            "damage_avgs": damage_avgs,
             "has_temp_void": character.school in SCHOOLS_WITH_TEMP_VOID,
         },
     )

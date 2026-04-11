@@ -66,9 +66,10 @@ def test_wound_check_modal_opens(page, live_server_url):
     page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_timeout(300)
     # Modal should be visible with the probability table
-    assert page.locator('h3:text("Wound Check")').is_visible()
+    modal = page.locator('[data-modal="wound-check"]')
+    assert modal.locator('h3:text("Wound Check")').is_visible()
     # Table should have at least the "None" (0 void) row
-    assert page.locator('td:text("None")').is_visible()
+    assert modal.locator('td:text("None")').is_visible()
 
 
 def test_wound_check_modal_shows_tn(page, live_server_url):

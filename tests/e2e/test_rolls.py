@@ -33,11 +33,12 @@ def test_click_skill_opens_modal_with_skill_name(page, live_server_url):
     assert "Bragging" in title
 
 
-def test_click_attack_opens_modal_with_attack_title(page, live_server_url):
+def test_click_attack_opens_attack_modal(page, live_server_url):
+    """Clicking attack opens the attack modal (not the regular dice roller)."""
     _create_roller(page, live_server_url, "ClickAttack")
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
-    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
+    page.wait_for_selector('[data-modal="attack"] h3.text-accent', state='visible', timeout=5000)
+    title = page.locator('[data-modal="attack"] h3.text-accent').text_content()
     assert "Attack" in title
 
 
@@ -169,22 +170,25 @@ def test_die_top_angle_is_about_70_degrees(page, live_server_url):
     page.goto(sheet_url)
     page.wait_for_selector('[data-roll-key="attack"]')
     page.locator('[data-roll-key="attack"]').click()
+    # Attack now opens the attack modal - click "Roll Attack" to start the roll
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    page.locator('[data-modal="attack"] button:text("Roll Attack")').click()
     # Wait until the rolling phase has rendered the dice tray AND the dice
     # have stopped tumbling (otherwise the rotation transform skews
     # getBoundingClientRect and the measured angle is wrong).
     page.wait_for_function(
-        "document.querySelectorAll('#dice-animation svg.die').length > 0",
+        "document.querySelectorAll('#dice-animation-atk svg.die').length > 0",
         timeout=5000,
     )
     page.wait_for_function(
-        "document.querySelectorAll('#dice-animation svg.die.rolling').length === 0",
+        "document.querySelectorAll('#dice-animation-atk svg.die.rolling').length === 0",
         timeout=10000,
     )
 
     measurement = page.evaluate(
         """
         () => {
-            const die = document.querySelector('#dice-animation svg.die');
+            const die = document.querySelector('#dice-animation-atk svg.die') || document.querySelector('#dice-animation svg.die');
             if (!die) return {error: 'no die element'};
             const path = die.querySelector('path.die-shape');
             if (!path) return {error: 'no path'};

@@ -1085,6 +1085,8 @@
     <script type="application/json" id="user-prefs">{{ user_prefs | tojson }}</script>
     {% set adv_raises_max = namespace(val=0) %}
     {% for a in per_adventure %}{% if a.id == 'adventure_raises' %}{% set adv_raises_max.val = a.max %}{% endif %}{% endfor %}
+    <script type="application/json" id="attack-probs">{{ attack_probs | tojson }}</script>
+    <script type="application/json" id="damage-avgs">{{ damage_avgs | tojson }}</script>
     <script type="application/json" id="wound-check-probs">{{ wound_check_probs | tojson }}</script>
     <script type="application/json" id="void-spend-config">{{ void_spend_config | tojson }}</script>
     <script type="application/json" id="adventure-raises-config">{{ {
@@ -1305,6 +1307,221 @@
                             </button>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        {# ── Attack Modal ── #}
+        <div x-show="atkModalOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="attack"
+             @click.self="atkModalOpen = false">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent" x-text="atkFormula?.label || 'Attack'"></h3>
+                    <button type="button" @click="atkModalOpen = false"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+
+                {# ── PRE-ROLL ── #}
+                <div x-show="atkPhase === 'pre'" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Opponent's TN</label>
+                            <div x-show="!atkShowCustomTN">
+                                <select x-model.number="atkTN" @change="if($event.target.value === 'other') { atkShowCustomTN = true; }"
+                                        class="w-full border rounded px-2 py-1.5 text-sm">
+                                    <option value="5">5 (Parry 0)</option>
+                                    <option value="10">10 (Parry 1)</option>
+                                    <option value="15">15 (Parry 2)</option>
+                                    <option value="20">20 (Parry 3)</option>
+                                    <option value="25">25 (Parry 4)</option>
+                                    <option value="30">30 (Parry 5)</option>
+                                    <option value="other">Other...</option>
+                                </select>
+                            </div>
+                            <div x-show="atkShowCustomTN" x-cloak class="flex gap-1">
+                                <input type="number" x-model.number="atkTN" min="1" max="100"
+                                       class="w-full border rounded px-2 py-1.5 text-sm">
+                                <button @click="atkShowCustomTN = false" class="text-xs text-ink/50 hover:text-ink">Back</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Base weapon damage</label>
+                            <div class="flex gap-1">
+                                <input type="number" x-model.number="atkWeaponRolled" min="0" max="10"
+                                       class="w-16 border rounded px-2 py-1.5 text-sm text-center" placeholder="R">
+                                <span class="self-center text-sm font-mono">k</span>
+                                <input type="number" x-model.number="atkWeaponKept" min="1" max="10"
+                                       class="w-16 border rounded px-2 py-1.5 text-sm text-center" placeholder="K">
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Probability table #}
+                    <div class="overflow-x-auto">
+                        <table class="text-sm w-full">
+                            <thead>
+                                <tr class="border-b border-ink/20">
+                                    <th class="text-left py-1 pr-3">Void</th>
+                                    <th class="text-right py-1 px-2">Hit %</th>
+                                    <th class="text-right py-1 px-2">Avg Extra Dice</th>
+                                    <th class="text-right py-1 px-2">Avg Damage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="v in Array.from({length: (voidSpendConfig.cap || 0) + 1}, (_, i) => i)" :key="v">
+                                    <tr class="border-b border-ink/5"
+                                        :class="v === atkVoidSelected ? 'bg-accent/10 font-medium' : ''">
+                                        <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
+                                        <td class="text-right py-1 px-2 text-green-700"
+                                            x-text="Math.round(atkHitChance(v) * 100) + '%'"></td>
+                                        <td class="text-right py-1 px-2"
+                                            x-text="atkAvgExtraDice(v)"></td>
+                                        <td class="text-right py-1 px-2 font-bold"
+                                            x-text="atkAvgDamage(v)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {# Void selector + roll button #}
+                    <div class="flex items-center gap-3">
+                        <label class="text-sm font-medium">Void points:</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" @click="atkVoidSelected = Math.max(0, atkVoidSelected - 1)"
+                                    :disabled="atkVoidSelected <= 0"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                            <span class="w-8 text-center font-bold text-lg" x-text="atkVoidSelected"></span>
+                            <button type="button" @click="atkVoidSelected = Math.min(atkVoidSelected + 1, Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0))"
+                                    :disabled="atkVoidSelected >= Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0)"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">+</button>
+                        </div>
+                        <button type="button" @click="rollAttack()"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium ml-auto">
+                            Roll <span x-text="atkFormula?.label || 'Attack'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                {# ── ROLLING ── #}
+                <div x-show="atkPhase === 'rolling' || atkPhase === 'damage-rolling'" x-cloak>
+                    <div id="dice-animation-atk"
+                         class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+                </div>
+
+                {# ── ATTACK RESULT ── #}
+                <div x-show="atkPhase === 'result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'atk'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3 text-sm">
+                        <div class="font-bold text-lg mb-1">
+                            Total: <span class="text-accent" x-text="baseTotal"></span>
+                            <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="atkTN"></span></span>
+                        </div>
+                    </div>
+
+                    {# HIT #}
+                    <div x-show="atkHit" x-cloak class="bg-green-50 border border-green-300 rounded p-3">
+                        <div class="font-bold text-green-800 mb-2">
+                            HIT - exceeded TN by <span x-text="atkExcess"></span>
+                            (<span x-text="atkExtraDice"></span> extra damage dice)
+                        </div>
+
+                        {# Damage formula breakdown #}
+                        <div x-show="atkCurrentDamage()" class="text-sm mb-2">
+                            <span class="font-medium">Damage roll:</span>
+                            <span class="font-mono font-bold" x-text="atkCurrentDamage()?.rolled + 'k' + atkCurrentDamage()?.kept + (atkCurrentDamage()?.flat > 0 ? ' + ' + atkCurrentDamage()?.flat : '')"></span>
+                            <span class="text-ink/50 ml-1">avg <span x-text="atkCurrentDamage()?.avg"></span></span>
+                            <div class="text-xs text-ink/60 mt-1">
+                                <template x-for="(p, i) in (atkCurrentDamage()?.parts || [])" :key="i">
+                                    <span x-text="(i > 0 ? ', ' : '') + p"></span>
+                                </template>
+                            </div>
+                        </div>
+
+                        {# Failed parry checkbox #}
+                        <label class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
+                            <input type="checkbox" x-model="atkFailedParry" class="rounded text-accent">
+                            Opponent made a failed parry
+                        </label>
+                        <div x-show="atkFailedParry" x-cloak class="ml-6 mt-1 flex items-center gap-2 text-sm">
+                            <span class="text-ink/60">Parry skill:</span>
+                            <input type="number" x-model.number="atkParrySkill" min="1" max="5"
+                                   class="w-16 border rounded px-2 py-1 text-sm text-center">
+                        </div>
+
+                        {# Discretionary bonuses (3rd Dan) #}
+                        <div x-show="atkFormula?.adventure_raises_max_per_roll > 0" x-cloak class="mt-2 pt-2 border-t border-green-200">
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button" @click="atkSpendRaise()"
+                                        :disabled="atkRaisesSpent >= (atkFormula?.adventure_raises_max_per_roll || 0)"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Free Raise (+5)
+                                </button>
+                                <button type="button" @click="atkUndoRaise()"
+                                        :disabled="atkRaisesSpent <= 0"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="button" @click="rollDamage()"
+                                class="mt-3 bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                            Make Damage Roll
+                        </button>
+                    </div>
+
+                    {# MISS #}
+                    <div x-show="!atkHit" x-cloak class="bg-red-50 border border-red-300 rounded p-3">
+                        <div class="font-bold text-red-800">MISSED - needed <span x-text="atkTN"></span>, rolled <span x-text="atkRollTotal"></span></div>
+                        {# Discretionary bonuses might turn a miss into a hit #}
+                        <div x-show="atkFormula?.adventure_raises_max_per_roll > 0" x-cloak class="mt-2">
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button" @click="atkSpendRaise()"
+                                        :disabled="atkRaisesSpent >= (atkFormula?.adventure_raises_max_per_roll || 0)"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Free Raise (+5)
+                                </button>
+                                <button type="button" @click="atkUndoRaise()"
+                                        :disabled="atkRaisesSpent <= 0"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" @click="atkModalOpen = false"
+                                class="mt-3 bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
+                            Close
+                        </button>
+                    </div>
+                </div>
+
+                {# ── DAMAGE RESULT ── #}
+                <div x-show="atkPhase === 'damage-result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Damage dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'dmg'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="font-bold text-2xl text-accent" x-text="atkDamageTotal + ' damage'"></div>
+                    </div>
+                    <button type="button" @click="atkModalOpen = false"
+                            class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
+                        Close
+                    </button>
                 </div>
             </div>
         </div>
@@ -1545,6 +1762,34 @@
             // 3rd Dan free raises
             advRaisesConfig: { available: 0, used: 0 },
             raisesSpentThisRoll: 0,
+            // Attack modal
+            atkModalOpen: false,
+            atkPhase: 'pre',  // 'pre' | 'rolling' | 'result' | 'damage-rolling' | 'damage-result'
+            atkKey: '',
+            atkFormula: null,
+            atkProbs: {},
+            atkDamageAvgs: {},
+            atkTN: 20,
+            atkWeaponRolled: 4,
+            atkWeaponKept: 2,
+            atkVoidSelected: 0,
+            atkCustomTN: '',
+            atkShowCustomTN: false,
+            // Attack result state
+            atkHit: false,
+            atkRollTotal: 0,
+            atkExcess: 0,
+            atkExtraDice: 0,
+            atkRaisesSpent: 0,
+            atkConvictionSpent: 0,
+            atkFailedParry: false,
+            atkParrySkill: 3,
+            // Damage state
+            atkDamageRolled: 0,
+            atkDamageKept: 0,
+            atkDamageFlat: 0,
+            atkDamageTotal: 0,
+            atkDamageConvictionSpent: 0,
             // Wound check
             wcModalOpen: false,
             wcPhase: 'pre',  // 'pre' | 'rolling' | 'result'
@@ -1588,6 +1833,16 @@
                         document.getElementById('void-spend-config').textContent || '{}'
                     );
                 } catch (e) { /* keep defaults */ }
+                try {
+                    this.atkProbs = JSON.parse(
+                        document.getElementById('attack-probs').textContent || '{}'
+                    );
+                } catch (e) { this.atkProbs = {}; }
+                try {
+                    this.atkDamageAvgs = JSON.parse(
+                        document.getElementById('damage-avgs').textContent || '{}'
+                    );
+                } catch (e) { this.atkDamageAvgs = {}; }
                 // Listen for tracking-section changes
                 window.addEventListener('adventure-state-changed', () => {
                     if (window._trackingBridge) {
@@ -1613,6 +1868,12 @@
                 // Initiative rolls directly (no void spending)
                 if (f.is_initiative) {
                     this.executeRoll(key, 0, null);
+                    return;
+                }
+
+                // Attack types open the attack modal
+                if (f.is_attack_type) {
+                    this.openAttackModal(key);
                     return;
                 }
 
@@ -1815,6 +2076,208 @@
             },
             raisesRemainingAdventure() {
                 return Math.max(0, this.advRaisesConfig.available - this.advRaisesConfig.used);
+            },
+
+            // --- Attack Modal ---
+
+            openAttackModal(key) {
+                const f = this.formulas[key];
+                if (!f) return;
+                this.atkKey = key;
+                this.atkFormula = f;
+                this.atkPhase = 'pre';
+                this.atkVoidSelected = 0;
+                this.atkRaisesSpent = 0;
+                this.atkConvictionSpent = 0;
+                this.atkFailedParry = false;
+                this.atkParrySkill = Math.max(1, Math.floor((this.atkTN - 5) / 5));
+                this.atkShowCustomTN = false;
+                this.atkModalOpen = true;
+            },
+
+            atkHitChance(voidCount) {
+                const probs = this.atkProbs[this.atkKey];
+                if (!probs) return 0;
+                const rk = probs.void_keys?.[String(voidCount)];
+                if (!rk || !probs.probs?.[rk]) return 0;
+                const arr = probs.probs[rk];
+                const target = Math.max(0, this.atkTN - (probs.flat || 0));
+                return target < arr.length ? arr[target] : 0;
+            },
+
+            atkAvgAttackRoll(voidCount) {
+                const probs = this.atkProbs[this.atkKey];
+                if (!probs) return 0;
+                const rk = probs.void_keys?.[String(voidCount)];
+                return (probs.avgs?.[rk] || 0) + (probs.flat || 0);
+            },
+
+            atkAvgExtraDice(voidCount) {
+                const avg = this.atkAvgAttackRoll(voidCount);
+                const excess = avg - this.atkTN;
+                if (excess <= 0) return 0;
+                return Math.floor(excess / 5);
+            },
+
+            atkComputeDamage(extraDice, isLunge, failedParry, parrySkill, isDoubleAttack) {
+                const f = this.atkFormula;
+                if (!f) return { rolled: 0, kept: 0, flat: 0, avg: 0, parts: [] };
+                let wR = this.atkWeaponRolled;
+                let wK = this.atkWeaponKept;
+                const ringVal = f.damage_ring_val || 2;
+                const ringName = f.damage_ring_name || 'Fire';
+                let extraR = (f.damage_extra_rolled || 0);
+                let extraK = (f.damage_extra_kept || 0);
+                const flat = f.damage_flat_bonus || 0;
+
+                let totalExtra = extraDice;
+                if (isLunge) totalExtra += 1;
+                if (isDoubleAttack && failedParry) totalExtra += 2;
+
+                if (failedParry) {
+                    totalExtra = Math.max(0, totalExtra - parrySkill);
+                }
+
+                let rolled = wR + ringVal + extraR + totalExtra;
+                let kept = wK + extraK;
+                const parts = [`${wR}k${wK} weapon`, `+${ringVal}k0 from ${ringName}`];
+                if (extraR > 0 || extraK > 0) parts.push(`+${extraR}k${extraK} from school`);
+                if (extraDice > 0) parts.push(`+${extraDice}k0 extra from attack roll`);
+                if (isLunge) parts.push('+1k0 from Lunge');
+                if (isDoubleAttack && failedParry) parts.push('+2k0 from Double Attack (failed parry)');
+                if (failedParry) parts.push(`-${parrySkill}k0 from failed parry`);
+                if (flat > 0) parts.push(`+${flat} flat bonus`);
+
+                // Apply 10k10 caps
+                let overflowFlat = 0;
+                if (rolled > 10) { kept += rolled - 10; rolled = 10; }
+                if (kept > 10) { overflowFlat = 2 * (kept - 10); kept = 10; }
+
+                const rk = `${rolled},${kept}`;
+                const avg = Math.round((this.atkDamageAvgs[rk] || 0) + flat + overflowFlat);
+
+                return { rolled, kept, flat: flat + overflowFlat, avg, parts };
+            },
+
+            atkAvgDamage(voidCount) {
+                const extra = this.atkAvgExtraDice(voidCount);
+                const f = this.atkFormula;
+                const isLunge = f?.attack_variant === 'lunge';
+                const d = this.atkComputeDamage(extra, isLunge, false, 0, false);
+                return d.avg;
+            },
+
+            async rollAttack() {
+                const voidCount = this.atkVoidSelected;
+                const formula = { ...this.formulas[this.atkKey] };
+
+                if (voidCount > 0) {
+                    formula.rolled += voidCount;
+                    formula.kept += voidCount;
+                    formula.void_spent = voidCount;
+                    if (formula.rolled > 10) { formula.kept += formula.rolled - 10; formula.rolled = 10; }
+                    if (formula.kept > 10) {
+                        const overflow = formula.kept - 10;
+                        formula.flat += 2 * overflow;
+                        formula.void_overflow_bonus = 2 * overflow;
+                        formula.kept = 10;
+                    }
+                    const options = this.computeVoidOptions();
+                    if (options[voidCount - 1]) this.deductVoidPoints(options[voidCount - 1]);
+                }
+
+                this.atkPhase = 'rolling';
+                this.formula = formula;
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                const dice = await window.L7RDice.rollAndAnimate(
+                    formula.rolled, formula.reroll_tens,
+                    this.prefs.dice_animation_enabled, playSound, 'dice-animation-atk'
+                );
+
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(formula.kept, sorted.length);
+                const keptIdx = new Set(sorted.slice(sorted.length - keptCount).map((d, i) => sorted.length - keptCount + i));
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = this.keptSum + formula.flat;
+
+                this.atkRollTotal = this.baseTotal;
+                this.atkRaisesSpent = 0;
+                this.atkConvictionSpent = 0;
+                this.atkFailedParry = false;
+
+                const excess = this.atkRollTotal - this.atkTN;
+                this.atkHit = excess >= 0;
+                this.atkExcess = excess;
+                this.atkExtraDice = this.atkHit ? Math.floor(excess / 5) : 0;
+                this.atkPhase = 'result';
+            },
+
+            atkSpendRaise() {
+                const f = this.atkFormula;
+                const max = f?.adventure_raises_max_per_roll || 0;
+                if (this.atkRaisesSpent >= max) return;
+                const t = window._trackingBridge;
+                const used = t?.getCount?.('adventure_raises') || 0;
+                const avail = Math.max(0, (this.advRaisesConfig.available || 0) - used);
+                if (this.atkRaisesSpent >= avail) return;
+                this.atkRaisesSpent++;
+                this.baseTotal += 5;
+                this.atkRollTotal += 5;
+                if (t?.setCount) t.setCount('adventure_raises', used + 1);
+                this._atkUpdateHitState();
+            },
+
+            atkUndoRaise() {
+                if (this.atkRaisesSpent <= 0) return;
+                const t = window._trackingBridge;
+                const used = t?.getCount?.('adventure_raises') || 0;
+                this.atkRaisesSpent--;
+                this.baseTotal -= 5;
+                this.atkRollTotal -= 5;
+                if (t?.setCount) t.setCount('adventure_raises', Math.max(0, used - 1));
+                this._atkUpdateHitState();
+            },
+
+            _atkUpdateHitState() {
+                const excess = this.atkRollTotal - this.atkTN;
+                this.atkHit = excess >= 0;
+                this.atkExcess = excess;
+                this.atkExtraDice = this.atkHit ? Math.floor(excess / 5) : 0;
+            },
+
+            atkCurrentDamage() {
+                const f = this.atkFormula;
+                if (!f || !this.atkHit) return null;
+                const isLunge = f.attack_variant === 'lunge';
+                const isDA = f.attack_variant === 'double_attack';
+                return this.atkComputeDamage(
+                    this.atkExtraDice, isLunge,
+                    this.atkFailedParry, this.atkParrySkill, isDA
+                );
+            },
+
+            async rollDamage() {
+                const dmg = this.atkCurrentDamage();
+                if (!dmg) return;
+                this.atkPhase = 'damage-rolling';
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                const dice = await window.L7RDice.rollAndAnimate(
+                    dmg.rolled, true, // damage always rerolls 10s
+                    this.prefs.dice_animation_enabled, playSound, 'dice-animation-atk'
+                );
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(dmg.kept, sorted.length);
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.atkDamageTotal = this.keptSum + dmg.flat;
+                this.atkDamageConvictionSpent = 0;
+                this.atkPhase = 'damage-result';
             },
 
             // --- Wound Check ---
