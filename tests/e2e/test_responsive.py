@@ -22,6 +22,26 @@ def _assert_no_horizontal_overflow(page):
     overflow = page.evaluate(
         "() => document.body.scrollWidth - window.innerWidth"
     )
+    if overflow > 0:
+        culprit = page.evaluate("""() => {
+            const vw = window.innerWidth;
+            const bad = [];
+            document.querySelectorAll('*').forEach(el => {
+                const r = el.getBoundingClientRect();
+                if (r.right > vw + 2) {
+                    bad.push({
+                        tag: el.tagName,
+                        cls: el.className?.toString?.()?.substring(0, 80) || '',
+                        text: el.textContent?.substring(0, 40) || '',
+                        right: Math.round(r.right),
+                        width: Math.round(r.width),
+                    });
+                }
+            });
+            return bad.slice(0, 5);
+        }""")
+        for c in culprit:
+            print(f"  OVERFLOW: <{c['tag']}> right={c['right']}px w={c['width']}px cls={c['cls'][:60]} text={c['text'][:30]}")
     assert overflow <= 0, f"Page overflows by {overflow}px horizontally"
 
 
