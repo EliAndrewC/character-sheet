@@ -112,29 +112,28 @@ def test_wound_minus_disabled_at_zero(page, live_server_url):
 
 
 def test_lucky_toggle_works(page, live_server_url):
-    """Lucky toggle can be checked and shows 'Used'."""
+    """Lucky toggle shows 'unused' and can be marked as used."""
     _create_character_with_lucky(page, live_server_url)
     page.wait_for_selector('text="Lucky (re-roll)"')
-    label = page.locator('text="Lucky (re-roll)"').locator('..')
-    checkbox = label.locator('input[type="checkbox"]')
-    assert not checkbox.is_checked()
-    assert "Available" in label.text_content()
-    checkbox.check()
+    section = page.locator('text="Lucky (re-roll)"').locator('..')
+    assert "unused" in section.text_content()
+    section.locator('button:text("Mark as used")').click()
     page.wait_for_timeout(500)
-    assert "Used" in label.text_content()
+    assert "used" in section.text_content()
+    assert section.locator('button:text("Undo")').is_visible()
 
 
 def test_lucky_toggle_persists(page, live_server_url):
     """Lucky toggle state persists across reload."""
     _create_character_with_lucky(page, live_server_url)
     page.wait_for_selector('text="Lucky (re-roll)"')
-    label = page.locator('text="Lucky (re-roll)"').locator('..')
-    label.locator('input[type="checkbox"]').check()
+    section = page.locator('text="Lucky (re-roll)"').locator('..')
+    section.locator('button:text("Mark as used")').click()
     page.wait_for_timeout(500)
     page.reload()
     page.wait_for_selector('text="Lucky (re-roll)"')
-    label = page.locator('text="Lucky (re-roll)"').locator('..')
-    assert label.locator('input[type="checkbox"]').is_checked()
+    section = page.locator('text="Lucky (re-roll)"').locator('..')
+    assert section.locator('button:text("Undo")').is_visible()
 
 
 def test_reset_per_adventure(page, live_server_url):
@@ -143,19 +142,19 @@ def test_reset_per_adventure(page, live_server_url):
     page.wait_for_selector('text="Lucky (re-roll)"')
 
     # Use the lucky toggle
-    label = page.locator('text="Lucky (re-roll)"').locator('..')
-    label.locator('input[type="checkbox"]').check()
+    section = page.locator('text="Lucky (re-roll)"').locator('..')
+    section.locator('button:text("Mark as used")').click()
     page.wait_for_timeout(500)
 
-    # Reset — opens modal, then confirm
+    # Reset - opens modal, then confirm
     page.locator('[data-action="open-reset-modal"]').click()
     page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
     page.locator('[data-action="confirm-reset"]').click()
     page.wait_for_timeout(500)
 
-    # Should be unchecked again
-    label = page.locator('text="Lucky (re-roll)"').locator('..')
-    assert not label.locator('input[type="checkbox"]').is_checked()
+    # Should be back to unused
+    section = page.locator('text="Lucky (re-roll)"').locator('..')
+    assert "unused" in section.text_content()
 
 
 def test_reset_modal_lists_abilities_to_restore(page, live_server_url):
@@ -163,8 +162,8 @@ def test_reset_modal_lists_abilities_to_restore(page, live_server_url):
     _create_character_with_lucky(page, live_server_url)
     page.wait_for_selector('text="Lucky (re-roll)"')
     # Use lucky
-    label = page.locator('text="Lucky (re-roll)"').locator('..')
-    label.locator('input[type="checkbox"]').check()
+    section = page.locator('text="Lucky (re-roll)"').locator('..')
+    section.locator('button:text("Mark as used")').click()
     page.wait_for_timeout(500)
     # Open reset modal
     page.locator('[data-action="open-reset-modal"]').click()

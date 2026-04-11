@@ -983,7 +983,7 @@ _SCHOOLS_LIST: List[School] = [
         ),
         school_knacks=["counterattack", "double_attack", "iaijutsu"],
         techniques={
-            1: "Roll an extra die on attack, double attack, and parry rolls.",
+            1: "Roll one extra die on parry, double attack, and wound check rolls.",
             2: "Free raise on parry rolls.",
             3: (
                 "At the start of each round, gain 2X points to decrease action "
@@ -1982,7 +1982,7 @@ SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
         # 3rd Dan: non-standard (reroll dice on counterattacks/attacks)
     },
     "mirumoto_bushi": {
-        "first_dan_extra_die": ["attack", "double_attack", "parry"],
+        "first_dan_extra_die": ["parry", "double_attack", "wound_check"],
         "second_dan_free_raise": "parry",
         # 3rd Dan: non-standard (gain points to decrease action phases)
     },

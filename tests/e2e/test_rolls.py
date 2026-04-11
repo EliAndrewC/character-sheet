@@ -42,10 +42,17 @@ def test_click_attack_opens_attack_modal(page, live_server_url):
     assert "Attack" in title
 
 
-def test_click_parry_opens_modal(page, live_server_url):
+def test_click_parry_shows_predeclare_option(page, live_server_url):
+    """Clicking parry shows roll menu with predeclared parry option."""
     _create_roller(page, live_server_url, "ClickParry")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    assert menu.is_visible()
+    assert menu.locator('text=Predeclared Parry').count() > 0
+    # Click normal parry to roll
+    menu.locator('button.font-medium').first.click()
+    _wait_for_roll_result(page)
     title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Parry" in title
 

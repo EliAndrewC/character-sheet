@@ -170,8 +170,34 @@ def _apply_school_technique_bonus(
             _add_flat_bonus(formula, "2nd Dan technique", FREE_RAISE_VALUE)
 
 
-def build_skill_formula(
+def build_unskilled_formula(
     skill_id: str, character_data: dict
+) -> Optional[RollFormula]:
+    """Build a roll formula for an unskilled roll (rank 0).
+
+    Unskilled rolls never reroll 10s. Advanced skills at rank 0 get
+    a -10 penalty.
+    """
+    skill_def = SKILLS.get(skill_id)
+    if skill_def is None:
+        return None
+    rings = character_data.get("rings", {})
+    ring_val = rings.get(skill_def.ring.value, 2)
+    flat = -10 if skill_def.is_advanced else 0
+    return RollFormula(
+        label=f"{skill_def.name} ({skill_def.ring.value})",
+        rolled=ring_val,
+        kept=ring_val,
+        flat=flat,
+        reroll_tens=False,
+        no_reroll_reason="unskilled",
+    )
+
+
+def build_skill_formula(
+    skill_id: str,
+    character_data: dict,
+    party_members: Optional[List[dict]] = None,
 ) -> Optional[RollFormula]:
     """Build a roll formula for a skill the character has at rank > 0."""
     skill_def = SKILLS.get(skill_id)
@@ -593,6 +619,17 @@ def build_all_roll_formulas(
             out[f"skill:{skill_id}"] = _annotate_third_dan(
                 f"skill:{skill_id}", formula.to_dict()
             )
+
+    # Unskilled rolls: generate formulas for ALL skills at rank 0 so
+    # they can still be rolled (no reroll 10s, advanced get -10 penalty).
+    for skill_id, skill_def in SKILLS.items():
+        if skills.get(skill_id, 0) > 0:
+            continue  # already handled above
+        formula = build_unskilled_formula(skill_id, character_data)
+        if formula is not None:
+            d = formula.to_dict()
+            d["is_unskilled"] = True
+            out[f"skill:{skill_id}"] = d
 
     # School knacks (look up from the character's school)
     school = SCHOOLS.get(school_id)

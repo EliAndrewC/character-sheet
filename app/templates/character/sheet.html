@@ -150,9 +150,15 @@
                 - (1 if 'permanent_wound' in (character.disadvantages or []) else 0)
                 + (1 if 'great_destiny' in (character.advantages or []) else 0) %}
             {% set has_dying_tooltip = dying_adj != dying_base %}
-            <div class="bg-parchment rounded p-2 {{ 'tooltip-trigger relative' if has_dying_tooltip else '' }}">
+            <div x-data="{ dying: {{ 'true' if (character.current_serious_wounds or 0) >= dying_adj else 'false' }} }"
+                 @wound-changed.window="dying = $event.detail.serious >= {{ dying_adj }}"
+                 :class="dying ? 'bg-red-100 border border-red-300' : 'bg-parchment'"
+                 class="rounded p-2 {{ 'tooltip-trigger relative' if has_dying_tooltip else '' }}">
                 <span class="text-ink/60">Dying at:</span>
                 <span class="font-bold">{{ dying_adj }} serious wounds</span>
+                <template x-if="dying">
+                    <div class="mt-1 text-xs font-bold text-red-800">MORTALLY WOUNDED - consult GM for available options</div>
+                </template>
                 {% if has_dying_tooltip %}
                 <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs text-left">
                     <p>Base: {{ dying_base }} (2 &times; Earth {{ ring_map['Earth'] }})</p>
@@ -505,14 +511,19 @@
                 {% elif ability.type == 'toggle' %}
                 <div class="flex items-center justify-between">
                     <span class="text-sm font-medium">{{ ability.name }}</span>
-                    <label class="inline-flex items-center gap-2 text-sm {% if viewer_can_edit %}cursor-pointer{% endif %}">
-                        <input type="checkbox"
-                               :checked="getToggle('{{ ability.id }}')"
-                               @change="setToggle('{{ ability.id }}', $event.target.checked)"
-                               {% if not viewer_can_edit %}disabled{% endif %}
-                               class="rounded text-accent">
-                        <span x-text="getToggle('{{ ability.id }}') ? 'Used' : 'Available'" class="text-xs"></span>
-                    </label>
+                    <div class="flex items-center gap-2 text-sm">
+                        <span x-text="getToggle('{{ ability.id }}') ? '{{ ability.name }}: used' : '{{ ability.name }}: unused'"
+                              :class="getToggle('{{ ability.id }}') ? 'text-red-700 font-medium' : 'text-green-700 font-medium'"
+                              class="text-xs"></span>
+                        {% if viewer_can_edit %}
+                        <button x-show="!getToggle('{{ ability.id }}')"
+                                @click="setToggle('{{ ability.id }}', true)"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded">Mark as used</button>
+                        <button x-show="getToggle('{{ ability.id }}')" x-cloak
+                                @click="setToggle('{{ ability.id }}', false)"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded">Undo</button>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endif %}
                 {% endfor %}
@@ -761,15 +772,15 @@
                 {% for sid, skill in skills.items() %}
                 {% if skill.category == cat and skill.is_advanced == advanced %}
                 {% set rank = char_skills.get(sid, 0) %}
-                <div class="flex items-center gap-3 py-1 tooltip-trigger relative {{ 'opacity-40' if rank == 0 else '' }} {{ 'cursor-pointer hover:bg-parchment/50 rounded px-1 -mx-1' if rank > 0 else '' }}"
-                     {% if rank > 0 %}data-roll-key="skill:{{ sid }}" title="Click to roll {{ skill.name }}"{% endif %}>
+                <div class="flex items-center gap-3 py-1 tooltip-trigger relative {{ 'opacity-60' if rank == 0 else '' }} cursor-pointer hover:bg-parchment/50 rounded px-1 -mx-1"
+                     data-roll-key="skill:{{ sid }}" title="Click to roll {{ skill.name }}{{ ' (unskilled)' if rank == 0 else '' }}">
                     <span class="w-24 sm:w-32 shrink-0 text-sm font-medium truncate">{{ skill.name }}</span>
                     <div class="flex gap-0.5">
                         {% for i in range(1, 6) %}
                         <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= rank else 'border-ink/30' }}"></div>
                         {% endfor %}
                     </div>
-                    {% if rank > 0 and sid in skill_rolls %}
+                    {% if sid in skill_rolls %}
                     {% set roll = skill_rolls[sid] %}
                     <span class="text-xs text-accent font-medium ml-2">
                         {{ roll.display }}
@@ -1113,6 +1124,13 @@
                     </button>
                 </div>
             </template>
+            <template x-if="rollMenuHasParry">
+                <button type="button"
+                        @click="executeRollWithExtraFlat(rollMenuKey, 0, null, 5, 'predeclared parry')"
+                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10">
+                    Predeclared Parry <span class="text-xs text-ink/50">(+5 bonus)</span>
+                </button>
+            </template>
             <button type="button"
                     @click="executeRoll(rollMenuKey, 0, null)"
                     class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
@@ -1215,6 +1233,7 @@
                         </button>
                         <button type="button" @click="wcIsStrike = true; wcVoidSelected = 0; rollWoundCheck()"
                                 data-action="roll-wound-check-strike"
+                                title="No void points, no discretionary bonuses, and 10s are not rerolled"
                                 class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
                             Iaijutsu Strike Wound Check
                         </button>
@@ -1284,6 +1303,12 @@
                             serious wound<span x-show="wcSeriousWounds > 1">s</span>.
                             Light wounds reset to 0.
                         </p>
+                        <p x-show="(window._trackingBridge?.seriousWounds || 0) - wcSeriousWounds < _earthRing && (window._trackingBridge?.seriousWounds || 0) >= _earthRing"
+                           x-cloak class="text-sm font-bold text-red-800 mt-1"
+                           x-text="_charName + ' is now Impaired'"></p>
+                        <p x-show="(window._trackingBridge?.seriousWounds || 0) - wcSeriousWounds < _dyingThreshold && (window._trackingBridge?.seriousWounds || 0) >= _dyingThreshold"
+                           x-cloak class="text-sm font-bold text-red-900 mt-1"
+                           x-text="_charName + ' is now mortally wounded'"></p>
 
                         {# Discretionary bonuses (3rd Dan raises) - only if not iaijutsu and not auto-applied #}
                         <div x-show="!wcIsStrike && wcHasDiscretionary && !wcResultApplied" x-cloak
@@ -1844,7 +1869,7 @@
                                 </template>
                             </div>
                             <div class="text-xs text-ink/60">
-                                Lower = act earlier. You act once per action die in that phase.
+                                Each action die may be spent in or after its phase to perform an action.
                             </div>
                         </div>
                         {# School-specific notes #}
@@ -2006,6 +2031,10 @@
                     </div>
 
                     <div x-show="phase === 'done'" x-cloak class="flex justify-end gap-2 pt-2">
+                        <button x-show="canUseLucky()" x-cloak type="button" @click="useLucky()"
+                                class="bg-gold/20 hover:bg-gold/30 text-ink px-4 py-2 rounded text-sm font-medium">
+                            Use Lucky to reroll
+                        </button>
                         <button type="button" @click="close()"
                                 class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">Close</button>
                     </div>
@@ -2033,6 +2062,58 @@
             // 3rd Dan free raises
             advRaisesConfig: { available: 0, used: 0 },
             raisesSpentThisRoll: 0,
+            // Lucky reroll
+            luckyUsedThisRoll: false,
+
+            canUseLucky() {
+                const t = window._trackingBridge;
+                if (!t || this.luckyUsedThisRoll) return false;
+                // Check if Lucky ability exists and is unused
+                const hasLucky = (t.perAdventure || []).some(a => a.id === 'lucky_used');
+                if (!hasLucky) return false;
+                return !t.getToggle('lucky_used');
+            },
+
+            useLucky() {
+                if (!this.canUseLucky()) return;
+                const t = window._trackingBridge;
+                t.setToggle('lucky_used', true);
+                this.luckyUsedThisRoll = true;
+                // Re-run whatever roll was in progress
+                this.runRoll();
+            },
+
+            useLuckyWoundCheck() {
+                if (!this.canUseLucky()) return;
+                const t = window._trackingBridge;
+                t.setToggle('lucky_used', true);
+                this.luckyUsedThisRoll = true;
+                this.wcPhase = 'rolling';
+                this._doWoundCheckRoll();
+            },
+
+            useLuckyAttack() {
+                if (!this.canUseLucky()) return;
+                const t = window._trackingBridge;
+                t.setToggle('lucky_used', true);
+                this.luckyUsedThisRoll = true;
+                this.atkPhase = 'rolling';
+                this._doAttackRoll();
+            },
+
+            useLuckyDamage() {
+                if (!this.canUseLucky()) return;
+                const t = window._trackingBridge;
+                t.setToggle('lucky_used', true);
+                this.luckyUsedThisRoll = true;
+                this.atkPhase = 'damage-rolling';
+                this._doDamageRoll();
+            },
+
+            // Threshold data for wound check notifications
+            _earthRing: {{ ring_map['Earth'] }},
+            _dyingThreshold: {{ dying_adj }},
+            _charName: {{ character.name|tojson }},
             // Iaijutsu duel
             duelOpen: false,
             duelPhase: 'setup',
@@ -2104,6 +2185,7 @@
             rollMenuPos: { top: 0, left: 0 },
             rollMenuOptions: [],
             rollMenuHasStrike: false,
+            rollMenuHasParry: false,
             voidSpendConfig: { cap: 0, worldliness_max: 0 },
 
             init() {
@@ -2171,11 +2253,12 @@
 
                 // Compute void options
                 const options = this.computeVoidOptions();
-                // Check if iaijutsu strike variant exists
+                // Check for special roll variants
                 const hasStrike = key === 'knack:iaijutsu' && !!this.formulas['knack:iaijutsu:strike'];
+                const hasParry = key === 'parry';
 
-                // If no void options and no strike variant, roll directly
-                if (options.length === 0 && !hasStrike) {
+                // If no void options and no special variants, roll directly
+                if (options.length === 0 && !hasStrike && !hasParry) {
                     this.executeRoll(key, 0, null);
                     return;
                 }
@@ -2192,6 +2275,7 @@
                 this.rollMenuPos = { top: rect.bottom + 4, left };
                 this.rollMenuOptions = options;
                 this.rollMenuHasStrike = hasStrike;
+                this.rollMenuHasParry = hasParry;
                 this.rollMenuOpen = true;
             },
 
@@ -2236,8 +2320,25 @@
                 return options;
             },
 
+            executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason) {
+                this.rollMenuOpen = false;
+                this.luckyUsedThisRoll = false;
+                const f = { ...this.formulas[key] };
+                f.flat += extraFlat;
+                f.bonuses = [...(f.bonuses || []), { label: reason, amount: extraFlat }];
+                this.formula = f;
+                this.title = f.label;
+                this.formulaText = f.flat > 0
+                    ? `${f.rolled}k${f.kept} + ${f.flat}`
+                    : `${f.rolled}k${f.kept}`;
+                this.raisesSpentThisRoll = 0;
+                this.open = true;
+                this.runRoll();
+            },
+
             executeRoll(key, voidSpent, option) {
                 this.rollMenuOpen = false;
+                this.luckyUsedThisRoll = false;
                 const f = { ...this.formulas[key] };
 
                 if (voidSpent > 0 && option) {
