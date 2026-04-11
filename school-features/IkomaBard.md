@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Force the opponent to spend their next available action die to attempt to parry; they do not get a free raise.
+> Once per round before making an attack roll against an opponent, you may force the opponent to spend their next available action die to attempt to parry your attack. The opponent does not get a free raise for pre-declaring the parry.
 
 **Status:** NOT implemented beyond generic mechanics. This is a combat mechanic that forces the opponent to use an action on parrying.
 
@@ -27,7 +27,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on attack, bragging, and wound check rolls.
+> Roll one extra die on attack, bragging, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "bragging", "wound_check"]`
@@ -44,7 +44,7 @@
 
 ## 2nd Dan
 
-> Free raise on attack rolls.
+> You get a free raise on attack rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "attack"`
@@ -61,7 +61,7 @@
 
 ## 3rd Dan
 
-> Gain 2X free raises per adventure (X = bragging skill); apply to bragging, culture, heraldry, intimidation, attack, wound checks; max X per roll.
+> Each adventure you get 2X free raises, where X is equal to your bragging skill, which may be applied to the following rolls: bragging, culture, heraldry, intimidation, attack, and wound checks. You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "bragging"`
@@ -93,7 +93,7 @@
 
 ## 4th Dan
 
-> +1 to a non-Void ring; that ring costs 5 fewer XP to raise; unparried attacks always roll 10 dice.
+> Raise your current and maximum in any non-Void Ring by 1. Raising that Ring now costs 5 fewer XP. When making a damage roll for an unparried attack for which you are not keeping extra damage dice, you always roll 10 dice.
 
 **Status:** Partially implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
@@ -110,13 +110,9 @@
 
 ## 5th Dan
 
-> Once per round, apply the Oppose knack or Special Ability again.
+> Once per conversation or combat round, you can apply an oppose knack or your Special ability an additional time. You may choose to use your Special Ability after an opponent has made an attack roll against you, in which case their attack is canceled and their attack roll will be used as their parry roll.
 
-**Status:** NOT implemented. This allows reusing the Oppose knack effect or the forced-parry special ability a second time per round.
-
-**Questions:**
-- Does "apply again" mean the Ikoma gets a free use of Oppose or the Special Ability without spending an action?
-- Can the Ikoma choose which one to reapply each round?
+**Status:** NOT implemented. This allows reusing the Oppose knack effect or the forced-parry special ability a second time per round. Also allows reactive use of the Special Ability after an opponent's attack roll, canceling their attack and converting it to a parry.
 
 **Missing:**
 - [ ] Implement per-round reuse of Oppose/Special Ability

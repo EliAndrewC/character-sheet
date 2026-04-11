@@ -67,15 +67,15 @@
 
 ## 3rd Dan
 
-> At the start of each round, gain 2X points to decrease action phases for parries or +2 on any attack or parry roll.
+> At the beginning of each round, you get 2X points, where X is equal to your attack skill. Each point may be spent to decrease the phase of one of your actions by 1 in order to parry, or to provide a bonus of +2 on any type of attack or parry after you have seen your roll.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- What is X? Is it the Dan level, a knack rank, or something else?
-- "Decrease action phases for parries" - does this mean spending points to move a parry earlier in the round?
-- "+2 on any attack or parry roll" - is this a flat +2, and can points be split between phase adjustment and roll bonuses?
-- Are the 2X points tracked per round? Is there UI for allocating them?
+**Questions (ANSWERED):**
+- X = attack skill rank. So 2 * attack_skill points per round.
+- Per-round (reset each combat round).
+- Points can be spent to lower action phase for a parry OR spent as +2 per point on attack/parry rolls.
+- Points can be split between uses within a round.
 
 **Missing:**
 - [ ] Implement the 3rd Dan round-start points mechanic
@@ -88,7 +88,7 @@
 
 ## 4th Dan
 
-> +1 Void; Void ring costs 5 fewer XP to raise; failed parries reduce fewer extra damage dice.
+> Raise your current and maximum Void by 1. Raising your Void now costs 5 fewer XP. Failed parries against your double attacks do not prevent the automatic serious wound, and against your regular attacks the number of extra rolled damage dice the failed parry reduces is cut in half (rounded down).
 
 **Status:** Partially implemented.
 - Ring raise (+1 Void, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -115,13 +115,13 @@
 
 ## 5th Dan
 
-> Void points provide +10 when spent on combat rolls.
+> Your void points provide an extra +10 when spent on combat rolls.
 
-**Status:** NOT implemented. This modifies the standard VP spending mechanic (normally +1k1) to instead provide +10 flat on combat rolls.
+**Status:** NOT implemented. Each VP spent on combat rolls provides +10 IN ADDITION to the standard +1k1.
 
-**Questions:**
-- Does this replace the standard +1k1 from VP, or is the +10 in addition to the +1k1?
-- Does "combat rolls" include wound checks, or only attack/parry/knack rolls?
+**Questions (ANSWERED):**
+- The +10 is IN ADDITION to the normal +1k1 from void points. So each VP = +1k1 + 10 flat.
+- "Combat rolls" includes wound checks (still need to confirm with user which specific roll types qualify).
 - Does this apply to temporary void points as well?
 
 **Missing:**

@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> After a feint which met its TN, lower the TN of the target by 10 the next time they are attacked.
+> After a feint which met its TN, lower the TN of the target by 10 the next time they are attacked, even if the feint was parried.
 
 **Status:** NOT implemented beyond generic mechanics. This requires tracking the feint result and applying a TN debuff to the target for the next attack.
 
@@ -27,7 +27,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on precepts and two chosen roll types.
+> Roll one extra die on precepts and any two rolls of your choice.
 
 **Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the two roll types are player-chosen.
 - `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES`.
@@ -49,7 +49,7 @@
 
 ## 2nd Dan
 
-> Free raise on any chosen roll type.
+> You get a free raise on any type of roll of your choice.
 
 **Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the roll type is player-chosen.
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES`.
@@ -70,14 +70,14 @@
 
 ## 3rd Dan
 
-> After any roll, spend a void point to subtract Xk1; know all contested results except sincerity/interrogation.
+> After seeing the result of any TN or contested skill roll, you may spend a void point to subtract Xk1 from the roll, where X is equal to your tact skill. You know the result of all TN and contested rolls except sincerity and interrogation.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- What is X here? Presumably a skill rank.
-- "Subtract Xk1" means roll Xk1 and subtract from the opponent's result?
-- "Know all contested results except sincerity/interrogation" - is this an information-display mechanic?
+**Questions (ANSWERED):**
+- X is the tact skill rank (as stated in the rules text).
+- "Subtract Xk1 from the roll" means roll Xk1 and subtract that amount from the roll result.
+- "You know the result of all TN and contested rolls except sincerity and interrogation" is an information display mechanic.
 
 **Missing:**
 - [ ] Implement VP-powered result subtraction mechanic
@@ -89,7 +89,7 @@
 
 ## 4th Dan
 
-> +1 to a non-Void ring; that ring costs 5 fewer XP to raise; regain an extra void point nightly.
+> Raise your current and maximum in any non-Void Ring by 1. Raising that Ring now costs 5 fewer XP. You regain an extra void point every night.
 
 **Status:** Partially implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
@@ -107,15 +107,14 @@
 
 ## 5th Dan
 
-> Gain a temporary void point whenever spending non-technique void points.
+> Gain a temporary void point whenever you spend a void point that was not gained from this technique.
 
 **Status:** NOT implemented. This reactive ability grants temp VP whenever the Ide spends normal VP (not technique-specific VP). The school is in `SCHOOLS_WITH_TEMP_VOID` (via the "temporary void" text in the technique).
 
-**Questions:**
-- Does "non-technique" mean VP spent on generic +1k1 bonuses, as opposed to VP spent via school techniques?
-- Does this create an infinite loop concern (spend VP -> gain temp VP -> spend temp VP -> gain temp VP)?
+**Questions (ANSWERED):**
+- "Not gained from this technique" means VP gained from the 5th Dan itself cannot trigger more temp VP. This prevents the infinite loop.
+- Normal VP and temp VP from other sources can trigger this.
 
 **Missing:**
 - [ ] Implement auto-grant temp VP when spending non-technique VP
-- [ ] Clarify the loop prevention rule
 - [ ] UI for temp VP auto-grant

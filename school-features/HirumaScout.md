@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Two allies fighting on your left and right have their TN to be hit raised by 5.
+> The two allies fighting on your left and right have their TN to be hit raised by 5.
 
 **Status:** NOT implemented beyond generic mechanics. This is a passive aura effect that requires positional tracking in combat.
 
@@ -43,7 +43,7 @@
 
 ## 2nd Dan
 
-> Free raise on parry rolls.
+> You get a free raise to all parry rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "parry"`
@@ -60,14 +60,14 @@
 
 ## 3rd Dan
 
-> After a parry, add 2X to your next attack against the attacker or adjacent targets.
+> After making a successful or unsuccessful parry, add 2X to your next attack and damage roll against the attacker or someone adjacent to them, where X is your attack skill.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- What is X here? Presumably a skill rank (investigation? parry-related?).
-- Is the bonus a flat +2X or 2X free raises?
-- Does "adjacent targets" mean the attacker's neighbors?
+**Questions (ANSWERED):**
+- X is the attack skill rank.
+- The bonus is a flat +2X added to the next attack AND damage roll.
+- "Against the attacker or someone adjacent to them" means the bonus applies to the next attack against the original attacker or their neighbors.
 
 **Missing:**
 - [ ] Implement post-parry attack bonus mechanic
@@ -78,7 +78,7 @@
 
 ## 4th Dan
 
-> +1 Air; Air ring costs 5 fewer XP to raise; lower action dice by 2 (minimum 1) after rolling initiative.
+> Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. After rolling initiative, lower all of your action dice by 2, to a minimum of 1.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -97,13 +97,9 @@
 
 ## 5th Dan
 
-> After a parry, the attacker deals 10 fewer light wounds on their next 2 damage rolls.
+> After making a successful or unsuccessful parry roll, the attacker deals 10 fewer light wounds on their next 2 damage rolls.
 
 **Status:** NOT implemented. This is a reactive ability that modifies the attacker's future damage.
-
-**Questions:**
-- Does this stack if multiple parries are successful?
-- Is the 10 fewer light wounds per damage roll or split across 2 rolls?
 
 **Missing:**
 - [ ] Implement post-parry damage reduction on attacker

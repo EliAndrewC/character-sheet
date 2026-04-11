@@ -27,7 +27,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on precepts, one chosen skill, and one combat roll type.
+> Roll one extra die on precepts, any one skill, and any one type of combat roll.
 
 **Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the skill and combat roll type are player-chosen.
 - `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES`.
@@ -49,21 +49,16 @@
 
 ## 2nd Dan
 
-> Free raise on all Honor bonus rolls (bragging, precepts, open sincerity) for self and allies.
+> You and your allies get a free raise on all rolls for which you receive an Honor bonus (bragging, precepts, and open sincerity).
 
 **Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because this is a group buff.
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES`.
-- This affects "Honor bonus rolls" which is a specific category of rolls.
+- This affects "Honor bonus rolls" which are explicitly defined as bragging, precepts, and open sincerity.
 
 **Implementation:** `app/game_data.py:2168` (`second_dan_free_raise: None`).
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Questions:**
-- What exactly are "Honor bonus rolls"? Are they rolls where Honor provides a bonus (bragging, precepts, open sincerity)?
-- Does "for self and allies" mean all characters in the party benefit?
-- How does this interact with the sheet - does the Priest's sheet show the bonus, or do allies' sheets also need to reflect it?
 
 **Missing:**
 - [ ] Define which rolls count as "Honor bonus rolls"
@@ -76,14 +71,9 @@
 
 ## 3rd Dan
 
-> Roll X dice (X = precepts skill) at combat start; swap for any rolled die on attack/parry/wound/damage; swap lower dice for allies.
+> Roll X dice at the beginning of combat, where X is equal to your precepts skill. You may swap any of these dice for any rolled die on any attack, parry, wound check, or damage roll. You may swap any of these dice for any lower die on any of those types of rolls made by any ally.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`. It involves pre-rolling a pool of dice at combat start and then swapping them in during the combat.
-
-**Questions:**
-- Are the pre-rolled dice visible to the Priest before combat?
-- "Swap for any rolled die" means replace one die in a roll with one from the pool?
-- "Swap lower dice for allies" means allies can only receive swaps where the pool die is lower than the die being replaced?
 
 **Missing:**
 - [ ] Implement pre-roll dice pool at combat start
@@ -95,7 +85,7 @@
 
 ## 4th Dan
 
-> +1 School Ring; that ring costs 5 fewer XP to raise; free raise for self and allies on contested rolls vs equal or higher skills.
+> Raise your current and maximum of your School's chosen Ring by 1. Raising that Ring now costs 5 fewer XP. You and your allies get a free raise on all contested rolls for which your opponent has an equal or higher skill rank.
 
 **Status:** Partially implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
@@ -113,14 +103,9 @@
 
 ## 5th Dan
 
-> Spend Conviction points on allies' rolls; refresh per round; spend to lower action dice for counterattack/parry.
+> You may spend the points from your Conviction knack on your allies' rolls, and your Conviction points refresh after each conversation and combat round. You may also spend these points to lower action dice in order for you or an ally to counterattack or parry.
 
 **Status:** NOT implemented. This allows spending Conviction knack points as a resource for allies, with combat-phase utility.
-
-**Questions:**
-- Does "Conviction points" refer to the knack rank or a separate resource pool?
-- "Refresh per round" means the Conviction points reset each combat round?
-- "Lower action dice for counterattack/parry" means the Priest can spend Conviction to reduce an ally's next action die phase?
 
 **Missing:**
 - [ ] Implement Conviction point spending mechanic

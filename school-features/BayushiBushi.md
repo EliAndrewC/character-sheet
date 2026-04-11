@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Add 1k1 to the damage rolls of those attacks per void point spent.
+> When spending void points on all types of attack rolls, add 1k1 to the damage rolls of those attacks per void point spent.
 
 **Status:** NOT implemented.
 - The damage formula in `build_all_roll_formulas()` does not have any Bayushi-specific logic for adding 1k1 per VP spent on damage.
@@ -40,7 +40,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on iaijutsu, double attack, and wound check rolls.
+> Roll one extra die on iaijutsu, double attack, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["iaijutsu", "double_attack", "wound_check"]`
@@ -57,7 +57,7 @@
 
 ## 2nd Dan
 
-> Free raise on double attack rolls.
+> You get a free raise on double attack rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "double_attack"`
@@ -74,14 +74,14 @@
 
 ## 3rd Dan
 
-> Feints deal damage based on attack skill; no extra damage dice are added.
+> Your feints do Xk1 damage, where X is your attack skill. You don't roll extra damage dice from your Fire or from exceeding the TN, but your Special Ability may increase the damage.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- How does feint damage work mechanically? Is it `attack_skill * X` damage on a successful feint?
-- Does "no extra damage dice" mean the normal damage formula is replaced, or that bonus dice from advantages etc. are suppressed?
-- Is the damage automatic on a successful feint, or does it require a separate roll?
+**Questions (ANSWERED):**
+- Damage formula: (attack_skill)k1 with NO extra damage from ring or TN excess.
+- However, the Bayushi special ability (+1k1 per VP spent on the roll) DOES apply. So if attack=4 and 1 VP spent on the feint: damage = 5k2.
+- This is a separate damage roll triggered after a successful feint.
 
 **Missing:**
 - [ ] Implement the 3rd Dan feint-deals-damage mechanic
@@ -93,7 +93,7 @@
 
 ## 4th Dan
 
-> +1 Fire; Fire ring costs 5 fewer XP to raise; free raise on any attack after a successful or unsuccessful feint.
+> Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. After a successful or unsuccessful feint, you may apply a free raise to any future attack this combat.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -117,7 +117,7 @@
 
 ## 5th Dan
 
-> Failed wound checks calculate serious wounds as half light wounds.
+> When you fail a wound check, calculate your serious wounds as if you had half your number of light wounds.
 
 **Status:** NOT implemented. This modifies the wound check failure outcome formula.
 

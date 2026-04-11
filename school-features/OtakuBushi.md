@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Make a lunge attack at your attacker as an interrupt action at the cost of one action die.
+> After an attack against you is completely resolved, you may make a lunge attack at your attacker as an interrupt action at the cost of one action die.
 
 **Status:** NOT implemented.
 - No code in `dice.py` or templates modifies lunge behavior for Otaku Bushi.
@@ -31,7 +31,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on iaijutsu, lunge, and wound check rolls.
+> Roll one extra die on iaijutsu, lunge, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["iaijutsu", "lunge", "wound_check"]`
@@ -48,7 +48,7 @@
 
 ## 2nd Dan
 
-> Free raise on wound checks.
+> You get a free raise on wound checks.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "wound_check"`
@@ -65,14 +65,14 @@
 
 ## 3rd Dan
 
-> Increase attacker's next action dice by (6 - Fire) minimum 1, scaled by attack skill, maximum phase 10.
+> After you roll damage against an opponent, increase that character's next X action dice this turn by (6 - that character's Fire) min 1, where X is your attack skill, to a maximum of phase 10.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- "Scaled by attack skill" - does this mean the increase is `(6 - Fire) * attack_skill`?
-- Is this triggered after a successful lunge (interrupt), or after any attack?
-- "Maximum phase 10" - the attacker's action die cannot exceed 10 after the increase?
+**Questions (ANSWERED):**
+- The increase is (6 - target's Fire), minimum 1.
+- The increase is applied to the target's next X action dice, where X is the Otaku's attack skill.
+- "Maximum of phase 10" means action dice cannot be increased beyond phase 10.
 
 **Missing:**
 - [ ] Implement the 3rd Dan action dice increase mechanic
@@ -85,7 +85,7 @@
 
 ## 4th Dan
 
-> +1 Fire; Fire ring costs 5 fewer XP to raise; lunge always rolls an extra damage die even if unsuccessfully parried.
+> Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. When you lunge, you always roll the extra damage die from using lunge even if your attack is unsuccessfully parried.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -109,14 +109,9 @@
 
 ## 5th Dan
 
-> After a successful attack, spend 10 dice to automatically deal 1 serious wound; once per damage roll.
+> After a successful attack or lunge roll, you may decrease the number of rolled damage dice by 10, to a minimum of 2, to automatically deal 1 serious wound to your opponent. You may only do this once per damage roll.
 
 **Status:** NOT implemented. This is a unique mechanic that converts excess dice into an automatic serious wound.
-
-**Questions:**
-- "Spend 10 dice" - does this mean 10 of the damage dice are removed, or 10 action dice?
-- Is this in addition to normal damage, or instead of rolling those 10 dice for damage?
-- "Once per damage roll" - can this only be used once per attack?
 
 **Missing:**
 - [ ] Implement the 5th Dan automatic serious wound mechanic

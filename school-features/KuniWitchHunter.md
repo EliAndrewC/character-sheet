@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Never become Tainted. Extra (X+1)k(X+1) on wound checks based on target's Shadowlands Taint level.
+> You may never become Tainted. Roll an extra (X+1)k(X+1) on wound checks, where X is the Shadowlands Taint of the attacker, rounded down to the nearest whole number.
 
 **Status:** NOT implemented. The Taint immunity is a passive narrative rule. The wound check bonus requires knowing the opponent's Taint level, which has no current tracking mechanism.
 
@@ -28,7 +28,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on damage, interrogation, and wound check rolls.
+> Roll one extra die on damage, interrogation, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["damage", "interrogation", "wound_check"]`
@@ -44,7 +44,7 @@
 
 ## 2nd Dan
 
-> Free raise on interrogation rolls.
+> You get a free raise a free on interrogation rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "interrogation"`
@@ -61,7 +61,7 @@
 
 ## 3rd Dan
 
-> Gain 2X free raises per adventure (X = investigation skill); apply to interrogation, intimidation, law, underworld, attack, wound checks, damage vs Tainted; max X per roll.
+> Each adventure you get 2X free raises, where X is equal to your investigation skill, which may be applied to the following rolls: interrogation, intimidation, law, underworld, attack, and wound checks. You may also spend these free raises on damage rolls against targets with the Shadowlands Taint. You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "investigation"`
@@ -82,7 +82,7 @@
 
 ## 4th Dan
 
-> +1 Earth; Earth ring costs 5 fewer XP to raise; extra action die (attacks only vs Tainted).
+> Raise your current and maximum Earth by 1. Raising your Earth now costs 5 fewer XP. Roll an an extra action die in combat, which may not be used to attack targets without the Shadowlands Taint.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Earth, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -99,13 +99,9 @@
 
 ## 5th Dan
 
-> After a wound check, inflict light wounds back on a Tainted attacker.
+> After you take light wounds and resolve your wound check, you may choose to inflict that number of light wounds on the opponent who dealt them and take half that amount yourself. If the opponent has the Shadowlands Taint, then you may also use an attack in the current phase to add to that damage.
 
 **Status:** NOT implemented. This is a reactive ability that only triggers against Tainted opponents.
-
-**Questions:**
-- How many light wounds are inflicted back? Is it based on the wound check result?
-- Does this happen automatically or require spending a resource?
 
 **Missing:**
 - [ ] Implement reflective damage vs Tainted attackers

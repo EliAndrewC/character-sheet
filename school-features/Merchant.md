@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Spend void points after your initial roll.
+> You may spend void points after you see the results of your initial roll.
 
 **Status:** NOT implemented. Normally, void points must be declared before rolling. This ability allows the Merchant to see the roll result first and then decide to spend VP. This would require modifying the roll UI to add a post-roll VP spending step.
 
@@ -48,7 +48,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on interrogation, sincerity, and wound check rolls.
+> Roll one extra die on interrogation, sincerity, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["interrogation", "sincerity", "wound_check"]`
@@ -64,7 +64,7 @@
 
 ## 2nd Dan
 
-> Free raise on interrogation rolls.
+> You get a free raise on interrogation rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "interrogation"`
@@ -81,7 +81,7 @@
 
 ## 3rd Dan
 
-> Gain 2X free raises per adventure (X = sincerity skill); apply to commerce, heraldry, interrogation, sincerity, attack, wound checks; max X per roll.
+> Each adventure you get 2X free raises, where X is equal to your sincerity skill, which may be applied to the following rolls: commerce, heraldry, interrogation, sincerity, attack, and wound checks. You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "sincerity"`
@@ -100,7 +100,7 @@
 
 ## 4th Dan
 
-> +1 Water; Water ring costs 5 fewer XP to raise; Rank considered 5.0 higher for stipend.
+> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. Your Rank is considered 5.0 higher for the purpose of calculating your stipend.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -113,24 +113,19 @@
 **Clicktests:**
 - `test_sheet_advanced.py:34` - tests stipend display with Merchant school
 
-**Questions:**
-- Should the stipend +5 be gated behind 4th Dan? Currently it applies at all Dan levels.
+**Questions (ANSWERED):**
+- Should the stipend +5 be gated behind 4th Dan? **YES.** The stipend bonus is a 4th Dan technique and should only apply at 4th Dan+. The current implementation is a bug.
 
 **Missing:**
-- [ ] Verify whether stipend bonus should be Dan-gated; if so, add Dan check to `status.py`
+- [ ] **BUG:** Gate the stipend +5 behind 4th Dan (dan >= 4 check in `status.py`)
 
 ---
 
 ## 5th Dan
 
-> After any non-initiative roll, reroll dice totaling 5*(X-1) where X is the number rerolled; spend void before or after.
+> After making any non-initiative roll, you may reroll some of the dice so long as the dice being rerolled add up to at least 5*(X-1) where X is the number of dice being rerolled. You may only do this once per roll. As per your Special Ability, you may spend Void Points before and/or after you make this reroll.
 
 **Status:** NOT implemented. This is a complex reroll mechanic that interacts with the VP spending special ability.
-
-**Questions:**
-- Does "dice totaling 5*(X-1)" mean the sum of the dice being rerolled must equal 5*(X-1)?
-- "Spend void before or after" - does this stack with the special ability to spend VP after rolling?
-- How many dice can be rerolled per roll?
 
 **Missing:**
 - [ ] Implement the reroll mechanic

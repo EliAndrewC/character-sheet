@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Roll and keep one extra die for damage rolls from unarmed attacks.
+> You roll and keep one extra die for damage rolls from unarmed attacks.
 
 **Status:** Fully implemented.
 - `dice.py:581-584` adds +1 rolled and +1 kept to damage when `school_id == "brotherhood_of_shinsei_monk"` and `dan >= 1`.
@@ -31,7 +31,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on attack, damage, and wound check rolls.
+> Roll one extra die on attack, damage, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "damage", "wound_check"]`
@@ -49,7 +49,7 @@
 
 ## 2nd Dan
 
-> Free raise on all attack rolls.
+> You get a free raise on all attack rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "attack"`
@@ -66,7 +66,7 @@
 
 ## 3rd Dan
 
-> Gain 2X free raises per adventure (X = precepts skill); apply to history, law, precepts, wound checks, attack; can lower action dice by 5.
+> Each adventure you get 2X free raises, where X is equal to your precepts skill, which may be applied to the following rolls: history, law, precepts, wound checks, and attack. You may not spend more than X of these free raises on a single roll. These free raises may also be applied to action dice at any time, lowering a single die by 5 phases.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "precepts"`
@@ -90,7 +90,7 @@
 
 ## 4th Dan
 
-> +1 to a non-Void ring; that ring costs 5 fewer XP to raise; failed parries don't lower damage dice.
+> Raise your current and maximum rank in a non-Void ring of your choice by 1. Raising this Ring now costs 5 fewer XP. Failed parry attempts do not lower your rolled damage dice.
 
 **Status:** Partially implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
@@ -110,14 +110,9 @@
 
 ## 5th Dan
 
-> After being attacked but before damage, spend an action die to counter-attack; negates the original attack if successful.
+> Once per round after you have been attacked but before damage is rolled, you may spend an action die from any phase to attack your attacker. If your attack roll is at least as high as your attacker's then the attack against you is canceled; your attack continues and you hit/miss and roll damage as normal.
 
 **Status:** NOT implemented. This is a reactive combat ability.
-
-**Questions:**
-- Does the counter-attack use the normal attack formula?
-- If successful, does the counter-attack also deal damage to the original attacker?
-- Is this similar to the Hida Bushi special ability but with different conditions?
 
 **Missing:**
 - [ ] Implement reactive counter-attack mechanic

@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> You gain four temporary void points after a successful feint and one void point after an unsuccessful feint.
+> You get four temporary void points after a successful feint and one void point after an unsuccessful feint.
 
 **Status:** Partially implemented.
 - Temporary Void Points are tracked for Akodo Bushi (school is in `SCHOOLS_WITH_TEMP_VOID`).
@@ -29,7 +29,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on attack, double attack, and wound check rolls.
+> Rolls one extra die on attack, double attack, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "double_attack", "wound_check"]`
@@ -48,7 +48,7 @@
 
 ## 2nd Dan
 
-> Free raise on wound checks.
+> You get a free raise on wound checks.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "wound_check"`
@@ -65,14 +65,16 @@
 
 ## 3rd Dan
 
-> Excess from wound checks divided by 5 adds a bonus to future attack rolls, scaled by attack skill.
+> After you exceed the TN of a wound check, divide the difference between your wound check and the damage roll by 5, rounding down. You may add that number multiplied by X to any future attack this combat, where X is your attack skill.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- How exactly does the scaling by attack skill work? Is it `floor(excess/5) * attack_skill`?
-- Is the bonus per-round or per-combat?
-- Does it stack across multiple wound checks?
+**Questions (ANSWERED):**
+- Formula: `floor((wound_check_roll - light_wounds) / 5) * attack_skill` = a single flat bonus
+- Example: 16 light wounds, wound check roll of 35 -> floor((35-16)/5) = 3, times attack skill 4 = +12 bonus
+- The bonus is a single-use discretionary bonus applied all-at-once after seeing a future attack roll (attack, double attack, or feint)
+- The user decides after seeing the roll whether to apply the entire bonus
+- This is NOT per-adventure free raises; it's a one-shot bonus generated from each wound check
 
 **Missing:**
 - [ ] Implement the 3rd Dan excess-from-wound-checks mechanic
@@ -83,7 +85,7 @@
 
 ## 4th Dan
 
-> +1 Water; Water ring costs 5 fewer XP to raise; spend void points for free raises on wound checks.
+> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. You may spend void points after rolling a wound check to receive a free raise for each void point spent.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -106,7 +108,7 @@
 
 ## 5th Dan
 
-> Spend void points after receiving damage to inflict 10 light wounds per void point spent back to attacker (capped by damage taken).
+> After you take damage, you may spend void points to deal 10 light wounds to the attacker for every void point spent, up to the amount of damage you took.
 
 **Status:** NOT implemented. This is a reactive ability triggered after receiving damage.
 

@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Use Water for interrogation rolls and add twice your Water to all attack rolls.
+> You use Water for interrogation rolls, and you add twice your Water to all attack rolls.
 
 **Status:** NOT implemented. Neither the Water-for-interrogation substitution nor the +2x Water flat bonus on attacks is coded.
 
@@ -30,7 +30,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on investigation, interrogation, and wound check rolls.
+> Roll one extra die on investigation, interrogation, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["investigation", "interrogation", "wound_check"]`
@@ -46,7 +46,7 @@
 
 ## 2nd Dan
 
-> Free raise on interrogation rolls.
+> You get a free raise on interrogation rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "interrogation"`
@@ -63,7 +63,7 @@
 
 ## 3rd Dan
 
-> Gain 2X free raises per adventure (X = investigation skill); apply to interrogation, intimidation, law, underworld, attack, wound checks; max X per roll.
+> Each adventure you get 2X free raises, where X is equal to your investigation skill, which may be applied to the following rolls: interrogation, intimidation, law, underworld, attack, and wound checks. You may not spend more than X of these free raises on any single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "investigation"`
@@ -82,7 +82,7 @@
 
 ## 4th Dan
 
-> +1 Water; Water ring costs 5 fewer XP to raise; automatically know target's Void, parry, and next action phase in combat.
+> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. You automatically know the Void, parry, and phase of the next action of each character during combat, and you know the result of contested rolls made against you out of combat.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -99,14 +99,9 @@
 
 ## 5th Dan
 
-> Reduce targeted characters' Air, Fire, and Water by 1; limited by total experience.
+> Your presence is so overwhelming that the Air, Fire and Water rings of chosen characters are reduced by one. You may do this to any one character, or you may do it to multiple characters so long as the sum of their experience does not exceed your experience. This does not work during the iaijutsu phase of a duel, and it does not stack with other Kitsuki Magistrates targeting the same character.
 
 **Status:** NOT implemented. This is a debuff ability.
-
-**Questions:**
-- How is "total experience" used as a limit? Is it XP spent or XP earned?
-- Is this a per-combat or per-adventure ability?
-- Does this affect all rolls the target makes, or just specific ones?
 
 **Missing:**
 - [ ] Implement ring reduction debuff mechanic
