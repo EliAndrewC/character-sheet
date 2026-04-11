@@ -9,6 +9,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 - [x] Homepage loads → `test_smoke.py::test_homepage_loads`
 - [x] "New Character" button creates character and redirects to edit → `test_create_character.py::test_create_and_edit_character`
+- [x] Create minimal character → `test_create_character.py::test_create_minimal_character`
 - [x] Profile link navigates to /profile → `test_profile_e2e.py::test_profile_loads`
 - [x] Logout link visible and points to /auth/logout → `test_navigation.py::test_logout_link_exists`
 - [x] Login link visible when anonymous → `test_navigation.py::test_login_link_visible_when_anonymous`
@@ -27,10 +28,46 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Iaijutsu strike wound check button present → `test_wound_check.py::test_iaijutsu_strike_wound_check_available`
 - [x] Regular roll also shows dice animation → `test_wound_check.py::test_regular_roll_shows_dice_animation`
 
+## Attack Modal
+
+- [x] Attack opens attack modal (not dice roller) -> `test_attack_modal.py::test_attack_opens_attack_modal`
+- [x] Feint does NOT open attack modal -> `test_attack_modal.py::test_feint_does_not_open_attack_modal`
+- [x] Parry does NOT open attack modal -> `test_attack_modal.py::test_parry_does_not_open_attack_modal`
+- [x] Probability table with Hit % column -> `test_attack_modal.py::test_attack_modal_shows_probability_table`
+- [x] TN dropdown shows common values -> `test_attack_modal.py::test_attack_modal_tn_dropdown`
+- [x] Attack roll shows HIT or MISSED -> `test_attack_modal.py::test_attack_roll_shows_hit_or_miss`
+- [x] Hit shows Make Damage Roll button -> `test_attack_modal.py::test_attack_hit_shows_damage_roll_button`
+- [x] Dice animation visible during attack roll -> `test_attack_modal.py::test_attack_dice_animation_visible`
+- [x] Damage roll produces result after hit -> `test_attack_modal.py::test_attack_damage_roll_produces_result`
+
+## Iaijutsu Duel
+
+- [x] Iaijutsu Duel option in roll menu -> `test_iaijutsu_duel.py::test_duel_option_in_iaijutsu_menu`
+- [x] Duel modal opens with setup phase -> `test_iaijutsu_duel.py::test_duel_modal_opens_with_setup`
+- [x] Player TN computed from XP -> `test_iaijutsu_duel.py::test_duel_player_tn_computed`
+- [x] Contested roll proceeds after entering opponent XP -> `test_iaijutsu_duel.py::test_contested_roll_proceeds`
+- [x] Contested roll shows result -> `test_iaijutsu_duel.py::test_contested_roll_shows_result`
+- [x] Focus/Strike buttons appear after contested -> `test_iaijutsu_duel.py::test_focus_strike_phase_shows_buttons`
+- [x] Focus alternation enforced -> `test_iaijutsu_duel.py::test_focus_alternation`
+- [x] Strike shows dice animation -> `test_iaijutsu_duel.py::test_strike_shows_dice_animation`
+- [x] Strike hit shows Roll Damage button -> `test_iaijutsu_duel.py::test_duel_strike_hit_shows_damage_button`
+- [x] Strike shows opponent roll input -> `test_iaijutsu_duel.py::test_duel_strike_shows_opponent_input`
+
+## JS Error Checks
+
+- [x] No JS errors on sheet page (parametrized across 6 schools) → `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors`
+
+## Void Point Spending
+
+- [x] Roll menu shows void options when VP available → `test_void_spending.py::test_roll_menu_shows_void_options`
+- [x] Roll menu skipped when no VP available → `test_void_spending.py::test_roll_menu_skipped_without_void`
+- [x] Spending void deducts from counter → `test_void_spending.py::test_spending_void_deducts_from_counter`
+- [x] Temp void deducted before regular → `test_void_spending.py::test_temp_void_deducted_before_regular`
+
 ## Dice Rolling
 
 - [x] Click a skill row opens the modal with the skill name → `test_rolls.py::test_click_skill_opens_modal_with_skill_name`
-- [x] Click Attack opens modal with "Attack" title → `test_rolls.py::test_click_attack_opens_modal_with_attack_title`
+- [x] Click Attack opens attack modal → `test_rolls.py::test_click_attack_opens_attack_modal`
 - [x] Click Parry opens modal with "Parry" title → `test_rolls.py::test_click_parry_opens_modal`
 - [x] Click a Ring opens an Athletics roll modal → `test_rolls.py::test_click_ring_opens_athletics_modal`
 - [x] Modal shows Total and dice after the animation phase → `test_rolls.py::test_modal_shows_total_and_dice_after_animation`
@@ -39,6 +76,15 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Impaired indicator visible on the sheet when wounds ≥ Earth → `test_rolls.py::test_impaired_indicator_visible_on_sheet`
 - [x] Impaired indicator absent when healthy → `test_rolls.py::test_impaired_indicator_absent_when_healthy`
 - [x] Disabling animation in profile shows result panel immediately → `test_rolls.py::test_disable_animation_preference`
+- [x] Die top angle is approximately 70 degrees → `test_rolls.py::test_die_top_angle_is_about_70_degrees`
+- [x] Initiative roll shows action dice → `test_rolls.py::test_initiative_roll_shows_action_dice`
+- [x] Initiative shows action dice (not Total) → `test_rolls.py::test_initiative_no_total_shown`
+- [x] 3rd Dan spend raise button visible for applicable skill → `test_rolls.py::test_spend_raise_button_visible_for_applicable_skill`
+- [x] 3rd Dan spend raise adds +5 to total → `test_rolls.py::test_spend_raise_adds_5_to_total`
+- [x] 3rd Dan undo raise reverses spend → `test_rolls.py::test_undo_raise_reverses_spend`
+- [x] 3rd Dan spend disabled at per-roll max → `test_rolls.py::test_spend_disabled_at_per_roll_max`
+- [x] 3rd Dan undo disabled when none spent → `test_rolls.py::test_undo_disabled_when_none_spent`
+- [x] No spend button for non-applicable skill → `test_rolls.py::test_no_spend_button_for_non_applicable_skill`
 - [x] Athletics roll modal title includes the ring name → `test_rolls.py::test_athletics_label_in_modal`
 
 ## Sections (rich-text panels)
@@ -86,12 +132,14 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Display name can be changed and persists → `test_profile_e2e.py::test_profile_display_name_change`
 - [x] Other users listed with grant checkboxes → `test_profile_e2e.py::test_profile_shows_other_users`
 - [x] GM badge and access note shown → `test_profile_e2e.py::test_profile_gm_badge`
+- [x] Sound toggle saves preference → `test_profile_e2e.py::test_sound_toggle_saves`
 
 ## Character Editor — Basics (edit.html)
 
 - [x] Character name can be edited and auto-saves → `test_edit_character.py::test_edit_auto_saves`
 - [x] Owner dropdown visible only for GM users → `test_permissions.py::test_owner_dropdown_visible_for_admin`
 - [x] Owner dropdown hidden for non-GM users → `test_permissions.py::test_owner_dropdown_hidden_for_nonadmin`
+- [x] No JS console errors on editor page → `test_editor_controls.py::test_editor_has_no_javascript_console_errors`
 - [x] Earned XP field updates budget → `test_editor_controls.py::test_earned_xp_updates_budget`
 - [x] Notes textarea saves → `test_editor_controls.py::test_notes_saves`
 - [x] Save status shows "Saved" → `test_editor_controls.py::test_save_status_indicator`
@@ -126,6 +174,13 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Knack +/- buttons update XP → `test_live_xp.py::test_xp_updates_on_knack_change`
 - [x] Knack - disabled at rank 1 → `test_editor_controls.py::test_knack_min_1`
 - [x] Knack + disabled at rank 5 → `test_editor_controls.py::test_knack_max_5`
+- [x] 4th Dan auto-raises school ring to 4 → `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring`
+- [x] 4th Dan school ring max is 7 → `test_editor_controls.py::test_fourth_dan_school_ring_max_7`
+- [x] Drop below 4th Dan caps ring at 6 → `test_editor_controls.py::test_drop_below_4th_dan_caps_ring_at_6`
+- [x] Drop below 4th Dan ring at 4 stays at 4 → `test_editor_controls.py::test_drop_below_4th_dan_ring_at_4_goes_to_3`
+- [x] Ring max correct after repeated Dan toggle → `test_editor_controls.py::test_ring_max_correct_after_repeated_dan_toggle`
+- [x] Ring max never exceeds bounds after many toggles → `test_editor_controls.py::test_ring_max_never_exceeds_bounds_after_many_toggles`
+- [x] Ring at 5 stable across Dan toggle → `test_editor_controls.py::test_ring_at_5_stable_across_dan_toggle`
 
 ## Character Editor — Combat Skills
 
@@ -172,6 +227,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Editing an award's rank delta updates rank → `test_gm_awards.py::test_edit_award_rank_delta_updates_rank`
 - [x] Deleting an award restores rank and recognition → `test_gm_awards.py::test_delete_award_restores_rank`
 - [x] Source text edit does NOT trigger draft → `test_gm_awards.py::test_source_edit_does_not_trigger_modified_badge`
+- [x] Reputation tab applies Good Reputation → `test_gm_awards.py::test_reputation_tab_applies_good_reputation`
+- [x] Reputation award shows badge in history → `test_gm_awards.py::test_reputation_award_shows_badge_in_history`
 
 ## Character Editor — Advantages & Disadvantages
 
@@ -280,6 +337,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Lucky toggle persists → `test_tracking_advanced.py::test_lucky_toggle_persists`
 - [x] Unlucky toggle shown → `test_sheet_advanced.py::test_unlucky_toggle`
 - [x] Reset per-adventure → `test_tracking_advanced.py::test_reset_per_adventure`
+- [x] Reset modal lists abilities to restore → `test_tracking_advanced.py::test_reset_modal_lists_abilities_to_restore`
 - [x] Tracking buttons hidden for non-editors → `test_permissions.py::test_tracking_buttons_hidden_for_nonadmin`
 
 ## Character Sheet — Skill Roll Display
@@ -383,6 +441,9 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `skill_rolls` | Skill roll display with bonuses | `test_sheet_display.py`, `test_skill_rolls_display.py` |
 | `xp_summary` | XP breakdown on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
 | `version_history` | Version list, revert, inline edit | `test_publish_revert.py`, `test_sheet_display.py`, `test_sheet_advanced.py` |
+| `groups` | Gaming groups, party effects, admin manage groups | `test_groups.py` |
+| `rolls` | Click-to-roll dice, attack modal, wound check, iaijutsu | `test_rolls.py`, `test_attack_modal.py`, `test_wound_check.py`, `test_iaijutsu_duel.py`, `test_sheet_js_errors.py`, `test_void_spending.py` |
+| `sections` | Rich-text freeform sections | `test_sections.py` |
 
 Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pytestmark` at module level and add it to this table.
 
@@ -401,7 +462,7 @@ Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pyt
 
 ## Coverage Summary
 
-**Covered:** ~180 features across 170 test functions (17 test files)
+**Covered:** ~280 test functions across 32 test files
 **Uncovered:** 0
 
 All interactive UI features are covered by at least one e2e clicktest.

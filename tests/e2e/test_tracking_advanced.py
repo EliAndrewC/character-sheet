@@ -156,3 +156,22 @@ def test_reset_per_adventure(page, live_server_url):
     # Should be unchecked again
     label = page.locator('text="Lucky (re-roll)"').locator('..')
     assert not label.locator('input[type="checkbox"]').is_checked()
+
+
+def test_reset_modal_lists_abilities_to_restore(page, live_server_url):
+    """The reset modal lists which specific abilities will be restored."""
+    _create_character_with_lucky(page, live_server_url)
+    page.wait_for_selector('text="Lucky (re-roll)"')
+    # Use lucky
+    label = page.locator('text="Lucky (re-roll)"').locator('..')
+    label.locator('input[type="checkbox"]').check()
+    page.wait_for_timeout(500)
+    # Open reset modal
+    page.locator('[data-action="open-reset-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+    # The modal should list "Regain Lucky (re-roll)"
+    body = page.text_content("body")
+    assert "Regain" in body
+    assert "Lucky" in body
+    # Close without resetting
+    page.keyboard.press("Escape")

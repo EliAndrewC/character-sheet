@@ -238,3 +238,35 @@ def test_source_edit_does_not_trigger_modified_badge(page, live_server_url):
     assert persisted_source == "Reworded reason"
     body = page.text_content("body")
     assert "Draft changes" not in body
+
+
+def test_reputation_tab_applies_good_reputation(page, live_server_url):
+    """Switching to the Reputation tab and applying creates a reputation award."""
+    _go_to_editor(page, live_server_url)
+    _open_award_modal(page)
+    # Switch to reputation tab
+    page.locator('[data-action="award-tab-reputation"]').click()
+    page.wait_for_timeout(200)
+    # Select Good Reputation
+    page.locator('[data-action="award-rep-good"]').click()
+    page.locator('input[data-field="award-rep-text"]').fill("Heroic deed")
+    page.locator('[data-action="apply-award"]').click()
+    page.wait_for_timeout(300)
+    # Should appear in history with badge
+    award_row = page.locator('[data-award-row]').first
+    assert award_row.is_visible()
+    assert "Good Reputation" in award_row.text_content()
+
+
+def test_reputation_award_shows_badge_in_history(page, live_server_url):
+    """A reputation award shows a colored badge (not rank/recog +/-)."""
+    _go_to_editor(page, live_server_url)
+    _open_award_modal(page)
+    page.locator('[data-action="award-tab-reputation"]').click()
+    page.wait_for_timeout(200)
+    page.locator('[data-action="award-rep-bad"]').click()
+    page.locator('input[data-field="award-rep-text"]').fill("Cowardice")
+    page.locator('[data-action="apply-award"]').click()
+    page.wait_for_timeout(300)
+    award_row = page.locator('[data-award-row]').first
+    assert "Bad Reputation" in award_row.text_content()
