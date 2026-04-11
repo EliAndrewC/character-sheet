@@ -96,10 +96,6 @@
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
-**Questions:**
-- What qualifies as a "near-miss"? Is there a specific margin (e.g., missed by less than 5)?
-- "No bonus damage" - does this mean the attack hits but with base damage only (no bonus dice from excess)?
-
 **Missing:**
 - [ ] Implement the 4th Dan near-miss double attack mechanic
 - [ ] Display near-miss conversion in the double attack roll result
@@ -113,10 +109,6 @@
 > After you deal light wounds which result in the defender taking one or more serious wounds, their light wound total is reset to 15 instead of 0.
 
 **Status:** NOT implemented. This modifies the wound application outcome after dealing serious wounds.
-
-**Questions:**
-- Is this automatic whenever the Matsu deals serious wounds, or only on specific attack types?
-- Does the defender's light wound total get set to exactly 15, or is it `max(current_light, 15)`?
 
 **Missing:**
 - [ ] Implement the 5th Dan light wound reset mechanic

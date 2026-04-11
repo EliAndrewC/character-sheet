@@ -21,11 +21,6 @@
 **Unit tests:** None.
 **Clicktests:** None.
 
-**Questions:**
-- "Phases held" - does this mean the number of phases the character waited before acting (e.g., if action die is 5 and they act on phase 7, X=2)?
-- Does the +2X bonus apply to all roll types (attack, parry, knacks) or only specific ones?
-- Is this tracked automatically from initiative, or manually entered?
-
 **Missing:**
 - [ ] Implement the phases-held bonus mechanic
 - [ ] Track phase holding state on the sheet

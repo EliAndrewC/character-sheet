@@ -82,8 +82,10 @@
 
 **Clicktests:** None specific to Brotherhood 3rd Dan. The 3rd Dan free raise UI is tested via Courtier in `test_rolls.py`.
 
+**Notes:** Spending 1 free raise can lower a single action die by 5 phases (confirmed). This is an alternative use of the same free raises pool.
+
 **Missing:**
-- [ ] Implement "lower action dice by 5" option when spending 3rd Dan raises
+- [ ] Implement "lower action dice by 5" option when spending 3rd Dan raises (1 raise = 1 die lowered by 5)
 - [ ] Clicktest for Brotherhood-specific 3rd Dan applicable skills
 
 ---

@@ -97,13 +97,13 @@
 
 **Status:** Partially implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
-- "Unparried attacks always roll 10 dice" is NOT implemented. This is a combat mechanic that modifies the attack formula when the attack is not parried.
+- "Roll 10 dice on unparried attacks without extra kept dice" is NOT implemented. This sets a FLOOR of 10 rolled dice on damage rolls when the attack is unparried and you are not keeping extra damage dice (from TN excess). Example: Ikoma with Fire 3 and a 3k2 weapon exceeds TN by 12, gaining 2 extra rolled dice for 8k2. The 4th Dan sets rolled to max(current_rolled, 10), so 10k2. But if they exceed TN by 25+, they'd get 5+ extra rolled dice making it 11k3+ which already exceeds 10, so the technique doesn't change anything.
 
 **Unit tests:** None.
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement 10-dice attack mechanic for unparried attacks
+- [ ] Implement 10-dice floor on damage for unparried attacks without extra kept dice
 - [ ] UI for indicating/tracking parry status of attacks
 
 ---

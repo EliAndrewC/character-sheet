@@ -102,11 +102,8 @@
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
-**Questions:**
-- "Reduce fewer extra damage dice" - does this mean when a parry fails, the attacker gets fewer bonus damage dice than normal? How many fewer?
-
 **Missing:**
-- [ ] Implement "failed parries reduce fewer extra damage dice" for Mirumoto 4th Dan
+- [ ] Implement Mirumoto 4th Dan: failed parries vs double attacks don't prevent automatic serious wound; vs regular attacks, extra rolled damage dice reduction is halved (rounded down)
 - [ ] Display the reduced damage dice effect in parry roll results
 - [ ] Unit test: Mirumoto 4th Dan failed parry damage dice reduction
 - [ ] Clicktest: failed parry at 4th Dan shows reduced bonus damage dice

@@ -112,10 +112,6 @@
 
 **Status:** NOT implemented. This is a reactive ability triggered after receiving damage.
 
-**Questions:**
-- Does this apply to any type of damage or only melee?
-- Is there a UI for this, or should it be a button that appears on the wound check result?
-
 **Missing:**
 - [ ] Implement the reflective damage mechanic
 - [ ] UI for spending void points after taking damage
