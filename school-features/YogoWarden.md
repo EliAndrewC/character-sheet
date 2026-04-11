@@ -49,10 +49,10 @@
 **Clicktests:** None school-specific.
 
 **Questions (ANSWERED):**
-- Yes, the "damage" extra die is supposed to add +1 rolled die to all damage rolls. This may need school-specific handling in the damage formula builder since the generic `_apply_school_technique_bonus()` is not called for damage rolls.
+- Yes, the "damage" extra die adds +1k0 (one extra rolled die) to all damage rolls. This needs school-specific handling in the damage formula builder since the generic `_apply_school_technique_bonus()` is not called for damage rolls. Same applies to Kuni Witch Hunter.
 
 **Missing:**
-- [ ] Verify/implement the 1st Dan extra die on damage rolls (may require school-specific code)
+- [ ] Implement +1k0 on all damage rolls for Yogo Warden (school-specific code in damage formula builder)
 - [ ] Unit test: Yogo Warden 1st Dan gets +1 rolled die on attack, damage, and wound check
 - [ ] Clicktest verifying the extra die appears in the roll formula display for attack/damage/wound_check
 

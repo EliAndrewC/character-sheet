@@ -119,11 +119,7 @@
 
 > When you fail a wound check, calculate your serious wounds as if you had half your number of light wounds.
 
-**Status:** NOT implemented. This modifies the wound check failure outcome formula.
-
-**Questions:**
-- Does "half light wounds" mean the light wound total is halved before computing serious wounds, or that the serious wound calculation uses `ceil(light_wounds / 2)` instead of `light_wounds`?
-- Is this always active or only when a wound check fails by a specific margin?
+**Status:** NOT implemented. This modifies the wound check failure outcome formula. Uses `floor(light_wounds / 2)` for rounding.
 
 **Missing:**
 - [ ] Implement the 5th Dan half-light-wounds mechanic in wound check resolution

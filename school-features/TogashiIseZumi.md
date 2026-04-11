@@ -85,13 +85,12 @@
 - "Reroll any contested roll once after seeing the result" is NOT implemented. This is a per-roll reactive ability.
 
 **Questions (ANSWERED):**
-- The rules say "any Ring" - this means the player can choose any ring, including Void. This overrides the standard 4th Dan behavior of raising the school ring.
+- Despite the rules text saying "any Ring", the Togashi should always use Void for their 4th Dan raise (same as their school ring). The standard 4th Dan behavior is correct for this school.
 
 **Unit tests:** None.
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement any-ring choice for 4th Dan (not just school ring)
 - [ ] Implement contested roll reroll mechanic
 - [ ] UI for reroll option after seeing contested results
 

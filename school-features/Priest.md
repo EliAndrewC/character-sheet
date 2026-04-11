@@ -53,7 +53,7 @@
 
 **Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because this is a group buff.
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES`.
-- This affects "Honor bonus rolls" which are explicitly defined as bragging, precepts, and open sincerity.
+- "Honor bonus rolls" are: bragging (gets +2*Honor), precepts (gets +2*Honor), and open sincerity (non-contested sincerity, gets +2*Honor). Contested sincerity (lying, rolled vs interrogation) does NOT qualify.
 
 **Implementation:** `app/game_data.py:2168` (`second_dan_free_raise: None`).
 
@@ -61,8 +61,7 @@
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Define which rolls count as "Honor bonus rolls"
-- [ ] Implement free raise on Honor bonus rolls for the Priest
+- [ ] Implement free raise on Honor bonus rolls (bragging, precepts, open sincerity) for the Priest and allies
 - [ ] Determine how to handle the ally buff (display only vs mechanical)
 - [ ] Unit test for Honor bonus roll identification and free raise
 - [ ] Clicktest for Honor bonus roll free raise

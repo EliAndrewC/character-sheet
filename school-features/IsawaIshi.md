@@ -30,10 +30,8 @@
 
 **Clicktests:** `test_sheet_js_errors.py:19` includes `isawa_ishi` in the sheet JS error check list.
 
-**Questions:**
-- Is the VP max (highest ring + school rank) being used in the sheet display? The `pages.py:210` line uses `min(ring_vals)` as `void_max` for all schools, then subtracts 1 for the spend cap. The actual max VP for Isawa Ishi should use the shugenja-specific max function.
-
 **Missing:**
+- [ ] **POTENTIAL BUG:** Verify VP max display on sheet uses `void_points_max_shugenja` (highest ring + school rank) and not the default `void_points_max` (min of rings). The `pages.py:210` line uses `min(ring_vals)` as `void_max` for all schools - this may be wrong for Isawa Ishi.
 - [ ] Verify VP max display on sheet uses `void_points_max_shugenja` not `void_points_max`
 - [ ] Verify VP regen display on sheet uses `void_regen_per_night_shugenja`
 - [ ] Clicktest: VP max display shows highest ring + school rank

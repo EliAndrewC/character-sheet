@@ -32,10 +32,8 @@
 
 **Clicktests:** None (school is disabled in UI).
 
-**Questions:**
-- Same as Isawa Ishi: is the VP max display on the sheet using the correct shugenja-specific function?
-
 **Missing:**
+- [ ] **POTENTIAL BUG:** Same as Isawa Ishi - verify VP max display on sheet uses `void_points_max_shugenja` not the default.
 - [ ] Enable Shugenja in the school selection dropdown (remove "coming soon" disable)
 - [ ] Verify VP max display on sheet uses `void_points_max_shugenja`
 - [ ] Implement spellcasting UI (commune/spellcasting knacks require element selection)

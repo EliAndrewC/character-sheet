@@ -30,14 +30,16 @@
 
 > Roll one extra die on damage, interrogation, and wound check rolls.
 
-**Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Partially implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["damage", "interrogation", "wound_check"]`
-- Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
+- Interrogation and wound check extra die: applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
+- Damage extra die: same issue as Yogo Warden - the `"damage"` entry is present but `_apply_school_technique_bonus()` is not called for damage rolls. Needs +1k0 on all damage rolls via school-specific code.
 
 **Unit tests:** None specific to Kuni 1st Dan.
 **Clicktests:** None.
 
 **Missing:**
+- [ ] Implement +1k0 on all damage rolls for Kuni Witch Hunter (school-specific code in damage formula builder, same as Yogo Warden)
 - [ ] Clicktest verifying the extra die appears in the roll formula display for damage/interrogation/wound_check
 
 ---
@@ -101,8 +103,10 @@
 
 > After you take light wounds and resolve your wound check, you may choose to inflict that number of light wounds on the opponent who dealt them and take half that amount yourself. If the opponent has the Shadowlands Taint, then you may also use an attack in the current phase to add to that damage.
 
-**Status:** NOT implemented. This is a reactive ability that only triggers against Tainted opponents.
+**Status:** NOT implemented. This is a reactive ability available against any opponent (not just Tainted). The reflected damage is ADDITIONAL - the Kuni takes the original damage plus half the reflected amount, which triggers an additional wound check. Against Tainted opponents, the Kuni can also attack in the current phase to add to the reflected damage.
 
 **Missing:**
-- [ ] Implement reflective damage vs Tainted attackers
+- [ ] Implement reflective damage mechanic (reflect X light wounds to attacker, take X/2 additional yourself)
+- [ ] Additional wound check from the self-inflicted half damage
+- [ ] Tainted-only bonus: attack in current phase adds to reflected damage
 - [ ] UI for triggering reflective damage after wound check
