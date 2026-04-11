@@ -30,7 +30,7 @@ class TestGoodReputation:
         )
         status = compute_effective_status(data)
         assert any(
-            m["context"] == "identification" and m["field"] == "recognition"
+            m["context"] == "for identification" and m["field"] == "recognition"
             for m in status.recognition_modifiers
         )
 
@@ -38,7 +38,7 @@ class TestGoodReputation:
         data = make_character_data(rank=2.0, advantages=["good_reputation"])
         status = compute_effective_status(data)
         assert any(
-            m["context"] == "those familiar with your reputation"
+            m["context"] == "with those familiar with your reputation"
             and m["value"] == 2.0
             for m in status.rank_modifiers
         )
@@ -79,7 +79,7 @@ class TestBadReputation:
         )
         status = compute_effective_status(data)
         assert any(
-            m["context"] == "identification" and m["field"] == "recognition"
+            m["context"] == "for identification" and m["field"] == "recognition"
             for m in status.recognition_modifiers
         )
 

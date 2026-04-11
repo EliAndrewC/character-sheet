@@ -105,6 +105,7 @@ ADVANTAGE_DETAIL_FIELDS = {
     "good_reputation": {"text": "What are you known for?"},
     "bad_reputation": {"text": "What are you known for?"},
     "dark_secret": {"text": "What is your secret?", "player": True},
+    "driven": {"text": "What is your ultimate goal?"},
     "higher_purpose": {"text": "What is your cause?", "skills": "multi"},
     "specialization": {"text": "What specialization?", "skills": "single"},
 }
@@ -2347,7 +2348,7 @@ GROUP_EFFECTS: Dict[str, Dict[str, Any]] = {
             "Party Rank is considered 1.0 lower when dealing with those who "
             "know this history."
         ),
-        "rank_modifier": (-1.0, "to those aware of {name}'s family history"),
+        "rank_modifier": (-1.0, "with those aware of {name}'s family history"),
     },
     "family_reckoning_righteous_sting": {
         "name": "Family Reckoning: Righteous Sting",
@@ -2355,7 +2356,7 @@ GROUP_EFFECTS: Dict[str, Dict[str, Any]] = {
             "Party Rank is considered 1.0 higher when dealing with those who "
             "know this history."
         ),
-        "rank_modifier": (1.0, "to those aware of {name}'s family history"),
+        "rank_modifier": (1.0, "with those aware of {name}'s family history"),
     },
     "imperial_disdain": {
         "name": "Imperial Disdain",
@@ -2363,7 +2364,7 @@ GROUP_EFFECTS: Dict[str, Dict[str, Any]] = {
             "Party Rank is considered 1.0 lower when dealing with Imperial "
             "post holders."
         ),
-        "rank_modifier": (-1.0, "vs Imperial post holders ({name}'s Imperial Disdain)"),
+        "rank_modifier": (-1.0, "with Imperial post holders ({name}'s Imperial Disdain)"),
     },
 }
 
@@ -2371,6 +2372,33 @@ GROUP_EFFECTS: Dict[str, Dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 # CONVENIENCE: all data in one place for iteration
 # ---------------------------------------------------------------------------
+
+# Schools whose abilities, techniques, or knacks (e.g. feint) can grant
+# temporary void points. The View Sheet shows a Temp VP counter for these.
+SCHOOLS_WITH_TEMP_VOID: set = set()
+for _s in _SCHOOLS_LIST:
+    # Check if any technique or the special ability mentions "temporary void"
+    _texts = [_s.special_ability or ""]
+    _texts.extend(str(v) for v in _s.techniques.values())
+    if any("temporary void" in t.lower() for t in _texts):
+        SCHOOLS_WITH_TEMP_VOID.add(_s.id)
+    # Schools with the feint knack also get temp VP (feint grants them)
+    if "feint" in _s.school_knacks:
+        SCHOOLS_WITH_TEMP_VOID.add(_s.id)
+
+
+_BUSHI_CATEGORIES = {"bushi", "counterattack", "duelist", "investigator"}
+SCHOOLS_BUSHI_NONBUSHI = [
+    ("Bushi Schools", sorted(
+        [s for s in _SCHOOLS_LIST if s.category in _BUSHI_CATEGORIES],
+        key=lambda s: s.name,
+    )),
+    ("Non-Bushi Schools", sorted(
+        [s for s in _SCHOOLS_LIST if s.category not in _BUSHI_CATEGORIES],
+        key=lambda s: s.name,
+    )),
+]
+
 
 ALL_DATA = {
     "rings": RING_NAMES,

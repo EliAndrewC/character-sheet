@@ -592,6 +592,8 @@ async def track_state(
         character.current_serious_wounds = max(0, int(body["current_serious_wounds"]))
     if "current_void_points" in body:
         character.current_void_points = max(0, int(body["current_void_points"]))
+    if "current_temp_void_points" in body:
+        character.current_temp_void_points = max(0, int(body["current_temp_void_points"]))
     if "adventure_state" in body:
         character.adventure_state = body["adventure_state"]
 

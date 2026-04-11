@@ -72,6 +72,87 @@
             stroke: #b06060;
         }
         .die-cell { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+
+        /* ── Status tooltip: aligned value:description grid ── */
+        .status-tooltip-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0 0.5em;
+        }
+
+        /* ── Rings: diamond layout ── */
+        .rings-diamond {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 300 / 260;
+        }
+        /* Narrow screens: collapse to a centered flex wrap */
+        @media (max-width: 479px) {
+            .rings-diamond {
+                position: static;
+                aspect-ratio: auto;
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 0.75rem;
+                max-width: none !important;
+            }
+            .rings-diamond .ring-node {
+                position: static !important;
+                width: 72px; height: 72px;
+                border-width: 5px;
+            }
+            .rings-diamond .ring-node .ring-value { font-size: 1.4rem; }
+        }
+        /* Each ring is a circle absolutely positioned inside the diamond container */
+        .ring-node {
+            position: absolute;
+            width: 100px; height: 100px;
+            border-radius: 50%;
+            border: 6px solid;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .ring-node:hover {
+            transform: scale(1.08);
+            box-shadow: 0 0 16px rgba(44,24,16,0.18);
+        }
+        .ring-node.ring-school {
+            border-width: 8px;
+        }
+        .ring-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            line-height: 1;
+        }
+        .ring-value {
+            font-size: 1.75rem;
+            font-weight: 800;
+            line-height: 1;
+            color: #2c1810;
+        }
+        .ring-school-badge {
+            font-size: 0.55rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            line-height: 1;
+        }
+        /* Diamond positions — centers of a 300×260 box. Each elemental
+           ring is ~108px center-to-center from Void (≈8px gap between
+           the 100px circles — almost touching).
+              Air (74,54)        Fire (226,54)
+                     Void (150,130)
+              Water (74,206)     Earth (226,206)   */
+        .ring-pos-air   { left: calc(74 / 300 * 100% - 50px);  top: calc(54 / 260 * 100% - 50px); }
+        .ring-pos-fire  { left: calc(226 / 300 * 100% - 50px); top: calc(54 / 260 * 100% - 50px); }
+        .ring-pos-void  { left: calc(150 / 300 * 100% - 50px); top: calc(130 / 260 * 100% - 50px); }
+        .ring-pos-water { left: calc(74 / 300 * 100% - 50px);  top: calc(206 / 260 * 100% - 50px); }
+        .ring-pos-earth { left: calc(226 / 300 * 100% - 50px); top: calc(206 / 260 * 100% - 50px); }
         @keyframes dice-tumble {
             0%   { transform: rotate(0deg)  translateY(0); }
             25%  { transform: rotate(90deg) translateY(-6px); }

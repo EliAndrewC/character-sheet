@@ -147,9 +147,10 @@ def test_reset_per_adventure(page, live_server_url):
     label.locator('input[type="checkbox"]').check()
     page.wait_for_timeout(500)
 
-    # Reset — accept the dialog
-    page.on("dialog", lambda d: d.accept())
-    page.locator('button:text("Reset Per-Adventure Abilities")').click()
+    # Reset — opens modal, then confirm
+    page.locator('[data-action="open-reset-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+    page.locator('[data-action="confirm-reset"]').click()
     page.wait_for_timeout(500)
 
     # Should be unchecked again

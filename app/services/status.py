@@ -74,13 +74,13 @@ def compute_effective_status(
     if "good_reputation" in advantages:
         status.recognition_modifiers.append({
             "field": "recognition",
-            "context": "identification",
+            "context": "for identification",
             "value": 1.0,
             "source": "Good Reputation",
         })
         status.rank_modifiers.append({
             "field": "rank",
-            "context": "those familiar with your reputation",
+            "context": "with those familiar with your reputation",
             "value": 2.0,
             "source": "Good Reputation",
         })
@@ -88,25 +88,25 @@ def compute_effective_status(
     if "imperial_favor" in advantages:
         status.rank_modifiers.append({
             "field": "rank",
-            "context": "Imperial family members",
+            "context": "with Imperial family members",
             "value": 3.0,
             "source": "Imperial Favor",
         })
         status.recognition_modifiers.append({
             "field": "recognition",
-            "context": "Imperial family members",
+            "context": "with Imperial family members",
             "value": 3.0,
             "source": "Imperial Favor",
         })
         status.rank_modifiers.append({
             "field": "rank",
-            "context": "Imperial post holders",
+            "context": "with Imperial post holders",
             "value": 1.0,
             "source": "Imperial Favor",
         })
         status.recognition_modifiers.append({
             "field": "recognition",
-            "context": "Imperial post holders",
+            "context": "with Imperial post holders",
             "value": 1.0,
             "source": "Imperial Favor",
         })
@@ -115,18 +115,37 @@ def compute_effective_status(
     if "bad_reputation" in disadvantages:
         status.recognition_modifiers.append({
             "field": "recognition",
-            "context": "identification",
+            "context": "for identification",
             "value": 1.0,
             "source": "Bad Reputation",
         })
         status.rank_modifiers.append({
             "field": "rank",
-            "context": "those aware of your reputation",
+            "context": "with those aware of your reputation",
             "value": -1.5,
             "source": "Bad Reputation",
         })
 
-    # --- Party-wide Rank modifiers from OTHER members in the same group ---
+    # --- Party-wide Rank modifiers (self + other members in the group) ---
+    # These effects apply to the ENTIRE party, including the character who
+    # has the advantage/disadvantage. We check the character's own IDs first,
+    # then loop over other party members.
+    self_name = character_data.get("name", "you")
+    all_self_ids = advantages + disadvantages + campaign_advantages + (
+        character_data.get("campaign_disadvantages") or []
+    )
+    for effect_id in all_self_ids:
+        effect = GROUP_EFFECTS.get(effect_id)
+        if not effect or "rank_modifier" not in effect:
+            continue
+        delta, context_template = effect["rank_modifier"]
+        status.rank_modifiers.append({
+            "field": "rank",
+            "context": context_template.format(name=self_name),
+            "value": delta,
+            "source": effect["name"],
+        })
+
     if party_members:
         for member in party_members:
             member_ids = (

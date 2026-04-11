@@ -224,3 +224,110 @@ def test_die_top_angle_is_about_70_degrees(page, live_server_url):
     assert 67 <= measurement["angle"] <= 73, (
         f"Expected ~70 degrees, got {measurement['angle']}. Full: {measurement}"
     )
+
+
+# --- 3rd Dan Free Raises on the roll modal ---
+
+
+def _create_3rd_dan_courtier(page, live_server_url, name="Courtier3Dan"):
+    """Create a Courtier at 3rd Dan with Tact 3 and Manipulation 2."""
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, "courtier")
+    page.wait_for_timeout(500)
+    # Select school ring (Courtier has fixed Air ring)
+    # Raise knacks to 3 for 3rd Dan
+    click_plus(page, "knack_discern_honor", 2)  # 1 → 3
+    click_plus(page, "knack_oppose_social", 2)
+    click_plus(page, "knack_worldliness", 2)
+    # Tact 3 = source skill for 3rd Dan
+    click_plus(page, "skill_tact", 3)
+    # Manipulation 2 = a skill in the 3rd Dan applicable_to list
+    click_plus(page, "skill_manipulation", 2)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "3rd Dan Courtier setup")
+
+
+def _wait_for_roll_result(page):
+    """Wait for the dice roller Alpine component to reach ``phase='done'``."""
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const data = window.Alpine && window.Alpine.$data(el);
+            if (data && data.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+
+
+def test_spend_raise_button_visible_for_applicable_skill(page, live_server_url):
+    """The 'Spend 3rd Dan Free Raise' button appears on the roll modal for
+    skills in the 3rd Dan applicable_to list."""
+    _create_3rd_dan_courtier(page, live_server_url)
+    page.locator('[data-roll-key="skill:manipulation"]').click()
+    _wait_for_roll_result(page)
+    assert page.locator('[data-action="spend-raise"]').is_visible()
+    assert page.locator('[data-action="undo-raise"]').is_visible()
+
+
+def test_spend_raise_adds_5_to_total(page, live_server_url):
+    _create_3rd_dan_courtier(page, live_server_url, "SpendTest")
+    page.locator('[data-roll-key="skill:manipulation"]').click()
+    _wait_for_roll_result(page)
+    total_before = int(page.locator('.fixed.inset-0 .font-bold.text-lg .text-accent').text_content().strip())
+    page.locator('[data-action="spend-raise"]').click()
+    page.wait_for_timeout(200)
+    total_after = int(page.locator('.fixed.inset-0 .font-bold.text-lg .text-accent').text_content().strip())
+    assert total_after == total_before + 5
+
+
+def test_undo_raise_reverses_spend(page, live_server_url):
+    _create_3rd_dan_courtier(page, live_server_url, "UndoTest")
+    page.locator('[data-roll-key="skill:manipulation"]').click()
+    _wait_for_roll_result(page)
+    total_before = int(page.locator('.fixed.inset-0 .font-bold.text-lg .text-accent').text_content().strip())
+    page.locator('[data-action="spend-raise"]').click()
+    page.wait_for_timeout(100)
+    page.locator('[data-action="undo-raise"]').click()
+    page.wait_for_timeout(200)
+    total_after = int(page.locator('.fixed.inset-0 .font-bold.text-lg .text-accent').text_content().strip())
+    assert total_after == total_before
+
+
+def test_spend_disabled_at_per_roll_max(page, live_server_url):
+    """Spend button disables after spending max-per-roll raises (= source rank)."""
+    _create_3rd_dan_courtier(page, live_server_url, "MaxPerRoll")
+    page.locator('[data-roll-key="skill:manipulation"]').click()
+    _wait_for_roll_result(page)
+    # Tact rank 3 → max 3 per roll
+    for _ in range(3):
+        page.locator('[data-action="spend-raise"]').click()
+        page.wait_for_timeout(100)
+    assert page.locator('[data-action="spend-raise"]').is_disabled()
+
+
+def test_undo_disabled_when_none_spent(page, live_server_url):
+    """Undo button is disabled when no raises have been spent this roll."""
+    _create_3rd_dan_courtier(page, live_server_url, "UndoDisabled")
+    page.locator('[data-roll-key="skill:manipulation"]').click()
+    _wait_for_roll_result(page)
+    assert page.locator('[data-action="undo-raise"]').is_disabled()
+
+
+def test_no_spend_button_for_non_applicable_skill(page, live_server_url):
+    """Skills NOT in the 3rd Dan applicable_to list don't show the button."""
+    _create_3rd_dan_courtier(page, live_server_url, "NonApplicable")
+    # Tact IS in applicable_to, but let's check a skill that isn't:
+    # add bragging rank 1
+    page.goto(page.url.replace("/characters/", "/characters/") + "/edit")
+    page.wait_for_selector('input[name="name"]')
+    click_plus(page, "skill_bragging", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Add bragging")
+    # Roll bragging — should NOT show spend button (x-show=false → hidden)
+    page.wait_for_selector('[data-roll-key="skill:bragging"]', timeout=5000)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_for_roll_result(page)
+    assert not page.locator('[data-action="spend-raise"]').is_visible()
