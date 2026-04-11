@@ -37,7 +37,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on attack, damage, and wound check rolls.
+> Roll one extra die on attack, damage, and wound check rolls.
 
 **Status:** Partially implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "damage", "wound_check"]`
@@ -48,8 +48,8 @@
 **Unit tests:** None specific to Yogo Warden 1st Dan.
 **Clicktests:** None school-specific.
 
-**Questions:**
-- Is the "damage" extra die supposed to add +1 rolled die to all damage rolls? The generic `_apply_school_technique_bonus()` function is not invoked for damage rolls, suggesting this may need school-specific handling similar to Brotherhood of Shinsei.
+**Questions (ANSWERED):**
+- Yes, the "damage" extra die is supposed to add +1 rolled die to all damage rolls. This may need school-specific handling in the damage formula builder since the generic `_apply_school_technique_bonus()` is not called for damage rolls.
 
 **Missing:**
 - [ ] Verify/implement the 1st Dan extra die on damage rolls (may require school-specific code)
@@ -60,7 +60,7 @@
 
 ## 2nd Dan
 
-> Free raise on all wound checks.
+> You get a free raise on all wound check rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "wound_check"`
@@ -77,14 +77,14 @@
 
 ## 3rd Dan
 
-> Spend a void point to reduce your current light wound total by 2X.
+> Whenever you spend a void point, reduce your current light wound total by 2X, where X is your attack skill.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- What is X? Is it the Dan level, Earth ring, or something else?
-- Can multiple VP be spent at once for cumulative reduction?
-- Is there a minimum light wound total (i.e., can it go below 0)?
+**Questions (ANSWERED):**
+- X is the attack skill rank (as with all bushi 3rd Dan techniques).
+- This triggers whenever a void point is spent (any usage), not just as a standalone action.
+- Light wound total can presumably be reduced to 0 but not below.
 
 **Missing:**
 - [ ] Implement the 3rd Dan VP-for-light-wound-reduction mechanic
@@ -96,7 +96,7 @@
 
 ## 4th Dan
 
-> +1 Earth; Earth ring costs 5 fewer XP to raise; extra free raise per void point spent on wound checks.
+> Raise your current and maximum Earth by 1. Raising your Earth now costs 5 fewer XP. You get an extra free raise for each void point you spend on wound check rolls.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Earth, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -120,9 +120,9 @@
 
 ## 5th Dan
 
-> (Unreleased)
+> TBD
 
-**Status:** NOT implemented. The 5th Dan technique text is marked as "(Unreleased)" in the game data.
+**Status:** NOT implemented. The 5th Dan technique text is marked as "TBD" in the game data.
 
 **Missing:**
 - [ ] Awaiting rules release for 5th Dan technique

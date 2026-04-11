@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Spend a void point to counterattack as an interrupt action. Void point still gives +1k1. Bonus equal to attacker's roll divided by 5.
+> You may spend a void point to counterattack as an interrupt action at the cost of one actions die; this void point still gives your counterattack +1k1. While counterattacking, you receive a bonus equal to the attacker's roll divided by 5, rounded down.
 
 **Status:** NOT implemented beyond generic mechanics. The interrupt counterattack with VP cost and attacker-roll-based bonus would require combat-phase tracking and roll result passing.
 
@@ -27,7 +27,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on counterattack, manipulation, and wound check rolls.
+> Roll one extra die on counterattack, manipulation, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["counterattack", "manipulation", "wound_check"]`
@@ -43,7 +43,7 @@
 
 ## 2nd Dan
 
-> Free raise on manipulation.
+> You get a free raise on manipulation.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "manipulation"`
@@ -60,7 +60,7 @@
 
 ## 3rd Dan
 
-> Gain 2X free raises per adventure (X = culture skill); apply to bragging, culture, heraldry, manipulation, counterattack, wound checks; max X per roll.
+> Each adventure you get 2X free raises, where X is equal to your culture skill, which may be applied to the following rolls: bragging, culture, heraldry, manipulation, counterattack, and wound checks. You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "culture"`
@@ -79,7 +79,7 @@
 
 ## 4th Dan
 
-> +1 Air or Water; that ring costs 5 fewer XP to raise; bonus equal to current phase when attacking untouched targets.
+> Raise your current and maximum Air or Water by 1. Raising that ring now costs 5 fewer XP. When attacking a target who has not attacked you this round, you receive a bonus equal to the current phase.
 
 **Status:** Partially implemented.
 - Ring raise (+1 to the chosen school ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "Air or Water", the 4th Dan ring raise applies to whichever ring was chosen.
@@ -99,13 +99,9 @@
 
 ## 5th Dan
 
-> On TN/contested rolls, gain (X-10)/5 bonus where X is the opponent's result.
+> When making any TN or contested roll, you receive a bonus equal to (X-10) / 5 where X is the TN or result of your opponent's contested roll.
 
 **Status:** NOT implemented. This is a reactive ability that benefits from the opponent rolling high.
-
-**Questions:**
-- Is the bonus applied after the roll? Does the Doji see the opponent's result first?
-- Can the bonus be negative (if X < 10)?
 
 **Missing:**
 - [ ] Implement opponent-result-based bonus mechanic

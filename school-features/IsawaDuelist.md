@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Add your Water instead of Fire to your rolled damage dice.
+> You add your Water instead of Fire to your rolled damage dice.
 
 **Status:** Fully implemented.
 - `dice.py:567` sets `damage_ring_name = "Water"` when `school_id == "isawa_duelist"`.
@@ -28,7 +28,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on double attack, lunge, and wound check rolls.
+> Roll one extra die on double attack, lunge, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["double_attack", "lunge", "wound_check"]`
@@ -44,7 +44,7 @@
 
 ## 2nd Dan
 
-> Free raise on wound checks.
+> You get a free raise on wound checks.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "wound_check"`
@@ -61,14 +61,14 @@
 
 ## 3rd Dan
 
-> Trade -5 TN to be hit next round for +3X on attack; no penalty if the attack is parried.
+> After you make any type of attack roll, you may lower your TN to be hit by 5 for the next time that you are attacked this round to get a bonus of 3X on your attack roll, where X is your attack skill. If a successful or unsuccessful parry is made against your attack, you do not suffer the TN penalty.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- What is X here? Presumably related to a skill rank.
-- Is the -5 TN trade done before the attack roll? Is it a toggle?
-- Does "no penalty if the attack is parried" mean the TN reduction doesn't apply if the Isawa's attack gets parried?
+**Questions (ANSWERED):**
+- X is the attack skill rank (as with all bushi 3rd Dan techniques).
+- The -5 TN trade happens after making an attack roll (it's a bonus applied to that attack roll).
+- If the attack is parried (successfully or not), the TN penalty is waived.
 
 **Missing:**
 - [ ] Implement the TN-trade-for-attack-bonus mechanic
@@ -79,7 +79,7 @@
 
 ## 4th Dan
 
-> +1 Water; Water ring costs 5 fewer XP to raise; lunge once per round as an interrupt action.
+> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. Once per round, you may lunge as an interrupt action at the cost of 1 action die.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -96,14 +96,9 @@
 
 ## 5th Dan
 
-> After a successful wound check, add excess to a future wound check this combat.
+> After a successful wound check, you may add X to a future wound check this combat, where X is the amount by which the wound check exceeded the light wound total.
 
 **Status:** NOT implemented. This is a reactive ability that tracks wound check excess across a combat.
-
-**Questions:**
-- Does the excess accumulate across multiple wound checks?
-- Is there a cap on the accumulated bonus?
-- Does "this combat" mean it resets between combats?
 
 **Missing:**
 - [ ] Implement wound check excess tracking

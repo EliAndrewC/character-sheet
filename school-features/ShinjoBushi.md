@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Each action you take in combat has a bonus of 2X, where X is the number of phases held.
+> Each action you take in combat has a bonus of 2X, where X is the number of phases for which the action die was held.
 
 **Status:** NOT implemented.
 - No code tracks "phases held" or applies a +2X bonus to actions.
@@ -37,7 +37,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on double attack, initiative, and parry rolls.
+> Roll one extra die on double attack, initiative, and parry rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["double_attack", "initiative", "parry"]`
@@ -57,7 +57,7 @@
 
 ## 2nd Dan
 
-> Free raise on parry rolls.
+> You get a free raise on parry rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "parry"`
@@ -74,14 +74,15 @@
 
 ## 3rd Dan
 
-> After a parry, decrease all action dice by X (attack skill); new values count as held since the reduction.
+> After a successful or unsuccessful parry, all your action dice are decreased by X, where X is equal to your attack skill. Action dice are considered to have been held since their newly lowered value. This can lower dice to negative numbers.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- "X (attack skill)" - is X the attack skill rank?
-- "Decrease all action dice" - does this affect all of the Shinjo's remaining action dice, or the opponent's?
-- "New values count as held since the reduction" - does this mean the Shinjo's special ability (+2X per phase held) applies retroactively to the reduced values?
+**Questions (ANSWERED):**
+- X is the attack skill rank.
+- "All your action dice" means all of the Shinjo's own remaining action dice are decreased.
+- "Considered to have been held since their newly lowered value" means the Special Ability's +2X bonus applies retroactively to the reduced values.
+- "Can lower dice to negative numbers" means there's no minimum.
 
 **Missing:**
 - [ ] Implement the 3rd Dan action dice reduction after parry
@@ -94,7 +95,7 @@
 
 ## 4th Dan
 
-> +1 Air; Air ring costs 5 fewer XP to raise; highest action die set to 1 at round start.
+> Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. Your highest action die is set to 1 at the beginning of each combat round.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -124,14 +125,9 @@
 
 ## 5th Dan
 
-> After a successful parry, add parry excess to a future wound check after seeing the roll.
+> After you successfully parry, you may add X to a future wound check this combat after seeing your roll, where X is the amount by which your parry roll exceeded its TN.
 
 **Status:** NOT implemented. This is a reactive ability that requires tracking parry excess and applying it retroactively.
-
-**Questions:**
-- "After seeing the roll" - does this mean the parry excess can be applied after the wound check dice are rolled?
-- Does this stack with multiple successful parries, or is it one-time use?
-- Is there a cap on how much excess can be added?
 
 **Missing:**
 - [ ] Implement the 5th Dan parry excess to wound check mechanic

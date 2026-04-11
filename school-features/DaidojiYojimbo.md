@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Counterattack as an interrupt action by spending only 1 action die; your opponent gets a free raise. May counterattack for others.
+> You may counterattack as an interrupt action by spending only 1 action die, but if you do so then your opponent gets a free raise on their wound check if you hit. You may counterattack for other characters at no penalty.
 
 **Status:** NOT implemented.
 - No code in `dice.py` or templates modifies counterattack behavior for Daidoji Yojimbo.
@@ -33,7 +33,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on attack, counterattack, and wound check rolls.
+> Roll one extra die on attack, counterattack, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "counterattack", "wound_check"]`
@@ -50,7 +50,7 @@
 
 ## 2nd Dan
 
-> Free raise on counterattack rolls.
+> You get a free raise on all counterattack rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "counterattack"`
@@ -67,14 +67,13 @@
 
 ## 3rd Dan
 
-> Add X free raises to wound checks from counterattack damage.
+> When you counterattack, add X free raises to the wound check from the original attack, where X is your attack skill.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- What is X? Is it the counterattack knack rank, attack skill rank, or Dan level?
-- "From counterattack damage" - does this mean the damage dealt by the counterattack translates to free raises on the next wound check the Daidoji must make?
-- Is this per counterattack, or does it stack?
+**Questions (ANSWERED):**
+- X is the Daidoji's attack skill rank.
+- The free raises are applied to the wound check of the person who was originally attacked (the person the Daidoji counterattacked for). The original attack still lands, and the target gets X free raises on their wound check.
 
 **Missing:**
 - [ ] Implement the 3rd Dan counterattack-damage-to-wound-check-raises mechanic
@@ -87,7 +86,7 @@
 
 ## 4th Dan
 
-> +1 Water; Water ring costs 5 fewer XP to raise; intercept adjacent character damage before rolling.
+> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. You may choose to take the damage from a hit dealt to an adjacent character before damage has been rolled.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -111,14 +110,9 @@
 
 ## 5th Dan
 
-> Lower next attacker TN by wound check excess; minimum 0.
+> After you or a character for whom you've counterattacked makes a wound check, lower the TN to hit the attacker the next time they are attacked by the amount by which the wound check exceeded the damage roll, to a minimum of 0.
 
 **Status:** NOT implemented. This modifies the attacker's TN after a successful wound check.
-
-**Questions:**
-- "Lower next attacker TN" - does this lower the TN for the next attack against the opponent who caused the wound check?
-- "Wound check excess" - is this the amount by which the wound check exceeded its target number?
-- "Minimum 0" - the attacker's TN cannot go below 0?
 
 **Missing:**
 - [ ] Implement the 5th Dan wound check excess to attacker TN reduction

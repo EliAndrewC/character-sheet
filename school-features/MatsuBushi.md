@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Always roll 10 dice when rolling initiative, keeping the usual number.
+> You always roll 10 dice when rolling initiative, keeping the usual number as action dice.
 
 **Status:** Fully implemented.
 - `app/services/dice.py:487-489` checks `school_id == "matsu_bushi"` and sets `rolled = 10` in `build_initiative_formula()`.
@@ -29,7 +29,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on double attack, iaijutsu, and wound check rolls.
+> Roll one extra die on double attack, iaijutsu, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["double_attack", "iaijutsu", "wound_check"]`
@@ -46,7 +46,7 @@
 
 ## 2nd Dan
 
-> Free raise on iaijutsu rolls.
+> You get a free raise on iaijutsu rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "iaijutsu"`
@@ -63,14 +63,14 @@
 
 ## 3rd Dan
 
-> Spend a void point to add 3X to a future wound check after seeing the roll.
+> When you spend a void point, you may add 3X to any future wound check this combat after seeing the roll, where X is your attack skill.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- What is X? Is it the Dan level, a knack rank, or the wound check knack rank?
-- "After seeing the roll" - does this mean the VP can be spent retroactively after the wound check dice are rolled?
-- Is this per wound check, or can multiple VP be spent on a single wound check?
+**Questions (ANSWERED):**
+- X = the Matsu's attack skill rank. So spending 1 VP adds 3 * attack_skill to a wound check.
+- "After seeing the roll" = yes, VP can be spent retroactively after seeing the wound check result.
+- Remaining question: can multiple VP be spent on a single wound check? (Each adding 3X?)
 
 **Missing:**
 - [ ] Implement the 3rd Dan retroactive VP spending on wound checks
@@ -82,7 +82,7 @@
 
 ## 4th Dan
 
-> +1 Fire; Fire ring costs 5 fewer XP to raise; near-misses on double attacks still hit with no bonus damage.
+> Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. When you miss the TN on a double attack roll by less than 20, you are still considered to have hit, but you deal no extra damage.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -110,7 +110,7 @@
 
 ## 5th Dan
 
-> After dealing serious wounds, reset the defender's light wounds to 15 instead of 0.
+> After you deal light wounds which result in the defender taking one or more serious wounds, their light wound total is reset to 15 instead of 0.
 
 **Status:** NOT implemented. This modifies the wound application outcome after dealing serious wounds.
 

@@ -35,7 +35,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on tact, manipulation, and wound check rolls.
+> Roll one extra die on tact, manipulation, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["tact", "manipulation", "wound_check"]`
@@ -53,7 +53,7 @@
 
 ## 2nd Dan
 
-> Free raise on manipulation rolls.
+> You get a free raise on manipulation rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "manipulation"`
@@ -71,7 +71,7 @@
 
 ## 3rd Dan
 
-> Gain 2X free raises per adventure (X = tact skill); apply to heraldry, manipulation, sincerity, tact, attack, wound checks; max X per roll.
+> Each adventure you get 2X free raises, where X is equal to your tact skill, which may be applied to the following rolls: heraldry, manipulation, sincerity, tact, attack, and wound checks. You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "tact"`
@@ -99,7 +99,7 @@
 
 ## 4th Dan
 
-> +1 Air; Air ring costs 5 fewer XP to raise; gain a temporary void point after a successful attack or manipulation per target.
+> Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. Once per target per conversation or fight, you get a temporary void point after a successful attack or manipulation roll.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -120,15 +120,10 @@
 
 ## 5th Dan
 
-> Add your Air to all TN and contested rolls for attack rolls.
+> Add your Air to all TN and contested rolls. This stacks with your Special Ability for attack rolls.
 
-**Status:** NOT implemented. This adds Air as a bonus to the TN for contested attack rolls (making it harder for opponents to hit the Courtier) and to the Courtier's own contested attack rolls.
-
-**Questions:**
-- Does "TN and contested rolls for attack rolls" mean the Courtier's TN to be hit is increased by Air, AND the Courtier gets +Air on contested attack rolls?
-- How does this interact with the Special Ability which already adds Air to attack rolls?
+**Status:** NOT implemented. This adds Air as a bonus to all TN and contested rolls, stacking with the Special Ability for attack rolls.
 
 **Missing:**
-- [ ] Implement +Air on TN for attack rolls
-- [ ] Implement +Air on contested attack rolls
-- [ ] Clarify interaction with Special Ability
+- [ ] Implement +Air on all TN and contested rolls
+- [ ] Ensure stacking with Special Ability for attack rolls

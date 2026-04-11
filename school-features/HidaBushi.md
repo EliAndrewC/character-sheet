@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Counterattack as an interrupt action by spending only 1 action die, but the attacker gets a free raise.
+> You may counterattack as an interrupt action by spending only 1 action die, but if you do so then the attacker gets a free raise on their attack roll.
 
 **Status:** NOT implemented.
 - No code in `dice.py` or templates modifies counterattack behavior for Hida Bushi.
@@ -31,7 +31,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on attack, counterattack, and wound check rolls.
+> Roll one extra die on attack, counterattack, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "counterattack", "wound_check"]`
@@ -48,7 +48,7 @@
 
 ## 2nd Dan
 
-> Free raise on all counterattack rolls.
+> You get a free raise on all counterattack rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "counterattack"`
@@ -65,14 +65,14 @@
 
 ## 3rd Dan
 
-> Reroll 2X dice on counterattacks or X dice on other attacks; half effectiveness when impaired but reroll 10s.
+> You may re-roll 2X dice on each counterattack roll or X dice on any other attack roll, where X is your attack skill. When impaired, your number of extra dice on these rolls is divided in half (round up), but you reroll 10s on these rolls despite being impaired.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- What is X in this formula? Is it the counterattack knack rank, Dan level, or something else?
-- "Reroll dice" - does this mean reroll the lowest N dice and take the better result?
-- "Half effectiveness when impaired but reroll 10s" - does impaired halve the reroll count (X instead of 2X for counterattacks) but restore 10-rerolling?
+**Questions (ANSWERED):**
+- X is the attack skill rank (as with all bushi 3rd Dan techniques).
+- "Re-roll dice" means rerolling that many dice and taking the better result.
+- "When impaired, divided in half (round up), but reroll 10s despite being impaired" - the impaired state halves the reroll count but restores 10-rerolling on these specific rolls.
 
 **Missing:**
 - [ ] Implement the 3rd Dan reroll mechanic for counterattacks and attacks
@@ -85,7 +85,7 @@
 
 ## 4th Dan
 
-> +1 Water; Water ring costs 5 fewer XP to raise; trade 2 serious wounds to reset light wounds to 0.
+> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. Instead of making a wound check, you may choose to take 2 serious wounds to reduce your light wounds to 0. You may not do this during the iaijutsu phase of a duel.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -109,13 +109,9 @@
 
 ## 5th Dan
 
-> Add counterattack excess to wound check; may counterattack after seeing damage rolls.
+> When you counterattack successfully, note the quantity X by which the counterattack roll exceeded its TN. Add X to your wound check on the damage from the attack you counterattacked. You may choose to counterattack after seeing an opponent's damage roll, but that roll goes through even if your counterattack impairs or kills the opponent.
 
 **Status:** NOT implemented. This has two parts: a wound check bonus from counterattack excess and a reactive counterattack trigger.
-
-**Questions:**
-- "Add counterattack excess to wound check" - is this the excess from the counterattack roll (amount by which it exceeded the TN) added as flat bonus to the next wound check?
-- "May counterattack after seeing damage rolls" - does this mean the Hida can declare a counterattack after the attacker's damage is rolled but before the wound check?
 
 **Missing:**
 - [ ] Implement counterattack excess tracking and wound check bonus

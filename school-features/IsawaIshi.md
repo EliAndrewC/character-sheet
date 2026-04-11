@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Maximum void points equals highest ring plus school rank. Regain lowest Ring per night, one per 2 hours partial. May not spend more than lowest Ring minus 1 per roll.
+> Your maximum number of void points is equal to your highest ring plus your school rank. You regain a number of void points equal to your lowest Ring after a full night's rest, and one void point per 2 hours for a partial night. However, you may not spend more void points on any one roll than your lowest Ring minus 1.
 
 **Status:** Partially implemented.
 - VP spend cap (lowest ring - 1) is implemented in `pages.py:211`: `void_spend_cap = void_max - (1 if character.school in ("shugenja", "isawa_ishi") else 0)`.
@@ -43,7 +43,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on precepts and two chosen skill rolls.
+> Roll one extra die on precepts and any two skills of your choice.
 
 **Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the two skill rolls are player-chosen.
 - `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES`.
@@ -65,7 +65,7 @@
 
 ## 2nd Dan
 
-> Free raise on all rolls for a chosen skill.
+> You get a free raise on all rolls for any skill of your choice.
 
 **Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the skill is player-chosen.
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES`.
@@ -86,14 +86,14 @@
 
 ## 3rd Dan
 
-> After an ally's roll, spend a void point to roll Xk1 and add the result (X = precepts skill); once per roll.
+> After another character makes a roll for which void points may be spent, you may spend one void point to roll Xk1 and add the result to their total, where X is your precepts skill. You may only do this once per roll.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`. It is a support ability that affects allies' rolls.
 
-**Questions:**
-- Is this triggered via the Isawa's UI or the ally's UI?
-- Does the Xk1 roll use the Isawa's precepts rank or the ally's?
-- "Once per roll" means each of the Isawa's allies can only receive this once per roll they make?
+**Questions (ANSWERED):**
+- Triggered from the Isawa's side (the Isawa decides to spend their VP to help another character).
+- Uses the Isawa's precepts skill rank for X.
+- "Once per roll" means each roll can only receive this bonus once.
 
 **Missing:**
 - [ ] Implement ally-support roll mechanic
@@ -104,7 +104,7 @@
 
 ## 4th Dan
 
-> +1 Void; Void ring costs 5 fewer XP to raise; contested opponents can't spend void points.
+> Raise your current and maximum Void by 1. Raising your Void now costs 5 fewer XP. Characters opposing you in contested rolls may not spend void points. If someone is opposing both you and someone else, they may spend void points, but the bonus will only count against whoever else they're opposing.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Void, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -121,14 +121,9 @@
 
 ## 5th Dan
 
-> Negate another character's school for a conversation or fight; costs 2X void for school rank X, or experience/50 for non-school.
+> You may completely negate another character's school or profession for the remainder of one conversation or fight. Against characters with a school, you must spend void points equal to twice their school rank. Against characters with no school, you must spend void points equal to their experience divided by 50, rounded down. This is instantaneous and does not require spending an action.
 
 **Status:** NOT implemented. This is a powerful debuff ability.
-
-**Questions:**
-- Does "negate" mean all school techniques, special ability, and knack bonuses are suppressed?
-- Does "experience/50 for non-school" mean it can affect non-school abilities too?
-- What is the UI for targeting another character?
 
 **Missing:**
 - [ ] Implement school negation mechanic

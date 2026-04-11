@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Parry as an interrupt action by spending your lowest 1 action die. Parry attacks directed at other characters.
+> You may parry as an interrupt action by spending your lowest 1 action die, and you may parry attacks directed at other characters with no penalty.
 
 **Status:** NOT implemented beyond generic mechanics. The interrupt parry and parry-for-others logic would require combat-phase tracking.
 
@@ -45,7 +45,7 @@
 
 ## 2nd Dan
 
-> Free raise on parry rolls.
+> You get a free raise on parry rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "parry"`
@@ -62,14 +62,14 @@
 
 ## 3rd Dan
 
-> Parries deal (2X)k1 damage; no extra damage dice from ring or TN excess.
+> Your successful or unsuccessful parry rolls deal (2X)k1 damage, where X is equal to your attack skill. You don't roll extra damage dice from your Fire or from exceeding the TN.
 
 **Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
-**Questions:**
-- What is X here? Presumably counterattack knack rank or parry-related skill rank?
-- How does this interact with the damage UI? Is a separate damage roll triggered after a successful parry?
-- Does "no extra damage dice from ring or TN excess" mean the damage is strictly (2X)k1 with no modifiers?
+**Questions (ANSWERED):**
+- X is the attack skill rank.
+- This is a separate damage roll triggered after the parry resolves, since parries don't ordinarily do damage.
+- Damage is strictly (2X)k1 with no modifiers from Fire or TN excess.
 
 **Missing:**
 - [ ] Implement parry-deals-damage mechanic
@@ -80,7 +80,7 @@
 
 ## 4th Dan
 
-> +1 Air; Air ring costs 5 fewer XP to raise; extra 3k1 on wound checks.
+> Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. You roll an extra 3k1 on wound checks.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -98,13 +98,9 @@
 
 ## 5th Dan
 
-> After a successful parry, lower next attacker TN by parry excess; can go negative.
+> After you successfully parry, the TN to hit the parried opponent on the next attack directed at them this combat is lowered by the amount by which your parry roll exceeded its TN. This can lower the TN to a negative number.
 
 **Status:** NOT implemented. This is a reactive ability triggered after a successful parry that affects the next attack against that target.
-
-**Questions:**
-- Does "can go negative" mean the attacker's TN can drop below 0, effectively giving the Shiba's next attack a bonus?
-- How long does the TN reduction last? Just the next attack?
 
 **Missing:**
 - [ ] Implement TN reduction after successful parry

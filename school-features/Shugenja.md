@@ -11,7 +11,7 @@
 
 ## Special Ability
 
-> Maximum void points equals highest ring plus school rank. Regain lowest Ring per night, one per 2 hours partial. May not spend more than lowest Ring minus 1 per roll.
+> Your maximum number of void points is equal to your highest ring plus your school rank. You regain a number of void points equal to your lowest Ring after a full night's rest, and one void point per 2 hours for a partial night. However, you may not spend more void points on any one roll than your lowest Ring minus 1.
 
 **Status:** Partially implemented (same as Isawa Ishi).
 - VP spend cap (lowest ring - 1) is implemented in `pages.py:211`: `void_spend_cap = void_max - (1 if character.school in ("shugenja", "isawa_ishi") else 0)`.
@@ -44,7 +44,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on precepts or commune/spellcasting for a chosen element.
+> Roll one extra die when rolling precepts or with commune and spellcasting for your chosen element.
 
 **Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the element/skill is player-chosen.
 - `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES`.
@@ -66,7 +66,7 @@
 
 ## 2nd Dan
 
-> Free raise on precepts or commune/spellcasting for a chosen element.
+> You get a free raise when rolling precepts or with commune and spellcasting for your chosen element.
 
 **Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the element/skill is player-chosen.
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES`.
@@ -87,7 +87,7 @@
 
 ## 3rd Dan
 
-> Gain 2X free raises per adventure (X = precepts skill); apply to bragging, intimidation, precepts, tact, wound checks, spellcasting for element; max X per roll.
+> Each adventure you get 2X free raises, where X is equal to your precepts skill, which may be applied to the following rolls: bragging, intimidation, precepts, tact, wound checks, and spellcasting for your chosen element. You may not spend more than X of these free raises on any single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "precepts"`
@@ -108,7 +108,7 @@
 
 ## 4th Dan
 
-> +1 to the chosen element's ring; that ring costs 5 fewer XP to raise; cast one spell per round as an interrupt action.
+> Raise your current and maximum Ring of your chosen element by 1. Raising that Ring now costs 5 fewer XP. You may cast one spell per round as an interrupt action.
 
 **Status:** Partially implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring (which represents the chosen element).
@@ -125,13 +125,9 @@
 
 ## 5th Dan
 
-> All non-Void rings considered 1 higher when rolling commune/spellcasting.
+> Your non-Void rings are all considered 1 higher when rolling commune and spellcasting.
 
 **Status:** NOT implemented. This would add +1 to Air, Fire, Earth, and Water when computing commune and spellcasting roll formulas.
-
-**Questions:**
-- Does this affect only the rolled/kept values (ring determines kept dice) or also any flat bonuses that scale with ring?
-- Does this stack with the 4th Dan ring raise?
 
 **Missing:**
 - [ ] Implement +1 to non-Void rings for commune/spellcasting rolls
