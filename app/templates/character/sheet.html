@@ -301,8 +301,7 @@
     </script>
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
              x-data="trackingData()"
-             x-init="window._trackingGetCount = (id) => getCount(id);
-                     window._trackingSetCount = (id, val) => setCount(id, val)">
+             x-init="window._trackingBridge = $data">
         <h2 class="text-xl font-bold mb-4 text-accent">Tracking</h2>
 
         <!-- Wounds & Void -->
@@ -694,7 +693,7 @@
                     </div>
                     <div class="flex items-center gap-3">
                         {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction'] %}
-                        <button type="button" data-roll-key="knack:{{ kid }}" @click.stop
+                        <button type="button" data-roll-key="knack:{{ kid }}"
                                 title="Click to roll {{ info.data.name }}"
                                 class="text-base hover:scale-110 transition-transform">&#x1F3B2;</button>
                         {% endif %}
@@ -989,7 +988,7 @@
                     {% endif %}
                     <template x-if="editingSummary !== {{ v.id }}">
                         <p class="text-ink/70 mt-1 cursor-pointer hover:text-ink"
-                           @click="startEditSummary({{ v.id }}, {{ v.summary|tojson }})">{{ v.summary }}</p>
+                           @click='startEditSummary({{ v.id }}, {{ v.summary|tojson }})'>{{ v.summary }}</p>
                     </template>
                     <template x-if="editingSummary === {{ v.id }}">
                         <div class="mt-1 flex gap-2">
@@ -1167,19 +1166,19 @@
                                 <li><span x-text="keptSum"></span> from the kept dice</li>
 
                                 {# Single bonus: render directly without sub-bullets #}
-                                <template x-if="formula.bonuses.length === 1">
+                                <template x-if="formula?.bonuses?.length === 1">
                                     <li>
-                                        +<span x-text="formula.bonuses[0].amount"></span>
-                                        from <span x-text="formula.bonuses[0].label"></span>
+                                        +<span x-text="formula?.bonuses?.[0]?.amount"></span>
+                                        from <span x-text="formula?.bonuses?.[0]?.label"></span>
                                     </li>
                                 </template>
 
                                 {# Multiple bonuses: total line + indented sub-bullets #}
-                                <template x-if="formula.bonuses.length > 1">
+                                <template x-if="formula?.bonuses?.length > 1">
                                     <li>
-                                        +<span x-text="formula.flat"></span> total flat bonus
+                                        +<span x-text="formula?.flat"></span> total flat bonus
                                         <ul class="ml-5 mt-0.5 list-disc list-inside space-y-0.5">
-                                            <template x-for="b in formula.bonuses" :key="b.label">
+                                            <template x-for="b in (formula?.bonuses || [])" :key="b.label">
                                                 <li>
                                                     +<span x-text="b.amount"></span>
                                                     from <span x-text="b.label"></span>
@@ -1203,7 +1202,7 @@
                         <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
                             <div class="mt-2 pt-2 border-t border-ink/10">
                                 <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
-                                <template x-for="alt in formula.alternatives" :key="alt.label">
+                                <template x-for="alt in (formula?.alternatives || [])" :key="alt.label">
                                     <div class="text-sm">
                                         <span x-text="alt.label"></span>:
                                         <span class="font-bold text-accent" x-text="baseTotal + alt.extra_flat"></span>
@@ -1230,7 +1229,7 @@
                             </div>
                             <div class="text-xs text-ink/60">
                                 This roll: <span class="font-mono font-bold" x-text="raisesSpentThisRoll"></span>
-                                / <span x-text="formula.adventure_raises_max_per_roll"></span> max
+                                / <span x-text="formula?.adventure_raises_max_per_roll"></span> max
                                 <span class="mx-1">&middot;</span>
                                 Remaining this adventure: <span class="font-mono font-bold" x-text="raisesRemainingAdventure()"></span>
                                 / <span x-text="advRaisesConfig.available"></span>
@@ -1291,8 +1290,8 @@
                 // Listen for tracking-section changes (e.g. manual +/- on the
                 // per-adventure counter) so our remaining count stays in sync.
                 window.addEventListener('adventure-state-changed', () => {
-                    if (window._trackingGetCount) {
-                        this.advRaisesConfig.used = window._trackingGetCount('adventure_raises');
+                    if (window._trackingBridge) {
+                        this.advRaisesConfig.used = window._trackingBridge.getCount('adventure_raises');
                     }
                 });
 
@@ -1397,8 +1396,8 @@
                 this.raisesSpentThisRoll++;
                 this.baseTotal += 5;
                 this.advRaisesConfig.used++;
-                if (window._trackingSetCount) {
-                    window._trackingSetCount('adventure_raises', this.advRaisesConfig.used);
+                if (window._trackingBridge) {
+                    window._trackingBridge.setCount('adventure_raises', this.advRaisesConfig.used);
                 }
             },
             undoRaise() {
@@ -1406,8 +1405,8 @@
                 this.raisesSpentThisRoll--;
                 this.baseTotal -= 5;
                 this.advRaisesConfig.used--;
-                if (window._trackingSetCount) {
-                    window._trackingSetCount('adventure_raises', this.advRaisesConfig.used);
+                if (window._trackingBridge) {
+                    window._trackingBridge.setCount('adventure_raises', this.advRaisesConfig.used);
                 }
             },
             raisesRemainingAdventure() {
