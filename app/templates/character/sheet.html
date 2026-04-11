@@ -331,6 +331,15 @@
                 </div>
 
                 {% if viewer_can_edit %}
+                <button x-show="lightWounds > 0" x-cloak
+                        @click="$dispatch('open-wound-check')"
+                        data-action="roll-wound-check"
+                        class="mt-1 text-xs bg-accent/10 hover:bg-accent/20 text-accent font-medium px-2 py-1 rounded transition-colors">
+                    Roll Wound Check
+                </button>
+                {% endif %}
+
+                {% if viewer_can_edit %}
                 <!-- Minus dropdown menu -->
                 <div x-show="lwMinusMenu" x-cloak @click.outside="lwMinusMenu = false"
                      class="absolute left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm w-48">
@@ -1076,6 +1085,7 @@
     <script type="application/json" id="user-prefs">{{ user_prefs | tojson }}</script>
     {% set adv_raises_max = namespace(val=0) %}
     {% for a in per_adventure %}{% if a.id == 'adventure_raises' %}{% set adv_raises_max.val = a.max %}{% endif %}{% endfor %}
+    <script type="application/json" id="wound-check-probs">{{ wound_check_probs | tojson }}</script>
     <script type="application/json" id="void-spend-config">{{ void_spend_config | tojson }}</script>
     <script type="application/json" id="adventure-raises-config">{{ {
         "available": adv_raises_max.val,
@@ -1108,8 +1118,200 @@
             </template>
         </div>
 
+        {# ── Wound Check Modal ── #}
+        <div x-show="wcModalOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="wound-check"
+             @click.self="wcModalOpen = false">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent">Wound Check</h3>
+                    <button type="button" @click="wcModalOpen = false"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+
+                {# ── PRE-ROLL: probability table + void selection ── #}
+                <div x-show="wcPhase === 'pre'" class="space-y-4">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Light wounds:</span>
+                        <span class="font-bold text-lg" x-text="wcLightWounds"></span>
+                        <span class="text-ink/60 ml-2">TN:</span>
+                        <span class="font-bold" x-text="wcLightWounds"></span>
+                        <span x-show="wcProbs.flat > 0" x-cloak class="text-green-700 text-xs ml-1"
+                              x-text="'(+' + wcProbs.flat + ' flat bonus)'"></span>
+                    </div>
+
+                    {# Bonus sources #}
+                    <div x-show="formulas.wound_check?.bonus_sources?.length > 0" x-cloak class="text-xs text-ink/60">
+                        Bonuses: <span x-text="formulas.wound_check?.bonus_sources?.join(', ')"></span>
+                    </div>
+
+                    {# Probability table #}
+                    <div class="overflow-x-auto">
+                        <table class="text-sm w-full">
+                            <thead>
+                                <tr class="border-b border-ink/20">
+                                    <th class="text-left py-1 pr-3">Void</th>
+                                    <th class="text-right py-1 px-2">Pass</th>
+                                    <th class="text-right py-1 px-2">1 SW</th>
+                                    <th class="text-right py-1 px-2">2 SW</th>
+                                    <th class="text-right py-1 px-2">3 SW</th>
+                                    <th class="text-right py-1 px-2 font-bold">Avg SW</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="v in Array.from({length: (wcProbs.void_cap || 0) + 1}, (_, i) => i)" :key="v">
+                                    <tr class="border-b border-ink/5"
+                                        :class="v === wcVoidSelected ? 'bg-accent/10 font-medium' : ''">
+                                        <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
+                                        <td class="text-right py-1 px-2 text-green-700"
+                                            x-text="wcProbRow(v) ? Math.round(wcProbRow(v).passChance * 100) + '%' : '-'"></td>
+                                        <template x-for="sw in [1,2,3]" :key="sw">
+                                            <td class="text-right py-1 px-2"
+                                                x-text="wcProbRow(v)?.rows?.find(r => r.sw === sw) ? Math.round(wcProbRow(v).rows.find(r => r.sw === sw).chance * 100) + '%' : '-'"></td>
+                                        </template>
+                                        <td class="text-right py-1 px-2 font-bold"
+                                            x-text="wcProbRow(v) ? wcProbRow(v).expectedSW.toFixed(1) : '-'"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {# 3rd Dan raises note #}
+                    <div x-show="wcMaxRaisesPerRoll > 0" x-cloak class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        You have 3rd Dan free raises available (not reflected in table above).
+                        These can be spent after the roll to adjust the result.
+                    </div>
+
+                    {# Void selection #}
+                    <div class="flex items-center gap-3">
+                        <label class="text-sm font-medium">Void points to spend:</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" @click="wcVoidSelected = Math.max(0, wcVoidSelected - 1)"
+                                    :disabled="wcVoidSelected <= 0"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                            <span class="w-8 text-center font-bold text-lg" x-text="wcVoidSelected"></span>
+                            <button type="button" @click="wcVoidSelected = Math.min(wcVoidSelected + 1, Math.min(computeVoidOptions().length, wcProbs.void_cap || 0))"
+                                    :disabled="wcVoidSelected >= Math.min(computeVoidOptions().length, wcProbs.void_cap || 0)"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">+</button>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button type="button" @click="rollWoundCheck()"
+                                data-action="roll-wound-check-go"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                            Roll Wound Check
+                        </button>
+                        <button type="button" @click="wcIsStrike = true; wcVoidSelected = 0; rollWoundCheck()"
+                                data-action="roll-wound-check-strike"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
+                            Iaijutsu Strike Wound Check
+                        </button>
+                    </div>
+                </div>
+
+                {# ── ROLLING: dice animation ── #}
+                <div x-show="wcPhase === 'rolling'" x-cloak>
+                    <div id="dice-animation-wc"
+                         class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+                </div>
+
+                {# ── RESULT: pass/fail + discretionary bonuses ── #}
+                <div x-show="wcPhase === 'result'" x-cloak class="space-y-3">
+                    {# Roll summary #}
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'wc'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+
+                    <div class="bg-ink/5 rounded p-3 text-sm">
+                        <div class="font-bold text-lg mb-1">
+                            Total: <span class="text-accent" x-text="baseTotal"></span>
+                            <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="wcLightWounds"></span></span>
+                        </div>
+                        <div x-show="formula?.void_spent > 0" x-cloak class="text-xs text-ink/70">
+                            &bull; Rolled +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span>
+                            from <span x-text="formula?.void_spent"></span> spent void point<span x-show="formula?.void_spent > 1">s</span>
+                        </div>
+                        <div x-show="wcRaisesSpent > 0" x-cloak class="text-xs text-ink/70">
+                            &bull; +<span x-text="wcRaisesSpent * 5"></span> from <span x-text="wcRaisesSpent"></span> 3rd Dan free raise<span x-show="wcRaisesSpent > 1">s</span>
+                        </div>
+                        <div x-show="formula && !formula.reroll_tens && finalDice.some(d => d.value === 10)"
+                             x-cloak class="text-xs italic text-red-700">
+                            10s not rerolled for the strike in an iaijutsu duel
+                        </div>
+                    </div>
+
+                    {# PASSED #}
+                    <div x-show="wcPassed" x-cloak class="bg-green-50 border border-green-300 rounded p-3">
+                        <div class="font-bold text-green-800 mb-2">Wound check PASSED</div>
+                        <p class="text-sm text-green-700 mb-3">
+                            You may keep your light wounds or choose to take 1 serious wound and reset light wounds to 0.
+                        </p>
+                        <div class="flex gap-2">
+                            <button type="button" @click="wcKeepLightWounds()"
+                                    class="bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded text-sm font-medium">
+                                Keep Light Wounds
+                            </button>
+                            <button type="button" @click="wcTakeSeriousAndReset()"
+                                    class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
+                                Take 1 Serious Wound
+                            </button>
+                        </div>
+                    </div>
+
+                    {# FAILED #}
+                    <div x-show="!wcPassed" x-cloak class="bg-red-50 border border-red-300 rounded p-3">
+                        <div class="font-bold text-red-800 mb-1">Wound check FAILED</div>
+                        <p class="text-sm text-red-700">
+                            Failed by <span class="font-bold" x-text="wcMargin"></span> -
+                            taking <span class="font-bold" x-text="wcSeriousWounds"></span>
+                            serious wound<span x-show="wcSeriousWounds > 1">s</span>.
+                            Light wounds reset to 0.
+                        </p>
+
+                        {# Discretionary bonuses (3rd Dan raises) - only if not iaijutsu and not auto-applied #}
+                        <div x-show="!wcIsStrike && wcHasDiscretionary && !wcResultApplied" x-cloak
+                             class="mt-3 pt-2 border-t border-red-200">
+                            <div class="flex items-center gap-2 mb-1">
+                                <button type="button" @click="wcSpendRaise()"
+                                        :disabled="wcRaisesSpent >= wcMaxRaisesPerRoll"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                                    Spend Free Raise (+5)
+                                </button>
+                                <button type="button" @click="wcUndoRaise()"
+                                        :disabled="wcRaisesSpent <= 0"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                                    Undo
+                                </button>
+                            </div>
+                            <button type="button" @click="wcAcceptResult()"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium mt-2">
+                                Accept Result
+                            </button>
+                        </div>
+
+                        {# Auto-applied or no discretionary - just close #}
+                        <div x-show="wcIsStrike || !wcHasDiscretionary || wcResultApplied" x-cloak>
+                            <button type="button" @click="wcModalOpen = false"
+                                    class="mt-3 bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div x-show="open" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="dice-roller"
              @click.self="close()">
             <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4">
                 <div class="flex items-start justify-between mb-3">
@@ -1343,6 +1545,21 @@
             // 3rd Dan free raises
             advRaisesConfig: { available: 0, used: 0 },
             raisesSpentThisRoll: 0,
+            // Wound check
+            wcModalOpen: false,
+            wcPhase: 'pre',  // 'pre' | 'rolling' | 'result'
+            wcProbs: {},
+            wcVoidSelected: 0,
+            wcIsStrike: false,
+            wcLightWounds: 0,
+            wcRollTotal: 0,
+            wcPassed: false,
+            wcSeriousWounds: 0,
+            wcMargin: 0,
+            wcRaisesSpent: 0,
+            wcMaxRaisesPerRoll: 0,
+            wcHasDiscretionary: false,
+            wcResultApplied: false,
             // Roll menu (void spending)
             rollMenuOpen: false,
             rollMenuKey: '',
@@ -1377,6 +1594,8 @@
                         this.advRaisesConfig.used = window._trackingBridge.getCount('adventure_raises');
                     }
                 });
+
+                window.addEventListener('open-wound-check', () => this.openWoundCheckModal());
 
                 document.querySelectorAll('[data-roll-key]').forEach(el => {
                     el.addEventListener('click', (ev) => {
@@ -1596,6 +1815,222 @@
             },
             raisesRemainingAdventure() {
                 return Math.max(0, this.advRaisesConfig.available - this.advRaisesConfig.used);
+            },
+
+            // --- Wound Check ---
+
+            openWoundCheckModal() {
+                const t = window._trackingBridge;
+                if (!t || t.lightWounds <= 0) return;
+                try {
+                    this.wcProbs = JSON.parse(document.getElementById('wound-check-probs')?.textContent || '{}');
+                } catch (e) { this.wcProbs = {}; }
+                const formula = this.formulas['wound_check'];
+                this.wcLightWounds = t.lightWounds;
+                this.wcVoidSelected = 0;
+                this.wcIsStrike = false;
+                this.wcPhase = 'pre';
+                this.wcRaisesSpent = 0;
+                this.wcResultApplied = false;
+                this.wcMaxRaisesPerRoll = formula?.adventure_raises_max_per_roll || 0;
+                const raisesUsed = t.getCount ? t.getCount('adventure_raises') : 0;
+                const raisesAvail = Math.max(0, (this.advRaisesConfig.available || 0) - raisesUsed);
+                this.wcHasDiscretionary = this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0;
+                this.wcModalOpen = true;
+            },
+
+            wcProbRow(voidCount) {
+                // Compute probability breakdown for a given void spend
+                const p = this.wcProbs;
+                if (!p || !p.probs) return null;
+                const reroll = this.wcIsStrike ? p.probs_no_reroll : p.probs;
+                const key = this.wcIsStrike ? p.void_keys?.['0'] : p.void_keys?.[String(voidCount)];
+                if (!key || !reroll?.[key]) return null;
+                const probs = reroll[key];
+                const flat = p.flat || 0;
+                const lw = this.wcLightWounds;
+                const target = Math.max(0, lw - flat);
+
+                const passChance = target < probs.length ? probs[target] : 0;
+                const rows = [];
+                let maxSW = Math.floor(lw / 10) + 1;
+                for (let sw = 1; sw <= maxSW; sw++) {
+                    const lo = target + (sw - 1) * 10;
+                    const hi = target + sw * 10;
+                    const pAboveLo = lo < probs.length ? probs[lo] : 0;
+                    const pAboveHi = hi < probs.length ? probs[hi] : 0;
+                    // P(lo <= roll < hi) = P(roll >= lo) - P(roll >= hi) ... but
+                    // we want P(fail by sw*10-1 to (sw-1)*10), i.e. roll in [target-sw*10, target-(sw-1)*10)
+                    // Actually: fail by X means roll+flat = lw - X - 1, i.e. roll = lw - flat - X - 1
+                    // Fail by 0-9: roll in [target-9, target-1] → P(roll>=target-9) - P(roll>=target)
+                    const failLo = Math.max(0, target - sw * 10);
+                    const failHi = Math.max(0, target - (sw - 1) * 10);
+                    const pGeLo = failLo < probs.length ? probs[failLo] : 0;
+                    const pGeHi = failHi < probs.length ? probs[failHi] : 0;
+                    const chance = pGeLo - pGeHi;
+                    if (chance > 0.0005) rows.push({ sw, chance });
+                }
+
+                // Expected serious wounds
+                let expectedSW = 0;
+                for (const r of rows) expectedSW += r.sw * r.chance;
+
+                return { passChance, rows, expectedSW };
+            },
+
+            async rollWoundCheck() {
+                const voidCount = this.wcIsStrike ? 0 : this.wcVoidSelected;
+                const formula = { ...this.formulas['wound_check'] };
+
+                // Iaijutsu strike: no reroll
+                if (this.wcIsStrike) {
+                    formula.reroll_tens = false;
+                    formula.no_reroll_reason = 'iaijutsu_strike';
+                }
+
+                // Add void spending
+                if (voidCount > 0) {
+                    formula.rolled += voidCount;
+                    formula.kept += voidCount;
+                    formula.void_spent = voidCount;
+                    if (formula.rolled > 10) { formula.kept += formula.rolled - 10; formula.rolled = 10; }
+                    if (formula.kept > 10) {
+                        const overflow = formula.kept - 10;
+                        formula.flat += 2 * overflow;
+                        formula.void_overflow_bonus = 2 * overflow;
+                        formula.kept = 10;
+                    }
+                    // Deduct void
+                    const options = this.computeVoidOptions();
+                    if (options[voidCount - 1]) this.deductVoidPoints(options[voidCount - 1]);
+                }
+
+                // Roll the dice
+                this.wcPhase = 'rolling';
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                const dice = await window.L7RDice.rollAndAnimate(
+                    formula.rolled, formula.reroll_tens,
+                    this.prefs.dice_animation_enabled, playSound,
+                    'dice-animation-wc'
+                );
+
+                // Keep highest dice (normal roll, not initiative)
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(formula.kept, sorted.length);
+                const keptDice = sorted.slice(sorted.length - keptCount);
+                const rollTotal = keptDice.reduce((s, d) => s + d.value, 0) + formula.flat;
+
+                // Store result
+                this.formula = formula;
+                this.finalDice = sorted.map((d, i) => ({
+                    value: d.value,
+                    kept: i >= sorted.length - keptCount
+                }));
+                this.keptDice = keptDice;
+                this.unkeptDice = sorted.slice(0, sorted.length - keptCount);
+                this.keptSum = keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = rollTotal;
+
+                const lw = this.wcLightWounds;
+                const effectiveTotal = rollTotal;
+                this.wcRollTotal = effectiveTotal;
+                this.wcRaisesSpent = 0;
+
+                if (effectiveTotal >= lw) {
+                    this.wcPassed = true;
+                    this.wcSeriousWounds = 0;
+                    this.wcMargin = effectiveTotal - lw;
+                } else {
+                    this.wcPassed = false;
+                    this.wcMargin = lw - effectiveTotal;
+                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
+                }
+
+                this.wcResultApplied = false;
+                this.wcPhase = 'result';
+
+                // Auto-apply if no discretionary bonuses and failed (or iaijutsu)
+                if (!this.wcPassed && (this.wcIsStrike || !this.wcHasDiscretionary)) {
+                    this.applyWoundCheckFailure();
+                }
+            },
+
+            wcSpendRaise() {
+                if (this.wcRaisesSpent >= this.wcMaxRaisesPerRoll) return;
+                const t = window._trackingBridge;
+                const raisesUsed = t?.getCount?.('adventure_raises') || 0;
+                const raisesAvail = Math.max(0, (this.advRaisesConfig.available || 0) - raisesUsed);
+                if (this.wcRaisesSpent >= raisesAvail) return;
+
+                this.wcRaisesSpent++;
+                this.baseTotal += 5;
+                this.wcRollTotal += 5;
+                const lw = this.wcLightWounds;
+                if (this.wcRollTotal >= lw) {
+                    this.wcPassed = true;
+                    this.wcSeriousWounds = 0;
+                    this.wcMargin = this.wcRollTotal - lw;
+                } else {
+                    this.wcMargin = lw - this.wcRollTotal;
+                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
+                }
+                // Deduct the raise from tracking
+                if (t?.setCount) t.setCount('adventure_raises', raisesUsed + 1);
+            },
+
+            wcUndoRaise() {
+                if (this.wcRaisesSpent <= 0) return;
+                const t = window._trackingBridge;
+                const raisesUsed = t?.getCount?.('adventure_raises') || 0;
+                this.wcRaisesSpent--;
+                this.baseTotal -= 5;
+                this.wcRollTotal -= 5;
+                const lw = this.wcLightWounds;
+                if (this.wcRollTotal >= lw) {
+                    this.wcPassed = true;
+                    this.wcSeriousWounds = 0;
+                    this.wcMargin = this.wcRollTotal - lw;
+                } else {
+                    this.wcPassed = false;
+                    this.wcMargin = lw - this.wcRollTotal;
+                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
+                }
+                if (t?.setCount) t.setCount('adventure_raises', Math.max(0, raisesUsed - 1));
+            },
+
+            applyWoundCheckFailure() {
+                const t = window._trackingBridge;
+                if (!t || this.wcResultApplied) return;
+                t.seriousWounds += this.wcSeriousWounds;
+                t.lightWounds = 0;
+                t.save();
+                window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
+                this.wcResultApplied = true;
+            },
+
+            wcKeepLightWounds() {
+                // Passed - player chooses to keep their light wounds
+                this.wcModalOpen = false;
+            },
+
+            wcTakeSeriousAndReset() {
+                // Passed - player chooses to take 1 serious, reset light to 0
+                const t = window._trackingBridge;
+                if (!t) return;
+                t.seriousWounds += 1;
+                t.lightWounds = 0;
+                t.save();
+                window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
+                this.wcModalOpen = false;
+            },
+
+            wcAcceptResult() {
+                // Accept the current discretionary-adjusted result
+                if (!this.wcResultApplied) {
+                    this.applyWoundCheckFailure();
+                }
+                this.wcModalOpen = false;
             },
 
             close() {

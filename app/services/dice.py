@@ -380,6 +380,63 @@ def build_athletics_formula(
     return formula
 
 
+def build_wound_check_formula(character_data: dict) -> dict:
+    """Build the wound check roll formula.
+
+    Base: (Water+1) rolled, Water kept.  School techniques may add an extra
+    die (1st Dan) or a free raise / +5 flat (2nd Dan).  The Strength of the
+    Earth advantage adds another +5 flat.
+
+    Wound checks ALWAYS reroll 10s (the ``reroll_tens`` flag is True
+    regardless of Impaired status - being Impaired does not suppress rerolls
+    on wound checks).
+    """
+    rings = character_data.get("rings", {})
+    water = rings.get("Water", 2)
+    rolled = water + 1
+    kept = water
+    flat = 0
+
+    school_id = character_data.get("school", "")
+    knacks = character_data.get("knacks", {}) or {}
+    dan = compute_dan(knacks) if knacks else 0
+    bonuses = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
+
+    bonus_sources: list = []
+
+    # 1st Dan: extra rolled die on wound_check
+    if dan >= 1 and bonuses.get("first_dan_extra_die"):
+        if "wound_check" in (bonuses["first_dan_extra_die"] or []):
+            rolled += 1
+            bonus_sources.append("+1 rolled die from 1st Dan")
+
+    # 2nd Dan: free raise (+5) on wound_check
+    if dan >= 2 and bonuses.get("second_dan_free_raise"):
+        if bonuses["second_dan_free_raise"] == "wound_check":
+            flat += FREE_RAISE_VALUE
+            bonus_sources.append("+5 from 2nd Dan")
+
+    # Strength of the Earth advantage
+    advantages = character_data.get("advantages", []) or []
+    if "strength_of_the_earth" in advantages:
+        flat += FREE_RAISE_VALUE
+        bonus_sources.append("+5 from Strength of the Earth")
+
+    return {
+        "label": "Wound Check",
+        "rolled": rolled,
+        "kept": kept,
+        "flat": flat,
+        "reroll_tens": True,
+        "no_reroll_reason": "",
+        "is_wound_check": True,
+        "bonus_sources": bonus_sources,
+        "alternatives": [],
+        "bonuses": [],
+        "adventure_raises_max_per_roll": 0,
+    }
+
+
 def build_initiative_formula(character_data: dict) -> Optional[dict]:
     """Build the initiative roll formula.
 
@@ -526,5 +583,9 @@ def build_all_roll_formulas(
     init_formula = build_initiative_formula(character_data)
     if init_formula is not None:
         out["initiative"] = init_formula
+
+    # Wound check
+    wc_formula = build_wound_check_formula(character_data)
+    out["wound_check"] = _annotate_third_dan("wound_check", wc_formula)
 
     return out
