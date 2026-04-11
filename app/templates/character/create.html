@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}L7R — New Character{% endblock %}
+{% block title %}L7R - New Character{% endblock %}
 
 {% block content %}
 <div x-data="characterForm()" x-init="init()">
@@ -269,7 +269,7 @@
             <div class="space-y-6">
                 <!-- Social Skills (Basic) -->
                 <div>
-                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Social Skills (Basic — Air)</h3>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Social Skills (Basic - Air)</h3>
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "social" and not skill.is_advanced %}
@@ -304,7 +304,7 @@
 
                 <!-- Social Skills (Advanced) -->
                 <div>
-                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Social Skills (Advanced — Air)</h3>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Social Skills (Advanced - Air)</h3>
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "social" and skill.is_advanced %}
@@ -339,7 +339,7 @@
 
                 <!-- Knowledge Skills (Basic) -->
                 <div>
-                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Knowledge Skills (Basic — Water)</h3>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Knowledge Skills (Basic - Water)</h3>
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "knowledge" and not skill.is_advanced %}
@@ -374,7 +374,7 @@
 
                 <!-- Knowledge Skills (Advanced) -->
                 <div>
-                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Knowledge Skills (Advanced — Water)</h3>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Knowledge Skills (Advanced - Water)</h3>
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "knowledge" and skill.is_advanced %}
@@ -421,7 +421,7 @@
                             <input type="checkbox" name="adv_{{ aid }}"
                                    x-model="advantages.{{ aid }}"
                                    :disabled="{% if aid == 'wealthy' %}true{% elif aid == 'poor' %}true{% else %}exclusionReason('{{ aid }}') !== null{% endif %}"
-                                   :title="{% if aid == 'wealthy' %}'Disabled for Wasp campaign — use Household Wealth instead'{% elif aid == 'poor' %}'Disabled for Wasp campaign'{% else %}exclusionReason('{{ aid }}') || ''{% endif %}"
+                                   :title="{% if aid == 'wealthy' %}'Disabled for Wasp campaign - use Household Wealth instead'{% elif aid == 'poor' %}'Disabled for Wasp campaign'{% else %}exclusionReason('{{ aid }}') || ''{% endif %}"
                                    class="rounded text-accent">
                             <span>{{ adv.name }}</span>
                             <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
@@ -474,7 +474,7 @@
                             <span class="text-xs text-ink/50" x-show="totalDisXp() > 0"
                                   x-text="'(' + startingXp + ' + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
                         </span>
-                        <span class="mx-2">—</span>
+                        <span class="mx-2">-</span>
                         <span :class="remainingXp() >= 0 ? 'text-green-700' : 'text-red-600 font-bold'">
                             Unspent: <strong class="font-mono" x-text="remainingXp()"></strong>
                         </span>
@@ -664,7 +664,7 @@ function characterForm() {
                     // Auto-set school ring to at least 3
                     this.rings[info.ring] = Math.max(this.rings[info.ring], 3);
                 } else {
-                    // "any non-Void" or "Air or Water" — user must pick
+                    // "any non-Void" or "Air or Water" - user must pick
                     this.schoolRingChoice = '';
                 }
 

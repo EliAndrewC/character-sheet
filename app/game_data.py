@@ -1673,7 +1673,7 @@ _ADVANTAGES_LIST: List[Advantage] = [
               "the discern Honor knack on you, instead of adding 0.5 × (1k1 − 5) they add the absolute "
               "value of that."),
     Advantage("wealthy", "Wealthy", 2,
-              "Disabled for Wasp Campaign — all characters are considered 4th rank for stipend "
+              "Disabled for Wasp Campaign - all characters are considered 4th rank for stipend "
               "(16 koku/year). Take Household Wealth instead. "
               "Normal rules: Your Rank is considered to be 3.0 higher when calculating your stipend."),
     Advantage("worldly", "Worldly", 4,
@@ -1728,7 +1728,7 @@ _DISADVANTAGES_LIST: List[Disadvantage] = [
     Disadvantage("permanent_wound", "Permanent Wound", 12,
                  "It takes one fewer serious wound to kill you. You may not take the Great Destiny advantage."),
     Disadvantage("poor", "Poor", 4,
-                 "Disabled for Wasp Campaign — all characters are considered 4th rank for stipend "
+                 "Disabled for Wasp Campaign - all characters are considered 4th rank for stipend "
                  "(16 koku/year). Normal rules: Divide your Rank in half for the purpose of calculating "
                  "your stipend."),
     Disadvantage("proud", "Proud", 2,
