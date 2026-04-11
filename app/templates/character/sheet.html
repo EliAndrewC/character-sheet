@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}L7R — {{ character.name }}{% endblock %}
+{% block title %}L7R - {{ character.name }}{% endblock %}
 
 {% block content %}
 
 {# Macro: render a flat list of XP line rows as a 3-column grid (XP | label | from→to).
-   ``align`` controls the horizontal alignment of the label column — most
+   ``align`` controls the horizontal alignment of the label column - most
    sections look best centered, but advantages/disadvantages have wordy
    labels that read better left-aligned. #}
 {% macro render_rows(rows, align='center') %}
@@ -30,11 +30,11 @@
     <!-- DRAFT STATUS BANNER -->
     {% if not character.is_published %}
     <div class="bg-amber-100 border border-amber-400 text-amber-800 rounded px-4 py-2 text-sm">
-        <strong>Draft</strong> — This is a new character draft. No versions have been applied yet.
+        <strong>Draft</strong> - This is a new character draft. No versions have been applied yet.
     </div>
     {% elif character.has_unpublished_changes %}
     <div class="bg-blue-100 border border-blue-400 text-blue-800 rounded px-4 py-2 text-sm">
-        <strong>Draft changes</strong> — This character has been edited since the last time changes were applied.
+        <strong>Draft changes</strong> - This character has been edited since the last time changes were applied.
     </div>
     {% endif %}
 
@@ -83,7 +83,7 @@
             <p class="text-sm bg-parchment rounded p-2 italic mt-1">{{ school.special_ability }}</p>
         </div>
 
-        <!-- Techniques — bold if attained, grayed if not -->
+        <!-- Techniques - bold if attained, grayed if not -->
         <div>
             <p class="text-sm font-medium mb-1">Techniques:</p>
             {% for d, desc in school.techniques.items() %}
@@ -135,12 +135,13 @@
         </div>
 
         <div class="mt-4 lg:mt-0 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-3 text-sm">
-            <div class="{{ 'bg-red-100 border border-red-300' if is_impaired_now else 'bg-parchment' }} rounded p-2">
+            <div x-data="{ impaired: {{ 'true' if is_impaired_now else 'false' }} }"
+                 @wound-changed.window="impaired = $event.detail.serious >= {{ ring_map['Earth'] }}"
+                 :class="impaired ? 'bg-red-100 border border-red-300' : 'bg-parchment'"
+                 class="rounded p-2">
                 <span class="text-ink/60">Impaired at:</span>
                 <span class="font-bold">{{ ring_map['Earth'] }} serious wounds</span>
-                {% if is_impaired_now %}
-                <div class="mt-1 text-xs font-bold text-red-800">IMPAIRED — 10s do not reroll</div>
-                {% endif %}
+                <div x-show="impaired" x-cloak class="mt-1 text-xs font-bold text-red-800">IMPAIRED - 10s do not reroll</div>
             </div>
             {% set dying_base = ring_map['Earth'] * 2 %}
             {% set dying_adj = dying_base
@@ -198,6 +199,10 @@
                 async save() {
                     if (this._saving) return;
                     this._saving = true;
+                    // Notify the Impaired indicator so it updates reactively
+                    window.dispatchEvent(new CustomEvent('wound-changed', {
+                        detail: { serious: this.seriousWounds }
+                    }));
                     await fetch('/characters/' + this._charId + '/track', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
@@ -423,41 +428,43 @@
                     {% endif %}
                 </div>
             </div>
-            <div class="text-center">
-                <div class="text-sm text-ink/60 mb-1">Void Points</div>
-                <div class="flex items-center justify-center gap-2">
-                    {% if viewer_can_edit %}
-                    <button @click="voidPoints = Math.max(0, voidPoints - 1); save()"
-                            :disabled="voidPoints <= 0"
-                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
-                    {% endif %}
-                    <span class="text-2xl font-bold w-8 text-center" x-text="voidPoints"></span>
-                    {% if viewer_can_edit %}
-                    <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); save()"
-                            :disabled="voidPoints >= voidMax"
-                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">+</button>
-                    {% endif %}
+            <div class="flex gap-6 justify-center">
+                <div class="text-center">
+                    <div class="text-sm text-ink/60 mb-1">Void Points</div>
+                    <div class="flex items-center justify-center gap-2">
+                        {% if viewer_can_edit %}
+                        <button @click="voidPoints = Math.max(0, voidPoints - 1); save()"
+                                :disabled="voidPoints <= 0"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                        {% endif %}
+                        <span class="text-2xl font-bold w-8 text-center" x-text="voidPoints"></span>
+                        {% if viewer_can_edit %}
+                        <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); save()"
+                                :disabled="voidPoints >= voidMax"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">+</button>
+                        {% endif %}
+                    </div>
+                    <div class="text-xs text-ink/50" x-text="'max ' + voidMax"></div>
                 </div>
-                <div class="text-xs text-ink/50" x-text="'max ' + voidMax"></div>
-            </div>
-            {% if has_temp_void %}
-            <div class="text-center">
-                <div class="text-sm text-ink/60 mb-1">Temp Void</div>
-                <div class="flex items-center justify-center gap-2">
-                    {% if viewer_can_edit %}
-                    <button @click="tempVoidPoints = Math.max(0, tempVoidPoints - 1); save()"
-                            :disabled="tempVoidPoints <= 0"
-                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
-                    {% endif %}
-                    <span class="text-2xl font-bold w-8 text-center" x-text="tempVoidPoints"></span>
-                    {% if viewer_can_edit %}
-                    <button @click="tempVoidPoints++; save()"
-                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
-                    {% endif %}
+                {% if has_temp_void %}
+                <div class="text-center">
+                    <div class="text-sm text-ink/60 mb-1">Temp Void</div>
+                    <div class="flex items-center justify-center gap-2">
+                        {% if viewer_can_edit %}
+                        <button @click="tempVoidPoints = Math.max(0, tempVoidPoints - 1); save()"
+                                :disabled="tempVoidPoints <= 0"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                        {% endif %}
+                        <span class="text-2xl font-bold w-8 text-center" x-text="tempVoidPoints"></span>
+                        {% if viewer_can_edit %}
+                        <button @click="tempVoidPoints++; save()"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                        {% endif %}
+                    </div>
+                    <div class="text-xs text-ink/50">no max</div>
                 </div>
-                <div class="text-xs text-ink/50">no max</div>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
 
         <!-- Per-Adventure Abilities -->
@@ -705,9 +712,30 @@
                     </div>
                     <div class="flex items-center gap-3">
                         {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction'] %}
+                        {% if kid == 'iaijutsu' %}
+                        <div class="relative" x-data="{ iaijutsuMenu: false }" @click.outside="iaijutsuMenu = false">
+                            <button type="button" @click.stop="iaijutsuMenu = !iaijutsuMenu"
+                                    title="Click to roll Iaijutsu"
+                                    class="text-base hover:scale-110 transition-transform">&#x1F3B2;</button>
+                            <div x-show="iaijutsuMenu" x-cloak
+                                 class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-ink/20 py-1 z-20 min-w-[220px]">
+                                <button type="button" data-roll-key="knack:iaijutsu:strike"
+                                        @click="iaijutsuMenu = false"
+                                        class="w-full text-left px-3 py-1.5 text-sm hover:bg-parchment transition-colors">
+                                    Iaijutsu Strike <span class="text-xs text-ink/50">(10s not rerolled)</span>
+                                </button>
+                                <button type="button" data-roll-key="knack:iaijutsu"
+                                        @click="iaijutsuMenu = false"
+                                        class="w-full text-left px-3 py-1.5 text-sm hover:bg-parchment transition-colors">
+                                    Iaijutsu <span class="text-xs text-ink/50">(normal roll)</span>
+                                </button>
+                            </div>
+                        </div>
+                        {% else %}
                         <button type="button" data-roll-key="knack:{{ kid }}"
                                 title="Click to roll {{ info.data.name }}"
                                 class="text-base hover:scale-110 transition-transform">&#x1F3B2;</button>
+                        {% endif %}
                         {% endif %}
                         <span class="text-lg font-bold text-accent">{{ info.rank }}</span>
                         <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -793,7 +821,7 @@
                     <span class="text-xs text-ink/40">(campaign)</span>
                     {% endif %}
                     {% if detail.get('text') %}
-                    <span class="text-sm text-ink/60">— {{ detail.text }}</span>
+                    <span class="text-sm text-ink/60">- {{ detail.text }}</span>
                     {% endif %}
                     {% if detail.get('player') and detail.player in player_names %}
                     <span class="text-xs text-ink/50">(known by {{ player_names[detail.player] }})</span>
@@ -820,7 +848,7 @@
                     <span class="text-xs text-ink/40">(campaign)</span>
                     {% endif %}
                     {% if detail.get('text') %}
-                    <span class="text-sm text-ink/60">— {{ detail.text }}</span>
+                    <span class="text-sm text-ink/60">- {{ detail.text }}</span>
                     {% endif %}
                     {% if detail.get('player') and detail.player in player_names %}
                     <span class="text-xs text-ink/50">(known by {{ player_names[detail.player] }})</span>
@@ -1054,7 +1082,7 @@
     <!-- DRAFT STATUS (bottom) -->
     {% if not character.is_published %}
     <div class="text-center text-sm text-ink/50 py-2 italic">
-        New character draft — no versions applied yet.
+        New character draft - no versions applied yet.
     </div>
     {% elif character.has_unpublished_changes %}
     <div class="text-center text-sm text-ink/50 py-2 italic">
@@ -1249,12 +1277,19 @@
                         </div>
                     </div>
 
-                    {# Impaired note #}
-                    <template x-if="formula && !formula.reroll_tens">
-                        <div class="text-xs italic text-red-700 font-medium">
-                            10s not rerolled due to being impaired.
-                        </div>
-                    </template>
+                    {# No-reroll note (impaired or iaijutsu strike) - only when a 10 was actually rolled #}
+                    <div x-show="formula && !formula.reroll_tens && finalDice.some(d => d.value === 10)"
+                         x-cloak class="text-xs italic text-red-700 font-medium">
+                        <span x-show="formula?.no_reroll_reason === 'iaijutsu_strike'">
+                            10s not rerolled for the strike in an iaijutsu duel
+                        </span>
+                        <span x-show="formula?.no_reroll_reason === 'impaired'">
+                            10s not rerolled due to being Impaired
+                        </span>
+                        <span x-show="formula?.no_reroll_reason !== 'iaijutsu_strike' && formula?.no_reroll_reason !== 'impaired' && !formula?.reroll_tens">
+                            10s not rerolled
+                        </span>
+                    </div>
 
                     <div x-show="phase === 'done'" x-cloak class="flex justify-end gap-2 pt-2">
                         <button type="button" @click="close()"

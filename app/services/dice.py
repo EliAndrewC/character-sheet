@@ -76,6 +76,7 @@ class RollFormula:
     kept: int
     flat: int = 0
     reroll_tens: bool = True
+    no_reroll_reason: str = ""
     alternatives: List[dict] = field(default_factory=list)
     bonuses: List[dict] = field(default_factory=list)
     adventure_raises_max_per_roll: int = 0
@@ -110,6 +111,13 @@ def _finalize_caps(formula: "RollFormula") -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _reroll_fields(character_data: dict) -> dict:
+    """Return ``reroll_tens`` and ``no_reroll_reason`` for a formula."""
+    if is_impaired(character_data):
+        return {"reroll_tens": False, "no_reroll_reason": "impaired"}
+    return {"reroll_tens": True, "no_reroll_reason": ""}
 
 
 def is_impaired(character_data: dict) -> bool:
@@ -183,7 +191,7 @@ def build_skill_formula(
         rolled=rank + ring_val,
         kept=ring_val,
         flat=0,
-        reroll_tens=not is_impaired(character_data),
+        **_reroll_fields(character_data),
     )
 
     school_id = character_data.get("school", "")
@@ -308,7 +316,7 @@ def build_knack_formula(
         rolled=rank + ring_val,
         kept=ring_val,
         flat=0,
-        reroll_tens=not is_impaired(character_data),
+        **_reroll_fields(character_data),
     )
 
     school_id = character_data.get("school", "")
@@ -336,7 +344,7 @@ def build_combat_formula(
         rolled=rank + ring_val,
         kept=ring_val,
         flat=0,
-        reroll_tens=not is_impaired(character_data),
+        **_reroll_fields(character_data),
     )
 
     school_id = character_data.get("school", "")
@@ -366,7 +374,7 @@ def build_athletics_formula(
         rolled=2 * ring_val + athletics_rank,
         kept=ring_val,
         flat=0,
-        reroll_tens=not is_impaired(character_data),
+        **_reroll_fields(character_data),
     )
     _finalize_caps(formula)
     return formula
@@ -488,6 +496,19 @@ def build_all_roll_formulas(
                 out[f"knack:{knack_id}"] = _annotate_third_dan(
                     f"knack:{knack_id}", formula.to_dict()
                 )
+
+    # Iaijutsu strike variant (10s never rerolled during the strike)
+    if school is not None and "iaijutsu" in school.school_knacks:
+        base_formula = build_knack_formula("iaijutsu", character_data)
+        if base_formula is not None:
+            strike = base_formula.to_dict()
+            # "Iaijutsu (Fire)" -> "Iaijutsu Strike (Fire)"
+            strike["label"] = base_formula.label.replace("Iaijutsu", "Iaijutsu Strike", 1)
+            strike["reroll_tens"] = False
+            strike["no_reroll_reason"] = "iaijutsu_strike"
+            out["knack:iaijutsu:strike"] = _annotate_third_dan(
+                "knack:iaijutsu:strike", strike
+            )
 
     # Combat
     for which in ("attack", "parry"):

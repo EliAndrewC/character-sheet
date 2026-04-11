@@ -100,7 +100,7 @@ def test_impaired_character_modal_shows_no_reroll_note(page, live_server_url):
     page.locator('[data-roll-key="skill:bragging"]').click()
     page.wait_for_selector('text="Total:"', state='visible', timeout=5000)
     body = page.text_content("body")
-    assert "10s not rerolled due to being impaired" in body
+    assert "10s not rerolled due to being Impaired" in body
 
 
 def test_impaired_indicator_visible_on_sheet(page, live_server_url):

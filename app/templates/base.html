@@ -164,9 +164,9 @@
             letter-spacing: 0.04em;
             line-height: 1;
         }
-        /* Diamond positions — centers of a 300×260 box. Each elemental
+        /* Diamond positions - centers of a 300×260 box. Each elemental
            ring is ~108px center-to-center from Void (≈8px gap between
-           the 100px circles — almost touching).
+           the 100px circles - almost touching).
               Air (74,54)        Fire (226,54)
                      Void (150,130)
               Water (74,206)     Earth (226,206)   */
@@ -204,7 +204,7 @@
             <a href="/" class="text-xl font-bold tracking-wide hover:text-gold transition-colors">
                 L7R Character Builder
             </a>
-            {# Hamburger — small screens only #}
+            {# Hamburger - small screens only #}
             <button @click="navOpen = !navOpen" class="sm:hidden text-parchment p-1" aria-label="Toggle navigation">
                 <svg x-show="!navOpen" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
@@ -254,7 +254,7 @@
     </main>
 
     <footer class="text-center text-sm text-ink/50 py-4 mt-8 border-t border-ink/10">
-        L7R &mdash; Legend of the Five Rings Homebrew System
+        L7R - Legend of the Five Rings Homebrew System
         <span class="mx-2">&middot;</span>
         <a href="/terms" class="hover:text-ink/70">Terms</a>
         <span class="mx-1">&middot;</span>
@@ -262,7 +262,7 @@
     </footer>
     <script>
     // Tooltip tap-to-toggle for touch devices (hover: none).
-    // Desktop (hover: hover) is untouched — CSS :hover handles it.
+    // Desktop (hover: hover) is untouched - CSS :hover handles it.
     if (window.matchMedia('(hover: none)').matches) {
         document.addEventListener('click', function(e) {
             var trigger = e.target.closest('.tooltip-trigger');

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}L7R — Edit {{ character.name }}{% endblock %}
+{% block title %}L7R - Edit {{ character.name }}{% endblock %}
 
 {% block content %}
 <link href="/static/css/quill.snow.css" rel="stylesheet">
 <script src="/static/js/quill.js"></script>
 <style>
-    /* Quill toolbar/editor — keep within the parchment aesthetic */
+    /* Quill toolbar/editor - keep within the parchment aesthetic */
     .ql-toolbar.ql-snow { border-top-left-radius: 0.375rem; border-top-right-radius: 0.375rem; border-color: rgba(44,24,16,0.2); }
     .ql-container.ql-snow { border-bottom-left-radius: 0.375rem; border-bottom-right-radius: 0.375rem; border-color: rgba(44,24,16,0.2); min-height: 8rem; background: white; }
     .ql-editor { min-height: 8rem; }
@@ -82,7 +82,7 @@
                     <select name="gaming_group_id" data-test="gaming-group-select"
                             @change="setGroup($event.target.value)"
                             class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent bg-white">
-                        <option value="">— Unassigned —</option>
+                        <option value="">- Unassigned -</option>
                         {% for g in all_groups %}
                         <option value="{{ g.id }}"
                                 {% if character.gaming_group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
@@ -526,7 +526,7 @@
             <div class="space-y-6">
                 <!-- Social Skills (Basic) -->
                 <div>
-                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Social Skills (Basic — Air)</h3>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Social Skills (Basic - Air)</h3>
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "social" and not skill.is_advanced %}
@@ -561,7 +561,7 @@
 
                 <!-- Social Skills (Advanced) -->
                 <div>
-                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Social Skills (Advanced — Air)</h3>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Social Skills (Advanced - Air)</h3>
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "social" and skill.is_advanced %}
@@ -596,7 +596,7 @@
 
                 <!-- Knowledge Skills (Basic) -->
                 <div>
-                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Knowledge Skills (Basic — Water)</h3>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Knowledge Skills (Basic - Water)</h3>
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "knowledge" and not skill.is_advanced %}
@@ -631,7 +631,7 @@
 
                 <!-- Knowledge Skills (Advanced) -->
                 <div>
-                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Knowledge Skills (Advanced — Water)</h3>
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Knowledge Skills (Advanced - Water)</h3>
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "knowledge" and skill.is_advanced %}
@@ -853,7 +853,7 @@
                             <span class="text-xs text-ink/50" x-show="totalDisXp() > 0"
                                   x-text="'(' + 150 + ' starting + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
                         </span>
-                        <span class="mx-1 sm:mx-2">&mdash;</span>
+                        <span class="mx-1 sm:mx-2">-</span>
                         <span :class="remainingXp() >= 0 ? 'text-green-700' : 'text-red-600 font-bold'">
                             Unspent: <strong class="font-mono" x-text="remainingXp()"></strong>
                         </span>
@@ -1121,7 +1121,7 @@ function characterForm() {
 
         doSave() {
             // Returns a promise that resolves when this save (and only this
-            // save) finishes. ``flushPendingSave`` relies on this — calling
+            // save) finishes. ``flushPendingSave`` relies on this - calling
             // doSave while another save is in flight returns the in-flight
             // promise so callers can await it.
             if (this._saving) return this._savePromise || Promise.resolve();
@@ -1184,7 +1184,7 @@ function characterForm() {
         async flushPendingSave() {
             // Cancel any pending debounce, drain any in-flight save, and
             // run a fresh save if changes are still buffered. Loops until
-            // there's nothing left to do — protects against the case where
+            // there's nothing left to do - protects against the case where
             // an in-flight save's tail (`if (_dirty) debounceSave()`)
             // schedules another timer right as we're trying to flush.
             for (let i = 0; i < 5; i++) {
@@ -1262,7 +1262,7 @@ function characterForm() {
                     // Auto-set school ring to at least 3
                     this.rings[info.ring] = Math.max(this.rings[info.ring], 3);
                 } else {
-                    // "any non-Void" or "Air or Water" — user must pick
+                    // "any non-Void" or "Air or Water" - user must pick
                     this.schoolRingChoice = 'Water'; // default
                     this.rings['Water'] = Math.max(this.rings['Water'], 3);
                 }
@@ -1367,7 +1367,7 @@ function characterForm() {
                 this.rank = +(this.rank + award.rank_delta).toFixed(1);
                 this.recognition = +(this.recognition + award.recognition_delta).toFixed(1);
             } else {
-                // Reputation award — no direct rank/recognition delta
+                // Reputation award - no direct rank/recognition delta
                 const award = {
                     id: 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
                     type: this.awardModalRepType,
@@ -1413,7 +1413,7 @@ function characterForm() {
         },
 
         onAwardSourceInput(awardId, newSource) {
-            // Editing the freeform ``source`` text is metadata only — it must
+            // Editing the freeform ``source`` text is metadata only - it must
             // NOT trigger a draft. We update the in-memory copy so the UI
             // stays in sync, then debounce a metadata-only POST to the
             // dedicated endpoint that bypasses the version system. We
@@ -1436,16 +1436,20 @@ function characterForm() {
 
         enforceFourthDanRing() {
             // Reconciles the school ring with the character's current Dan.
-            // At 4th Dan the school ring's floor is 4 (auto-raise) and its
-            // ceiling is 7. Below 4th Dan the ceiling drops back to 6.
+            // At 4th Dan the school ring gets a free +1 (floor becomes 4,
+            // ceiling becomes 7). Below 4th Dan the floor is 3 and the
+            // ceiling is 6. This function ALWAYS clamps the ring into the
+            // valid range for the current Dan, so repeated raise/lower of
+            // knacks across the 4th Dan boundary always produces a
+            // consistent state.
             const schoolRing = this.getSchoolRing();
             if (!schoolRing) return;
+            const dan = this.currentDan();
+            const minVal = dan >= 4 ? 4 : 3;
+            const maxVal = dan >= 4 ? 7 : 6;
             const current = this.rings[schoolRing] || 0;
-            if (this.currentDan() >= 4) {
-                if (current < 4) this.rings[schoolRing] = 4;
-            } else {
-                if (current > 6) this.rings[schoolRing] = 6;
-            }
+            if (current < minVal) this.rings[schoolRing] = minVal;
+            if (current > maxVal) this.rings[schoolRing] = maxVal;
         },
 
         skillXpLabel(skillId, isAdvanced) {
