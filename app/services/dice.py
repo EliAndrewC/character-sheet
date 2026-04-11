@@ -531,6 +531,58 @@ def build_all_roll_formulas(
             formula_dict["adventure_raises_max_per_roll"] = third_dan_max_per_roll
         return formula_dict
 
+    # Attack-type metadata for the combat modal. These formulas open the
+    # attack modal instead of the void-spending dropdown.
+    ATTACK_TYPE_KEYS = {"attack", "double_attack", "counterattack", "lunge"}
+    rings = character_data.get("rings", {})
+    advantages = character_data.get("advantages", []) or []
+
+    # Determine damage ring and school-specific damage bonuses
+    damage_ring_name = "Water" if school_id == "isawa_duelist" else "Fire"
+    damage_ring_val = rings.get(damage_ring_name, 2)
+    damage_flat_bonus = 0
+    damage_extra_rolled = 0
+    damage_extra_kept = 0
+    damage_bonus_sources: list = []
+
+    # Courtier: +Air as flat bonus on attack and damage
+    if school_id == "courtier":
+        air_val = rings.get("Air", 2)
+        damage_flat_bonus += air_val
+        damage_bonus_sources.append(f"+{air_val} from Courtier (Air)")
+
+    # Brotherhood of Shinsei: +1 rolled +1 kept on unarmed damage (1st Dan)
+    if school_id == "brotherhood_of_shinsei_monk" and dan >= 1:
+        damage_extra_rolled += 1
+        damage_extra_kept += 1
+        damage_bonus_sources.append("+1k1 from 1st Dan (unarmed)")
+
+    # Detect bushi vs non-bushi for default weapon
+    _school_obj = SCHOOLS.get(school_id)
+    is_bushi = _school_obj.category in {"bushi", "counterattack", "duelist", "investigator"} if _school_obj else False
+
+    def _annotate_attack_type(key: str, formula_dict: dict) -> dict:
+        bare = key.split(":", 1)[-1] if ":" in key else key
+        if bare in ATTACK_TYPE_KEYS:
+            formula_dict["is_attack_type"] = True
+            formula_dict["attack_variant"] = bare
+            formula_dict["damage_ring_name"] = damage_ring_name
+            formula_dict["damage_ring_val"] = damage_ring_val
+            formula_dict["damage_flat_bonus"] = damage_flat_bonus
+            formula_dict["damage_extra_rolled"] = damage_extra_rolled
+            formula_dict["damage_extra_kept"] = damage_extra_kept
+            formula_dict["damage_bonus_sources"] = damage_bonus_sources
+            formula_dict["is_bushi"] = is_bushi
+            # Courtier also gets +Air flat on attack rolls
+            if school_id == "courtier":
+                air_val = rings.get("Air", 2)
+                formula_dict["flat"] = formula_dict.get("flat", 0) + air_val
+                if not any("Courtier" in b.get("label", "") for b in formula_dict.get("bonuses", [])):
+                    formula_dict.setdefault("bonuses", []).append(
+                        {"label": "Courtier (Air)", "amount": air_val}
+                    )
+        return formula_dict
+
     # Skills with rank > 0
     skills = character_data.get("skills", {}) or {}
     for skill_id, rank in skills.items():
@@ -550,9 +602,8 @@ def build_all_roll_formulas(
                 continue
             formula = build_knack_formula(knack_id, character_data)
             if formula is not None:
-                out[f"knack:{knack_id}"] = _annotate_third_dan(
-                    f"knack:{knack_id}", formula.to_dict()
-                )
+                d = _annotate_third_dan(f"knack:{knack_id}", formula.to_dict())
+                out[f"knack:{knack_id}"] = _annotate_attack_type(f"knack:{knack_id}", d)
 
     # Iaijutsu strike variant (10s never rerolled during the strike)
     if school is not None and "iaijutsu" in school.school_knacks:
@@ -571,7 +622,8 @@ def build_all_roll_formulas(
     for which in ("attack", "parry"):
         formula = build_combat_formula(which, character_data)
         if formula is not None:
-            out[which] = _annotate_third_dan(which, formula.to_dict())
+            d = _annotate_third_dan(which, formula.to_dict())
+            out[which] = _annotate_attack_type(which, d)
 
     # Athletics on each ring
     for ring_name in (r.value for r in Ring):
