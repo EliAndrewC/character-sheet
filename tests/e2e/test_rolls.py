@@ -250,8 +250,19 @@ def _create_3rd_dan_courtier(page, live_server_url, name="Courtier3Dan"):
     apply_changes(page, "3rd Dan Courtier setup")
 
 
+def _dismiss_roll_menu_if_open(page):
+    """If the void-spending roll menu appeared, click the default 'Roll X' option."""
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    if menu.count() > 0 and menu.is_visible():
+        # Click the first non-iaijutsu-strike button (the "Roll X" default)
+        menu.locator('button.font-medium').first.click()
+        page.wait_for_timeout(100)
+
+
 def _wait_for_roll_result(page):
-    """Wait for the dice roller Alpine component to reach ``phase='done'``."""
+    """Wait for the dice roller Alpine component to reach ``phase='done'``.
+    If the void-spending roll menu is showing, click 'Roll X' first."""
+    _dismiss_roll_menu_if_open(page)
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
