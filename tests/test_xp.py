@@ -346,6 +346,44 @@ class TestValidation:
 # ---------------------------------------------------------------------------
 
 
+class TestDetailFieldValidation:
+    """Advantages/disadvantages with ADVANTAGE_DETAIL_FIELDS entries require
+    a non-empty text description."""
+
+    def test_missing_detail_text_produces_error(self):
+        data = make_character_data(advantages=["good_reputation"])
+        errors = validate_character(data)
+        assert any("Good Reputation" in e and "requires" in e for e in errors)
+
+    def test_filled_detail_text_no_error(self):
+        data = make_character_data(
+            advantages=["good_reputation"],
+            advantage_details={"good_reputation": {"text": "brave warrior"}},
+        )
+        errors = validate_character(data)
+        assert not any("Good Reputation" in e for e in errors)
+
+    def test_disadvantage_missing_detail_text(self):
+        data = make_character_data(disadvantages=["driven"])
+        errors = validate_character(data)
+        assert any("Driven" in e and "requires" in e for e in errors)
+
+    def test_disadvantage_filled_detail_text(self):
+        data = make_character_data(
+            disadvantages=["driven"],
+            advantage_details={"driven": {"text": "become shogun"}},
+        )
+        errors = validate_character(data)
+        assert not any("Driven" in e for e in errors)
+
+    def test_advantage_without_detail_field_no_error(self):
+        """Advantages without an ADVANTAGE_DETAIL_FIELDS entry should not
+        trigger a 'requires description' error."""
+        data = make_character_data(advantages=["lucky"])
+        errors = validate_character(data)
+        assert not any("requires" in e for e in errors)
+
+
 class TestXpBreakdown:
     """The rich per-item breakdown used by the sheet's expandable XP Summary."""
 

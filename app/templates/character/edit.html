@@ -90,11 +90,7 @@
                     </select>
                     <p class="text-xs text-ink/50 mt-1">Saves instantly. Doesn't create a new version.</p>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Starting XP</label>
-                    <input type="hidden" name="starting_xp" value="150">
-                    <span class="text-lg font-bold">150</span>
-                </div>
+                <input type="hidden" name="starting_xp" value="150">
                 <div>
                     <label class="block text-sm font-medium mb-1">Earned XP</label>
                     <input type="number" name="earned_xp" value="{{ character.earned_xp }}" min="0"
@@ -114,9 +110,9 @@
                         @change="onSchoolChange($event)"
                         class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
                     <option value="">-- Choose a school --</option>
-                    {% for category, cat_schools in schools_by_category.items() %}
-                    <optgroup label="{{ category.replace('_', ' ').title() }}">
-                        {% for s in cat_schools %}
+                    {% for group_label, group_schools in schools_by_category %}
+                    <optgroup label="{{ group_label }}">
+                        {% for s in group_schools %}
                         <option value="{{ s.id }}" {{ 'selected' if s.id == character.school else '' }}>{{ s.name }}</option>
                         {% endfor %}
                     </optgroup>
@@ -638,10 +634,12 @@
                             </label>
                             {% if aid in advantage_detail_fields %}
                             {% set df = advantage_detail_fields[aid] %}
-                            <div x-show="advantages.{{ aid }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1">
+                            <div x-show="advantages.{{ aid }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1"
+                                 x-effect="if(advantages.{{ aid }}) $nextTick(() => { const i = $el.querySelector('input[type=text]'); if(i) i.focus(); })">
                                 <input type="text" placeholder="{{ df.text }}"
                                        @input="if(!advantageDetails['{{ aid }}']) advantageDetails['{{ aid }}']={};advantageDetails['{{ aid }}'].text=$event.target.value;markDirty()"
                                        :value="(advantageDetails['{{ aid }}'] || {}).text || ''"
+                                       :class="advantages.{{ aid }} && !((advantageDetails['{{ aid }}'] || {}).text || '').trim() ? 'border-red-400 bg-red-50' : ''"
                                        class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
                                 {% if df.get('skills') == 'multi' %}
                                 <div class="flex flex-wrap gap-1">
@@ -658,7 +656,7 @@
                                 {% elif df.get('skills') == 'single' %}
                                 <select @change="if(!advantageDetails['{{ aid }}']) advantageDetails['{{ aid }}']={};advantageDetails['{{ aid }}'].skills=[$event.target.value];markDirty()"
                                         class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
-                                    <option value="">Select skill...</option>
+                                    <option value="">Applied to which skill?</option>
                                     {% for sid, skill in skills.items() %}
                                     <option value="{{ sid }}" :selected="(advantageDetails['{{ aid }}'] || {}).skills && advantageDetails['{{ aid }}'].skills[0] === '{{ sid }}'">{{ skill.name }}</option>
                                     {% endfor %}
@@ -699,10 +697,12 @@
                             </label>
                             {% if did in advantage_detail_fields %}
                             {% set df = advantage_detail_fields[did] %}
-                            <div x-show="disadvantages.{{ did }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1">
+                            <div x-show="disadvantages.{{ did }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1"
+                                 x-effect="if(disadvantages.{{ did }}) $nextTick(() => { const i = $el.querySelector('input[type=text]'); if(i) i.focus(); })">
                                 <input type="text" placeholder="{{ df.text }}"
                                        @input="if(!advantageDetails['{{ did }}']) advantageDetails['{{ did }}']={};advantageDetails['{{ did }}'].text=$event.target.value;markDirty()"
                                        :value="(advantageDetails['{{ did }}'] || {}).text || ''"
+                                       :class="disadvantages.{{ did }} && !((advantageDetails['{{ did }}'] || {}).text || '').trim() ? 'border-red-400 bg-red-50' : ''"
                                        class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
                                 {% if df.get('player') %}
                                 <select @change="if(!advantageDetails['{{ did }}']) advantageDetails['{{ did }}']={};advantageDetails['{{ did }}'].player=$event.target.value;markDirty()"
@@ -772,7 +772,7 @@
         <!-- SECTIONS (rich-text panels: Notes, Backstory, Allies, etc.) -->
         <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl font-bold text-accent">Sections</h2>
+                <h2 class="text-xl font-bold text-accent">Freeform Sections</h2>
                 <button type="button" id="add-section-btn"
                         class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
                     Add Section
@@ -795,7 +795,7 @@
                         <span class="mx-2">/</span>
                         <span>Total: <strong class="font-mono" x-text="budgetWithDis()"></strong>
                             <span class="text-xs text-ink/50" x-show="totalDisXp() > 0"
-                                  x-text="'(' + 150 + ' + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
+                                  x-text="'(' + 150 + ' starting + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
                         </span>
                         <span class="mx-2">&mdash;</span>
                         <span :class="remainingXp() >= 0 ? 'text-green-700' : 'text-red-600 font-bold'">

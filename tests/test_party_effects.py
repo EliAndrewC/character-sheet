@@ -120,3 +120,49 @@ class TestPartyNonRankEffects:
         }]
         status = compute_effective_status(_bare_char(), party_members=party)
         assert all("Thoughtless" not in m["source"] for m in status.rank_modifiers)
+
+
+class TestSelfGroupEffect:
+    def test_own_righteous_sting_appears_in_own_rank(self):
+        """A character's own party-wide rank modifier (e.g. Righteous Sting)
+        should show on their OWN Rank tooltip, not just on party members'."""
+        char = _bare_char(
+            campaign_advantages=["family_reckoning_righteous_sting"],
+        )
+        char["name"] = "Doji Natsu"
+        status = compute_effective_status(char, party_members=[])
+        modifiers = [m for m in status.rank_modifiers if "Righteous" in m["source"]]
+        assert len(modifiers) == 1
+        assert modifiers[0]["value"] == 1.0
+        assert "Doji Natsu" in modifiers[0]["context"]
+
+    def test_own_imperial_disdain_appears_in_own_rank(self):
+        char = _bare_char(
+            campaign_disadvantages=["imperial_disdain"],
+        )
+        char["name"] = "Troublemaker"
+        status = compute_effective_status(char, party_members=[])
+        modifiers = [m for m in status.rank_modifiers if "Imperial Disdain" in m["source"]]
+        assert len(modifiers) == 1
+        assert modifiers[0]["value"] == -1.0
+
+    def test_own_venomous_sting_plus_party_member(self):
+        """Both self and a party member have Venomous Sting — should get 2
+        separate rank modifiers."""
+        char = _bare_char(
+            campaign_disadvantages=["family_reckoning_venomous_sting"],
+        )
+        char["name"] = "Hero"
+        party = [{
+            "name": "Ally",
+            "advantages": [], "disadvantages": [],
+            "campaign_advantages": [],
+            "campaign_disadvantages": ["family_reckoning_venomous_sting"],
+        }]
+        status = compute_effective_status(char, party_members=party)
+        modifiers = [m for m in status.rank_modifiers if "Venomous" in m["source"]]
+        assert len(modifiers) == 2
+        sources = {m["source"] for m in modifiers}
+        # Self effect uses the effect name without a name prefix
+        assert any("Venomous Sting" in s and "Ally" not in s for s in sources)
+        assert any("Ally" in s for s in sources)

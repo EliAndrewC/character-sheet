@@ -73,7 +73,7 @@ def test_specialization_shows_dropdown(page, live_server_url):
     page.wait_for_selector('input[placeholder="What specialization?"]', timeout=3000)
     assert page.locator('input[placeholder="What specialization?"]').is_visible()
     # Should have a select dropdown for skill
-    select = page.locator('select', has=page.locator('option:text("Select skill...")'))
+    select = page.locator('select', has=page.locator('option:text("Applied to which skill?")'))
     assert select.is_visible()
 
 

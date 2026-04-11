@@ -11,6 +11,7 @@ from typing import Dict, List
 
 from app.game_data import (
     ADVANCED_SKILL_COSTS,
+    ADVANTAGE_DETAIL_FIELDS,
     ADVANTAGES,
     BASIC_SKILL_COSTS,
     CAMPAIGN_ADVANTAGES,
@@ -734,6 +735,25 @@ def validate_character(character_data: dict) -> List[str]:
             f"Recognition ({recognition}) is below minimum "
             f"({min_recognition})."
         )
+
+    # -- Advantage / disadvantage detail fields --
+    advantage_details = character_data.get("advantage_details") or {}
+    all_taken_ids = (
+        (character_data.get("advantages") or [])
+        + (character_data.get("disadvantages") or [])
+    )
+    for taken_id in all_taken_ids:
+        field_def = ADVANTAGE_DETAIL_FIELDS.get(taken_id)
+        if field_def and "text" in field_def:
+            detail = advantage_details.get(taken_id) or {}
+            text_val = (detail.get("text") or "").strip()
+            if not text_val:
+                # Look up the display name from either advantages or disadvantages
+                lookup = ADVANTAGES.get(taken_id) or DISADVANTAGES.get(taken_id)
+                name = lookup.name if lookup else taken_id
+                errors.append(
+                    f"{name} requires a description: \"{field_def['text']}\""
+                )
 
     # -- XP budget --
     breakdown = calculate_total_xp(character_data)

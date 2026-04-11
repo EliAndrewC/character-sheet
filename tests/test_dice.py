@@ -458,6 +458,46 @@ class TestBuildAllRollFormulas:
         assert "knack:feint" in formulas
         assert "knack:iaijutsu" in formulas
 
+    def test_third_dan_annotates_applicable_skills(self):
+        """At 3rd Dan, skills in the technique's applicable_to list get
+        adventure_raises_max_per_roll set to the source skill rank."""
+        # Courtier 3rd Dan: source_skill=tact, applicable to manipulation, etc.
+        char = make_character_data(
+            school="courtier",
+            school_ring_choice="Air",
+            skills={"tact": 3, "manipulation": 2, "bragging": 1},
+            knacks={"discern_honor": 3, "oppose_social": 3, "worldliness": 3},
+        )
+        formulas = build_all_roll_formulas(char)
+        # Manipulation is in applicable_to → should have max_per_roll = 3 (tact rank)
+        assert formulas["skill:manipulation"]["adventure_raises_max_per_roll"] == 3
+        # Bragging is NOT in applicable_to → should be 0
+        assert formulas["skill:bragging"]["adventure_raises_max_per_roll"] == 0
+
+    def test_third_dan_annotates_attack(self):
+        """3rd Dan also applies to attack/parry if they're in applicable_to."""
+        # Brotherhood of Shinsei Monk 3rd Dan applies to attack
+        char = make_character_data(
+            school="brotherhood_of_shinsei_monk",
+            school_ring_choice="Fire",
+            skills={"precepts": 2},
+            knacks={"conviction": 3, "otherworldliness": 3, "worldliness": 3},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        assert formulas["attack"]["adventure_raises_max_per_roll"] == 2
+
+    def test_below_third_dan_no_annotation(self):
+        """Below 3rd Dan, no formulas get adventure_raises_max_per_roll."""
+        char = make_character_data(
+            school="courtier",
+            school_ring_choice="Air",
+            skills={"tact": 3, "manipulation": 2},
+            knacks={"discern_honor": 2, "oppose_social": 2, "worldliness": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        assert formulas["skill:manipulation"]["adventure_raises_max_per_roll"] == 0
+
     def test_non_rollable_knacks_excluded(self):
         # Brotherhood of Shinsei Monk's knacks are conviction,
         # otherworldliness, worldliness — all in NON_ROLLABLE_KNACKS — so

@@ -78,6 +78,7 @@ class RollFormula:
     reroll_tens: bool = True
     alternatives: List[dict] = field(default_factory=list)
     bonuses: List[dict] = field(default_factory=list)
+    adventure_raises_max_per_roll: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -383,6 +384,33 @@ def build_all_roll_formulas(
     """
     out: Dict[str, dict] = {}
 
+    # 3rd Dan: determine which roll keys get adventure free raises and
+    # the per-roll cap (= source skill rank).
+    school_id = character_data.get("school", "")
+    knacks = character_data.get("knacks", {}) or {}
+    dan = compute_dan(knacks) if knacks else 0
+    third_dan_applicable: set = set()
+    third_dan_max_per_roll: int = 0
+    tech_bonuses = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
+    if dan >= 3 and tech_bonuses.get("third_dan"):
+        t3 = tech_bonuses["third_dan"]
+        source_rank = (character_data.get("skills") or {}).get(t3["source_skill"], 0)
+        if source_rank > 0:
+            third_dan_max_per_roll = source_rank
+            # The applicable_to list contains bare IDs like "bragging",
+            # "attack", etc.  We'll match against the formula key's
+            # trailing component (e.g. "skill:bragging" → "bragging").
+            third_dan_applicable = set(t3["applicable_to"])
+
+    def _annotate_third_dan(key: str, formula_dict: dict) -> dict:
+        """Stamp ``adventure_raises_max_per_roll`` on applicable formulas."""
+        # Strip the category prefix (skill:, knack:, athletics:) to get
+        # the bare ID that appears in applicable_to.
+        bare = key.split(":", 1)[-1] if ":" in key else key
+        if bare in third_dan_applicable:
+            formula_dict["adventure_raises_max_per_roll"] = third_dan_max_per_roll
+        return formula_dict
+
     # Skills with rank > 0
     skills = character_data.get("skills", {}) or {}
     for skill_id, rank in skills.items():
@@ -390,10 +418,11 @@ def build_all_roll_formulas(
             continue
         formula = build_skill_formula(skill_id, character_data)
         if formula is not None:
-            out[f"skill:{skill_id}"] = formula.to_dict()
+            out[f"skill:{skill_id}"] = _annotate_third_dan(
+                f"skill:{skill_id}", formula.to_dict()
+            )
 
     # School knacks (look up from the character's school)
-    school_id = character_data.get("school", "")
     school = SCHOOLS.get(school_id)
     if school is not None:
         for knack_id in school.school_knacks:
@@ -401,13 +430,15 @@ def build_all_roll_formulas(
                 continue
             formula = build_knack_formula(knack_id, character_data)
             if formula is not None:
-                out[f"knack:{knack_id}"] = formula.to_dict()
+                out[f"knack:{knack_id}"] = _annotate_third_dan(
+                    f"knack:{knack_id}", formula.to_dict()
+                )
 
     # Combat
     for which in ("attack", "parry"):
         formula = build_combat_formula(which, character_data)
         if formula is not None:
-            out[which] = formula.to_dict()
+            out[which] = _annotate_third_dan(which, formula.to_dict())
 
     # Athletics on each ring
     for ring_name in (r.value for r in Ring):

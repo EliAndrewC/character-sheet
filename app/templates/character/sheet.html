@@ -66,14 +66,14 @@
     <!-- SCHOOL & DAN -->
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <div class="flex items-baseline gap-4 mb-4">
-            <h2 class="text-xl font-bold text-accent">
-                {% if school %}{{ school.name }}{% else %}{{ character.school }}{% endif %}
-            </h2>
+            {% if school %}
+            <h2 class="text-xl font-bold text-accent">{{ school.name }}</h2>
             <span class="text-sm bg-accent/10 text-accent rounded-full px-3 py-0.5 font-medium">
                 {{ dan }}{{ 'st' if dan == 1 else ('nd' if dan == 2 else ('rd' if dan == 3 else 'th')) }} Dan
             </span>
-            {% if school %}
             <span class="text-sm text-ink/60">School Ring: {{ character.school_ring_choice }}</span>
+            {% else %}
+            <h2 class="text-xl font-bold text-ink/40">No school selected yet</h2>
             {% endif %}
         </div>
 
@@ -99,28 +99,39 @@
     </section>
 
     <!-- RINGS -->
+    {% set ring_map = character.rings %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">Rings</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
-            {% set ring_map = character.rings %}
-            {% for ring_name in ['Air', 'Fire', 'Earth', 'Water', 'Void'] %}
-            <div class="p-3 rounded-lg cursor-pointer hover:ring-2 hover:ring-accent/40 transition-shadow {{ 'bg-accent/10 ring-2 ring-accent/30' if ring_name == character.school_ring_choice else 'bg-parchment' }}"
-                 data-roll-key="athletics:{{ ring_name }}"
-                 title="Click to roll Athletics ({{ ring_name }})">
-                <div class="text-sm font-medium text-ink/70">{{ ring_name }}</div>
-                <div class="text-3xl font-bold">{{ ring_map[ring_name] }}</div>
-                {% if ring_name == character.school_ring_choice %}
-                <div class="text-xs text-accent">School Ring</div>
+
+        {# ── Diamond layout (desktop) / horizontal strip (mobile) ── #}
+        <div class="rings-diamond mx-auto" style="max-width: 300px;">
+
+            {# ── The 5 ring elements ── #}
+            {% set ring_colors = {
+                'Air':   {'border': '#6ba3d6', 'bg': 'rgba(107,163,214,0.07)'},
+                'Fire':  {'border': '#b03030', 'bg': 'rgba(176,48,48,0.06)'},
+                'Void':  {'border': '#1a1a1a', 'bg': 'rgba(26,26,26,0.04)'},
+                'Water': {'border': '#2563a8', 'bg': 'rgba(37,99,168,0.07)'},
+                'Earth': {'border': '#8b5a2b', 'bg': 'rgba(139,90,43,0.06)'},
+            } %}
+
+            {% for ring_name, pos_class in [('Air', 'ring-pos-air'), ('Fire', 'ring-pos-fire'), ('Void', 'ring-pos-void'), ('Water', 'ring-pos-water'), ('Earth', 'ring-pos-earth')] %}
+            {% set rc = ring_colors[ring_name] %}
+            {% set is_school = ring_name == character.school_ring_choice %}
+            <div class="ring-node {{ pos_class }}{{ ' ring-school' if is_school else '' }}"
+                 style="border-color: {{ rc.border }}; background: {{ rc.bg }};"
+                 {% if ring_name != 'Void' %}data-roll-key="athletics:{{ ring_name }}"{% endif %}
+                 title="{{ 'Click to roll Athletics (' + ring_name + ')' if ring_name != 'Void' else 'Void' }}">
+                <div class="ring-label" style="color: {{ rc.border }};">{{ ring_name }}</div>
+                <div class="ring-value">{{ ring_map[ring_name] }}</div>
+                {% if is_school %}
+                <div class="ring-school-badge" style="color: {{ rc.border }};">School</div>
                 {% endif %}
             </div>
             {% endfor %}
         </div>
 
         <div class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-            <div class="bg-parchment rounded p-2">
-                <span class="text-ink/60">Void Points:</span>
-                <span class="font-bold">{{ [ring_map['Air'], ring_map['Fire'], ring_map['Earth'], ring_map['Water'], ring_map['Void']] | min }}</span>
-            </div>
             <div class="{{ 'bg-red-100 border border-red-300' if is_impaired_now else 'bg-parchment' }} rounded p-2">
                 <span class="text-ink/60">Impaired at:</span>
                 <span class="font-bold">{{ ring_map['Earth'] }} serious wounds</span>
@@ -128,9 +139,25 @@
                 <div class="mt-1 text-xs font-bold text-red-800">IMPAIRED — 10s do not reroll</div>
                 {% endif %}
             </div>
-            <div class="bg-parchment rounded p-2">
-                <span class="text-ink/60">Mortal at:</span>
-                <span class="font-bold">{{ ring_map['Earth'] * 2 }} serious wounds</span>
+            {% set dying_base = ring_map['Earth'] * 2 %}
+            {% set dying_adj = dying_base
+                - (1 if 'permanent_wound' in (character.disadvantages or []) else 0)
+                + (1 if 'great_destiny' in (character.advantages or []) else 0) %}
+            {% set has_dying_tooltip = dying_adj != dying_base %}
+            <div class="bg-parchment rounded p-2 {{ 'tooltip-trigger relative' if has_dying_tooltip else '' }}">
+                <span class="text-ink/60">Dying at:</span>
+                <span class="font-bold">{{ dying_adj }} serious wounds</span>
+                {% if has_dying_tooltip %}
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs text-left">
+                    <p>Base: {{ dying_base }} (2 &times; Earth {{ ring_map['Earth'] }})</p>
+                    {% if 'permanent_wound' in (character.disadvantages or []) %}
+                    <p>-1 from Permanent Wound</p>
+                    {% endif %}
+                    {% if 'great_destiny' in (character.advantages or []) %}
+                    <p>+1 from Great Destiny</p>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
             <div class="bg-parchment rounded p-2">
                 <span class="text-ink/60">Initiative:</span>
@@ -156,10 +183,12 @@
                 seriousWounds: {{ character.current_serious_wounds or 0 }},
                 voidPoints: {{ character.current_void_points or 0 }},
                 voidMax: {{ void_max }},
+                tempVoidPoints: {{ character.current_temp_void_points or 0 }},
                 adventureState: {{ (adventure_state or {})|tojson }},
                 perAdventure: {{ per_adventure|tojson }},
                 _charId: {{ character.id }},
                 _saving: false,
+                showResetModal: false,
 
                 async save() {
                     if (this._saving) return;
@@ -171,6 +200,7 @@
                             current_light_wounds: this.lightWounds,
                             current_serious_wounds: this.seriousWounds,
                             current_void_points: this.voidPoints,
+                            current_temp_void_points: this.tempVoidPoints,
                             adventure_state: this.adventureState,
                         }),
                     });
@@ -178,9 +208,36 @@
                 },
 
                 getCount(id) { return this.adventureState[id + '_used'] || 0; },
-                setCount(id, val) { this.adventureState[id + '_used'] = val; this.save(); },
+                setCount(id, val) {
+                    this.adventureState[id + '_used'] = val;
+                    this.save();
+                    // Notify the dice roller (separate Alpine scope) so its
+                    // remaining-raises counter stays in sync.
+                    window.dispatchEvent(new CustomEvent('adventure-state-changed'));
+                },
                 getToggle(id) { return !!this.adventureState[id]; },
                 setToggle(id, val) { this.adventureState[id] = val; this.save(); },
+
+                hasAnythingSpent() {
+                    for (const a of this.perAdventure) {
+                        if (a.type === 'counter' && this.getCount(a.id) > 0) return true;
+                        if (a.type === 'toggle' && this.getToggle(a.id)) return true;
+                    }
+                    return false;
+                },
+
+                resetSummary() {
+                    const items = [];
+                    for (const a of this.perAdventure) {
+                        if (a.type === 'counter') {
+                            const used = this.getCount(a.id);
+                            if (used > 0) items.push('Regain ' + used + ' ' + a.name);
+                        } else if (a.type === 'toggle') {
+                            if (this.getToggle(a.id)) items.push('Regain ' + a.name);
+                        }
+                    }
+                    return items;
+                },
 
                 resetAdventure() {
                     for (const a of this.perAdventure) {
@@ -188,6 +245,7 @@
                         if (a.type === 'toggle') this.adventureState[a.id] = false;
                     }
                     this.save();
+                    window.dispatchEvent(new CustomEvent('adventure-state-changed'));
                 },
 
                 // Light wound modals
@@ -237,7 +295,9 @@
         }
     </script>
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
-             x-data="trackingData()">
+             x-data="trackingData()"
+             x-init="window._trackingGetCount = (id) => getCount(id);
+                     window._trackingSetCount = (id, val) => setCount(id, val)">
         <h2 class="text-xl font-bold mb-4 text-accent">Tracking</h2>
 
         <!-- Wounds & Void -->
@@ -376,6 +436,24 @@
                 </div>
                 <div class="text-xs text-ink/50" x-text="'max ' + voidMax"></div>
             </div>
+            {% if has_temp_void %}
+            <div class="text-center">
+                <div class="text-sm text-ink/60 mb-1">Temp Void</div>
+                <div class="flex items-center justify-center gap-2">
+                    {% if viewer_can_edit %}
+                    <button @click="tempVoidPoints = Math.max(0, tempVoidPoints - 1); save()"
+                            :disabled="tempVoidPoints <= 0"
+                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                    {% endif %}
+                    <span class="text-2xl font-bold w-8 text-center" x-text="tempVoidPoints"></span>
+                    {% if viewer_can_edit %}
+                    <button @click="tempVoidPoints++; save()"
+                            class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                    {% endif %}
+                </div>
+                <div class="text-xs text-ink/50">no max</div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Per-Adventure Abilities -->
@@ -418,10 +496,38 @@
                 {% endfor %}
             </div>
             {% if viewer_can_edit %}
-            <button @click="if(confirm('Reset all per-adventure abilities?')) resetAdventure()"
-                    class="mt-4 text-sm bg-ink/10 hover:bg-ink/20 px-3 py-1.5 rounded transition-colors">
+            <button @click="showResetModal = true" data-action="open-reset-modal"
+                    :disabled="!hasAnythingSpent()"
+                    class="mt-4 text-sm bg-ink/10 hover:bg-ink/20 px-3 py-1.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                 Reset Per-Adventure Abilities
             </button>
+
+            {# Reset confirmation modal #}
+            <div x-show="showResetModal" x-cloak
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+                 @click.self="showResetModal = false" @keydown.escape="showResetModal = false">
+                <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4">
+                    <h3 class="text-lg font-bold text-accent mb-3">Reset Per-Adventure Abilities</h3>
+                    <p class="text-sm text-ink/70 mb-3">The following will be restored:</p>
+                    <ul class="text-sm space-y-1 mb-4">
+                        <template x-for="item in resetSummary()" :key="item">
+                            <li class="flex items-center gap-2">
+                                <span class="text-accent font-bold">&bull;</span>
+                                <span x-text="item"></span>
+                            </li>
+                        </template>
+                    </ul>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" @click="showResetModal = false"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm">Cancel</button>
+                        <button type="button" @click="resetAdventure(); showResetModal = false"
+                                data-action="confirm-reset"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                            Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
             {% endif %}
         </div>
         {% endif %}
@@ -484,30 +590,68 @@
                 <div class="text-sm text-ink/60">Honor</div>
                 <div class="text-2xl font-bold">{{ character.honor }}</div>
             </div>
-            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative">
+            {# --- Rank tooltip: awards (non-contextual) + modifiers (contextual) --- #}
+            {% set rank_awards = (character.rank_recognition_awards or []) | selectattr('rank_delta') | list %}
+            {% set rank_base = character.rank - (rank_awards | sum(attribute='rank_delta')) %}
+            {% set has_rank_tooltip = rank_awards or effective.rank_modifiers %}
+            <div class="bg-parchment rounded-lg p-3 {{ 'tooltip-trigger relative' if has_rank_tooltip else '' }}">
                 <div class="text-sm text-ink/60">Rank</div>
                 <div class="text-2xl font-bold">{{ character.rank }}</div>
-                {% if character.rank_locked %}
+                {% if character.rank_locked and not rank_awards %}
                 <div class="text-xs text-ink/50">locked</div>
                 {% endif %}
-                {% if effective.rank_modifiers %}
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs text-left">
-                    <p class="font-medium mb-1">Effective Rank in context:</p>
-                    {% for m in effective.rank_modifiers %}
-                    <p>{{ m.source }}: {{ "+" if m.value > 0 else "" }}{{ m.value }} ({{ m.context }})</p>
-                    {% endfor %}
+                {% if has_rank_tooltip %}
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm text-left">
+                    {% if rank_awards %}
+                    <div class="status-tooltip-grid mb-2">
+                        <div class="text-right font-mono">{{ "%.1f"|format(rank_base) }}:</div>
+                        <div>starting Rank</div>
+                        {% for a in rank_awards %}
+                        <div class="text-right font-mono">{{ "%+.1f"|format(a.rank_delta) }}:</div>
+                        <div>{{ a.source }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if effective.rank_modifiers %}
+                    <p class="font-medium mb-1{{ ' pt-2 border-t border-parchment/20' if rank_awards else '' }}">Effective Rank in context:</p>
+                    <div class="status-tooltip-grid">
+                        {% for m in effective.rank_modifiers %}
+                        <div class="text-right font-mono">{{ "%+.1f"|format(m.value) }}:</div>
+                        <div>{{ m.source }} ({{ m.context }})</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
-            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative">
+            {# --- Recognition tooltip: awards (non-contextual) + modifiers (contextual) --- #}
+            {% set recog_awards = (character.rank_recognition_awards or []) | selectattr('recognition_delta') | list %}
+            {% set recog_base = character.recognition - (recog_awards | sum(attribute='recognition_delta')) %}
+            {% set has_recog_tooltip = recog_awards or effective.recognition_modifiers %}
+            <div class="bg-parchment rounded-lg p-3 {{ 'tooltip-trigger relative' if has_recog_tooltip else '' }}">
                 <div class="text-sm text-ink/60">Recognition</div>
                 <div class="text-2xl font-bold">{{ character.recognition }}</div>
-                {% if effective.recognition_modifiers %}
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs text-left">
-                    <p class="font-medium mb-1">Effective Recognition in context:</p>
-                    {% for m in effective.recognition_modifiers %}
-                    <p>{{ m.source }}: {{ "+" if m.value > 0 else "" }}{{ m.value }} ({{ m.context }})</p>
-                    {% endfor %}
+                {% if has_recog_tooltip %}
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm text-left">
+                    {% if recog_awards %}
+                    <div class="status-tooltip-grid mb-2">
+                        <div class="text-right font-mono">{{ "%.1f"|format(recog_base) }}:</div>
+                        <div>starting Recognition</div>
+                        {% for a in recog_awards %}
+                        <div class="text-right font-mono">{{ "%+.1f"|format(a.recognition_delta) }}:</div>
+                        <div>{{ a.source }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if effective.recognition_modifiers %}
+                    <p class="font-medium mb-1{{ ' pt-2 border-t border-parchment/20' if recog_awards else '' }}">Effective Recognition in context:</p>
+                    <div class="status-tooltip-grid">
+                        {% for m in effective.recognition_modifiers %}
+                        <div class="text-right font-mono">{{ "%+.1f"|format(m.value) }}:</div>
+                        <div>{{ m.source }} ({{ m.context }})</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
@@ -613,19 +757,25 @@
     </section>
 
     <!-- ADVANTAGES & DISADVANTAGES -->
-    {% if character.advantages or character.disadvantages %}
+    {% set all_advs = (character.advantages or []) + (character.campaign_advantages or []) %}
+    {% set all_disadvs = (character.disadvantages or []) + (character.campaign_disadvantages or []) %}
+    {% if all_advs or all_disadvs %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">Advantages & Disadvantages</h2>
         <div class="grid gap-6 md:grid-cols-2">
-            {% if character.advantages %}
+            {% if all_advs %}
             <div>
                 <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Advantages</h3>
-                {% for aid in character.advantages %}
-                {% set adv = advantages.get(aid) %}
+                {% for aid in all_advs %}
+                {% set adv = advantages.get(aid) or campaign_advantages.get(aid) %}
                 {% if adv %}
                 {% set detail = advantage_details.get(aid, {}) %}
+                {% set is_campaign = aid in (character.campaign_advantages or []) %}
                 <div class="mb-2 tooltip-trigger relative">
                     <span class="text-sm font-medium cursor-help">{{ adv.name }}</span>
+                    {% if is_campaign %}
+                    <span class="text-xs text-ink/40">(campaign)</span>
+                    {% endif %}
                     {% if detail.get('text') %}
                     <span class="text-sm text-ink/60">— {{ detail.text }}</span>
                     {% endif %}
@@ -640,15 +790,19 @@
                 {% endfor %}
             </div>
             {% endif %}
-            {% if character.disadvantages %}
+            {% if all_disadvs %}
             <div>
                 <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Disadvantages</h3>
-                {% for did in character.disadvantages %}
-                {% set dis = disadvantages.get(did) %}
+                {% for did in all_disadvs %}
+                {% set dis = disadvantages.get(did) or campaign_disadvantages.get(did) %}
                 {% if dis %}
                 {% set detail = advantage_details.get(did, {}) %}
+                {% set is_campaign = did in (character.campaign_disadvantages or []) %}
                 <div class="mb-2 tooltip-trigger relative">
                     <span class="text-sm font-medium cursor-help">{{ dis.name }}</span>
+                    {% if is_campaign %}
+                    <span class="text-xs text-ink/40">(campaign)</span>
+                    {% endif %}
                     {% if detail.get('text') %}
                     <span class="text-sm text-ink/60">— {{ detail.text }}</span>
                     {% endif %}
@@ -738,7 +892,7 @@
             <span>Spent: <span class="font-mono">{{ gross_spent }}</span></span>
             <span>Total: <span class="font-mono">{{ budget }}</span>
                 {% if dis_xp > 0 %}
-                <span class="text-xs text-ink/50">({{ character.starting_xp }} + {{ character.earned_xp }} earned + {{ dis_xp }} disadvantages)</span>
+                <span class="text-xs text-ink/50">({{ character.starting_xp }} starting + {{ character.earned_xp }} earned + {{ dis_xp }} disadvantages)</span>
                 {% endif %}
             </span>
             <span class="{{ 'text-green-700' if remaining >= 0 else 'text-red-600 font-bold' }}">
@@ -895,6 +1049,12 @@
     <!-- DICE ROLLER (click-to-roll modal) -->
     <script type="application/json" id="roll-formulas">{{ roll_formulas | tojson }}</script>
     <script type="application/json" id="user-prefs">{{ user_prefs | tojson }}</script>
+    {% set adv_raises_max = namespace(val=0) %}
+    {% for a in per_adventure %}{% if a.id == 'adventure_raises' %}{% set adv_raises_max.val = a.max %}{% endif %}{% endfor %}
+    <script type="application/json" id="adventure-raises-config">{{ {
+        "available": adv_raises_max.val,
+        "used": (adventure_state or {}).get('adventure_raises_used', 0),
+    } | tojson }}</script>
     <script src="/static/js/dice.js?v={{ static_v('js/dice.js') }}"></script>
     <div x-data="diceRoller()" x-init="init()">
         <div x-show="open" x-cloak
@@ -993,6 +1153,15 @@
                             </ul>
                         </template>
 
+                        {# 3rd Dan free raises spent on this roll #}
+                        <div x-show="raisesSpentThisRoll > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="raisesSpentThisRoll * 5"></span>
+                            from <span x-text="raisesSpentThisRoll"></span>
+                            3rd Dan free raise<span x-show="raisesSpentThisRoll > 1">s</span>
+                        </div>
+
                         <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
                             <div class="mt-2 pt-2 border-t border-ink/10">
                                 <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
@@ -1006,6 +1175,31 @@
                         </template>
                     </div>
 
+                    {# 3rd Dan free raises: Spend / Undo #}
+                    <div x-show="formula && formula.adventure_raises_max_per_roll > 0 && advRaisesConfig.available > 0"
+                         x-cloak class="bg-parchment rounded p-3 text-sm">
+                            <div class="flex items-center gap-2 mb-1">
+                                <button type="button" @click="spendRaise()" :disabled="!canSpendRaise()"
+                                        data-action="spend-raise"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                    Spend 3rd Dan Free Raise (+5)
+                                </button>
+                                <button type="button" @click="undoRaise()" :disabled="!canUndoRaise()"
+                                        data-action="undo-raise"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                    Undo
+                                </button>
+                            </div>
+                            <div class="text-xs text-ink/60">
+                                This roll: <span class="font-mono font-bold" x-text="raisesSpentThisRoll"></span>
+                                / <span x-text="formula.adventure_raises_max_per_roll"></span> max
+                                <span class="mx-1">&middot;</span>
+                                Remaining this adventure: <span class="font-mono font-bold" x-text="raisesRemainingAdventure()"></span>
+                                / <span x-text="advRaisesConfig.available"></span>
+                            </div>
+                        </div>
+                    </div>
+
                     {# Impaired note #}
                     <template x-if="formula && !formula.reroll_tens">
                         <div class="text-xs italic text-red-700 font-medium">
@@ -1013,9 +1207,7 @@
                         </div>
                     </template>
 
-                    <div class="flex justify-end gap-2 pt-2">
-                        <button type="button" @click="reroll()"
-                                class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">Reroll</button>
+                    <div x-show="phase === 'done'" x-cloak class="flex justify-end gap-2 pt-2">
                         <button type="button" @click="close()"
                                 class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">Close</button>
                     </div>
@@ -1039,6 +1231,9 @@
             keptSum: 0,
             formulas: {},
             prefs: { dice_animation_enabled: true, dice_sound_enabled: true },
+            // 3rd Dan free raises
+            advRaisesConfig: { available: 0, used: 0 },
+            raisesSpentThisRoll: 0,
 
             init() {
                 try {
@@ -1049,6 +1244,18 @@
                     this.prefs.dice_animation_enabled = p.dice_animation_enabled !== false;
                     this.prefs.dice_sound_enabled = p.dice_sound_enabled !== false;
                 } catch (e) { /* keep defaults */ }
+                try {
+                    this.advRaisesConfig = JSON.parse(
+                        document.getElementById('adventure-raises-config').textContent || '{}'
+                    );
+                } catch (e) { /* keep defaults */ }
+                // Listen for tracking-section changes (e.g. manual +/- on the
+                // per-adventure counter) so our remaining count stays in sync.
+                window.addEventListener('adventure-state-changed', () => {
+                    if (window._trackingGetCount) {
+                        this.advRaisesConfig.used = window._trackingGetCount('adventure_raises');
+                    }
+                });
 
                 document.querySelectorAll('[data-roll-key]').forEach(el => {
                     el.addEventListener('click', (ev) => {
@@ -1067,12 +1274,16 @@
                 this.formulaText = f.flat > 0
                     ? `${f.rolled}k${f.kept} + ${f.flat}`
                     : `${f.rolled}k${f.kept}`;
+                this.raisesSpentThisRoll = 0;
                 this.open = true;
                 this.runRoll();
             },
 
             reroll() {
-                if (this.formula) this.runRoll();
+                if (this.formula) {
+                    this.raisesSpentThisRoll = 0;
+                    this.runRoll();
+                }
             },
 
             async runRoll() {
@@ -1109,6 +1320,38 @@
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
                 this.baseTotal = this.keptSum + flat;
                 this.phase = 'done';
+            },
+
+            // 3rd Dan free raises: spending and undo
+            canSpendRaise() {
+                if (!this.formula || !this.formula.adventure_raises_max_per_roll) return false;
+                const maxPerRoll = this.formula.adventure_raises_max_per_roll;
+                const remaining = this.advRaisesConfig.available - this.advRaisesConfig.used;
+                return this.raisesSpentThisRoll < maxPerRoll && remaining > 0;
+            },
+            canUndoRaise() {
+                return this.raisesSpentThisRoll > 0;
+            },
+            spendRaise() {
+                if (!this.canSpendRaise()) return;
+                this.raisesSpentThisRoll++;
+                this.baseTotal += 5;
+                this.advRaisesConfig.used++;
+                if (window._trackingSetCount) {
+                    window._trackingSetCount('adventure_raises', this.advRaisesConfig.used);
+                }
+            },
+            undoRaise() {
+                if (!this.canUndoRaise()) return;
+                this.raisesSpentThisRoll--;
+                this.baseTotal -= 5;
+                this.advRaisesConfig.used--;
+                if (window._trackingSetCount) {
+                    window._trackingSetCount('adventure_raises', this.advRaisesConfig.used);
+                }
+            },
+            raisesRemainingAdventure() {
+                return Math.max(0, this.advRaisesConfig.available - this.advRaisesConfig.used);
             },
 
             close() {

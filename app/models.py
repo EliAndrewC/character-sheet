@@ -149,6 +149,7 @@ class Character(Base):
     current_light_wounds: Mapped[int] = mapped_column(default=0)
     current_serious_wounds: Mapped[int] = mapped_column(default=0)
     current_void_points: Mapped[int] = mapped_column(default=0)
+    current_temp_void_points: Mapped[int] = mapped_column(default=0)
     # Per-adventure state: {"lucky_used": false, "unlucky_used": false,
     #   "adventure_raises_used": 0, "conviction_used": 0, ...}
     adventure_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
@@ -201,7 +202,8 @@ class Character(Base):
                     "advantage_details": {},
                     "attack": 1, "parry": 1, "rank_locked": False,
                     "current_light_wounds": 0, "current_serious_wounds": 0,
-                    "current_void_points": 0, "notes": "", "sections": [],
+                    "current_void_points": 0, "current_temp_void_points": 0,
+                    "notes": "", "sections": [],
                     "rank_recognition_awards": []}
         for key in current:
             if key in skip:
@@ -264,6 +266,7 @@ class Character(Base):
             "current_light_wounds": self.current_light_wounds,
             "current_serious_wounds": self.current_serious_wounds,
             "current_void_points": self.current_void_points,
+            "current_temp_void_points": self.current_temp_void_points,
             "notes": self.notes,
             "sections": self.sections or [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -308,5 +311,6 @@ class Character(Base):
             current_light_wounds=data.get("current_light_wounds", 0),
             current_serious_wounds=data.get("current_serious_wounds", 0),
             current_void_points=data.get("current_void_points", 0),
+            current_temp_void_points=data.get("current_temp_void_points", 0),
             notes=data.get("notes", ""),
         )
