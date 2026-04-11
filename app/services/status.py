@@ -70,6 +70,38 @@ def compute_effective_status(
 
     status.stipend = int(stipend_rank) ** 2
 
+    # --- GM-awarded reputations (from rank_recognition_awards) ---
+    awards = character_data.get("rank_recognition_awards") or []
+    for award in awards:
+        award_type = award.get("type", "rank_recognition")
+        source_text = award.get("source") or "unknown"
+        if award_type == "good_reputation":
+            status.recognition_modifiers.append({
+                "field": "recognition",
+                "context": "for identification",
+                "value": 1.0,
+                "source": f"Good Reputation ({source_text})",
+            })
+            status.rank_modifiers.append({
+                "field": "rank",
+                "context": "with those familiar with your reputation",
+                "value": 2.0,
+                "source": f"Good Reputation ({source_text})",
+            })
+        elif award_type == "bad_reputation":
+            status.recognition_modifiers.append({
+                "field": "recognition",
+                "context": "for identification",
+                "value": 1.0,
+                "source": f"Bad Reputation ({source_text})",
+            })
+            status.rank_modifiers.append({
+                "field": "rank",
+                "context": "with those aware of your reputation",
+                "value": -1.5,
+                "source": f"Bad Reputation ({source_text})",
+            })
+
     # --- Advantages ---
     if "good_reputation" in advantages:
         status.recognition_modifiers.append({

@@ -292,8 +292,12 @@ async def autosave_character(
                 return JSONResponse(
                     {"error": "Award source is required"}, status_code=400
                 )
+            award_type = entry.get("type", "rank_recognition")
+            if award_type not in ("rank_recognition", "good_reputation", "bad_reputation"):
+                award_type = "rank_recognition"
             cleaned.append({
                 "id": str(entry.get("id") or ""),
+                "type": award_type,
                 "rank_delta": rank_delta,
                 "recognition_delta": recog_delta,
                 "source": source,
