@@ -3,8 +3,8 @@
 {% block title %}L7R — Edit {{ character.name }}{% endblock %}
 
 {% block content %}
-<link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+<link href="/static/css/quill.snow.css" rel="stylesheet">
+<script src="/static/js/quill.js"></script>
 <style>
     /* Quill toolbar/editor — keep within the parchment aesthetic */
     .ql-toolbar.ql-snow { border-top-left-radius: 0.375rem; border-top-right-radius: 0.375rem; border-color: rgba(44,24,16,0.2); }
@@ -113,7 +113,8 @@
                     {% for group_label, group_schools in schools_by_category %}
                     <optgroup label="{{ group_label }}">
                         {% for s in group_schools %}
-                        <option value="{{ s.id }}" {{ 'selected' if s.id == character.school else '' }}>{{ s.name }}</option>
+                        <option value="{{ s.id }}" {{ 'selected' if s.id == character.school else '' }}
+                                {% if s.id == 'shugenja' %}disabled{% endif %}>{{ s.name }}{% if s.id == 'shugenja' %} (coming soon){% endif %}</option>
                         {% endfor %}
                     </optgroup>
                     {% endfor %}

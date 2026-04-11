@@ -979,8 +979,7 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.VOID.value,
         category="bushi",
         special_ability=(
-            "Free ring boost can apply to Void. "
-            "Parries give you one temporary void point."
+            "Your successful or unsuccessful parries give you a temporary void point."
         ),
         school_knacks=["counterattack", "double_attack", "iaijutsu"],
         techniques={
