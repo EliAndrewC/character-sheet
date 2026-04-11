@@ -130,6 +130,17 @@ The canonical rules live at: https://github.com/EliAndrewC/l7r/tree/master/rules
 - **JS error tests for both editor and sheet.** The sheet page has a parametrized JS error test across multiple schools (`test_sheet_js_errors.py`). The editor has its own (`test_editor_controls.py`). When adding Alpine expressions, use optional chaining (`?.`) for any property access that could be null during initial render. Use single-quote delimiters on Alpine attributes that contain Jinja `tojson` output (which produces double-quoted strings).
 - **Low-effort automated sanity checks.** When making UI changes, look for cheap structural assertions: no horizontal overflow at phone width, no zero-width truncated elements, critical controls visible/hidden at expected breakpoints. Add these to `test_responsive.py`.
 
+## School Features Inventory
+
+The `school-features/` directory contains one .md file per school documenting:
+- Implementation status of each ability (special ability, 1st-5th Dan techniques)
+- How each ability is implemented in the codebase (which files, which functions)
+- Which unit tests and clicktests cover each ability
+- What's missing (unimplemented features, untested behaviors)
+- Open questions about ambiguous rules
+
+This inventory is the basis for future school-by-school implementation work. When implementing a school feature, update the corresponding .md file to reflect the new status.
+
 ## Deployment
 
 The Fly CLI is not pre-installed in the sandbox container. Install it and authenticate before deploying:

@@ -1,0 +1,114 @@
+# Kitsuki Magistrate
+
+**School ID:** `kitsuki_magistrate`
+**Category:** Investigator
+**School Ring:** Water - Confirmed correct.
+**School Knacks:** discern_honor, iaijutsu, presence - Discern_honor is rollable (Air). Iaijutsu is rollable (Fire). Presence is rollable (Water).
+
+---
+
+## Special Ability
+
+> Use Water for interrogation rolls and add twice your Water to all attack rolls.
+
+**Status:** NOT implemented. Neither the Water-for-interrogation substitution nor the +2x Water flat bonus on attacks is coded.
+
+**Implementation:** `app/game_data.py:1307-1309` (definition only).
+
+**Unit tests:** None.
+**Clicktests:** None.
+
+**Missing:**
+- [ ] Implement Water ring substitution for interrogation rolls (use Water instead of the normal ring)
+- [ ] Implement +2x Water flat bonus on all attack rolls
+- [ ] Unit test: interrogation formula uses Water ring
+- [ ] Unit test: attack formula includes +2*Water flat bonus
+- [ ] Clicktest: interrogation roll uses Water ring value
+- [ ] Clicktest: attack roll shows the +2*Water bonus
+
+---
+
+## 1st Dan
+
+> Roll an extra die on investigation, interrogation, and wound check rolls.
+
+**Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
+- `first_dan_extra_die: ["investigation", "interrogation", "wound_check"]`
+- Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
+
+**Unit tests:** None specific to Kitsuki 1st Dan.
+**Clicktests:** None.
+
+**Missing:**
+- [ ] Clicktest verifying the extra die appears in the roll formula display for investigation/interrogation/wound_check
+
+---
+
+## 2nd Dan
+
+> Free raise on interrogation rolls.
+
+**Status:** Fully implemented.
+- `second_dan_free_raise: "interrogation"`
+- Applied as +5 flat bonus on interrogation rolls via `_apply_school_technique_bonus()`.
+
+**Unit tests:** None.
+**Clicktests:** None.
+
+**Missing:**
+- [ ] Unit test: Kitsuki at 2nd Dan gets +5 flat on interrogation formula
+- [ ] Clicktest: interrogation roll shows the +5 bonus from 2nd Dan
+
+---
+
+## 3rd Dan
+
+> Gain 2X free raises per adventure (X = investigation skill); apply to interrogation, intimidation, law, underworld, attack, wound checks; max X per roll.
+
+**Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+- `source_skill: "investigation"`
+- `applicable_to: ["interrogation", "intimidation", "law", "underworld", "attack", "wound_check"]`
+- `formula: "2X"`, `max_per_roll: "X"`
+
+**Implementation:** `app/game_data.py:2062-2070` (third_dan dict).
+
+**Unit tests:** None specific to Kitsuki 3rd Dan. The mechanism is identical to Courtier 3rd Dan which is tested in `test_dice.py`.
+**Clicktests:** None specific. The 3rd Dan free raise UI is tested via Courtier in `test_rolls.py`.
+
+**Missing:**
+- [ ] Clicktest for Kitsuki-specific 3rd Dan applicable skills
+
+---
+
+## 4th Dan
+
+> +1 Water; Water ring costs 5 fewer XP to raise; automatically know target's Void, parry, and next action phase in combat.
+
+**Status:** Partially implemented.
+- Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
+- "Automatically know target's Void, parry, and next action phase" is NOT implemented. This is an information-display combat mechanic.
+
+**Unit tests:** None.
+**Clicktests:** None.
+
+**Missing:**
+- [ ] Implement combat info display for Kitsuki 4th Dan
+- [ ] UI for showing target's Void/parry/action phase
+
+---
+
+## 5th Dan
+
+> Reduce targeted characters' Air, Fire, and Water by 1; limited by total experience.
+
+**Status:** NOT implemented. This is a debuff ability.
+
+**Questions:**
+- How is "total experience" used as a limit? Is it XP spent or XP earned?
+- Is this a per-combat or per-adventure ability?
+- Does this affect all rolls the target makes, or just specific ones?
+
+**Missing:**
+- [ ] Implement ring reduction debuff mechanic
+- [ ] Experience-based usage limit
+- [ ] UI for applying the debuff to targets
