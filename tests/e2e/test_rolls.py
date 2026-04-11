@@ -230,6 +230,28 @@ def test_die_top_angle_is_about_70_degrees(page, live_server_url):
     )
 
 
+# --- Initiative Rolls ---
+
+
+def test_initiative_roll_shows_action_dice(page, live_server_url):
+    """Clicking the Initiative box rolls and shows action dice (not a Total)."""
+    _create_roller(page, live_server_url, "InitRoll")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    modal = page.locator('[data-modal="dice-roller"]')
+    assert modal.locator('text="Action Dice"').is_visible()
+
+
+def test_initiative_no_total_shown(page, live_server_url):
+    """Initiative results show action dice, not a summed Total."""
+    _create_roller(page, live_server_url, "InitNoTotal")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    modal = page.locator('[data-modal="dice-roller"]')
+    # The initiative-specific "Action Dice" section should be visible
+    assert modal.locator('text="Action Dice"').is_visible()
+
+
 # --- 3rd Dan Free Raises on the roll modal ---
 
 

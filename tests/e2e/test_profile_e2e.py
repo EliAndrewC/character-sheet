@@ -43,3 +43,23 @@ def test_profile_gm_badge(page, live_server_url):
     # But we should see the GM note if there are any admin users in the list
     body = page.text_content("body")
     assert "always have edit access" in body.lower() or "GM" in body
+
+
+def test_sound_toggle_saves(page, live_server_url):
+    """Sound checkbox on profile page saves and persists."""
+    page.goto(f"{live_server_url}/profile")
+    sound_checkbox = page.locator('input[name="dice_sound"]')
+    # Uncheck it
+    if sound_checkbox.is_checked():
+        sound_checkbox.uncheck()
+    page.locator('button[type="submit"]', has_text="Save").click()
+    page.wait_for_load_state("networkidle")
+    # Reload and verify
+    page.goto(f"{live_server_url}/profile")
+    assert not page.locator('input[name="dice_sound"]').is_checked()
+    # Re-check it
+    page.locator('input[name="dice_sound"]').check()
+    page.locator('button[type="submit"]', has_text="Save").click()
+    page.wait_for_load_state("networkidle")
+    page.goto(f"{live_server_url}/profile")
+    assert page.locator('input[name="dice_sound"]').is_checked()

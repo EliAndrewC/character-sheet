@@ -1100,11 +1100,18 @@
              class="fixed z-50 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[240px]"
              :style="'top:' + rollMenuPos.top + 'px; left:' + rollMenuPos.left + 'px'">
             <template x-if="rollMenuHasStrike">
-                <button type="button"
-                        @click="executeRoll('knack:iaijutsu:strike', 0, null)"
-                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10">
-                    Iaijutsu Strike <span class="text-xs text-ink/50">(10s not rerolled)</span>
-                </button>
+                <div>
+                    <button type="button"
+                            @click="rollMenuOpen = false; openDuelModal()"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10 font-medium">
+                        Iaijutsu Duel
+                    </button>
+                    <button type="button"
+                            @click="executeRoll('knack:iaijutsu:strike', 0, null)"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10">
+                        Iaijutsu Strike <span class="text-xs text-ink/50">(10s not rerolled)</span>
+                    </button>
+                </div>
             </template>
             <button type="button"
                     @click="executeRoll(rollMenuKey, 0, null)"
@@ -1526,6 +1533,270 @@
             </div>
         </div>
 
+        {# ── Iaijutsu Duel Modal ── #}
+        <div x-show="duelOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="iaijutsu-duel"
+             @click.self="duelOpen = false">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent">Iaijutsu Duel</h3>
+                    <button type="button" @click="duelOpen = false"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+
+                {# ── SETUP ── #}
+                <div x-show="duelPhase === 'setup'" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-parchment rounded p-3 text-center">
+                            <div class="text-sm text-ink/60">Your Duel TN</div>
+                            <div class="text-2xl font-bold" x-text="duelPlayerTN"></div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Opponent's Total XP</label>
+                            <input type="number" x-model="duelOpponentXP" min="0" placeholder="e.g. 200"
+                                   class="w-full border rounded px-3 py-2 text-sm">
+                            <div class="text-xs text-ink/50 mt-1">
+                                Opponent's TN: <span x-text="Math.floor(parseInt(duelOpponentXP || '0') / 10)"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Weapon damage</label>
+                        <div class="flex gap-1 items-center">
+                            <input type="number" x-model.number="duelWeaponRolled" min="0" max="10"
+                                   class="w-16 border rounded px-2 py-1.5 text-sm text-center">
+                            <span class="text-sm font-mono">k</span>
+                            <input type="number" x-model.number="duelWeaponKept" min="1" max="10"
+                                   class="w-16 border rounded px-2 py-1.5 text-sm text-center">
+                        </div>
+                    </div>
+                    <button type="button" @click="duelStartContested()"
+                            :disabled="!duelOpponentXP"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                        Proceed to Contested Roll
+                    </button>
+                </div>
+
+                {# ── CONTESTED ROLL ── #}
+                <div x-show="duelPhase === 'contested'" class="space-y-4">
+                    <p class="text-sm text-ink/70">Roll iaijutsu to determine who gets the first option to focus or strike.</p>
+                    <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-green-700 bg-green-50 rounded p-2">
+                        +<span x-text="duelRestartBonus"></span> bonus from winning previous round(s)
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <label class="text-sm font-medium">Void points:</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" @click="duelVoidSelected = Math.max(0, duelVoidSelected - 1)"
+                                    :disabled="duelVoidSelected <= 0"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                            <span class="w-8 text-center font-bold text-lg" x-text="duelVoidSelected"></span>
+                            <button type="button" @click="duelVoidSelected = Math.min(duelVoidSelected + 1, Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0))"
+                                    :disabled="duelVoidSelected >= Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0)"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">+</button>
+                        </div>
+                    </div>
+                    <button type="button" @click="duelRollContested()"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                        Roll Contested Iaijutsu
+                    </button>
+                </div>
+
+                {# ── CONTESTED ROLLING ── #}
+                <div x-show="duelPhase === 'contested-rolling' || duelPhase === 'strike-rolling' || duelPhase === 'damage-rolling'" x-cloak>
+                    <div id="dice-animation-duel"
+                         class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+                </div>
+
+                {# ── CONTESTED RESULT ── #}
+                <div x-show="duelPhase === 'contested-result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'dc'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="font-bold text-lg">Contested roll: <span class="text-accent" x-text="duelContestedRoll"></span></div>
+                    </div>
+                    <button type="button" @click="duelProceedToFocusStrike()"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                        Proceed to Focus / Strike
+                    </button>
+                </div>
+
+                {# ── FOCUS / STRIKE ── #}
+                <div x-show="duelPhase === 'focus_strike'" x-cloak class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4 text-center">
+                        <div class="bg-parchment rounded p-3">
+                            <div class="text-sm text-ink/60">Your TN</div>
+                            <div class="text-2xl font-bold" x-text="duelPlayerTN"></div>
+                        </div>
+                        <div class="bg-parchment rounded p-3">
+                            <div class="text-sm text-ink/60">Opponent's TN</div>
+                            <div class="text-2xl font-bold" x-text="duelOpponentTN"></div>
+                        </div>
+                    </div>
+                    <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-green-700 bg-green-50 rounded p-2">
+                        +<span x-text="duelRestartBonus"></span> bonus from winning previous round(s)
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="button" @click="duelFocus()"
+                                :disabled="!duelPlayerCanFocus"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                            Focus (+5 to your TN)
+                        </button>
+                        <button type="button" @click="duelOpponentFocus()"
+                                :disabled="!duelOpponentCanFocus"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                            Opponent Focuses (+5 to their TN)
+                        </button>
+                    </div>
+                    <button type="button" @click="duelRollStrike()"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                        Strike!
+                    </button>
+                </div>
+
+                {# ── STRIKE RESULT ── #}
+                <div x-show="duelPhase === 'strike-result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'ds'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3 text-sm">
+                        <div class="font-bold text-lg">
+                            Strike roll: <span class="text-accent" x-text="duelStrikeRoll"></span>
+                            <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="duelOpponentTN"></span></span>
+                        </div>
+                        <div x-show="finalDice.some(d => d.value === 10)" x-cloak class="text-xs italic text-red-700 mt-1">
+                            10s not rerolled for the strike in an iaijutsu duel
+                        </div>
+                    </div>
+
+                    {# HIT #}
+                    <div x-show="duelStrikeHit" x-cloak class="bg-green-50 border border-green-300 rounded p-3">
+                        <div class="font-bold text-green-800 mb-2">
+                            HIT - exceeded TN by <span x-text="duelStrikeExcess"></span>
+                            (<span x-text="duelStrikeExcess"></span> extra damage dice!)
+                        </div>
+                        <div class="text-sm mb-2">
+                            <span class="font-medium">Damage roll:</span>
+                            <span class="font-mono font-bold"
+                                  x-text="duelComputeDamage().rolled + 'k' + duelComputeDamage().kept + (duelComputeDamage().flat > 0 ? ' + ' + duelComputeDamage().flat : '')"></span>
+                            <span class="text-ink/50 ml-1">avg <span x-text="duelComputeDamage().avg"></span></span>
+                        </div>
+                        <button type="button" @click="duelRollDamage()"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                            Roll Damage
+                        </button>
+                    </div>
+
+                    {# MISS #}
+                    <div x-show="!duelStrikeHit" x-cloak class="bg-red-50 border border-red-300 rounded p-3">
+                        <div class="font-bold text-red-800 mb-2">MISSED</div>
+                    </div>
+
+                    {# Opponent's roll input (always shown after strike) #}
+                    <div class="bg-parchment rounded p-3 space-y-2">
+                        <label class="block text-sm font-medium">Opponent's iaijutsu roll total:</label>
+                        <div class="flex gap-2">
+                            <input type="number" x-model="duelOpponentRoll" min="0" placeholder="Enter total"
+                                   class="w-32 border rounded px-2 py-1.5 text-sm">
+                            <button type="button" @click="duelApplyOpponentRoll()"
+                                    :disabled="!duelOpponentRoll"
+                                    class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                                Apply Roll
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {# ── DAMAGE RESULT ── #}
+                <div x-show="duelPhase === 'damage-result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Damage dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'dd'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="font-bold text-2xl text-accent" x-text="duelDamageTotal + ' damage'"></div>
+                    </div>
+
+                    {# If opponent also needs to resolve #}
+                    <div x-show="duelOpponentRoll && !duelOpponentHit" x-cloak>
+                        <p class="text-sm text-ink/70">Opponent missed. Duel continues to kenjutsu.</p>
+                        <button type="button" @click="duelOpen = false"
+                                class="mt-2 bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">Close</button>
+                    </div>
+                    <div x-show="!duelOpponentRoll" x-cloak>
+                        <p class="text-sm text-ink/70">Enter opponent's roll to continue.</p>
+                        <div class="flex gap-2 mt-2">
+                            <input type="number" x-model="duelOpponentRoll" min="0" placeholder="Opponent's total"
+                                   class="w-32 border rounded px-2 py-1.5 text-sm">
+                            <button type="button" @click="duelApplyOpponentRoll()"
+                                    :disabled="!duelOpponentRoll"
+                                    class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                                Apply Roll
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {# ── OPPONENT DAMAGE + WOUND CHECK ── #}
+                <div x-show="duelPhase === 'opponent-damage'" x-cloak class="space-y-3">
+                    <div class="bg-red-50 border border-red-300 rounded p-3">
+                        <div class="font-bold text-red-800 mb-2">Opponent hit you!</div>
+                        <label class="block text-sm font-medium mb-1">Opponent's damage roll total:</label>
+                        <div class="flex gap-2">
+                            <input type="number" x-model="duelOpponentDamage" min="0" placeholder="Damage"
+                                   class="w-32 border rounded px-2 py-1.5 text-sm">
+                            <button type="button" @click="duelApplyOpponentDamage()"
+                                    :disabled="!duelOpponentDamage"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                                Make Wound Check
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {# ── RESTART (both missed) ── #}
+                <div x-show="duelPhase === 'restart'" x-cloak class="space-y-3">
+                    <div class="bg-parchment rounded p-3">
+                        <div class="font-bold text-ink mb-2">Both duelists missed - resheathe and restart</div>
+                        <p class="text-sm text-ink/70">
+                            <template x-if="duelStrikeRoll >= parseInt(duelOpponentRoll || '0')">
+                                <span class="text-green-700 font-medium">You rolled higher - you receive a free raise (+5) on future iaijutsu rolls.</span>
+                            </template>
+                            <template x-if="duelStrikeRoll < parseInt(duelOpponentRoll || '0')">
+                                <span class="text-red-700 font-medium">Opponent rolled higher - they receive the bonus.</span>
+                            </template>
+                        </p>
+                    </div>
+                    <button type="button" @click="duelRestart()"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                        Start Next Round
+                    </button>
+                </div>
+
+                {# ── DONE ── #}
+                <div x-show="duelPhase === 'done'" x-cloak class="space-y-3">
+                    <p class="text-sm text-ink/70">The iaijutsu duel phase is complete. Normal kenjutsu combat may follow.</p>
+                    <button type="button" @click="duelOpen = false"
+                            class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">Close</button>
+                </div>
+            </div>
+        </div>
+
         <div x-show="open" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
              data-modal="dice-roller"
@@ -1762,6 +2033,27 @@
             // 3rd Dan free raises
             advRaisesConfig: { available: 0, used: 0 },
             raisesSpentThisRoll: 0,
+            // Iaijutsu duel
+            duelOpen: false,
+            duelPhase: 'setup',
+            duelPlayerTN: Math.floor(({{ character.starting_xp }} + {{ character.earned_xp }}) / 10),
+            duelOpponentXP: '',
+            duelOpponentTN: 0,
+            duelContestedDone: false,
+            duelContestedRoll: 0,
+            duelPlayerCanFocus: true,
+            duelOpponentCanFocus: true,
+            duelRestartBonus: 0,
+            duelStrikeRoll: 0,
+            duelStrikeHit: false,
+            duelStrikeExcess: 0,
+            duelOpponentRoll: '',
+            duelOpponentHit: false,
+            duelOpponentDamage: '',
+            duelWeaponRolled: 4,
+            duelWeaponKept: 2,
+            duelDamageTotal: 0,
+            duelVoidSelected: 0,
             // Attack modal
             atkModalOpen: false,
             atkPhase: 'pre',  // 'pre' | 'rolling' | 'result' | 'damage-rolling' | 'damage-result'
@@ -2076,6 +2368,178 @@
             },
             raisesRemainingAdventure() {
                 return Math.max(0, this.advRaisesConfig.available - this.advRaisesConfig.used);
+            },
+
+            // --- Iaijutsu Duel ---
+
+            openDuelModal() {
+                this.duelPhase = 'setup';
+                this.duelPlayerTN = Math.floor(({{ character.starting_xp }} + {{ character.earned_xp }}) / 10);
+                this.duelContestedDone = false;
+                this.duelPlayerCanFocus = true;
+                this.duelOpponentCanFocus = true;
+                this.duelRestartBonus = 0;
+                this.duelVoidSelected = 0;
+                this.duelOpen = true;
+            },
+
+            duelStartContested() {
+                this.duelOpponentTN = Math.floor(parseInt(this.duelOpponentXP || '0') / 10);
+                this.duelPhase = 'contested';
+            },
+
+            async duelRollContested() {
+                const f = { ...this.formulas['knack:iaijutsu'] };
+                // Add duel restart bonus
+                f.flat += this.duelRestartBonus;
+                // Add void spending
+                const voidCount = this.duelVoidSelected;
+                if (voidCount > 0) {
+                    f.rolled += voidCount;
+                    f.kept += voidCount;
+                    f.void_spent = voidCount;
+                    if (f.rolled > 10) { f.kept += f.rolled - 10; f.rolled = 10; }
+                    if (f.kept > 10) { f.flat += 2 * (f.kept - 10); f.kept = 10; }
+                    const options = this.computeVoidOptions();
+                    if (options[voidCount - 1]) this.deductVoidPoints(options[voidCount - 1]);
+                }
+
+                this.duelPhase = 'contested-rolling';
+                this.formula = f;
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                const dice = await window.L7RDice.rollAndAnimate(
+                    f.rolled, f.reroll_tens, this.prefs.dice_animation_enabled, playSound, 'dice-animation-duel'
+                );
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(f.kept, sorted.length);
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = this.keptSum + f.flat;
+                this.duelContestedRoll = this.baseTotal;
+                this.duelContestedDone = true;
+                this.duelPhase = 'contested-result';
+            },
+
+            duelProceedToFocusStrike() {
+                this.duelPhase = 'focus_strike';
+            },
+
+            duelFocus() {
+                if (!this.duelPlayerCanFocus) return;
+                this.duelPlayerTN += 5;
+                this.duelPlayerCanFocus = false;
+                this.duelOpponentCanFocus = true;
+            },
+
+            duelOpponentFocus() {
+                if (!this.duelOpponentCanFocus) return;
+                this.duelOpponentTN += 5;
+                this.duelOpponentCanFocus = false;
+                this.duelPlayerCanFocus = true;
+            },
+
+            async duelRollStrike() {
+                const f = { ...this.formulas['knack:iaijutsu:strike'] };
+                f.flat += this.duelRestartBonus;
+                this.duelPhase = 'strike-rolling';
+                this.formula = f;
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                const dice = await window.L7RDice.rollAndAnimate(
+                    f.rolled, false, this.prefs.dice_animation_enabled, playSound, 'dice-animation-duel'
+                );
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(f.kept, sorted.length);
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = this.keptSum + f.flat;
+                this.duelStrikeRoll = this.baseTotal;
+                const excess = this.duelStrikeRoll - this.duelOpponentTN;
+                this.duelStrikeHit = excess >= 0;
+                this.duelStrikeExcess = excess;
+                this.duelPhase = 'strike-result';
+            },
+
+            duelComputeDamage() {
+                const f = this.formulas['knack:iaijutsu'] || {};
+                const ringVal = f.damage_ring_val || 2;
+                const ringName = f.damage_ring_name || 'Fire';
+                const wR = this.duelWeaponRolled;
+                const wK = this.duelWeaponKept;
+                const extraDice = Math.max(0, this.duelStrikeExcess);
+                let rolled = wR + ringVal + extraDice;
+                let kept = wK;
+                let flat = 0;
+                if (rolled > 10) { kept += rolled - 10; rolled = 10; }
+                if (kept > 10) { flat += 2 * (kept - 10); kept = 10; }
+                const rk = `${rolled},${kept}`;
+                const avg = Math.round((this.atkDamageAvgs[rk] || 0) + flat);
+                return { rolled, kept, flat, avg, extraDice, ringVal, ringName };
+            },
+
+            async duelRollDamage() {
+                const dmg = this.duelComputeDamage();
+                this.duelPhase = 'damage-rolling';
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                const dice = await window.L7RDice.rollAndAnimate(
+                    dmg.rolled, true, this.prefs.dice_animation_enabled, playSound, 'dice-animation-duel'
+                );
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(dmg.kept, sorted.length);
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.duelDamageTotal = this.keptSum + dmg.flat;
+                this.duelPhase = 'damage-result';
+            },
+
+            duelApplyOpponentRoll() {
+                const oppRoll = parseInt(this.duelOpponentRoll || '0');
+                this.duelOpponentHit = oppRoll >= this.duelPlayerTN;
+                if (!this.duelStrikeHit && !this.duelOpponentHit) {
+                    // Both missed - compare rolls, higher gets +5 bonus
+                    if (this.duelStrikeRoll >= oppRoll) {
+                        this.duelRestartBonus += 5;
+                    }
+                    this.duelPhase = 'restart';
+                } else if (this.duelOpponentHit) {
+                    this.duelPhase = 'opponent-damage';
+                } else {
+                    // We hit, they missed - duel over after our damage
+                    this.duelPhase = 'done';
+                }
+            },
+
+            duelApplyOpponentDamage() {
+                const dmg = parseInt(this.duelOpponentDamage || '0');
+                const t = window._trackingBridge;
+                if (t) {
+                    t.lightWounds += dmg;
+                    t.save();
+                }
+                // Open wound check with iaijutsu strike mode
+                this.wcIsStrike = true;
+                this.wcLightWounds = t ? t.lightWounds : dmg;
+                this.wcVoidSelected = 0;
+                this.wcPhase = 'pre';
+                this.wcRaisesSpent = 0;
+                this.wcResultApplied = false;
+                this.wcMaxRaisesPerRoll = 0;
+                this.wcHasDiscretionary = false;
+                // Skip the pre-roll modal and roll directly for iaijutsu wound checks
+                this.rollWoundCheck();
+            },
+
+            duelRestart() {
+                this.duelContestedDone = false;
+                this.duelPlayerCanFocus = true;
+                this.duelOpponentCanFocus = true;
+                this.duelVoidSelected = 0;
+                this.duelPhase = 'contested';
             },
 
             // --- Attack Modal ---
