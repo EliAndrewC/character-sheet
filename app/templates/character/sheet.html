@@ -34,7 +34,7 @@
     </div>
     {% elif character.has_unpublished_changes %}
     <div class="bg-blue-100 border border-blue-400 text-blue-800 rounded px-4 py-2 text-sm">
-        <strong>Draft changes</strong> — This character has been edited since the last version.
+        <strong>Draft changes</strong> — This character has been edited since the last time changes were applied.
     </div>
     {% endif %}
 
@@ -590,9 +590,21 @@
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">Status</h2>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-            <div class="bg-parchment rounded-lg p-3">
+            {% set has_honor_perception = 'virtue' in (character.advantages or []) or 'unconventional' in (character.disadvantages or []) %}
+            <div class="bg-parchment rounded-lg p-3 {{ 'tooltip-trigger relative' if has_honor_perception else '' }}">
                 <div class="text-sm text-ink/60">Honor</div>
                 <div class="text-2xl font-bold">{{ character.honor }}</div>
+                {% if has_honor_perception %}
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs text-left">
+                    <p class="font-medium mb-1">Perceived Honor:</p>
+                    {% if 'virtue' in (character.advantages or []) %}
+                    <p>Virtue: when others use Discern Honor on you, the random adjustment is always positive (you appear more honorable).</p>
+                    {% endif %}
+                    {% if 'unconventional' in (character.disadvantages or []) %}
+                    <p>Unconventional: when others use Discern Honor on you, the random adjustment is always negative (you appear less honorable).</p>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
             {# --- Rank tooltip: awards (non-contextual) + modifiers (contextual) --- #}
             {% set rank_awards = (character.rank_recognition_awards or []) | selectattr('rank_delta') | list %}
@@ -1046,7 +1058,7 @@
     </div>
     {% elif character.has_unpublished_changes %}
     <div class="text-center text-sm text-ink/50 py-2 italic">
-        Draft changes since the last version.
+        Draft changes since the last time changes were applied.
     </div>
     {% endif %}
 
