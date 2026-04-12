@@ -23,9 +23,6 @@
 **Unit tests:** None specific to the auto-grant mechanic.
 **Clicktests:** None specific. General temp void counter tested indirectly via tracking tests.
 
-**Missing:**
-- [ ] Clicktest: Yogo Warden serious wound grants temp VP
-
 ---
 
 ## Temp Void Tracking (Feint)
@@ -53,9 +50,6 @@
 **Questions (ANSWERED):**
 - Yes, the "damage" extra die adds +1k0 (one extra rolled die) to all damage rolls. This needs school-specific handling in the damage formula builder since the generic `_apply_school_technique_bonus()` is not called for damage rolls. Same applies to Kuni Witch Hunter.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for attack/damage/wound_check
-
 ---
 
 ## 2nd Dan
@@ -68,10 +62,6 @@
 
 **Unit tests:** None directly testing the Yogo Warden 2nd Dan free raise on wound checks.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Yogo Warden at 2nd Dan gets +5 flat on wound check formula
-- [ ] Clicktest: wound check modal shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -87,10 +77,6 @@
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
 - This triggers whenever a void point is spent (any usage), not just as a standalone action.
 - Light wound total can presumably be reduced to 0 but not below.
-
-**Missing:**
-- [ ] Unit test: Yogo Warden 3rd Dan VP spending reduces light wounds by 2X
-- [ ] Clicktest: 3rd Dan VP spending button reduces light wound counter
 
 ---
 
@@ -111,10 +97,6 @@
 **Clicktests:**
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
-
-**Missing:**
-- [ ] Unit test: Yogo Warden 4th Dan wound check gets extra +5 per VP spent
-- [ ] Clicktest: wound check at 4th Dan shows enhanced VP bonus
 
 ---
 

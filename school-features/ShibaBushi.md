@@ -32,9 +32,6 @@
 **Unit tests:** None specific to Shiba 1st Dan.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for double_attack/parry/wound_check
-
 ---
 
 ## 2nd Dan
@@ -47,10 +44,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Shiba at 2nd Dan gets +5 flat on parry formula
-- [ ] Clicktest: parry roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -80,9 +73,6 @@
 - `test_dice.py::TestSchoolAbilities::test_shiba_bushi_4th_dan_wound_check_3k1` - verifies +3k1 on wound checks at 4th Dan
 - `test_dice.py::TestSchoolAbilities::test_shiba_bushi_below_4th_dan_no_3k1` - verifies no bonus below 4th Dan
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest verifying wound check modal displays the 3k1 bonus
 
 ---
 

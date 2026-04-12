@@ -29,10 +29,6 @@
 
 **Clicktests:** `test_sheet_js_errors.py:19` includes `isawa_ishi` in the sheet JS error check list.
 
-**Missing:**
-- [ ] Clicktest: VP max display shows highest ring + school rank
-- [ ] Clicktest: VP spend cap shows min(rings) - 1
-
 ---
 
 ## 1st Dan
@@ -52,9 +48,6 @@
 
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest for 1st Dan skill selection
-
 ---
 
 ## 2nd Dan
@@ -72,9 +65,6 @@
 - `test_dice.py::TestSchoolAbilities::test_flexible_second_dan_free_raise`
 
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest for 2nd Dan skill selection
 
 ---
 

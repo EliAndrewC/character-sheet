@@ -23,9 +23,6 @@
 **Unit tests:** None specific to the auto-grant mechanic.
 **Clicktests:** None specific. General temp void counter tested indirectly via tracking tests.
 
-**Missing:**
-- [ ] Clicktest: Akodo Bushi feint roll adds temp VP
-
 ---
 
 ## 1st Dan
@@ -40,10 +37,8 @@
 **Unit tests:**
 - `test_dice.py::TestBuildAllRollFormulas::test_wound_check_formula_present` - verifies wound check rolled=5 for Akodo (Water 3 + 1 + 1 from 1st Dan)
 
-**Clicktests:** No school-specific clicktest for Akodo 1st Dan extra die.
-
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for attack/double_attack/wound_check
+**Clicktests:**
+- `test_school_abilities.py::test_akodo_1st_dan_formula_display` - verifies extra die in roll formula display for attack/double_attack/wound_check
 
 ---
 
@@ -57,10 +52,6 @@
 
 **Unit tests:** None directly testing the Akodo 2nd Dan free raise on wound checks.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Akodo at 2nd Dan gets +5 flat on wound check formula
-- [ ] Clicktest: wound check modal shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -78,9 +69,6 @@
 - The bonus is a single-use discretionary bonus applied all-at-once after seeing a future attack roll (attack, double attack, or feint)
 - The user decides after seeing the roll whether to apply the entire bonus
 - This is NOT per-adventure free raises; it's a one-shot bonus generated from each wound check
-
-**Missing:**
-- [ ] Clicktest: Akodo 3rd Dan wound check banks bonus and applies to next attack
 
 ---
 

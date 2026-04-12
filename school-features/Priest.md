@@ -34,9 +34,6 @@
 
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest for 1st Dan selection
-
 ---
 
 ## 2nd Dan
@@ -55,9 +52,6 @@
 - `test_dice.py::TestSchoolAbilities::test_priest_below_2nd_dan_no_bonus`
 
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest for Honor bonus roll free raise
 
 ---
 

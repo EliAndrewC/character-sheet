@@ -27,10 +27,6 @@
 - `test_school_selection.py:58` - tests selecting Courtier school.
 - `test_school_rings.py:58` - tests Courtier school ring (fixed Air).
 
-**Missing:**
-- [ ] Clicktest: attack roll modal shows the +Air flat bonus
-- [ ] Clicktest: damage roll modal shows the +Air flat bonus
-
 ---
 
 ## 1st Dan
@@ -46,9 +42,6 @@
 
 **Clicktests:** None specific to 1st Dan formula display.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for tact/manipulation/wound_check
-
 ---
 
 ## 2nd Dan
@@ -63,9 +56,6 @@
 - `test_roll_display.py:335` - `test_courtier_free_raise_on_manipulation` verifies +5 flat on manipulation
 
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest: manipulation roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -112,9 +102,6 @@
 
 **Unit tests:** None specific to the auto-grant mechanic.
 **Clicktests:** None specific.
-
-**Missing:**
-- [ ] Clicktest: Courtier 4th Dan gains temp VP after successful attack or manipulation
 
 ---
 

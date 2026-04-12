@@ -32,9 +32,6 @@
 
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for attack/bragging/wound_check
-
 ---
 
 ## 2nd Dan
@@ -47,10 +44,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Ikoma at 2nd Dan gets +5 flat on attack formula
-- [ ] Clicktest: attack roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -67,9 +60,6 @@
 
 **Unit tests:** None specific to Ikoma 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest for Ikoma-specific 3rd Dan applicable skills
 
 ---
 
@@ -99,9 +89,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest: damage roll at 4th Dan shows 10-dice floor on unparried attacks
 
 ---
 

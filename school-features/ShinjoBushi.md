@@ -33,11 +33,6 @@
 **Unit tests:** None specific to Shinjo 1st Dan (no test verifies the initiative extra die from 1st Dan).
 **Clicktests:** None school-specific.
 
-**Missing:**
-- [ ] Unit test: Shinjo 1st Dan initiative formula gets +1 rolled die
-- [ ] Unit test: Shinjo 1st Dan parry formula gets +1 rolled die
-- [ ] Clicktest verifying the extra die appears in initiative/double_attack/parry formulas
-
 ---
 
 ## 2nd Dan
@@ -50,10 +45,6 @@
 
 **Unit tests:** None directly testing the Shinjo 2nd Dan free raise on parry.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Shinjo at 2nd Dan gets +5 flat on parry formula
-- [ ] Clicktest: parry modal shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -95,10 +86,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 - No clicktest verifies the highest-action-die-to-1 behavior on the sheet.
 
-**Missing:**
-- [ ] Unit test: Shinjo 4th Dan initiative formula includes `shinjo_4th_dan: True`
-- [ ] Clicktest: Shinjo 4th Dan initiative roll sets highest die to 1
-
 ---
 
 ## 5th Dan
@@ -108,9 +95,6 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `shinjo_bank_parry_excess: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows a "Bank Parry Excess" section after parry rolls with an opponent roll input to compute and bank the excess for future wound checks. Uses the same banked WC excess mechanism as Isawa Duelist 5th Dan.
-
-**Missing:**
-- [ ] Clicktest: wound check at 5th Dan offers parry excess application
 
 ---
 

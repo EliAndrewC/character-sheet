@@ -19,10 +19,6 @@
 **Unit tests:** None.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Unit test: Merchant post-roll VP flag is passed
-- [ ] Clicktest: Merchant can spend VP after seeing roll results
-
 ---
 
 ## Stipend Bonus
@@ -58,9 +54,6 @@
 **Unit tests:** None specific to Merchant 1st Dan.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for interrogation/sincerity/wound_check
-
 ---
 
 ## 2nd Dan
@@ -73,10 +66,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Merchant at 2nd Dan gets +5 flat on interrogation formula
-- [ ] Clicktest: interrogation roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -93,9 +82,6 @@
 
 **Unit tests:** None specific to Merchant 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest for Merchant-specific 3rd Dan applicable skills
 
 ---
 

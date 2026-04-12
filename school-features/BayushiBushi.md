@@ -20,9 +20,6 @@
 **Unit tests:** None specific to the +1k1 per VP spent damage mechanic.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest: Bayushi Bushi attack modal offers VP spending for bonus damage dice
-
 ---
 
 ## Temp Void Tracking
@@ -48,9 +45,6 @@
 **Unit tests:** None specific to Bayushi 1st Dan extra die (tested generically via Akodo in `test_dice.py`).
 **Clicktests:** None school-specific.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for iaijutsu/double_attack/wound_check
-
 ---
 
 ## 2nd Dan
@@ -63,10 +57,6 @@
 
 **Unit tests:** None directly testing the Bayushi 2nd Dan free raise on double attack.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Bayushi at 2nd Dan gets +5 flat on double attack formula
-- [ ] Clicktest: double attack modal shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -81,10 +71,6 @@
 - Damage formula: (attack_skill)k1 with NO extra damage from ring or TN excess.
 - However, the Bayushi special ability (+1k1 per VP spent on the roll) DOES apply. So if attack=4 and 1 VP spent on the feint: damage = 5k2.
 - This is a separate damage roll triggered after a successful feint.
-
-**Missing:**
-- [ ] Unit test: Bayushi 3rd Dan feint rolls include damage
-- [ ] Clicktest: feint roll at 3rd Dan shows damage output
 
 ---
 
@@ -106,9 +92,6 @@
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
-**Missing:**
-- [ ] Clicktest: attack roll after feint at 4th Dan shows the free raise bonus
-
 ---
 
 ## 5th Dan
@@ -124,9 +107,6 @@
 - `test_dice.py::TestSchoolAbilities::test_bayushi_below_5th_dan_no_half_lw_flag`
 
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest: wound check failure at 5th Dan shows reduced serious wounds
 
 ---
 

@@ -18,11 +18,6 @@
 **Unit tests:** None.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Implement wound check bonus based on target Taint level
-- [ ] UI for inputting target Taint level when making wound checks
-- [ ] Unit test for wound check formula with Taint bonus
-
 ---
 
 ## 1st Dan
@@ -38,9 +33,6 @@
 - `test_dice.py::TestSchoolAbilities::test_kuni_witch_hunter_1st_dan_damage_extra_die` - verifies +1k0 on damage rolls
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for damage/interrogation/wound_check
-
 ---
 
 ## 2nd Dan
@@ -53,10 +45,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Kuni at 2nd Dan gets +5 flat on interrogation formula
-- [ ] Clicktest: interrogation roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -75,10 +63,6 @@
 **Unit tests:** None specific to Kuni 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Implement Tainted-only restriction for damage free raises
-- [ ] Clicktest for Kuni-specific 3rd Dan applicable skills
-
 ---
 
 ## 4th Dan
@@ -92,10 +76,6 @@
 **Unit tests:** None.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Implement extra action die vs Tainted mechanic
-- [ ] UI for marking targets as Tainted
-
 ---
 
 ## 5th Dan
@@ -107,5 +87,3 @@
 - Client: tracking section shows "Kuni 5th Dan - Reflect Damage" UI with LW input. Reflecting applies half the reflected LW as additional damage to self.
 - The "Tainted-only bonus: attack in current phase adds to reflected damage" is out of scope (combat-phase tracking).
 
-**Missing:**
-- [ ] Clicktest: Kuni 5th Dan reflect damage UI and self-damage calculation

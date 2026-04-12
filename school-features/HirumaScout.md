@@ -31,10 +31,6 @@
 **Unit tests:** None specific to Hiruma 1st Dan initiative logic.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Unit test: Hiruma initiative formula shows extra die from 1st Dan
-- [ ] Clicktest verifying the extra die appears in the roll formula display for initiative/parry/wound_check
-
 ---
 
 ## 2nd Dan
@@ -47,10 +43,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Hiruma at 2nd Dan gets +5 flat on parry formula
-- [ ] Clicktest: parry roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -67,9 +59,6 @@
 - The bonus is a flat +2X added to the next attack AND damage roll.
 - "Against the attacker or someone adjacent to them" means the bonus applies to the next attack against the original attacker or their neighbors.
 
-**Missing:**
-- [ ] Clicktest: Hiruma post-parry bonus appears and applies to next attack and damage
-
 ---
 
 ## 4th Dan
@@ -85,10 +74,6 @@
 **Unit tests:** None specific to Hiruma 4th Dan action dice.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Unit test: initiative formula for Hiruma 4th Dan includes `hiruma_4th_dan: True`
-- [ ] Clicktest: initiative display shows action dice -2 information
-
 ---
 
 ## 5th Dan
@@ -99,5 +84,3 @@
 - Server: `app/routes/pages.py` passes `hiruma_parry_reduce_lw: true` in school_abilities.
 - Client: shows informational note after parry rolls: "the attacker deals 10 fewer light wounds on their next 2 damage rolls."
 
-**Missing:**
-- [ ] Clicktest: Hiruma 5th Dan parry note is displayed after parry rolls
