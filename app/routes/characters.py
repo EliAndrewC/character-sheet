@@ -10,7 +10,7 @@ from app.game_data import (
     DISADVANTAGES, SCHOOLS, SKILLS, SCHOOL_KNACKS, Ring,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User
-from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids
+from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids, get_all_editors
 from app.services.sanitize import sanitize_sections
 from app.services.versions import publish_character, revert_character
 from app.services.xp import calculate_total_xp
@@ -109,10 +109,15 @@ async def update_character(
     if not character:
         return HTMLResponse("Character not found", status_code=404)
 
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
     if not can_edit_character(
         user["discord_id"],
         character.owner_discord_id,
-        character.editor_discord_ids or [],
+        all_editors,
     ):
         return HTMLResponse("You don't have permission to edit this character.", status_code=403)
 
@@ -166,10 +171,15 @@ def delete_character(request: Request, char_id: int, db: Session = Depends(get_d
 
     character = db.query(Character).filter(Character.id == char_id).first()
     if character:
+        owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+        all_editors = get_all_editors(
+            character.editor_discord_ids or [],
+            owner.granted_account_ids or [] if owner else [],
+        )
         if not can_edit_character(
             user["discord_id"],
             character.owner_discord_id,
-            character.editor_discord_ids or [],
+            all_editors,
         ):
             return HTMLResponse("You don't have permission to delete this character.", status_code=403)
         db.delete(character)
@@ -197,11 +207,14 @@ async def autosave_character(
 
     # Check edit permission using account-level grants
     owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
-    owner_granted = owner.granted_account_ids or [] if owner else []
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
     if not can_edit_character(
         user["discord_id"],
         character.owner_discord_id,
-        owner_granted,
+        all_editors,
     ):
         return JSONResponse({"error": "Forbidden"}, status_code=403)
 
@@ -332,11 +345,14 @@ async def set_group(request: Request, char_id: int, db: Session = Depends(get_db
         return JSONResponse({"error": "Not found"}, status_code=404)
 
     owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
-    owner_granted = owner.granted_account_ids or [] if owner else []
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
     if not can_edit_character(
         user["discord_id"],
         character.owner_discord_id,
-        owner_granted,
+        all_editors,
     ):
         return JSONResponse({"error": "Forbidden"}, status_code=403)
 
@@ -377,11 +393,14 @@ async def set_award_source(
         return JSONResponse({"error": "Not found"}, status_code=404)
 
     owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
-    owner_granted = owner.granted_account_ids or [] if owner else []
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
     if not can_edit_character(
         user["discord_id"],
         character.owner_discord_id,
-        owner_granted,
+        all_editors,
     ):
         return JSONResponse({"error": "Forbidden"}, status_code=403)
 
@@ -425,11 +444,14 @@ async def publish_character_route(
         return JSONResponse({"error": "Not found"}, status_code=404)
 
     owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
-    owner_granted = owner.granted_account_ids or [] if owner else []
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
     if not can_edit_character(
         user["discord_id"],
         character.owner_discord_id,
-        owner_granted,
+        all_editors,
     ):
         return JSONResponse({"error": "Forbidden"}, status_code=403)
 
@@ -468,11 +490,14 @@ async def revert_character_route(
         return JSONResponse({"error": "Not found"}, status_code=404)
 
     owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
-    owner_granted = owner.granted_account_ids or [] if owner else []
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
     if not can_edit_character(
         user["discord_id"],
         character.owner_discord_id,
-        owner_granted,
+        all_editors,
     ):
         return JSONResponse({"error": "Forbidden"}, status_code=403)
 
@@ -510,11 +535,14 @@ async def update_version_summary(
         return JSONResponse({"error": "Not found"}, status_code=404)
 
     owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
-    owner_granted = owner.granted_account_ids or [] if owner else []
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
     if not can_edit_character(
         user["discord_id"],
         character.owner_discord_id,
-        owner_granted,
+        all_editors,
     ):
         return JSONResponse({"error": "Forbidden"}, status_code=403)
 
@@ -580,11 +608,14 @@ async def track_state(
         return JSONResponse({"error": "Not found"}, status_code=404)
 
     owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
-    owner_granted = owner.granted_account_ids or [] if owner else []
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
     if not can_edit_character(
         user["discord_id"],
         character.owner_discord_id,
-        owner_granted,
+        all_editors,
     ):
         return JSONResponse({"error": "Forbidden"}, status_code=403)
 

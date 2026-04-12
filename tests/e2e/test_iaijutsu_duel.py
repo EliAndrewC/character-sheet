@@ -257,3 +257,92 @@ def test_duel_strike_shows_opponent_input(page, live_server_url):
     """After a strike, opponent roll input is shown."""
     modal = _get_to_strike_result(page, live_server_url, "DuelOppInput")
     assert modal.locator('input[placeholder="Enter total"]').is_visible()
+
+
+def _get_to_opponent_damage(page, live_server_url, name):
+    """Helper: get to the 'opponent hit you' phase by entering a high opponent roll.
+
+    Handles both cases: player hit (must roll damage first) and player missed.
+    """
+    modal = _get_to_strike_result(page, live_server_url, name)
+    # Check if player hit (damage button visible) or missed
+    hit = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.duelStrikeHit !== undefined) return d.duelStrikeHit;
+        }
+        return false;
+    }""")
+    if hit:
+        # Player hit: roll damage first, then enter opponent roll in damage-result phase
+        modal.locator('button:text("Roll Damage")').click()
+        page.wait_for_function("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.duelPhase === 'damage-result') return true;
+            }
+            return false;
+        }""", timeout=10000)
+        page.wait_for_timeout(300)
+        modal.locator('input[placeholder="Opponent\'s total"]').fill("999")
+    else:
+        # Player missed: enter opponent roll directly in strike-result phase
+        modal.locator('input[placeholder="Enter total"]').fill("999")
+    # Click the visible Apply Roll button
+    modal.locator('button:text("Apply Roll"):visible').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.duelPhase === 'opponent-damage') return true;
+        }
+        return false;
+    }""", timeout=5000)
+    return modal
+
+
+def test_duel_opponent_hit_shows_damage_input(page, live_server_url):
+    """When opponent hits, the damage input and Make Wound Check button appear."""
+    _get_to_opponent_damage(page, live_server_url, "DuelOppHit")
+    # The opponent-damage phase should show damage input and wound check button
+    page.wait_for_selector('input[placeholder="Damage"]', state='visible', timeout=3000)
+    assert page.locator('button:text("Make Wound Check")').is_visible()
+
+
+def test_duel_opponent_hit_shows_player_tn(page, live_server_url):
+    """When opponent hits, the player's TN is shown as reference."""
+    _get_to_opponent_damage(page, live_server_url, "DuelOppTN")
+    page.wait_for_selector('input[placeholder="Damage"]', state='visible', timeout=3000)
+    assert page.locator('text="Your TN to be hit:"').is_visible()
+
+
+def test_duel_opponent_wound_check_opens(page, live_server_url):
+    """Clicking Make Wound Check opens the wound check modal with dice animation."""
+    _get_to_opponent_damage(page, live_server_url, "DuelOppWC")
+    page.locator('input[placeholder="Damage"]').fill("20")
+    page.locator('button:text("Make Wound Check")').click()
+    # The wound check modal should open and show results
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    assert wc_modal.is_visible()
+    # Should show pass or fail result
+    assert wc_modal.locator('text="Wound check PASSED"').is_visible() or \
+           wc_modal.locator('text="Wound check FAILED"').is_visible()
+
+
+def test_duel_katana_weapon_default(page, live_server_url):
+    """The duel setup shows Katana (4k2) instead of weapon input fields."""
+    _create_duelist(page, live_server_url, "DuelKatana")
+    _wait_alpine(page)
+    _open_duel_modal(page)
+    modal = page.locator('[data-modal="iaijutsu-duel"]')
+    assert modal.locator('text="Weapon: Katana (4k2)"').is_visible()

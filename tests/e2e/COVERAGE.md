@@ -52,6 +52,10 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Strike shows dice animation -> `test_iaijutsu_duel.py::test_strike_shows_dice_animation`
 - [x] Strike hit shows Roll Damage button -> `test_iaijutsu_duel.py::test_duel_strike_hit_shows_damage_button`
 - [x] Strike shows opponent roll input -> `test_iaijutsu_duel.py::test_duel_strike_shows_opponent_input`
+- [x] Opponent hit shows damage input -> `test_iaijutsu_duel.py::test_duel_opponent_hit_shows_damage_input`
+- [x] Opponent hit shows player TN reference -> `test_iaijutsu_duel.py::test_duel_opponent_hit_shows_player_tn`
+- [x] Opponent wound check opens from duel -> `test_iaijutsu_duel.py::test_duel_opponent_wound_check_opens`
+- [x] Duel setup shows Katana (4k2) default -> `test_iaijutsu_duel.py::test_duel_katana_weapon_default`
 
 ## JS Error Checks
 
