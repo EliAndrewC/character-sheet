@@ -11,17 +11,16 @@
 
 > You may spend void points after you see the results of your initial roll.
 
-**Status:** NOT implemented. Normally, void points must be declared before rolling. This ability allows the Merchant to see the roll result first and then decide to spend VP. This would require modifying the roll UI to add a post-roll VP spending step.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `merchant_post_roll_vp: true`. Client: after any non-initiative roll, shows VP spending buttons. Each VP adds +1k1 and the roll is re-executed with the additional dice.
 
-**Implementation:** `app/game_data.py:1448` (definition only).
+**Implementation:** `app/game_data.py:1448` (definition), `app/routes/pages.py` (merchant_post_roll_vp flag), `app/templates/character/sheet.html` (post-roll VP buttons).
 
 **Unit tests:** None.
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement post-roll VP spending option for Merchant
-- [ ] Modify the dice roller UI to allow VP spending after seeing results
-- [ ] Unit test for post-roll VP mechanic
+- [ ] Unit test: Merchant post-roll VP flag is passed
 - [ ] Clicktest: Merchant can spend VP after seeing roll results
 
 ---

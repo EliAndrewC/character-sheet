@@ -69,18 +69,16 @@
 
 > When you counterattack, add X free raises to the wound check from the original attack, where X is your attack skill.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented (display note).
+- Server: `app/routes/pages.py` passes `daidoji_counterattack_raises: true` and amount. Client shows note after counterattack rolls: the original attack target gets X free raises on their wound check.
 
 **Questions (ANSWERED):**
 - X is the Daidoji's attack skill rank.
 - The free raises are applied to the wound check of the person who was originally attacked (the person the Daidoji counterattacked for). The original attack still lands, and the target gets X free raises on their wound check.
 
 **Missing:**
-- [ ] Implement the 3rd Dan counterattack-damage-to-wound-check-raises mechanic
-- [ ] Track counterattack damage for wound check bonus calculation
-- [ ] UI for displaying the accumulated free raises on wound checks
-- [ ] Unit test: Daidoji 3rd Dan counterattack damage adds free raises to wound check
-- [ ] Clicktest: wound check after counterattack at 3rd Dan shows bonus free raises
+- [ ] Unit test: Daidoji 3rd Dan counterattack raises flag
+- [ ] Clicktest: counterattack at 3rd Dan shows wound check raises note
 
 ---
 
@@ -112,14 +110,12 @@
 
 > After you or a character for whom you've counterattacked makes a wound check, lower the TN to hit the attacker the next time they are attacked by the amount by which the wound check exceeded the damage roll, to a minimum of 0.
 
-**Status:** NOT implemented. This modifies the attacker's TN after a successful wound check.
+**Status:** Fully implemented (display note).
+- Server: `app/routes/pages.py` passes `daidoji_wc_lower_tn: true`. Client shows note after passed wound checks about lowering the attacker's TN by the wound check excess.
 
 **Missing:**
-- [ ] Implement the 5th Dan wound check excess to attacker TN reduction
-- [ ] Track wound check excess for the TN modification
-- [ ] Display the TN reduction on the next attack
-- [ ] Unit test: Daidoji 5th Dan wound check excess lowers attacker TN
-- [ ] Clicktest: wound check success at 5th Dan shows attacker TN reduction
+- [ ] Unit test: Daidoji 5th Dan wound check TN reduction flag
+- [ ] Clicktest: wound check at 5th Dan shows attacker TN reduction note
 
 ---
 

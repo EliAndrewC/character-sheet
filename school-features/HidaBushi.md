@@ -67,7 +67,8 @@
 
 > You may re-roll 2X dice on each counterattack roll or X dice on any other attack roll, where X is your attack skill. When impaired, your number of extra dice on these rolls is divided in half (round up), but you reroll 10s on these rolls despite being impaired.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `hida_reroll: true` and `hida_reroll_x: attack_skill`. Client: after attack rolls, shows dice selection UI pre-selecting lowest dice <=7. User can toggle selections before confirming reroll. For counterattack: 2X dice. For other attacks: X dice. When impaired: count halved (round up) but 10s rerolled on these dice.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
@@ -75,9 +76,6 @@
 - "When impaired, divided in half (round up), but reroll 10s despite being impaired" - the impaired state halves the reroll count but restores 10-rerolling on these specific rolls.
 
 **Missing:**
-- [ ] Implement the 3rd Dan reroll mechanic for counterattacks and attacks
-- [ ] Handle the impaired variant (half rerolls but reroll 10s)
-- [ ] UI for selecting which dice to reroll or auto-rerolling lowest
 - [ ] Unit test: Hida 3rd Dan reroll mechanics
 - [ ] Clicktest: counterattack/attack at 3rd Dan shows reroll option
 

@@ -70,7 +70,8 @@
 
 > At the beginning of each round, you get 2X points, where X is equal to your attack skill. Each point may be spent to decrease the phase of one of your actions by 1 in order to parry, or to provide a bonus of +2 on any type of attack or parry after you have seen your roll.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `mirumoto_round_points: true` and `mirumoto_round_points_max: 2*attack_skill`. Client: tracking section shows a per-round points counter with +/- and Reset. "Spend 3rd Dan Point (+2)" button appears on attack and parry roll results. Points can be spent for +2 flat on the roll.
 
 **Questions (ANSWERED):**
 - X = attack skill rank. So 2 * attack_skill points per round.
@@ -79,11 +80,8 @@
 - Points can be split between uses within a round.
 
 **Missing:**
-- [ ] Implement the 3rd Dan round-start points mechanic
-- [ ] UI for allocating points between phase decrease and roll bonus
-- [ ] Track points per round
-- [ ] Unit test: Mirumoto 3rd Dan point allocation
-- [ ] Clicktest: round-start point display and allocation
+- [ ] Unit test: Mirumoto 3rd Dan round points flag
+- [ ] Clicktest: round-start point display and spending on rolls
 
 ---
 

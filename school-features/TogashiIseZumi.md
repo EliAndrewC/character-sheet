@@ -63,16 +63,16 @@
 
 > Each day you get 4X free raises which may be applied to athletics rolls, where X is your precepts skill. You may not spend more than X of these free raises on a single roll.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`. It differs from the standard pattern by using 4X instead of 2X and being daily instead of per-adventure.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `togashi_daily_athletics_raises: true`, `togashi_daily_raises_max: 4*precepts`, and `togashi_daily_raises_per_roll: precepts`. Client: shows "Spend Athletics Raise (+5)" button after athletics rolls with per-roll cap of X.
 
 **Questions (ANSWERED):**
 - "Each day" is the frequency, as stated in the rules text.
 - Yes, these raises only apply to athletics rolls.
 
 **Missing:**
-- [ ] Implement 4X daily free raises for athletics
-- [ ] Track daily usage count
-- [ ] UI for spending/tracking daily athletics raises
+- [ ] Unit test: Togashi 3rd Dan daily athletics raises tracking
+- [ ] Clicktest: athletics roll at 3rd Dan shows raise spending button
 
 ---
 

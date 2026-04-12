@@ -74,7 +74,8 @@
 
 > Your feints do Xk1 damage, where X is your attack skill. You don't roll extra damage dice from your Fire or from exceeding the TN, but your Special Ability may increase the damage.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `bayushi_feint_damage: true` and `bayushi_feint_damage_rolled: attack_skill`. Client: `sheet.html` shows "Roll Feint Damage" button after feint rolls. Damage = attack_skill rolled, 1 kept, no ring/TN bonus. Bayushi Special VP bonus (+1k1 per VP) applies to the feint damage.
 
 **Questions (ANSWERED):**
 - Damage formula: (attack_skill)k1 with NO extra damage from ring or TN excess.
@@ -82,8 +83,6 @@
 - This is a separate damage roll triggered after a successful feint.
 
 **Missing:**
-- [ ] Implement the 3rd Dan feint-deals-damage mechanic
-- [ ] Display feint damage information in the feint roll result
 - [ ] Unit test: Bayushi 3rd Dan feint rolls include damage
 - [ ] Clicktest: feint roll at 3rd Dan shows damage output
 

@@ -57,6 +57,17 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Opponent wound check opens from duel -> `test_iaijutsu_duel.py::test_duel_opponent_wound_check_opens`
 - [x] Duel setup shows Katana (4k2) default -> `test_iaijutsu_duel.py::test_duel_katana_weapon_default`
 
+## School-Specific Abilities
+
+- [x] Bayushi 3rd Dan feint damage button -> `test_school_abilities.py::test_bayushi_feint_damage_button`
+- [x] Shiba 3rd Dan parry damage button -> `test_school_abilities.py::test_shiba_parry_damage_button`
+- [x] Feint temp VP button (non-Akodo) -> `test_school_abilities.py::test_feint_temp_vp_button_for_bayushi`
+- [x] Hida 3rd Dan reroll selection UI -> `test_school_abilities.py::test_hida_reroll_selection_appears`
+- [x] Merchant post-roll VP buttons -> `test_school_abilities.py::test_merchant_post_roll_vp_buttons`
+- [x] Mirumoto 3rd Dan round points counter -> `test_school_abilities.py::test_mirumoto_round_points_counter`
+- [x] Daidoji 3rd Dan counterattack flag set -> `test_school_abilities.py::test_daidoji_counterattack_school_flag`
+- [x] Account-level sharing allows edit access -> `test_permissions.py::test_granted_user_can_access_edit_page`
+
 ## JS Error Checks
 
 - [x] No JS errors on sheet page (parametrized across 6 schools) → `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors`
@@ -446,7 +457,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `xp_summary` | XP breakdown on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
 | `version_history` | Version list, revert, inline edit | `test_publish_revert.py`, `test_sheet_display.py`, `test_sheet_advanced.py` |
 | `groups` | Gaming groups, party effects, admin manage groups | `test_groups.py` |
-| `rolls` | Click-to-roll dice, attack modal, wound check, iaijutsu | `test_rolls.py`, `test_attack_modal.py`, `test_wound_check.py`, `test_iaijutsu_duel.py`, `test_sheet_js_errors.py`, `test_void_spending.py` |
+| `rolls` | Click-to-roll dice, attack modal, wound check, iaijutsu, school abilities | `test_rolls.py`, `test_attack_modal.py`, `test_wound_check.py`, `test_iaijutsu_duel.py`, `test_sheet_js_errors.py`, `test_void_spending.py`, `test_school_abilities.py` |
 | `sections` | Rich-text freeform sections | `test_sections.py` |
 
 Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pytestmark` at module level and add it to this table.
