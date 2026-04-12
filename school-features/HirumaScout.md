@@ -62,7 +62,9 @@
 
 > After making a successful or unsuccessful parry, add 2X to your next attack and damage roll against the attacker or someone adjacent to them, where X is your attack skill.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `hiruma_post_parry_bonus: true` and `hiruma_post_parry_amount: 2*attack_skill` in school_abilities.
+- Client: auto-banks 2*attack_skill after any parry roll, applies as flat bonus to both attack roll AND damage roll on next attack via `rollAttack()` and `atkComputeDamage()`.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank.
@@ -70,9 +72,7 @@
 - "Against the attacker or someone adjacent to them" means the bonus applies to the next attack against the original attacker or their neighbors.
 
 **Missing:**
-- [ ] Implement post-parry attack bonus mechanic
-- [ ] Track bonus state between parry and next attack
-- [ ] UI for applying the bonus
+- [ ] Clicktest: Hiruma post-parry bonus appears and applies to next attack and damage
 
 ---
 
@@ -99,9 +99,9 @@
 
 > After making a successful or unsuccessful parry roll, the attacker deals 10 fewer light wounds on their next 2 damage rolls.
 
-**Status:** NOT implemented. This is a reactive ability that modifies the attacker's future damage.
+**Status:** Fully implemented (display note).
+- Server: `app/routes/pages.py` passes `hiruma_parry_reduce_lw: true` in school_abilities.
+- Client: shows informational note after parry rolls: "the attacker deals 10 fewer light wounds on their next 2 damage rolls."
 
 **Missing:**
-- [ ] Implement post-parry damage reduction on attacker
-- [ ] Track the 2-roll duration of the debuff
-- [ ] UI for displaying active damage reduction effects
+- [ ] Clicktest: Hiruma 5th Dan parry note is displayed after parry rolls

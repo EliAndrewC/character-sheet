@@ -349,6 +349,15 @@ def build_knack_formula(
         ring_name = "Earth"
     ring_val = rings.get(ring_name, 2)
 
+    school_id = character_data.get("school", "")
+    dan = compute_dan(knacks) if knacks else 0
+
+    # Shugenja 5th Dan: non-Void rings +1 for commune and spellcasting
+    if (school_id == "shugenja" and dan >= 5
+            and knack_id in ("commune", "spellcasting")
+            and ring_name in ("Air", "Fire", "Earth", "Water")):
+        ring_val += 1
+
     formula = RollFormula(
         label=f"{knack_def.name} ({ring_name})",
         rolled=rank + ring_val,
@@ -357,11 +366,9 @@ def build_knack_formula(
         **_reroll_fields(character_data),
     )
 
-    school_id = character_data.get("school", "")
     _apply_school_technique_bonus(formula, knack_id, school_id, knacks)
 
     # Courtier 5th Dan: +Air to all TN and contested rolls
-    dan = compute_dan(knacks) if knacks else 0
     if school_id == "courtier" and dan >= 5:
         air_val = rings.get("Air", 2)
         _add_flat_bonus(formula, "Courtier 5th Dan (Air)", air_val)

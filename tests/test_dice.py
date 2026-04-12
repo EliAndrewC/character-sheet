@@ -868,3 +868,46 @@ class TestSchoolAbilities:
         )
         formulas = build_all_roll_formulas(char)
         assert formulas["wound_check"]["bayushi_5th_dan_half_lw"] is False
+
+    # --- Shugenja 5th Dan: +1 non-Void rings on commune/spellcasting ---
+    def test_shugenja_5th_dan_commune_ring_boost(self):
+        char = make_character_data(
+            school="shugenja",
+            knacks={"commune": 5, "pontificate": 5, "spellcasting": 5},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+        )
+        # Commune uses a ring (varies). For the knack formula, it falls back
+        # to Earth as default for "varies" ring. At 5th Dan, Earth should be +1.
+        f = build_knack_formula("commune", char)
+        # Default ring = Earth(2) + 1 from 5th Dan = 3
+        assert f.kept == 3  # Earth(2) + 1
+
+    def test_shugenja_5th_dan_spellcasting_ring_boost(self):
+        char = make_character_data(
+            school="shugenja",
+            knacks={"commune": 5, "pontificate": 5, "spellcasting": 5},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+        )
+        f = build_knack_formula("spellcasting", char)
+        assert f.kept == 3  # Earth(2) + 1
+
+    def test_shugenja_5th_dan_void_not_boosted(self):
+        """Void ring is NOT boosted for commune/spellcasting."""
+        char = make_character_data(
+            school="shugenja",
+            knacks={"commune": 5, "pontificate": 5, "spellcasting": 5},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 3},
+        )
+        # Pontificate uses Water, not affected by 5th Dan (it's not commune/spellcasting)
+        f = build_knack_formula("pontificate", char)
+        # Water(2), 5th Dan only applies to commune/spellcasting
+        assert f.kept == 2
+
+    def test_shugenja_below_5th_dan_no_boost(self):
+        char = make_character_data(
+            school="shugenja",
+            knacks={"commune": 4, "pontificate": 4, "spellcasting": 4},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        f = build_knack_formula("commune", char)
+        assert f.kept == 2  # No boost

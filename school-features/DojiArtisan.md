@@ -101,8 +101,9 @@
 
 > When making any TN or contested roll, you receive a bonus equal to (X-10) / 5 where X is the TN or result of your opponent's contested roll.
 
-**Status:** NOT implemented. This is a reactive ability that benefits from the opponent rolling high.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `doji_opponent_bonus: true` in school_abilities.
+- Client: shows opponent result input after any TN/contested roll. Computes `floor((opponent - 10) / 5)` and displays the adjusted total.
 
 **Missing:**
-- [ ] Implement opponent-result-based bonus mechanic
-- [ ] UI for inputting or receiving opponent roll results
+- [ ] Clicktest: Doji 5th Dan opponent bonus input appears and adjusts total

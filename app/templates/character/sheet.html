@@ -1474,6 +1474,20 @@
                         </label>
                     </div>
 
+                    {# Ide Special: banked TN reduction #}
+                    <div x-show="ideBankedTnReduce > 0" x-cloak
+                         class="bg-green-50 border border-green-300 rounded p-2 text-sm text-green-800">
+                        Ide feint bonus: TN reduced by <span x-text="ideBankedTnReduce"></span> (effective TN: <span x-text="Math.max(0, atkEffectiveTN() - ideBankedTnReduce)"></span>)
+                    </div>
+
+                    {# Banked bonus indicators #}
+                    <div x-show="hirumaBankedAttackBonus > 0 || akodoBankedAttackBonus > 0 || bayushiBankedFeintRaise > 0" x-cloak
+                         class="bg-green-50 border border-green-300 rounded p-2 text-xs text-green-800 space-y-0.5">
+                        <div x-show="hirumaBankedAttackBonus > 0" x-cloak>+<span x-text="hirumaBankedAttackBonus"></span> from Hiruma post-parry bonus (attack and damage)</div>
+                        <div x-show="akodoBankedAttackBonus > 0" x-cloak>+<span x-text="akodoBankedAttackBonus"></span> from Akodo wound check excess (attack only)</div>
+                        <div x-show="bayushiBankedFeintRaise > 0" x-cloak>+<span x-text="bayushiBankedFeintRaise"></span> from Bayushi post-feint raise</div>
+                    </div>
+
                     {# Probability table #}
                     <div class="overflow-x-auto">
                         <table class="text-sm w-full">
@@ -1602,6 +1616,16 @@
                                     Undo
                                 </button>
                             </div>
+                        </div>
+
+                        {# Courtier 4th Dan: temp VP after successful attack #}
+                        <div x-show="schoolAbilities.courtier_temp_vp_on_hit" x-cloak
+                             class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                            <button type="button"
+                                    @click="const t = window._trackingBridge; if (t) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
+                                    class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
+                                Gain 1 temp VP (Courtier 4th Dan - once per target)
+                            </button>
                         </div>
 
                         <button type="button" @click="rollDamage()"
@@ -2183,6 +2207,16 @@
                         </div>
                     </div>
 
+                    {# Feint knack: 1 temp VP on success (non-Akodo feint schools) #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.feint_temp_vp" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <button type="button"
+                                @click="const t = window._trackingBridge; if (t) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
+                                class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
+                            Feint succeeded (+1 temp VP)
+                        </button>
+                    </div>
+
                     {# Bayushi 4th Dan: feint grants +5 on next attack #}
                     <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.bayushi_post_feint_raise" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
@@ -2191,6 +2225,57 @@
                                 class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
                             Bank free raise for next attack (+5)
                         </button>
+                    </div>
+
+                    {# Ide Special: feint -> lower target TN by 10 #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.ide_feint_tn_reduce" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <button type="button"
+                                @click="ideBankedTnReduce += 10; $el.disabled = true; $el.textContent = 'Banked -10 TN for next attack';"
+                                class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
+                            Bank -10 TN on target (Ide Special)
+                        </button>
+                    </div>
+
+                    {# Courtier 4th Dan: temp VP after successful manipulation #}
+                    <div x-show="phase === 'done' && currentRollKey === 'skill:manipulation' && schoolAbilities.courtier_temp_vp_on_hit" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <button type="button"
+                                @click="const t = window._trackingBridge; if (t) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
+                                class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
+                            Gain 1 temp VP (Courtier 4th Dan - once per target)
+                        </button>
+                    </div>
+
+                    {# Togashi 4th Dan: reroll contested roll #}
+                    <div x-show="phase === 'done' && schoolAbilities.togashi_reroll_contested && !luckyUsedThisRoll" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <button type="button" @click="_saveLuckyPrev(); runRoll().then(() => _checkLuckyResult(false))"
+                                class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
+                            Reroll (Togashi 4th Dan)
+                        </button>
+                    </div>
+
+                    {# Hiruma 5th Dan: parry note about -10 LW on attacker #}
+                    <div x-show="phase === 'done' && currentRollKey === 'parry' && schoolAbilities.hiruma_parry_reduce_lw" x-cloak
+                         class="bg-ink/5 rounded p-2 text-xs text-ink/70">
+                        Hiruma 5th Dan: the attacker deals 10 fewer light wounds on their next 2 damage rolls.
+                    </div>
+
+                    {# Doji 5th Dan: bonus from opponent's result #}
+                    <div x-show="phase === 'done' && schoolAbilities.doji_opponent_bonus" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs">Opponent's TN or contested result:</label>
+                            <input type="number" x-model.number="dojiOpponentResult" min="0"
+                                   class="w-20 border rounded px-2 py-1 text-sm text-center">
+                            <span class="text-xs" x-show="dojiOpponentResult >= 10" x-cloak>
+                                +<span x-text="Math.floor((dojiOpponentResult - 10) / 5)"></span> bonus
+                            </span>
+                        </div>
+                        <div x-show="dojiOpponentResult >= 10" x-cloak class="text-xs text-ink/60 mt-1">
+                            Adjusted total: <span class="font-bold" x-text="baseTotal + Math.floor(((dojiOpponentResult || 0) - 10) / 5)"></span>
+                        </div>
                     </div>
 
                     {# Lucky reroll: original was higher (non-initiative) #}
@@ -2485,6 +2570,10 @@
             bayushiBankedFeintRaise: 0,
             bankedWcExcess: 0,
             shinjoParryOpponentRoll: 0,
+            hirumaBankedAttackBonus: 0,
+            akodoBankedAttackBonus: 0,
+            ideBankedTnReduce: 0,
+            dojiOpponentResult: 0,
 
             init() {
                 try {
@@ -2823,8 +2912,13 @@
                         // Player enters the excess manually or we show a prompt.
                         // For now we store roll total so it can be used.
                     }
+                    // Hiruma 3rd Dan: bank 2*attack for next attack and damage after parry
+                    if (key === 'parry' && this.schoolAbilities.hiruma_post_parry_bonus) {
+                        this.hirumaBankedAttackBonus = this.schoolAbilities.hiruma_post_parry_amount || 0;
+                    }
                     // Akodo Special: feint roll triggers temp VP (success/failure decided by user)
                     // Bayushi 4th Dan: feint triggers banked +5 for next attack
+                    // Ide Special: feint triggers TN reduction
                     // These are handled in the result display via buttons (see template below)
                 }
 
@@ -3106,7 +3200,16 @@
                 const ringName = f.damage_ring_name || 'Fire';
                 let extraR = (f.damage_extra_rolled || 0);
                 let extraK = (f.damage_extra_kept || 0);
-                const flat = f.damage_flat_bonus || 0;
+                let flat = f.damage_flat_bonus || 0;
+                // Hiruma 3rd Dan: +2X on damage roll after parry
+                if (f.hiruma_parry_bonus) { flat += f.hiruma_parry_bonus; }
+
+                // Bayushi Special: +1k1 per VP spent on the attack roll
+                const bayushiVpDmg = this.schoolAbilities.bayushi_vp_damage ? (f.void_spent || 0) : 0;
+                if (bayushiVpDmg > 0) {
+                    extraR += bayushiVpDmg;
+                    extraK += bayushiVpDmg;
+                }
 
                 let totalExtra = extraDice;
                 if (isLunge) totalExtra += 1;
@@ -3135,7 +3238,9 @@
                 let rolled = wR + ringVal + extraR + totalExtra;
                 let kept = wK + extraK;
                 const parts = [`${wR}k${wK} weapon`, `+${ringVal}k0 from ${ringName}`];
-                if (extraR > 0 || extraK > 0) parts.push(`+${extraR}k${extraK} from school`);
+                if (bayushiVpDmg > 0) parts.push(`+${bayushiVpDmg}k${bayushiVpDmg} from VP (Bayushi Special)`);
+                const schoolR = extraR - bayushiVpDmg, schoolK = extraK - bayushiVpDmg;
+                if (schoolR > 0 || schoolK > 0) parts.push(`+${schoolR}k${schoolK} from school`);
                 if (extraDice > 0) parts.push(`+${extraDice}k0 extra from attack roll`);
                 if (isLunge) parts.push('+1k0 from Lunge');
                 if (isDoubleAttack && failedParry) parts.push('+2k0 from Double Attack (failed parry)');
@@ -3190,6 +3295,26 @@
                     this.bayushiBankedFeintRaise = 0;
                 }
 
+                // Hiruma 3rd Dan: apply banked post-parry bonus
+                if (this.hirumaBankedAttackBonus > 0) {
+                    formula.flat += this.hirumaBankedAttackBonus;
+                    formula.hiruma_parry_bonus = this.hirumaBankedAttackBonus;
+                    this.hirumaBankedAttackBonus = 0;
+                }
+
+                // Akodo 3rd Dan: apply banked wound check excess bonus
+                if (this.akodoBankedAttackBonus > 0) {
+                    formula.flat += this.akodoBankedAttackBonus;
+                    formula.akodo_wc_bonus = this.akodoBankedAttackBonus;
+                    this.akodoBankedAttackBonus = 0;
+                }
+
+                // Ide Special: apply banked TN reduction
+                if (this.ideBankedTnReduce > 0) {
+                    formula.ide_tn_reduce = this.ideBankedTnReduce;
+                    this.ideBankedTnReduce = 0;
+                }
+
                 if (voidCount > 0) {
                     formula.rolled += voidCount;
                     formula.kept += voidCount;
@@ -3233,7 +3358,8 @@
                 this.atkConvictionSpent = 0;
                 this.atkFailedParry = false;
 
-                const effectiveTN = this.atkEffectiveTN();
+                const ideTnReduce = formula.ide_tn_reduce || 0;
+                const effectiveTN = Math.max(0, this.atkEffectiveTN() - ideTnReduce);
                 const excess = this.atkRollTotal - effectiveTN;
                 this.atkHit = excess >= 0;
                 this.atkNearMiss = false;
@@ -3577,6 +3703,11 @@
                 // Isawa Duelist 5th Dan: bank wound check excess for future wound check
                 if (this.schoolAbilities.isawa_bank_wc_excess && this.wcPassed && this.wcMargin > 0) {
                     this.bankedWcExcess += this.wcMargin;
+                }
+                // Akodo 3rd Dan: bank floor(margin/5) * attack_skill for future attack
+                if (this.schoolAbilities.akodo_wc_attack_bonus && this.wcPassed && this.wcMargin > 0) {
+                    const bonus = Math.floor(this.wcMargin / 5) * (this.schoolAbilities.akodo_attack_skill || 0);
+                    if (bonus > 0) this.akodoBankedAttackBonus += bonus;
                 }
                 this.wcModalOpen = false;
             },

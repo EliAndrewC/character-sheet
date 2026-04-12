@@ -30,9 +30,9 @@
 
 ## Temp Void Tracking (Feint)
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Yogo Warden also has the feint knack, so temp void tracking is doubly applicable.
-- Feint rolls do NOT automatically grant temporary void points; manual adjustment is required.
+- The feint knack temp VP auto-grant (1 VP on successful feint) is now implemented via `feint_temp_vp` flag. Client shows "Feint succeeded (+1 temp VP)" button after feint rolls.
 
 ---
 

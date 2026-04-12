@@ -11,30 +11,28 @@
 
 > When spending void points on all types of attack rolls, add 1k1 to the damage rolls of those attacks per void point spent.
 
-**Status:** NOT implemented.
-- The damage formula in `build_all_roll_formulas()` does not have any Bayushi-specific logic for adding 1k1 per VP spent on damage.
-- The attack modal does not provide a VP-to-damage mechanic for this school.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `bayushi_vp_damage: true` in school_abilities.
+- Client: `sheet.html` in `atkComputeDamage()` adds +1 rolled and +1 kept to damage per VP spent on the attack roll (`f.void_spent`).
 
-**Implementation:** `app/game_data.py:927` (definition only). No corresponding logic in `dice.py` or templates.
+**Implementation:** `app/game_data.py:927` (definition), `app/routes/pages.py` (bayushi_vp_damage flag), `app/templates/character/sheet.html` (atkComputeDamage).
 
 **Unit tests:** None specific to the +1k1 per VP spent damage mechanic.
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement +1k1 per VP spent on damage rolls in the attack/damage modal
-- [ ] Unit test: Bayushi Bushi damage formula reflects +1k1 per VP spent
 - [ ] Clicktest: Bayushi Bushi attack modal offers VP spending for bonus damage dice
 
 ---
 
 ## Temp Void Tracking
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Bayushi Bushi has the feint knack, so it is included in `SCHOOLS_WITH_TEMP_VOID` via the feint-knack check in `app/game_data.py:2385`.
 - The Temp Void counter appears on the View Sheet page with +/- buttons.
-- Feint rolls do NOT automatically grant temporary void points; manual adjustment is required.
+- The feint knack temp VP auto-grant (1 VP on successful feint) is now implemented via `feint_temp_vp` flag. Client shows "Feint succeeded (+1 temp VP)" button after feint rolls.
 
-**Implementation:** `app/game_data.py:2385` (SCHOOLS_WITH_TEMP_VOID membership), `app/templates/character/sheet.html` (Temp Void counter).
+**Implementation:** `app/game_data.py:2385` (SCHOOLS_WITH_TEMP_VOID membership), `app/templates/character/sheet.html` (Temp Void counter, feint_temp_vp grant).
 
 ---
 
