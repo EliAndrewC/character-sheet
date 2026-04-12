@@ -64,17 +64,13 @@
 
 > Your successful or unsuccessful parry rolls deal (2X)k1 damage, where X is equal to your attack skill. You don't roll extra damage dice from your Fire or from exceeding the TN.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `shiba_parry_damage: true` and `shiba_parry_damage_rolled: 2*attack_skill`. Client: `sheet.html` shows "Roll Parry Damage" button after parry rolls. Damage = (2*attack_skill)k1, no ring/TN bonus.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank.
 - This is a separate damage roll triggered after the parry resolves, since parries don't ordinarily do damage.
 - Damage is strictly (2X)k1 with no modifiers from Fire or TN excess.
-
-**Missing:**
-- [ ] Implement parry-deals-damage mechanic
-- [ ] Determine what X represents and document
-- [ ] Display parry damage in the combat UI
 
 ---
 
@@ -100,8 +96,5 @@
 
 > After you successfully parry, the TN to hit the parried opponent on the next attack directed at them this combat is lowered by the amount by which your parry roll exceeded its TN. This can lower the TN to a negative number.
 
-**Status:** NOT implemented. This is a reactive ability triggered after a successful parry that affects the next attack against that target.
-
-**Missing:**
-- [ ] Implement TN reduction after successful parry
-- [ ] UI for displaying/tracking the TN reduction
+**Status:** Fully implemented (display note).
+- Server: `app/routes/pages.py` passes `shiba_parry_lower_tn: true`. Client shows informational note after parry rolls about lowering the attacker's TN by the parry excess.

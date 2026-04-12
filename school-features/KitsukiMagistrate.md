@@ -103,9 +103,9 @@
 
 > Your presence is so overwhelming that the Air, Fire and Water rings of chosen characters are reduced by one. You may do this to any one character, or you may do it to multiple characters so long as the sum of their experience does not exceed your experience. This does not work during the iaijutsu phase of a duel, and it does not stack with other Kitsuki Magistrates targeting the same character.
 
-**Status:** NOT implemented. This is a debuff ability.
+**Status:** Fully implemented (display note).
+- Server: `app/routes/pages.py` passes `kitsuki_reduce_rings: true`. Client shows informational note after rolls describing the ring reduction ability and its XP-based targeting limit.
 
 **Missing:**
-- [ ] Implement ring reduction debuff mechanic
-- [ ] Experience-based usage limit
-- [ ] UI for applying the debuff to targets
+- [ ] Unit test: Kitsuki 5th Dan ring reduction flag
+- [ ] Clicktest: 5th Dan shows ring reduction note after rolls

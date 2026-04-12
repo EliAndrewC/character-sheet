@@ -506,6 +506,20 @@
             </div>
             {% endif %}
             {% endif %}
+            {% if school_abilities.get('mirumoto_round_points') %}
+            <div class="flex items-center justify-between gap-4 mt-2 pt-2 border-t border-ink/10">
+                <div class="text-sm text-ink/60">3rd Dan Points <span class="text-xs">(per round)</span></div>
+                <div class="flex items-center gap-2" x-data>
+                    <button @click="if (window._diceRoller) window._diceRoller.mirumotoRoundPoints = Math.max(0, window._diceRoller.mirumotoRoundPoints - 1)"
+                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-xs font-bold">-</button>
+                    <span class="text-lg font-bold w-6 text-center" x-text="window._diceRoller?.mirumotoRoundPoints || 0"></span>
+                    <button @click="if (window._diceRoller) window._diceRoller.mirumotoRoundPoints = Math.min({{ school_abilities.get('mirumoto_round_points_max', 0) }}, (window._diceRoller?.mirumotoRoundPoints || 0) + 1)"
+                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-xs font-bold">+</button>
+                    <button @click="if (window._diceRoller) window._diceRoller.mirumotoRoundPoints = {{ school_abilities.get('mirumoto_round_points_max', 0) }}"
+                            class="text-xs text-accent hover:underline ml-1">Reset</button>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Per-Adventure Abilities (right column) -->
@@ -1335,6 +1349,12 @@
                         </div>
                     </div>
 
+                    {# Daidoji 5th Dan: lower attacker TN after wound check #}
+                    <div x-show="schoolAbilities.daidoji_wc_lower_tn && wcPassed" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70 mt-2">
+                        Daidoji 5th Dan: the attacker's TN to be hit is lowered by the wound check excess (<span x-text="wcMargin"></span>) the next time they are attacked, to a minimum of 0.
+                    </div>
+
                     {# FAILED #}
                     <div x-show="!wcPassed" x-cloak class="bg-red-50 border border-red-300 rounded p-3">
                         <div class="font-bold text-red-800 mb-1">Wound check FAILED</div>
@@ -1563,6 +1583,37 @@
                         </div>
                     </div>
 
+                    {# Hida 3rd Dan: reroll dice selection #}
+                    <div x-show="schoolAbilities.hida_reroll && hidaRerollPhase === 'selecting'" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-3 text-sm">
+                        <div class="font-medium text-amber-800 mb-2">
+                            Hida 3rd Dan: select up to <span x-text="hidaRerollMax"></span> dice to reroll
+                            <span x-show="hidaRerollMax !== schoolAbilities.hida_reroll_x" class="text-xs">(impaired: halved but 10s rerolled)</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                            <template x-for="(d, i) in finalDice.filter(d => d.kept)" :key="'hr'+i">
+                                <button type="button"
+                                        @click="if (hidaRerollSelections.includes(i)) { hidaRerollSelections = hidaRerollSelections.filter(x => x !== i); } else if (hidaRerollSelections.length < hidaRerollMax) { hidaRerollSelections.push(i); }"
+                                        class="w-10 h-10 rounded-full border-2 font-mono font-bold text-sm transition-colors"
+                                        :class="hidaRerollSelections.includes(i) ? 'border-accent bg-accent/20 text-accent' : 'border-ink/30 bg-white text-ink'"
+                                        x-text="d.value">
+                                </button>
+                            </template>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button"
+                                    @click="(async () => { const kept = finalDice.filter(d => d.kept); const rerollTens = formula.reroll_tens || (schoolAbilities.hida_reroll && !formula.reroll_tens); const newDice = await _rerollDice(hidaRerollSelections.length, rerollTens, 'dice-animation-atk'); hidaRerollSelections.sort((a,b)=>b-a).forEach((idx, j) => { kept[idx] = { value: newDice[j].value, kept: true }; }); const allKept = kept; keptSum = allKept.reduce((s,d) => s + d.value, 0); baseTotal = keptSum + formula.flat; atkRollTotal = baseTotal; atkRaisesSpent = 0; _atkUpdateHitState(); hidaRerollPhase = 'done'; atkPhase = 'result'; })()"
+                                    :disabled="hidaRerollSelections.length === 0"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs disabled:opacity-30">
+                                Reroll <span x-text="hidaRerollSelections.length"></span> dice
+                            </button>
+                            <button type="button" @click="hidaRerollPhase = 'done'"
+                                    class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-xs">
+                                Skip
+                            </button>
+                        </div>
+                    </div>
+
                     {# HIT #}
                     <div x-show="atkHit" x-cloak class="bg-green-50 border border-green-300 rounded p-3">
                         <div class="font-bold text-green-800 mb-2">
@@ -1618,6 +1669,19 @@
                             </div>
                         </div>
 
+                        {# Mirumoto 3rd Dan: spend points for +2 on attack #}
+                        <div x-show="schoolAbilities.mirumoto_round_points && mirumotoRoundPoints > 0" x-cloak class="mt-2 pt-2 border-t border-green-200">
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button"
+                                        @click="mirumotoRoundPoints--; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState();"
+                                        :disabled="mirumotoRoundPoints <= 0"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend 3rd Dan Point (+2)
+                                </button>
+                                <span class="text-xs text-ink/60" x-text="mirumotoRoundPoints + ' points remaining'"></span>
+                            </div>
+                        </div>
+
                         {# Courtier 4th Dan: temp VP after successful attack #}
                         <div x-show="schoolAbilities.courtier_temp_vp_on_hit" x-cloak
                              class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-sm">
@@ -1626,6 +1690,12 @@
                                     class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
                                 Gain 1 temp VP (Courtier 4th Dan - once per target)
                             </button>
+                        </div>
+
+                        {# Daidoji 3rd Dan: counterattack gives free raises #}
+                        <div x-show="schoolAbilities.daidoji_counterattack_raises && atkFormula?.attack_variant === 'counterattack'" x-cloak
+                             class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
+                            Daidoji 3rd Dan: the person you counterattacked for gets +<span x-text="(schoolAbilities.daidoji_counterattack_raises_amount || 0) * 5"></span> (<span x-text="schoolAbilities.daidoji_counterattack_raises_amount || 0"></span> free raises) on their wound check from the original attack.
                         </div>
 
                         <button type="button" @click="rollDamage()"
@@ -2175,6 +2245,36 @@
                         </div>
                     </div>
 
+                    {# Mirumoto 3rd Dan: spend points for +2 on parry/attack in regular roll #}
+                    <div x-show="phase === 'done' && schoolAbilities.mirumoto_round_points && mirumotoRoundPoints > 0 && (currentRollKey === 'parry' || currentRollKey === 'attack')" x-cloak
+                         class="bg-parchment rounded p-2 text-sm">
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    @click="mirumotoRoundPoints--; baseTotal += 2;"
+                                    :disabled="mirumotoRoundPoints <= 0"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                Spend 3rd Dan Point (+2)
+                            </button>
+                            <span class="text-xs text-ink/60" x-text="mirumotoRoundPoints + ' points remaining'"></span>
+                        </div>
+                    </div>
+
+                    {# Togashi 3rd Dan: daily athletics raises #}
+                    <div x-show="phase === 'done' && schoolAbilities.togashi_daily_athletics_raises && currentRollKey?.startsWith('athletics:')" x-cloak
+                         class="bg-parchment rounded p-2 text-sm"
+                         x-data="{ spent: 0 }">
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    @click="if (spent < (schoolAbilities.togashi_daily_raises_per_roll || 0)) { spent++; baseTotal += 5; }"
+                                    :disabled="spent >= (schoolAbilities.togashi_daily_raises_per_roll || 0)"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                Spend Athletics Raise (+5)
+                            </button>
+                            <span class="text-xs text-ink/60" x-text="spent + ' / ' + (schoolAbilities.togashi_daily_raises_per_roll || 0) + ' max per roll'"></span>
+                        </div>
+                        <div class="text-xs text-ink/50 mt-1" x-text="'Daily pool: ' + (schoolAbilities.togashi_daily_raises_max || 0) + ' total'"></div>
+                    </div>
+
                     {# No-reroll note (impaired or iaijutsu strike) - only when a 10 was actually rolled #}
                     <div x-show="formula && !formula.reroll_tens && finalDice.some(d => d.value === 10)"
                          x-cloak class="text-xs italic text-red-700 font-medium">
@@ -2258,7 +2358,7 @@
 
                     {# Hiruma 5th Dan: parry note about -10 LW on attacker #}
                     <div x-show="phase === 'done' && currentRollKey === 'parry' && schoolAbilities.hiruma_parry_reduce_lw" x-cloak
-                         class="bg-ink/5 rounded p-2 text-xs text-ink/70">
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
                         Hiruma 5th Dan: the attacker deals 10 fewer light wounds on their next 2 damage rolls.
                     </div>
 
@@ -2275,6 +2375,61 @@
                         </div>
                         <div x-show="dojiOpponentResult >= 10" x-cloak class="text-xs text-ink/60 mt-1">
                             Adjusted total: <span class="font-bold" x-text="baseTotal + Math.floor(((dojiOpponentResult || 0) - 10) / 5)"></span>
+                        </div>
+                    </div>
+
+                    {# Bayushi 3rd Dan: feint deals Xk1 damage #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.bayushi_feint_damage" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="text-xs text-ink/60 mb-1">Bayushi 3rd Dan: feint deals <span x-text="schoolAbilities.bayushi_feint_damage_rolled"></span>k1 damage (no ring/TN bonus, Bayushi Special VP bonus applies).</div>
+                        <button type="button"
+                                @click="const r = schoolAbilities.bayushi_feint_damage_rolled + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0); const k = 1 + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0); _rerollDice(r, true, null).then(dice => { const s = [...dice].sort((a,b)=>a.value-b.value); const kc = Math.min(k,s.length); const kept = s.slice(s.length-kc); const total = kept.reduce((a,d)=>a+d.value,0); $el.outerHTML = '<div class=\'text-sm font-bold text-accent\'>Feint damage: ' + total + ' (' + r + 'k' + k + ')</div>'; });"
+                                class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
+                            Roll Feint Damage
+                        </button>
+                    </div>
+
+                    {# Shiba 3rd Dan: parry deals (2X)k1 damage #}
+                    <div x-show="phase === 'done' && currentRollKey === 'parry' && schoolAbilities.shiba_parry_damage" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="text-xs text-ink/60 mb-1">Shiba 3rd Dan: parry deals <span x-text="schoolAbilities.shiba_parry_damage_rolled"></span>k1 damage (no ring/TN bonus).</div>
+                        <button type="button"
+                                @click="const r = schoolAbilities.shiba_parry_damage_rolled; _rerollDice(r, true, null).then(dice => { const s = [...dice].sort((a,b)=>a.value-b.value); const kept = s.slice(s.length-1); const total = kept.reduce((a,d)=>a+d.value,0); $el.outerHTML = '<div class=\'text-sm font-bold text-accent\'>Parry damage: ' + total + ' (' + r + 'k1)</div>'; });"
+                                class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
+                            Roll Parry Damage
+                        </button>
+                    </div>
+
+                    {# Shiba 5th Dan: parry lowers opponent TN (display note) #}
+                    <div x-show="phase === 'done' && currentRollKey === 'parry' && schoolAbilities.shiba_parry_lower_tn" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
+                        5th Dan: if this parry succeeded, you've just lowered the attacker's TN to be hit by the amount your parry exceeded their attack roll (their TN may become negative).
+                    </div>
+
+                    {# Daidoji 3rd Dan: counterattack gives X free raises on wound check #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:counterattack' && schoolAbilities.daidoji_counterattack_raises" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
+                        Daidoji 3rd Dan: the person you counterattacked for gets +<span x-text="schoolAbilities.daidoji_counterattack_raises_amount * 5"></span> (<span x-text="schoolAbilities.daidoji_counterattack_raises_amount"></span> free raises) on their wound check from the original attack.
+                    </div>
+
+                    {# Kitsuki 5th Dan: reduce target rings (display note) #}
+                    <div x-show="phase === 'done' && schoolAbilities.kitsuki_reduce_rings" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
+                        Kitsuki 5th Dan: you may reduce chosen characters' Air, Fire, and Water by 1. You may target any one character, or multiple characters whose total XP does not exceed yours. Does not work during iaijutsu duels. Does not stack with other Kitsuki Magistrates.
+                    </div>
+
+                    {# Merchant Special: post-roll VP spending (re-rolls with extra dice) #}
+                    <div x-show="phase === 'done' && schoolAbilities.merchant_post_roll_vp && !formula?.merchant_vp_spent && !formula?.is_initiative" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="text-xs text-ink/60 mb-1">Merchant Special: spend VP after seeing the roll.</div>
+                        <div class="flex flex-wrap gap-1">
+                            <template x-for="opt in computeVoidOptions()" :key="'mv'+opt.count">
+                                <button type="button"
+                                        @click="formula.rolled += opt.count; formula.kept += opt.count; if (formula.rolled > 10) { formula.kept += formula.rolled - 10; formula.rolled = 10; } if (formula.kept > 10) { formula.flat += 2*(formula.kept-10); formula.kept = 10; } formula.void_spent = (formula.void_spent||0) + opt.count; formula.merchant_vp_spent = opt.count; deductVoidPoints(opt); phase = 'rolling'; runRoll();"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-2 py-1 rounded text-xs"
+                                        x-text="'Spend ' + opt.count + ' VP (+' + opt.count + 'k' + opt.count + ')'">
+                                </button>
+                            </template>
                         </div>
                     </div>
 
@@ -2574,6 +2729,10 @@
             akodoBankedAttackBonus: 0,
             ideBankedTnReduce: 0,
             dojiOpponentResult: 0,
+            hidaRerollPhase: '',  // '' | 'selecting' | 'done'
+            hidaRerollSelections: [],
+            hidaRerollMax: 0,
+            mirumotoRoundPoints: 0,
 
             init() {
                 try {
@@ -2638,6 +2797,7 @@
                 });
 
                 window.addEventListener('open-wound-check', () => this.openWoundCheckModal());
+                window._diceRoller = this;
 
                 document.querySelectorAll('[data-roll-key]').forEach(el => {
                     el.addEventListener('click', (ev) => {
@@ -3374,6 +3534,25 @@
                 const excessForDamage = this.atkIsDoubleAttack()
                     ? this.atkRollTotal - this.atkTN : excess;
                 this.atkExtraDice = this.atkHit && !this.atkNearMiss ? Math.max(0, Math.floor(excessForDamage / 5)) : 0;
+
+                // Hida 3rd Dan: offer dice reroll
+                this.hidaRerollPhase = '';
+                if (this.schoolAbilities.hida_reroll) {
+                    const isCounter = formula.attack_variant === 'counterattack';
+                    const isImpaired = !formula.reroll_tens;
+                    let max = isCounter ? 2 * this.schoolAbilities.hida_reroll_x : this.schoolAbilities.hida_reroll_x;
+                    if (isImpaired) max = Math.ceil(max / 2);
+                    this.hidaRerollMax = max;
+                    // Pre-select lowest kept dice with value <= 7
+                    const keptDice = this.finalDice.filter(d => d.kept).map((d, i) => ({ ...d, idx: i }));
+                    keptDice.sort((a, b) => a.value - b.value);
+                    this.hidaRerollSelections = keptDice
+                        .filter(d => d.value <= 7)
+                        .slice(0, max)
+                        .map(d => d.idx);
+                    this.hidaRerollPhase = 'selecting';
+                }
+
                 this.atkPhase = 'result';
             },
 

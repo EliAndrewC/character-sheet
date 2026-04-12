@@ -296,6 +296,33 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "doji_opponent_bonus": character.school == "doji_artisan" and dan >= 5,
         # Hiruma 5th Dan: attacker deals 10 fewer LW after parry (display note)
         "hiruma_parry_reduce_lw": character.school == "hiruma_scout" and dan >= 5,
+        # Bayushi 3rd Dan: feints deal Xk1 damage
+        "bayushi_feint_damage": character.school == "bayushi_bushi" and dan >= 3,
+        "bayushi_feint_damage_rolled": attack_skill if character.school == "bayushi_bushi" and dan >= 3 else 0,
+        # Shiba 3rd Dan: parries deal (2X)k1 damage
+        "shiba_parry_damage": character.school == "shiba_bushi" and dan >= 3,
+        "shiba_parry_damage_rolled": 2 * attack_skill if character.school == "shiba_bushi" and dan >= 3 else 0,
+        # Daidoji 3rd Dan: X free raises to wound check from counterattack
+        "daidoji_counterattack_raises": character.school == "daidoji_yojimbo" and dan >= 3,
+        "daidoji_counterattack_raises_amount": attack_skill if character.school == "daidoji_yojimbo" and dan >= 3 else 0,
+        # Hida 3rd Dan: reroll 2X on counterattack, X on other attacks
+        "hida_reroll": character.school == "hida_bushi" and dan >= 3,
+        "hida_reroll_x": attack_skill if character.school == "hida_bushi" and dan >= 3 else 0,
+        # Togashi 3rd Dan: 4X daily athletics raises (X = precepts skill)
+        "togashi_daily_athletics_raises": character.school == "togashi_ise_zumi" and dan >= 3,
+        "togashi_daily_raises_max": 4 * (char_dict.get("skills") or {}).get("precepts", 0) if character.school == "togashi_ise_zumi" and dan >= 3 else 0,
+        "togashi_daily_raises_per_roll": (char_dict.get("skills") or {}).get("precepts", 0) if character.school == "togashi_ise_zumi" and dan >= 3 else 0,
+        # Merchant Special: spend VP after seeing roll
+        "merchant_post_roll_vp": character.school == "merchant",
+        # Shiba 5th Dan: lower opponent TN after parry (display note)
+        "shiba_parry_lower_tn": character.school == "shiba_bushi" and dan >= 5,
+        # Daidoji 5th Dan: lower attacker TN after wound check (display note)
+        "daidoji_wc_lower_tn": character.school == "daidoji_yojimbo" and dan >= 5,
+        # Kitsuki 5th Dan: reduce target rings (display note)
+        "kitsuki_reduce_rings": character.school == "kitsuki_magistrate" and dan >= 5,
+        # Mirumoto 3rd Dan: 2X points per round
+        "mirumoto_round_points": character.school == "mirumoto_bushi" and dan >= 3,
+        "mirumoto_round_points_max": 2 * attack_skill if character.school == "mirumoto_bushi" and dan >= 3 else 0,
     }
 
     # Compute wound check probability slice for client-side display.
