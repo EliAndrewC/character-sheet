@@ -120,9 +120,6 @@
 **Questions (ANSWERED):**
 - Should the stipend +5 be gated behind 4th Dan? **YES.** The stipend bonus is a 4th Dan technique and should only apply at 4th Dan+. This has been fixed.
 
-**Missing:**
-- [x] ~~**BUG:** Gate the stipend +5 behind 4th Dan (dan >= 4 check in `status.py`)~~ - FIXED
-
 ---
 
 ## 5th Dan

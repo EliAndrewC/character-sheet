@@ -53,8 +53,6 @@
 - Yes, the "damage" extra die adds +1k0 (one extra rolled die) to all damage rolls. This needs school-specific handling in the damage formula builder since the generic `_apply_school_technique_bonus()` is not called for damage rolls. Same applies to Kuni Witch Hunter.
 
 **Missing:**
-- [x] ~~Implement +1k0 on all damage rolls for Yogo Warden (school-specific code in damage formula builder)~~ - DONE
-- [x] ~~Unit test: Yogo Warden 1st Dan gets +1 rolled die on attack, damage, and wound check~~ - `test_dice.py::TestSchoolAbilities::test_yogo_warden_1st_dan_damage_extra_die`
 - [ ] Clicktest verifying the extra die appears in the roll formula display for attack/damage/wound_check
 
 ---
@@ -90,8 +88,6 @@
 - Light wound total can presumably be reduced to 0 but not below.
 
 **Missing:**
-- [x] Implement the 3rd Dan VP-for-light-wound-reduction mechanic
-- [x] UI button on the sheet for spending VP to reduce light wounds
 - [ ] Unit test: Yogo Warden 3rd Dan VP spending reduces light wounds by 2X
 - [ ] Clicktest: 3rd Dan VP spending button reduces light wound counter
 
@@ -116,8 +112,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
 **Missing:**
-- [x] Implement "extra free raise per VP on wound checks" for Yogo Warden 4th Dan
-- [x] Display the additional +5 per VP in the wound check modal
 - [ ] Unit test: Yogo Warden 4th Dan wound check gets extra +5 per VP spent
 - [ ] Clicktest: wound check at 4th Dan shows enhanced VP bonus
 

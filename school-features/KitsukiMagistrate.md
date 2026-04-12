@@ -25,10 +25,6 @@
 **Clicktests:** None.
 
 **Missing:**
-- [x] Implement Water ring substitution for interrogation rolls (use Water instead of the normal ring)
-- [x] Implement +2x Water flat bonus on all attack rolls
-- [x] Unit test: interrogation formula uses Water ring
-- [x] Unit test: attack formula includes +2*Water flat bonus
 - [ ] Clicktest: interrogation roll uses Water ring value
 - [ ] Clicktest: attack roll shows the +2*Water bonus
 

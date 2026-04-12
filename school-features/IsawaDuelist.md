@@ -73,8 +73,6 @@
 - If the attack is parried (successfully or not), the TN penalty is waived.
 
 **Missing:**
-- [x] Implement the TN-trade-for-attack-bonus mechanic
-- [x] UI toggle or button for choosing to trade TN
 - [ ] Track the TN reduction for the next round
 
 ---

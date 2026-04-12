@@ -92,8 +92,6 @@
 **Clicktests:** None.
 
 **Missing:**
-- [x] ~~Implement +3k1 on wound checks at 4th Dan~~ - DONE
-- [x] ~~Unit test for wound check formula showing +3 rolled +1 kept at 4th Dan~~ - `test_dice.py::TestSchoolAbilities::test_shiba_bushi_4th_dan_wound_check_3k1`
 - [ ] Clicktest verifying wound check modal displays the 3k1 bonus
 
 ---

@@ -117,6 +117,3 @@
 - "Not gained from this technique" means VP gained from the 5th Dan itself cannot trigger more temp VP. This prevents the infinite loop.
 - Normal VP and temp VP from other sources can trigger this.
 
-**Missing:**
-- [x] Implement auto-grant temp VP when spending non-technique VP
-- [x] UI for temp VP auto-grant

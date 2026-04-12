@@ -26,8 +26,6 @@
 **Clicktests:** None.
 
 **Missing:**
-- [x] Implement +acting_rank extra rolled dice on attack/parry/wound_check
-- [x] Unit test: attack/parry/wound_check formulas include acting-based extra dice
 - [ ] Clicktest: roll formulas show the acting skill bonus
 
 ---
@@ -126,9 +124,6 @@
 **Questions (ANSWERED):**
 - Should the stipend +5 be gated behind 4th Dan? **YES.** The stipend bonus is a 4th Dan technique and should only apply at 4th Dan+. This has been fixed.
 
-**Missing:**
-- [x] ~~**BUG:** Gate the stipend +5 behind 4th Dan (dan >= 4 check in `status.py`)~~ - FIXED
-
 ---
 
 ## 5th Dan
@@ -139,6 +134,3 @@
 - Server: `app/routes/pages.py` passes `shosuro_add_lowest_3: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` auto-adds the 3 lowest dice values to the total after any TN/contested roll (not initiative). Bonus is displayed in the roll result breakdown.
 
-**Missing:**
-- [x] Implement lowest-three-dice addition mechanic
-- [x] UI for showing the additional dice being added
