@@ -27,19 +27,18 @@ def test_serious_wounds_increment_decrement(page, live_server_url):
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Test")
 
-    section = page.locator('text="Serious Wounds"').locator('..')
-    plus = section.locator('button', has_text="+")
-    minus = section.locator('button', has_text="-")
-    display = section.locator('span.text-2xl')
+    sw_row = page.locator('text="Serious Wounds"').locator('..')
+    plus = sw_row.locator('button', has_text="+")
+    minus = sw_row.locator('button', has_text="-")
 
     plus.click()
     plus.click()
     page.wait_for_timeout(500)
-    assert display.text_content().strip() == "2"
+    assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "2"
 
     minus.click()
     page.wait_for_timeout(500)
-    assert display.text_content().strip() == "1"
+    assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "1"
 
 
 def test_serious_wounds_persist(page, live_server_url):
@@ -51,13 +50,12 @@ def test_serious_wounds_persist(page, live_server_url):
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Test")
 
-    section = page.locator('text="Serious Wounds"').locator('..')
-    section.locator('button', has_text="+").click()
+    sw_row = page.locator('text="Serious Wounds"').locator('..')
+    sw_row.locator('button', has_text="+").click()
     page.wait_for_timeout(500)
     page.reload()
     page.wait_for_selector('text="Serious Wounds"')
-    display = page.locator('text="Serious Wounds"').locator('..').locator('span.text-2xl')
-    assert display.text_content().strip() == "1"
+    assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "1"
 
 
 def test_void_points_persist(page, live_server_url):
@@ -69,13 +67,12 @@ def test_void_points_persist(page, live_server_url):
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Test")
 
-    section = page.locator('text="Void Points"').locator('..')
-    section.locator('button', has_text="+").click()
+    vp_row = page.locator('text="Void Points"').locator('..')
+    vp_row.locator('button', has_text="+").click()
     page.wait_for_timeout(500)
     page.reload()
     page.wait_for_selector('text="Void Points"')
-    display = page.locator('text="Void Points"').locator('..').locator('span.text-2xl')
-    assert display.text_content().strip() == "1"
+    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "1"
 
 
 def test_void_points_max_enforced(page, live_server_url):
@@ -87,9 +84,9 @@ def test_void_points_max_enforced(page, live_server_url):
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Test")
 
-    section = page.locator('text="Void Points"').locator('..')
-    plus = section.locator('button', has_text="+")
-    # Default rings: Air=2, Fire=2, Earth=2, Water=3, Void=2 → max = 2
+    vp_row = page.locator('text="Void Points"').locator('..')
+    plus = vp_row.locator('button', has_text="+")
+    # Default rings: Air=2, Fire=2, Earth=2, Water=3, Void=2 -> max = 2
     plus.click()
     plus.click()
     page.wait_for_timeout(300)

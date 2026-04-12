@@ -1181,8 +1181,7 @@
         {# ── Wound Check Modal ── #}
         <div x-show="wcModalOpen" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
-             data-modal="wound-check"
-             @click.self="wcModalOpen = false">
+             data-modal="wound-check">
             <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-start justify-between mb-3">
                     <h3 class="text-xl font-bold text-accent">Wound Check</h3>
@@ -1410,8 +1409,7 @@
         {# ── Attack Modal ── #}
         <div x-show="atkModalOpen" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
-             data-modal="attack"
-             @click.self="atkModalOpen = false">
+             data-modal="attack">
             <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-start justify-between mb-3">
                     <h3 class="text-xl font-bold text-accent" x-text="(atkFormula?.label || 'Attack').replace(/\s*\(.*\)/, '')"></h3>
@@ -1666,8 +1664,7 @@
         {# ── Iaijutsu Duel Modal ── #}
         <div x-show="duelOpen" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
-             data-modal="iaijutsu-duel"
-             @click.self="duelOpen = false">
+             data-modal="iaijutsu-duel">
             <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-start justify-between mb-3">
                     <h3 class="text-xl font-bold text-accent">Iaijutsu Duel</h3>
@@ -1743,6 +1740,18 @@
                     </div>
                     <div class="bg-ink/5 rounded p-3">
                         <div class="font-bold text-lg">Contested roll: <span class="text-accent" x-text="duelContestedRoll"></span></div>
+                        <div x-show="formula?.void_spent > 0" x-cloak class="text-xs text-ink/70 mt-1">
+                            &bull; +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span>
+                            from <span x-text="formula?.void_spent"></span> spent void point<span x-show="formula?.void_spent > 1">s</span>
+                        </div>
+                        <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="duelRestartBonus"></span> from winning previous round(s)
+                        </div>
+                        <template x-for="b in (formula?.bonuses || [])" :key="b.label">
+                            <div class="text-xs text-ink/70 mt-0.5">
+                                &bull; +<span x-text="b.amount"></span> from <span x-text="b.label"></span>
+                            </div>
+                        </template>
                     </div>
                     <button type="button" @click="duelProceedToFocusStrike()"
                             class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
@@ -1765,7 +1774,7 @@
                     <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-green-700 bg-green-50 rounded p-2">
                         +<span x-text="duelRestartBonus"></span> bonus from winning previous round(s)
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex justify-between">
                         <button type="button" @click="duelFocus()"
                                 :disabled="!duelPlayerCanFocus"
                                 class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
@@ -1777,10 +1786,12 @@
                             Opponent Focuses (+5 to their TN)
                         </button>
                     </div>
-                    <button type="button" @click="duelRollStrike()"
-                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
-                        Strike!
-                    </button>
+                    <div class="text-center">
+                        <button type="button" @click="duelRollStrike()"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                            Strike!
+                        </button>
+                    </div>
                 </div>
 
                 {# ── STRIKE RESULT ── #}
