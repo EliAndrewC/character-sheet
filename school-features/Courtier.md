@@ -137,6 +137,3 @@
 
 **Clicktests:** None.
 
-**Missing:**
-- [x] Implement +Air on all TN and contested rolls
-- [x] Ensure stacking with Special Ability for attack rolls

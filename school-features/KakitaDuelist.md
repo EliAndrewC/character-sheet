@@ -93,8 +93,6 @@
 **Clicktests:** None.
 
 **Missing:**
-- [x] ~~Implement +5 flat bonus on iaijutsu damage rolls at 4th Dan~~ - DONE
-- [x] ~~Unit test for iaijutsu damage formula showing the free raise~~ - `test_dice.py::TestSchoolAbilities::test_kakita_duelist_4th_dan_iaijutsu_damage_bonus`
 - [ ] Clicktest verifying damage modal shows the +5 bonus for iaijutsu attacks
 
 ---

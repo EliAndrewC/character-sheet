@@ -102,10 +102,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7`
 - Plus 6 additional 4th Dan ring state tests
 
-**Missing:**
-- [x] Implement "void points also give free raises on wound checks" for Akodo 4th Dan
-- [x] This should show as an additional +5 per void point in the wound check modal
-
 ---
 
 ## 5th Dan
@@ -116,6 +112,3 @@
 - Server: `app/routes/pages.py` passes `akodo_reflect_damage: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows a "Reflect Damage" section in the wound check result with a VP input and button. Each VP spent deals 10 LW to the attacker (informational - applied on the attacker's sheet manually).
 
-**Missing:**
-- [x] Implement the reflective damage mechanic
-- [x] UI for spending void points after taking damage

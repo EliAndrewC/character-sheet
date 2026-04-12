@@ -126,8 +126,6 @@
 No unit test for the pages.py flag (it's a template context variable), but the behavior is tested through the UI.
 
 **Missing:**
-- [x] Implement the 5th Dan +10 per VP on combat rolls mechanic
-- [x] Modify the void spending UI to show the enhanced bonus for Mirumoto
 - [ ] Clicktest: VP spending on combat rolls at 5th Dan shows +10
 
 ---

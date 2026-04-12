@@ -102,7 +102,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
 **Missing:**
-- [x] Implement "trade 2 SW to reset light wounds" button on the sheet for Hida 4th Dan
 - [ ] Validate the character has >= 2 serious wounds before allowing the trade
 - [ ] Unit test: Hida 4th Dan wound trade mechanic
 - [ ] Clicktest: 4th Dan button trades 2 SW for light wound reset

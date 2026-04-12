@@ -40,7 +40,6 @@
 **Clicktests:** None.
 
 **Missing:**
-- [x] ~~Implement +1k0 on all damage rolls for Kuni Witch Hunter (school-specific code in damage formula builder, same as Yogo Warden)~~ - DONE
 - [ ] Clicktest verifying the extra die appears in the roll formula display for damage/interrogation/wound_check
 
 ---

@@ -102,8 +102,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
 **Missing:**
-- [x] Implement "lunge extra damage die on unsuccessful parry" for Otaku 4th Dan
-- [x] Modify lunge damage formula to include the bonus die
 - [ ] Unit test: Otaku 4th Dan lunge damage includes extra die
 - [ ] Clicktest: lunge damage at 4th Dan shows extra die even after failed parry
 

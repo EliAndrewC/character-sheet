@@ -130,9 +130,6 @@
 **Clicktests:** None.
 
 **Missing:**
-- [x] Implement the 5th Dan half-light-wounds mechanic in wound check resolution
-- [x] Display the modified serious wound calculation in the wound check result
-- [x] Unit test: Bayushi 5th Dan failed wound check uses halved light wounds
 - [ ] Clicktest: wound check failure at 5th Dan shows reduced serious wounds
 
 ---

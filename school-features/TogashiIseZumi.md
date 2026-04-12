@@ -104,6 +104,3 @@
 - Server: `app/routes/pages.py` passes `togashi_heal_sw: true` in school_abilities config when togashi_ise_zumi and dan >= 5.
 - Client: `app/templates/character/sheet.html` shows a "Spend 1 VP to heal 2 SW" button in the tracking section.
 
-**Missing:**
-- [x] Implement void-for-healing mechanic
-- [x] UI button for spending void to heal serious wounds

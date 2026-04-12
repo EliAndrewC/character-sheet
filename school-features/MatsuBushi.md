@@ -75,8 +75,6 @@
 - Remaining question: can multiple VP be spent on a single wound check? (Each adding 3X?)
 
 **Missing:**
-- [x] Implement the 3rd Dan retroactive VP spending on wound checks
-- [x] UI for spending VP after seeing the wound check roll result
 - [ ] Unit test: Matsu 3rd Dan VP spending adds 3X to wound check
 - [ ] Clicktest: wound check result offers VP spending option at 3rd Dan
 
@@ -101,8 +99,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
 **Missing:**
-- [x] Implement the 4th Dan near-miss double attack mechanic
-- [x] Display near-miss conversion in the double attack roll result
 - [ ] Unit test: Matsu 4th Dan double attack near-miss converts to hit
 - [ ] Clicktest: double attack near-miss at 4th Dan shows hit with no bonus damage
 
@@ -117,8 +113,6 @@
 - Client: `app/templates/character/sheet.html` shows an informational note in the damage result: "If this causes serious wounds, the defender's light wounds reset to 15 instead of 0." This is a display-only implementation since the defender's sheet is separate.
 
 **Missing:**
-- [x] Implement the 5th Dan light wound reset mechanic
-- [x] Display the modified light wound outcome in the damage/wound result
 - [ ] Unit test: Matsu 5th Dan sets defender's light wounds to 15 after dealing serious wounds
 - [ ] Clicktest: dealing serious wounds at 5th Dan shows light wound reset to 15
 
