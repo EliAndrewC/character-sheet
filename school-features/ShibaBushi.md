@@ -11,18 +11,12 @@
 
 > You may parry as an interrupt action by spending your lowest 1 action die, and you may parry attacks directed at other characters with no penalty.
 
-**Status:** NOT implemented beyond generic mechanics. The interrupt parry and parry-for-others logic would require combat-phase tracking.
+**Status:** Out of scope - requires combat-phase tracking (interrupt parry spending action die) and positional tracking (parry for others).
 
 **Implementation:** `app/game_data.py:1139-1142` (definition only).
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Implement interrupt parry mechanic (spend lowest action die)
-- [ ] Implement parry-for-others mechanic
-- [ ] Unit tests for special ability
-- [ ] Clicktest for special ability UI
 
 ---
 

@@ -11,23 +11,12 @@
 
 > You may counterattack as an interrupt action by spending only 1 action die, but if you do so then your opponent gets a free raise on their wound check if you hit. You may counterattack for other characters at no penalty.
 
-**Status:** NOT implemented.
-- No code in `dice.py` or templates modifies counterattack behavior for Daidoji Yojimbo.
-- The interrupt-for-1-die mechanic and the attacker's free raise are not tracked anywhere.
-- The "may counterattack for others" mechanic (protecting adjacent allies) has no implementation.
-- Daidoji Yojimbo is NOT in `SCHOOLS_WITH_TEMP_VOID` (no feint knack, no temporary void mentions).
+**Status:** Out of scope - "counterattack for others" requires positional tracking not supported by the app. The interrupt counterattack also requires combat-phase tracking.
 
 **Implementation:** `app/game_data.py:1112` (definition only). No corresponding logic in `dice.py` or templates.
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Implement the interrupt counterattack mechanic (1 action die cost, attacker free raise)
-- [ ] Implement the "counterattack for others" mechanic
-- [ ] UI indicator on the sheet showing both abilities
-- [ ] Unit test: Daidoji counterattack formula reflects interrupt rules
-- [ ] Clicktest: counterattack action shows the 1-die cost, attacker free raise, and ally protection option
 
 ---
 
@@ -86,9 +75,8 @@
 
 > Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. You may choose to take the damage from a hit dealt to an adjacent character before damage has been rolled.
 
-**Status:** Partially implemented.
+**Status:** Partially implemented. Ring raise is fully implemented; "take damage for adjacent character" is out of scope (positional tracking).
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Intercept adjacent character damage before rolling" is NOT implemented. This is the bodyguard mechanic where the Daidoji can take damage meant for an adjacent ally.
 
 **Unit tests:**
 - `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
@@ -97,12 +85,6 @@
 **Clicktests:**
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
-
-**Missing:**
-- [ ] Implement the 4th Dan damage interception mechanic
-- [ ] UI for declaring damage interception for an adjacent character
-- [ ] Unit test: Daidoji 4th Dan damage interception
-- [ ] Clicktest: 4th Dan offers damage interception option
 
 ---
 

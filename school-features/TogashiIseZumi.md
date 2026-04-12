@@ -11,18 +11,12 @@
 
 > Roll either 1 or 3 extra action dice at the beginning of each combat round. If you roll 1 die, it may only be spent on athletics actions; if you roll 3 dice, all of your action dice may only be spent on athletics actions.
 
-**Status:** NOT implemented beyond generic mechanics. This requires combat-round tracking and a choice mechanism for 1 vs 3 extra dice.
+**Status:** Out of scope - requires combat-round tracking and action die restriction mechanics.
 
 **Implementation:** `app/game_data.py:1254-1255` (definition only).
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Implement extra action dice choice (1 or 3) at combat round start
-- [ ] UI for selecting 1 or 3 extra action dice
-- [ ] Unit tests for action dice mechanic
-- [ ] Clicktest for action dice selection
 
 ---
 

@@ -11,7 +11,7 @@
 
 > You may never become Tainted. Roll an extra (X+1)k(X+1) on wound checks, where X is the Shadowlands Taint of the attacker, rounded down to the nearest whole number.
 
-**Status:** NOT implemented. The Taint immunity is a passive narrative rule. The wound check bonus requires knowing the opponent's Taint level, which has no current tracking mechanism.
+**Status:** Partially implemented. Taint immunity is narrative. The Taint-based wound check bonus is not currently implemented (target Taint level tracking deferred).
 
 **Implementation:** `app/game_data.py:1337-1338` (definition only).
 
@@ -19,7 +19,6 @@
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement Taint immunity flag (narrative/display)
 - [ ] Implement wound check bonus based on target Taint level
 - [ ] UI for inputting target Taint level when making wound checks
 - [ ] Unit test for wound check formula with Taint bonus
@@ -103,10 +102,10 @@
 
 > After you take light wounds and resolve your wound check, you may choose to inflict that number of light wounds on the opponent who dealt them and take half that amount yourself. If the opponent has the Shadowlands Taint, then you may also use an attack in the current phase to add to that damage.
 
-**Status:** NOT implemented. This is a reactive ability available against any opponent (not just Tainted). The reflected damage is ADDITIONAL - the Kuni takes the original damage plus half the reflected amount, which triggers an additional wound check. Against Tainted opponents, the Kuni can also attack in the current phase to add to the reflected damage.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `kuni_reflect_damage: true` in school_abilities.
+- Client: tracking section shows "Kuni 5th Dan - Reflect Damage" UI with LW input. Reflecting applies half the reflected LW as additional damage to self.
+- The "Tainted-only bonus: attack in current phase adds to reflected damage" is out of scope (combat-phase tracking).
 
 **Missing:**
-- [ ] Implement reflective damage mechanic (reflect X light wounds to attacker, take X/2 additional yourself)
-- [ ] Additional wound check from the self-inflicted half damage
-- [ ] Tainted-only bonus: attack in current phase adds to reflected damage
-- [ ] UI for triggering reflective damage after wound check
+- [ ] Clicktest: Kuni 5th Dan reflect damage UI and self-damage calculation

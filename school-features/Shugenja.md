@@ -13,14 +13,13 @@
 
 > Your maximum number of void points is equal to your highest ring plus your school rank. You regain a number of void points equal to your lowest Ring after a full night's rest, and one void point per 2 hours for a partial night. However, you may not spend more void points on any one roll than your lowest Ring minus 1.
 
-**Status:** Partially implemented (same as Isawa Ishi).
-- VP spend cap (lowest ring - 1) is implemented in `pages.py:211`: `void_spend_cap = void_max - (1 if character.school in ("shugenja", "isawa_ishi") else 0)`.
-- VP max (highest ring + school rank) is implemented in `game_data.py:872-873` via `void_points_max_shugenja()`.
+**Status:** Fully implemented (same as Isawa Ishi).
+- VP max (highest ring + school rank) is implemented in `game_data.py:872-873` via `void_points_max_shugenja()`. `app/routes/pages.py` uses `void_points_max_shugenja()` for Shugenja VP max display.
+- VP spend cap (`min(rings) - 1`) is computed in `app/routes/pages.py` for shugenja/isawa_ishi schools.
 - VP regen (lowest ring per night) is implemented in `game_data.py:882-884` via `void_regen_per_night_shugenja()`.
-- Note: same implementation concerns as Isawa Ishi regarding VP max display.
 
 **Implementation:**
-- `app/routes/pages.py:211` (spend cap -1 for shugenja/isawa_ishi)
+- `app/routes/pages.py` (VP max via `void_points_max_shugenja()`, spend cap via `min(rings) - 1`)
 - `app/game_data.py:872-873` (`void_points_max_shugenja`)
 - `app/game_data.py:882-884` (`void_regen_per_night_shugenja`)
 - `app/game_data.py:887-889` (`void_spend_cap_shugenja`)
@@ -33,9 +32,7 @@
 **Clicktests:** None (school is disabled in UI).
 
 **Missing:**
-- [ ] **POTENTIAL BUG:** Same as Isawa Ishi - verify VP max display on sheet uses `void_points_max_shugenja` not the default.
 - [ ] Enable Shugenja in the school selection dropdown (remove "coming soon" disable)
-- [ ] Verify VP max display on sheet uses `void_points_max_shugenja`
 - [ ] Implement spellcasting UI (commune/spellcasting knacks require element selection)
 
 ---
@@ -44,21 +41,21 @@
 
 > Roll one extra die when rolling precepts or with commune and spellcasting for your chosen element.
 
-**Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the element/skill is player-chosen.
-- `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES`.
-- The chosen element would need to be stored on the character and applied dynamically to commune/spellcasting rolls of that element.
+**Status:** Fully implemented via technique_choices.
+- `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES` (choices are player-selected, not hardcoded).
+- Server: `app/models.py` stores player choices in `technique_choices` JSON column. `app/services/dice.py:_apply_school_technique_bonus()` applies +1 rolled die for chosen skills.
+- Editor UI allows selecting skills.
 
-**Implementation:** `app/game_data.py:2172` (`first_dan_extra_die: None`).
+**Implementation:** `app/game_data.py:2172` (`first_dan_extra_die: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
 
-**Unit tests:** None.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_extra_die`
+- `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_no_choice_no_bonus`
+
 **Clicktests:** None (school is disabled in UI).
 
 **Missing:**
-- [ ] Implement UI for selecting element for 1st Dan extra die
-- [ ] Store chosen element on the character model
-- [ ] Apply extra die to precepts or commune/spellcasting for chosen element
-- [ ] Unit test for flexible 1st Dan with chosen element
-- [ ] Clicktest for 1st Dan element selection
+- [ ] Clicktest for 1st Dan element selection (after enabling school)
 
 ---
 
@@ -66,20 +63,20 @@
 
 > You get a free raise when rolling precepts or with commune and spellcasting for your chosen element.
 
-**Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the element/skill is player-chosen.
-- `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented via technique_choices.
+- `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES` (choice is player-selected, not hardcoded).
+- Server: `app/models.py` stores player choice in `technique_choices` JSON column. `app/services/dice.py:_apply_school_technique_bonus()` applies +5 flat bonus for the chosen skill.
+- Editor UI allows selecting skill.
 
-**Implementation:** `app/game_data.py:2173` (`second_dan_free_raise: None`).
+**Implementation:** `app/game_data.py:2173` (`second_dan_free_raise: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
 
-**Unit tests:** None.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_flexible_second_dan_free_raise`
+
 **Clicktests:** None (school is disabled in UI).
 
 **Missing:**
-- [ ] Implement UI for selecting element for 2nd Dan free raise
-- [ ] Store chosen element on the character model
-- [ ] Apply free raise to precepts or commune/spellcasting for chosen element
-- [ ] Unit test for flexible 2nd Dan with chosen element
-- [ ] Clicktest for 2nd Dan element selection
+- [ ] Clicktest for 2nd Dan element selection (after enabling school)
 
 ---
 
@@ -108,16 +105,11 @@
 
 > Raise your current and maximum Ring of your chosen element by 1. Raising that Ring now costs 5 fewer XP. You may cast one spell per round as an interrupt action.
 
-**Status:** Partially implemented.
+**Status:** Partially implemented. Ring raise is fully implemented; "cast one spell per round as an interrupt action" is out of scope (combat-phase tracking).
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring (which represents the chosen element).
-- "Cast one spell per round as an interrupt action" is NOT implemented. This is a combat-phase mechanic requiring spellcasting support.
 
 **Unit tests:** None.
 **Clicktests:** None (school is disabled in UI).
-
-**Missing:**
-- [ ] Implement interrupt spellcasting (once per round)
-- [ ] UI for interrupt spell casting during combat
 
 ---
 

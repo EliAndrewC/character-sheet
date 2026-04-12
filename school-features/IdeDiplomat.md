@@ -29,20 +29,20 @@
 
 > Roll one extra die on precepts and any two rolls of your choice.
 
-**Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the two roll types are player-chosen.
-- `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES`.
-- The "chosen roll types" would need to be stored on the character and applied dynamically.
+**Status:** Fully implemented via technique_choices.
+- `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES` (choices are player-selected, not hardcoded).
+- Server: `app/models.py` stores player choices in `technique_choices` JSON column. `app/services/dice.py:_apply_school_technique_bonus()` applies +1 rolled die for chosen skills.
+- Editor UI allows selecting skills.
 
-**Implementation:** `app/game_data.py:2114` (`first_dan_extra_die: None`).
+**Implementation:** `app/game_data.py:2114` (`first_dan_extra_die: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
 
-**Unit tests:** None.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_extra_die`
+- `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_no_choice_no_bonus`
+
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement UI for selecting two roll types for 1st Dan extra die
-- [ ] Store chosen roll types on the character model
-- [ ] Apply chosen extra die in roll formula computation
-- [ ] Unit test for flexible 1st Dan with chosen skills
 - [ ] Clicktest for 1st Dan skill selection
 
 ---
@@ -51,19 +51,19 @@
 
 > You get a free raise on any type of roll of your choice.
 
-**Status:** NOT implementable via generic `SCHOOL_TECHNIQUE_BONUSES` because the roll type is player-chosen.
-- `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented via technique_choices.
+- `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES` (choice is player-selected, not hardcoded).
+- Server: `app/models.py` stores player choice in `technique_choices` JSON column. `app/services/dice.py:_apply_school_technique_bonus()` applies +5 flat bonus for the chosen skill.
+- Editor UI allows selecting skill.
 
-**Implementation:** `app/game_data.py:2115` (`second_dan_free_raise: None`).
+**Implementation:** `app/game_data.py:2115` (`second_dan_free_raise: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
 
-**Unit tests:** None.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_flexible_second_dan_free_raise`
+
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement UI for selecting roll type for 2nd Dan free raise
-- [ ] Store chosen roll type on the character model
-- [ ] Apply chosen free raise in roll formula computation
-- [ ] Unit test for flexible 2nd Dan with chosen skill
 - [ ] Clicktest for 2nd Dan skill selection
 
 ---
@@ -72,7 +72,10 @@
 
 > After seeing the result of any TN or contested skill roll, you may spend a void point to subtract Xk1 from the roll, where X is equal to your tact skill. You know the result of all TN and contested rolls except sincerity and interrogation.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `ide_subtract_roll: true` and `ide_subtract_x: tact_skill` in school_abilities.
+- Client: tracking section shows "Ide 3rd Dan - Subtract from Roll" button. Spending 1 VP rolls Xk1 (X = tact skill) and displays the result to subtract from an opponent's roll.
+- "You know the result of all TN and contested rolls except sincerity and interrogation" is an information display mechanic (not encoded).
 
 **Questions (ANSWERED):**
 - X is the tact skill rank (as stated in the rules text).
@@ -80,10 +83,7 @@
 - "You know the result of all TN and contested rolls except sincerity and interrogation" is an information display mechanic.
 
 **Missing:**
-- [ ] Implement VP-powered result subtraction mechanic
-- [ ] Implement contested result visibility (all except sincerity/interrogation)
-- [ ] UI for spending VP to subtract from rolls
-- [ ] UI for displaying known contested results
+- [ ] Clicktest: Ide 3rd Dan subtract-from-roll button and VP spending
 
 ---
 

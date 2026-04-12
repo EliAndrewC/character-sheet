@@ -911,3 +911,66 @@ class TestSchoolAbilities:
         )
         f = build_knack_formula("commune", char)
         assert f.kept == 2  # No boost
+
+    # --- Priest 2nd Dan: +5 on Honor bonus rolls (self) ---
+    def test_priest_2nd_dan_bragging_bonus(self):
+        char = make_character_data(
+            school="priest",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+            skills={"bragging": 2},
+        )
+        f = build_skill_formula("bragging", char)
+        assert any("Priest 2nd Dan" in b["label"] and b["amount"] == 5 for b in f.bonuses)
+
+    def test_priest_2nd_dan_sincerity_conditional(self):
+        char = make_character_data(
+            school="priest",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+            skills={"sincerity": 2},
+        )
+        f = build_skill_formula("sincerity", char)
+        # Priest 2nd Dan on sincerity is conditional (open rolls only)
+        assert any("Priest 2nd Dan" in alt["label"] for alt in f.alternatives)
+
+    def test_priest_below_2nd_dan_no_bonus(self):
+        char = make_character_data(
+            school="priest",
+            knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1},
+            skills={"bragging": 2},
+        )
+        f = build_skill_formula("bragging", char)
+        assert not any("Priest" in b.get("label", "") for b in f.bonuses)
+
+    # --- Flexible 1st/2nd Dan technique choices ---
+    def test_flexible_first_dan_extra_die(self):
+        char = make_character_data(
+            school="ide_diplomat",
+            knacks={"double_attack": 1, "feint": 1, "worldliness": 1},
+            skills={"bragging": 2, "etiquette": 2},
+            technique_choices={"first_dan_choices": ["bragging", "etiquette"]},
+        )
+        f_bragging = build_skill_formula("bragging", char)
+        f_etiquette = build_skill_formula("etiquette", char)
+        # Both chosen skills get +1 rolled die
+        assert f_bragging.rolled == 2 + 2 + 1  # rank + Air + 1st Dan
+        assert f_etiquette.rolled == 2 + 2 + 1
+
+    def test_flexible_first_dan_no_choice_no_bonus(self):
+        char = make_character_data(
+            school="ide_diplomat",
+            knacks={"double_attack": 1, "feint": 1, "worldliness": 1},
+            skills={"bragging": 2},
+        )
+        f = build_skill_formula("bragging", char)
+        # No technique_choices set, no bonus
+        assert f.rolled == 2 + 2  # rank + Air
+
+    def test_flexible_second_dan_free_raise(self):
+        char = make_character_data(
+            school="ide_diplomat",
+            knacks={"double_attack": 2, "feint": 2, "worldliness": 2},
+            skills={"bragging": 2},
+            technique_choices={"second_dan_choice": "bragging"},
+        )
+        f = build_skill_formula("bragging", char)
+        assert any("2nd Dan" in b["label"] and b["amount"] == 5 for b in f.bonuses)

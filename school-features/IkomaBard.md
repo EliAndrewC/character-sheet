@@ -11,17 +11,12 @@
 
 > Once per round before making an attack roll against an opponent, you may force the opponent to spend their next available action die to attempt to parry your attack. The opponent does not get a free raise for pre-declaring the parry.
 
-**Status:** NOT implemented beyond generic mechanics. This is a combat mechanic that forces the opponent to use an action on parrying.
+**Status:** Out of scope - requires forcing opponent to spend action die (combat-phase tracking affecting opponent).
 
 **Implementation:** `app/game_data.py:1504-1506` (definition only).
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Implement forced-parry mechanic on opponent
-- [ ] UI for triggering the forced parry
-- [ ] Combat state tracking for opponent's next action die
 
 ---
 
@@ -114,8 +109,4 @@
 
 > Once per conversation or combat round, you can apply an oppose knack or your Special ability an additional time. You may choose to use your Special Ability after an opponent has made an attack roll against you, in which case their attack is canceled and their attack roll will be used as their parry roll.
 
-**Status:** NOT implemented. This allows reusing the Oppose knack effect or the forced-parry special ability a second time per round. Also allows reactive use of the Special Ability after an opponent's attack roll, canceling their attack and converting it to a parry.
-
-**Missing:**
-- [ ] Implement per-round reuse of Oppose/Special Ability
-- [ ] UI for tracking and triggering the reuse
+**Status:** Out of scope - requires reactive cancellation of opponent's attack roll (combat-phase tracking).

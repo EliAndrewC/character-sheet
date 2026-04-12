@@ -11,21 +11,12 @@
 
 > After an attack against you is completely resolved, you may make a lunge attack at your attacker as an interrupt action at the cost of one action die.
 
-**Status:** NOT implemented.
-- No code in `dice.py` or templates modifies lunge behavior for Otaku Bushi.
-- The interrupt-for-1-die mechanic is not tracked anywhere.
-- Otaku Bushi is NOT in `SCHOOLS_WITH_TEMP_VOID` (no feint knack, no temporary void mentions).
+**Status:** Out of scope - requires combat-phase tracking (interrupt lunge costing 1 action die).
 
 **Implementation:** `app/game_data.py:1032` (definition only). No corresponding logic in `dice.py` or templates.
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Implement the interrupt lunge mechanic (1 action die cost)
-- [ ] UI indicator on the sheet showing this ability is available
-- [ ] Unit test: Otaku Bushi lunge as interrupt action
-- [ ] Clicktest: lunge action shows the 1-die interrupt cost
 
 ---
 
@@ -67,19 +58,12 @@
 
 > After you roll damage against an opponent, increase that character's next X action dice this turn by (6 - that character's Fire) min 1, where X is your attack skill, to a maximum of phase 10.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Out of scope - requires tracking opponent's action dice and modifying them (cross-character combat-phase tracking).
 
 **Questions (ANSWERED):**
 - The increase is (6 - target's Fire), minimum 1.
 - The increase is applied to the target's next X action dice, where X is the Otaku's attack skill.
 - "Maximum of phase 10" means action dice cannot be increased beyond phase 10.
-
-**Missing:**
-- [ ] Implement the 3rd Dan action dice increase mechanic
-- [ ] Track which attacker's action dice are affected
-- [ ] UI for displaying the action dice modification
-- [ ] Unit test: Otaku 3rd Dan increases attacker's action dice
-- [ ] Clicktest: attack result at 3rd Dan shows attacker action dice increase
 
 ---
 
@@ -87,7 +71,7 @@
 
 > Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. When you lunge, you always roll the extra damage die from using lunge even if your attack is unsuccessfully parried.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 - "Lunge always rolls an extra damage die even if unsuccessfully parried" is implemented:
   - Server: `app/routes/pages.py` passes `otaku_lunge_extra_die: true` in school_abilities.

@@ -207,8 +207,16 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
 
     # Compute void points max and void-spend config
     ring_vals = [char_dict["rings"].get(r, 2) for r in ("Air", "Fire", "Earth", "Water", "Void")]
-    void_max = min(ring_vals)
-    void_spend_cap = void_max - (1 if character.school in ("shugenja", "isawa_ishi") else 0)
+    if character.school in ("shugenja", "isawa_ishi"):
+        from app.game_data import void_points_max_shugenja
+        school_rank = min(char_knacks[k]["rank"] for k in char_knacks) if char_knacks else 0
+        void_max = void_points_max_shugenja(
+            char_dict["rings"], school_rank
+        )
+        void_spend_cap = min(ring_vals) - 1  # lowest ring - 1
+    else:
+        void_max = min(ring_vals)
+        void_spend_cap = void_max
     worldliness_max = char_knacks["worldliness"]["rank"] if "worldliness" in char_knacks else 0
     # Mirumoto 5th Dan: VP provides +10 on combat rolls (in addition to +1k1)
     mirumoto_5th_dan_bonus = 10 if character.school == "mirumoto_bushi" and dan >= 5 else 0
@@ -323,6 +331,11 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Mirumoto 3rd Dan: 2X points per round
         "mirumoto_round_points": character.school == "mirumoto_bushi" and dan >= 3,
         "mirumoto_round_points_max": 2 * attack_skill if character.school == "mirumoto_bushi" and dan >= 3 else 0,
+        # Ide Diplomat 3rd Dan: spend VP to subtract Xk1 from someone's roll
+        "ide_subtract_roll": character.school == "ide_diplomat" and dan >= 3,
+        "ide_subtract_x": (char_dict.get("skills") or {}).get("tact", 0) if character.school == "ide_diplomat" and dan >= 3 else 0,
+        # Kuni Witch Hunter 5th Dan: reflect damage
+        "kuni_reflect_damage": character.school == "kuni_witch_hunter" and dan >= 5,
     }
 
     # Compute wound check probability slice for client-side display.
