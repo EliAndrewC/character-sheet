@@ -83,16 +83,18 @@
 
 > Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. You get a free raise to all damage rolls from attacks using iaijutsu.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Free raise on iaijutsu DAMAGE rolls" is NOT implemented. Note: this is specifically on damage rolls from iaijutsu, not on the iaijutsu attack roll itself (which already gets a free raise from 2nd Dan).
+- "Free raise on iaijutsu DAMAGE rolls" is fully implemented via `app/services/dice.py:build_all_roll_formulas()` (iaijutsu damage metadata with +5 flat bonus when school_id == "kakita_duelist" and dan >= 4).
 
-**Unit tests:** None specific to Kakita 4th Dan damage bonus.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_kakita_duelist_4th_dan_iaijutsu_damage_bonus` - verifies +5 flat on iaijutsu damage at 4th Dan
+- `test_dice.py::TestSchoolAbilities::test_kakita_duelist_below_4th_dan_no_damage_bonus` - verifies no bonus below 4th Dan
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement +5 flat bonus on iaijutsu damage rolls at 4th Dan
-- [ ] Unit test for iaijutsu damage formula showing the free raise
+- [x] ~~Implement +5 flat bonus on iaijutsu damage rolls at 4th Dan~~ - DONE
+- [x] ~~Unit test for iaijutsu damage formula showing the free raise~~ - `test_dice.py::TestSchoolAbilities::test_kakita_duelist_4th_dan_iaijutsu_damage_bonus`
 - [ ] Clicktest verifying damage modal shows the +5 bonus for iaijutsu attacks
 
 ---

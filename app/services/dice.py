@@ -210,19 +210,31 @@ def build_skill_formula(
         return None
 
     rings = character_data.get("rings", {})
-    ring_val = rings.get(skill_def.ring.value, 2)
+    school_id = character_data.get("school", "")
+
+    # Kitsuki Magistrate: use Water for interrogation rolls
+    if school_id == "kitsuki_magistrate" and skill_id == "interrogation":
+        ring_name = "Water"
+    else:
+        ring_name = skill_def.ring.value
+    ring_val = rings.get(ring_name, 2)
 
     formula = RollFormula(
-        label=f"{skill_def.name} ({skill_def.ring.value})",
+        label=f"{skill_def.name} ({ring_name})",
         rolled=rank + ring_val,
         kept=ring_val,
         flat=0,
         **_reroll_fields(character_data),
     )
 
-    school_id = character_data.get("school", "")
     knacks = character_data.get("knacks", {}) or {}
     _apply_school_technique_bonus(formula, skill_id, school_id, knacks)
+
+    # Courtier 5th Dan: +Air to all TN and contested rolls
+    dan = compute_dan(knacks) if knacks else 0
+    if school_id == "courtier" and dan >= 5:
+        air_val = rings.get("Air", 2)
+        _add_flat_bonus(formula, "Courtier 5th Dan (Air)", air_val)
 
     # --- Advantage bonuses (free raises = +5 each) ---
     advantages = character_data.get("advantages", []) or []
@@ -348,6 +360,12 @@ def build_knack_formula(
     school_id = character_data.get("school", "")
     _apply_school_technique_bonus(formula, knack_id, school_id, knacks)
 
+    # Courtier 5th Dan: +Air to all TN and contested rolls
+    dan = compute_dan(knacks) if knacks else 0
+    if school_id == "courtier" and dan >= 5:
+        air_val = rings.get("Air", 2)
+        _add_flat_bonus(formula, "Courtier 5th Dan (Air)", air_val)
+
     _finalize_caps(formula)
     return formula
 
@@ -376,6 +394,26 @@ def build_combat_formula(
     school_id = character_data.get("school", "")
     knacks = character_data.get("knacks", {}) or {}
     _apply_school_technique_bonus(formula, which, school_id, knacks)
+
+    dan = compute_dan(knacks) if knacks else 0
+
+    # Kitsuki Magistrate: +2*Water flat on attack rolls
+    if school_id == "kitsuki_magistrate" and which == "attack":
+        water_val = rings.get("Water", 2)
+        _add_flat_bonus(formula, "Kitsuki Magistrate (2x Water)", 2 * water_val)
+
+    # Shosuro Actor: +acting_rank rolled dice on attack and parry
+    if school_id == "shosuro_actor":
+        skills = character_data.get("skills", {}) or {}
+        acting_rank = skills.get("acting", 0)
+        if acting_rank > 0:
+            formula.rolled += acting_rank
+
+    # Courtier 5th Dan: +Air to all TN and contested rolls
+    if school_id == "courtier" and dan >= 5:
+        air_val = rings.get("Air", 2)
+        _add_flat_bonus(formula, "Courtier 5th Dan (Air)", air_val)
+
     _finalize_caps(formula)
     return formula
 
@@ -442,11 +480,28 @@ def build_wound_check_formula(character_data: dict) -> dict:
             flat += FREE_RAISE_VALUE
             bonus_sources.append("+5 from 2nd Dan")
 
+    # Shosuro Actor: +acting_rank rolled dice on wound checks
+    if school_id == "shosuro_actor":
+        skills = character_data.get("skills", {}) or {}
+        acting_rank = skills.get("acting", 0)
+        if acting_rank > 0:
+            rolled += acting_rank
+            bonus_sources.append(f"+{acting_rank} rolled dice from Acting")
+
+    # Shiba Bushi 4th Dan: +3k1 on wound checks
+    if school_id == "shiba_bushi" and dan >= 4:
+        rolled += 3
+        kept += 1
+        bonus_sources.append("+3k1 from 4th Dan")
+
     # Strength of the Earth advantage
     advantages = character_data.get("advantages", []) or []
     if "strength_of_the_earth" in advantages:
         flat += FREE_RAISE_VALUE
         bonus_sources.append("+5 from Strength of the Earth")
+
+    # Bayushi Bushi 5th Dan: halve light wounds for serious wound calculation
+    bayushi_5th_dan_half_lw = school_id == "bayushi_bushi" and dan >= 5
 
     return {
         "label": "Wound Check",
@@ -460,6 +515,7 @@ def build_wound_check_formula(character_data: dict) -> dict:
         "alternatives": [],
         "bonuses": [],
         "adventure_raises_max_per_roll": 0,
+        "bayushi_5th_dan_half_lw": bayushi_5th_dan_half_lw,
     }
 
 
@@ -577,6 +633,11 @@ def build_all_roll_formulas(
         damage_flat_bonus += air_val
         damage_bonus_sources.append(f"+{air_val} from Courtier (Air)")
 
+    # Yogo Warden / Kuni Witch Hunter: +1 rolled die on damage (1st Dan)
+    if school_id in ("yogo_warden", "kuni_witch_hunter") and dan >= 1:
+        damage_extra_rolled += 1
+        damage_bonus_sources.append("+1 rolled die from 1st Dan")
+
     # Brotherhood of Shinsei: +1 rolled +1 kept on unarmed damage (1st Dan)
     if school_id == "brotherhood_of_shinsei_monk" and dan >= 1:
         damage_extra_rolled += 1
@@ -590,14 +651,24 @@ def build_all_roll_formulas(
     def _annotate_attack_type(key: str, formula_dict: dict) -> dict:
         bare = key.split(":", 1)[-1] if ":" in key else key
         if bare in ATTACK_TYPE_KEYS:
+            # Start with shared damage metadata; copy sources list so
+            # per-variant additions don't bleed into other attack types.
+            variant_damage_flat = damage_flat_bonus
+            variant_damage_sources = list(damage_bonus_sources)
+
+            # Kakita Duelist 4th Dan: +5 on iaijutsu damage
+            if school_id == "kakita_duelist" and dan >= 4 and bare == "iaijutsu":
+                variant_damage_flat += FREE_RAISE_VALUE
+                variant_damage_sources.append("+5 from 4th Dan (iaijutsu)")
+
             formula_dict["is_attack_type"] = True
             formula_dict["attack_variant"] = bare
             formula_dict["damage_ring_name"] = damage_ring_name
             formula_dict["damage_ring_val"] = damage_ring_val
-            formula_dict["damage_flat_bonus"] = damage_flat_bonus
+            formula_dict["damage_flat_bonus"] = variant_damage_flat
             formula_dict["damage_extra_rolled"] = damage_extra_rolled
             formula_dict["damage_extra_kept"] = damage_extra_kept
-            formula_dict["damage_bonus_sources"] = damage_bonus_sources
+            formula_dict["damage_bonus_sources"] = variant_damage_sources
             formula_dict["is_bushi"] = is_bushi
             # Courtier also gets +Air flat on attack rolls
             if school_id == "courtier":
@@ -641,6 +712,22 @@ def build_all_roll_formulas(
             if formula is not None:
                 d = _annotate_third_dan(f"knack:{knack_id}", formula.to_dict())
                 out[f"knack:{knack_id}"] = _annotate_attack_type(f"knack:{knack_id}", d)
+
+    # Iaijutsu knack: stamp damage metadata so the duel modal can use it.
+    # Iaijutsu is NOT in ATTACK_TYPE_KEYS (it uses the roll menu, not
+    # attack modal), but its damage metadata is needed for duel damage.
+    if "knack:iaijutsu" in out:
+        iai_flat = damage_flat_bonus
+        iai_sources = list(damage_bonus_sources)
+        if school_id == "kakita_duelist" and dan >= 4:
+            iai_flat += FREE_RAISE_VALUE
+            iai_sources.append("+5 from 4th Dan (iaijutsu)")
+        out["knack:iaijutsu"]["damage_ring_name"] = damage_ring_name
+        out["knack:iaijutsu"]["damage_ring_val"] = damage_ring_val
+        out["knack:iaijutsu"]["damage_flat_bonus"] = iai_flat
+        out["knack:iaijutsu"]["damage_extra_rolled"] = damage_extra_rolled
+        out["knack:iaijutsu"]["damage_extra_kept"] = damage_extra_kept
+        out["knack:iaijutsu"]["damage_bonus_sources"] = iai_sources
 
     # Iaijutsu strike variant (10s never rerolled during the strike)
     if school is not None and "iaijutsu" in school.school_knacks:

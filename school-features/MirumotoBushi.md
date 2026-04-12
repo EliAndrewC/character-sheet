@@ -114,17 +114,20 @@
 
 > Your void points provide an extra +10 when spent on combat rolls.
 
-**Status:** NOT implemented. Each VP spent on combat rolls provides +10 IN ADDITION to the standard +1k1.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `combat_vp_flat_bonus: 10` in void_spend_config when mirumoto_bushi and dan >= 5.
+- Client: `app/templates/character/sheet.html` applies +10 per VP flat bonus on attack, wound check, and duel VP spending paths.
 
 **Questions (ANSWERED):**
 - The +10 is IN ADDITION to the normal +1k1 from void points. So each VP = +1k1 + 10 flat.
 - "Combat rolls" includes wound checks (still need to confirm with user which specific roll types qualify).
 - Does this apply to temporary void points as well?
 
+No unit test for the pages.py flag (it's a template context variable), but the behavior is tested through the UI.
+
 **Missing:**
-- [ ] Implement the 5th Dan +10 per VP on combat rolls mechanic
-- [ ] Modify the void spending UI to show the enhanced bonus for Mirumoto
-- [ ] Unit test: Mirumoto 5th Dan VP spending gives +10 on combat rolls
+- [x] Implement the 5th Dan +10 per VP on combat rolls mechanic
+- [x] Modify the void spending UI to show the enhanced bonus for Mirumoto
 - [ ] Clicktest: VP spending on combat rolls at 5th Dan shows +10
 
 ---

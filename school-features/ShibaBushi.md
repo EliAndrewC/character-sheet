@@ -82,16 +82,18 @@
 
 > Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. You roll an extra 3k1 on wound checks.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Extra 3k1 on wound checks" is NOT implemented. This is a unique bonus beyond the standard 4th Dan ring mechanics.
+- "+3k1 on wound checks" is fully implemented via `app/services/dice.py:build_wound_check_formula()` (school_id == "shiba_bushi" and dan >= 4).
 
-**Unit tests:** None specific to Shiba 4th Dan wound check bonus.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_shiba_bushi_4th_dan_wound_check_3k1` - verifies +3k1 on wound checks at 4th Dan
+- `test_dice.py::TestSchoolAbilities::test_shiba_bushi_below_4th_dan_no_3k1` - verifies no bonus below 4th Dan
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement +3k1 on wound checks at 4th Dan
-- [ ] Unit test for wound check formula showing +3 rolled +1 kept at 4th Dan
+- [x] ~~Implement +3k1 on wound checks at 4th Dan~~ - DONE
+- [x] ~~Unit test for wound check formula showing +3 rolled +1 kept at 4th Dan~~ - `test_dice.py::TestSchoolAbilities::test_shiba_bushi_4th_dan_wound_check_3k1`
 - [ ] Clicktest verifying wound check modal displays the 3k1 bonus
 
 ---

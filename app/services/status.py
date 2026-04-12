@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from app.game_data import CAMPAIGN_STIPEND_RANK, GROUP_EFFECTS
+from app.services.rolls import compute_dan
 
 
 @dataclass
@@ -60,11 +61,13 @@ def compute_effective_status(
             "detail": "base stipend rank 10",
         })
 
-    if school in ("merchant", "shosuro_actor"):
+    knacks = character_data.get("knacks", {}) or {}
+    dan = compute_dan(knacks) if knacks else 0
+    if school in ("merchant", "shosuro_actor") and dan >= 4:
         stipend_rank += 5
         school_name = "Merchant" if school == "merchant" else "Shosuro Actor"
         status.stipend_modifiers.append({
-            "source": school_name,
+            "source": f"{school_name} (4th Dan)",
             "detail": "+5 stipend rank",
         })
 

@@ -30,16 +30,17 @@
 
 > Roll one extra die on damage, interrogation, and wound check rolls.
 
-**Status:** Partially implemented via `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["damage", "interrogation", "wound_check"]`
 - Interrogation and wound check extra die: applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
-- Damage extra die: same issue as Yogo Warden - the `"damage"` entry is present but `_apply_school_technique_bonus()` is not called for damage rolls. Needs +1k0 on all damage rolls via school-specific code.
+- Damage extra die: implemented via school-specific code in `app/services/dice.py` damage section.
 
-**Unit tests:** None specific to Kuni 1st Dan.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_kuni_witch_hunter_1st_dan_damage_extra_die` - verifies +1k0 on damage rolls
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement +1k0 on all damage rolls for Kuni Witch Hunter (school-specific code in damage formula builder, same as Yogo Warden)
+- [x] ~~Implement +1k0 on all damage rolls for Kuni Witch Hunter (school-specific code in damage formula builder, same as Yogo Warden)~~ - DONE
 - [ ] Clicktest verifying the extra die appears in the roll formula display for damage/interrogation/wound_check
 
 ---
