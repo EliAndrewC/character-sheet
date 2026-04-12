@@ -101,20 +101,20 @@
 
 > Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. Once per target per conversation or fight, you get a temporary void point after a successful attack or manipulation roll.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 - Temporary Void Points are tracked (school has `SCHOOLS_WITH_TEMP_VOID` via the technique text mentioning "temporary void").
 - The Temp Void counter appears on the View Sheet page with +/- buttons.
-- However, temp VP are NOT automatically granted after successful attacks/manipulation. This requires manual adjustment.
+- Server: `app/routes/pages.py` passes `courtier_temp_vp_on_hit: true` in school_abilities.
+- Client: shows "Gain 1 temp VP (once per target)" button on attack HIT result and after manipulation skill rolls.
 
-**Implementation:** Temp VP counter in `app/templates/character/sheet.html`.
+**Implementation:** Temp VP counter in `app/templates/character/sheet.html`, `app/routes/pages.py` (courtier_temp_vp_on_hit flag).
 
 **Unit tests:** None specific to the auto-grant mechanic.
 **Clicktests:** None specific.
 
 **Missing:**
-- [ ] Automatically grant temp VP after successful attack or manipulation
-- [ ] Clicktest: Courtier 4th Dan gains temp VP after successful attack
+- [ ] Clicktest: Courtier 4th Dan gains temp VP after successful attack or manipulation
 
 ---
 

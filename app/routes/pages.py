@@ -276,6 +276,26 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "isawa_bank_wc_excess": character.school == "isawa_duelist" and dan >= 5,
         # Shinjo 5th Dan: bank parry excess for future wound check
         "shinjo_bank_parry_excess": character.school == "shinjo_bushi" and dan >= 5,
+        # Bayushi Special: +1k1 per VP spent on attack damage
+        "bayushi_vp_damage": character.school == "bayushi_bushi",
+        # Feint knack: 1 temp VP on successful feint (non-Akodo feint schools)
+        "feint_temp_vp": character.school in ("bayushi_bushi", "yogo_warden", "hiruma_scout", "ide_diplomat"),
+        # Hiruma 3rd Dan: bank +2*attack for next attack and damage after parry
+        "hiruma_post_parry_bonus": character.school == "hiruma_scout" and dan >= 3,
+        "hiruma_post_parry_amount": 2 * attack_skill if character.school == "hiruma_scout" and dan >= 3 else 0,
+        # Akodo 3rd Dan: bank wound check excess * attack for attack bonus
+        "akodo_wc_attack_bonus": character.school == "akodo_bushi" and dan >= 3,
+        "akodo_attack_skill": attack_skill if character.school == "akodo_bushi" and dan >= 3 else 0,
+        # Courtier 4th Dan: temp VP after successful attack or manipulation
+        "courtier_temp_vp_on_hit": character.school == "courtier" and dan >= 4,
+        # Togashi 4th Dan: reroll any contested roll after seeing result
+        "togashi_reroll_contested": character.school == "togashi_ise_zumi" and dan >= 4,
+        # Ide Special: feint -> lower target TN by 10
+        "ide_feint_tn_reduce": character.school == "ide_diplomat",
+        # Doji 5th Dan: bonus = (opponent_result - 10) / 5
+        "doji_opponent_bonus": character.school == "doji_artisan" and dan >= 5,
+        # Hiruma 5th Dan: attacker deals 10 fewer LW after parry (display note)
+        "hiruma_parry_reduce_lw": character.school == "hiruma_scout" and dan >= 5,
     }
 
     # Compute wound check probability slice for client-side display.

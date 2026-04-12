@@ -80,9 +80,11 @@
 
 > Raise the current and maximum rank of any Ring by 1. Raising that Ring now costs 5 fewer XP. You may reroll any contested roll once after seeing the result.
 
-**Status:** Partially implemented.
-- Ring raise (+1 to any ring) would need to support any ring choice, including Void. The school ring is Void, so the standard 4th Dan raises Void. However, the technique text says "any Ring," which may allow a different ring.
-- "Reroll any contested roll once after seeing the result" is NOT implemented. This is a per-roll reactive ability.
+**Status:** Fully implemented.
+- Ring raise (+1 Void, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
+- Reroll is now implemented.
+  - Server: `app/routes/pages.py` passes `togashi_reroll_contested: true` in school_abilities.
+  - Client: shows "Reroll (Togashi 4th Dan)" button after any roll result. Uses the same reroll mechanism as Lucky (saves previous result, compares).
 
 **Questions (ANSWERED):**
 - Despite the rules text saying "any Ring", the Togashi should always use Void for their 4th Dan raise (same as their school ring). The standard 4th Dan behavior is correct for this school.
@@ -91,8 +93,7 @@
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement contested roll reroll mechanic
-- [ ] UI for reroll option after seeing contested results
+- [ ] Clicktest: Togashi 4th Dan reroll button appears after contested rolls
 
 ---
 

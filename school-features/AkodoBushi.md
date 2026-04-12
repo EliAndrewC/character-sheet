@@ -68,7 +68,9 @@
 
 > After you exceed the TN of a wound check, divide the difference between your wound check and the damage roll by 5, rounding down. You may add that number multiplied by X to any future attack this combat, where X is your attack skill.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `akodo_wc_attack_bonus: true` and `akodo_attack_skill` in school_abilities.
+- Client: after passing a wound check (in `wcKeepLightWounds()`), computes `floor(margin / 5) * attack_skill` and banks it. Shows banked bonus indicator in attack modal. Applies as flat bonus on next attack via `rollAttack()`.
 
 **Questions (ANSWERED):**
 - Formula: `floor((wound_check_roll - light_wounds) / 5) * attack_skill` = a single flat bonus
@@ -78,9 +80,7 @@
 - This is NOT per-adventure free raises; it's a one-shot bonus generated from each wound check
 
 **Missing:**
-- [ ] Implement the 3rd Dan excess-from-wound-checks mechanic
-- [ ] Track the accumulated bonus somewhere (per-round state?)
-- [ ] Display the bonus on attack rolls when it's active
+- [ ] Clicktest: Akodo 3rd Dan wound check banks bonus and applies to next attack
 
 ---
 

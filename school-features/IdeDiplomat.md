@@ -11,17 +11,17 @@
 
 > After a feint which met its TN, lower the TN of the target by 10 the next time they are attacked, even if the feint was parried.
 
-**Status:** NOT implemented beyond generic mechanics. This requires tracking the feint result and applying a TN debuff to the target for the next attack.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `ide_feint_tn_reduce: true` in school_abilities.
+- Client: shows "Bank -10 TN on target" button after feint rolls. The banked TN reduction is shown in the attack modal and applied when rolling the attack.
 
-**Implementation:** `app/game_data.py:1421-1423` (definition only).
+**Implementation:** `app/game_data.py:1421-1423` (definition), `app/routes/pages.py` (ide_feint_tn_reduce flag), `app/templates/character/sheet.html` (feint result button, attack modal TN reduction).
 
 **Unit tests:** None.
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement post-feint TN reduction (-10) on target
-- [ ] Track the debuff state until next attack against that target
-- [ ] UI for displaying active TN debuff
+- [ ] Clicktest: Ide feint banks -10 TN and applies on next attack
 
 ---
 

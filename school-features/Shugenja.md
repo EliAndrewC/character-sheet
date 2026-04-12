@@ -125,9 +125,14 @@
 
 > Your non-Void rings are all considered 1 higher when rolling commune and spellcasting.
 
-**Status:** NOT implemented. This would add +1 to Air, Fire, Earth, and Water when computing commune and spellcasting roll formulas.
+**Status:** Fully implemented.
+- Server: `app/services/dice.py:build_knack_formula()` adds +1 to non-Void ring values when computing commune and spellcasting formulas for shugenja at 5th Dan.
+
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_shugenja_5th_dan_commune_ring_boost`
+- `test_dice.py::TestSchoolAbilities::test_shugenja_5th_dan_spellcasting_ring_boost`
+- `test_dice.py::TestSchoolAbilities::test_shugenja_5th_dan_void_not_boosted`
+- `test_dice.py::TestSchoolAbilities::test_shugenja_below_5th_dan_no_boost`
 
 **Missing:**
-- [ ] Implement +1 to non-Void rings for commune/spellcasting rolls
-- [ ] Unit test: commune/spellcasting formulas show ring+1 for non-Void rings at 5th Dan
 - [ ] Clicktest for ring bonus display (after enabling school)
