@@ -34,8 +34,7 @@ def test_tracking_renders_with_per_adventure_abilities(page, live_server_url):
     page.wait_for_timeout(500)
 
     # Numbers should be visible
-    light = page.locator('text="Light Wounds"').locator('..').locator('span.text-2xl')
-    assert light.text_content().strip() == "0"
+    assert page.locator('[x-text="lightWounds"]').text_content().strip() == "0"
 
     # Lucky toggle should be visible
     assert page.locator('text="Lucky (re-roll)"').is_visible()
@@ -50,14 +49,9 @@ def test_tracking_shows_initial_values(page, live_server_url):
     page.wait_for_timeout(500)
 
     # Check that the numbers are visible and show 0
-    light = page.locator('text="Light Wounds"').locator('..').locator('span.text-2xl')
-    assert light.text_content().strip() == "0", f"Light wounds showed: {light.text_content()!r}"
-
-    serious = page.locator('text="Serious Wounds"').locator('..').locator('span.text-2xl')
-    assert serious.text_content().strip() == "0", f"Serious wounds showed: {serious.text_content()!r}"
-
-    void = page.locator('text="Void Points"').locator('..').locator('span.text-2xl')
-    assert void.text_content().strip() == "0", f"Void points showed: {void.text_content()!r}"
+    assert page.locator('[x-text="lightWounds"]').text_content().strip() == "0"
+    assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "0"
+    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "0"
 
 
 def test_wound_tracking_persists(page, live_server_url):
@@ -71,30 +65,27 @@ def test_wound_tracking_persists(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button', has_text="Add").click()
     page.wait_for_timeout(500)
 
-    wound_display = page.locator('text="Light Wounds"').locator('..').locator('span.text-2xl')
-    assert wound_display.text_content().strip() == "5"
+    assert page.locator('[x-text="lightWounds"]').text_content().strip() == "5"
 
     # Reload and verify persistence
     page.reload()
     page.wait_for_selector('text="Light Wounds"')
     page.wait_for_timeout(500)
-    wound_display = page.locator('text="Light Wounds"').locator('..').locator('span.text-2xl')
-    assert wound_display.text_content().strip() == "5"
+    assert page.locator('[x-text="lightWounds"]').text_content().strip() == "5"
 
 
 def test_void_points_tracking(page, live_server_url):
     """Void points can be incremented and decremented."""
     _create_published_character(page, live_server_url, "Void Tracker")
 
-    # Add a void point
-    void_section = page.locator('text="Void Points"').locator('..')
-    void_section.locator('button', has_text="+").click()
+    # Find the void section buttons via the parent of the VP label
+    void_row = page.locator('text="Void Points"').locator('..')
+    void_row.locator('button', has_text="+").click()
     page.wait_for_timeout(500)
 
-    void_display = void_section.locator('span.text-2xl')
-    assert int(void_display.text_content().strip()) == 1
+    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "1"
 
     # Remove it
-    void_section.locator('button', has_text="-").click()
+    void_row.locator('button', has_text="-").click()
     page.wait_for_timeout(500)
-    assert int(void_display.text_content().strip()) == 0
+    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "0"

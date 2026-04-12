@@ -18,11 +18,11 @@ def _create_char(page, live_server_url):
 
 
 def _get_lw(page):
-    return page.locator('text="Light Wounds"').locator('..').locator('span.text-2xl').text_content().strip()
+    return page.locator('[x-text="lightWounds"]').text_content().strip()
 
 
 def _get_sw(page):
-    return page.locator('text="Serious Wounds"').locator('..').locator('span.text-2xl').text_content().strip()
+    return page.locator('[x-text="seriousWounds"]').text_content().strip()
 
 
 def _add_light_wounds(page, amount):
