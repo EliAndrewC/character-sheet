@@ -1157,24 +1157,33 @@
                     </button>
                 </div>
             </template>
-            <template x-if="rollMenuHasParry">
-                <button type="button"
-                        @click="executeRollWithExtraFlat(rollMenuKey, 0, null, 5, 'predeclared parry')"
-                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10">
-                    Predeclared Parry <span class="text-xs text-ink/50">(+5 bonus)</span>
-                </button>
-            </template>
             <button type="button"
                     @click="executeRoll(rollMenuKey, 0, null)"
                     class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
                 Roll <span x-text="rollMenuTitle"></span>
             </button>
-            <template x-for="opt in rollMenuOptions" :key="opt.count">
+            <template x-for="opt in rollMenuOptions" :key="'r'+opt.count">
                 <button type="button"
                         @click="executeRoll(rollMenuKey, opt.count, opt)"
                         class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
                     <span x-text="opt.label"></span>
                 </button>
+            </template>
+            <template x-if="rollMenuHasParry">
+                <div class="border-t border-ink/10">
+                    <button type="button"
+                            @click="executeRollWithExtraFlat(rollMenuKey, 0, null, 5, 'predeclared parry')"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
+                        Predeclared Parry <span class="text-xs text-ink/50">(+5)</span>
+                    </button>
+                    <template x-for="opt in rollMenuOptions" :key="'p'+opt.count">
+                        <button type="button"
+                                @click="executeRollWithExtraFlat(rollMenuKey, opt.count, opt, 5, 'predeclared parry')"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                            <span x-text="opt.label + ' + predeclared (+5)'"></span>
+                        </button>
+                    </template>
+                </div>
             </template>
         </div>
 
@@ -1809,6 +1818,14 @@
                             Strike roll: <span class="text-accent" x-text="duelStrikeRoll"></span>
                             <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="duelOpponentTN"></span></span>
                         </div>
+                        <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="duelRestartBonus"></span> from winning previous round(s)
+                        </div>
+                        <template x-for="b in (formula?.bonuses || [])" :key="b.label">
+                            <div class="text-xs text-ink/70 mt-0.5">
+                                &bull; +<span x-text="b.amount"></span> from <span x-text="b.label"></span>
+                            </div>
+                        </template>
                         <div x-show="finalDice.some(d => d.value === 10)" x-cloak class="text-xs italic text-red-700 mt-1">
                             10s not rerolled for the strike in an iaijutsu duel
                         </div>
@@ -2176,6 +2193,25 @@
                         </button>
                     </div>
 
+                    {# Lucky reroll: original was higher (non-initiative) #}
+                    <div x-show="luckyOriginalWasHigher && !formula?.is_initiative" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                    </div>
+
+                    {# Lucky reroll: initiative - always show original action dice #}
+                    <div x-show="luckyUsedThisRoll && formula?.is_initiative && luckyPrevActionDice.length > 0" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        <div class="font-medium mb-1">Original action dice (choose which set to keep):</div>
+                        <div class="flex gap-2">
+                            <template x-for="(v, i) in luckyPrevActionDice" :key="'lpd'+i">
+                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full border-2 font-mono font-bold"
+                                      :class="v === 0 ? 'border-gold bg-gold/10 text-gold' : v <= 3 ? 'border-accent bg-accent/10 text-accent' : 'border-ink/30 bg-parchment text-ink'"
+                                      x-text="v"></span>
+                            </template>
+                        </div>
+                    </div>
+
                     {# Shinjo 5th Dan: bank parry excess for future wound check #}
                     <div x-show="phase === 'done' && currentRollKey === 'parry' && schoolAbilities.shinjo_bank_parry_excess" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
@@ -2226,6 +2262,9 @@
             raisesSpentThisRoll: 0,
             // Lucky reroll
             luckyUsedThisRoll: false,
+            luckyPrevTotal: 0,
+            luckyPrevActionDice: [],
+            luckyOriginalWasHigher: false,
 
             canUseLucky() {
                 const t = window._trackingBridge;
@@ -2236,40 +2275,126 @@
                 return !t.getToggle('lucky_used');
             },
 
+            _saveLuckyPrev() {
+                this.luckyPrevTotal = this.baseTotal;
+                this.luckyPrevActionDice = [...this.actionDice];
+                this.luckyOriginalWasHigher = false;
+            },
+
+            _checkLuckyResult(isInit) {
+                if (isInit) {
+                    // For initiative, always show both so user can choose
+                    this.luckyOriginalWasHigher = true;
+                } else if (this.luckyPrevTotal > this.baseTotal) {
+                    this.luckyOriginalWasHigher = true;
+                } else {
+                    this.luckyOriginalWasHigher = false;
+                }
+            },
+
             useLucky() {
                 if (!this.canUseLucky()) return;
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                this._saveLuckyPrev();
+                const isInit = this.formula?.is_initiative;
                 // Re-run whatever roll was in progress
-                this.runRoll();
+                this.runRoll().then(() => this._checkLuckyResult(isInit));
             },
 
-            useLuckyWoundCheck() {
+            async _rerollDice(rolled, rerollTens, trayId) {
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                return window.L7RDice.rollAndAnimate(
+                    rolled, rerollTens, this.prefs.dice_animation_enabled, playSound, trayId
+                );
+            },
+
+            async useLuckyWoundCheck() {
                 if (!this.canUseLucky()) return;
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                const prevTotal = this.wcRollTotal;
+                this.luckyPrevTotal = prevTotal;
+                this.luckyOriginalWasHigher = false;
                 this.wcPhase = 'rolling';
-                this._doWoundCheckRoll();
+                const f = this.formula;
+                const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-wc');
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(f.kept, sorted.length);
+                const keptDice = sorted.slice(sorted.length - keptCount);
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = keptDice;
+                this.unkeptDice = sorted.slice(0, sorted.length - keptCount);
+                this.keptSum = keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = this.keptSum + f.flat;
+                const lw = this.wcLightWounds;
+                this.wcRollTotal = this.baseTotal;
+                this.wcRaisesSpent = 0;
+                if (this.wcRollTotal >= lw) {
+                    this.wcPassed = true;
+                    this.wcSeriousWounds = 0;
+                    this.wcMargin = this.wcRollTotal - lw;
+                } else {
+                    this.wcPassed = false;
+                    const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
+                        ? Math.floor(lw / 2) : lw;
+                    this.wcMargin = effectiveLw - this.wcRollTotal;
+                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
+                }
+                this.wcResultApplied = false;
+                this.wcPhase = 'result';
+                this.luckyOriginalWasHigher = prevTotal > this.wcRollTotal;
             },
 
-            useLuckyAttack() {
+            async useLuckyAttack() {
                 if (!this.canUseLucky()) return;
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                const prevTotal = this.atkRollTotal;
+                this.luckyPrevTotal = prevTotal;
+                this.luckyOriginalWasHigher = false;
                 this.atkPhase = 'rolling';
-                this._doAttackRoll();
+                const f = this.formula;
+                const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-atk');
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(f.kept, sorted.length);
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = this.keptSum + f.flat;
+                this.atkRollTotal = this.baseTotal;
+                this.atkRaisesSpent = 0;
+                this.atkConvictionSpent = 0;
+                this.atkFailedParry = false;
+                this._atkUpdateHitState();
+                this.atkPhase = 'result';
+                this.luckyOriginalWasHigher = prevTotal > this.atkRollTotal;
             },
 
-            useLuckyDamage() {
+            async useLuckyDamage() {
                 if (!this.canUseLucky()) return;
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                const prevTotal = this.atkDamageTotal;
+                this.luckyPrevTotal = prevTotal;
+                this.luckyOriginalWasHigher = false;
                 this.atkPhase = 'damage-rolling';
-                this._doDamageRoll();
+                const f = this.formula;
+                const dice = await this._rerollDice(f.rolled, true, 'dice-animation-atk');
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(f.kept, sorted.length);
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.atkDamageTotal = this.keptSum + (f.flat || 0);
+                this.atkPhase = 'damage-result';
+                this.luckyOriginalWasHigher = prevTotal > this.atkDamageTotal;
             },
 
             // Threshold data for wound check notifications
@@ -2522,9 +2647,28 @@
             executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason) {
                 this.rollMenuOpen = false;
                 this.luckyUsedThisRoll = false;
+                this.luckyOriginalWasHigher = false;
+                this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
                 f.flat += extraFlat;
                 f.bonuses = [...(f.bonuses || []), { label: reason, amount: extraFlat }];
+
+                if (voidSpent > 0 && option) {
+                    f.rolled += voidSpent;
+                    f.kept += voidSpent;
+                    f.void_spent = voidSpent;
+                    let overflowBonus = 0;
+                    if (f.rolled > 10) { f.kept += f.rolled - 10; f.rolled = 10; }
+                    if (f.kept > 10) {
+                        const overflow = f.kept - 10;
+                        overflowBonus = 2 * overflow;
+                        f.flat += overflowBonus;
+                        f.kept = 10;
+                    }
+                    f.void_overflow_bonus = overflowBonus;
+                    this.deductVoidPoints(option);
+                }
+
                 this.formula = f;
                 this.title = f.label;
                 this.formulaText = f.flat > 0
@@ -2538,6 +2682,7 @@
             executeRoll(key, voidSpent, option) {
                 this.rollMenuOpen = false;
                 this.luckyUsedThisRoll = false;
+                this.luckyOriginalWasHigher = false;
                 this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
 
@@ -2894,6 +3039,9 @@
                 this.duelPlayerCanFocus = true;
                 this.duelOpponentCanFocus = true;
                 this.duelVoidSelected = 0;
+                // Reset TNs to base values (XP / 10) - focus bonuses don't carry over
+                this.duelPlayerTN = Math.floor(({{ character.starting_xp }} + {{ character.earned_xp }}) / 10);
+                this.duelOpponentTN = Math.floor(parseInt(this.duelOpponentXP || '0') / 10);
                 this.duelPhase = 'contested';
             },
 
