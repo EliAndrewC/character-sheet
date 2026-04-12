@@ -32,9 +32,6 @@
 **Unit tests:** None specific to Otaku 1st Dan extra die (tested generically via other schools in `test_dice.py`).
 **Clicktests:** None school-specific.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for iaijutsu/lunge/wound_check
-
 ---
 
 ## 2nd Dan
@@ -47,10 +44,6 @@
 
 **Unit tests:** None directly testing the Otaku 2nd Dan free raise on wound checks.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Otaku at 2nd Dan gets +5 flat on wound check formula
-- [ ] Clicktest: wound check modal shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -85,10 +78,6 @@
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
-**Missing:**
-- [ ] Unit test: Otaku 4th Dan lunge damage includes extra die
-- [ ] Clicktest: lunge damage at 4th Dan shows extra die even after failed parry
-
 ---
 
 ## 5th Dan
@@ -98,9 +87,6 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `otaku_trade_dice_for_sw: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows a "Trade 10 damage dice for 1 automatic serious wound" button in the damage result when rolled >= 12 (ensuring min 2 after trade).
-
-**Missing:**
-- [ ] Clicktest: attack result at 5th Dan offers the 10-dice-for-1-SW option
 
 ---
 

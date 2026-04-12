@@ -474,6 +474,11 @@ def build_athletics_formula(
         flat=0,
         **_reroll_fields(character_data),
     )
+
+    school_id = character_data.get("school", "")
+    tech_choices = character_data.get("technique_choices") or {}
+    _apply_school_technique_bonus(formula, "athletics", school_id, knacks, tech_choices)
+
     _finalize_caps(formula)
     return formula
 

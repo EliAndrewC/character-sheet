@@ -20,10 +20,6 @@
 **Unit tests:** None specific to this mechanic.
 **Clicktests:** `test_sheet_js_errors.py` includes `isawa_duelist` indirectly (not in the explicit list but referenced generally).
 
-**Missing:**
-- [ ] Unit test: damage formula for Isawa Duelist uses Water ring value instead of Fire
-- [ ] Clicktest: damage roll modal shows Water ring label
-
 ---
 
 ## 1st Dan
@@ -37,9 +33,6 @@
 **Unit tests:** None specific to Isawa Duelist 1st Dan.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for double_attack/lunge/wound_check
-
 ---
 
 ## 2nd Dan
@@ -52,10 +45,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Isawa Duelist at 2nd Dan gets +5 flat on wound check formula
-- [ ] Clicktest: wound check modal shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -71,9 +60,6 @@
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
 - The -5 TN trade happens after making an attack roll (it's a bonus applied to that attack roll).
 - If the attack is parried (successfully or not), the TN penalty is waived.
-
-**Missing:**
-- [ ] Track the TN reduction for the next round
 
 ---
 
@@ -97,5 +83,3 @@
 - Server: `app/routes/pages.py` passes `isawa_bank_wc_excess: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` banks wound check excess (margin when passed) via `wcKeepLightWounds()`, and the wound check modal shows an "Apply Banked Excess" button for future wound checks.
 
-**Missing:**
-- [ ] Clicktest: wound check at 5th Dan banks excess and applies it to future wound checks

@@ -32,9 +32,6 @@
 **Unit tests:** None specific to Daidoji 1st Dan extra die (tested generically via other schools in `test_dice.py`).
 **Clicktests:** None school-specific.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for attack/counterattack/wound_check
-
 ---
 
 ## 2nd Dan
@@ -48,10 +45,6 @@
 **Unit tests:** None directly testing the Daidoji 2nd Dan free raise on counterattack.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Unit test: Daidoji at 2nd Dan gets +5 flat on counterattack formula
-- [ ] Clicktest: counterattack modal shows the +5 bonus from 2nd Dan
-
 ---
 
 ## 3rd Dan
@@ -64,10 +57,6 @@
 **Questions (ANSWERED):**
 - X is the Daidoji's attack skill rank.
 - The free raises are applied to the wound check of the person who was originally attacked (the person the Daidoji counterattacked for). The original attack still lands, and the target gets X free raises on their wound check.
-
-**Missing:**
-- [ ] Unit test: Daidoji 3rd Dan counterattack raises flag
-- [ ] Clicktest: counterattack at 3rd Dan shows wound check raises note
 
 ---
 
@@ -94,10 +83,6 @@
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `daidoji_wc_lower_tn: true`. Client shows note after passed wound checks about lowering the attacker's TN by the wound check excess.
-
-**Missing:**
-- [ ] Unit test: Daidoji 5th Dan wound check TN reduction flag
-- [ ] Clicktest: wound check at 5th Dan shows attacker TN reduction note
 
 ---
 

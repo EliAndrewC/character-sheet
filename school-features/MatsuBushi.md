@@ -21,10 +21,6 @@
 **Unit tests:** None. No test in `test_dice.py` verifies the Matsu initiative override.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Unit test: Matsu Bushi initiative formula has `rolled=10` regardless of Void ring
-- [ ] Clicktest: initiative roll on the sheet shows 10 rolled dice for Matsu Bushi
-
 ---
 
 ## 1st Dan
@@ -39,9 +35,6 @@
 **Unit tests:** None specific to Matsu 1st Dan extra die (tested generically via other schools in `test_dice.py`).
 **Clicktests:** None school-specific.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for double_attack/iaijutsu/wound_check
-
 ---
 
 ## 2nd Dan
@@ -54,10 +47,6 @@
 
 **Unit tests:** None directly testing the Matsu 2nd Dan free raise on iaijutsu.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Matsu at 2nd Dan gets +5 flat on iaijutsu formula
-- [ ] Clicktest: iaijutsu modal shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -73,10 +62,6 @@
 - X = the Matsu's attack skill rank. So spending 1 VP adds 3 * attack_skill to a wound check.
 - "After seeing the roll" = yes, VP can be spent retroactively after seeing the wound check result.
 - Remaining question: can multiple VP be spent on a single wound check? (Each adding 3X?)
-
-**Missing:**
-- [ ] Unit test: Matsu 3rd Dan VP spending adds 3X to wound check
-- [ ] Clicktest: wound check result offers VP spending option at 3rd Dan
 
 ---
 
@@ -98,10 +83,6 @@
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
-**Missing:**
-- [ ] Unit test: Matsu 4th Dan double attack near-miss converts to hit
-- [ ] Clicktest: double attack near-miss at 4th Dan shows hit with no bonus damage
-
 ---
 
 ## 5th Dan
@@ -111,10 +92,6 @@
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `matsu_lw_reset_15: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows an informational note in the damage result: "If this causes serious wounds, the defender's light wounds reset to 15 instead of 0." This is a display-only implementation since the defender's sheet is separate.
-
-**Missing:**
-- [ ] Unit test: Matsu 5th Dan sets defender's light wounds to 15 after dealing serious wounds
-- [ ] Clicktest: dealing serious wounds at 5th Dan shows light wound reset to 15
 
 ---
 

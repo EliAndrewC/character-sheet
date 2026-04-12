@@ -32,9 +32,6 @@
 **Unit tests:** None specific to Hida 1st Dan extra die (tested generically via other schools in `test_dice.py`).
 **Clicktests:** None school-specific.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for attack/counterattack/wound_check
-
 ---
 
 ## 2nd Dan
@@ -47,10 +44,6 @@
 
 **Unit tests:** None directly testing the Hida 2nd Dan free raise on counterattack.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Hida at 2nd Dan gets +5 flat on counterattack formula
-- [ ] Clicktest: counterattack modal shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -65,10 +58,6 @@
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
 - "Re-roll dice" means rerolling that many dice and taking the better result.
 - "When impaired, divided in half (round up), but reroll 10s despite being impaired" - the impaired state halves the reroll count but restores 10-rerolling on these specific rolls.
-
-**Missing:**
-- [ ] Unit test: Hida 3rd Dan reroll mechanics
-- [ ] Clicktest: counterattack/attack at 3rd Dan shows reroll option
 
 ---
 
@@ -89,11 +78,6 @@
 **Clicktests:**
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
-
-**Missing:**
-- [ ] Validate the character has >= 2 serious wounds before allowing the trade
-- [ ] Unit test: Hida 4th Dan wound trade mechanic
-- [ ] Clicktest: 4th Dan button trades 2 SW for light wound reset
 
 ---
 

@@ -31,9 +31,6 @@
 **Unit tests:** None specific to Doji 1st Dan.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for counterattack/manipulation/wound_check
-
 ---
 
 ## 2nd Dan
@@ -46,10 +43,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Doji at 2nd Dan gets +5 flat on manipulation formula
-- [ ] Clicktest: manipulation roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -66,9 +59,6 @@
 
 **Unit tests:** None specific to Doji 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest for Doji-specific 3rd Dan applicable skills
 
 ---
 
@@ -95,5 +85,3 @@
 - Server: `app/routes/pages.py` passes `doji_opponent_bonus: true` in school_abilities.
 - Client: shows opponent result input after any TN/contested roll. Computes `floor((opponent - 10) / 5)` and displays the adjusted total.
 
-**Missing:**
-- [ ] Clicktest: Doji 5th Dan opponent bonus input appears and adjusts total

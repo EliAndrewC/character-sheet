@@ -24,10 +24,6 @@
 
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest: interrogation roll uses Water ring value
-- [ ] Clicktest: attack roll shows the +2*Water bonus
-
 ---
 
 ## 1st Dan
@@ -41,9 +37,6 @@
 **Unit tests:** None specific to Kitsuki 1st Dan.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for investigation/interrogation/wound_check
-
 ---
 
 ## 2nd Dan
@@ -56,10 +49,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Kitsuki at 2nd Dan gets +5 flat on interrogation formula
-- [ ] Clicktest: interrogation roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -76,9 +65,6 @@
 
 **Unit tests:** None specific to Kitsuki 3rd Dan. The mechanism is identical to Courtier 3rd Dan which is tested in `test_dice.py`.
 **Clicktests:** None specific. The 3rd Dan free raise UI is tested via Courtier in `test_rolls.py`.
-
-**Missing:**
-- [ ] Clicktest for Kitsuki-specific 3rd Dan applicable skills
 
 ---
 
@@ -101,6 +87,3 @@
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `kitsuki_reduce_rings: true`. Client shows informational note after rolls describing the ring reduction ability and its XP-based targeting limit.
 
-**Missing:**
-- [ ] Unit test: Kitsuki 5th Dan ring reduction flag
-- [ ] Clicktest: 5th Dan shows ring reduction note after rolls

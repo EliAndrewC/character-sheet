@@ -24,9 +24,6 @@
 
 **Clicktests:** `test_sheet_js_errors.py:18` includes `brotherhood_of_shinsei_monk` in the sheet JS error check list.
 
-**Missing:**
-- [ ] Clicktest: damage roll modal shows the +1k1 unarmed bonus
-
 ---
 
 ## 1st Dan
@@ -42,9 +39,6 @@
 
 **Clicktests:** None specific to 1st Dan extra die.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for attack/damage/wound_check
-
 ---
 
 ## 2nd Dan
@@ -57,10 +51,6 @@
 
 **Unit tests:** None directly testing the 2nd Dan free raise on attack.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Brotherhood at 2nd Dan gets +5 flat on attack formula
-- [ ] Clicktest: attack roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -86,7 +76,6 @@
 
 **Missing:**
 - N/A - "lower action dice by 5" is tracked via the adventure raise counter directly. This is NOT implemented as a separate web UI feature because action dice lowering can happen at any time during combat (not just when initiative is rolled), and players track initiative outside the app. The existing 3rd Dan adventure raise counter can be used directly to track raises spent on lowering dice.
-- [ ] Clicktest for Brotherhood-specific 3rd Dan applicable skills
 
 ---
 
@@ -105,9 +94,6 @@
 
 **Clicktests:**
 - `test_school_rings.py:26,43,67` - tests school ring selection for Brotherhood
-
-**Missing:**
-- [ ] Unit test for 4th Dan parry interaction
 
 ---
 

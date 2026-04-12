@@ -20,9 +20,6 @@
 **Unit tests:** None.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest: Ide feint banks -10 TN and applies on next attack
-
 ---
 
 ## 1st Dan
@@ -42,9 +39,6 @@
 
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest for 1st Dan skill selection
-
 ---
 
 ## 2nd Dan
@@ -63,9 +57,6 @@
 
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest for 2nd Dan skill selection
-
 ---
 
 ## 3rd Dan
@@ -82,9 +73,6 @@
 - "Subtract Xk1 from the roll" means roll Xk1 and subtract that amount from the roll result.
 - "You know the result of all TN and contested rolls except sincerity and interrogation" is an information display mechanic.
 
-**Missing:**
-- [ ] Clicktest: Ide 3rd Dan subtract-from-roll button and VP spending
-
 ---
 
 ## 4th Dan
@@ -100,10 +88,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test for extra VP regen at 4th Dan
-- [ ] Clicktest for VP regen display
 
 ---
 

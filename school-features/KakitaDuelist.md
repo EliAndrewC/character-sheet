@@ -21,10 +21,6 @@
 **Unit tests:** None specific to Phase 0 mechanic.
 **Clicktests:** `test_sheet_js_errors.py` includes `kakita_duelist` in the school list. `test_school_selection.py` references `kakita_duelist` for selection testing.
 
-**Missing:**
-- [ ] Unit test: initiative formula for Kakita includes `kakita_phase_zero: True`
-- [ ] Clicktest: initiative display shows Phase 0 information
-
 ---
 
 ## 1st Dan
@@ -38,9 +34,6 @@
 **Unit tests:** None specific to Kakita 1st Dan.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for double_attack/iaijutsu/initiative
-
 ---
 
 ## 2nd Dan
@@ -53,10 +46,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Kakita at 2nd Dan gets +5 flat on iaijutsu formula
-- [ ] Clicktest: iaijutsu roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -86,9 +75,6 @@
 - `test_dice.py::TestSchoolAbilities::test_kakita_duelist_4th_dan_iaijutsu_damage_bonus` - verifies +5 flat on iaijutsu damage at 4th Dan
 - `test_dice.py::TestSchoolAbilities::test_kakita_duelist_below_4th_dan_no_damage_bonus` - verifies no bonus below 4th Dan
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest verifying damage modal shows the +5 bonus for iaijutsu attacks
 
 ---
 

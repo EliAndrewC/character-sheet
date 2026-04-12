@@ -25,9 +25,6 @@
 
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest: roll formulas show the acting skill bonus
-
 ---
 
 ## Stipend Bonus
@@ -48,9 +45,6 @@
 
 **Clicktests:** None specific to Shosuro stipend (Merchant stipend is tested in `test_sheet_advanced.py`).
 
-**Missing:**
-- [ ] Clicktest: Shosuro Actor stipend display on character sheet
-
 ---
 
 ## 1st Dan
@@ -64,9 +58,6 @@
 **Unit tests:** None specific to Shosuro 1st Dan.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for attack/sincerity/wound_check
-
 ---
 
 ## 2nd Dan
@@ -79,10 +70,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Unit test: Shosuro at 2nd Dan gets +5 flat on sincerity formula
-- [ ] Clicktest: sincerity roll shows the +5 bonus from 2nd Dan
 
 ---
 
@@ -99,9 +86,6 @@
 
 **Unit tests:** None specific to Shosuro 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest for Shosuro-specific 3rd Dan applicable skills
 
 ---
 

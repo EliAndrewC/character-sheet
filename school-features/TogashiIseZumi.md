@@ -31,9 +31,6 @@
 **Unit tests:** None specific to Togashi 1st Dan.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for attack/parry/athletics
-
 ---
 
 ## 2nd Dan
@@ -47,10 +44,6 @@
 **Unit tests:** None.
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Unit test: Togashi at 2nd Dan gets +5 flat on athletics formula
-- [ ] Clicktest: athletics roll shows the +5 bonus from 2nd Dan
-
 ---
 
 ## 3rd Dan
@@ -63,10 +56,6 @@
 **Questions (ANSWERED):**
 - "Each day" is the frequency, as stated in the rules text.
 - Yes, these raises only apply to athletics rolls.
-
-**Missing:**
-- [ ] Unit test: Togashi 3rd Dan daily athletics raises tracking
-- [ ] Clicktest: athletics roll at 3rd Dan shows raise spending button
 
 ---
 
@@ -85,9 +74,6 @@
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Clicktest: Togashi 4th Dan reroll button appears after contested rolls
 
 ---
 

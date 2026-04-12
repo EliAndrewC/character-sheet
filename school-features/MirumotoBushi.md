@@ -23,9 +23,6 @@
 **Unit tests:** None specific to the auto-grant mechanic.
 **Clicktests:** None specific. General temp void counter tested indirectly via tracking tests.
 
-**Missing:**
-- [ ] Clicktest: Mirumoto Bushi parry roll adds temp VP
-
 ---
 
 ## 1st Dan
@@ -43,9 +40,6 @@
 
 **Clicktests:** No school-specific clicktest for Mirumoto 1st Dan extra die.
 
-**Missing:**
-- [ ] Clicktest verifying the extra die appears in the roll formula display for parry/double_attack/wound_check
-
 ---
 
 ## 2nd Dan
@@ -61,9 +55,6 @@
 
 **Clicktests:** None.
 
-**Missing:**
-- [ ] Clicktest: parry modal shows the +5 bonus from 2nd Dan
-
 ---
 
 ## 3rd Dan
@@ -78,10 +69,6 @@
 - Per-round (reset each combat round).
 - Points can be spent to lower action phase for a parry OR spent as +2 per point on attack/parry rolls.
 - Points can be split between uses within a round.
-
-**Missing:**
-- [ ] Unit test: Mirumoto 3rd Dan round points flag
-- [ ] Clicktest: round-start point display and spending on rolls
 
 ---
 
@@ -103,9 +90,6 @@
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
-**Missing:**
-- [ ] Clicktest: failed parry at 4th Dan shows reduced bonus damage dice
-
 ---
 
 ## 5th Dan
@@ -122,9 +106,6 @@
 - Does this apply to temporary void points as well?
 
 No unit test for the pages.py flag (it's a template context variable), but the behavior is tested through the UI.
-
-**Missing:**
-- [ ] Clicktest: VP spending on combat rolls at 5th Dan shows +10
 
 ---
 
