@@ -111,12 +111,11 @@
 
 > After a successful attack or lunge roll, you may decrease the number of rolled damage dice by 10, to a minimum of 2, to automatically deal 1 serious wound to your opponent. You may only do this once per damage roll.
 
-**Status:** NOT implemented. This is a unique mechanic that converts excess dice into an automatic serious wound.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `otaku_trade_dice_for_sw: true` in school_abilities.
+- Client: `app/templates/character/sheet.html` shows a "Trade 10 damage dice for 1 automatic serious wound" button in the damage result when rolled >= 12 (ensuring min 2 after trade).
 
 **Missing:**
-- [ ] Implement the 5th Dan automatic serious wound mechanic
-- [ ] UI for choosing to spend 10 dice for the auto-wound
-- [ ] Unit test: Otaku 5th Dan dice-to-wound conversion
 - [ ] Clicktest: attack result at 5th Dan offers the 10-dice-for-1-SW option
 
 ---

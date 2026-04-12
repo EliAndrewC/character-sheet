@@ -481,6 +481,9 @@
                         {% endif %}
                     </div>
                     <div class="text-xs text-ink/50" x-text="'max ' + voidMax"></div>
+                    {% if school_abilities.get('ide_extra_vp_regen') %}
+                    <div class="text-xs text-accent/70">+1 VP nightly (4th Dan)</div>
+                    {% endif %}
                 </div>
                 {% if has_temp_void %}
                 <div class="text-center">
@@ -1351,6 +1354,11 @@
                                         class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium">
                                     Apply Matsu Bonus (+<span x-text="matsuBankedWcBonus"></span>)
                                 </button>
+                                <button type="button" @click="wcSpendBankedExcess()"
+                                        x-show="bankedWcExcess > 0"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium">
+                                    Apply Banked Excess (+<span x-text="bankedWcExcess"></span>)
+                                </button>
                             </div>
                             <button type="button" @click="wcAcceptResult()"
                                     class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium mt-2">
@@ -1614,6 +1622,16 @@
                              class="text-xs text-ink/70 mt-1">
                             If this causes serious wounds, the defender's light wounds reset to 15 instead of 0.
                         </div>
+                    </div>
+                    {# Otaku 5th Dan: trade 10 rolled dice for 1 auto serious wound #}
+                    <div x-show="schoolAbilities.otaku_trade_dice_for_sw && atkDamageRolled >= 12" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <button type="button"
+                                @click="atkDamageTotal = '1 serious wound (auto)'; $el.disabled = true; $el.textContent = 'Applied: 1 automatic serious wound';"
+                                class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
+                            Trade 10 damage dice for 1 automatic serious wound
+                        </button>
+                        <span class="text-xs text-ink/60 ml-1">(reduces rolled from <span x-text="atkDamageRolled"></span> to <span x-text="Math.max(2, atkDamageRolled - 10)"></span>)</span>
                     </div>
                     <button type="button" @click="atkModalOpen = false"
                             class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
@@ -2103,6 +2121,50 @@
                         </span>
                     </div>
 
+                    {# Akodo Special: feint grants temp VP (4 on success, 1 on failure) #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.akodo_temp_vp_on_feint" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="font-medium mb-1">Akodo Feint - Temp VP</div>
+                        <div class="flex gap-2">
+                            <button type="button"
+                                    @click="const t = window._trackingBridge; if (t) { t.tempVoidPoints += 4; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
+                                    class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
+                                Succeeded (+4 temp VP)
+                            </button>
+                            <button type="button"
+                                    @click="const t = window._trackingBridge; if (t) { t.tempVoidPoints += 1; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
+                                    class="bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded text-xs">
+                                Failed (+1 temp VP)
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Bayushi 4th Dan: feint grants +5 on next attack #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.bayushi_post_feint_raise" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <button type="button"
+                                @click="bayushiBankedFeintRaise += 5; $el.disabled = true; $el.textContent = 'Banked +5 for next attack';"
+                                class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
+                            Bank free raise for next attack (+5)
+                        </button>
+                    </div>
+
+                    {# Shinjo 5th Dan: bank parry excess for future wound check #}
+                    <div x-show="phase === 'done' && currentRollKey === 'parry' && schoolAbilities.shinjo_bank_parry_excess" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="font-medium mb-1">Shinjo 5th Dan - Bank Parry Excess</div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs">Opponent's attack roll:</label>
+                            <input type="number" x-model.number="shinjoParryOpponentRoll" min="0"
+                                   class="w-20 border rounded px-2 py-1 text-sm text-center">
+                            <button type="button"
+                                    @click="const excess = baseTotal - (shinjoParryOpponentRoll || 0); if (excess > 0) { bankedWcExcess += excess; } shinjoParryOpponentRoll = 0; $el.disabled = true; $el.textContent = excess > 0 ? 'Banked +' + excess : 'No excess';"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
+                                Bank Excess
+                            </button>
+                        </div>
+                    </div>
+
                     <div x-show="phase === 'done'" x-cloak class="flex justify-end gap-2 pt-2">
                         <button x-show="canUseLucky()" x-cloak type="button" @click="useLucky()"
                                 class="bg-gold/20 hover:bg-gold/30 text-ink px-4 py-2 rounded text-sm font-medium">
@@ -2237,6 +2299,7 @@
             atkDamageKept: 0,
             atkDamageFlat: 0,
             atkDamageTotal: 0,
+            atkDamageRolled: 0,
             atkDamageConvictionSpent: 0,
             // Wound check
             wcModalOpen: false,
@@ -2266,6 +2329,10 @@
             matsuBankedWcBonus: 0,
             shosuroLowest3Bonus: 0,
             akodoReflectVP: 0,
+            currentRollKey: '',
+            bayushiBankedFeintRaise: 0,
+            bankedWcExcess: 0,
+            shinjoParryOpponentRoll: 0,
 
             init() {
                 try {
@@ -2423,6 +2490,7 @@
             executeRoll(key, voidSpent, option) {
                 this.rollMenuOpen = false;
                 this.luckyUsedThisRoll = false;
+                this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
 
                 if (voidSpent > 0 && option) {
@@ -2546,6 +2614,27 @@
                     }
                     this.actionDice = actions.sort((a, b) => a - b);
                 }
+
+                // Post-roll school ability hooks (non-initiative only)
+                if (!isInit) {
+                    const t = window._trackingBridge;
+                    const key = this.currentRollKey;
+                    // Mirumoto Special: gain 1 temp VP after any parry roll
+                    if (key === 'parry' && this.schoolAbilities.mirumoto_temp_vp_on_parry && t) {
+                        t.tempVoidPoints += 1;
+                        t.save();
+                    }
+                    // Shinjo 5th Dan: bank parry excess for future wound check
+                    if (key === 'parry' && this.schoolAbilities.shinjo_bank_parry_excess) {
+                        // Parry TN is not tracked, so this banked bonus is informational.
+                        // Player enters the excess manually or we show a prompt.
+                        // For now we store roll total so it can be used.
+                    }
+                    // Akodo Special: feint roll triggers temp VP (success/failure decided by user)
+                    // Bayushi 4th Dan: feint triggers banked +5 for next attack
+                    // These are handled in the result display via buttons (see template below)
+                }
+
                 this.phase = 'done';
             },
 
@@ -2816,7 +2905,19 @@
                 if (isDoubleAttack && failedParry) totalExtra += 2;
 
                 if (failedParry) {
-                    totalExtra = Math.max(0, totalExtra - parrySkill);
+                    // Brotherhood 4th Dan: failed parries don't reduce damage dice
+                    if (this.schoolAbilities.brotherhood_parry_no_reduce) {
+                        // No reduction at all
+                    } else if (this.schoolAbilities.mirumoto_parry_modifier && isDoubleAttack) {
+                        // Mirumoto 4th Dan vs double attacks: parry doesn't prevent auto SW
+                        // (totalExtra stays as-is - the auto SW from double attack is preserved)
+                        totalExtra = Math.max(0, totalExtra - parrySkill);
+                    } else if (this.schoolAbilities.mirumoto_parry_modifier) {
+                        // Mirumoto 4th Dan vs regular attacks: halve parry reduction (round down)
+                        totalExtra = Math.max(0, totalExtra - Math.floor(parrySkill / 2));
+                    } else {
+                        totalExtra = Math.max(0, totalExtra - parrySkill);
+                    }
                 }
                 // Otaku 4th Dan: lunge extra die always applies even if unsuccessfully parried
                 if (isLunge && failedParry && this.schoolAbilities.otaku_lunge_extra_die) {
@@ -2830,8 +2931,20 @@
                 if (extraDice > 0) parts.push(`+${extraDice}k0 extra from attack roll`);
                 if (isLunge) parts.push('+1k0 from Lunge');
                 if (isDoubleAttack && failedParry) parts.push('+2k0 from Double Attack (failed parry)');
-                if (failedParry) parts.push(`-${parrySkill}k0 from failed parry`);
+                if (failedParry && this.schoolAbilities.brotherhood_parry_no_reduce) {
+                    parts.push('parry does not reduce dice (4th Dan)');
+                } else if (failedParry && this.schoolAbilities.mirumoto_parry_modifier && !isDoubleAttack) {
+                    parts.push(`-${Math.floor(parrySkill / 2)}k0 from failed parry (halved by 4th Dan)`);
+                } else if (failedParry) {
+                    parts.push(`-${parrySkill}k0 from failed parry`);
+                }
                 if (flat > 0) parts.push(`+${flat} flat bonus`);
+
+                // Ikoma 4th Dan: 10-dice floor on unparried damage without extra kept dice
+                if (this.schoolAbilities.ikoma_10_dice_floor && !failedParry && rolled <= 10 && rolled < 10) {
+                    parts.push(`rolled ${rolled} -> 10 (4th Dan, unparried)`);
+                    rolled = 10;
+                }
 
                 // Apply 10k10 caps
                 let overflowFlat = 0;
@@ -2860,6 +2973,13 @@
                 if (this.atkIsawaTnTrade && this.schoolAbilities.isawa_tn_trade) {
                     formula.flat += this.schoolAbilities.isawa_tn_trade_bonus || 0;
                     formula.isawa_tn_trade = true;
+                }
+
+                // Bayushi 4th Dan: apply banked feint raise
+                if (this.bayushiBankedFeintRaise > 0) {
+                    formula.flat += this.bayushiBankedFeintRaise;
+                    formula.bayushi_feint_raise = this.bayushiBankedFeintRaise;
+                    this.bayushiBankedFeintRaise = 0;
                 }
 
                 if (voidCount > 0) {
@@ -2979,6 +3099,7 @@
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
                 this.atkDamageTotal = this.keptSum + dmg.flat;
+                this.atkDamageRolled = dmg.rolled;
                 this.atkDamageConvictionSpent = 0;
                 this.atkPhase = 'damage-result';
             },
@@ -3001,7 +3122,7 @@
                 this.wcMaxRaisesPerRoll = formula?.adventure_raises_max_per_roll || 0;
                 const raisesUsed = t.getCount ? t.getCount('adventure_raises') : 0;
                 const raisesAvail = Math.max(0, (this.advRaisesConfig.available || 0) - raisesUsed);
-                this.wcHasDiscretionary = (this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0) || this.matsuBankedWcBonus > 0;
+                this.wcHasDiscretionary = (this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0) || this.matsuBankedWcBonus > 0 || this.bankedWcExcess > 0;
                 this.wcModalOpen = true;
             },
 
@@ -3176,6 +3297,25 @@
                 }
             },
 
+            wcSpendBankedExcess() {
+                if (this.bankedWcExcess <= 0) return;
+                const bonus = this.bankedWcExcess;
+                this.bankedWcExcess = 0;
+                this.baseTotal += bonus;
+                this.wcRollTotal += bonus;
+                const lw = this.wcLightWounds;
+                if (this.wcRollTotal >= lw) {
+                    this.wcPassed = true;
+                    this.wcSeriousWounds = 0;
+                    this.wcMargin = this.wcRollTotal - lw;
+                } else {
+                    const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
+                        ? Math.floor(lw / 2) : lw;
+                    this.wcMargin = effectiveLw - this.wcRollTotal;
+                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
+                }
+            },
+
             wcUndoRaise() {
                 if (this.wcRaisesSpent <= 0) return;
                 const t = window._trackingBridge;
@@ -3199,8 +3339,13 @@
             applyWoundCheckFailure() {
                 const t = window._trackingBridge;
                 if (!t || this.wcResultApplied) return;
-                t.seriousWounds += this.wcSeriousWounds;
+                const swGained = this.wcSeriousWounds;
+                t.seriousWounds += swGained;
                 t.lightWounds = 0;
+                // Yogo Warden: gain 1 temp VP per serious wound taken
+                if (this.schoolAbilities.yogo_temp_vp_on_sw && swGained > 0) {
+                    t.tempVoidPoints += swGained;
+                }
                 t.save();
                 window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                 this.wcResultApplied = true;
@@ -3208,6 +3353,10 @@
 
             wcKeepLightWounds() {
                 // Passed - player chooses to keep their light wounds
+                // Isawa Duelist 5th Dan: bank wound check excess for future wound check
+                if (this.schoolAbilities.isawa_bank_wc_excess && this.wcPassed && this.wcMargin > 0) {
+                    this.bankedWcExcess += this.wcMargin;
+                }
                 this.wcModalOpen = false;
             },
 
@@ -3216,6 +3365,10 @@
                 const t = window._trackingBridge;
                 if (!t) return;
                 t.seriousWounds += 1;
+                // Yogo Warden: gain 1 temp VP per serious wound taken
+                if (this.schoolAbilities.yogo_temp_vp_on_sw) {
+                    t.tempVoidPoints += 1;
+                }
                 t.lightWounds = 0;
                 t.save();
                 window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));

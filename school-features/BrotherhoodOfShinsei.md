@@ -94,9 +94,11 @@
 
 > Raise your current and maximum rank in a non-Void ring of your choice by 1. Raising this Ring now costs 5 fewer XP. Failed parry attempts do not lower your rolled damage dice.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
-- "Failed parries don't lower damage dice" is NOT implemented. This is a combat mechanic.
+- "Failed parries don't lower damage dice" is implemented.
+  - Server: `app/routes/pages.py` passes `brotherhood_parry_no_reduce: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` skips parry damage reduction in `atkComputeDamage()`.
 
 **Unit tests:**
 - `test_remaining_features.py:20` - tests SCHOOL_RING_OPTIONS for Brotherhood (any non-Void)
@@ -105,7 +107,6 @@
 - `test_school_rings.py:26,43,67` - tests school ring selection for Brotherhood
 
 **Missing:**
-- [ ] Implement "failed parries don't lower damage dice" mechanic
 - [ ] Unit test for 4th Dan parry interaction
 
 ---
