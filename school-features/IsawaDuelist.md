@@ -98,8 +98,9 @@
 
 > After a successful wound check, you may add X to a future wound check this combat, where X is the amount by which the wound check exceeded the light wound total.
 
-**Status:** NOT implemented. This is a reactive ability that tracks wound check excess across a combat.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `isawa_bank_wc_excess: true` in school_abilities.
+- Client: `app/templates/character/sheet.html` banks wound check excess (margin when passed) via `wcKeepLightWounds()`, and the wound check modal shows an "Apply Banked Excess" button for future wound checks.
 
 **Missing:**
-- [ ] Implement wound check excess tracking
-- [ ] UI for displaying/applying accumulated wound check bonus
+- [ ] Clicktest: wound check at 5th Dan banks excess and applies it to future wound checks

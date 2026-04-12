@@ -91,15 +91,17 @@
 
 > Raise your current and maximum in any non-Void Ring by 1. Raising that Ring now costs 5 fewer XP. You regain an extra void point every night.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
-- "Regain an extra void point nightly" is NOT implemented. This would modify the VP regeneration display on the character sheet.
+- "Regain an extra void point nightly" is implemented as a display note.
+  - Server: `app/routes/pages.py` passes `ide_extra_vp_regen: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` shows "+1 VP nightly (4th Dan)" text under the VP counter.
+  - This is display-only since VP regeneration is tracked manually by players.
 
 **Unit tests:** None.
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement +1 VP nightly regeneration display
 - [ ] Unit test for extra VP regen at 4th Dan
 - [ ] Clicktest for VP regen display
 

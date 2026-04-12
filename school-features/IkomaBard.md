@@ -95,16 +95,18 @@
 
 > Raise your current and maximum in any non-Void Ring by 1. Raising that Ring now costs 5 fewer XP. When making a damage roll for an unparried attack for which you are not keeping extra damage dice, you always roll 10 dice.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
-- "Roll 10 dice on unparried attacks without extra kept dice" is NOT implemented. This sets a FLOOR of 10 rolled dice on damage rolls when the attack is unparried and you are not keeping extra damage dice (from TN excess). Example: Ikoma with Fire 3 and a 3k2 weapon exceeds TN by 12, gaining 2 extra rolled dice for 8k2. The 4th Dan sets rolled to max(current_rolled, 10), so 10k2. But if they exceed TN by 25+, they'd get 5+ extra rolled dice making it 11k3+ which already exceeds 10, so the technique doesn't change anything.
+- "10-dice floor on unparried damage" is implemented.
+  - Server: `app/routes/pages.py` passes `ikoma_10_dice_floor: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` sets `rolled = max(rolled, 10)` in `atkComputeDamage()` when unparried and not already exceeding 10.
+  - Example: Ikoma with Fire 3 and a 3k2 weapon exceeds TN by 12, gaining 2 extra rolled dice for 8k2. The 4th Dan sets rolled to max(current_rolled, 10), so 10k2. But if they exceed TN by 25+, they'd get 5+ extra rolled dice making it 11k3+ which already exceeds 10, so the technique doesn't change anything.
 
 **Unit tests:** None.
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement 10-dice floor on damage for unparried attacks without extra kept dice
-- [ ] UI for indicating/tracking parry status of attacks
+- [ ] Clicktest: damage roll at 4th Dan shows 10-dice floor on unparried attacks
 
 ---
 

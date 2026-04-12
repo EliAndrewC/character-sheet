@@ -95,9 +95,11 @@
 
 > Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. After a successful or unsuccessful feint, you may apply a free raise to any future attack this combat.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Free raise on any attack after a feint" is NOT implemented. This requires tracking feint state and conditionally adding +5 to subsequent attack rolls.
+- "Free raise on any future attack after feint" is implemented.
+  - Server: `app/routes/pages.py` passes `bayushi_post_feint_raise: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` shows a "Bank free raise for next attack (+5)" button after feint rolls, and applies the +5 in `rollAttack()`.
 
 **Unit tests:**
 - `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic, not Bayushi-specific).
@@ -108,9 +110,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
 **Missing:**
-- [ ] Implement "free raise on any attack after a feint" for Bayushi 4th Dan
-- [ ] Track feint state (successful/unsuccessful) to conditionally apply the bonus
-- [ ] Unit test: Bayushi 4th Dan post-feint attack gets +5 flat
 - [ ] Clicktest: attack roll after feint at 4th Dan shows the free raise bonus
 
 ---

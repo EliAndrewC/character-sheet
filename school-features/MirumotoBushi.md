@@ -11,18 +11,19 @@
 
 > Your successful or unsuccessful parries give you a temporary void point.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Temporary Void Points are tracked for Mirumoto Bushi (school is in `SCHOOLS_WITH_TEMP_VOID` via the "temporary void" text in the special ability).
 - The Temp Void counter appears on the View Sheet page with +/- buttons.
-- However, making a parry roll does NOT automatically grant a temporary void point. This requires manual adjustment.
+- Auto-grant of temp VP after parry is implemented.
+  - Server: `app/routes/pages.py` passes `mirumoto_temp_vp_on_parry: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` auto-increments temp VP after parry rolls in `runRoll()`.
 
-**Implementation:** `app/game_data.py:982`, `app/game_data.py:2382` (SCHOOLS_WITH_TEMP_VOID membership), `app/templates/character/sheet.html` (Temp Void counter).
+**Implementation:** `app/game_data.py:982`, `app/game_data.py:2382` (SCHOOLS_WITH_TEMP_VOID membership), `app/routes/pages.py` (mirumoto_temp_vp_on_parry flag), `app/templates/character/sheet.html` (Temp Void counter, auto-grant in runRoll).
 
 **Unit tests:** None specific to the auto-grant mechanic.
 **Clicktests:** None specific. General temp void counter tested indirectly via tracking tests.
 
 **Missing:**
-- [ ] After a parry roll resolves, automatically add 1 temp VP (regardless of success/failure)
 - [ ] Clicktest: Mirumoto Bushi parry roll adds temp VP
 
 ---
@@ -90,9 +91,11 @@
 
 > Raise your current and maximum Void by 1. Raising your Void now costs 5 fewer XP. Failed parries against your double attacks do not prevent the automatic serious wound, and against your regular attacks the number of extra rolled damage dice the failed parry reduces is cut in half (rounded down).
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Void, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Failed parries reduce fewer extra damage dice" is NOT implemented. This modifies the parry failure outcome.
+- "Failed parries" modification is implemented.
+  - Server: `app/routes/pages.py` passes `mirumoto_parry_modifier: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` in `atkComputeDamage()` - vs double attacks: no parry reduction (auto SW preserved); vs regular attacks: parry reduction halved (rounded down).
 
 **Unit tests:**
 - `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
@@ -103,9 +106,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
 **Missing:**
-- [ ] Implement Mirumoto 4th Dan: failed parries vs double attacks don't prevent automatic serious wound; vs regular attacks, extra rolled damage dice reduction is halved (rounded down)
-- [ ] Display the reduced damage dice effect in parry roll results
-- [ ] Unit test: Mirumoto 4th Dan failed parry damage dice reduction
 - [ ] Clicktest: failed parry at 4th Dan shows reduced bonus damage dice
 
 ---

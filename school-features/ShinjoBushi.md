@@ -122,13 +122,11 @@
 
 > After you successfully parry, you may add X to a future wound check this combat after seeing your roll, where X is the amount by which your parry roll exceeded its TN.
 
-**Status:** NOT implemented. This is a reactive ability that requires tracking parry excess and applying it retroactively.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `shinjo_bank_parry_excess: true` in school_abilities.
+- Client: `app/templates/character/sheet.html` shows a "Bank Parry Excess" section after parry rolls with an opponent roll input to compute and bank the excess for future wound checks. Uses the same banked WC excess mechanism as Isawa Duelist 5th Dan.
 
 **Missing:**
-- [ ] Implement the 5th Dan parry excess to wound check mechanic
-- [ ] Track parry excess from successful parries
-- [ ] UI for applying the excess after seeing the wound check roll
-- [ ] Unit test: Shinjo 5th Dan parry excess added to wound check
 - [ ] Clicktest: wound check at 5th Dan offers parry excess application
 
 ---

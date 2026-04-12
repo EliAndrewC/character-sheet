@@ -11,18 +11,19 @@
 
 > Gain a temporary void point every time you take a serious wound.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Temporary Void Points are tracked for Yogo Warden (school is in `SCHOOLS_WITH_TEMP_VOID` via two mechanisms: the "temporary void" text in the special ability at `app/game_data.py:2382`, and the feint knack check at `app/game_data.py:2385`).
 - The Temp Void counter appears on the View Sheet page with +/- buttons.
-- However, taking a serious wound does NOT automatically grant a temporary void point. This requires manual adjustment.
+- Auto-grant of temp VP on serious wound is implemented.
+  - Server: `app/routes/pages.py` passes `yogo_temp_vp_on_sw: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` auto-increments temp VP in `applyWoundCheckFailure()` and `wcTakeSeriousAndReset()` when serious wounds are gained.
 
-**Implementation:** `app/game_data.py:1088`, `app/game_data.py:2382-2386` (SCHOOLS_WITH_TEMP_VOID membership), `app/templates/character/sheet.html` (Temp Void counter).
+**Implementation:** `app/game_data.py:1088`, `app/game_data.py:2382-2386` (SCHOOLS_WITH_TEMP_VOID membership), `app/routes/pages.py` (yogo_temp_vp_on_sw flag), `app/templates/character/sheet.html` (Temp Void counter, auto-grant in wound check functions).
 
 **Unit tests:** None specific to the auto-grant mechanic.
 **Clicktests:** None specific. General temp void counter tested indirectly via tracking tests.
 
 **Missing:**
-- [ ] After taking a serious wound, automatically add 1 temp VP
 - [ ] Clicktest: Yogo Warden serious wound grants temp VP
 
 ---

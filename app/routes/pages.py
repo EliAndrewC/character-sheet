@@ -254,6 +254,28 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "shosuro_add_lowest_3": character.school == "shosuro_actor" and dan >= 5,
         # Matsu 4th Dan: miss by <20 on double attack = hit with no extra damage
         "matsu_near_miss": character.school == "matsu_bushi" and dan >= 4,
+        # Ide 4th Dan: +1 VP nightly regen (display only)
+        "ide_extra_vp_regen": character.school == "ide_diplomat" and dan >= 4,
+        # Brotherhood 4th Dan: failed parries don't lower rolled damage dice
+        "brotherhood_parry_no_reduce": character.school == "brotherhood_of_shinsei_monk" and dan >= 4,
+        # Yogo Warden Special: gain temp VP when taking serious wounds
+        "yogo_temp_vp_on_sw": character.school == "yogo_warden",
+        # Mirumoto Special: gain temp VP after any parry roll
+        "mirumoto_temp_vp_on_parry": character.school == "mirumoto_bushi",
+        # Akodo Special: gain 4 temp VP on successful feint, 1 on unsuccessful
+        "akodo_temp_vp_on_feint": character.school == "akodo_bushi",
+        # Bayushi 4th Dan: free raise on future attack after any feint
+        "bayushi_post_feint_raise": character.school == "bayushi_bushi" and dan >= 4,
+        # Otaku 5th Dan: trade 10 rolled damage dice for 1 auto serious wound
+        "otaku_trade_dice_for_sw": character.school == "otaku_bushi" and dan >= 5,
+        # Ikoma 4th Dan: 10-dice floor on damage for unparried attacks without extra kept
+        "ikoma_10_dice_floor": character.school == "ikoma_bard" and dan >= 4,
+        # Mirumoto 4th Dan: failed parries vs double attacks preserve auto SW; vs regular halve reduction
+        "mirumoto_parry_modifier": character.school == "mirumoto_bushi" and dan >= 4,
+        # Isawa Duelist 5th Dan: bank wound check excess for future wound check
+        "isawa_bank_wc_excess": character.school == "isawa_duelist" and dan >= 5,
+        # Shinjo 5th Dan: bank parry excess for future wound check
+        "shinjo_bank_parry_excess": character.school == "shinjo_bushi" and dan >= 5,
     }
 
     # Compute wound check probability slice for client-side display.

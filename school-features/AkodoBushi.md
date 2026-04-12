@@ -11,18 +11,19 @@
 
 > You get four temporary void points after a successful feint and one void point after an unsuccessful feint.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Temporary Void Points are tracked for Akodo Bushi (school is in `SCHOOLS_WITH_TEMP_VOID`).
 - The Temp Void counter appears on the View Sheet page with +/- buttons.
-- However, making a feint roll does NOT automatically grant temporary void points. This requires manual adjustment.
+- Temp VP grant after feint (4 on success, 1 on failure) is implemented.
+  - Server: `app/routes/pages.py` passes `akodo_temp_vp_on_feint: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` shows "Succeeded (+4 temp VP)" and "Failed (+1 temp VP)" buttons after feint rolls.
 
-**Implementation:** `app/game_data.py:893`, `app/services/dice.py` (SCHOOLS_WITH_TEMP_VOID computed in `app/game_data.py`), `app/templates/character/sheet.html` (Temp Void counter).
+**Implementation:** `app/game_data.py:893`, `app/services/dice.py` (SCHOOLS_WITH_TEMP_VOID computed in `app/game_data.py`), `app/routes/pages.py` (akodo_temp_vp_on_feint flag), `app/templates/character/sheet.html` (Temp Void counter, feint result buttons).
 
 **Unit tests:** None specific to the auto-grant mechanic.
 **Clicktests:** None specific. General temp void counter tested indirectly via tracking tests.
 
 **Missing:**
-- [ ] After a feint roll resolves, automatically add 4 temp VP on success or 1 on failure
 - [ ] Clicktest: Akodo Bushi feint roll adds temp VP
 
 ---
