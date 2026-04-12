@@ -39,21 +39,22 @@
 
 > Roll one extra die on attack, damage, and wound check rolls.
 
-**Status:** Partially implemented via `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "damage", "wound_check"]`
 - Attack extra die: applied in `app/services/dice.py:_apply_school_technique_bonus()`.
 - Wound check extra die: applied in `build_wound_check_formula()`.
-- Damage extra die: The `"damage"` entry is present in the bonus list, but `_apply_school_technique_bonus()` is not called during damage formula construction. Damage formulas are built inline in `build_all_roll_formulas()` and only check for specific school IDs (courtier, brotherhood_of_shinsei_monk). There is no generic mechanism to apply 1st Dan extra die to damage rolls.
+- Damage extra die: implemented via school-specific code in `app/services/dice.py` damage section.
 
-**Unit tests:** None specific to Yogo Warden 1st Dan.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_yogo_warden_1st_dan_damage_extra_die` - verifies +1k0 on damage rolls
 **Clicktests:** None school-specific.
 
 **Questions (ANSWERED):**
 - Yes, the "damage" extra die adds +1k0 (one extra rolled die) to all damage rolls. This needs school-specific handling in the damage formula builder since the generic `_apply_school_technique_bonus()` is not called for damage rolls. Same applies to Kuni Witch Hunter.
 
 **Missing:**
-- [ ] Implement +1k0 on all damage rolls for Yogo Warden (school-specific code in damage formula builder)
-- [ ] Unit test: Yogo Warden 1st Dan gets +1 rolled die on attack, damage, and wound check
+- [x] ~~Implement +1k0 on all damage rolls for Yogo Warden (school-specific code in damage formula builder)~~ - DONE
+- [x] ~~Unit test: Yogo Warden 1st Dan gets +1 rolled die on attack, damage, and wound check~~ - `test_dice.py::TestSchoolAbilities::test_yogo_warden_1st_dan_damage_extra_die`
 - [ ] Clicktest verifying the extra die appears in the roll formula display for attack/damage/wound_check
 
 ---
@@ -98,9 +99,11 @@
 
 > Raise your current and maximum Earth by 1. Raising your Earth now costs 5 fewer XP. You get an extra free raise for each void point you spend on wound check rolls.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Earth, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Extra free raise per void point spent on wound checks" is NOT implemented. This means each VP spent on a wound check should provide an additional +5 (free raise) on top of the normal +1k1 benefit.
+- VP for extra free raise on wound checks:
+  - Server: `app/routes/pages.py` passes `wc_vp_free_raise: true` in void_spend_config when yogo_warden and dan >= 4 (same pattern as Akodo 4th Dan).
+  - Client: `app/templates/character/sheet.html` applies +5 per VP flat bonus on wound check VP spending path.
 
 **Unit tests:**
 - `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
@@ -111,8 +114,8 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
 **Missing:**
-- [ ] Implement "extra free raise per VP on wound checks" for Yogo Warden 4th Dan
-- [ ] Display the additional +5 per VP in the wound check modal
+- [x] Implement "extra free raise per VP on wound checks" for Yogo Warden 4th Dan
+- [x] Display the additional +5 per VP in the wound check modal
 - [ ] Unit test: Yogo Warden 4th Dan wound check gets extra +5 per VP spent
 - [ ] Clicktest: wound check at 4th Dan shows enhanced VP bonus
 

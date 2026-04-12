@@ -629,3 +629,242 @@ class TestBuildAllRollFormulas:
                 assert formula["reroll_tens"] is True
             else:
                 assert formula["reroll_tens"] is False
+
+
+# ---------------------------------------------------------------------------
+# School-specific ability tests
+# ---------------------------------------------------------------------------
+
+
+class TestSchoolAbilities:
+    """Tests for individual school abilities implemented in dice.py."""
+
+    # --- Yogo Warden: +1k0 on damage (1st Dan) ---
+    def test_yogo_warden_1st_dan_damage_extra_die(self):
+        char = make_character_data(
+            school="yogo_warden",
+            knacks={"double_attack": 1, "iaijutsu": 1, "feint": 1},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["attack"]
+        assert atk["damage_extra_rolled"] == 1
+        assert any("1st Dan" in s for s in atk["damage_bonus_sources"])
+
+    # --- Kuni Witch Hunter: +1k0 on damage (1st Dan) ---
+    def test_kuni_witch_hunter_1st_dan_damage_extra_die(self):
+        char = make_character_data(
+            school="kuni_witch_hunter",
+            knacks={"detect_taint": 1, "iaijutsu": 1, "presence": 1},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["attack"]
+        assert atk["damage_extra_rolled"] == 1
+        assert any("1st Dan" in s for s in atk["damage_bonus_sources"])
+
+    # --- Shiba Bushi: +3k1 on wound checks (4th Dan) ---
+    def test_shiba_bushi_4th_dan_wound_check_3k1(self):
+        char = make_character_data(
+            school="shiba_bushi",
+            knacks={"counterattack": 4, "double_attack": 4, "iaijutsu": 4},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        wc = formulas["wound_check"]
+        # Base: Water(3)+1=4 rolled, 3 kept. 1st Dan: +1 rolled. 4th Dan: +3 rolled, +1 kept.
+        assert wc["rolled"] == 8  # 4 + 1 + 3
+        assert wc["kept"] == 4    # 3 + 1
+        assert any("3k1" in s for s in wc["bonus_sources"])
+
+    def test_shiba_bushi_below_4th_dan_no_3k1(self):
+        char = make_character_data(
+            school="shiba_bushi",
+            knacks={"counterattack": 3, "double_attack": 3, "iaijutsu": 3},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        wc = formulas["wound_check"]
+        # Base: Water(3)+1=4 rolled, 3 kept. 1st Dan: +1 rolled. No 4th Dan bonus.
+        assert wc["rolled"] == 5
+        assert wc["kept"] == 3
+
+    # --- Kakita Duelist: +5 on iaijutsu damage (4th Dan) ---
+    def test_kakita_duelist_4th_dan_iaijutsu_damage_bonus(self):
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 4, "iaijutsu": 4, "lunge": 4},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        iai = formulas["knack:iaijutsu"]
+        assert iai["damage_flat_bonus"] == 5
+        assert any("4th Dan" in s for s in iai["damage_bonus_sources"])
+        # Other attack types should NOT have the +5
+        atk = formulas["attack"]
+        assert atk["damage_flat_bonus"] == 0
+
+    def test_kakita_duelist_below_4th_dan_no_damage_bonus(self):
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        iai = formulas["knack:iaijutsu"]
+        assert iai["damage_flat_bonus"] == 0
+
+    # --- Kitsuki Magistrate: +2*Water flat on attacks ---
+    def test_kitsuki_magistrate_attack_water_bonus(self):
+        char = make_character_data(
+            school="kitsuki_magistrate",
+            knacks={"discern_honor": 1, "iaijutsu": 1, "presence": 1},
+            attack=2,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        f = build_combat_formula("attack", char)
+        # +2*Water(3) = +6 flat
+        assert f.flat == 6
+        assert any("Kitsuki" in b["label"] for b in f.bonuses)
+
+    def test_kitsuki_magistrate_parry_no_water_bonus(self):
+        char = make_character_data(
+            school="kitsuki_magistrate",
+            knacks={"discern_honor": 1, "iaijutsu": 1, "presence": 1},
+            parry=2,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        f = build_combat_formula("parry", char)
+        assert f.flat == 0  # Water bonus only on attacks
+
+    # --- Kitsuki Magistrate: Water for interrogation ---
+    def test_kitsuki_magistrate_interrogation_uses_water(self):
+        char = make_character_data(
+            school="kitsuki_magistrate",
+            knacks={"discern_honor": 1, "iaijutsu": 1, "presence": 1},
+            skills={"interrogation": 2},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+        )
+        f = build_skill_formula("interrogation", char)
+        # Should use Water(4) not Air(3)
+        assert f.label == "Interrogation (Water)"
+        assert f.kept == 4  # Water ring
+        assert f.rolled == 2 + 4 + 1  # rank + Water + 1st Dan extra die
+
+    # --- Shosuro Actor: +acting rolled dice on attack/parry/wound_check ---
+    def test_shosuro_actor_attack_acting_bonus(self):
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 1, "discern_honor": 1, "pontificate": 1},
+            skills={"acting": 3},
+            attack=2,
+        )
+        f = build_combat_formula("attack", char)
+        # Base: 2(attack) + 2(Fire) = 4. 1st Dan: +1. Acting: +3.
+        assert f.rolled == 8
+
+    def test_shosuro_actor_parry_acting_bonus(self):
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 1, "discern_honor": 1, "pontificate": 1},
+            skills={"acting": 2},
+            parry=2,
+        )
+        f = build_combat_formula("parry", char)
+        # Base: 2(parry) + 2(Air) = 4. Acting adds 2 rolled.
+        assert f.rolled == 6
+
+    def test_shosuro_actor_wound_check_acting_bonus(self):
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 1, "discern_honor": 1, "pontificate": 1},
+            skills={"acting": 3},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        wc = formulas["wound_check"]
+        # Base: Water(3)+1=4 rolled, 3 kept. 1st Dan: +1 rolled. Acting: +3 rolled.
+        assert wc["rolled"] == 8
+        assert any("Acting" in s for s in wc["bonus_sources"])
+
+    def test_shosuro_actor_no_acting_skill_no_bonus(self):
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 1, "discern_honor": 1, "pontificate": 1},
+            attack=2,
+        )
+        f = build_combat_formula("attack", char)
+        # No acting skill, so no acting bonus. Base: 2(attack) + 2(Fire) + 1(1st Dan) = 5
+        assert f.rolled == 5
+
+    # --- Courtier 5th Dan: +Air to all TN and contested rolls ---
+    def test_courtier_5th_dan_skill_air_bonus(self):
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+            skills={"bragging": 2},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        f = build_skill_formula("bragging", char)
+        # Should have +3 (Air) from 5th Dan
+        assert any("5th Dan" in b["label"] and b["amount"] == 3 for b in f.bonuses)
+
+    def test_courtier_5th_dan_combat_air_bonus(self):
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+            attack=2,
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        # build_combat_formula applies 5th Dan bonus; the Courtier special
+        # +Air on attacks is applied in _annotate_attack_type (build_all_roll_formulas)
+        f = build_combat_formula("attack", char)
+        assert any("5th Dan" in b["label"] and b["amount"] == 3 for b in f.bonuses)
+
+    def test_courtier_5th_dan_attack_stacks_with_special(self):
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+            attack=2,
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["attack"]
+        # Courtier special (+3 Air via _annotate_attack_type) + 5th Dan (+3 Air via build_combat_formula)
+        assert atk["flat"] == 6  # 3 + 3
+
+    def test_courtier_5th_dan_knack_air_bonus(self):
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        f = build_knack_formula("discern_honor", char)
+        assert any("5th Dan" in b["label"] and b["amount"] == 3 for b in f.bonuses)
+
+    def test_courtier_below_5th_dan_no_extra_air(self):
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 4, "oppose_social": 4, "worldliness": 4},
+            skills={"bragging": 2},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        f = build_skill_formula("bragging", char)
+        assert not any("5th Dan" in b.get("label", "") for b in f.bonuses)
+
+    # --- Bayushi 5th Dan: half light wounds flag on wound check ---
+    def test_bayushi_5th_dan_half_lw_flag(self):
+        char = make_character_data(
+            school="bayushi_bushi",
+            knacks={"double_attack": 5, "feint": 5, "iaijutsu": 5},
+        )
+        formulas = build_all_roll_formulas(char)
+        assert formulas["wound_check"]["bayushi_5th_dan_half_lw"] is True
+
+    def test_bayushi_below_5th_dan_no_half_lw_flag(self):
+        char = make_character_data(
+            school="bayushi_bushi",
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+        )
+        formulas = build_all_roll_formulas(char)
+        assert formulas["wound_check"]["bayushi_5th_dan_half_lw"] is False

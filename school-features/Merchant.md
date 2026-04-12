@@ -30,9 +30,9 @@
 
 > Rank considered 5.0 higher for stipend (4th Dan technique mentions this).
 
-**Status:** Fully implemented.
+**Status:** BUG FIXED. Now gated behind 4th Dan (dan >= 4) in `status.py`.
 - `app/services/status.py:63-69` adds +5 to stipend rank when school is "merchant" or "shosuro_actor".
-- The bonus is unconditional (not gated by Dan level in the current implementation).
+- The bonus is now correctly gated behind 4th Dan (dan >= 4).
 
 **Implementation:** `app/services/status.py:63-69`.
 
@@ -40,6 +40,8 @@
 - `test_effective_status.py:185` - `test_merchant_school_stipend` verifies stipend calculation
 - `test_effective_status.py:169` - `test_household_wealth_with_merchant` verifies interaction with Household Wealth
 - `test_effective_status.py:210` - additional stipend test with Merchant
+- `test_effective_status.py::TestMerchantStipend::test_merchant_school_stipend_below_4th_dan` - verifies no stipend bonus below 4th Dan
+- `test_effective_status.py::TestMerchantStipend::test_merchant_school_stipend_at_4th_dan` - verifies stipend bonus at 4th Dan
 
 **Clicktests:**
 - `test_sheet_advanced.py:34` - `test_stipend_with_merchant_school` e2e test
@@ -105,19 +107,21 @@
 **Status:** Fully implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 - Stipend +5 rank is implemented in `status.py:63-69` (see Stipend Bonus section above).
-- Note: The stipend bonus is currently applied unconditionally regardless of Dan level.
+- The stipend bonus is now correctly gated behind 4th Dan (dan >= 4).
 
 **Unit tests:**
 - `test_effective_status.py:185` - tests stipend with Merchant school
+- `test_effective_status.py::TestMerchantStipend::test_merchant_school_stipend_below_4th_dan` - verifies no stipend bonus below 4th Dan
+- `test_effective_status.py::TestMerchantStipend::test_merchant_school_stipend_at_4th_dan` - verifies stipend bonus at 4th Dan
 
 **Clicktests:**
 - `test_sheet_advanced.py:34` - tests stipend display with Merchant school
 
 **Questions (ANSWERED):**
-- Should the stipend +5 be gated behind 4th Dan? **YES.** The stipend bonus is a 4th Dan technique and should only apply at 4th Dan+. The current implementation is a bug.
+- Should the stipend +5 be gated behind 4th Dan? **YES.** The stipend bonus is a 4th Dan technique and should only apply at 4th Dan+. This has been fixed.
 
 **Missing:**
-- [ ] **BUG:** Gate the stipend +5 behind 4th Dan (dan >= 4 check in `status.py`)
+- [x] ~~**BUG:** Gate the stipend +5 behind 4th Dan (dan >= 4 check in `status.py`)~~ - FIXED
 
 ---
 

@@ -119,12 +119,20 @@
 
 > When you fail a wound check, calculate your serious wounds as if you had half your number of light wounds.
 
-**Status:** NOT implemented. This modifies the wound check failure outcome formula. Uses `floor(light_wounds / 2)` for rounding.
+**Status:** Fully implemented.
+- Server: `app/services/dice.py:build_wound_check_formula()` sets `bayushi_5th_dan_half_lw: True` flag.
+- Client: `app/templates/character/sheet.html` uses `Math.floor(lw / 2)` for serious wound calculation when flag is set.
+
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_bayushi_5th_dan_half_lw_flag`
+- `test_dice.py::TestSchoolAbilities::test_bayushi_below_5th_dan_no_half_lw_flag`
+
+**Clicktests:** None.
 
 **Missing:**
-- [ ] Implement the 5th Dan half-light-wounds mechanic in wound check resolution
-- [ ] Display the modified serious wound calculation in the wound check result
-- [ ] Unit test: Bayushi 5th Dan failed wound check uses halved light wounds
+- [x] Implement the 5th Dan half-light-wounds mechanic in wound check resolution
+- [x] Display the modified serious wound calculation in the wound check result
+- [x] Unit test: Bayushi 5th Dan failed wound check uses halved light wounds
 - [ ] Clicktest: wound check failure at 5th Dan shows reduced serious wounds
 
 ---

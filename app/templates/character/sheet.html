@@ -2186,7 +2186,7 @@
             rollMenuOptions: [],
             rollMenuHasStrike: false,
             rollMenuHasParry: false,
-            voidSpendConfig: { cap: 0, worldliness_max: 0 },
+            voidSpendConfig: { cap: 0, worldliness_max: 0, combat_vp_flat_bonus: 0, wc_vp_free_raise: false },
 
             init() {
                 try {
@@ -2501,6 +2501,11 @@
                     f.void_spent = voidCount;
                     if (f.rolled > 10) { f.kept += f.rolled - 10; f.rolled = 10; }
                     if (f.kept > 10) { f.flat += 2 * (f.kept - 10); f.kept = 10; }
+                    // Mirumoto 5th Dan: +10 per VP on combat rolls
+                    const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
+                    if (combatBonus > 0) {
+                        f.flat += voidCount * combatBonus;
+                    }
                     const options = this.computeVoidOptions();
                     if (options[voidCount - 1]) this.deductVoidPoints(options[voidCount - 1]);
                 }
@@ -2571,9 +2576,9 @@
                 const wR = this.duelWeaponRolled;
                 const wK = this.duelWeaponKept;
                 const extraDice = Math.max(0, this.duelStrikeExcess);
-                let rolled = wR + ringVal + extraDice;
-                let kept = wK;
-                let flat = 0;
+                let rolled = wR + ringVal + (f.damage_extra_rolled || 0) + extraDice;
+                let kept = wK + (f.damage_extra_kept || 0);
+                let flat = f.damage_flat_bonus || 0;
                 if (rolled > 10) { kept += rolled - 10; rolled = 10; }
                 if (kept > 10) { flat += 2 * (kept - 10); kept = 10; }
                 const rk = `${rolled},${kept}`;
@@ -2746,6 +2751,11 @@
                         formula.flat += 2 * overflow;
                         formula.void_overflow_bonus = 2 * overflow;
                         formula.kept = 10;
+                    }
+                    // Mirumoto 5th Dan: +10 per VP on combat rolls
+                    const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
+                    if (combatBonus > 0) {
+                        formula.flat += voidCount * combatBonus;
                     }
                     const options = this.computeVoidOptions();
                     if (options[voidCount - 1]) this.deductVoidPoints(options[voidCount - 1]);
@@ -2928,6 +2938,15 @@
                         formula.void_overflow_bonus = 2 * overflow;
                         formula.kept = 10;
                     }
+                    // Mirumoto 5th Dan: +10 per VP on combat rolls (wound checks are combat rolls)
+                    const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
+                    if (combatBonus > 0) {
+                        formula.flat += voidCount * combatBonus;
+                    }
+                    // Akodo 4th Dan / Yogo Warden 4th Dan: +5 per VP on wound checks
+                    if (this.voidSpendConfig.wc_vp_free_raise) {
+                        formula.flat += voidCount * 5;
+                    }
                     // Deduct void
                     const options = this.computeVoidOptions();
                     if (options[voidCount - 1]) this.deductVoidPoints(options[voidCount - 1]);
@@ -2971,7 +2990,10 @@
                     this.wcMargin = effectiveTotal - lw;
                 } else {
                     this.wcPassed = false;
-                    this.wcMargin = lw - effectiveTotal;
+                    // Bayushi 5th Dan: calculate serious wounds as if half light wounds
+                    const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
+                        ? Math.floor(lw / 2) : lw;
+                    this.wcMargin = effectiveLw - effectiveTotal;
                     this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
                 }
 

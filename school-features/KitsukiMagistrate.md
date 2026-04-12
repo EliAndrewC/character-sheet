@@ -11,18 +11,24 @@
 
 > You use Water for interrogation rolls, and you add twice your Water to all attack rolls.
 
-**Status:** NOT implemented. Neither the Water-for-interrogation substitution nor the +2x Water flat bonus on attacks is coded.
+**Status:** Fully implemented.
+- Water for interrogation: `app/services/dice.py:build_skill_formula()` overrides ring to Water for kitsuki_magistrate + interrogation.
+- +2*Water on attacks: `app/services/dice.py:build_combat_formula()` adds 2*Water flat bonus for kitsuki_magistrate attacks.
 
-**Implementation:** `app/game_data.py:1307-1309` (definition only).
+**Implementation:** `app/game_data.py:1307-1309` (definition), `app/services/dice.py` (build_skill_formula, build_combat_formula).
 
-**Unit tests:** None.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_kitsuki_magistrate_interrogation_uses_water`
+- `test_dice.py::TestSchoolAbilities::test_kitsuki_magistrate_attack_water_bonus`
+- `test_dice.py::TestSchoolAbilities::test_kitsuki_magistrate_parry_no_water_bonus`
+
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement Water ring substitution for interrogation rolls (use Water instead of the normal ring)
-- [ ] Implement +2x Water flat bonus on all attack rolls
-- [ ] Unit test: interrogation formula uses Water ring
-- [ ] Unit test: attack formula includes +2*Water flat bonus
+- [x] Implement Water ring substitution for interrogation rolls (use Water instead of the normal ring)
+- [x] Implement +2x Water flat bonus on all attack rolls
+- [x] Unit test: interrogation formula uses Water ring
+- [x] Unit test: attack formula includes +2*Water flat bonus
 - [ ] Clicktest: interrogation roll uses Water ring value
 - [ ] Clicktest: attack roll shows the +2*Water bonus
 

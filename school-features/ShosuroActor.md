@@ -11,16 +11,23 @@
 
 > Roll extra dice equal to your acting on attack, parry, and wound check rolls.
 
-**Status:** NOT implemented. This requires reading the character's acting skill rank and adding that many extra rolled dice to attack, parry, and wound check formulas.
+**Status:** Fully implemented.
+- Attack/parry: `app/services/dice.py:build_combat_formula()` adds acting skill rank as extra rolled dice.
+- Wound check: `app/services/dice.py:build_wound_check_formula()` adds acting skill rank as extra rolled dice.
 
-**Implementation:** `app/game_data.py:1474-1476` (definition only).
+**Implementation:** `app/game_data.py:1474-1476` (definition), `app/services/dice.py` (build_combat_formula, build_wound_check_formula).
 
-**Unit tests:** None.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_shosuro_actor_attack_acting_bonus`
+- `test_dice.py::TestSchoolAbilities::test_shosuro_actor_parry_acting_bonus`
+- `test_dice.py::TestSchoolAbilities::test_shosuro_actor_wound_check_acting_bonus`
+- `test_dice.py::TestSchoolAbilities::test_shosuro_actor_no_acting_skill_no_bonus`
+
 **Clicktests:** None.
 
 **Missing:**
-- [ ] Implement +acting_rank extra rolled dice on attack/parry/wound_check
-- [ ] Unit test: attack/parry/wound_check formulas include acting-based extra dice
+- [x] Implement +acting_rank extra rolled dice on attack/parry/wound_check
+- [x] Unit test: attack/parry/wound_check formulas include acting-based extra dice
 - [ ] Clicktest: roll formulas show the acting skill bonus
 
 ---
@@ -29,15 +36,17 @@
 
 > Rank considered 5.0 higher for stipend (4th Dan technique mentions this).
 
-**Status:** Fully implemented.
+**Status:** BUG FIXED. Now gated behind 4th Dan (dan >= 4) in `status.py`.
 - `app/services/status.py:63-69` adds +5 to stipend rank when school is "merchant" or "shosuro_actor".
-- The bonus is unconditional (not gated by Dan level in the current implementation).
+- The bonus is now correctly gated behind 4th Dan (dan >= 4).
 
 **Implementation:** `app/services/status.py:63-69`.
 
 **Unit tests:**
 - `test_effective_status.py:176` - `test_household_wealth_with_shosuro_actor` verifies interaction with Household Wealth
 - `test_effective_status.py:190` - `test_shosuro_actor_stipend` verifies stipend calculation
+- `test_effective_status.py::TestMerchantStipend::test_shosuro_actor_stipend_below_4th_dan` - verifies no stipend bonus below 4th Dan
+- `test_effective_status.py::TestMerchantStipend::test_shosuro_actor_stipend_at_4th_dan` - verifies stipend bonus at 4th Dan
 
 **Clicktests:** None specific to Shosuro stipend (Merchant stipend is tested in `test_sheet_advanced.py`).
 
@@ -105,18 +114,20 @@
 **Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 - Stipend +5 rank is implemented in `status.py:63-69` (see Stipend Bonus section above).
-- Note: The stipend bonus is currently applied unconditionally regardless of Dan level.
+- The stipend bonus is now correctly gated behind 4th Dan (dan >= 4).
 
 **Unit tests:**
 - `test_effective_status.py:190` - tests stipend with Shosuro Actor
+- `test_effective_status.py::TestMerchantStipend::test_shosuro_actor_stipend_below_4th_dan` - verifies no stipend bonus below 4th Dan
+- `test_effective_status.py::TestMerchantStipend::test_shosuro_actor_stipend_at_4th_dan` - verifies stipend bonus at 4th Dan
 
 **Clicktests:** None specific.
 
 **Questions (ANSWERED):**
-- Should the stipend +5 be gated behind 4th Dan? **YES.** The stipend bonus is a 4th Dan technique and should only apply at 4th Dan+. The current implementation is a bug.
+- Should the stipend +5 be gated behind 4th Dan? **YES.** The stipend bonus is a 4th Dan technique and should only apply at 4th Dan+. This has been fixed.
 
 **Missing:**
-- [ ] **BUG:** Gate the stipend +5 behind 4th Dan (dan >= 4 check in `status.py`)
+- [x] ~~**BUG:** Gate the stipend +5 behind 4th Dan (dan >= 4 check in `status.py`)~~ - FIXED
 
 ---
 

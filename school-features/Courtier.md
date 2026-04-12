@@ -122,8 +122,21 @@
 
 > Add your Air to all TN and contested rolls. This stacks with your Special Ability for attack rolls.
 
-**Status:** NOT implemented. This adds Air as a bonus to all TN and contested rolls, stacking with the Special Ability for attack rolls.
+**Status:** Fully implemented.
+- Skills: `app/services/dice.py:build_skill_formula()` adds +Air flat when courtier and dan >= 5.
+- Knacks: `app/services/dice.py:build_knack_formula()` adds +Air flat when courtier and dan >= 5.
+- Combat: `app/services/dice.py:build_combat_formula()` adds +Air flat when courtier and dan >= 5.
+- Stacks with the Special Ability +Air on attacks (applied via _annotate_attack_type).
+
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_courtier_5th_dan_skill_air_bonus`
+- `test_dice.py::TestSchoolAbilities::test_courtier_5th_dan_combat_air_bonus`
+- `test_dice.py::TestSchoolAbilities::test_courtier_5th_dan_knack_air_bonus`
+- `test_dice.py::TestSchoolAbilities::test_courtier_5th_dan_attack_stacks_with_special`
+- `test_dice.py::TestSchoolAbilities::test_courtier_below_5th_dan_no_extra_air`
+
+**Clicktests:** None.
 
 **Missing:**
-- [ ] Implement +Air on all TN and contested rolls
-- [ ] Ensure stacking with Special Ability for attack rolls
+- [x] Implement +Air on all TN and contested rolls
+- [x] Ensure stacking with Special Ability for attack rolls

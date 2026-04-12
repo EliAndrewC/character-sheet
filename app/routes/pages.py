@@ -210,9 +210,18 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     void_max = min(ring_vals)
     void_spend_cap = void_max - (1 if character.school in ("shugenja", "isawa_ishi") else 0)
     worldliness_max = char_knacks["worldliness"]["rank"] if "worldliness" in char_knacks else 0
+    # Mirumoto 5th Dan: VP provides +10 on combat rolls (in addition to +1k1)
+    mirumoto_5th_dan_bonus = 10 if character.school == "mirumoto_bushi" and dan >= 5 else 0
+    # Akodo 4th Dan: VP on wound checks also gives a free raise (+5 each)
+    akodo_4th_dan_wc_raise = character.school == "akodo_bushi" and dan >= 4
+    # Yogo Warden 4th Dan: VP on wound checks also gives a free raise (+5 each)
+    yogo_4th_dan_wc_raise = character.school == "yogo_warden" and dan >= 4
+
     void_spend_config = {
         "cap": max(0, void_spend_cap),
         "worldliness_max": worldliness_max,
+        "combat_vp_flat_bonus": mirumoto_5th_dan_bonus,
+        "wc_vp_free_raise": akodo_4th_dan_wc_raise or yogo_4th_dan_wc_raise,
     }
 
     # Compute wound check probability slice for client-side display.

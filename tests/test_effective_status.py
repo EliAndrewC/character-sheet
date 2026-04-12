@@ -166,29 +166,64 @@ class TestHouseholdWealth:
         status = compute_effective_status(data)
         assert status.stipend == 100  # 10^2
 
-    def test_household_wealth_with_merchant(self):
+    def test_household_wealth_with_merchant_below_4th_dan(self):
         data = make_character_data(
             school="merchant", campaign_advantages=["household_wealth"]
         )
         status = compute_effective_status(data)
+        assert status.stipend == 100  # 10^2 (no +5, below 4th Dan)
+
+    def test_household_wealth_with_merchant_at_4th_dan(self):
+        data = make_character_data(
+            school="merchant",
+            campaign_advantages=["household_wealth"],
+            knacks={"discern_honor": 4, "oppose_knowledge": 4, "worldliness": 4},
+        )
+        status = compute_effective_status(data)
         assert status.stipend == 225  # (10+5)^2
 
-    def test_household_wealth_with_shosuro_actor(self):
+    def test_household_wealth_with_shosuro_actor_below_4th_dan(self):
         data = make_character_data(
             school="shosuro_actor", campaign_advantages=["household_wealth"]
+        )
+        status = compute_effective_status(data)
+        assert status.stipend == 100  # 10^2 (no +5, below 4th Dan)
+
+    def test_household_wealth_with_shosuro_actor_at_4th_dan(self):
+        data = make_character_data(
+            school="shosuro_actor",
+            campaign_advantages=["household_wealth"],
+            knacks={"athletics": 4, "discern_honor": 4, "pontificate": 4},
         )
         status = compute_effective_status(data)
         assert status.stipend == 225  # (10+5)^2
 
 
 class TestMerchantStipend:
-    def test_merchant_school_stipend(self):
+    def test_merchant_school_stipend_below_4th_dan(self):
         data = make_character_data(school="merchant")
+        # Default knacks are rank 1 (dan=1), stipend bonus should NOT apply
+        status = compute_effective_status(data)
+        assert status.stipend == 16  # 4^2 (no +5 bonus)
+
+    def test_merchant_school_stipend_at_4th_dan(self):
+        data = make_character_data(
+            school="merchant",
+            knacks={"discern_honor": 4, "oppose_knowledge": 4, "worldliness": 4},
+        )
         status = compute_effective_status(data)
         assert status.stipend == 81  # (4+5)^2
 
-    def test_shosuro_actor_stipend(self):
+    def test_shosuro_actor_stipend_below_4th_dan(self):
         data = make_character_data(school="shosuro_actor")
+        status = compute_effective_status(data)
+        assert status.stipend == 16  # 4^2 (no +5 bonus)
+
+    def test_shosuro_actor_stipend_at_4th_dan(self):
+        data = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 4, "discern_honor": 4, "pontificate": 4},
+        )
         status = compute_effective_status(data)
         assert status.stipend == 81  # (4+5)^2
 
@@ -207,10 +242,19 @@ class TestStipendModifiers:
         assert "Household Wealth" in sources
 
     def test_school_modifier(self):
+        data = make_character_data(
+            school="merchant",
+            knacks={"discern_honor": 4, "oppose_knowledge": 4, "worldliness": 4},
+        )
+        status = compute_effective_status(data)
+        sources = [m["source"] for m in status.stipend_modifiers]
+        assert "Merchant (4th Dan)" in sources
+
+    def test_no_school_modifier_below_4th_dan(self):
         data = make_character_data(school="merchant")
         status = compute_effective_status(data)
         sources = [m["source"] for m in status.stipend_modifiers]
-        assert "Merchant" in sources
+        assert not any("Merchant" in s for s in sources)
 
 
 class TestCombined:

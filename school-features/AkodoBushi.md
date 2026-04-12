@@ -87,9 +87,11 @@
 
 > Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. You may spend void points after rolling a wound check to receive a free raise for each void point spent.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Spend void points for free raises on wound checks" is NOT implemented. This is a unique mechanic where each void point spent on a wound check provides an additional +5 (free raise) on top of the normal +1k1.
+- VP for free raises on wound checks:
+  - Server: `app/routes/pages.py` passes `wc_vp_free_raise: true` in void_spend_config when akodo_bushi and dan >= 4.
+  - Client: `app/templates/character/sheet.html` applies +5 per VP flat bonus on wound check VP spending path.
 
 **Unit tests:**
 - `test_remaining_features.py::TestFourthDanAutoRaise` - 7 tests covering the ring raise mechanics
@@ -101,8 +103,8 @@
 - Plus 6 additional 4th Dan ring state tests
 
 **Missing:**
-- [ ] Implement "void points also give free raises on wound checks" for Akodo 4th Dan
-- [ ] This should show as an additional +5 per void point in the wound check modal
+- [x] Implement "void points also give free raises on wound checks" for Akodo 4th Dan
+- [x] This should show as an additional +5 per void point in the wound check modal
 
 ---
 
