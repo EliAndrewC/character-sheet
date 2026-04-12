@@ -73,6 +73,14 @@ def can_view_drafts(
     return False
 
 
+def get_all_editors(
+    character_editor_ids: List[str],
+    owner_granted_ids: List[str],
+) -> List[str]:
+    """Merge character-level editors with owner's account-level grants."""
+    return list(set(character_editor_ids + owner_granted_ids))
+
+
 def can_edit_character(
     user_discord_id: Optional[str],
     character_owner_id: Optional[str],
@@ -84,7 +92,7 @@ def can_edit_character(
     Returns True if the user is:
     - The character's owner
     - An admin
-    - Granted account-level access by the owner
+    - In the granted_editors list (character-level or account-level)
     """
     if user_discord_id is None:
         return False

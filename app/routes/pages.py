@@ -414,10 +414,17 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
     if not character:
         return HTMLResponse("Character not found", status_code=404)
 
+    from app.models import User as UserModel
+    from app.services.auth import get_all_editors
+    owner = db.query(UserModel).filter(UserModel.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
     if not can_edit_character(
         user["discord_id"],
         character.owner_discord_id,
-        character.editor_discord_ids or [],
+        all_editors,
     ):
         return HTMLResponse("You don't have permission to edit this character.", status_code=403)
 

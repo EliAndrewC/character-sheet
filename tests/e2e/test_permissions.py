@@ -45,12 +45,12 @@ def test_tracking_buttons_hidden_for_nonadmin(page, page_nonadmin, live_server_u
     page_nonadmin.goto(url)
     page_nonadmin.wait_for_selector('text="Tracking"')
     # Values still visible
-    serious = page_nonadmin.locator('text="Serious Wounds"').locator('..').locator('span.text-2xl')
-    assert serious.text_content().strip() == "0"
+    serious = page_nonadmin.locator('text="Serious Wounds"').locator('..').locator('span.font-bold')
+    assert serious.first.text_content().strip() == "0"
     # But +/- buttons should not be present
     assert page_nonadmin.locator('text="Serious Wounds"').locator('..').locator('button', has_text="+").count() == 0
     assert page_nonadmin.locator('text="Light Wounds"').locator('..').locator('button', has_text="+").count() == 0
-    assert page_nonadmin.locator('text="Void Points"').locator('..').locator('button', has_text="+").count() == 0
+    assert page_nonadmin.locator('text="Void Points"').locator('..').locator('..').locator('button', has_text="+").count() == 0
 
 
 def test_track_endpoint_forbidden_for_nonadmin(page, page_nonadmin, live_server_url):
@@ -86,6 +86,26 @@ def test_owner_dropdown_visible_for_admin(page, live_server_url):
     page.locator('a:text-is("Edit")').click()
     page.wait_for_selector('input[name="name"]')
     assert page.locator('select[name="owner_discord_id"]').is_visible()
+
+
+def test_granted_user_can_access_edit_page(page, page_nonadmin, live_server_url):
+    """User granted account-level access can load the edit page."""
+    # Create a character as admin
+    url = create_and_apply(page, live_server_url, "Shared Char")
+    char_id = url.rstrip("/").split("/")[-1]
+
+    # Grant access to test_user_1 (nonadmin) via profile page
+    page.goto(f"{live_server_url}/profile")
+    grant_cb = page.locator('input[name="grant_test_user_1"]')
+    if not grant_cb.is_checked():
+        grant_cb.check()
+    page.locator('button[type="submit"]', has_text="Save").click()
+    page.wait_for_load_state("networkidle")
+
+    # Now nonadmin should be able to load the edit page
+    page_nonadmin.goto(f"{live_server_url}/characters/{char_id}/edit")
+    page_nonadmin.wait_for_selector('input[name="name"]', timeout=5000)
+    assert page_nonadmin.input_value('input[name="name"]') == "Shared Char"
 
 
 def test_owner_dropdown_hidden_for_nonadmin(page, page_nonadmin, live_server_url):
