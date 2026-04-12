@@ -109,12 +109,14 @@
 
 > Gain a temporary void point whenever you spend a void point that was not gained from this technique.
 
-**Status:** NOT implemented. This reactive ability grants temp VP whenever the Ide spends normal VP (not technique-specific VP). The school is in `SCHOOLS_WITH_TEMP_VOID` (via the "temporary void" text in the technique).
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `ide_temp_vp_on_spend: true` in school_abilities.
+- Client: `app/templates/character/sheet.html` hooks into `deductVoidPoints()` to auto-grant temp VP when non-temp VP is spent.
 
 **Questions (ANSWERED):**
 - "Not gained from this technique" means VP gained from the 5th Dan itself cannot trigger more temp VP. This prevents the infinite loop.
 - Normal VP and temp VP from other sources can trigger this.
 
 **Missing:**
-- [ ] Implement auto-grant temp VP when spending non-technique VP
-- [ ] UI for temp VP auto-grant
+- [x] Implement auto-grant temp VP when spending non-technique VP
+- [x] UI for temp VP auto-grant

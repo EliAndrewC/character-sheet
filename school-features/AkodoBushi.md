@@ -112,8 +112,10 @@
 
 > After you take damage, you may spend void points to deal 10 light wounds to the attacker for every void point spent, up to the amount of damage you took.
 
-**Status:** NOT implemented. This is a reactive ability triggered after receiving damage.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `akodo_reflect_damage: true` in school_abilities.
+- Client: `app/templates/character/sheet.html` shows a "Reflect Damage" section in the wound check result with a VP input and button. Each VP spent deals 10 LW to the attacker (informational - applied on the attacker's sheet manually).
 
 **Missing:**
-- [ ] Implement the reflective damage mechanic
-- [ ] UI for spending void points after taking damage
+- [x] Implement the reflective damage mechanic
+- [x] UI for spending void points after taking damage

@@ -89,7 +89,9 @@
 
 **Status:** Partially implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Lunge always rolls an extra damage die even if unsuccessfully parried" is NOT implemented. This requires modifying the lunge damage formula when the lunge is parried.
+- "Lunge always rolls an extra damage die even if unsuccessfully parried" is implemented:
+  - Server: `app/routes/pages.py` passes `otaku_lunge_extra_die: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` in `atkComputeDamage()`, when lunge is unsuccessfully parried, adds the lunge extra die back after parry reduction.
 
 **Unit tests:**
 - `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
@@ -100,8 +102,8 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
 **Missing:**
-- [ ] Implement "lunge extra damage die on unsuccessful parry" for Otaku 4th Dan
-- [ ] Modify lunge damage formula to include the bonus die
+- [x] Implement "lunge extra damage die on unsuccessful parry" for Otaku 4th Dan
+- [x] Modify lunge damage formula to include the bonus die
 - [ ] Unit test: Otaku 4th Dan lunge damage includes extra die
 - [ ] Clicktest: lunge damage at 4th Dan shows extra die even after failed parry
 

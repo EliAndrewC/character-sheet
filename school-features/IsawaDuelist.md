@@ -63,7 +63,9 @@
 
 > After you make any type of attack roll, you may lower your TN to be hit by 5 for the next time that you are attacked this round to get a bonus of 3X on your attack roll, where X is your attack skill. If a successful or unsuccessful parry is made against your attack, you do not suffer the TN penalty.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `isawa_tn_trade: true` and `isawa_tn_trade_bonus: 3*attack_skill` in school_abilities.
+- Client: `app/templates/character/sheet.html` shows a checkbox toggle in the attack modal pre-roll phase: "Trade -5 TN to be hit for +3X on this attack." When checked, adds the flat bonus to the attack roll. Note about TN penalty waiver if parried is informational only.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
@@ -71,8 +73,8 @@
 - If the attack is parried (successfully or not), the TN penalty is waived.
 
 **Missing:**
-- [ ] Implement the TN-trade-for-attack-bonus mechanic
-- [ ] UI toggle or button for choosing to trade TN
+- [x] Implement the TN-trade-for-attack-bonus mechanic
+- [x] UI toggle or button for choosing to trade TN
 - [ ] Track the TN reduction for the next round
 
 ---

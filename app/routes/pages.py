@@ -217,11 +217,43 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     # Yogo Warden 4th Dan: VP on wound checks also gives a free raise (+5 each)
     yogo_4th_dan_wc_raise = character.school == "yogo_warden" and dan >= 4
 
+    attack_skill = char_dict.get("attack", 1)
     void_spend_config = {
         "cap": max(0, void_spend_cap),
         "worldliness_max": worldliness_max,
         "combat_vp_flat_bonus": mirumoto_5th_dan_bonus,
         "wc_vp_free_raise": akodo_4th_dan_wc_raise or yogo_4th_dan_wc_raise,
+    }
+
+    # School-specific ability flags for client-side conditional UI
+    school_abilities = {
+        # Togashi 5th Dan: spend 1 VP to heal 2 serious wounds
+        "togashi_heal_sw": character.school == "togashi_ise_zumi" and dan >= 5,
+        # Hida 4th Dan: trade 2 SW to reset light wounds to 0
+        "hida_trade_sw": character.school == "hida_bushi" and dan >= 4,
+        # Ide 5th Dan: gain temp VP when spending non-technique VP
+        "ide_temp_vp_on_spend": character.school == "ide_diplomat" and dan >= 5,
+        # Yogo Warden 3rd Dan: each VP spent reduces light wounds by 2*attack
+        "yogo_vp_heals_lw": character.school == "yogo_warden" and dan >= 3,
+        "yogo_vp_heal_amount": 2 * attack_skill if character.school == "yogo_warden" and dan >= 3 else 0,
+        # Matsu 3rd Dan: spend VP to bank 3*attack for future wound check bonus
+        "matsu_vp_wc_bonus": character.school == "matsu_bushi" and dan >= 3,
+        "matsu_vp_wc_amount": 3 * attack_skill if character.school == "matsu_bushi" and dan >= 3 else 0,
+        # Matsu 5th Dan: defender LW reset to 15 after dealing serious wounds
+        "matsu_lw_reset_15": character.school == "matsu_bushi" and dan >= 5,
+        # Akodo 5th Dan: spend VP after damage to deal 10 LW per VP back
+        "akodo_reflect_damage": character.school == "akodo_bushi" and dan >= 5,
+        # Isawa Duelist 3rd Dan: trade -5 TN for +3*attack on attack
+        "isawa_tn_trade": character.school == "isawa_duelist" and dan >= 3,
+        "isawa_tn_trade_bonus": 3 * attack_skill if character.school == "isawa_duelist" and dan >= 3 else 0,
+        # Otaku 4th Dan: lunge always rolls extra damage die even if parried
+        "otaku_lunge_extra_die": character.school == "otaku_bushi" and dan >= 4,
+        # Brotherhood 3rd Dan: adventure raises can lower action die by 5
+        "brotherhood_lower_action_die": character.school == "brotherhood_of_shinsei_monk" and dan >= 3,
+        # Shosuro 5th Dan: add lowest 3 dice to result on TN/contested rolls
+        "shosuro_add_lowest_3": character.school == "shosuro_actor" and dan >= 5,
+        # Matsu 4th Dan: miss by <20 on double attack = hit with no extra damage
+        "matsu_near_miss": character.school == "matsu_bushi" and dan >= 4,
     }
 
     # Compute wound check probability slice for client-side display.
@@ -345,6 +377,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "attack_probs": attack_probs,
             "damage_avgs": damage_avgs,
             "has_temp_void": character.school in SCHOOLS_WITH_TEMP_VOID,
+            "school_abilities": school_abilities,
         },
     )
 

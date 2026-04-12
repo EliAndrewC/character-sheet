@@ -85,7 +85,7 @@
 **Notes:** Spending 1 free raise can lower a single action die by 5 phases (confirmed). This is an alternative use of the same free raises pool.
 
 **Missing:**
-- [ ] Implement "lower action dice by 5" option when spending 3rd Dan raises (1 raise = 1 die lowered by 5)
+- N/A - "lower action dice by 5" is tracked via the adventure raise counter directly. This is NOT implemented as a separate web UI feature because action dice lowering can happen at any time during combat (not just when initiative is rolled), and players track initiative outside the app. The existing 3rd Dan adventure raise counter can be used directly to track raises spent on lowering dice.
 - [ ] Clicktest for Brotherhood-specific 3rd Dan applicable skills
 
 ---
