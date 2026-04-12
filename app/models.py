@@ -126,6 +126,10 @@ class Character(Base):
     # Format: {"advantage_id": {"text": "...", "skills": ["skill_id", ...], "player": "discord_id"}}
     advantage_details: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
 
+    # Player-chosen technique selections (for schools with flexible 1st/2nd Dan)
+    # Format: {"first_dan_choices": ["skill_id", ...], "second_dan_choice": "skill_id"}
+    technique_choices: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
+
     # Honor / Rank / Recognition
     honor: Mapped[float] = mapped_column(Float, default=1.0)
     rank: Mapped[float] = mapped_column(Float, default=7.5)
@@ -257,6 +261,7 @@ class Character(Base):
             "campaign_advantages": self.campaign_advantages or [],
             "campaign_disadvantages": self.campaign_disadvantages or [],
             "advantage_details": self.advantage_details or {},
+            "technique_choices": self.technique_choices or {},
             "honor": self.honor,
             "rank": self.rank,
             "rank_locked": self.rank_locked,
@@ -315,4 +320,5 @@ class Character(Base):
             current_void_points=data.get("current_void_points", 0),
             current_temp_void_points=data.get("current_temp_void_points", 0),
             notes=data.get("notes", ""),
+            technique_choices=data.get("technique_choices", {}),
         )

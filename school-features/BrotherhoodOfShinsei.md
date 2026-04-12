@@ -115,8 +115,4 @@
 
 > Once per round after you have been attacked but before damage is rolled, you may spend an action die from any phase to attack your attacker. If your attack roll is at least as high as your attacker's then the attack against you is canceled; your attack continues and you hit/miss and roll damage as normal.
 
-**Status:** NOT implemented. This is a reactive combat ability.
-
-**Missing:**
-- [ ] Implement reactive counter-attack mechanic
-- [ ] UI for spending action die to counter-attack after being attacked
+**Status:** Out of scope - requires reactive counter-attack mechanics (combat-phase tracking).

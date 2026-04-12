@@ -11,21 +11,12 @@
 
 > You may counterattack as an interrupt action by spending only 1 action die, but if you do so then the attacker gets a free raise on their attack roll.
 
-**Status:** NOT implemented.
-- No code in `dice.py` or templates modifies counterattack behavior for Hida Bushi.
-- The interrupt-for-1-die mechanic and the attacker's free raise are not tracked anywhere.
-- Hida Bushi is NOT in `SCHOOLS_WITH_TEMP_VOID` (no feint knack, no temporary void mentions).
+**Status:** Out of scope - requires combat-phase tracking (interrupt counterattack costing 1 action die).
 
 **Implementation:** `app/game_data.py:953` (definition only). No corresponding logic in `dice.py` or templates.
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Implement the interrupt counterattack mechanic (1 action die cost, attacker free raise)
-- [ ] UI indicator on the sheet showing this ability is available
-- [ ] Unit test: Hida Bushi counterattack formula reflects interrupt rules
-- [ ] Clicktest: counterattack action shows the 1-die cost and attacker free raise
 
 ---
 
@@ -85,7 +76,7 @@
 
 > Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. Instead of making a wound check, you may choose to take 2 serious wounds to reduce your light wounds to 0. You may not do this during the iaijutsu phase of a duel.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 - "Trade 2 serious wounds to reset light wounds to 0" is implemented:
   - Server: `app/routes/pages.py` passes `hida_trade_sw: true` in school_abilities.
@@ -110,13 +101,7 @@
 
 > When you counterattack successfully, note the quantity X by which the counterattack roll exceeded its TN. Add X to your wound check on the damage from the attack you counterattacked. You may choose to counterattack after seeing an opponent's damage roll, but that roll goes through even if your counterattack impairs or kills the opponent.
 
-**Status:** NOT implemented. This has two parts: a wound check bonus from counterattack excess and a reactive counterattack trigger.
-
-**Missing:**
-- [ ] Implement counterattack excess tracking and wound check bonus
-- [ ] Implement reactive counterattack after seeing damage
-- [ ] Unit test: Hida 5th Dan counterattack excess added to wound check
-- [ ] Clicktest: 5th Dan wound check reflects counterattack excess
+**Status:** Out of scope - requires tracking counterattack excess across rolls and reactive counterattack after seeing damage (combat-phase tracking).
 
 ---
 

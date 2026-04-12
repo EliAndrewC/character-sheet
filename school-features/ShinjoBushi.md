@@ -11,22 +11,12 @@
 
 > Each action you take in combat has a bonus of 2X, where X is the number of phases for which the action die was held.
 
-**Status:** NOT implemented.
-- No code tracks "phases held" or applies a +2X bonus to actions.
-- The initiative formula does not account for this bonus.
-- Shinjo Bushi is NOT in `SCHOOLS_WITH_TEMP_VOID` (no feint knack, no temporary void mentions).
+**Status:** Out of scope - requires combat-phase tracking (tracking how long each action die was held).
 
 **Implementation:** `app/game_data.py:1059` (definition only). No corresponding logic in `dice.py` or templates.
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Implement the phases-held bonus mechanic
-- [ ] Track phase holding state on the sheet
-- [ ] Apply +2X bonus to action rolls
-- [ ] Unit test: Shinjo special ability bonus calculation
-- [ ] Clicktest: action with held phases shows the +2X bonus
 
 ---
 
@@ -71,20 +61,13 @@
 
 > After a successful or unsuccessful parry, all your action dice are decreased by X, where X is equal to your attack skill. Action dice are considered to have been held since their newly lowered value. This can lower dice to negative numbers.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Out of scope - requires live action die manipulation and combat-phase tracking.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank.
 - "All your action dice" means all of the Shinjo's own remaining action dice are decreased.
 - "Considered to have been held since their newly lowered value" means the Special Ability's +2X bonus applies retroactively to the reduced values.
 - "Can lower dice to negative numbers" means there's no minimum.
-
-**Missing:**
-- [ ] Implement the 3rd Dan action dice reduction after parry
-- [ ] Track the reduced action dice values
-- [ ] Integrate with the special ability's phases-held bonus
-- [ ] Unit test: Shinjo 3rd Dan parry reduces action dice
-- [ ] Clicktest: parry at 3rd Dan shows action dice reduction
 
 ---
 

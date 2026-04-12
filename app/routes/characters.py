@@ -262,6 +262,8 @@ async def autosave_character(
         character.disadvantages = body["disadvantages"]
     if "advantage_details" in body:
         character.advantage_details = body["advantage_details"]
+    if "technique_choices" in body:
+        character.technique_choices = body["technique_choices"]
     if "honor" in body:
         character.honor = body["honor"]
     if "rank" in body:

@@ -81,16 +81,11 @@
 
 > Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. Once per round, you may lunge as an interrupt action at the cost of 1 action die.
 
-**Status:** Partially implemented.
+**Status:** Partially implemented. Ring raise is fully implemented; "lunge as interrupt action once per round" is out of scope (combat-phase tracking).
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Lunge once per round as an interrupt action" is NOT implemented. This is a combat-phase mechanic.
 
 **Unit tests:** None specific to Isawa Duelist 4th Dan.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Implement interrupt lunge mechanic (once per round)
-- [ ] UI indicator for interrupt lunge availability
 
 ---
 

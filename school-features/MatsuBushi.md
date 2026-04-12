@@ -84,7 +84,7 @@
 
 > Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. When you miss the TN on a double attack roll by less than 20, you are still considered to have hit, but you deal no extra damage.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 - "Near-misses on double attacks still hit with no bonus damage" is implemented:
   - Server: `app/routes/pages.py` passes `matsu_near_miss: true` in school_abilities.

@@ -520,6 +520,42 @@
                 </div>
             </div>
             {% endif %}
+            {% if school_abilities.get('ide_subtract_roll') %}
+            <div class="mt-2 pt-2 border-t border-ink/10" x-data="{ ideRolled: false, ideResult: 0 }">
+                <div class="text-sm text-ink/60 mb-1">Ide 3rd Dan - Subtract from Roll</div>
+                <div x-show="!ideRolled" class="flex items-center gap-2">
+                    <button type="button"
+                            @click="const t = window._trackingBridge; if (!t || t.voidPoints <= 0) return; t.voidPoints--; t.save(); const x = {{ school_abilities.get('ide_subtract_x', 0) }}; window.L7RDice.rollAllDice(x, true).then ? undefined : undefined; (async () => { const dice = await window._diceRoller._rerollDice(x, true, null); const s = [...dice].sort((a,b)=>a.value-b.value); ideResult = s[s.length-1].value; ideRolled = true; })()"
+                            :disabled="(window._trackingBridge?.voidPoints || 0) <= 0"
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                        Spend 1 VP to subtract <span>{{ school_abilities.get('ide_subtract_x', 0) }}</span>k1
+                    </button>
+                </div>
+                <div x-show="ideRolled" x-cloak class="text-sm font-bold text-accent">
+                    Subtract <span x-text="ideResult"></span> from opponent's roll
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('kuni_reflect_damage') %}
+            <div class="mt-2 pt-2 border-t border-ink/10" x-data="{ kuniLW: 0, reflected: false }">
+                <div class="text-sm text-ink/60 mb-1">Kuni 5th Dan - Reflect Damage</div>
+                <p class="text-xs text-ink/50 mb-1">After taking LW and resolving wound check, reflect that amount to attacker and take half yourself.</p>
+                <div x-show="!reflected" class="flex items-center gap-2">
+                    <input type="number" x-model.number="kuniLW" min="0" placeholder="LW taken"
+                           class="w-20 border rounded px-2 py-1 text-sm text-center">
+                    <button type="button"
+                            @click="const t = window._trackingBridge; if (t && kuniLW > 0) { const extra = Math.floor(kuniLW / 2); t.lightWounds += extra; t.save(); } reflected = true;"
+                            :disabled="kuniLW <= 0"
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                        Reflect
+                    </button>
+                </div>
+                <div x-show="reflected" x-cloak class="text-sm">
+                    <span class="font-bold text-accent">Reflected <span x-text="kuniLW"></span> LW to attacker.</span>
+                    <span class="text-ink/60">You take <span x-text="Math.floor(kuniLW / 2)"></span> additional LW.</span>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Per-Adventure Abilities (right column) -->

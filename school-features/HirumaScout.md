@@ -11,16 +11,12 @@
 
 > The two allies fighting on your left and right have their TN to be hit raised by 5.
 
-**Status:** NOT implemented beyond generic mechanics. This is a passive aura effect that requires positional tracking in combat.
+**Status:** Out of scope - requires positional tracking (who is adjacent to whom) not supported by the app.
 
 **Implementation:** `app/game_data.py:1279-1281` (definition only).
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Implement ally TN +5 aura (positional combat mechanic)
-- [ ] UI for designating adjacent allies
 
 ---
 
@@ -80,9 +76,9 @@
 
 > Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. After rolling initiative, lower all of your action dice by 2, to a minimum of 1.
 
-**Status:** Partially implemented.
+**Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- Action dice -2 is IMPLEMENTED in `dice.py:503` (`hiruma_4th_dan = school_id == "hiruma_scout" and dan >= 4`) and rendered on `sheet.html`.
+- Action dice -2 is implemented in `dice.py:503` (`hiruma_4th_dan = school_id == "hiruma_scout" and dan >= 4`) and rendered on `sheet.html`.
 
 **Implementation:** `app/services/dice.py:503` (`hiruma_4th_dan`), `app/templates/character/sheet.html` (initiative display).
 

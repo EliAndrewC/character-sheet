@@ -154,6 +154,7 @@ def _apply_school_technique_bonus(
     skill_or_knack_id: str,
     school_id: str,
     knacks: dict,
+    technique_choices: Optional[dict] = None,
 ) -> None:
     """Apply 1st Dan extra die and 2nd Dan free raise if the school has them."""
     if not school_id:
@@ -165,8 +166,20 @@ def _apply_school_technique_bonus(
         if skill_or_knack_id in bonuses_def["first_dan_extra_die"]:
             formula.rolled += 1
 
+    # Flexible 1st Dan: player-chosen skills (Ide, Isawa Ishi, Priest, Shugenja)
+    if dan >= 1 and bonuses_def.get("first_dan_extra_die") is None and technique_choices:
+        chosen = technique_choices.get("first_dan_choices") or []
+        if skill_or_knack_id in chosen:
+            formula.rolled += 1
+
     if dan >= 2 and bonuses_def.get("second_dan_free_raise"):
         if skill_or_knack_id == bonuses_def["second_dan_free_raise"]:
+            _add_flat_bonus(formula, "2nd Dan technique", FREE_RAISE_VALUE)
+
+    # Flexible 2nd Dan: player-chosen skill (Ide, Isawa Ishi, Shugenja)
+    if dan >= 2 and bonuses_def.get("second_dan_free_raise") is None and technique_choices:
+        chosen_2nd = technique_choices.get("second_dan_choice")
+        if chosen_2nd and skill_or_knack_id == chosen_2nd:
             _add_flat_bonus(formula, "2nd Dan technique", FREE_RAISE_VALUE)
 
 
@@ -228,7 +241,8 @@ def build_skill_formula(
     )
 
     knacks = character_data.get("knacks", {}) or {}
-    _apply_school_technique_bonus(formula, skill_id, school_id, knacks)
+    tech_choices = character_data.get("technique_choices") or {}
+    _apply_school_technique_bonus(formula, skill_id, school_id, knacks, tech_choices)
 
     # Courtier 5th Dan: +Air to all TN and contested rolls
     dan = compute_dan(knacks) if knacks else 0
@@ -278,6 +292,17 @@ def build_skill_formula(
                     SKILLS[source_id].name,
                     source_rank * per_rank * FREE_RAISE_VALUE,
                 )
+
+    # --- Priest 2nd Dan: free raise on Honor bonus rolls (bragging, precepts, open sincerity) ---
+    if school_id == "priest" and dan >= 2 and skill_id in ("bragging", "precepts", "sincerity"):
+        if skill_id == "sincerity":
+            # Sincerity honor bonus is conditional (open rolls only), so the priest bonus is too
+            formula.alternatives.append({
+                "label": "on open rolls (Priest 2nd Dan)",
+                "extra_flat": FREE_RAISE_VALUE,
+            })
+        else:
+            _add_flat_bonus(formula, "Priest 2nd Dan", FREE_RAISE_VALUE)
 
     # --- Honor bonus (Bragging, Precepts: unconditional. Sincerity: conditional) ---
     honor = character_data.get("honor", 1.0)
@@ -366,7 +391,8 @@ def build_knack_formula(
         **_reroll_fields(character_data),
     )
 
-    _apply_school_technique_bonus(formula, knack_id, school_id, knacks)
+    tech_choices = character_data.get("technique_choices") or {}
+    _apply_school_technique_bonus(formula, knack_id, school_id, knacks, tech_choices)
 
     # Courtier 5th Dan: +Air to all TN and contested rolls
     if school_id == "courtier" and dan >= 5:
@@ -400,7 +426,8 @@ def build_combat_formula(
 
     school_id = character_data.get("school", "")
     knacks = character_data.get("knacks", {}) or {}
-    _apply_school_technique_bonus(formula, which, school_id, knacks)
+    tech_choices = character_data.get("technique_choices") or {}
+    _apply_school_technique_bonus(formula, which, school_id, knacks, tech_choices)
 
     dan = compute_dan(knacks) if knacks else 0
 

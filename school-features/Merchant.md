@@ -125,9 +125,4 @@
 
 > After making any non-initiative roll, you may reroll some of the dice so long as the dice being rerolled add up to at least 5*(X-1) where X is the number of dice being rerolled. You may only do this once per roll. As per your Special Ability, you may spend Void Points before and/or after you make this reroll.
 
-**Status:** NOT implemented. This is a complex reroll mechanic that interacts with the VP spending special ability.
-
-**Missing:**
-- [ ] Implement the reroll mechanic
-- [ ] UI for selecting dice to reroll based on the value constraint
-- [ ] Integration with post-roll VP spending
+**Status:** Out of scope - complex selective reroll mechanic with value constraints.

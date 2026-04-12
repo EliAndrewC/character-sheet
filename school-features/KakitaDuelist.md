@@ -64,18 +64,13 @@
 
 > Your attacks get a bonus of X for each phase before the defender's next action they occur, where X is equal to your attack skill. If a defender does not have an action remaining in this round, they are considered to act in phase 11. This applies to all types of attacks, and you know the next action of everyone within striking range.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Out of scope - requires knowing opponent's initiative phase, which requires combat-phase tracking.
 
 **Questions (ANSWERED):**
 - The bonus is X per phase before the defender's next action, where X is the attack skill rank.
 - Phase tracking is needed: if defender's next action is phase 7 and you attack in phase 4, bonus = 3X.
 - "Defender is considered to act in phase 11" if they have no remaining actions.
 - "You know the next action of everyone within striking range" is an information display mechanic.
-
-**Missing:**
-- [ ] Implement phase-based attack bonus
-- [ ] Implement enemy action awareness display
-- [ ] Combat phase tracking integration
 
 ---
 
@@ -101,9 +96,4 @@
 
 > At the beginning of phase 0 in each combat round, make a contested iaijutsu roll against an opponent. If the opponent doesn't have iaijutsu, they may roll attack instead, and you get an extra free raise. Make a damage roll against this opponent; if you won the contested roll then roll 1 extra damage die for every 5 by which your roll exceeded your opponent's, and if you lost then roll 1 fewer damage die for every 5 by which their roll exceeded yours.
 
-**Status:** NOT implemented. This is a Phase 0 combat-start ability.
-
-**Missing:**
-- [ ] Implement Phase 0 contested iaijutsu mechanic
-- [ ] Damage dice scaling based on excess/deficit
-- [ ] UI for Phase 0 iaijutsu resolution
+**Status:** Out of scope - requires Phase 0 combat-start mechanics and contested roll with automatic damage scaling.

@@ -86,16 +86,11 @@
 
 > Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. You automatically know the Void, parry, and phase of the next action of each character during combat, and you know the result of contested rolls made against you out of combat.
 
-**Status:** Partially implemented.
+**Status:** Partially implemented. Ring raise is fully implemented; "automatically know target's Void, parry, and next action phase" is out of scope (requires opponent data not available in the app).
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Automatically know target's Void, parry, and next action phase" is NOT implemented. This is an information-display combat mechanic.
 
 **Unit tests:** None.
 **Clicktests:** None.
-
-**Missing:**
-- [ ] Implement combat info display for Kitsuki 4th Dan
-- [ ] UI for showing target's Void/parry/action phase
 
 ---
 

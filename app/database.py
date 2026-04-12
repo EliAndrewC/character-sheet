@@ -68,6 +68,7 @@ def _migrate_add_columns():
         ("sections", "TEXT", "'[]'"),
         ("rank_recognition_awards", "TEXT", "'[]'"),
         ("current_temp_void_points", "INTEGER", "0"),
+        ("technique_choices", "TEXT", "'{}'"),
     ]
 
     for col_name, col_type, default in needed:
