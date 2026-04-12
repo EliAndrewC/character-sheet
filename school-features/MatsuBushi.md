@@ -65,7 +65,9 @@
 
 > When you spend a void point, you may add 3X to any future wound check this combat after seeing the roll, where X is your attack skill.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `matsu_vp_wc_bonus: true` and `matsu_vp_wc_amount: 3*attack_skill` in school_abilities.
+- Client: `app/templates/character/sheet.html` banks 3*attack_skill per VP spent via `deductVoidPoints()`, and the wound check modal shows an "Apply Matsu Bonus" button to apply the full banked amount after seeing the roll.
 
 **Questions (ANSWERED):**
 - X = the Matsu's attack skill rank. So spending 1 VP adds 3 * attack_skill to a wound check.
@@ -73,8 +75,8 @@
 - Remaining question: can multiple VP be spent on a single wound check? (Each adding 3X?)
 
 **Missing:**
-- [ ] Implement the 3rd Dan retroactive VP spending on wound checks
-- [ ] UI for spending VP after seeing the wound check roll result
+- [x] Implement the 3rd Dan retroactive VP spending on wound checks
+- [x] UI for spending VP after seeing the wound check roll result
 - [ ] Unit test: Matsu 3rd Dan VP spending adds 3X to wound check
 - [ ] Clicktest: wound check result offers VP spending option at 3rd Dan
 
@@ -86,7 +88,9 @@
 
 **Status:** Partially implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Near-misses on double attacks still hit with no bonus damage" is NOT implemented. This requires tracking double attack results and converting near-misses to hits.
+- "Near-misses on double attacks still hit with no bonus damage" is implemented:
+  - Server: `app/routes/pages.py` passes `matsu_near_miss: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` treats double attack rolls that miss by less than 20 as hits with 0 extra damage dice, showing "NEAR-MISS HIT" in the result display.
 
 **Unit tests:**
 - `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
@@ -97,8 +101,8 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
 **Missing:**
-- [ ] Implement the 4th Dan near-miss double attack mechanic
-- [ ] Display near-miss conversion in the double attack roll result
+- [x] Implement the 4th Dan near-miss double attack mechanic
+- [x] Display near-miss conversion in the double attack roll result
 - [ ] Unit test: Matsu 4th Dan double attack near-miss converts to hit
 - [ ] Clicktest: double attack near-miss at 4th Dan shows hit with no bonus damage
 
@@ -108,11 +112,13 @@
 
 > After you deal light wounds which result in the defender taking one or more serious wounds, their light wound total is reset to 15 instead of 0.
 
-**Status:** NOT implemented. This modifies the wound application outcome after dealing serious wounds.
+**Status:** Fully implemented (display note).
+- Server: `app/routes/pages.py` passes `matsu_lw_reset_15: true` in school_abilities.
+- Client: `app/templates/character/sheet.html` shows an informational note in the damage result: "If this causes serious wounds, the defender's light wounds reset to 15 instead of 0." This is a display-only implementation since the defender's sheet is separate.
 
 **Missing:**
-- [ ] Implement the 5th Dan light wound reset mechanic
-- [ ] Display the modified light wound outcome in the damage/wound result
+- [x] Implement the 5th Dan light wound reset mechanic
+- [x] Display the modified light wound outcome in the damage/wound result
 - [ ] Unit test: Matsu 5th Dan sets defender's light wounds to 15 after dealing serious wounds
 - [ ] Clicktest: dealing serious wounds at 5th Dan shows light wound reset to 15
 

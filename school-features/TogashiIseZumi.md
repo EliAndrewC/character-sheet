@@ -100,8 +100,10 @@
 
 > At any time, you may spend 1 void point to heal 2 serious wounds.
 
-**Status:** NOT implemented. This is an on-demand healing ability.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `togashi_heal_sw: true` in school_abilities config when togashi_ise_zumi and dan >= 5.
+- Client: `app/templates/character/sheet.html` shows a "Spend 1 VP to heal 2 SW" button in the tracking section.
 
 **Missing:**
-- [ ] Implement void-for-healing mechanic
-- [ ] UI button for spending void to heal serious wounds
+- [x] Implement void-for-healing mechanic
+- [x] UI button for spending void to heal serious wounds

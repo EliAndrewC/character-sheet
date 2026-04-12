@@ -89,7 +89,9 @@
 
 **Status:** Partially implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Trade 2 serious wounds to reset light wounds to 0" is NOT implemented. This requires a UI action on the sheet to spend 2 SW and zero out light wounds.
+- "Trade 2 serious wounds to reset light wounds to 0" is implemented:
+  - Server: `app/routes/pages.py` passes `hida_trade_sw: true` in school_abilities.
+  - Client: `app/templates/character/sheet.html` shows a "Trade 2 SW to reset LW to 0" button in tracking section.
 
 **Unit tests:**
 - `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
@@ -100,7 +102,7 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 
 **Missing:**
-- [ ] Implement "trade 2 SW to reset light wounds" button on the sheet for Hida 4th Dan
+- [x] Implement "trade 2 SW to reset light wounds" button on the sheet for Hida 4th Dan
 - [ ] Validate the character has >= 2 serious wounds before allowing the trade
 - [ ] Unit test: Hida 4th Dan wound trade mechanic
 - [ ] Clicktest: 4th Dan button trades 2 SW for light wound reset

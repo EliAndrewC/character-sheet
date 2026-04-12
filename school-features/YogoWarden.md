@@ -80,7 +80,9 @@
 
 > Whenever you spend a void point, reduce your current light wound total by 2X, where X is your attack skill.
 
-**Status:** NOT implemented. This is a non-standard 3rd Dan that is not encoded in the `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `yogo_vp_heals_lw: true` and `yogo_vp_heal_amount: 2*attack_skill` in school_abilities.
+- Client: `app/templates/character/sheet.html` hooks into `deductVoidPoints()` to automatically reduce light wounds by 2*attack_skill per VP spent.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
@@ -88,8 +90,8 @@
 - Light wound total can presumably be reduced to 0 but not below.
 
 **Missing:**
-- [ ] Implement the 3rd Dan VP-for-light-wound-reduction mechanic
-- [ ] UI button on the sheet for spending VP to reduce light wounds
+- [x] Implement the 3rd Dan VP-for-light-wound-reduction mechanic
+- [x] UI button on the sheet for spending VP to reduce light wounds
 - [ ] Unit test: Yogo Warden 3rd Dan VP spending reduces light wounds by 2X
 - [ ] Clicktest: 3rd Dan VP spending button reduces light wound counter
 

@@ -445,6 +445,25 @@
                     {% endif %}
                 </div>
             </div>
+            {% if viewer_can_edit %}
+            <!-- School-specific wound/healing buttons -->
+            <div class="flex flex-wrap gap-2 justify-center">
+                {% if school_abilities.get('togashi_heal_sw') %}
+                <button @click="if (voidPoints > 0 && seriousWounds >= 2) { voidPoints--; seriousWounds = Math.max(0, seriousWounds - 2); save(); }"
+                        :disabled="voidPoints <= 0 || seriousWounds < 2"
+                        class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                    Spend 1 VP to heal 2 SW
+                </button>
+                {% endif %}
+                {% if school_abilities.get('hida_trade_sw') %}
+                <button @click="if (seriousWounds >= 2) { seriousWounds -= 2; lightWounds = 0; save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } })); }"
+                        :disabled="seriousWounds < 2"
+                        class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                    Trade 2 SW to reset LW to 0
+                </button>
+                {% endif %}
+            </div>
+            {% endif %}
             <div class="flex flex-wrap gap-3 sm:gap-6 justify-center">
                 <div class="text-center">
                     <div class="text-sm text-ink/60 mb-1">Void Points</div>
@@ -1100,6 +1119,7 @@
     <script type="application/json" id="damage-avgs">{{ damage_avgs | tojson }}</script>
     <script type="application/json" id="wound-check-probs">{{ wound_check_probs | tojson }}</script>
     <script type="application/json" id="void-spend-config">{{ void_spend_config | tojson }}</script>
+    <script type="application/json" id="school-abilities">{{ school_abilities | tojson }}</script>
     <script type="application/json" id="adventure-raises-config">{{ {
         "available": adv_raises_max.val,
         "used": (adventure_state or {}).get('adventure_raises_used', 0),
@@ -1310,19 +1330,26 @@
                            x-cloak class="text-sm font-bold text-red-900 mt-1"
                            x-text="_charName + ' is now mortally wounded'"></p>
 
-                        {# Discretionary bonuses (3rd Dan raises) - only if not iaijutsu and not auto-applied #}
+                        {# Discretionary bonuses (3rd Dan raises, Matsu bonus) - only if not iaijutsu and not auto-applied #}
                         <div x-show="!wcIsStrike && wcHasDiscretionary && !wcResultApplied" x-cloak
                              class="mt-3 pt-2 border-t border-red-200">
-                            <div class="flex items-center gap-2 mb-1">
+                            <div class="flex flex-wrap items-center gap-2 mb-1">
                                 <button type="button" @click="wcSpendRaise()"
+                                        x-show="wcMaxRaisesPerRoll > 0"
                                         :disabled="wcRaisesSpent >= wcMaxRaisesPerRoll"
                                         class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
                                     Spend Free Raise (+5)
                                 </button>
                                 <button type="button" @click="wcUndoRaise()"
+                                        x-show="wcMaxRaisesPerRoll > 0"
                                         :disabled="wcRaisesSpent <= 0"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
                                     Undo
+                                </button>
+                                <button type="button" @click="wcSpendMatsuBonus()"
+                                        x-show="matsuBankedWcBonus > 0"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium">
+                                    Apply Matsu Bonus (+<span x-text="matsuBankedWcBonus"></span>)
                                 </button>
                             </div>
                             <button type="button" @click="wcAcceptResult()"
@@ -1336,6 +1363,25 @@
                             <button type="button" @click="wcModalOpen = false"
                                     class="mt-3 bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
                                 Close
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Akodo 5th Dan: reflect damage after taking damage #}
+                    <div x-show="schoolAbilities.akodo_reflect_damage && wcLightWounds > 0" x-cloak
+                         class="mt-3 pt-2 border-t border-ink/10">
+                        <div class="text-sm font-medium mb-1">Akodo 5th Dan - Reflect Damage</div>
+                        <p class="text-xs text-ink/60 mb-2">Spend VP to deal 10 light wounds per VP to the attacker (max <span x-text="wcLightWounds"></span>).</p>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm">VP to spend:</label>
+                            <input type="number" x-model.number="akodoReflectVP" min="0"
+                                   :max="Math.floor(wcLightWounds / 10) || 1"
+                                   class="w-16 border rounded px-2 py-1 text-sm text-center">
+                            <button type="button"
+                                    @click="const t = window._trackingBridge; if (t && akodoReflectVP > 0 && t.voidPoints >= akodoReflectVP) { t.voidPoints -= akodoReflectVP; t.save(); } akodoReflectVP = 0;"
+                                    :disabled="akodoReflectVP <= 0"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm font-medium disabled:opacity-30">
+                                Reflect <span x-text="(akodoReflectVP || 0) * 10"></span> LW
                             </button>
                         </div>
                     </div>
@@ -1388,6 +1434,16 @@
                                        class="w-16 border rounded px-2 py-1.5 text-sm text-center" placeholder="K">
                             </div>
                         </div>
+                    </div>
+
+                    {# Isawa Duelist 3rd Dan: TN trade toggle #}
+                    <div x-show="schoolAbilities.isawa_tn_trade" x-cloak
+                         class="flex items-center gap-2 bg-ink/5 rounded p-2">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" x-model="atkIsawaTnTrade"
+                                   class="rounded border-ink/30">
+                            <span>Trade -5 TN to be hit for +<span x-text="schoolAbilities.isawa_tn_trade_bonus || 0"></span> on this attack</span>
+                        </label>
                     </div>
 
                     {# Probability table #}
@@ -1463,8 +1519,13 @@
                     {# HIT #}
                     <div x-show="atkHit" x-cloak class="bg-green-50 border border-green-300 rounded p-3">
                         <div class="font-bold text-green-800 mb-2">
-                            HIT - exceeded TN by <span x-text="atkExcess"></span>
-                            (<span x-text="atkExtraDice"></span> extra damage dice)
+                            <template x-if="atkNearMiss">
+                                <span>NEAR-MISS HIT - missed TN by <span x-text="Math.abs(atkExcess)"></span> (no extra damage)</span>
+                            </template>
+                            <template x-if="!atkNearMiss">
+                                <span>HIT - exceeded TN by <span x-text="atkExcess"></span>
+                                (<span x-text="atkExtraDice"></span> extra damage dice)</span>
+                            </template>
                         </div>
 
                         {# Damage formula breakdown #}
@@ -1549,6 +1610,10 @@
                     </div>
                     <div class="bg-ink/5 rounded p-3">
                         <div class="font-bold text-2xl text-accent" x-text="atkDamageTotal + ' damage'"></div>
+                        <div x-show="schoolAbilities.matsu_lw_reset_15" x-cloak
+                             class="text-xs text-ink/70 mt-1">
+                            If this causes serious wounds, the defender's light wounds reset to 15 instead of 0.
+                        </div>
                     </div>
                     <button type="button" @click="atkModalOpen = false"
                             class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
@@ -1978,6 +2043,14 @@
                             from rolling above 10k10 (+2 per extra rolled or kept die above 10)
                         </div>
 
+                        {# Shosuro 5th Dan: lowest 3 dice added #}
+                        <div x-show="shosuroLowest3Bonus > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="shosuroLowest3Bonus"></span>
+                            from 5th Dan (lowest 3 dice added to result)
+                        </div>
+
                         <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
                             <div class="mt-2 pt-2 border-t border-ink/10">
                                 <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
@@ -2150,6 +2223,8 @@
             atkShowCustomTN: false,
             // Attack result state
             atkHit: false,
+            atkNearMiss: false,
+            atkIsawaTnTrade: false,
             atkRollTotal: 0,
             atkExcess: 0,
             atkExtraDice: 0,
@@ -2187,6 +2262,10 @@
             rollMenuHasStrike: false,
             rollMenuHasParry: false,
             voidSpendConfig: { cap: 0, worldliness_max: 0, combat_vp_flat_bonus: 0, wc_vp_free_raise: false },
+            schoolAbilities: {},
+            matsuBankedWcBonus: 0,
+            shosuroLowest3Bonus: 0,
+            akodoReflectVP: 0,
 
             init() {
                 try {
@@ -2207,6 +2286,11 @@
                         document.getElementById('void-spend-config').textContent || '{}'
                     );
                 } catch (e) { /* keep defaults */ }
+                try {
+                    this.schoolAbilities = JSON.parse(
+                        document.getElementById('school-abilities').textContent || '{}'
+                    );
+                } catch (e) { this.schoolAbilities = {}; }
                 try {
                     this.atkProbs = JSON.parse(
                         document.getElementById('attack-probs').textContent || '{}'
@@ -2374,10 +2458,27 @@
             deductVoidPoints(option) {
                 const t = window._trackingBridge;
                 if (!t) return;
+                const nonTempSpent = (option.fromRegular || 0) + (option.fromWorldliness || 0);
                 if (option.fromTemp > 0) t.tempVoidPoints -= option.fromTemp;
                 if (option.fromRegular > 0) t.voidPoints -= option.fromRegular;
                 if (option.fromWorldliness > 0) {
                     t.setCount('worldliness', (t.getCount('worldliness') || 0) + option.fromWorldliness);
+                }
+                // Ide 5th Dan: gain temp VP when spending non-technique VP
+                if (this.schoolAbilities.ide_temp_vp_on_spend && nonTempSpent > 0) {
+                    t.tempVoidPoints += nonTempSpent;
+                }
+                // Yogo Warden 3rd Dan: each VP spent reduces light wounds by 2*attack
+                const yogoHeal = this.schoolAbilities.yogo_vp_heal_amount || 0;
+                if (yogoHeal > 0) {
+                    const totalSpent = (option.fromTemp || 0) + nonTempSpent;
+                    t.lightWounds = Math.max(0, t.lightWounds - totalSpent * yogoHeal);
+                    window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
+                }
+                // Matsu 3rd Dan: bank 3*attack for future wound check bonus
+                if (this.schoolAbilities.matsu_vp_wc_bonus) {
+                    const totalSpent = (option.fromTemp || 0) + nonTempSpent;
+                    this.matsuBankedWcBonus += totalSpent * (this.schoolAbilities.matsu_vp_wc_amount || 0);
                 }
                 t.save();
             },
@@ -2417,6 +2518,15 @@
                 this.unkeptDice = sortedAsc.filter(d => !keptIdx.has(d.idx));
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
                 this.baseTotal = this.keptSum + flat;
+
+                // Shosuro 5th Dan: add lowest 3 dice to result (TN/contested only, not initiative)
+                this.shosuroLowest3Bonus = 0;
+                if (this.schoolAbilities.shosuro_add_lowest_3 && !isInit) {
+                    const allValues = sortedAsc.map(d => d.value);
+                    const lowest3 = allValues.slice(0, Math.min(3, allValues.length));
+                    this.shosuroLowest3Bonus = lowest3.reduce((s, v) => s + v, 0);
+                    this.baseTotal += this.shosuroLowest3Bonus;
+                }
 
                 // Initiative: compute action dice with school effects
                 this.actionDice = [];
@@ -2660,6 +2770,7 @@
                 this.atkRaisesSpent = 0;
                 this.atkConvictionSpent = 0;
                 this.atkFailedParry = false;
+                this.atkIsawaTnTrade = false;
                 this.atkParrySkill = Math.max(1, Math.floor((this.atkTN - 5) / 5));
                 this.atkShowCustomTN = false;
                 this.atkModalOpen = true;
@@ -2707,6 +2818,10 @@
                 if (failedParry) {
                     totalExtra = Math.max(0, totalExtra - parrySkill);
                 }
+                // Otaku 4th Dan: lunge extra die always applies even if unsuccessfully parried
+                if (isLunge && failedParry && this.schoolAbilities.otaku_lunge_extra_die) {
+                    totalExtra += 1;
+                }
 
                 let rolled = wR + ringVal + extraR + totalExtra;
                 let kept = wK + extraK;
@@ -2740,6 +2855,12 @@
             async rollAttack() {
                 const voidCount = this.atkVoidSelected;
                 const formula = { ...this.formulas[this.atkKey] };
+
+                // Isawa Duelist 3rd Dan: TN trade bonus
+                if (this.atkIsawaTnTrade && this.schoolAbilities.isawa_tn_trade) {
+                    formula.flat += this.schoolAbilities.isawa_tn_trade_bonus || 0;
+                    formula.isawa_tn_trade = true;
+                }
 
                 if (voidCount > 0) {
                     formula.rolled += voidCount;
@@ -2786,8 +2907,15 @@
 
                 const excess = this.atkRollTotal - this.atkTN;
                 this.atkHit = excess >= 0;
+                this.atkNearMiss = false;
+                // Matsu 4th Dan: miss by <20 on double attack = hit with no extra damage
+                if (!this.atkHit && this.schoolAbilities.matsu_near_miss
+                    && formula.attack_variant === 'double_attack' && excess >= -19) {
+                    this.atkHit = true;
+                    this.atkNearMiss = true;
+                }
                 this.atkExcess = excess;
-                this.atkExtraDice = this.atkHit ? Math.floor(excess / 5) : 0;
+                this.atkExtraDice = this.atkHit && !this.atkNearMiss ? Math.max(0, Math.floor(excess / 5)) : 0;
                 this.atkPhase = 'result';
             },
 
@@ -2873,7 +3001,7 @@
                 this.wcMaxRaisesPerRoll = formula?.adventure_raises_max_per_roll || 0;
                 const raisesUsed = t.getCount ? t.getCount('adventure_raises') : 0;
                 const raisesAvail = Math.max(0, (this.advRaisesConfig.available || 0) - raisesUsed);
-                this.wcHasDiscretionary = this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0;
+                this.wcHasDiscretionary = (this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0) || this.matsuBankedWcBonus > 0;
                 this.wcModalOpen = true;
             },
 
@@ -3027,6 +3155,25 @@
                 }
                 // Deduct the raise from tracking
                 if (t?.setCount) t.setCount('adventure_raises', raisesUsed + 1);
+            },
+
+            wcSpendMatsuBonus() {
+                if (this.matsuBankedWcBonus <= 0) return;
+                const bonus = this.matsuBankedWcBonus;
+                this.matsuBankedWcBonus = 0;
+                this.baseTotal += bonus;
+                this.wcRollTotal += bonus;
+                const lw = this.wcLightWounds;
+                if (this.wcRollTotal >= lw) {
+                    this.wcPassed = true;
+                    this.wcSeriousWounds = 0;
+                    this.wcMargin = this.wcRollTotal - lw;
+                } else {
+                    const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
+                        ? Math.floor(lw / 2) : lw;
+                    this.wcMargin = effectiveLw - this.wcRollTotal;
+                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
+                }
             },
 
             wcUndoRaise() {

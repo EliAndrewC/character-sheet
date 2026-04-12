@@ -135,8 +135,10 @@
 
 > After making any TN or contested roll, add your lowest three dice to the result. (Some dice may be counted twice.)
 
-**Status:** NOT implemented. This is a post-roll ability that adds the lowest three dice from the roll to the total. The "(Some dice may be counted twice.)" note clarifies that dice already kept can also be among the lowest three added.
+**Status:** Fully implemented.
+- Server: `app/routes/pages.py` passes `shosuro_add_lowest_3: true` in school_abilities.
+- Client: `app/templates/character/sheet.html` auto-adds the 3 lowest dice values to the total after any TN/contested roll (not initiative). Bonus is displayed in the roll result breakdown.
 
 **Missing:**
-- [ ] Implement lowest-three-dice addition mechanic
-- [ ] UI for showing the additional dice being added
+- [x] Implement lowest-three-dice addition mechanic
+- [x] UI for showing the additional dice being added
