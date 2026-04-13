@@ -93,6 +93,4 @@
 **Clicktests:**
 - `test_school_abilities.py::test_isawa_duelist_5th_dan_banks_wc_excess`
 
-**Missing:**
-- [ ] Behavioral clicktest: pass a wound check, verify excess is banked, open another wound check, verify banked excess button appears and applies correctly
 

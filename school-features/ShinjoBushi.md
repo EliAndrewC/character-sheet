@@ -88,9 +88,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 - `test_school_abilities.py::test_shinjo_4th_dan_initiative_highest_die_1`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll initiative, verify the highest die is set to 1 in the action dice display
-
 ---
 
 ## 5th Dan
@@ -103,9 +100,6 @@
 
 **Clicktests:**
 - `test_school_abilities.py::test_shinjo_5th_dan_parry_excess_wc`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll a parry, enter opponent roll, verify excess is banked for future wound checks
 
 ---
 

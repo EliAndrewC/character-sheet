@@ -91,6 +91,4 @@
 **Clicktests:**
 - `test_school_abilities.py::test_doji_5th_dan_opponent_bonus_input`
 
-**Missing:**
-- [ ] Behavioral clicktest: after a roll, enter opponent result in the input, verify adjusted total displays correctly
 

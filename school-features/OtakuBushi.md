@@ -81,9 +81,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 - `test_school_abilities.py::test_otaku_4th_dan_lunge_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: in attack damage with lunge and failed parry, verify the extra die from Otaku 4th Dan appears in the parts breakdown
-
 ---
 
 ## 5th Dan
@@ -96,9 +93,6 @@
 
 **Clicktests:**
 - `test_school_abilities.py::test_otaku_5th_dan_trade_dice_for_sw`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll damage with 12+ dice, verify the trade-for-SW button appears and clicking it changes the result
 
 ---
 

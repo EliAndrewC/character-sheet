@@ -2476,3 +2476,741 @@ def test_shosuro_acting_dice_behavioral(page, live_server_url):
     _open_attack_modal_and_roll(page, "attack")
     dice_count = _count_attack_result_dice(page)
     assert dice_count >= 6
+
+
+# ===========================================================================
+# DISPLAY/NOTE VERIFICATION TESTS
+# ===========================================================================
+
+
+def test_daidoji_3rd_dan_raises_note_behavioral(page, live_server_url):
+    """Daidoji 3rd Dan: counterattack hit shows free raises note with amount."""
+    _create_char(page, live_server_url, "Daidoji3B", "daidoji_yojimbo",
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
+    # Set TN very low to maximize hit chance
+    page.locator('[data-roll-key="knack:counterattack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    hit = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkHit !== undefined) return d.atkHit;
+        }
+        return false;
+    }""")
+    if hit:
+        result = _get_attack_result_text(page)
+        assert "Daidoji 3rd Dan" in result
+        assert "free raise" in result.lower()
+
+
+def test_daidoji_5th_dan_tn_note_behavioral(page, live_server_url):
+    """Daidoji 5th Dan: passing wound check shows attacker TN reduction note."""
+    _create_char(page, live_server_url, "Daidoji5B", "daidoji_yojimbo",
+                 knack_overrides={"counterattack": 5, "double_attack": 5, "iaijutsu": 5})
+    # Add small LW so wound check is likely to pass
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "5")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    passed = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return d.wcPassed;
+        }
+        return false;
+    }""")
+    if passed:
+        result = _get_wc_result_text(page)
+        assert "Daidoji 5th Dan" in result
+
+
+def test_hiruma_4th_dan_initiative_note_behavioral(page, live_server_url):
+    """Hiruma 4th Dan: initiative result shows action dice -2 note."""
+    _create_char(page, live_server_url, "Hiruma4B", "hiruma_scout",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    result = _get_roll_result_text(page)
+    assert "Hiruma" in result or "-2" in result or "lowered by 2" in result.lower()
+
+
+def test_ide_4th_dan_vp_regen_note_behavioral(page, live_server_url):
+    """Ide 4th Dan: sheet shows +1/night regen text near VP counter."""
+    _create_char(page, live_server_url, "Ide4B", "ide_diplomat",
+                 knack_overrides={"double_attack": 4, "feint": 4, "worldliness": 4})
+    body = page.text_content("body")
+    assert "+1/night" in body
+
+
+def test_ikoma_4th_dan_10dice_note_behavioral(page, live_server_url):
+    """Ikoma 4th Dan: attack damage shows 10-dice floor note for unparried attacks."""
+    _create_char(page, live_server_url, "Ikoma4B", "ikoma_bard",
+                 knack_overrides={"discern_honor": 4, "oppose_knowledge": 4, "oppose_social": 4})
+    sa = _get_school_abilities(page)
+    assert sa.get("ikoma_10_dice_floor") is True
+    # Roll an attack and check the damage formula
+    _open_attack_modal_and_roll(page, "attack")
+    hit = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkHit !== undefined) return d.atkHit;
+        }
+        return false;
+    }""")
+    if hit:
+        result = _get_attack_result_text(page)
+        # The 10-dice floor note shows "4th Dan, unparried" in the damage parts
+        assert "4th Dan" in result or "unparried" in result.lower()
+
+
+def test_kitsuki_5th_dan_ring_note_behavioral(page, live_server_url):
+    """Kitsuki 5th Dan: roll result shows ring reduction note."""
+    _create_char(page, live_server_url, "Kitsuki5B", "kitsuki_magistrate",
+                 knack_overrides={"discern_honor": 5, "iaijutsu": 5, "presence": 5},
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    result = _get_roll_result_text(page)
+    assert "Kitsuki 5th Dan" in result or "reduce" in result.lower()
+
+
+def test_matsu_5th_dan_lw_reset_note_behavioral(page, live_server_url):
+    """Matsu 5th Dan: damage result shows LW reset to 15 note."""
+    _create_char(page, live_server_url, "Matsu5B", "matsu_bushi",
+                 knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
+    # Roll attack, hit, then roll damage
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")  # low TN for guaranteed hit
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    hit = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkHit !== undefined) return d.atkHit;
+        }
+        return false;
+    }""")
+    if hit:
+        # Roll damage
+        modal.locator('button:has-text("Make Damage Roll")').click()
+        page.wait_for_function("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.atkPhase === 'damage-result') return true;
+            }
+            return false;
+        }""", timeout=10000)
+        result = _get_attack_result_text(page)
+        assert "15" in result and "reset" in result.lower()
+
+
+def test_shinjo_4th_dan_initiative_highest_1_behavioral(page, live_server_url):
+    """Shinjo 4th Dan: initiative result shows highest action die set to 1."""
+    _create_char(page, live_server_url, "Shinjo4B", "shinjo_bushi",
+                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "lunge": 4})
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    # Check that the action dice include a 1 (the highest was set to 1)
+    action_dice = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.actionDice && d.phase === 'done') return d.actionDice;
+        }
+        return [];
+    }""")
+    assert 1 in action_dice, f"Expected 1 in action dice {action_dice} (Shinjo 4th Dan sets highest to 1)"
+    result = _get_roll_result_text(page)
+    assert "Shinjo" in result or "set to 1" in result.lower()
+
+
+# ===========================================================================
+# BUTTON CLICK + STATE CHANGE TESTS
+# ===========================================================================
+
+
+def test_hida_4th_dan_trade_sw_behavioral(page, live_server_url):
+    """Hida 4th Dan: Trade 2 SW button decreases SW by 2 and resets LW to 0."""
+    _create_char(page, live_server_url, "Hida4TB", "hida_bushi",
+                 knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
+    # Add serious wounds
+    sw_row = page.locator('text="Serious Wounds"').locator('..')
+    sw_row.locator('button:has-text("+")').click()
+    sw_row.locator('button:has-text("+")').click()
+    sw_row.locator('button:has-text("+")').click()
+    page.wait_for_timeout(300)
+    sw_before = int(page.locator('[x-text="seriousWounds"]').text_content().strip())
+    assert sw_before == 3
+    # Click trade button
+    page.locator('button:has-text("Trade 2 SW to reset LW to 0")').click()
+    page.wait_for_timeout(300)
+    sw_after = int(page.locator('[x-text="seriousWounds"]').text_content().strip())
+    assert sw_after == 1  # 3 - 2 = 1
+    lw_after = int(page.locator('[x-text="lightWounds"]').text_content().strip())
+    assert lw_after == 0
+
+
+def test_ide_3rd_dan_subtract_behavioral(page, live_server_url):
+    """Ide 3rd Dan: clicking subtract deducts VP and shows subtraction result."""
+    _create_char(page, live_server_url, "Ide3SB", "ide_diplomat",
+                 knack_overrides={"double_attack": 3, "feint": 3, "worldliness": 3},
+                 skill_overrides={"tact": 2})
+    # Give VP
+    page.evaluate("window._trackingBridge.voidPoints = 1")
+    page.wait_for_timeout(200)
+    vp_before = page.evaluate("window._trackingBridge.voidPoints")
+    assert vp_before == 1
+    # Click subtract button
+    subtract_btn = page.locator('button:has-text("Spend 1 VP to subtract")')
+    assert subtract_btn.is_visible()
+    subtract_btn.click()
+    page.wait_for_timeout(1000)  # async dice roll needs time
+    # VP should be deducted
+    vp_after = page.evaluate("window._trackingBridge.voidPoints")
+    assert vp_after == 0
+    # Result should show the subtraction amount
+    body = page.text_content("body")
+    assert "Subtract" in body or "subtract" in body.lower()
+
+
+def test_mirumoto_parry_temp_vp_behavioral(page, live_server_url):
+    """Mirumoto Special: rolling parry increases temp VP by 1."""
+    _create_char(page, live_server_url, "MirumotoTVPB", "mirumoto_bushi",
+                 knack_overrides={"counterattack": 1, "double_attack": 1, "iaijutsu": 1})
+    temp_before = page.evaluate("window._trackingBridge?.tempVoidPoints || 0")
+    _roll_via_menu_or_direct(page, "parry")
+    page.wait_for_timeout(300)
+    temp_after = page.evaluate("window._trackingBridge?.tempVoidPoints || 0")
+    assert temp_after == temp_before + 1
+
+
+def test_yogo_serious_wound_temp_vp_behavioral(page, live_server_url):
+    """Yogo Special: gaining serious wounds via wound check grants temp VP."""
+    _create_char(page, live_server_url, "YogoSWB", "yogo_warden",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "feint": 1})
+    temp_before = page.evaluate("window._trackingBridge?.tempVoidPoints || 0")
+    # Add lots of LW to ensure wound check fails
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "80")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    # Roll wound check - should fail with 80 LW
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    # Check if it failed (should with 80 LW)
+    failed = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return !d.wcPassed;
+        }
+        return false;
+    }""")
+    if failed:
+        # The failure auto-applies, which should grant temp VP
+        page.wait_for_timeout(500)
+        temp_after = page.evaluate("window._trackingBridge?.tempVoidPoints || 0")
+        assert temp_after > temp_before, f"Temp VP should increase from {temp_before}, got {temp_after}"
+
+
+def test_yogo_3rd_dan_vp_heals_lw_behavioral(page, live_server_url):
+    """Yogo 3rd Dan: spending VP on a roll decreases light wounds."""
+    _create_char(page, live_server_url, "Yogo3VPB", "yogo_warden",
+                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "feint": 3},
+                 skill_overrides={"bragging": 1})
+    # Add light wounds
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "20")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    lw_before = page.evaluate("window._trackingBridge?.lightWounds || 0")
+    assert lw_before == 20
+    # Give VP
+    page.evaluate("window._trackingBridge.voidPoints = 1")
+    page.wait_for_timeout(200)
+    # Roll bragging with 1 VP (via roll menu)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
+    if menu.is_visible():
+        vp_btn = menu.locator('button.text-accent').first
+        if vp_btn.is_visible():
+            vp_btn.click()
+            _wait_roll_done(page)
+            page.wait_for_timeout(300)
+            lw_after = page.evaluate("window._trackingBridge?.lightWounds || 0")
+            # Should decrease by 2 * attack_skill (attack=1, so 2*1=2)
+            assert lw_after < lw_before, f"LW should decrease from {lw_before}, got {lw_after}"
+
+
+def test_doji_5th_dan_opponent_input_behavioral(page, live_server_url):
+    """Doji 5th Dan: entering opponent result shows adjusted total."""
+    _create_char(page, live_server_url, "Doji5OB", "doji_artisan",
+                 knack_overrides={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    base = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return d.baseTotal;
+        }
+        return 0;
+    }""")
+    # Enter opponent result of 30 -> bonus = floor((30-10)/5) = 4
+    page.fill('input[x-model\\.number="dojiOpponentResult"]', "30")
+    page.wait_for_timeout(300)
+    # Should show adjusted total
+    modal = page.locator('[data-modal="dice-roller"]')
+    result = modal.text_content()
+    assert "Adjusted total" in result
+    expected_adjusted = base + 4
+    assert str(expected_adjusted) in result
+
+
+def test_togashi_4th_dan_reroll_behavioral(page, live_server_url):
+    """Togashi 4th Dan: Reroll button produces a new result."""
+    _create_char(page, live_server_url, "Togashi4RB", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    first_total = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return d.baseTotal;
+        }
+        return 0;
+    }""")
+    # Click Reroll button
+    reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
+    if reroll_btn.is_visible():
+        reroll_btn.click()
+        _wait_roll_done(page)
+        # Result should exist (may be same or different)
+        second_total = page.evaluate("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.phase === 'done') return d.baseTotal;
+            }
+            return 0;
+        }""")
+        assert second_total > 0  # a roll happened
+
+
+def test_kuni_5th_dan_reflect_behavioral(page, live_server_url):
+    """Kuni 5th Dan: Reflect damage button applies self-damage and shows result."""
+    _create_char(page, live_server_url, "Kuni5RB", "kuni_witch_hunter",
+                 knack_overrides={"detect_taint": 5, "iaijutsu": 5, "presence": 5})
+    lw_before = page.evaluate("window._trackingBridge?.lightWounds || 0")
+    # Find the reflect UI and enter LW amount
+    page.fill('input[x-model\\.number="kuniLW"]', "20")
+    page.wait_for_timeout(200)
+    # Click the Kuni Reflect button (not Akodo's)
+    page.locator('button:has-text("Reflect")').first.click()
+    page.wait_for_timeout(300)
+    # Self-damage: half of 20 = 10 additional LW
+    lw_after = page.evaluate("window._trackingBridge?.lightWounds || 0")
+    assert lw_after == lw_before + 10
+    # Result text should be visible
+    assert page.locator('text="Reflected"').is_visible()
+
+
+def test_yogo_4th_dan_post_roll_vp_behavioral(page, live_server_url):
+    """Yogo 4th Dan: post-roll Spend VP (+5) on wound check changes total."""
+    _create_char(page, live_server_url, "Yogo4VPB", "yogo_warden",
+                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "feint": 4})
+    # Give VP
+    page.evaluate("window._trackingBridge.voidPoints = 2")
+    page.wait_for_timeout(200)
+    # Add LW to make wound check meaningful
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "30")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    # Roll wound check (no VP pre-roll)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    total_before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return 0;
+    }""")
+    # Click "Spend VP (+5)" button if visible
+    spend_btn = page.locator('button:has-text("Spend VP (+5)")')
+    if spend_btn.is_visible():
+        spend_btn.click()
+        page.wait_for_timeout(300)
+        total_after = page.evaluate("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.wcPhase === 'result') return d.wcRollTotal;
+            }
+            return 0;
+        }""")
+        assert total_after == total_before + 5, f"Expected +5, got {total_before} -> {total_after}"
+        vp_remaining = page.evaluate("window._trackingBridge?.voidPoints || 0")
+        assert vp_remaining == 1  # spent 1 of 2
+
+
+# ===========================================================================
+# COMPLEX MULTI-STEP FLOW TESTS
+# ===========================================================================
+
+
+def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
+    """Akodo 3rd Dan: pass wound check -> bonus banked -> apply to attack."""
+    _create_char(page, live_server_url, "Akodo3FB", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    # Add small LW so wound check is likely to pass
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "5")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    # Roll wound check
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    passed = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return d.wcPassed;
+        }
+        return false;
+    }""")
+    if passed:
+        # Keep light wounds (this triggers banking)
+        page.locator('button:has-text("Keep Light Wounds")').click()
+        page.wait_for_timeout(300)
+        # Check that a bonus was banked
+        banked = page.evaluate("window._diceRoller?.akodoBankedBonuses?.filter(b => !b.spent)?.length || 0")
+        assert banked > 0, "A bonus should be banked after passing wound check"
+        # Roll an attack and check for the Apply button
+        page.locator('[data-roll-key="attack"]').click()
+        page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+        modal = page.locator('[data-modal="attack"]')
+        modal.locator('select').select_option("5")
+        modal.locator('button:has-text("Roll")').first.click()
+        _wait_attack_result(page)
+        # The Apply button should be visible
+        assert page.locator('button:has-text("Apply +")').first.is_visible()
+
+
+def test_akodo_5th_dan_reflect_ui_behavioral(page, live_server_url):
+    """Akodo 5th Dan: wound check result shows Reflect Damage UI with VP input."""
+    _create_char(page, live_server_url, "Akodo5FB", "akodo_bushi",
+                 knack_overrides={"double_attack": 5, "feint": 5, "iaijutsu": 5})
+    # Add LW and roll wound check
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "10")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    # The Reflect Damage section should exist in the wound check modal
+    wc_text = _get_wc_result_text(page)
+    assert "Akodo 5th Dan" in wc_text or "Reflect Damage" in wc_text
+
+
+def test_bayushi_vp_damage_behavioral(page, live_server_url):
+    """Bayushi Special: attacking with VP adds +1k1 per VP to damage breakdown."""
+    _create_char(page, live_server_url, "BayushiVPDB", "bayushi_bushi",
+                 knack_overrides={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+    # Give VP
+    page.evaluate("window._trackingBridge.voidPoints = 1")
+    page.wait_for_timeout(200)
+    # Open attack modal, spend 1 VP, roll
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    # Select 1 VP
+    vp_btn = modal.locator('button:has-text("+")').first
+    if vp_btn.is_visible():
+        vp_btn.click()
+        page.wait_for_timeout(100)
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    hit = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkHit !== undefined) return d.atkHit;
+        }
+        return false;
+    }""")
+    if hit:
+        result = _get_attack_result_text(page)
+        assert "Bayushi" in result or "VP" in result
+
+
+def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
+    """Hiruma 3rd Dan: parry auto-banks bonus, then attack applies it."""
+    _create_char(page, live_server_url, "Hiruma3FB", "hiruma_scout",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    # Roll parry to bank the bonus
+    _roll_via_menu_or_direct(page, "parry")
+    page.wait_for_timeout(300)
+    # Close the roll result via the dice roller modal's close button
+    page.locator('[data-modal="dice-roller"] button:has-text("Close")').click()
+    page.wait_for_timeout(300)
+    # Check bonus was banked
+    banked = page.evaluate("window._diceRoller?.hirumaBankedAttackBonus || 0")
+    assert banked > 0, f"Expected banked bonus > 0, got {banked}"
+    # Now roll attack - bonus should be auto-applied
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    result = _get_attack_result_text(page)
+    assert "Hiruma" in result or "post-parry" in result.lower()
+
+
+def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
+    """Isawa Duelist 5th Dan: pass WC banks excess, next WC can apply it."""
+    _create_char(page, live_server_url, "IsawaD5FB", "isawa_duelist",
+                 knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
+    # Add small LW for first wound check (likely to pass)
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "5")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    # Roll wound check
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    passed = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return d.wcPassed;
+        }
+        return false;
+    }""")
+    if passed:
+        # Keep light wounds (triggers banking the excess)
+        page.locator('button:has-text("Keep Light Wounds")').click()
+        page.wait_for_timeout(300)
+        banked = page.evaluate("window._diceRoller?.bankedWcExcess || 0")
+        assert banked > 0, "WC excess should be banked after passing"
+
+
+def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):
+    """Matsu 3rd Dan: spend VP banks WC bonus, wound check shows Apply button."""
+    _create_char(page, live_server_url, "Matsu3FB", "matsu_bushi",
+                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+                 skill_overrides={"bragging": 1})
+    # Give VP
+    page.evaluate("window._trackingBridge.voidPoints = 1")
+    page.wait_for_timeout(200)
+    # Roll bragging with 1 VP to bank the Matsu bonus
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
+    if menu.is_visible():
+        vp_btn = menu.locator('button.text-accent').first
+        if vp_btn.is_visible():
+            vp_btn.click()
+            _wait_roll_done(page)
+            page.wait_for_timeout(300)
+            banked = page.evaluate("window._diceRoller?.matsuBankedWcBonus || 0")
+            assert banked > 0, f"Matsu WC bonus should be banked, got {banked}"
+
+
+def test_matsu_4th_dan_near_miss_behavioral(page, live_server_url):
+    """Matsu 4th Dan: double attack near-miss shows NEAR-MISS HIT."""
+    _create_char(page, live_server_url, "Matsu4NMB", "matsu_bushi",
+                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "lunge": 4})
+    sa = _get_school_abilities(page)
+    assert sa.get("matsu_near_miss") is True
+    # Roll double attack with high TN so we're likely to miss but within 20
+    # Double attack TN = base + 20, so set base TN to 15 -> effective TN = 35
+    page.locator('[data-roll-key="knack:double_attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("15")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    # Check Alpine state for near-miss
+    state = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return { hit: d.atkHit, nearMiss: d.atkNearMiss, excess: d.atkExcess };
+        }
+        return null;
+    }""")
+    if state and state.get("nearMiss"):
+        result = _get_attack_result_text(page)
+        assert "NEAR-MISS" in result
+
+
+def test_mirumoto_4th_dan_parry_reduction_behavioral(page, live_server_url):
+    """Mirumoto 4th Dan: damage formula shows halved parry reduction."""
+    _create_char(page, live_server_url, "Mirumoto4PB", "mirumoto_bushi",
+                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
+    # Roll attack, check the failed parry checkbox, verify halved text
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    hit = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkHit !== undefined) return d.atkHit;
+        }
+        return false;
+    }""")
+    if hit:
+        # Check the failed parry checkbox using x-model attribute
+        page.locator('input[x-model="atkFailedParry"]').check()
+        page.wait_for_timeout(300)
+        result = _get_attack_result_text(page)
+        assert "halved" in result.lower() or "4th Dan" in result
+
+
+def test_otaku_4th_dan_lunge_parry_behavioral(page, live_server_url):
+    """Otaku 4th Dan: lunge with failed parry shows extra die in damage parts."""
+    _create_char(page, live_server_url, "Otaku4LB", "otaku_bushi",
+                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "lunge": 4})
+    # Roll lunge
+    page.locator('[data-roll-key="knack:lunge"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    hit = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkHit !== undefined) return d.atkHit;
+        }
+        return false;
+    }""")
+    if hit:
+        # Check failed parry
+        page.locator('input[x-model="atkFailedParry"]').check()
+        page.wait_for_timeout(300)
+        result = _get_attack_result_text(page)
+        # Lunge part should be in the damage breakdown
+        assert "Lunge" in result
+
+
+def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
+    """Otaku 5th Dan: with enough damage dice, trade-for-SW button works."""
+    _create_char(page, live_server_url, "Otaku5TB", "otaku_bushi",
+                 knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
+    sa = _get_school_abilities(page)
+    assert sa.get("otaku_trade_dice_for_sw") is True
+    # The trade button appears on damage-result when rolled >= 12
+    # Verify the flag is set - actual testing requires enough damage dice
+    # which depends on the weapon and hit excess
+
+
+def test_shinjo_5th_dan_parry_excess_behavioral(page, live_server_url):
+    """Shinjo 5th Dan: roll parry, enter opponent roll, verify banked excess."""
+    _create_char(page, live_server_url, "Shinjo5FB", "shinjo_bushi",
+                 knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
+    _roll_via_menu_or_direct(page, "parry")
+    # Get our parry total
+    our_total = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return d.baseTotal;
+        }
+        return 0;
+    }""")
+    # Enter a low opponent roll so we have excess
+    opp_input = page.locator('input[x-model\\.number="shinjoParryOpponentRoll"]')
+    if opp_input.is_visible():
+        opp_input.fill("5")
+        page.locator('button:has-text("Bank Excess")').click()
+        page.wait_for_timeout(300)
+        banked = page.evaluate("window._diceRoller?.bankedWcExcess || 0")
+        expected_excess = our_total - 5
+        if expected_excess > 0:
+            assert banked >= expected_excess

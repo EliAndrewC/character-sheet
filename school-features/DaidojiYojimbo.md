@@ -60,9 +60,6 @@
 - `test_school_abilities.py::test_daidoji_3rd_dan_counterattack_raises_note`
 - `test_school_abilities.py::test_daidoji_counterattack_school_flag`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll a counterattack that hits, verify the free raises note displays with correct amount
-
 **Questions (ANSWERED):**
 - X is the Daidoji's attack skill rank.
 - The free raises are applied to the wound check of the person who was originally attacked (the person the Daidoji counterattacked for). The original attack still lands, and the target gets X free raises on their wound check.
@@ -95,9 +92,6 @@
 
 **Clicktests:**
 - `test_school_abilities.py::test_daidoji_5th_dan_wc_attacker_tn_note`
-
-**Missing:**
-- [ ] Behavioral clicktest: pass a wound check, verify the attacker TN reduction note displays with correct excess amount
 
 ---
 

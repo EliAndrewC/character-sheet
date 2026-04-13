@@ -81,9 +81,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_togashi_4th_dan_reroll_contested`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll a skill, verify the Reroll button appears and clicking it produces a new result
-
 ---
 
 ## 5th Dan

@@ -21,9 +21,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_bayushi_vp_damage_on_attack`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll an attack with VP spent, verify damage formula shows +1k1 per VP in the damage breakdown
-
 ---
 
 ## Temp Void Tracking

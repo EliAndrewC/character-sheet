@@ -24,9 +24,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_mirumoto_parry_temp_vp`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll a parry, verify temp VP counter increases by 1
-
 ---
 
 ## 1st Dan
@@ -100,9 +97,6 @@
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 - `test_school_abilities.py::test_mirumoto_4th_dan_reduced_damage_dice`
-
-**Missing:**
-- [ ] Behavioral clicktest: in the attack damage formula, verify the halved parry reduction text appears when failed parry is checked
 
 ---
 

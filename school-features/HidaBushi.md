@@ -87,9 +87,6 @@
 - `test_school_abilities.py::test_hida_4th_dan_trade_sw_button`
 - `test_school_abilities.py::test_hida_trade_sw_button_works`
 
-**Missing:**
-- [ ] Behavioral clicktest: add 2+ serious wounds, click Trade button, verify SW decreases by 2 and LW resets to 0
-
 ---
 
 ## 5th Dan

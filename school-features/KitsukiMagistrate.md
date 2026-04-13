@@ -95,7 +95,3 @@
 
 **Clicktests:**
 - `test_school_abilities.py::test_kitsuki_5th_dan_ring_reduction_note`
-
-**Missing:**
-- [ ] Behavioral clicktest: after a roll, verify the ring reduction note text is visible
-

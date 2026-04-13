@@ -93,6 +93,4 @@
 **Clicktests:**
 - `test_school_abilities.py::test_kuni_5th_dan_reflect_damage_ui`
 
-**Missing:**
-- [ ] Behavioral clicktest: enter LW amount in reflect damage input, click Reflect, verify self-damage is applied and reflected amount displays
 
