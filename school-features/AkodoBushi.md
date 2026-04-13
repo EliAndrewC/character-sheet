@@ -68,9 +68,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_akodo_3rd_dan_wc_banks_bonus`
 
-**Missing:**
-- [ ] Behavioral clicktest: pass a wound check, verify bonus is banked in tracking section, apply it to an attack roll, verify total changes and bullet appears
-
 **Questions (ANSWERED):**
 - Formula: `floor((wound_check_roll - light_wounds) / 5) * attack_skill` = a single flat bonus
 - Example: 16 light wounds, wound check roll of 35 -> floor((35-16)/5) = 3, times attack skill 4 = +12 bonus
@@ -112,6 +109,4 @@
 **Clicktests:**
 - `test_school_abilities.py::test_akodo_5th_dan_reflect_damage_ui`
 
-**Missing:**
-- [ ] Behavioral clicktest: open wound check result, verify Reflect Damage UI accepts VP input and displays reflected LW amount
 

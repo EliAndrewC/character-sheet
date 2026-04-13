@@ -94,9 +94,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_ikoma_4th_dan_10_dice_floor`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll an attack, verify the 10-dice floor note appears in the damage formula for unparried attacks
-
 ---
 
 ## 5th Dan

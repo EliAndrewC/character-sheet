@@ -24,9 +24,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_yogo_temp_vp_on_sw`
 
-**Missing:**
-- [ ] Behavioral clicktest: gain a serious wound via wound check failure, verify temp VP counter increases
-
 ---
 
 ## Temp Void Tracking (Feint)
@@ -82,9 +79,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_yogo_3rd_dan_vp_heals_lw`
 
-**Missing:**
-- [ ] Behavioral clicktest: spend VP on a roll, verify light wounds decrease by the expected amount
-
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
 - This triggers whenever a void point is spent (any usage), not just as a standalone action.
@@ -110,9 +104,6 @@
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 - `test_school_abilities.py::test_yogo_4th_dan_wc_vp_raise`
-
-**Missing:**
-- [ ] Behavioral clicktest: fail a wound check with VP available, verify the post-roll Spend VP (+5) button appears and clicking it changes the total
 
 ---
 

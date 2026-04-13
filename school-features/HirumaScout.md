@@ -59,9 +59,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_hiruma_post_parry_bonus`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll a parry, verify bonus is auto-banked, then roll an attack and verify the bonus is applied to the attack total
-
 **Questions (ANSWERED):**
 - X is the attack skill rank.
 - The bonus is a flat +2X added to the next attack AND damage roll.
@@ -82,9 +79,6 @@
 **Unit tests:** None specific to Hiruma 4th Dan action dice.
 **Clicktests:**
 - `test_school_abilities.py::test_hiruma_initiative_action_dice_info`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll initiative, verify action dice display shows the -2 adjustment note
 
 ---
 

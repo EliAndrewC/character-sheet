@@ -75,9 +75,6 @@
 - `test_school_abilities.py::test_ide_3rd_dan_subtract_button`
 - `test_school_abilities.py::test_ide_subtract_button_visible`
 
-**Missing:**
-- [ ] Behavioral clicktest: give VP, click the subtract button, verify VP is deducted and a subtraction result is displayed
-
 **Questions (ANSWERED):**
 - X is the tact skill rank (as stated in the rules text).
 - "Subtract Xk1 from the roll" means roll Xk1 and subtract that amount from the roll result.
@@ -99,9 +96,6 @@
 **Unit tests:** None.
 **Clicktests:**
 - `test_school_abilities.py::test_ide_vp_regen_display`
-
-**Missing:**
-- [ ] Behavioral clicktest: verify the "+1 VP nightly" text appears near the VP counter
 
 ---
 

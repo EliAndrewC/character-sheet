@@ -64,9 +64,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_matsu_3rd_dan_vp_wc_bonus`
 
-**Missing:**
-- [ ] Behavioral clicktest: spend VP on a roll, open wound check, verify the Matsu bonus button appears and applying it changes the total
-
 **Questions (ANSWERED):**
 - X = the Matsu's attack skill rank. So spending 1 VP adds 3 * attack_skill to a wound check.
 - "After seeing the roll" = yes, VP can be spent retroactively after seeing the wound check result.
@@ -93,9 +90,6 @@
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
 - `test_school_abilities.py::test_matsu_4th_dan_near_miss`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll a double attack that misses by less than 20, verify NEAR-MISS HIT display appears
-
 ---
 
 ## 5th Dan
@@ -108,9 +102,6 @@
 
 **Clicktests:**
 - `test_school_abilities.py::test_matsu_5th_dan_lw_reset_15`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll damage, verify the LW reset to 15 note appears in the damage result
 
 ---
 
