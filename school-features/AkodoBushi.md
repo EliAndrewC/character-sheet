@@ -41,9 +41,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_akodo_1st_dan_formula_display` - verifies extra die in roll formula display for attack/double_attack/wound_check
 
-**Missing:**
-- [ ] Behavioral clicktest: roll attack, verify the result shows the correct number of rolled dice (including 1st Dan extra die)
-
 ---
 
 ## 2nd Dan
@@ -57,9 +54,6 @@
 **Unit tests:** None directly testing the Akodo 2nd Dan free raise on wound checks.
 **Clicktests:**
 - `test_school_abilities.py::test_akodo_2nd_dan_wound_check_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: open wound check, verify +5 from 2nd Dan appears in the result breakdown
 
 ---
 

@@ -34,9 +34,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_kuni_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll interrogation, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -50,9 +47,6 @@
 **Unit tests:** None.
 **Clicktests:**
 - `test_school_abilities.py::test_kuni_2nd_dan_interrogation_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll interrogation, verify +5 from 2nd Dan in result breakdown
 
 ---
 

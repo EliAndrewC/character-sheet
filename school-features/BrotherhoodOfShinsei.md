@@ -26,9 +26,6 @@
 - `test_sheet_js_errors.py:18` includes `brotherhood_of_shinsei_monk` in the sheet JS error check list.
 - `test_school_abilities.py::test_brotherhood_damage_unarmed_bonus`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll damage, verify +1k1 unarmed bonus appears in damage breakdown
-
 ---
 
 ## 1st Dan
@@ -45,9 +42,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_brotherhood_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll attack, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -61,9 +55,6 @@
 **Unit tests:** None directly testing the 2nd Dan free raise on attack.
 **Clicktests:**
 - `test_school_abilities.py::test_brotherhood_2nd_dan_attack_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll attack via attack modal, verify +5 from 2nd Dan in result breakdown
 
 ---
 

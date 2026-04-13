@@ -29,9 +29,6 @@
 - `test_school_abilities.py::test_courtier_attack_air_bonus`
 - `test_school_abilities.py::test_courtier_damage_air_bonus`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll attack via modal, verify +Air bonus appears in attack result breakdown and damage breakdown
-
 ---
 
 ## 1st Dan
@@ -48,9 +45,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_courtier_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll tact or manipulation, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -66,9 +60,6 @@
 
 **Clicktests:**
 - `test_school_abilities.py::test_courtier_2nd_dan_manipulation_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll manipulation, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -141,6 +132,5 @@
 **Clicktests:**
 - `test_school_abilities.py::test_courtier_5th_dan_air_bonus_on_skill`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll a skill at 5th Dan, verify +Air bonus appears in the result breakdown
+
 

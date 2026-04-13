@@ -22,9 +22,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_matsu_initiative_10_dice`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll initiative, verify 10 dice are shown in the result
-
 ---
 
 ## 1st Dan
@@ -40,9 +37,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_matsu_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll double_attack or iaijutsu, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -56,9 +50,6 @@
 **Unit tests:** None directly testing the Matsu 2nd Dan free raise on iaijutsu.
 **Clicktests:**
 - `test_school_abilities.py::test_matsu_2nd_dan_iaijutsu_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll iaijutsu, verify +5 from 2nd Dan in result breakdown
 
 ---
 

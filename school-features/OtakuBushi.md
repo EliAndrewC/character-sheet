@@ -33,9 +33,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_otaku_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll iaijutsu or lunge, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -49,9 +46,6 @@
 **Unit tests:** None directly testing the Otaku 2nd Dan free raise on wound checks.
 **Clicktests:**
 - `test_school_abilities.py::test_otaku_2nd_dan_wound_check_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: open wound check, verify +5 from 2nd Dan in result breakdown
 
 ---
 

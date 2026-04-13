@@ -24,9 +24,6 @@
 - `test_school_selection.py` references `kakita_duelist` for selection testing.
 - `test_school_abilities.py::test_kakita_initiative_phase_0`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll initiative, verify Phase 0 note appears when a 10 is rolled
-
 ---
 
 ## 1st Dan
@@ -41,9 +38,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_kakita_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll double_attack or iaijutsu, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -57,9 +51,6 @@
 **Unit tests:** None.
 **Clicktests:**
 - `test_school_abilities.py::test_kakita_2nd_dan_iaijutsu_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll iaijutsu, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -90,9 +81,6 @@
 - `test_dice.py::TestSchoolAbilities::test_kakita_duelist_below_4th_dan_no_damage_bonus` - verifies no bonus below 4th Dan
 **Clicktests:**
 - `test_school_abilities.py::test_kakita_4th_dan_iaijutsu_damage_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: in iaijutsu duel damage, verify +5 from 4th Dan appears in damage breakdown
 
 ---
 
