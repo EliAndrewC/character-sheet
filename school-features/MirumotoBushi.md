@@ -21,7 +21,11 @@
 **Implementation:** `app/game_data.py:982`, `app/game_data.py:2382` (SCHOOLS_WITH_TEMP_VOID membership), `app/routes/pages.py` (mirumoto_temp_vp_on_parry flag), `app/templates/character/sheet.html` (Temp Void counter, auto-grant in runRoll).
 
 **Unit tests:** None specific to the auto-grant mechanic.
-**Clicktests:** None specific. General temp void counter tested indirectly via tracking tests.
+**Clicktests:**
+- `test_school_abilities.py::test_mirumoto_parry_temp_vp`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll a parry, verify temp VP counter increases by 1
 
 ---
 
@@ -38,7 +42,11 @@
 - `test_dice.py::TestSchoolTechniqueBonus::test_school_technique_first_dan_extra_die` - Uses Mirumoto Bushi to set up a dan-1 character (lines 362-369).
 - `test_dice.py::TestCombatFormula::test_mirumoto_bushi_1st_dan_parry_extra_die` - Directly tests that a Mirumoto at dan 2 gets +1 rolled die on parry (line 417). Verifies `rolled=5` (parry 2 + Air 2 + 1 from 1st Dan) and `flat=5` (from 2nd Dan free raise).
 
-**Clicktests:** No school-specific clicktest for Mirumoto 1st Dan extra die.
+**Clicktests:**
+- `test_school_abilities.py::test_mirumoto_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll parry, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -53,7 +61,11 @@
 **Unit tests:**
 - `test_dice.py::TestCombatFormula::test_mirumoto_bushi_1st_dan_parry_extra_die` - Also validates 2nd Dan: asserts `flat=5` on parry at dan 2 (line 428).
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_mirumoto_2nd_dan_parry_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll parry, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -63,6 +75,10 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `mirumoto_round_points: true` and `mirumoto_round_points_max: 2*attack_skill`. Client: tracking section shows a per-round points counter with +/- and Reset. "Spend 3rd Dan Point (+2)" button appears on attack and parry roll results. Points can be spent for +2 flat on the roll.
+
+**Clicktests:**
+- `test_school_abilities.py::test_mirumoto_round_points_display_and_buttons`
+- `test_school_abilities.py::test_mirumoto_round_points_counter`
 
 **Questions (ANSWERED):**
 - X = attack skill rank. So 2 * attack_skill points per round.
@@ -89,6 +105,10 @@
 **Clicktests:**
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
+- `test_school_abilities.py::test_mirumoto_4th_dan_reduced_damage_dice`
+
+**Missing:**
+- [ ] Behavioral clicktest: in the attack damage formula, verify the halved parry reduction text appears when failed parry is checked
 
 ---
 
@@ -104,6 +124,9 @@
 - The +10 is IN ADDITION to the normal +1k1 from void points. So each VP = +1k1 + 10 flat.
 - "Combat rolls" includes wound checks (still need to confirm with user which specific roll types qualify).
 - Does this apply to temporary void points as well?
+
+**Clicktests:**
+- `test_school_abilities.py::test_mirumoto_5th_dan_vp_plus_10`
 
 No unit test for the pages.py flag (it's a template context variable), but the behavior is tested through the UI.
 

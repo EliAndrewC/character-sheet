@@ -26,6 +26,11 @@
 - `test_sheet_js_errors.py:17` includes `courtier` in the sheet JS error check list.
 - `test_school_selection.py:58` - tests selecting Courtier school.
 - `test_school_rings.py:58` - tests Courtier school ring (fixed Air).
+- `test_school_abilities.py::test_courtier_attack_air_bonus`
+- `test_school_abilities.py::test_courtier_damage_air_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack via modal, verify +Air bonus appears in attack result breakdown and damage breakdown
 
 ---
 
@@ -40,7 +45,11 @@
 **Unit tests:**
 - `test_roll_display.py:307` - `test_courtier_extra_die_on_tact` verifies extra die on tact formula
 
-**Clicktests:** None specific to 1st Dan formula display.
+**Clicktests:**
+- `test_school_abilities.py::test_courtier_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll tact or manipulation, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -55,7 +64,11 @@
 **Unit tests:**
 - `test_roll_display.py:335` - `test_courtier_free_raise_on_manipulation` verifies +5 flat on manipulation
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_courtier_2nd_dan_manipulation_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll manipulation, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -83,6 +96,8 @@
   - `test_undo_disabled_when_none_spent` (line 355)
   - `test_no_spend_button_for_non_applicable_skill` (line 363)
 
+- `test_school_abilities.py::test_courtier_3rd_dan_tact_raises`
+
 **Missing:** None - 3rd Dan is fully tested.
 
 ---
@@ -101,7 +116,8 @@
 **Implementation:** Temp VP counter in `app/templates/character/sheet.html`, `app/routes/pages.py` (courtier_temp_vp_on_hit flag).
 
 **Unit tests:** None specific to the auto-grant mechanic.
-**Clicktests:** None specific.
+**Clicktests:**
+- `test_school_abilities.py::test_courtier_4th_dan_temp_vp`
 
 ---
 
@@ -122,5 +138,9 @@
 - `test_dice.py::TestSchoolAbilities::test_courtier_5th_dan_attack_stacks_with_special`
 - `test_dice.py::TestSchoolAbilities::test_courtier_below_5th_dan_no_extra_air`
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_courtier_5th_dan_air_bonus_on_skill`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll a skill at 5th Dan, verify +Air bonus appears in the result breakdown
 

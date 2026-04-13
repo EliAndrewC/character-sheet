@@ -29,7 +29,11 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
 **Unit tests:** None specific to Doji 1st Dan.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_doji_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll counterattack or manipulation, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -42,7 +46,11 @@
 - Applied as +5 flat bonus on manipulation rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_doji_2nd_dan_manipulation_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll manipulation, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -58,7 +66,8 @@
 **Implementation:** `app/game_data.py:2103-2111` (third_dan dict).
 
 **Unit tests:** None specific to Doji 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_doji_3rd_dan_culture_raises`
 
 ---
 
@@ -84,4 +93,10 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `doji_opponent_bonus: true` in school_abilities.
 - Client: shows opponent result input after any TN/contested roll. Computes `floor((opponent - 10) / 5)` and displays the adjusted total.
+
+**Clicktests:**
+- `test_school_abilities.py::test_doji_5th_dan_opponent_bonus_input`
+
+**Missing:**
+- [ ] Behavioral clicktest: after a roll, enter opponent result in the input, verify adjusted total displays correctly
 

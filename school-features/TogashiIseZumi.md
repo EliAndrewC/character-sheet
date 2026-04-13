@@ -29,7 +29,11 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()`.
 
 **Unit tests:** None specific to Togashi 1st Dan.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_togashi_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack or athletics, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -42,7 +46,11 @@
 - Applied as +5 flat bonus on athletics rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_togashi_2nd_dan_athletics_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll athletics, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -52,6 +60,9 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `togashi_daily_athletics_raises: true`, `togashi_daily_raises_max: 4*precepts`, and `togashi_daily_raises_per_roll: precepts`. Client: shows "Spend Athletics Raise (+5)" button after athletics rolls with per-roll cap of X.
+
+**Clicktests:**
+- `test_school_abilities.py::test_togashi_3rd_dan_athletics_raises`
 
 **Questions (ANSWERED):**
 - "Each day" is the frequency, as stated in the rules text.
@@ -73,7 +84,11 @@
 - Despite the rules text saying "any Ring", the Togashi should always use Void for their 4th Dan raise (same as their school ring). The standard 4th Dan behavior is correct for this school.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_togashi_4th_dan_reroll_contested`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll a skill, verify the Reroll button appears and clicking it produces a new result
 
 ---
 
@@ -84,4 +99,7 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `togashi_heal_sw: true` in school_abilities config when togashi_ise_zumi and dan >= 5.
 - Client: `app/templates/character/sheet.html` shows a "Spend 1 VP to heal 2 SW" button in the tracking section.
+
+**Clicktests:**
+- `test_school_abilities.py::test_togashi_heal_sw_button_works`
 

@@ -30,7 +30,11 @@
 - Reflected in roll formulas on the View Sheet.
 
 **Unit tests:** None specific to Daidoji 1st Dan extra die (tested generically via other schools in `test_dice.py`).
-**Clicktests:** None school-specific.
+**Clicktests:**
+- `test_school_abilities.py::test_daidoji_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -43,7 +47,11 @@
 - Applied as +5 flat bonus on counterattack rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None directly testing the Daidoji 2nd Dan free raise on counterattack.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_daidoji_2nd_dan_counterattack_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll counterattack via attack modal, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -53,6 +61,13 @@
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `daidoji_counterattack_raises: true` and amount. Client shows note after counterattack rolls: the original attack target gets X free raises on their wound check.
+
+**Clicktests:**
+- `test_school_abilities.py::test_daidoji_3rd_dan_counterattack_raises_note`
+- `test_school_abilities.py::test_daidoji_counterattack_school_flag`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll a counterattack that hits, verify the free raises note displays with correct amount
 
 **Questions (ANSWERED):**
 - X is the Daidoji's attack skill rank.
@@ -83,6 +98,12 @@
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `daidoji_wc_lower_tn: true`. Client shows note after passed wound checks about lowering the attacker's TN by the wound check excess.
+
+**Clicktests:**
+- `test_school_abilities.py::test_daidoji_5th_dan_wc_attacker_tn_note`
+
+**Missing:**
+- [ ] Behavioral clicktest: pass a wound check, verify the attacker TN reduction note displays with correct excess amount
 
 ---
 

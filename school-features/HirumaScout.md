@@ -29,7 +29,11 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()`, `build_wound_check_formula()`, and `build_initiative_formula()`.
 
 **Unit tests:** None specific to Hiruma 1st Dan initiative logic.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_hiruma_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll initiative, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -42,7 +46,11 @@
 - Applied as +5 flat bonus on parry rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_hiruma_2nd_dan_parry_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll parry, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -53,6 +61,12 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `hiruma_post_parry_bonus: true` and `hiruma_post_parry_amount: 2*attack_skill` in school_abilities.
 - Client: auto-banks 2*attack_skill after any parry roll, applies as flat bonus to both attack roll AND damage roll on next attack via `rollAttack()` and `atkComputeDamage()`.
+
+**Clicktests:**
+- `test_school_abilities.py::test_hiruma_post_parry_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll a parry, verify bonus is auto-banked, then roll an attack and verify the bonus is applied to the attack total
 
 **Questions (ANSWERED):**
 - X is the attack skill rank.
@@ -72,7 +86,11 @@
 **Implementation:** `app/services/dice.py:503` (`hiruma_4th_dan`), `app/templates/character/sheet.html` (initiative display).
 
 **Unit tests:** None specific to Hiruma 4th Dan action dice.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_hiruma_initiative_action_dice_info`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll initiative, verify action dice display shows the -2 adjustment note
 
 ---
 
@@ -83,4 +101,7 @@
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `hiruma_parry_reduce_lw: true` in school_abilities.
 - Client: shows informational note after parry rolls: "the attacker deals 10 fewer light wounds on their next 2 damage rolls."
+
+**Clicktests:**
+- `test_school_abilities.py::test_hiruma_5th_dan_parry_note`
 

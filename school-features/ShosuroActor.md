@@ -23,7 +23,11 @@
 - `test_dice.py::TestSchoolAbilities::test_shosuro_actor_wound_check_acting_bonus`
 - `test_dice.py::TestSchoolAbilities::test_shosuro_actor_no_acting_skill_no_bonus`
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_shosuro_acting_skill_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: create char with acting skill, roll attack, verify extra rolled dice from acting appear in dice count
 
 ---
 
@@ -43,7 +47,8 @@
 - `test_effective_status.py::TestMerchantStipend::test_shosuro_actor_stipend_below_4th_dan` - verifies no stipend bonus below 4th Dan
 - `test_effective_status.py::TestMerchantStipend::test_shosuro_actor_stipend_at_4th_dan` - verifies stipend bonus at 4th Dan
 
-**Clicktests:** None specific to Shosuro stipend (Merchant stipend is tested in `test_sheet_advanced.py`).
+**Clicktests:**
+- `test_school_abilities.py::test_shosuro_stipend_display`
 
 ---
 
@@ -56,7 +61,11 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
 **Unit tests:** None specific to Shosuro 1st Dan.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_shosuro_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack or sincerity, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -69,7 +78,11 @@
 - Applied as +5 flat bonus on sincerity rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_shosuro_2nd_dan_sincerity_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll sincerity, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -85,7 +98,8 @@
 **Implementation:** `app/game_data.py:2134-2142` (third_dan dict).
 
 **Unit tests:** None specific to Shosuro 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_shosuro_3rd_dan_sincerity_raises`
 
 ---
 
@@ -117,4 +131,7 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `shosuro_add_lowest_3: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` auto-adds the 3 lowest dice values to the total after any TN/contested roll (not initiative). Bonus is displayed in the roll result breakdown.
+
+**Clicktests:**
+- `test_school_abilities.py::test_shosuro_5th_dan_lowest_3_dice`
 

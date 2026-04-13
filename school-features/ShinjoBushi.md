@@ -31,7 +31,11 @@
 - Note: wound_check is NOT in the 1st Dan list for Shinjo (unlike most bushi schools).
 
 **Unit tests:** None specific to Shinjo 1st Dan (no test verifies the initiative extra die from 1st Dan).
-**Clicktests:** None school-specific.
+**Clicktests:**
+- `test_school_abilities.py::test_shinjo_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll initiative or parry, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -44,7 +48,11 @@
 - Applied as +5 flat bonus on parry rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None directly testing the Shinjo 2nd Dan free raise on parry.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_shinjo_2nd_dan_parry_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll parry, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -84,7 +92,10 @@
 **Clicktests:**
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
-- No clicktest verifies the highest-action-die-to-1 behavior on the sheet.
+- `test_school_abilities.py::test_shinjo_4th_dan_initiative_highest_die_1`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll initiative, verify the highest die is set to 1 in the action dice display
 
 ---
 
@@ -95,6 +106,12 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `shinjo_bank_parry_excess: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows a "Bank Parry Excess" section after parry rolls with an opponent roll input to compute and bank the excess for future wound checks. Uses the same banked WC excess mechanism as Isawa Duelist 5th Dan.
+
+**Clicktests:**
+- `test_school_abilities.py::test_shinjo_5th_dan_parry_excess_wc`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll a parry, enter opponent roll, verify excess is banked for future wound checks
 
 ---
 

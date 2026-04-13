@@ -18,7 +18,12 @@
 **Implementation:** `app/services/dice.py:567` (`damage_ring_name = "Water" if school_id == "isawa_duelist" else "Fire"`).
 
 **Unit tests:** None specific to this mechanic.
-**Clicktests:** `test_sheet_js_errors.py` includes `isawa_duelist` indirectly (not in the explicit list but referenced generally).
+**Clicktests:**
+- `test_sheet_js_errors.py` includes `isawa_duelist` indirectly (not in the explicit list but referenced generally).
+- `test_school_abilities.py::test_isawa_duelist_damage_shows_water`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack via modal, verify damage ring shows Water not Fire in the damage breakdown
 
 ---
 
@@ -31,7 +36,11 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
 **Unit tests:** None specific to Isawa Duelist 1st Dan.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_isawa_duelist_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll double_attack or lunge, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -44,7 +53,11 @@
 - Applied as +5 flat bonus on wound check rolls via `_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_isawa_duelist_2nd_dan_wound_check_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: open wound check, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -55,6 +68,9 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `isawa_tn_trade: true` and `isawa_tn_trade_bonus: 3*attack_skill` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows a checkbox toggle in the attack modal pre-roll phase: "Trade -5 TN to be hit for +3X on this attack." When checked, adds the flat bonus to the attack roll. Note about TN penalty waiver if parried is informational only.
+
+**Clicktests:**
+- `test_school_abilities.py::test_isawa_duelist_3rd_dan_tn_trade_toggle`
 
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
@@ -82,4 +98,10 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `isawa_bank_wc_excess: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` banks wound check excess (margin when passed) via `wcKeepLightWounds()`, and the wound check modal shows an "Apply Banked Excess" button for future wound checks.
+
+**Clicktests:**
+- `test_school_abilities.py::test_isawa_duelist_5th_dan_banks_wc_excess`
+
+**Missing:**
+- [ ] Behavioral clicktest: pass a wound check, verify excess is banked, open another wound check, verify banked excess button appears and applies correctly
 

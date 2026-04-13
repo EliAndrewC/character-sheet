@@ -32,7 +32,8 @@
 - `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_extra_die`
 - `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_no_choice_no_bonus`
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_priest_1st_dan_skill_selection`
 
 ---
 
@@ -51,7 +52,11 @@
 - `test_dice.py::TestSchoolAbilities::test_priest_2nd_dan_sincerity_conditional`
 - `test_dice.py::TestSchoolAbilities::test_priest_below_2nd_dan_no_bonus`
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_priest_2nd_dan_honor_bonus_raise`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll bragging, verify +5 from Priest 2nd Dan appears in result breakdown
 
 ---
 

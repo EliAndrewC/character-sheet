@@ -18,7 +18,8 @@
 **Implementation:** `app/game_data.py:1421-1423` (definition), `app/routes/pages.py` (ide_feint_tn_reduce flag), `app/templates/character/sheet.html` (feint result button, attack modal TN reduction).
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_ide_feint_banks_tn_reduce`
 
 ---
 
@@ -37,7 +38,8 @@
 - `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_extra_die`
 - `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_no_choice_no_bonus`
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_ide_1st_dan_skill_selection`
 
 ---
 
@@ -55,7 +57,8 @@
 **Unit tests:**
 - `test_dice.py::TestSchoolAbilities::test_flexible_second_dan_free_raise`
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_ide_2nd_dan_skill_selection`
 
 ---
 
@@ -67,6 +70,13 @@
 - Server: `app/routes/pages.py` passes `ide_subtract_roll: true` and `ide_subtract_x: tact_skill` in school_abilities.
 - Client: tracking section shows "Ide 3rd Dan - Subtract from Roll" button. Spending 1 VP rolls Xk1 (X = tact skill) and displays the result to subtract from an opponent's roll.
 - "You know the result of all TN and contested rolls except sincerity and interrogation" is an information display mechanic (not encoded).
+
+**Clicktests:**
+- `test_school_abilities.py::test_ide_3rd_dan_subtract_button`
+- `test_school_abilities.py::test_ide_subtract_button_visible`
+
+**Missing:**
+- [ ] Behavioral clicktest: give VP, click the subtract button, verify VP is deducted and a subtraction result is displayed
 
 **Questions (ANSWERED):**
 - X is the tact skill rank (as stated in the rules text).
@@ -87,7 +97,11 @@
   - This is display-only since VP regeneration is tracked manually by players.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_ide_vp_regen_display`
+
+**Missing:**
+- [ ] Behavioral clicktest: verify the "+1 VP nightly" text appears near the VP counter
 
 ---
 
@@ -98,6 +112,9 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `ide_temp_vp_on_spend: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` hooks into `deductVoidPoints()` to auto-grant temp VP when non-temp VP is spent.
+
+**Clicktests:**
+- `test_school_abilities.py::test_ide_5th_dan_temp_vp_on_spend`
 
 **Questions (ANSWERED):**
 - "Not gained from this technique" means VP gained from the 5th Dan itself cannot trigger more temp VP. This prevents the infinite loop.

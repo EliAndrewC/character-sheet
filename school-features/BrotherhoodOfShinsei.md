@@ -22,7 +22,12 @@
 - `test_dice.py:528` - tests wound check formula
 - `test_dice.py:541` - tests non-rollable knacks (conviction, otherworldliness, worldliness)
 
-**Clicktests:** `test_sheet_js_errors.py:18` includes `brotherhood_of_shinsei_monk` in the sheet JS error check list.
+**Clicktests:**
+- `test_sheet_js_errors.py:18` includes `brotherhood_of_shinsei_monk` in the sheet JS error check list.
+- `test_school_abilities.py::test_brotherhood_damage_unarmed_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll damage, verify +1k1 unarmed bonus appears in damage breakdown
 
 ---
 
@@ -37,7 +42,11 @@
 **Unit tests:**
 - `test_dice.py:528` - verifies wound check formula for Brotherhood
 
-**Clicktests:** None specific to 1st Dan extra die.
+**Clicktests:**
+- `test_school_abilities.py::test_brotherhood_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -50,7 +59,11 @@
 - Applied as +5 flat bonus on attack rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None directly testing the 2nd Dan free raise on attack.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_brotherhood_2nd_dan_attack_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack via attack modal, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -70,7 +83,9 @@
 - `test_dice.py:466-493` - tests 3rd Dan courtier (same mechanism, different school); Brotherhood uses identical mechanism
 - `test_dice.py:481` - Brotherhood-specific test confirming 3rd Dan adventure raises
 
-**Clicktests:** None specific to Brotherhood 3rd Dan. The 3rd Dan free raise UI is tested via Courtier in `test_rolls.py`.
+**Clicktests:**
+- `test_school_abilities.py::test_brotherhood_3rd_dan_precepts_raises`
+- The 3rd Dan free raise UI is also tested via Courtier in `test_rolls.py`.
 
 **Notes:** Spending 1 free raise can lower a single action die by 5 phases (confirmed). This is an alternative use of the same free raises pool.
 
