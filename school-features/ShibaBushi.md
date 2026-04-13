@@ -30,7 +30,11 @@
 - Reflected in roll formulas on the View Sheet.
 
 **Unit tests:** None specific to Shiba 1st Dan.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_shiba_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll double_attack or parry, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -43,7 +47,11 @@
 - Applied as +5 flat bonus on parry rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_shiba_2nd_dan_parry_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll parry, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -53,6 +61,9 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `shiba_parry_damage: true` and `shiba_parry_damage_rolled: 2*attack_skill`. Client: `sheet.html` shows "Roll Parry Damage" button after parry rolls. Damage = (2*attack_skill)k1, no ring/TN bonus.
+
+**Clicktests:**
+- `test_school_abilities.py::test_shiba_parry_damage_button`
 
 **Questions (ANSWERED):**
 - X is the attack skill rank.
@@ -72,7 +83,11 @@
 **Unit tests:**
 - `test_dice.py::TestSchoolAbilities::test_shiba_bushi_4th_dan_wound_check_3k1` - verifies +3k1 on wound checks at 4th Dan
 - `test_dice.py::TestSchoolAbilities::test_shiba_bushi_below_4th_dan_no_3k1` - verifies no bonus below 4th Dan
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_shiba_4th_dan_wound_check_3k1_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: open wound check, verify +3k1 bonus is shown in the wound check result
 
 ---
 
@@ -82,3 +97,6 @@
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `shiba_parry_lower_tn: true`. Client shows informational note after parry rolls about lowering the attacker's TN by the parry excess.
+
+**Clicktests:**
+- `test_school_abilities.py::test_shiba_5th_dan_parry_tn_note`

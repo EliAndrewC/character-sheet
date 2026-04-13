@@ -17,7 +17,9 @@
 **Implementation:** `app/game_data.py:1448` (definition), `app/routes/pages.py` (merchant_post_roll_vp flag), `app/templates/character/sheet.html` (post-roll VP buttons).
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_merchant_post_roll_vp_spending`
+- `test_school_abilities.py::test_merchant_post_roll_vp_buttons`
 
 ---
 
@@ -52,7 +54,11 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
 **Unit tests:** None specific to Merchant 1st Dan.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_merchant_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll interrogation or sincerity, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -65,7 +71,11 @@
 - Applied as +5 flat bonus on interrogation rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_merchant_2nd_dan_interrogation_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll interrogation, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -81,7 +91,8 @@
 **Implementation:** `app/game_data.py:2121-2129` (third_dan dict).
 
 **Unit tests:** None specific to Merchant 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_merchant_3rd_dan_sincerity_raises`
 
 ---
 

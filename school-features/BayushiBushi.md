@@ -18,7 +18,11 @@
 **Implementation:** `app/game_data.py:927` (definition), `app/routes/pages.py` (bayushi_vp_damage flag), `app/templates/character/sheet.html` (atkComputeDamage).
 
 **Unit tests:** None specific to the +1k1 per VP spent damage mechanic.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_bayushi_vp_damage_on_attack`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll an attack with VP spent, verify damage formula shows +1k1 per VP in the damage breakdown
 
 ---
 
@@ -30,6 +34,9 @@
 - The feint knack temp VP auto-grant (1 VP on successful feint) is now implemented via `feint_temp_vp` flag. Client shows "Feint succeeded (+1 temp VP)" button after feint rolls.
 
 **Implementation:** `app/game_data.py:2385` (SCHOOLS_WITH_TEMP_VOID membership), `app/templates/character/sheet.html` (Temp Void counter, feint_temp_vp grant).
+
+**Clicktests:**
+- `test_school_abilities.py::test_feint_temp_vp_button_for_bayushi`
 
 ---
 
@@ -43,7 +50,11 @@
 - Reflected in roll formulas on the View Sheet.
 
 **Unit tests:** None specific to Bayushi 1st Dan extra die (tested generically via Akodo in `test_dice.py`).
-**Clicktests:** None school-specific.
+**Clicktests:**
+- `test_school_abilities.py::test_bayushi_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll iaijutsu/double_attack, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -56,7 +67,11 @@
 - Applied as +5 flat bonus on double attack rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None directly testing the Bayushi 2nd Dan free raise on double attack.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_bayushi_2nd_dan_double_attack_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll double_attack via attack modal, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -66,6 +81,10 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `bayushi_feint_damage: true` and `bayushi_feint_damage_rolled: attack_skill`. Client: `sheet.html` shows "Roll Feint Damage" button after feint rolls. Damage = attack_skill rolled, 1 kept, no ring/TN bonus. Bayushi Special VP bonus (+1k1 per VP) applies to the feint damage.
+
+**Clicktests:**
+- `test_school_abilities.py::test_bayushi_3rd_dan_feint_shows_damage`
+- `test_school_abilities.py::test_bayushi_feint_damage_button`
 
 **Questions (ANSWERED):**
 - Damage formula: (attack_skill)k1 with NO extra damage from ring or TN excess.
@@ -91,6 +110,7 @@
 **Clicktests:**
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
+- `test_school_abilities.py::test_bayushi_4th_dan_post_feint_raise`
 
 ---
 
@@ -106,7 +126,11 @@
 - `test_dice.py::TestSchoolAbilities::test_bayushi_5th_dan_half_lw_flag`
 - `test_dice.py::TestSchoolAbilities::test_bayushi_below_5th_dan_no_half_lw_flag`
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_bayushi_5th_dan_reduced_serious_wounds`
+
+**Missing:**
+- [ ] Behavioral clicktest: fail a wound check at 5th Dan, verify serious wounds are calculated using half light wounds
 
 ---
 

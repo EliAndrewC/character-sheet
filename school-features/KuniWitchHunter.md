@@ -31,7 +31,11 @@
 
 **Unit tests:**
 - `test_dice.py::TestSchoolAbilities::test_kuni_witch_hunter_1st_dan_damage_extra_die` - verifies +1k0 on damage rolls
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_kuni_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll interrogation, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -44,7 +48,11 @@
 - Applied as +5 flat bonus on interrogation rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_kuni_2nd_dan_interrogation_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll interrogation, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -61,7 +69,8 @@
 **Implementation:** `app/game_data.py:2075-2083` (third_dan dict).
 
 **Unit tests:** None specific to Kuni 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_kuni_3rd_dan_interrogation_raises`
 
 ---
 
@@ -86,4 +95,10 @@
 - Server: `app/routes/pages.py` passes `kuni_reflect_damage: true` in school_abilities.
 - Client: tracking section shows "Kuni 5th Dan - Reflect Damage" UI with LW input. Reflecting applies half the reflected LW as additional damage to self.
 - The "Tainted-only bonus: attack in current phase adds to reflected damage" is out of scope (combat-phase tracking).
+
+**Clicktests:**
+- `test_school_abilities.py::test_kuni_5th_dan_reflect_damage_ui`
+
+**Missing:**
+- [ ] Behavioral clicktest: enter LW amount in reflect damage input, click Reflect, verify self-damage is applied and reflected amount displays
 

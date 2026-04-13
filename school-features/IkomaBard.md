@@ -30,7 +30,11 @@
 
 **Unit tests:** None specific to Ikoma 1st Dan.
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_ikoma_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack or bragging, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -43,7 +47,11 @@
 - Applied as +5 flat bonus on attack rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_ikoma_2nd_dan_attack_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack via attack modal, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -59,7 +67,8 @@
 **Implementation:** `app/game_data.py:2149-2157` (third_dan dict).
 
 **Unit tests:** None specific to Ikoma 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_ikoma_3rd_dan_bragging_raises`
 
 ---
 
@@ -88,7 +97,11 @@
   - Example: Ikoma with Fire 3 and a 3k2 weapon exceeds TN by 12, gaining 2 extra rolled dice for 8k2. The 4th Dan sets rolled to max(current_rolled, 10), so 10k2. But if they exceed TN by 25+, they'd get 5+ extra rolled dice making it 11k3+ which already exceeds 10, so the technique doesn't change anything.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_ikoma_4th_dan_10_dice_floor`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll an attack, verify the 10-dice floor note appears in the damage formula for unparried attacks
 
 ---
 

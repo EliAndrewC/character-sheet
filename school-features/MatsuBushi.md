@@ -19,7 +19,11 @@
 **Implementation:** `app/game_data.py:1006`, `app/services/dice.py:487-489`.
 
 **Unit tests:** None. No test in `test_dice.py` verifies the Matsu initiative override.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_matsu_initiative_10_dice`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll initiative, verify 10 dice are shown in the result
 
 ---
 
@@ -33,7 +37,11 @@
 - Reflected in roll formulas on the View Sheet.
 
 **Unit tests:** None specific to Matsu 1st Dan extra die (tested generically via other schools in `test_dice.py`).
-**Clicktests:** None school-specific.
+**Clicktests:**
+- `test_school_abilities.py::test_matsu_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll double_attack or iaijutsu, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -46,7 +54,11 @@
 - Applied as +5 flat bonus on iaijutsu rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None directly testing the Matsu 2nd Dan free raise on iaijutsu.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_matsu_2nd_dan_iaijutsu_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll iaijutsu, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -57,6 +69,12 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `matsu_vp_wc_bonus: true` and `matsu_vp_wc_amount: 3*attack_skill` in school_abilities.
 - Client: `app/templates/character/sheet.html` banks 3*attack_skill per VP spent via `deductVoidPoints()`, and the wound check modal shows an "Apply Matsu Bonus" button to apply the full banked amount after seeing the roll.
+
+**Clicktests:**
+- `test_school_abilities.py::test_matsu_3rd_dan_vp_wc_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: spend VP on a roll, open wound check, verify the Matsu bonus button appears and applying it changes the total
 
 **Questions (ANSWERED):**
 - X = the Matsu's attack skill rank. So spending 1 VP adds 3 * attack_skill to a wound check.
@@ -82,6 +100,10 @@
 **Clicktests:**
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
+- `test_school_abilities.py::test_matsu_4th_dan_near_miss`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll a double attack that misses by less than 20, verify NEAR-MISS HIT display appears
 
 ---
 
@@ -92,6 +114,12 @@
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `matsu_lw_reset_15: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows an informational note in the damage result: "If this causes serious wounds, the defender's light wounds reset to 15 instead of 0." This is a display-only implementation since the defender's sheet is separate.
+
+**Clicktests:**
+- `test_school_abilities.py::test_matsu_5th_dan_lw_reset_15`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll damage, verify the LW reset to 15 note appears in the damage result
 
 ---
 

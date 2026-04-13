@@ -22,7 +22,12 @@
 - `test_dice.py::TestSchoolAbilities::test_kitsuki_magistrate_attack_water_bonus`
 - `test_dice.py::TestSchoolAbilities::test_kitsuki_magistrate_parry_no_water_bonus`
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_kitsuki_attack_water_bonus`
+- `test_school_abilities.py::test_kitsuki_interrogation_uses_water`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll interrogation, verify the formula label shows Water ring; roll attack, verify +2*Water flat bonus in result
 
 ---
 
@@ -35,7 +40,11 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
 **Unit tests:** None specific to Kitsuki 1st Dan.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_kitsuki_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll investigation or interrogation, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -48,7 +57,11 @@
 - Applied as +5 flat bonus on interrogation rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_kitsuki_2nd_dan_interrogation_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll interrogation, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -64,7 +77,9 @@
 **Implementation:** `app/game_data.py:2062-2070` (third_dan dict).
 
 **Unit tests:** None specific to Kitsuki 3rd Dan. The mechanism is identical to Courtier 3rd Dan which is tested in `test_dice.py`.
-**Clicktests:** None specific. The 3rd Dan free raise UI is tested via Courtier in `test_rolls.py`.
+**Clicktests:**
+- The 3rd Dan free raise UI is tested via Courtier in `test_rolls.py`.
+- `test_school_abilities.py::test_kitsuki_3rd_dan_investigation_raises`
 
 ---
 
@@ -86,4 +101,10 @@
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `kitsuki_reduce_rings: true`. Client shows informational note after rolls describing the ring reduction ability and its XP-based targeting limit.
+
+**Clicktests:**
+- `test_school_abilities.py::test_kitsuki_5th_dan_ring_reduction_note`
+
+**Missing:**
+- [ ] Behavioral clicktest: after a roll, verify the ring reduction note text is visible
 

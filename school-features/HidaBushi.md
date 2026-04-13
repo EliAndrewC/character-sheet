@@ -30,7 +30,11 @@
 - Reflected in roll formulas on the View Sheet.
 
 **Unit tests:** None specific to Hida 1st Dan extra die (tested generically via other schools in `test_dice.py`).
-**Clicktests:** None school-specific.
+**Clicktests:**
+- `test_school_abilities.py::test_hida_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack, verify extra die from 1st Dan in dice count
 
 ---
 
@@ -43,7 +47,11 @@
 - Applied as +5 flat bonus on counterattack rolls via `_apply_school_technique_bonus()`.
 
 **Unit tests:** None directly testing the Hida 2nd Dan free raise on counterattack.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_hida_2nd_dan_counterattack_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll counterattack via attack modal, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -53,6 +61,10 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `hida_reroll: true` and `hida_reroll_x: attack_skill`. Client: after attack rolls, shows dice selection UI pre-selecting lowest dice <=7. User can toggle selections before confirming reroll. For counterattack: 2X dice. For other attacks: X dice. When impaired: count halved (round up) but 10s rerolled on these dice.
+
+**Clicktests:**
+- `test_school_abilities.py::test_hida_3rd_dan_reroll_appears`
+- `test_school_abilities.py::test_hida_reroll_selection_appears`
 
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
@@ -78,6 +90,11 @@
 **Clicktests:**
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
+- `test_school_abilities.py::test_hida_4th_dan_trade_sw_button`
+- `test_school_abilities.py::test_hida_trade_sw_button_works`
+
+**Missing:**
+- [ ] Behavioral clicktest: add 2+ serious wounds, click Trade button, verify SW decreases by 2 and LW resets to 0
 
 ---
 

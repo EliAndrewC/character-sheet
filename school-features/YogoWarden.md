@@ -21,7 +21,11 @@
 **Implementation:** `app/game_data.py:1088`, `app/game_data.py:2382-2386` (SCHOOLS_WITH_TEMP_VOID membership), `app/routes/pages.py` (yogo_temp_vp_on_sw flag), `app/templates/character/sheet.html` (Temp Void counter, auto-grant in wound check functions).
 
 **Unit tests:** None specific to the auto-grant mechanic.
-**Clicktests:** None specific. General temp void counter tested indirectly via tracking tests.
+**Clicktests:**
+- `test_school_abilities.py::test_yogo_temp_vp_on_sw`
+
+**Missing:**
+- [ ] Behavioral clicktest: gain a serious wound via wound check failure, verify temp VP counter increases
 
 ---
 
@@ -45,7 +49,11 @@
 
 **Unit tests:**
 - `test_dice.py::TestSchoolAbilities::test_yogo_warden_1st_dan_damage_extra_die` - verifies +1k0 on damage rolls
-**Clicktests:** None school-specific.
+**Clicktests:**
+- `test_school_abilities.py::test_yogo_1st_dan_formula_extra_die`
+
+**Missing:**
+- [ ] Behavioral clicktest: roll attack, verify extra die from 1st Dan in dice count
 
 **Questions (ANSWERED):**
 - Yes, the "damage" extra die adds +1k0 (one extra rolled die) to all damage rolls. This needs school-specific handling in the damage formula builder since the generic `_apply_school_technique_bonus()` is not called for damage rolls. Same applies to Kuni Witch Hunter.
@@ -61,7 +69,11 @@
 - Applied as +5 flat bonus on wound check rolls via `_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
 **Unit tests:** None directly testing the Yogo Warden 2nd Dan free raise on wound checks.
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_yogo_2nd_dan_wound_check_bonus`
+
+**Missing:**
+- [ ] Behavioral clicktest: open wound check, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -72,6 +84,12 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `yogo_vp_heals_lw: true` and `yogo_vp_heal_amount: 2*attack_skill` in school_abilities.
 - Client: `app/templates/character/sheet.html` hooks into `deductVoidPoints()` to automatically reduce light wounds by 2*attack_skill per VP spent.
+
+**Clicktests:**
+- `test_school_abilities.py::test_yogo_3rd_dan_vp_heals_lw`
+
+**Missing:**
+- [ ] Behavioral clicktest: spend VP on a roll, verify light wounds decrease by the expected amount
 
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
@@ -97,6 +115,10 @@
 **Clicktests:**
 - `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
 - `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
+- `test_school_abilities.py::test_yogo_4th_dan_wc_vp_raise`
+
+**Missing:**
+- [ ] Behavioral clicktest: fail a wound check with VP available, verify the post-roll Spend VP (+5) button appears and clicking it changes the total
 
 ---
 

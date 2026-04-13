@@ -27,7 +27,13 @@
 - `test_game_data_helpers.py:66` - `test_shugenja_regen` verifies VP regen = lowest ring
 - `test_game_data_helpers.py:70` - `test_shugenja_spend_cap` verifies spend cap = min(rings) - 1
 
-**Clicktests:** `test_sheet_js_errors.py:19` includes `isawa_ishi` in the sheet JS error check list.
+**Clicktests:**
+- `test_sheet_js_errors.py:19` includes `isawa_ishi` in the sheet JS error check list.
+- `test_school_abilities.py::test_isawa_ishi_vp_max_display`
+- `test_school_abilities.py::test_isawa_ishi_vp_spend_cap`
+
+**Missing:**
+- [ ] Behavioral clicktest: verify VP max display on the sheet shows highest ring + school rank (not lowest ring)
 
 ---
 
@@ -46,7 +52,8 @@
 - `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_extra_die`
 - `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_no_choice_no_bonus`
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_isawa_ishi_1st_dan_skill_selection`
 
 ---
 
@@ -64,7 +71,8 @@
 **Unit tests:**
 - `test_dice.py::TestSchoolAbilities::test_flexible_second_dan_free_raise`
 
-**Clicktests:** None.
+**Clicktests:**
+- `test_school_abilities.py::test_isawa_ishi_2nd_dan_skill_selection`
 
 ---
 
