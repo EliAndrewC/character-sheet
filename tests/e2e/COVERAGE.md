@@ -27,6 +27,10 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Take 1 Serious resets light wounds to 0 → `test_wound_check.py::test_wound_check_take_serious_resets_light`
 - [x] Iaijutsu strike wound check button present → `test_wound_check.py::test_iaijutsu_strike_wound_check_available`
 - [x] Regular roll also shows dice animation → `test_wound_check.py::test_regular_roll_shows_dice_animation`
+- [x] Accept Result button applies wound check failure -> `test_ui_interactions.py::test_wc_accept_result_applies_failure`
+- [x] Keep Light Wounds closes modal without changes -> `test_ui_interactions.py::test_wc_keep_light_wounds_closes`
+- [x] Take 1 Serious Wound adds SW and resets LW -> `test_ui_interactions.py::test_wc_take_serious_resets_and_adds_sw`
+- [x] Post-roll VP spend (+5) on wound check -> `test_ui_interactions.py::test_wc_post_roll_vp_spend`
 
 ## Attack Modal
 
@@ -39,6 +43,10 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Hit shows Make Damage Roll button -> `test_attack_modal.py::test_attack_hit_shows_damage_roll_button`
 - [x] Dice animation visible during attack roll -> `test_attack_modal.py::test_attack_dice_animation_visible`
 - [x] Damage roll produces result after hit -> `test_attack_modal.py::test_attack_damage_roll_produces_result`
+- [x] Lucky reroll on attack produces new result -> `test_ui_interactions.py::test_lucky_reroll_on_attack`
+- [x] Lucky reroll on wound check produces new result -> `test_ui_interactions.py::test_lucky_reroll_on_wound_check`
+- [x] Failed parry checkbox changes damage formula -> `test_ui_interactions.py::test_failed_parry_checkbox`
+- [x] Predeclared parry rolls with +5 bonus -> `test_ui_interactions.py::test_predeclared_parry_with_bonus`
 
 ## Iaijutsu Duel
 
@@ -56,6 +64,11 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Opponent hit shows player TN reference -> `test_iaijutsu_duel.py::test_duel_opponent_hit_shows_player_tn`
 - [x] Opponent wound check opens from duel -> `test_iaijutsu_duel.py::test_duel_opponent_wound_check_opens`
 - [x] Duel setup shows Katana (4k2) default -> `test_iaijutsu_duel.py::test_duel_katana_weapon_default`
+- [x] Duel restart when both miss resets TNs -> `test_ui_interactions.py::test_duel_restart_resets_tns`
+
+## UI Interactions (cross-cutting)
+
+- [x] Account-level sharing allows edit access -> `test_permissions.py::test_granted_user_can_access_edit_page`
 
 ## School-Specific Abilities
 
