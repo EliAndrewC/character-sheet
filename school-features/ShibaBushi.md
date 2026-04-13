@@ -33,9 +33,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_shiba_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll double_attack or parry, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -49,9 +46,6 @@
 **Unit tests:** None.
 **Clicktests:**
 - `test_school_abilities.py::test_shiba_2nd_dan_parry_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll parry, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -85,9 +79,6 @@
 - `test_dice.py::TestSchoolAbilities::test_shiba_bushi_below_4th_dan_no_3k1` - verifies no bonus below 4th Dan
 **Clicktests:**
 - `test_school_abilities.py::test_shiba_4th_dan_wound_check_3k1_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: open wound check, verify +3k1 bonus is shown in the wound check result
 
 ---
 

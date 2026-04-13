@@ -53,9 +53,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_bayushi_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll iaijutsu/double_attack, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -69,9 +66,6 @@
 **Unit tests:** None directly testing the Bayushi 2nd Dan free raise on double attack.
 **Clicktests:**
 - `test_school_abilities.py::test_bayushi_2nd_dan_double_attack_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll double_attack via attack modal, verify +5 from 2nd Dan in result breakdown
 
 ---
 
@@ -128,9 +122,6 @@
 
 **Clicktests:**
 - `test_school_abilities.py::test_bayushi_5th_dan_reduced_serious_wounds`
-
-**Missing:**
-- [ ] Behavioral clicktest: fail a wound check at 5th Dan, verify serious wounds are calculated using half light wounds
 
 ---
 

@@ -26,9 +26,6 @@
 - `test_school_abilities.py::test_kitsuki_attack_water_bonus`
 - `test_school_abilities.py::test_kitsuki_interrogation_uses_water`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll interrogation, verify the formula label shows Water ring; roll attack, verify +2*Water flat bonus in result
-
 ---
 
 ## 1st Dan
@@ -43,9 +40,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_kitsuki_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll investigation or interrogation, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -59,9 +53,6 @@
 **Unit tests:** None.
 **Clicktests:**
 - `test_school_abilities.py::test_kitsuki_2nd_dan_interrogation_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll interrogation, verify +5 from 2nd Dan in result breakdown
 
 ---
 

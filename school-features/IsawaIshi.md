@@ -32,9 +32,6 @@
 - `test_school_abilities.py::test_isawa_ishi_vp_max_display`
 - `test_school_abilities.py::test_isawa_ishi_vp_spend_cap`
 
-**Missing:**
-- [ ] Behavioral clicktest: verify VP max display on the sheet shows highest ring + school rank (not lowest ring)
-
 ---
 
 ## 1st Dan

@@ -32,9 +32,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_doji_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll counterattack or manipulation, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -48,9 +45,6 @@
 **Unit tests:** None.
 **Clicktests:**
 - `test_school_abilities.py::test_doji_2nd_dan_manipulation_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll manipulation, verify +5 from 2nd Dan in result breakdown
 
 ---
 

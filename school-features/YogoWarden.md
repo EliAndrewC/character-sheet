@@ -52,9 +52,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_yogo_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll attack, verify extra die from 1st Dan in dice count
-
 **Questions (ANSWERED):**
 - Yes, the "damage" extra die adds +1k0 (one extra rolled die) to all damage rolls. This needs school-specific handling in the damage formula builder since the generic `_apply_school_technique_bonus()` is not called for damage rolls. Same applies to Kuni Witch Hunter.
 
@@ -71,9 +68,6 @@
 **Unit tests:** None directly testing the Yogo Warden 2nd Dan free raise on wound checks.
 **Clicktests:**
 - `test_school_abilities.py::test_yogo_2nd_dan_wound_check_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: open wound check, verify +5 from 2nd Dan in result breakdown
 
 ---
 

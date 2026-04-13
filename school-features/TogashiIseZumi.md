@@ -32,9 +32,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_togashi_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll attack or athletics, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -48,9 +45,6 @@
 **Unit tests:** None.
 **Clicktests:**
 - `test_school_abilities.py::test_togashi_2nd_dan_athletics_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll athletics, verify +5 from 2nd Dan in result breakdown
 
 ---
 

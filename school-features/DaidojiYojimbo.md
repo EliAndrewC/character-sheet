@@ -33,9 +33,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_daidoji_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll attack, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -49,9 +46,6 @@
 **Unit tests:** None directly testing the Daidoji 2nd Dan free raise on counterattack.
 **Clicktests:**
 - `test_school_abilities.py::test_daidoji_2nd_dan_counterattack_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll counterattack via attack modal, verify +5 from 2nd Dan in result breakdown
 
 ---
 

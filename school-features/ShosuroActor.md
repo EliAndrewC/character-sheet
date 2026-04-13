@@ -26,9 +26,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_shosuro_acting_skill_bonus`
 
-**Missing:**
-- [ ] Behavioral clicktest: create char with acting skill, roll attack, verify extra rolled dice from acting appear in dice count
-
 ---
 
 ## Stipend Bonus
@@ -64,9 +61,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_shosuro_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll attack or sincerity, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -80,9 +74,6 @@
 **Unit tests:** None.
 **Clicktests:**
 - `test_school_abilities.py::test_shosuro_2nd_dan_sincerity_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll sincerity, verify +5 from 2nd Dan in result breakdown
 
 ---
 

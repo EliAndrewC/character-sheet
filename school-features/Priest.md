@@ -55,9 +55,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_priest_2nd_dan_honor_bonus_raise`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll bragging, verify +5 from Priest 2nd Dan appears in result breakdown
-
 ---
 
 ## 3rd Dan

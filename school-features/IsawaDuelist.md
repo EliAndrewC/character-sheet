@@ -22,9 +22,6 @@
 - `test_sheet_js_errors.py` includes `isawa_duelist` indirectly (not in the explicit list but referenced generally).
 - `test_school_abilities.py::test_isawa_duelist_damage_shows_water`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll attack via modal, verify damage ring shows Water not Fire in the damage breakdown
-
 ---
 
 ## 1st Dan
@@ -39,9 +36,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_isawa_duelist_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll double_attack or lunge, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -55,9 +49,6 @@
 **Unit tests:** None.
 **Clicktests:**
 - `test_school_abilities.py::test_isawa_duelist_2nd_dan_wound_check_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: open wound check, verify +5 from 2nd Dan in result breakdown
 
 ---
 

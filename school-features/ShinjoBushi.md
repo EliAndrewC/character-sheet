@@ -34,9 +34,6 @@
 **Clicktests:**
 - `test_school_abilities.py::test_shinjo_1st_dan_formula_extra_die`
 
-**Missing:**
-- [ ] Behavioral clicktest: roll initiative or parry, verify extra die from 1st Dan in dice count
-
 ---
 
 ## 2nd Dan
@@ -50,9 +47,6 @@
 **Unit tests:** None directly testing the Shinjo 2nd Dan free raise on parry.
 **Clicktests:**
 - `test_school_abilities.py::test_shinjo_2nd_dan_parry_bonus`
-
-**Missing:**
-- [ ] Behavioral clicktest: roll parry, verify +5 from 2nd Dan in result breakdown
 
 ---
 
