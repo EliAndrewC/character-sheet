@@ -124,6 +124,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
 
     # Load party members in the same gaming group, if any.
     party_members_data: list = []
+    daidoji_counterattack_party: list = []  # party members with Daidoji 3rd Dan counterattack raises
     if character.gaming_group_id:
         party_chars = (
             db.query(Character)
@@ -141,6 +142,21 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                 "campaign_advantages": p.campaign_advantages or [],
                 "campaign_disadvantages": p.campaign_disadvantages or [],
             })
+            # Check if this party member is a Daidoji with 3rd Dan counterattack raises
+            if p.school == "daidoji_yojimbo":
+                p_school = SCHOOLS.get(p.school)
+                if p_school:
+                    p_knack_ranks = [
+                        (p.knacks or {}).get(k, 1) for k in p_school.school_knacks
+                    ]
+                    p_dan = min(p_knack_ranks) if p_knack_ranks else 0
+                    if p_dan >= 3:
+                        p_attack = (p.skills or {}).get("attack", 1)
+                        daidoji_counterattack_party.append({
+                            "name": p.name,
+                            "raises": p_attack,
+                            "bonus": p_attack * 5,
+                        })
 
     effective = compute_effective_status(char_dict, party_members=party_members_data)
     all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
@@ -336,6 +352,8 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "ide_subtract_x": (char_dict.get("skills") or {}).get("tact", 0) if character.school == "ide_diplomat" and dan >= 3 else 0,
         # Kuni Witch Hunter 5th Dan: reflect damage
         "kuni_reflect_damage": character.school == "kuni_witch_hunter" and dan >= 5,
+        # Hida 5th Dan: bank counterattack excess for wound check bonus
+        "hida_counterattack_wc_bonus": character.school == "hida_bushi" and dan >= 5,
     }
 
     # Compute wound check probability slice for client-side display.
@@ -460,6 +478,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "damage_avgs": damage_avgs,
             "has_temp_void": character.school in SCHOOLS_WITH_TEMP_VOID,
             "school_abilities": school_abilities,
+            "daidoji_counterattack_party": daidoji_counterattack_party,
         },
     )
 

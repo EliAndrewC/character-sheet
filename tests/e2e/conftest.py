@@ -79,6 +79,26 @@ def page(live_server_url, browser):
         extra_http_headers={"X-Test-User": "183026066498125825:eliandrewc"}
     )
     p = ctx.new_page()
+    # Disable dice animations in tests to eliminate timing flakiness
+    p.add_init_script("""
+        window.__testDisableAnimations = true;
+        const origDefineProperty = Object.defineProperty;
+        // After Alpine initializes diceRoller, override the prefs
+        const _origInterval = setInterval(() => {
+            if (window._diceRoller) {
+                window._diceRoller.prefs.dice_animation_enabled = false;
+                window._diceRoller.prefs.dice_sound_enabled = false;
+                clearInterval(_origInterval);
+            }
+        }, 50);
+        // Also disable for any future page loads
+        document.addEventListener('alpine:initialized', () => {
+            if (window._diceRoller) {
+                window._diceRoller.prefs.dice_animation_enabled = false;
+                window._diceRoller.prefs.dice_sound_enabled = false;
+            }
+        });
+    """)
     yield p
     ctx.close()
 
