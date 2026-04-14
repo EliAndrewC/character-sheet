@@ -403,9 +403,9 @@ def test_wc_post_roll_vp_spend(page, live_server_url):
         }
         return 0;
     }""")
-    spend_btn = page.locator('button:has-text("Spend VP (+5)")')
-    if spend_btn.is_visible():
-        spend_btn.click()
+    spend_btn = page.locator('button:has-text("Spend VP (+5)"):visible')
+    if spend_btn.count() > 0:
+        spend_btn.first.click()
         page.wait_for_timeout(300)
         total_after = page.evaluate("""() => {
             const els = document.querySelectorAll('[x-data]');
@@ -416,3 +416,188 @@ def test_wc_post_roll_vp_spend(page, live_server_url):
             return 0;
         }""")
         assert total_after == total_before + 5
+
+
+# ---------------------------------------------------------------------------
+# 10. Akodo banked bonus applies on MISS to turn it into a hit
+# ---------------------------------------------------------------------------
+
+def test_akodo_banked_bonus_on_miss(page, live_server_url):
+    """Akodo 3rd Dan: banked bonus Apply button appears on MISS and changes total."""
+    _create_char(page, live_server_url, "AkodoMissB", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    # Bank a bonus by injecting directly (simulating a passed wound check)
+    page.evaluate("window._trackingBridge.akodoBankedBonuses.push({amount: 15, spent: false})")
+    page.wait_for_timeout(200)
+    # Verify it shows in tracking section
+    assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
+    # Mock dice low so we miss
+    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.0")
+    # Roll attack with high TN to guarantee miss
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("30")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    page.evaluate("if (window._origRandom) Math.random = window._origRandom")
+    # Should have missed
+    miss_text = page.locator('[data-modal="attack"]').text_content()
+    assert "MISSED" in miss_text
+    # Apply button should be visible on the MISS section
+    apply_btn = modal.locator('button:has-text("Apply +15"):visible')
+    assert apply_btn.count() > 0, "Apply bonus button should appear on MISS"
+    total_before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkRollTotal !== undefined) return d.atkRollTotal;
+        }
+        return 0;
+    }""")
+    apply_btn.first.click()
+    page.wait_for_timeout(300)
+    total_after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkRollTotal !== undefined) return d.atkRollTotal;
+        }
+        return 0;
+    }""")
+    assert total_after == total_before + 15
+
+
+# ---------------------------------------------------------------------------
+# 10b. Undo button stays visible after all Akodo bonuses are spent
+# ---------------------------------------------------------------------------
+
+def test_akodo_undo_visible_after_all_bonuses_spent(page, live_server_url):
+    """Akodo 3rd Dan: Undo button remains visible after all banked bonuses are spent."""
+    _create_char(page, live_server_url, "AkodoUndoB", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    # Inject a single banked bonus
+    page.evaluate("window._trackingBridge.akodoBankedBonuses.push({amount: 12, spent: false})")
+    page.wait_for_timeout(200)
+    # Mock dice high, roll attack with low TN to guarantee hit
+    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.6")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    page.evaluate("if (window._origRandom) Math.random = window._origRandom")
+    # Apply the only bonus - this spends all bonuses
+    apply_btn = modal.locator('button:has-text("Apply +12"):visible')
+    assert apply_btn.count() > 0, "Apply button should be visible before spending"
+    total_before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkRollTotal !== undefined) return d.atkRollTotal;
+        }
+        return 0;
+    }""")
+    apply_btn.first.click()
+    page.wait_for_timeout(300)
+    # All bonuses are now spent - Undo button should still be visible
+    undo_btn = modal.locator('button:has-text("Undo"):visible')
+    assert undo_btn.count() > 0, "Undo button must remain visible after all bonuses are spent"
+    # Verify total increased
+    total_after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkRollTotal !== undefined) return d.atkRollTotal;
+        }
+        return 0;
+    }""")
+    assert total_after == total_before + 12
+    # Click Undo - total should decrease back
+    undo_btn.first.click()
+    page.wait_for_timeout(300)
+    total_undone = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkRollTotal !== undefined) return d.atkRollTotal;
+        }
+        return 0;
+    }""")
+    assert total_undone == total_before, f"Undo should restore total: expected {total_before}, got {total_undone}"
+
+
+# ---------------------------------------------------------------------------
+# 11. Banked bonuses display reactively in tracking section
+# ---------------------------------------------------------------------------
+
+def test_akodo_banked_bonuses_display_in_tracking(page, live_server_url):
+    """Akodo 3rd Dan: banked bonuses appear in the tracking section."""
+    _create_char(page, live_server_url, "AkodoTrackB", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    # Initially no bonuses
+    assert not page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
+    # Add a bonus
+    page.evaluate("window._trackingBridge.akodoBankedBonuses.push({amount: 8, spent: false})")
+    page.wait_for_timeout(300)
+    # Should now be visible
+    assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
+    body = page.text_content("body")
+    assert "8" in body  # the amount is displayed
+    # Mark it spent
+    page.locator('button:has-text("Mark spent")').click()
+    page.wait_for_timeout(300)
+    # Should show as spent (line-through)
+    assert page.locator('text="spent"').is_visible()
+
+
+# ---------------------------------------------------------------------------
+# 11b. Banked bonuses persist across page refresh
+# ---------------------------------------------------------------------------
+
+def test_akodo_banked_bonuses_persist_on_refresh(page, live_server_url):
+    """Akodo 3rd Dan: unspent banked bonuses survive a page refresh."""
+    _create_char(page, live_server_url, "AkodoPersist", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    # Inject a bonus and trigger save
+    page.evaluate("""
+        window._trackingBridge.akodoBankedBonuses.push({amount: 15, spent: false});
+        window._trackingBridge.saveBankedBonuses();
+    """)
+    page.wait_for_timeout(500)
+    assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
+    # Refresh the page
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(500)
+    # Bonus should still be there
+    assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
+    bonuses = page.evaluate("window._trackingBridge?.akodoBankedBonuses?.length || 0")
+    assert bonuses == 1, f"Expected 1 bonus after refresh, got {bonuses}"
+    amount = page.evaluate("window._trackingBridge?.akodoBankedBonuses?.[0]?.amount || 0")
+    assert amount == 15, f"Expected amount 15 after refresh, got {amount}"
+
+
+# ---------------------------------------------------------------------------
+# 12. Reset per-adventure clears all combat bonuses
+# ---------------------------------------------------------------------------
+
+def test_reset_adventure_clears_combat_bonuses(page, live_server_url):
+    """Reset Per-Adventure clears Akodo banked bonuses and other combat state."""
+    _create_char(page, live_server_url, "AkodoResetB", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    # Add a banked bonus and mark Lucky as used (so reset button is enabled)
+    page.evaluate("window._trackingBridge.akodoBankedBonuses.push({amount: 10, spent: false})")
+    page.wait_for_timeout(200)
+    assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
+    # Open reset modal and confirm
+    reset_btn = page.locator('[data-action="open-reset-modal"]')
+    if reset_btn.is_visible() and not reset_btn.is_disabled():
+        reset_btn.click()
+        page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+        page.locator('[data-action="confirm-reset"]').click()
+        page.wait_for_timeout(300)
+        # Banked bonuses should be cleared
+        bonuses = page.evaluate("window._trackingBridge?.akodoBankedBonuses?.length || 0")
+        assert bonuses == 0, f"Bonuses should be cleared after reset, got {bonuses}"

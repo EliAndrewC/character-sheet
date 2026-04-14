@@ -69,6 +69,11 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 ## UI Interactions (cross-cutting)
 
 - [x] Account-level sharing allows edit access -> `test_permissions.py::test_granted_user_can_access_edit_page`
+- [x] Akodo banked bonus Apply button works on MISS -> `test_ui_interactions.py::test_akodo_banked_bonus_on_miss`
+- [x] Akodo Undo button stays visible after all bonuses spent -> `test_ui_interactions.py::test_akodo_undo_visible_after_all_bonuses_spent`
+- [x] Akodo banked bonuses display reactively in tracking -> `test_ui_interactions.py::test_akodo_banked_bonuses_display_in_tracking`
+- [x] Akodo banked bonuses persist across page refresh -> `test_ui_interactions.py::test_akodo_banked_bonuses_persist_on_refresh`
+- [x] Reset per-adventure clears all combat bonuses -> `test_ui_interactions.py::test_reset_adventure_clears_combat_bonuses`
 
 ## School-Specific Abilities
 
@@ -78,6 +83,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_akodo_1st_dan_behavioral`
 - [x] 2nd Dan behavioral wound check bonus -> `test_school_abilities.py::test_akodo_2nd_dan_behavioral`
 - [x] 3rd Dan wound check banks bonus for next attack -> `test_school_abilities.py::test_akodo_3rd_dan_bank_and_apply_behavioral`
+- [x] 4th Dan Spend VP (+5) on passed wound check -> `test_school_abilities.py::test_akodo_4th_dan_vp_on_passed_wound_check`
+- [x] 4th Dan Spend VP (+5) on failed wound check -> `test_school_abilities.py::test_akodo_4th_dan_vp_on_failed_wound_check`
 - [x] 5th Dan reflect damage UI elements appear -> `test_school_abilities.py::test_akodo_5th_dan_reflect_damage_ui`
 - [x] 5th Dan reflect damage behavioral flow -> `test_school_abilities.py::test_akodo_5th_dan_reflect_ui_behavioral`
 
