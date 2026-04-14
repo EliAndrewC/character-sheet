@@ -96,7 +96,12 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 2nd Dan behavioral double attack bonus -> `test_school_abilities.py::test_bayushi_2nd_dan_behavioral`
 - [x] 3rd Dan feint shows damage output -> `test_school_abilities.py::test_bayushi_3rd_dan_feint_shows_damage`
 - [x] 4th Dan post-feint free raise -> `test_school_abilities.py::test_bayushi_4th_dan_post_feint_raise`
+- [x] 4th Dan banked raises tracking, persist, and mark spent -> `test_school_abilities.py::test_bayushi_banked_raises_tracking_and_persist`
+- [x] 3rd Dan feint damage formula shows VP-adjusted values -> `test_school_abilities.py::test_bayushi_feint_damage_formula_shows_vp`
 - [x] 5th Dan half light wounds on wound check failure -> `test_school_abilities.py::test_bayushi_5th_dan_half_lw_behavioral`
+- [x] Below 5th Dan does NOT use half-LW calculation -> `test_school_abilities.py::test_bayushi_below_5th_dan_no_half_lw`
+- [x] 5th Dan probability table reflects halved LW for SW columns -> `test_school_abilities.py::test_bayushi_5th_dan_prob_table_shows_half_lw`
+- [x] Below 5th Dan probability table has no halved note -> `test_school_abilities.py::test_bayushi_below_5th_dan_prob_table_no_half_note`
 - [x] VP spending for bonus damage dice on attack -> `test_school_abilities.py::test_bayushi_vp_damage_behavioral`
 
 ### Brotherhood

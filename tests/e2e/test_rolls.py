@@ -285,11 +285,16 @@ def _create_3rd_dan_courtier(page, live_server_url, name="Courtier3Dan"):
 
 def _dismiss_roll_menu_if_open(page):
     """If the void-spending roll menu appeared, click the default 'Roll X' option."""
-    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
     if menu.count() > 0 and menu.is_visible():
-        # Click the first non-iaijutsu-strike button (the "Roll X" default)
-        menu.locator('button.font-medium').first.click()
-        page.wait_for_timeout(100)
+        buttons = menu.locator('button.font-medium')
+        for i in range(buttons.count()):
+            text = buttons.nth(i).text_content().strip()
+            if text.startswith("Roll "):
+                buttons.nth(i).click()
+                return
+        buttons.first.click()
 
 
 def _wait_for_roll_result(page):
