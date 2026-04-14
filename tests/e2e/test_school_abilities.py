@@ -380,7 +380,7 @@ def test_hida_4th_dan_trade_sw_button(page, live_server_url):
                  knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
     sa = _get_school_abilities(page)
     assert sa.get("hida_trade_sw") is True
-    assert page.locator('button:has-text("Trade 2 SW to reset LW to 0")').is_visible()
+    assert page.locator('button:has-text("Take 2 SW to reset LW to 0")').is_visible()
 def test_hiruma_5th_dan_parry_note(page, live_server_url):
     """Hiruma 5th Dan: parry note flag is set and note text exists in DOM after parry roll."""
     _create_char(page, live_server_url, "Hiruma5Parry", "hiruma_scout",
@@ -693,7 +693,7 @@ def test_feint_temp_vp_button_for_bayushi(page, live_server_url):
 # --- Hida 3rd Dan: reroll dice selection ---
 
 def test_hida_reroll_selection_appears(page, live_server_url):
-    """Hida at 3rd Dan sees dice reroll selection after attack roll."""
+    """Hida at 3rd Dan sees ALL dice (kept and unkept) for reroll selection."""
     _create_char(page, live_server_url, "HidaReroll2", "hida_bushi",
                  knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
     page.locator('[data-roll-key="attack"]').click()
@@ -703,6 +703,17 @@ def test_hida_reroll_selection_appears(page, live_server_url):
     _wait_attack_result(page)
     assert page.locator('text="Hida 3rd Dan: select up to"').is_visible()
     assert page.locator('button:text("Skip")').is_visible()
+    # All dice should be shown (rolled count), not just kept
+    dice_count = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.finalDice) return d.finalDice.length;
+        }
+        return 0;
+    }""")
+    reroll_buttons = page.locator('[x-show*="hidaRerollPhase"] button.rounded-full')
+    assert reroll_buttons.count() == dice_count, f"Expected {dice_count} dice buttons, got {reroll_buttons.count()}"
 
 
 # --- Merchant Special: post-roll VP spending ---
@@ -818,24 +829,25 @@ def test_shosuro_3rd_dan_sincerity_raises(page, live_server_url):
 
 
 def test_hida_trade_sw_button_works(page, live_server_url):
-    """Hida 4th Dan: Trade 2 SW to reset LW button actually modifies tracking."""
+    """Hida 4th Dan: Take 2 SW to reset LW - adds 2 SW and sets LW to 0."""
     _create_char(page, live_server_url, "HidaTrade", "hida_bushi",
                  knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
-    # Set up: add 2 serious wounds
-    sw_row = page.locator('text="Serious Wounds"').locator('..')
-    sw_row.locator('button:has-text("+")').click()
-    sw_row.locator('button:has-text("+")').click()
+    trade_btn = page.locator('button:has-text("Take 2 SW to reset LW to 0")')
+    # Button should be disabled with 0 LW
+    assert trade_btn.is_disabled(), "Button should be disabled when LW is 0"
+    # Add light wounds
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "15")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "2"
-
-    # Click the trade button
-    trade_btn = page.locator('button:has-text("Trade 2 SW to reset LW to 0")')
-    assert trade_btn.is_visible()
+    assert not trade_btn.is_disabled(), "Button should be enabled when LW > 0"
+    # Click the button
     trade_btn.click()
     page.wait_for_timeout(300)
-
-    # SW should be 0 now
-    assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "0"
+    # SW should increase by 2, LW should be 0
+    assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "2"
+    assert page.locator('[x-text="lightWounds"]').text_content().strip() == "0"
 
 
 def test_togashi_heal_sw_button_works(page, live_server_url):
@@ -1770,6 +1782,90 @@ def test_daidoji_5th_dan_tn_note_behavioral(page, live_server_url):
     assert "Daidoji 5th Dan" in result
 
 
+def test_daidoji_3rd_dan_counterattack_checkbox(page, live_server_url):
+    """Daidoji 3rd Dan: wound check shows counterattack checkbox that applies bonus."""
+    _create_char(page, live_server_url, "Daidoji3CA", "daidoji_yojimbo",
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
+    # Add LW
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "20")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    # Open wound check
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    # Checkbox should be visible with "Hit was counterattacked" (self Daidoji)
+    checkbox = wc_modal.locator('text="Hit was counterattacked"')
+    assert checkbox.is_visible(), "Counterattack checkbox should appear for Daidoji 3rd Dan"
+    # Check the box - attack skill defaults to 1, so 1 raise = +5
+    wc_modal.locator('input[type="checkbox"]').check()
+    page.wait_for_timeout(200)
+    text = wc_modal.text_content()
+    assert "+5" in text, f"Expected +5 bonus (1 raise), got: {text[:200]}"
+    # Roll the wound check
+    _mock_dice_high(page)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    # The result should show the counterattack bonus in breakdown
+    result_text = _get_wc_result_text(page)
+    assert "counterattack" in result_text.lower() or "Daidoji" in result_text
+
+
+def test_daidoji_below_3rd_dan_no_counterattack_checkbox(page, live_server_url):
+    """Daidoji below 3rd Dan: wound check does NOT show counterattack checkbox."""
+    _create_char(page, live_server_url, "Daidoji2NoCA", "daidoji_yojimbo",
+                 knack_overrides={"counterattack": 2, "double_attack": 2, "iaijutsu": 2})
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "10")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    checkbox = wc_modal.locator('text="Hit was counterattacked"')
+    assert checkbox.count() == 0 or not checkbox.is_visible(), "Below 3rd Dan should not show counterattack checkbox"
+
+
+def test_non_daidoji_with_party_counterattack_checkbox(page, live_server_url):
+    """Non-Daidoji character with a Daidoji party member sees counterattack checkbox."""
+    # Create a non-Daidoji character
+    _create_char(page, live_server_url, "PartyMember", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    # Inject the party counterattack data as if a Daidoji party member exists
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.daidojiCounterattackData !== undefined) {
+                d.daidojiCounterattackData = { label: 'Daidoji Taro counterattacked this hit', raises: 4, bonus: 20 };
+            }
+        }
+    }""")
+    page.wait_for_timeout(200)
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "10")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    # Should show the party member's name in the checkbox label
+    checkbox = wc_modal.locator('text="Daidoji Taro counterattacked this hit"')
+    assert checkbox.is_visible(), "Party member counterattack checkbox should be visible"
+
+
 def test_hiruma_4th_dan_initiative_note_behavioral(page, live_server_url):
     """Hiruma 4th Dan: initiative result shows action dice -2 note."""
     _create_char(page, live_server_url, "Hiruma4B", "hiruma_scout",
@@ -1864,24 +1960,58 @@ def test_shinjo_4th_dan_initiative_highest_1_behavioral(page, live_server_url):
 
 
 def test_hida_4th_dan_trade_sw_behavioral(page, live_server_url):
-    """Hida 4th Dan: Trade 2 SW button decreases SW by 2 and resets LW to 0."""
+    """Hida 4th Dan: Take 2 SW button is disabled when LW=0, enabled when LW>0, adds 2 SW and resets LW."""
     _create_char(page, live_server_url, "Hida4TB", "hida_bushi",
                  knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
-    # Add serious wounds
-    sw_row = page.locator('text="Serious Wounds"').locator('..')
-    sw_row.locator('button:has-text("+")').click()
-    sw_row.locator('button:has-text("+")').click()
-    sw_row.locator('button:has-text("+")').click()
+    trade_btn = page.locator('button:has-text("Take 2 SW to reset LW to 0")')
+    # Button should be disabled with 0 LW
+    assert trade_btn.is_disabled(), "Button should be disabled with 0 LW"
+    # Add light wounds
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "25")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    sw_before = int(page.locator('[x-text="seriousWounds"]').text_content().strip())
-    assert sw_before == 3
-    # Click trade button
-    page.locator('button:has-text("Trade 2 SW to reset LW to 0")').click()
+    # Button should now be enabled
+    assert not trade_btn.is_disabled(), "Button should be enabled with LW > 0"
+    # Click - should ADD 2 SW and reset LW to 0
+    trade_btn.click()
     page.wait_for_timeout(300)
     sw_after = int(page.locator('[x-text="seriousWounds"]').text_content().strip())
-    assert sw_after == 1  # 3 - 2 = 1
+    assert sw_after == 2, f"Should have gained 2 SW, got {sw_after}"
     lw_after = int(page.locator('[x-text="lightWounds"]').text_content().strip())
-    assert lw_after == 0
+    assert lw_after == 0, f"LW should be 0 after trade, got {lw_after}"
+    # Button should be disabled again (LW is 0)
+    assert trade_btn.is_disabled(), "Button should be disabled again after LW reset to 0"
+
+
+def test_hida_trade_sw_can_be_used_multiple_times(page, live_server_url):
+    """Hida 4th Dan: Take 2 SW button can be used again after more LW are added."""
+    _create_char(page, live_server_url, "HidaWCTrade", "hida_bushi",
+                 knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
+    trade_btn = page.locator('button:has-text("Take 2 SW to reset LW to 0")')
+    # Add LW and use the button
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "10")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    trade_btn.click()
+    page.wait_for_timeout(300)
+    assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "2"
+    assert page.locator('[x-text="lightWounds"]').text_content().strip() == "0"
+    assert trade_btn.is_disabled(), "Should be disabled after LW reset"
+    # Add more LW and use again
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "20")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    assert not trade_btn.is_disabled(), "Should be enabled again with new LW"
+    trade_btn.click()
+    page.wait_for_timeout(300)
+    assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "4"
+    assert page.locator('[x-text="lightWounds"]').text_content().strip() == "0"
 
 
 def test_ide_3rd_dan_subtract_behavioral(page, live_server_url):
@@ -2512,3 +2642,102 @@ def test_shinjo_5th_dan_parry_excess_behavioral(page, live_server_url):
         expected_excess = our_total - 5
         if expected_excess > 0:
             assert banked >= expected_excess
+
+
+def test_hida_5th_dan_counterattack_wc_bonus(page, live_server_url):
+    """Hida 5th Dan: successful counterattack banks excess, applied to wound check."""
+    _create_char(page, live_server_url, "Hida5CWC", "hida_bushi",
+                 knack_overrides={"counterattack": 5, "iaijutsu": 5, "lunge": 5})
+    sa = _get_school_abilities(page)
+    assert sa.get("hida_counterattack_wc_bonus") is True
+
+    # Mock high dice so counterattack hits
+    _mock_dice_high(page)
+
+    # Roll counterattack with low TN to ensure a hit with excess
+    page.locator('[data-roll-key="knack:counterattack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+
+    # Check that the counterattack excess was banked
+    banked = page.evaluate("window._diceRoller?.hidaBankedWcBonus || 0")
+    assert banked > 0, f"Should have banked counterattack excess, got {banked}"
+
+    # Check the banked note is visible in the attack result
+    note = page.locator('[data-testid="hida-5th-dan-banked-note"]')
+    assert note.is_visible(), "Hida 5th Dan banked note should be visible after counterattack hit"
+
+    # Also check that tracking section shows the banked bonus
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkModalOpen !== undefined) { d.atkModalOpen = false; break; }
+        }
+    }""")
+    page.wait_for_timeout(300)
+    tracking_text = page.text_content("body")
+    assert "Banked Counterattack Bonus" in tracking_text
+
+    # Now add light wounds and roll wound check to verify bonus is applied
+    _restore_dice(page)
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "5")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    _mock_dice_high(page)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    # After wound check, the banked bonus should be consumed
+    after = page.evaluate("window._diceRoller?.hidaBankedWcBonus || 0")
+    assert after == 0, f"Banked bonus should be consumed after wound check, got {after}"
+    # The formula should contain the Hida bonus
+    formula_bonus = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.formula) return d.formula.hida_counterattack_bonus || 0;
+        }
+        return 0;
+    }""")
+    assert formula_bonus > 0, f"WC formula should include Hida counterattack bonus, got {formula_bonus}"
+    _restore_dice(page)
+
+
+def test_hida_below_5th_dan_no_counterattack_wc_bonus(page, live_server_url):
+    """Below 5th Dan, Hida does NOT bank counterattack excess for wound check."""
+    _create_char(page, live_server_url, "Hida4NoCWC", "hida_bushi",
+                 knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
+    sa = _get_school_abilities(page)
+    assert sa.get("hida_counterattack_wc_bonus") is not True
+
+    # Mock high dice and roll counterattack
+    _mock_dice_high(page)
+    page.locator('[data-roll-key="knack:counterattack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+
+    # Nothing should be banked
+    banked = page.evaluate("window._diceRoller?.hidaBankedWcBonus || 0")
+    assert banked == 0, f"Below 5th Dan should NOT bank counterattack excess, got {banked}"
+
+    # Banked note should not be visible
+    note = page.locator('[data-testid="hida-5th-dan-banked-note"]')
+    assert not note.is_visible(), "Hida 5th Dan banked note should NOT be visible below 5th Dan"
+    _restore_dice(page)

@@ -85,7 +85,7 @@
 
 ## 5th Dan
 
-> After you or a character for whom you've counterattacked makes a wound check, lower the TN to hit the attacker the next time they are attacked by the amount by which the wound check exceeded the damage roll, to a minimum of 0.
+> After you or a character for whom you've counterattacked makes a wound check, lower the TN to hit the attacker the next time they are attacked by the amount by which the wound check exceeded the damage roll. This can lower a TN to below 0.
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `daidoji_wc_lower_tn: true`. Client shows note after passed wound checks about lowering the attacker's TN by the wound check excess.

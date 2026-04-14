@@ -93,7 +93,23 @@
 
 > When you counterattack successfully, note the quantity X by which the counterattack roll exceeded its TN. Add X to your wound check on the damage from the attack you counterattacked. You may choose to counterattack after seeing an opponent's damage roll, but that roll goes through even if your counterattack impairs or kills the opponent.
 
-**Status:** Out of scope - requires tracking counterattack excess across rolls and reactive counterattack after seeing damage (combat-phase tracking).
+**Status:** Partially implemented. The first sentence (banking counterattack excess for wound check bonus) is fully implemented. The second sentence (reactive counterattack after seeing damage) is out of scope - requires combat-phase tracking.
+
+**Implementation:**
+- Server: `app/routes/pages.py` passes `hida_counterattack_wc_bonus: true` in school_abilities when dan >= 5.
+- Client: `app/templates/character/sheet.html`:
+  - `hidaBankedWcBonus` state in both trackingData and diceRoller components.
+  - After a successful counterattack roll, the excess over TN is banked automatically.
+  - In rollWoundCheck, the banked bonus is applied to formula.flat before rolling (auto-applied, not discretionary).
+  - Tracking section shows "Banked Counterattack Bonus" with a Clear button.
+  - Persisted via adventureState/saveBankedBonuses; cleared on resetAdventure.
+
+**Clicktests:**
+- `test_school_abilities.py::test_hida_5th_dan_counterattack_wc_bonus`
+- `test_school_abilities.py::test_hida_below_5th_dan_no_counterattack_wc_bonus`
+
+**Not implemented:**
+- "You may choose to counterattack after seeing an opponent's damage roll" - requires combat-phase tracking.
 
 ---
 

@@ -126,6 +126,9 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_daidoji_1st_dan_behavioral`
 - [x] 2nd Dan behavioral counterattack bonus -> `test_school_abilities.py::test_daidoji_2nd_dan_behavioral`
 - [x] 3rd Dan counterattack raises note displayed -> `test_school_abilities.py::test_daidoji_3rd_dan_raises_note_behavioral`
+- [x] 3rd Dan counterattack checkbox on wound check applies bonus -> `test_school_abilities.py::test_daidoji_3rd_dan_counterattack_checkbox`
+- [x] Below 3rd Dan no counterattack checkbox -> `test_school_abilities.py::test_daidoji_below_3rd_dan_no_counterattack_checkbox`
+- [x] Non-Daidoji party member sees counterattack checkbox with name -> `test_school_abilities.py::test_non_daidoji_with_party_counterattack_checkbox`
 - [x] 5th Dan wound check attacker TN reduction note -> `test_school_abilities.py::test_daidoji_5th_dan_tn_note_behavioral`
 
 ### Doji
@@ -143,6 +146,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 2nd Dan behavioral counterattack bonus -> `test_school_abilities.py::test_hida_2nd_dan_behavioral`
 - [x] 3rd Dan reroll option on counterattack/attack -> `test_school_abilities.py::test_hida_3rd_dan_reroll_appears`
 - [x] 4th Dan trade SW for light wound reset behavioral -> `test_school_abilities.py::test_hida_4th_dan_trade_sw_behavioral`
+- [x] 5th Dan counterattack excess banked for wound check bonus -> `test_school_abilities.py::test_hida_5th_dan_counterattack_wc_bonus`
+- [x] Below 5th Dan does NOT bank counterattack excess -> `test_school_abilities.py::test_hida_below_5th_dan_no_counterattack_wc_bonus`
 
 ### Hiruma
 
