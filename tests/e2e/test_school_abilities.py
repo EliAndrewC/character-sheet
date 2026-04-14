@@ -1931,6 +1931,119 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
     assert page.locator('button:has-text("Apply +")').first.is_visible()
 
 
+def test_akodo_4th_dan_vp_on_passed_wound_check(page, live_server_url):
+    """Akodo 4th Dan: Spend VP (+5) button appears on PASSED wound check to increase margin."""
+    _create_char(page, live_server_url, "Akodo4VP", "akodo_bushi",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    # Give VP and small light wounds so WC passes easily with mocked high dice
+    page.evaluate("window._trackingBridge.voidPoints = 3")
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "5")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    _mock_dice_high(page)
+    # Roll wound check
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    # Should have passed
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    assert "PASSED" in wc_modal.text_content()
+    # Spend VP (+5) button should be visible in the passed section
+    spend_btn = wc_modal.locator('button:has-text("Spend VP (+5)"):visible')
+    assert spend_btn.count() > 0, "Spend VP button must appear on passed wound check for 4th Dan"
+    # Get margin before spending
+    margin_before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcMargin !== undefined && d.wcPhase === 'result') return d.wcMargin;
+        }
+        return -1;
+    }""")
+    # Click Spend VP
+    spend_btn.first.click()
+    page.wait_for_timeout(300)
+    margin_after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcMargin !== undefined && d.wcPhase === 'result') return d.wcMargin;
+        }
+        return -1;
+    }""")
+    assert margin_after == margin_before + 5, f"Margin should increase by 5: {margin_before} -> {margin_after}"
+    # Undo VP button should be visible
+    undo_btn = wc_modal.locator('button:has-text("Undo VP"):visible')
+    assert undo_btn.count() > 0, "Undo VP button must appear after spending"
+    # VP should have decreased
+    vp = page.evaluate("window._trackingBridge.voidPoints")
+    assert vp == 2, f"VP should be 2 after spending 1, got {vp}"
+
+
+def test_akodo_4th_dan_vp_on_failed_wound_check(page, live_server_url):
+    """Akodo 4th Dan: Spend VP (+5) button appears on FAILED wound check."""
+    _create_char(page, live_server_url, "Akodo4VPF", "akodo_bushi",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    # Give VP and high light wounds so WC fails with mocked low dice
+    page.evaluate("window._trackingBridge.voidPoints = 3")
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "80")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    _mock_dice_low(page)
+    # Roll wound check
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    # Should have failed
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    assert "FAILED" in wc_modal.text_content()
+    # Spend VP (+5) button should be visible in the failed section
+    spend_btn = wc_modal.locator('button:has-text("Spend VP (+5)"):visible')
+    assert spend_btn.count() > 0, "Spend VP button must appear on failed wound check for 4th Dan"
+    # Click Spend VP and verify total increases
+    total_before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcRollTotal !== undefined && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return -1;
+    }""")
+    spend_btn.first.click()
+    page.wait_for_timeout(300)
+    total_after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcRollTotal !== undefined && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return -1;
+    }""")
+    assert total_after == total_before + 5, f"WC total should increase by 5: {total_before} -> {total_after}"
+
+
 def test_akodo_5th_dan_reflect_ui_behavioral(page, live_server_url):
     """Akodo 5th Dan: wound check result shows Reflect Damage UI with VP input."""
     _create_char(page, live_server_url, "Akodo5FB", "akodo_bushi",

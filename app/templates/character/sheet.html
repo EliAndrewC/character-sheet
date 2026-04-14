@@ -202,6 +202,9 @@
                 perAdventure: {{ per_adventure|tojson }},
                 mirumotoRoundPoints: 0,
                 mirumotoRoundPointsMax: {{ school_abilities.get('mirumoto_round_points_max', 0) }},
+                akodoBankedBonuses: ({{ (adventure_state or {})|tojson }}).akodo_banked_bonuses
+                    ? ({{ (adventure_state or {})|tojson }}).akodo_banked_bonuses.map(a => ({amount: a, spent: false}))
+                    : [],
                 _charId: {{ character.id }},
                 _saving: false,
                 showResetModal: false,
@@ -225,6 +228,21 @@
                         }),
                     });
                     this._saving = false;
+                },
+
+                saveBankedBonuses() {
+                    // Persist unspent Akodo banked bonuses and other banked state to adventureState
+                    const unspent = this.akodoBankedBonuses.filter(b => !b.spent).map(b => b.amount);
+                    this.adventureState.akodo_banked_bonuses = unspent.length > 0 ? unspent : undefined;
+                    const dr = window._diceRoller;
+                    if (dr) {
+                        this.adventureState.hiruma_banked_attack_bonus = dr.hirumaBankedAttackBonus || undefined;
+                        this.adventureState.bayushi_banked_feint_raise = dr.bayushiBankedFeintRaise || undefined;
+                        this.adventureState.banked_wc_excess = dr.bankedWcExcess || undefined;
+                        this.adventureState.matsu_banked_wc_bonus = dr.matsuBankedWcBonus || undefined;
+                        this.adventureState.ide_banked_tn_reduce = dr.ideBankedTnReduce || undefined;
+                    }
+                    this.save();
                 },
 
                 getCount(id) { return this.adventureState[id + '_used'] || 0; },
@@ -264,6 +282,26 @@
                         if (a.type === 'counter') this.adventureState[a.id + '_used'] = 0;
                         if (a.type === 'toggle') this.adventureState[a.id] = false;
                     }
+                    // Clear all combat-session bonuses
+                    this.akodoBankedBonuses = [];
+                    this.mirumotoRoundPoints = 0;
+                    // Also clear diceRoller combat state if available
+                    if (window._diceRoller) {
+                        window._diceRoller.akodoBankedBonuses = this.akodoBankedBonuses;
+                        window._diceRoller.akodoSpentThisRoll = 0;
+                        window._diceRoller.hirumaBankedAttackBonus = 0;
+                        window._diceRoller.bayushiBankedFeintRaise = 0;
+                        window._diceRoller.bankedWcExcess = 0;
+                        window._diceRoller.matsuBankedWcBonus = 0;
+                        window._diceRoller.ideBankedTnReduce = 0;
+                    }
+                    // Clear persisted banked bonuses from adventureState
+                    delete this.adventureState.akodo_banked_bonuses;
+                    delete this.adventureState.hiruma_banked_attack_bonus;
+                    delete this.adventureState.bayushi_banked_feint_raise;
+                    delete this.adventureState.banked_wc_excess;
+                    delete this.adventureState.matsu_banked_wc_bonus;
+                    delete this.adventureState.ide_banked_tn_reduce;
                     this.save();
                     window.dispatchEvent(new CustomEvent('adventure-state-changed'));
                 },
@@ -525,16 +563,16 @@
             </div>
             {% endif %}
             {% if school_abilities.get('akodo_wc_attack_bonus') %}
-            <div class="mt-2 pt-2 border-t border-ink/10" x-show="window._diceRoller?.akodoBankedBonuses?.length > 0" x-cloak>
+            <div class="mt-2 pt-2 border-t border-ink/10" x-show="akodoBankedBonuses.length > 0" x-cloak>
                 <div class="text-sm text-ink/60 mb-1">Banked 3rd Dan Bonuses</div>
                 <div class="space-y-1">
-                    <template x-for="(b, i) in (window._diceRoller?.akodoBankedBonuses || [])" :key="i">
+                    <template x-for="(b, i) in akodoBankedBonuses" :key="i">
                         <div class="flex items-center justify-between gap-2 text-sm">
                             <span :class="b.spent ? 'line-through text-ink/40' : 'font-medium'">
                                 +<span x-text="b.amount"></span>
                             </span>
                             <button x-show="!b.spent"
-                                    @click="window._diceRoller.akodoBankedBonuses[i].spent = true"
+                                    @click="akodoBankedBonuses[i].spent = true; saveBankedBonuses()"
                                     class="text-xs text-ink/50 hover:text-accent">Mark spent</button>
                             <span x-show="b.spent" class="text-xs text-ink/40">spent</span>
                         </div>
@@ -1420,6 +1458,27 @@
                         <p class="text-sm text-green-700 mb-3">
                             You may keep your light wounds or choose to take 1 serious wound and reset light wounds to 0.
                         </p>
+                        {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each (increases margin for 3rd Dan banking) #}
+                        <div x-show="voidSpendConfig.wc_vp_free_raise" x-cloak
+                             class="mb-3 pt-2 border-t border-green-200">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button"
+                                        x-show="(window._trackingBridge?.voidPoints || 0) > 0"
+                                        @click="const t = window._trackingBridge; if (t && t.voidPoints > 0) { t.voidPoints--; t.save(); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; wcMargin = wcRollTotal - wcLightWounds; }"
+                                        class="bg-green-700 hover:bg-green-800 text-white px-3 py-1.5 rounded text-sm font-medium">
+                                    Spend VP (+5)
+                                </button>
+                                <button type="button"
+                                        x-show="wcPostRollVpSpent > 0"
+                                        @click="const t = window._trackingBridge; if (t) { t.voidPoints++; t.save(); wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; wcMargin = wcRollTotal - wcLightWounds; }"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
+                                    Undo VP
+                                </button>
+                                <span x-show="wcPostRollVpSpent > 0" x-cloak class="text-xs text-green-700">
+                                    +<span x-text="wcPostRollVpSpent * 5"></span> from <span x-text="wcPostRollVpSpent"></span> VP (4th Dan)
+                                </span>
+                            </div>
+                        </div>
                         <div class="flex gap-2">
                             <button type="button" @click="wcKeepLightWounds()"
                                     class="bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded text-sm font-medium">
@@ -1822,19 +1881,19 @@
                         </div>
 
                         {# Akodo 3rd Dan: spend banked bonuses on attack #}
-                        <div x-show="schoolAbilities.akodo_wc_attack_bonus && akodoBankedBonuses.some(b => !b.spent)" x-cloak
+                        <div x-show="schoolAbilities.akodo_wc_attack_bonus && (akodoBankedBonuses.some(b => !b.spent) || akodoSpentThisRoll > 0)" x-cloak
                              class="mt-2 pt-2 border-t border-green-200">
                             <div class="text-sm font-medium mb-1">Akodo 3rd Dan - Banked Bonuses</div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <template x-for="(b, i) in akodoBankedBonuses" :key="'akb'+i">
                                     <button x-show="!b.spent" type="button"
-                                            @click="akodoBankedBonuses[i].spent = true; akodoSpentThisRoll += b.amount; atkRollTotal += b.amount; baseTotal += b.amount; _atkUpdateHitState();"
+                                            @click="akodoBankedBonuses[i].spent = true; akodoSpentThisRoll += b.amount; atkRollTotal += b.amount; baseTotal += b.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses();"
                                             class="bg-accent hover:bg-red-900 text-parchment px-2 py-1 rounded text-xs">
                                         Apply +<span x-text="b.amount"></span>
                                     </button>
                                 </template>
                                 <button type="button" x-show="akodoSpentThisRoll > 0"
-                                        @click="const last = [...akodoBankedBonuses].reverse().find(b => b.spent); if (last) { last.spent = false; akodoSpentThisRoll -= last.amount; atkRollTotal -= last.amount; baseTotal -= last.amount; _atkUpdateHitState(); }"
+                                        @click="const last = [...akodoBankedBonuses].reverse().find(b => b.spent); if (last) { last.spent = false; akodoSpentThisRoll -= last.amount; atkRollTotal -= last.amount; baseTotal -= last.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses(); }"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-2 py-1 rounded text-xs">
                                     Undo
                                 </button>
@@ -1879,6 +1938,44 @@
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
                                     Undo
                                 </button>
+                            </div>
+                        </div>
+                        {# Akodo 3rd Dan: spend banked bonuses to turn miss into hit #}
+                        <div x-show="schoolAbilities.akodo_wc_attack_bonus && (akodoBankedBonuses.some(b => !b.spent) || akodoSpentThisRoll > 0)" x-cloak
+                             class="mt-2 pt-2 border-t border-red-200">
+                            <div class="text-sm font-medium mb-1">Akodo 3rd Dan - Banked Bonuses</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <template x-for="(b, i) in akodoBankedBonuses" :key="'akbm'+i">
+                                    <button x-show="!b.spent" type="button"
+                                            @click="akodoBankedBonuses[i].spent = true; akodoSpentThisRoll += b.amount; atkRollTotal += b.amount; baseTotal += b.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses();"
+                                            class="bg-accent hover:bg-red-900 text-parchment px-2 py-1 rounded text-xs">
+                                        Apply +<span x-text="b.amount"></span>
+                                    </button>
+                                </template>
+                                <button type="button" x-show="akodoSpentThisRoll > 0"
+                                        @click="const last = [...akodoBankedBonuses].reverse().find(b => b.spent); if (last) { last.spent = false; akodoSpentThisRoll -= last.amount; atkRollTotal -= last.amount; baseTotal -= last.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses(); }"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-2 py-1 rounded text-xs">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+                        {# Mirumoto 3rd Dan: spend points on miss to turn into hit #}
+                        <div x-show="schoolAbilities.mirumoto_round_points && (window._trackingBridge?.mirumotoRoundPoints || 0) > 0" x-cloak
+                             class="mt-2 pt-2 border-t border-red-200">
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button"
+                                        @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { t.mirumotoRoundPoints--; mirumotoPointsSpentThisRoll++; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState(); }"
+                                        :disabled="(window._trackingBridge?.mirumotoRoundPoints || 0) <= 0"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend 3rd Dan Point (+2)
+                                </button>
+                                <button type="button"
+                                        @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { t.mirumotoRoundPoints++; mirumotoPointsSpentThisRoll--; atkRollTotal -= 2; baseTotal -= 2; _atkUpdateHitState(); }"
+                                        :disabled="mirumotoPointsSpentThisRoll <= 0"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60" x-text="(window._trackingBridge?.mirumotoRoundPoints || 0) + ' points remaining'"></span>
                             </div>
                         </div>
                         <button type="button" @click="atkModalOpen = false"
@@ -2502,7 +2599,7 @@
                     <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.bayushi_post_feint_raise" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <button type="button"
-                                @click="bayushiBankedFeintRaise += 5; $el.disabled = true; $el.textContent = 'Banked +5 for next attack';"
+                                @click="bayushiBankedFeintRaise += 5; $el.disabled = true; $el.textContent = 'Banked +5 for next attack'; window._trackingBridge?.saveBankedBonuses();"
                                 class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
                             Bank free raise for next attack (+5)
                         </button>
@@ -2512,7 +2609,7 @@
                     <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.ide_feint_tn_reduce" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <button type="button"
-                                @click="ideBankedTnReduce += 10; $el.disabled = true; $el.textContent = 'Banked -10 TN for next attack';"
+                                @click="ideBankedTnReduce += 10; $el.disabled = true; $el.textContent = 'Banked -10 TN for next attack'; window._trackingBridge?.saveBankedBonuses();"
                                 class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
                             Bank -10 TN on target (Ide Special)
                         </button>
@@ -2642,7 +2739,7 @@
                             <input type="number" x-model.number="shinjoParryOpponentRoll" min="0"
                                    class="w-20 border rounded px-2 py-1 text-sm text-center">
                             <button type="button"
-                                    @click="const excess = baseTotal - (shinjoParryOpponentRoll || 0); if (excess > 0) { bankedWcExcess += excess; } shinjoParryOpponentRoll = 0; $el.disabled = true; $el.textContent = excess > 0 ? 'Banked +' + excess : 'No excess';"
+                                    @click="const excess = baseTotal - (shinjoParryOpponentRoll || 0); if (excess > 0) { bankedWcExcess += excess; } shinjoParryOpponentRoll = 0; $el.disabled = true; $el.textContent = excess > 0 ? 'Banked +' + excess : 'No excess'; window._trackingBridge?.saveBankedBonuses();"
                                     class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
                                 Bank Excess
                             </button>
@@ -2986,6 +3083,17 @@
 
                 window.addEventListener('open-wound-check', () => this.openWoundCheckModal());
                 window._diceRoller = this;
+                // Share akodoBankedBonuses with the tracking bridge so both components use the same array
+                if (window._trackingBridge) {
+                    this.akodoBankedBonuses = window._trackingBridge.akodoBankedBonuses;
+                    // Restore other banked bonuses from adventureState
+                    const as = window._trackingBridge.adventureState || {};
+                    this.hirumaBankedAttackBonus = as.hiruma_banked_attack_bonus || 0;
+                    this.bayushiBankedFeintRaise = as.bayushi_banked_feint_raise || 0;
+                    this.bankedWcExcess = as.banked_wc_excess || 0;
+                    this.matsuBankedWcBonus = as.matsu_banked_wc_bonus || 0;
+                    this.ideBankedTnReduce = as.ide_banked_tn_reduce || 0;
+                }
 
                 document.querySelectorAll('[data-roll-key]').forEach(el => {
                     el.addEventListener('click', (ev) => {
@@ -3190,6 +3298,7 @@
                 if (this.schoolAbilities.matsu_vp_wc_bonus) {
                     const totalSpent = (option.fromTemp || 0) + nonTempSpent;
                     this.matsuBankedWcBonus += totalSpent * (this.schoolAbilities.matsu_vp_wc_amount || 0);
+                    window._trackingBridge?.saveBankedBonuses();
                 }
                 t.save();
             },
@@ -3276,6 +3385,7 @@
                     // Hiruma 3rd Dan: bank 2*attack for next attack and damage after parry
                     if (key === 'parry' && this.schoolAbilities.hiruma_post_parry_bonus) {
                         this.hirumaBankedAttackBonus = this.schoolAbilities.hiruma_post_parry_amount || 0;
+                        window._trackingBridge?.saveBankedBonuses();
                     }
                     // Akodo Special: feint roll triggers temp VP (success/failure decided by user)
                     // Bayushi 4th Dan: feint triggers banked +5 for next attack
@@ -3650,10 +3760,12 @@
                 }
 
                 // Bayushi 4th Dan: apply banked feint raise
+                let _bankedConsumed = false;
                 if (this.bayushiBankedFeintRaise > 0) {
                     formula.flat += this.bayushiBankedFeintRaise;
                     formula.bayushi_feint_raise = this.bayushiBankedFeintRaise;
                     this.bayushiBankedFeintRaise = 0;
+                    _bankedConsumed = true;
                 }
 
                 // Hiruma 3rd Dan: apply banked post-parry bonus
@@ -3661,6 +3773,7 @@
                     formula.flat += this.hirumaBankedAttackBonus;
                     formula.hiruma_parry_bonus = this.hirumaBankedAttackBonus;
                     this.hirumaBankedAttackBonus = 0;
+                    _bankedConsumed = true;
                 }
 
                 // Akodo 3rd Dan: reset per-roll spend tracking (bonuses are applied post-roll via buttons)
@@ -3670,7 +3783,9 @@
                 if (this.ideBankedTnReduce > 0) {
                     formula.ide_tn_reduce = this.ideBankedTnReduce;
                     this.ideBankedTnReduce = 0;
+                    _bankedConsumed = true;
                 }
+                if (_bankedConsumed) window._trackingBridge?.saveBankedBonuses();
 
                 if (voidCount > 0) {
                     formula.rolled += voidCount;
@@ -4018,6 +4133,7 @@
                     this.wcMargin = effectiveLw - this.wcRollTotal;
                     this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
                 }
+                window._trackingBridge?.saveBankedBonuses();
             },
 
             wcSpendBankedExcess() {
@@ -4037,6 +4153,7 @@
                     this.wcMargin = effectiveLw - this.wcRollTotal;
                     this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
                 }
+                window._trackingBridge?.saveBankedBonuses();
             },
 
             wcUndoRaise() {
@@ -4083,8 +4200,10 @@
                 // Akodo 3rd Dan: bank floor(margin/5) * attack_skill as individual bonus
                 if (this.schoolAbilities.akodo_wc_attack_bonus && this.wcPassed && this.wcMargin > 0) {
                     const bonus = Math.floor(this.wcMargin / 5) * (this.schoolAbilities.akodo_attack_skill || 0);
-                    if (bonus > 0) this.akodoBankedBonuses.push({ amount: bonus, spent: false });
+                    if (bonus > 0) window._trackingBridge.akodoBankedBonuses.push({ amount: bonus, spent: false });
                 }
+                // Persist banked bonuses
+                if (window._trackingBridge?.saveBankedBonuses) window._trackingBridge.saveBankedBonuses();
                 this.wcModalOpen = false;
             },
 
