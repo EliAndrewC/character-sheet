@@ -205,6 +205,7 @@
                 akodoBankedBonuses: ({{ (adventure_state or {})|tojson }}).akodo_banked_bonuses
                     ? ({{ (adventure_state or {})|tojson }}).akodo_banked_bonuses.map(a => ({amount: a, spent: false}))
                     : [],
+                bayushiBankedFeintRaise: ({{ (adventure_state or {})|tojson }}).bayushi_banked_feint_raise || 0,
                 _charId: {{ character.id }},
                 _saving: false,
                 showResetModal: false,
@@ -284,6 +285,7 @@
                     }
                     // Clear all combat-session bonuses
                     this.akodoBankedBonuses = [];
+                    this.bayushiBankedFeintRaise = 0;
                     this.mirumotoRoundPoints = 0;
                     // Also clear diceRoller combat state if available
                     if (window._diceRoller) {
@@ -577,6 +579,20 @@
                             <span x-show="b.spent" class="text-xs text-ink/40">spent</span>
                         </div>
                     </template>
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('bayushi_post_feint_raise') %}
+            <div class="mt-2 pt-2 border-t border-ink/10"
+                 x-show="bayushiBankedFeintRaise > 0" x-cloak>
+                <div class="text-sm text-ink/60 mb-1">Banked Feint Raises</div>
+                <div class="flex items-center justify-between gap-2 text-sm">
+                    <span class="font-medium">
+                        +<span x-text="bayushiBankedFeintRaise"></span>
+                        (<span x-text="bayushiBankedFeintRaise / 5"></span> raise<span x-show="bayushiBankedFeintRaise > 5">s</span>)
+                    </span>
+                    <button @click="bayushiBankedFeintRaise = Math.max(0, bayushiBankedFeintRaise - 5); if (window._diceRoller) window._diceRoller.bayushiBankedFeintRaise = bayushiBankedFeintRaise; saveBankedBonuses()"
+                            class="text-xs text-ink/50 hover:text-accent">Mark 1 spent</button>
                 </div>
             </div>
             {% endif %}
@@ -1356,6 +1372,14 @@
                         </table>
                     </div>
 
+                    {# Bayushi 5th Dan note #}
+                    <div x-show="formulas.wound_check?.bayushi_5th_dan_half_lw" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Bayushi 5th Dan: serious wounds are calculated as if your light wounds were halved
+                        (<span x-text="Math.floor(wcLightWounds / 2)"></span> instead of <span x-text="wcLightWounds"></span>).
+                        Pass chance is unaffected. SW columns reflect the halved calculation.
+                    </div>
+
                     {# 3rd Dan raises note #}
                     <div x-show="wcMaxRaisesPerRoll > 0" x-cloak class="text-xs text-ink/60 bg-parchment rounded p-2">
                         You have 3rd Dan free raises available (not reflected in table above).
@@ -1506,6 +1530,10 @@
                             serious wound<span x-show="wcSeriousWounds > 1">s</span>.
                             Light wounds reset to 0.
                         </p>
+                        <p x-show="wcBayushiHalfLw" x-cloak class="text-sm text-red-700 mt-1 italic">
+                            Bayushi 5th Dan calculates serious wounds as if light wounds were halved
+                            (<span x-text="Math.floor(wcLightWounds / 2)"></span> instead of <span x-text="wcLightWounds"></span>).
+                        </p>
                         <p x-show="(window._trackingBridge?.seriousWounds || 0) - wcSeriousWounds < _earthRing && (window._trackingBridge?.seriousWounds || 0) >= _earthRing"
                            x-cloak class="text-sm font-bold text-red-800 mt-1"
                            x-text="_charName + ' is now Impaired'"></p>
@@ -1542,13 +1570,13 @@
                                 {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each #}
                                 <button type="button"
                                         x-show="voidSpendConfig.wc_vp_free_raise && (window._trackingBridge?.voidPoints || 0) > 0"
-                                        @click="const t = window._trackingBridge; if (t && t.voidPoints > 0) { t.voidPoints--; t.save(); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = eLw - wcRollTotal; wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
+                                        @click="const t = window._trackingBridge; if (t && t.voidPoints > 0) { t.voidPoints--; t.save(); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
                                         class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium">
                                     Spend VP (+5)
                                 </button>
                                 <button type="button"
                                         x-show="wcPostRollVpSpent > 0"
-                                        @click="const t = window._trackingBridge; if (t) { t.voidPoints++; t.save(); wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = eLw - wcRollTotal; wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
+                                        @click="const t = window._trackingBridge; if (t) { t.voidPoints++; t.save(); wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
                                     Undo VP
                                 </button>
@@ -1662,7 +1690,7 @@
                         <template x-for="(b, i) in akodoBankedBonuses.filter(b => !b.spent)" :key="'ab'+i">
                             <div>Akodo banked bonus: +<span x-text="b.amount"></span> (discretionary, applied after roll)</div>
                         </template>
-                        <div x-show="bayushiBankedFeintRaise > 0" x-cloak>+<span x-text="bayushiBankedFeintRaise"></span> from Bayushi post-feint raise</div>
+                        <div x-show="bayushiBankedFeintRaise > 0" x-cloak>Bayushi feint raise<span x-show="bayushiBankedFeintRaise > 5">s</span>: +<span x-text="bayushiBankedFeintRaise"></span> available (discretionary, applied after roll)</div>
                     </div>
 
                     {# Probability table #}
@@ -1760,14 +1788,14 @@
                         <div x-show="formula?.isawa_tn_trade" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="schoolAbilities.isawa_tn_trade_bonus || 0"></span> from Isawa 3rd Dan TN trade
                         </div>
-                        <div x-show="formula?.bayushi_feint_raise > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
-                            &bull; +<span x-text="formula?.bayushi_feint_raise"></span> from Bayushi post-feint raise
-                        </div>
                         <div x-show="formula?.hiruma_parry_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="formula?.hiruma_parry_bonus"></span> from Hiruma post-parry bonus
                         </div>
                         <div x-show="akodoSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="akodoSpentThisRoll"></span> from Akodo 3rd Dan banked bonus
+                        </div>
+                        <div x-show="bayushiRaisesSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="bayushiRaisesSpentThisRoll"></span> from Bayushi 4th Dan feint raise<span x-show="bayushiRaisesSpentThisRoll > 5">s</span>
                         </div>
                         <div x-show="mirumotoPointsSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="mirumotoPointsSpentThisRoll * 2"></span>
@@ -1900,6 +1928,24 @@
                             </div>
                         </div>
 
+                        {# Bayushi 4th Dan: spend banked feint raises on attack #}
+                        <div x-show="schoolAbilities.bayushi_post_feint_raise && (bayushiBankedFeintRaise > 0 || bayushiRaisesSpentThisRoll > 0)" x-cloak
+                             class="mt-2 pt-2 border-t border-green-200">
+                            <div class="text-sm font-medium mb-1">Bayushi 4th Dan - Banked Feint Raises</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button x-show="bayushiBankedFeintRaise > 0" type="button"
+                                        @click="bayushiBankedFeintRaise -= 5; bayushiRaisesSpentThisRoll += 5; atkRollTotal += 5; baseTotal += 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-2 py-1 rounded text-xs">
+                                    Apply +5 (<span x-text="bayushiBankedFeintRaise / 5"></span> remaining)
+                                </button>
+                                <button type="button" x-show="bayushiRaisesSpentThisRoll > 0"
+                                        @click="bayushiBankedFeintRaise += 5; bayushiRaisesSpentThisRoll -= 5; atkRollTotal -= 5; baseTotal -= 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-2 py-1 rounded text-xs">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+
                         {# Courtier 4th Dan: temp VP after successful attack #}
                         <div x-show="schoolAbilities.courtier_temp_vp_on_hit" x-cloak
                              class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-sm">
@@ -1954,6 +2000,23 @@
                                 </template>
                                 <button type="button" x-show="akodoSpentThisRoll > 0"
                                         @click="const last = [...akodoBankedBonuses].reverse().find(b => b.spent); if (last) { last.spent = false; akodoSpentThisRoll -= last.amount; atkRollTotal -= last.amount; baseTotal -= last.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses(); }"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-2 py-1 rounded text-xs">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+                        {# Bayushi 4th Dan: spend banked feint raises on attack #}
+                        <div x-show="schoolAbilities.bayushi_post_feint_raise && (bayushiBankedFeintRaise > 0 || bayushiRaisesSpentThisRoll > 0)" x-cloak
+                             class="mt-2 pt-2 border-t border-red-200">
+                            <div class="text-sm font-medium mb-1">Bayushi 4th Dan - Banked Feint Raises</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button x-show="bayushiBankedFeintRaise > 0" type="button"
+                                        @click="bayushiBankedFeintRaise -= 5; bayushiRaisesSpentThisRoll += 5; atkRollTotal += 5; baseTotal += 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-2 py-1 rounded text-xs">
+                                    Apply +5 (<span x-text="bayushiBankedFeintRaise / 5"></span> remaining)
+                                </button>
+                                <button type="button" x-show="bayushiRaisesSpentThisRoll > 0"
+                                        @click="bayushiBankedFeintRaise += 5; bayushiRaisesSpentThisRoll -= 5; atkRollTotal -= 5; baseTotal -= 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-2 py-1 rounded text-xs">
                                     Undo
                                 </button>
@@ -2311,7 +2374,7 @@
                 </div>
 
                 {# Animated dice tray (visible while rolling, only if animation enabled) #}
-                <div x-show="prefs.dice_animation_enabled && phase === 'rolling'" x-cloak
+                <div x-show="prefs.dice_animation_enabled && (phase === 'rolling' || phase === 'sub-damage-rolling')" x-cloak
                      id="dice-animation"
                      class="mb-4 min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
 
@@ -2585,24 +2648,16 @@
                         </div>
                     </div>
 
-                    {# Feint knack: 1 temp VP on success (non-Akodo feint schools) #}
+                    {# Feint knack: 1 temp VP auto-granted (non-Akodo feint schools) #}
                     <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.feint_temp_vp" x-cloak
-                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
-                        <button type="button"
-                                @click="const t = window._trackingBridge; if (t) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
-                                class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
-                            Feint succeeded (+1 temp VP)
-                        </button>
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
+                        Gained 1 temp VP from feint.
                     </div>
 
-                    {# Bayushi 4th Dan: feint grants +5 on next attack #}
+                    {# Bayushi 4th Dan: feint auto-banks +5 on next attack #}
                     <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.bayushi_post_feint_raise" x-cloak
-                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
-                        <button type="button"
-                                @click="bayushiBankedFeintRaise += 5; $el.disabled = true; $el.textContent = 'Banked +5 for next attack'; window._trackingBridge?.saveBankedBonuses();"
-                                class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
-                            Bank free raise for next attack (+5)
-                        </button>
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
+                        Bayushi 4th Dan: +5 banked for a future attack (free raise).
                     </div>
 
                     {# Ide Special: feint -> lower target TN by 10 #}
@@ -2659,9 +2714,11 @@
                     {# Bayushi 3rd Dan: feint deals Xk1 damage #}
                     <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.bayushi_feint_damage" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
-                        <div class="text-xs text-ink/60 mb-1">Bayushi 3rd Dan: feint deals <span x-text="schoolAbilities.bayushi_feint_damage_rolled"></span>k1 damage (no ring/TN bonus, Bayushi Special VP bonus applies).</div>
+                        <div class="text-xs text-ink/60 mb-1">Bayushi 3rd Dan: feint deals
+                            <span x-text="schoolAbilities.bayushi_feint_damage_rolled + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0)"></span>k<span x-text="1 + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0)"></span> damage<span x-show="(formula?.void_spent || 0) > 0" x-cloak> (includes +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span> from VP)</span>.
+                        </div>
                         <button type="button"
-                                @click="const r = schoolAbilities.bayushi_feint_damage_rolled + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0); const k = 1 + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0); _rerollDice(r, true, null).then(dice => { const s = [...dice].sort((a,b)=>a.value-b.value); const kc = Math.min(k,s.length); const kept = s.slice(s.length-kc); const total = kept.reduce((a,d)=>a+d.value,0); $el.outerHTML = '<div class=\'text-sm font-bold text-accent\'>Feint damage: ' + total + ' (' + r + 'k' + k + ')</div>'; });"
+                                @click="const r = schoolAbilities.bayushi_feint_damage_rolled + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0); const k = 1 + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0); rollSubDamage(r, k, 'Bayushi 3rd Dan feint damage (' + r + 'k' + k + ')');"
                                 class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
                             Roll Feint Damage
                         </button>
@@ -2672,7 +2729,7 @@
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <div class="text-xs text-ink/60 mb-1">Shiba 3rd Dan: parry deals <span x-text="schoolAbilities.shiba_parry_damage_rolled"></span>k1 damage (no ring/TN bonus).</div>
                         <button type="button"
-                                @click="const r = schoolAbilities.shiba_parry_damage_rolled; _rerollDice(r, true, null).then(dice => { const s = [...dice].sort((a,b)=>a.value-b.value); const kept = s.slice(s.length-1); const total = kept.reduce((a,d)=>a+d.value,0); $el.outerHTML = '<div class=\'text-sm font-bold text-accent\'>Parry damage: ' + total + ' (' + r + 'k1)</div>'; });"
+                                @click="const r = schoolAbilities.shiba_parry_damage_rolled; rollSubDamage(r, 1, 'Shiba 3rd Dan parry damage (' + r + 'k1)');"
                                 class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
                             Roll Parry Damage
                         </button>
@@ -2754,6 +2811,30 @@
                         <button type="button" @click="close()"
                                 class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">Close</button>
                     </div>
+
+                {# Sub-damage result (feint damage, parry damage) #}
+                <div x-show="phase === 'sub-damage-result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Damage dice:</span>
+                        <template x-for="(d, i) in subDamageDice" :key="'sd'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="font-bold text-2xl text-accent" x-text="subDamageTotal + ' damage'"></div>
+                        <div class="text-xs text-ink/60 mt-1" x-text="subDamageLabel"></div>
+                    </div>
+                    <button type="button" @click="phase = 'done'"
+                            class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
+                        Back
+                    </button>
+                    <button type="button" @click="close()"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                        Close
+                    </button>
+                </div>
                 </div>
             </div>
         </div>
@@ -2773,6 +2854,9 @@
             baseTotal: 0,
             keptSum: 0,
             actionDice: [],
+            subDamageDice: [],
+            subDamageTotal: 0,
+            subDamageLabel: '',
             formulas: {},
             prefs: { dice_animation_enabled: true, dice_sound_enabled: true },
             // 3rd Dan free raises
@@ -2862,7 +2946,7 @@
                     this.wcPassed = false;
                     const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
                         ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = effectiveLw - this.wcRollTotal;
+                    this.wcMargin = Math.max(0, effectiveLw - this.wcRollTotal);
                     this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
                 }
                 this.wcResultApplied = false;
@@ -3005,13 +3089,15 @@
             shosuroLowest3Bonus: 0,
             akodoReflectVP: 0,
             currentRollKey: '',
-            bayushiBankedFeintRaise: 0,
+            bayushiBankedFeintRaise: 0,  // total available bonus from feints (+5 per feint)
+            bayushiRaisesSpentThisRoll: 0,  // amount spent on current attack roll
             bankedWcExcess: 0,
             shinjoParryOpponentRoll: 0,
             hirumaBankedAttackBonus: 0,
             akodoBankedBonuses: [],  // [{amount: N, spent: false}]
             akodoSpentThisRoll: 0,  // amount spent from banked bonuses on current roll
             wcPostRollVpSpent: 0,   // VP spent post-roll on wound check (Akodo/Yogo 4th Dan)
+            wcBayushiHalfLw: false, // whether Bayushi 5th Dan half-LW was applied this check
             ideBankedTnReduce: 0,
             dojiOpponentResult: 0,
             hidaRerollPhase: '',  // '' | 'selecting' | 'done'
@@ -3192,6 +3278,7 @@
             executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason) {
                 this.rollMenuOpen = false;
                 this.luckyUsedThisRoll = false;
+                this._postRollHooksFired = false;
                 this.luckyOriginalWasHigher = false;
                 this.mirumotoPointsSpentThisRoll = 0;
                 this.currentRollKey = key;
@@ -3233,6 +3320,7 @@
             executeRoll(key, voidSpent, option) {
                 this.rollMenuOpen = false;
                 this.luckyUsedThisRoll = false;
+                this._postRollHooksFired = false;
                 this.luckyOriginalWasHigher = false;
                 this.mirumotoPointsSpentThisRoll = 0;
                 this.currentRollKey = key;
@@ -3368,7 +3456,9 @@
                 }
 
                 // Post-roll school ability hooks (non-initiative only)
-                if (!isInit) {
+                // Guard: only fire once per roll (prevents double-grant if runRoll is called twice)
+                if (!isInit && !this._postRollHooksFired) {
+                    this._postRollHooksFired = true;
                     const t = window._trackingBridge;
                     const key = this.currentRollKey;
                     // Mirumoto Special: gain 1 temp VP after any parry roll
@@ -3388,9 +3478,19 @@
                         window._trackingBridge?.saveBankedBonuses();
                     }
                     // Akodo Special: feint roll triggers temp VP (success/failure decided by user)
-                    // Bayushi 4th Dan: feint triggers banked +5 for next attack
                     // Ide Special: feint triggers TN reduction
                     // These are handled in the result display via buttons (see template below)
+                    // Non-Akodo feint schools: auto-grant 1 temp VP on feint
+                    if (key === 'knack:feint' && this.schoolAbilities.feint_temp_vp && t) {
+                        t.tempVoidPoints += 1;
+                        t.save();
+                    }
+                    // Bayushi 4th Dan: auto-bank +5 for a future attack after feint
+                    if (this.schoolAbilities.bayushi_post_feint_raise) {
+                        this.bayushiBankedFeintRaise += 5;
+                        if (window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = this.bayushiBankedFeintRaise;
+                        window._trackingBridge?.saveBankedBonuses();
+                    }
                 }
 
                 this.phase = 'done';
@@ -3426,6 +3526,28 @@
             },
             raisesRemainingAdventure() {
                 return Math.max(0, this.advRaisesConfig.available - this.advRaisesConfig.used);
+            },
+
+            // --- Sub-damage roll (feint damage, parry damage) ---
+
+            async rollSubDamage(rolled, kept, label) {
+                this.subDamageLabel = label;
+                this.phase = 'sub-damage-rolling';
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                const dice = await window.L7RDice.rollAndAnimate(
+                    rolled, true,
+                    this.prefs.dice_animation_enabled, playSound, 'dice-animation'
+                );
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(kept, sorted.length);
+                this.subDamageDice = sorted.map((d, i) => ({
+                    value: d.value,
+                    kept: i >= sorted.length - keptCount
+                }));
+                const keptDice = sorted.slice(sorted.length - keptCount);
+                this.subDamageTotal = keptDice.reduce((s, d) => s + d.value, 0);
+                this.phase = 'sub-damage-result';
             },
 
             // --- Iaijutsu Duel ---
@@ -3759,14 +3881,9 @@
                     formula.isawa_tn_trade = true;
                 }
 
-                // Bayushi 4th Dan: apply banked feint raise
+                // Bayushi 4th Dan: feint raises are now discretionary (applied post-roll via buttons)
                 let _bankedConsumed = false;
-                if (this.bayushiBankedFeintRaise > 0) {
-                    formula.flat += this.bayushiBankedFeintRaise;
-                    formula.bayushi_feint_raise = this.bayushiBankedFeintRaise;
-                    this.bayushiBankedFeintRaise = 0;
-                    _bankedConsumed = true;
-                }
+                this.bayushiRaisesSpentThisRoll = 0;
 
                 // Hiruma 3rd Dan: apply banked post-parry bonus
                 if (this.hirumaBankedAttackBonus > 0) {
@@ -3978,23 +4095,31 @@
                 const lw = this.wcLightWounds;
                 const target = Math.max(0, lw - flat);
 
+                // Pass chance is always based on actual LW
                 const passChance = target < probs.length ? probs[target] : 0;
+
+                // Bayushi 5th Dan: SW distribution uses halved LW
+                const halfLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw;
+                const effectiveLw = halfLw ? Math.floor(lw / 2) : lw;
+                const effectiveTarget = Math.max(0, effectiveLw - flat);
+
                 const rows = [];
-                let maxSW = Math.floor(lw / 10) + 1;
+                let maxSW = Math.floor(effectiveLw / 10) + 1;
                 for (let sw = 1; sw <= maxSW; sw++) {
-                    const lo = target + (sw - 1) * 10;
-                    const hi = target + sw * 10;
-                    const pAboveLo = lo < probs.length ? probs[lo] : 0;
-                    const pAboveHi = hi < probs.length ? probs[hi] : 0;
-                    // P(lo <= roll < hi) = P(roll >= lo) - P(roll >= hi) ... but
-                    // we want P(fail by sw*10-1 to (sw-1)*10), i.e. roll in [target-sw*10, target-(sw-1)*10)
-                    // Actually: fail by X means roll+flat = lw - X - 1, i.e. roll = lw - flat - X - 1
-                    // Fail by 0-9: roll in [target-9, target-1] → P(roll>=target-9) - P(roll>=target)
-                    const failLo = Math.max(0, target - sw * 10);
-                    const failHi = Math.max(0, target - (sw - 1) * 10);
+                    // For SW calculation: a roll that fails the real check but exceeds the
+                    // effective target gives 1 SW. Rolls below effective target give more SW.
+                    const failLo = Math.max(0, effectiveTarget - sw * 10);
+                    const failHi = Math.max(0, effectiveTarget - (sw - 1) * 10);
                     const pGeLo = failLo < probs.length ? probs[failLo] : 0;
                     const pGeHi = failHi < probs.length ? probs[failHi] : 0;
-                    const chance = pGeLo - pGeHi;
+                    let chance = pGeLo - pGeHi;
+                    // For SW=1 with Bayushi: also include rolls between effectiveTarget and target
+                    // (rolls that fail the actual check but exceed the halved target)
+                    if (sw === 1 && halfLw && effectiveTarget < target) {
+                        const pGeEffTarget = effectiveTarget < probs.length ? probs[effectiveTarget] : 0;
+                        const pGeTarget = target < probs.length ? probs[target] : 0;
+                        chance += pGeEffTarget - pGeTarget;
+                    }
                     if (chance > 0.0005) rows.push({ sw, chance });
                 }
 
@@ -4080,8 +4205,9 @@
                     // Bayushi 5th Dan: calculate serious wounds as if half light wounds
                     const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
                         ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = effectiveLw - effectiveTotal;
+                    this.wcMargin = Math.max(0, effectiveLw - effectiveTotal);
                     this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
+                    this.wcBayushiHalfLw = !!this.formulas['wound_check']?.bayushi_5th_dan_half_lw;
                 }
 
                 this.wcResultApplied = false;
@@ -4109,7 +4235,8 @@
                     this.wcSeriousWounds = 0;
                     this.wcMargin = this.wcRollTotal - lw;
                 } else {
-                    this.wcMargin = lw - this.wcRollTotal;
+                    const eLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw / 2) : lw;
+                    this.wcMargin = Math.max(0, eLw - this.wcRollTotal);
                     this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
                 }
                 // Deduct the raise from tracking
@@ -4130,7 +4257,7 @@
                 } else {
                     const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
                         ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = effectiveLw - this.wcRollTotal;
+                    this.wcMargin = Math.max(0, effectiveLw - this.wcRollTotal);
                     this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
                 }
                 window._trackingBridge?.saveBankedBonuses();
@@ -4150,7 +4277,7 @@
                 } else {
                     const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
                         ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = effectiveLw - this.wcRollTotal;
+                    this.wcMargin = Math.max(0, effectiveLw - this.wcRollTotal);
                     this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
                 }
                 window._trackingBridge?.saveBankedBonuses();
@@ -4170,7 +4297,8 @@
                     this.wcMargin = this.wcRollTotal - lw;
                 } else {
                     this.wcPassed = false;
-                    this.wcMargin = lw - this.wcRollTotal;
+                    const eLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw / 2) : lw;
+                    this.wcMargin = Math.max(0, eLw - this.wcRollTotal);
                     this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
                 }
                 if (t?.setCount) t.setCount('adventure_raises', Math.max(0, raisesUsed - 1));

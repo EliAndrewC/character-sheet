@@ -251,19 +251,103 @@ def test_akodo_feint_temp_vp(page, live_server_url):
     assert page.locator('button:has-text("Succeeded (+4 temp VP)")').is_visible()
     assert page.locator('button:has-text("Failed (+1 temp VP)")').is_visible()
 def test_bayushi_3rd_dan_feint_shows_damage(page, live_server_url):
-    """Bayushi at 3rd Dan: feint roll shows Roll Feint Damage button."""
+    """Bayushi at 3rd Dan: feint roll shows Roll Feint Damage button, clicking it shows damage result."""
     _create_char(page, live_server_url, "BayushiFeintDmg", "bayushi_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
     _roll_via_menu_or_direct(page, "knack:feint")
-    assert page.locator('button:text("Roll Feint Damage")').is_visible()
+    btn = page.locator('button:text("Roll Feint Damage")')
+    assert btn.is_visible()
+    btn.click()
+    # Wait for sub-damage result phase
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'sub-damage-result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    # Should show damage total and Back button
+    modal = page.locator('[data-modal="dice-roller"]')
+    assert "damage" in modal.text_content().lower()
+    assert modal.locator('button:text("Back")').is_visible()
 
 
 def test_bayushi_4th_dan_post_feint_raise(page, live_server_url):
-    """Bayushi at 4th Dan: feint roll shows bank free raise button."""
+    """Bayushi at 4th Dan: feint auto-banks +5 free raise for a future attack."""
     _create_char(page, live_server_url, "BayushiFeint4", "bayushi_bushi",
                  knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
     _roll_via_menu_or_direct(page, "knack:feint")
-    assert page.locator('button:has-text("Bank free raise for next attack")').is_visible()
+    # Should auto-bank +5 after feint completes
+    banked = page.evaluate("window._diceRoller?.bayushiBankedFeintRaise || 0")
+    assert banked == 5, f"Expected 5 banked, got {banked}"
+    # Should show in tracking section
+    assert page.locator('text="Banked Feint Raises"').is_visible()
+
+
+def test_bayushi_banked_raises_tracking_and_persist(page, live_server_url):
+    """Bayushi banked feint raises: display in tracking, persist on refresh, clear on reset."""
+    _create_char(page, live_server_url, "BayushiTrack", "bayushi_bushi",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    # Inject banked raises and save
+    page.evaluate("""
+        window._trackingBridge.bayushiBankedFeintRaise = 10;
+        if (window._diceRoller) window._diceRoller.bayushiBankedFeintRaise = 10;
+        window._trackingBridge.saveBankedBonuses();
+    """)
+    page.wait_for_timeout(500)
+    # Should show in tracking section
+    assert page.locator('text="Banked Feint Raises"').is_visible()
+    body = page.text_content("body")
+    assert "+10" in body
+    assert "2 raises" in body.lower() or "2 raise" in body.lower()
+    # Mark 1 spent
+    page.locator('button:has-text("Mark 1 spent")').click()
+    page.wait_for_timeout(300)
+    val = page.evaluate("window._trackingBridge?.bayushiBankedFeintRaise || 0")
+    assert val == 5, f"Expected 5 after marking 1 spent, got {val}"
+    # Persist on refresh
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(500)
+    val = page.evaluate("window._trackingBridge?.bayushiBankedFeintRaise || 0")
+    assert val == 5, f"Expected 5 after refresh, got {val}"
+    assert page.locator('text="Banked Feint Raises"').is_visible()
+
+
+def test_bayushi_feint_damage_formula_shows_vp(page, live_server_url):
+    """Bayushi feint damage description shows VP-adjusted formula."""
+    _create_char(page, live_server_url, "BayushiDmgVP", "bayushi_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    # Give VP so we can spend them on the feint
+    page.evaluate("window._trackingBridge.voidPoints = 2")
+    page.wait_for_timeout(200)
+    # Click feint roll key - menu should appear with VP options
+    page.locator('[data-roll-key="knack:feint"]').click()
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
+    if menu.is_visible():
+        # Find the "1 VP" row and click it to select, then click "Roll Feint"
+        vp_btns = menu.locator('button')
+        for i in range(vp_btns.count()):
+            text = vp_btns.nth(i).text_content().strip()
+            if "1 VP" in text or "1 regular" in text.lower():
+                vp_btns.nth(i).click()
+                page.wait_for_timeout(100)
+                break
+        # Click the Roll button
+        roll_btns = menu.locator('button.font-medium')
+        for i in range(roll_btns.count()):
+            text = roll_btns.nth(i).text_content().strip()
+            if text.startswith("Roll "):
+                roll_btns.nth(i).click()
+                break
+    _wait_roll_done(page)
+    # The feint damage description should show the VP-adjusted formula
+    modal = page.locator('[data-modal="dice-roller"]')
+    desc = modal.text_content()
+    # With attack=2 base and 1 VP spent: should show 3k2, not 2k1
+    assert "3k2" in desc or "from VP" in desc, f"VP-adjusted formula not shown: {desc[:300]}"
 def test_courtier_4th_dan_temp_vp(page, live_server_url):
     """Courtier 4th Dan: temp VP button after successful attack or manipulation."""
     _create_char(page, live_server_url, "Court4VP", "courtier",
@@ -535,30 +619,75 @@ def test_togashi_3rd_dan_athletics_raises(page, live_server_url):
     _roll_via_menu_or_direct(page, "athletics:Air")
     assert page.locator('button:has-text("Spend Athletics Raise")').is_visible()
 def test_bayushi_feint_damage_button(page, live_server_url):
-    """Bayushi at 3rd Dan sees 'Roll Feint Damage' after a feint roll."""
+    """Bayushi feint damage: Back button returns to feint result."""
     _create_char(page, live_server_url, "BayushiFeintDmg2", "bayushi_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
     _roll_via_menu_or_direct(page, "knack:feint")
+    page.locator('button:text("Roll Feint Damage")').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'sub-damage-result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    # Verify damage total is a positive number
+    total = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.subDamageTotal !== undefined) return d.subDamageTotal;
+        }
+        return -1;
+    }""")
+    assert total > 0, f"Feint damage total should be positive, got {total}"
+    # Click Back to return to feint result
+    page.locator('[data-modal="dice-roller"]').locator('button:text("Back")').click()
+    page.wait_for_timeout(300)
+    # Should be back on the done phase with Roll Feint Damage visible again
     assert page.locator('button:text("Roll Feint Damage")').is_visible()
 
 
 # --- Shiba 3rd Dan: parry deals damage ---
 
 def test_shiba_parry_damage_button(page, live_server_url):
-    """Shiba at 3rd Dan sees 'Roll Parry Damage' after a parry roll."""
+    """Shiba at 3rd Dan: Roll Parry Damage shows dice animation and damage result."""
     _create_char(page, live_server_url, "ShibaParryDmg", "shiba_bushi",
                  knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
     _roll_via_menu_or_direct(page, "parry")
-    assert page.locator('button:text("Roll Parry Damage")').is_visible()
+    btn = page.locator('button:text("Roll Parry Damage")')
+    assert btn.is_visible()
+    btn.click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'sub-damage-result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    total = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.subDamageTotal !== undefined) return d.subDamageTotal;
+        }
+        return -1;
+    }""")
+    assert total > 0, f"Parry damage total should be positive, got {total}"
+    assert page.locator('[data-modal="dice-roller"]').locator('button:text("Back")').is_visible()
 
 
 # --- Feint temp VP for non-Akodo schools ---
 
 def test_feint_temp_vp_button_for_bayushi(page, live_server_url):
-    """Bayushi sees 'Feint succeeded (+1 temp VP)' button after feint."""
+    """Bayushi auto-gains 1 temp VP after feint."""
     _create_char(page, live_server_url, "BayushiFeintVP2", "bayushi_bushi")
+    temp_before = page.evaluate("window._trackingBridge?.tempVoidPoints || 0")
     _roll_via_menu_or_direct(page, "knack:feint")
-    assert page.locator('button:text("Feint succeeded (+1 temp VP)")').is_visible()
+    temp_after = page.evaluate("window._trackingBridge?.tempVoidPoints || 0")
+    assert temp_after == temp_before + 1, f"Expected +1 temp VP, got {temp_before} -> {temp_after}"
 
 
 # --- Hida 3rd Dan: reroll dice selection ---
@@ -1303,19 +1432,19 @@ def test_togashi_2nd_dan_behavioral(page, live_server_url):
 
 
 def test_bayushi_5th_dan_half_lw_behavioral(page, live_server_url):
-    """Bayushi 5th Dan: failing wound check calculates serious wounds using half LW."""
+    """Bayushi 5th Dan: failing wound check calculates serious wounds using half LW, never negative."""
     _create_char(page, live_server_url, "Bayushi5B", "bayushi_bushi",
                  knack_overrides={"double_attack": 5, "feint": 5, "iaijutsu": 5})
-    # Verify the flag is set in the wound check formula
     f = _get_formula(page, "wound_check")
     assert f.get("bayushi_5th_dan_half_lw") is True
-    # Add a large amount of light wounds to ensure failure
+    # Set LW to 60. Half is 30. With high dice (roll ~7*kept), roll should exceed 30
+    # but not 60, triggering the edge case where margin would have gone negative.
     page.locator('[data-action="lw-plus"]').click()
     page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
-    page.fill('input[placeholder="Amount"]', "80")
+    page.fill('input[placeholder="Amount"]', "60")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    # Roll wound check - with 80 LW, almost certain to fail
+    _mock_dice_high(page)  # dice roll 7 each -> ~35 total for a 5k3+flat roll
     page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
     page.locator('[data-action="roll-wound-check-go"]').click()
@@ -1327,19 +1456,108 @@ def test_bayushi_5th_dan_half_lw_behavioral(page, live_server_url):
         }
         return false;
     }""", timeout=10000)
-    # If failed, serious wounds should be based on half LW (40 not 80)
+    _restore_dice(page)
     wc_data = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
             const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.wcPhase === 'result') return { passed: d.wcPassed, sw: d.wcSeriousWounds, margin: d.wcMargin };
+            if (d && d.wcPhase === 'result') return {
+                passed: d.wcPassed, sw: d.wcSeriousWounds,
+                margin: d.wcMargin, bayushi: d.wcBayushiHalfLw
+            };
         }
         return null;
     }""")
     if wc_data and not wc_data["passed"]:
-        # With half-LW (40), the margin and SW should be roughly half what they'd be at 80
-        assert wc_data["sw"] > 0  # we failed, so some SW
-        assert wc_data["margin"] < 80  # margin should be based on 40, not 80
+        # Serious wounds must always be >= 1 on a failed check
+        assert wc_data["sw"] >= 1, f"SW should be >= 1, got {wc_data['sw']}"
+        # Margin must never be negative
+        assert wc_data["margin"] >= 0, f"Margin should be >= 0, got {wc_data['margin']}"
+        # The bayushi flag should be set
+        assert wc_data["bayushi"] is True
+        # The explanatory text should be visible
+        wc_modal = page.locator('[data-modal="wound-check"]')
+        assert "halved" in wc_modal.text_content().lower()
+
+
+def test_bayushi_below_5th_dan_no_half_lw(page, live_server_url):
+    """Bayushi below 5th Dan: wound check does NOT use half-LW calculation."""
+    _create_char(page, live_server_url, "Bayushi4NoHalf", "bayushi_bushi",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    f = _get_formula(page, "wound_check")
+    assert f.get("bayushi_5th_dan_half_lw") is not True, "4th Dan should not have half-LW flag"
+    # Add LW and roll wound check
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "60")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    _mock_dice_low(page)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    wc_data = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return { passed: d.wcPassed, sw: d.wcSeriousWounds, bayushi: d.wcBayushiHalfLw };
+        }
+        return null;
+    }""")
+    if wc_data and not wc_data["passed"]:
+        assert wc_data["bayushi"] is False, "4th Dan should not set bayushi half-LW flag"
+        # With low dice and 60 LW, SW should be based on full 60, not half
+        assert wc_data["sw"] >= 4, f"Expected >= 4 SW with full 60 LW and low dice, got {wc_data['sw']}"
+        # Bayushi 5th Dan explanation should NOT be visible
+        wc_modal = page.locator('[data-modal="wound-check"]')
+        halved_note = wc_modal.locator('text="Bayushi 5th Dan"')
+        assert halved_note.count() == 0 or not halved_note.first.is_visible()
+
+
+def test_bayushi_5th_dan_prob_table_shows_half_lw(page, live_server_url):
+    """Bayushi 5th Dan: wound check probability table reflects halved LW for SW columns."""
+    _create_char(page, live_server_url, "Bayushi5Prob", "bayushi_bushi",
+                 knack_overrides={"double_attack": 5, "feint": 5, "iaijutsu": 5})
+    # Add LW so the table has meaningful numbers
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "60")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    # Open wound check modal to see the probability table
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    # The Bayushi 5th Dan note should appear
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    text = wc_modal.text_content().lower()
+    assert "bayushi 5th dan" in text
+    assert "halved" in text
+    assert "30 instead of 60" in text
+
+
+def test_bayushi_below_5th_dan_prob_table_no_half_note(page, live_server_url):
+    """Bayushi below 5th Dan: wound check probability table does NOT show halved note."""
+    _create_char(page, live_server_url, "Bayushi4Prob", "bayushi_bushi",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "60")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    halved_note = wc_modal.locator('text="Bayushi 5th Dan"')
+    assert halved_note.count() == 0 or not halved_note.first.is_visible()
 
 
 def test_brotherhood_unarmed_damage_behavioral(page, live_server_url):
@@ -1869,9 +2087,9 @@ def test_yogo_4th_dan_post_roll_vp_behavioral(page, live_server_url):
         return 0;
     }""")
     # Click "Spend VP (+5)" button if visible
-    spend_btn = page.locator('button:has-text("Spend VP (+5)")')
-    if spend_btn.is_visible():
-        spend_btn.click()
+    spend_btn = page.locator('button:has-text("Spend VP (+5)"):visible')
+    if spend_btn.count() > 0:
+        spend_btn.first.click()
         page.wait_for_timeout(300)
         total_after = page.evaluate("""() => {
             const els = document.querySelectorAll('[x-data]');
