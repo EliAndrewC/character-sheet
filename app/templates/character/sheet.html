@@ -1906,7 +1906,7 @@
                         </div>
                     </div>
                     {# Otaku 5th Dan: trade 10 rolled dice for 1 auto serious wound #}
-                    <div x-show="schoolAbilities.otaku_trade_dice_for_sw && atkDamageRolled >= 12" x-cloak
+                    <div x-show="schoolAbilities.otaku_trade_dice_for_sw" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <button type="button"
                                 @click="atkDamageTotal = '1 serious wound (auto)'; $el.disabled = true; $el.textContent = 'Applied: 1 automatic serious wound';"
