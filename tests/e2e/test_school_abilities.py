@@ -66,6 +66,35 @@ def _wait_attack_result(page):
     }""", timeout=10000)
 
 
+def _mock_dice_high(page):
+    """Mock dice to always roll 7 (high enough to hit, avoids reroll-10 complications).
+
+    Overrides Math.random to return 0.6 which maps to floor(0.6*10)+1 = 7.
+    """
+    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.6")
+
+
+def _mock_dice_low(page):
+    """Mock dice to always roll 1 (guaranteed miss/fail).
+
+    Overrides Math.random to return 0.0 which maps to floor(0.0*10)+1 = 1.
+    """
+    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.0")
+
+
+def _mock_dice_ten(page):
+    """Mock dice to always roll 10 (for testing Phase 0 etc).
+
+    Overrides Math.random to return 0.9 which maps to floor(0.9*10)+1 = 10.
+    """
+    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.9")
+
+
+def _restore_dice(page):
+    """Restore normal random dice."""
+    page.evaluate("if (window._origRandom) Math.random = window._origRandom")
+
+
 def _get_formula(page, key):
     """Read a roll formula from the embedded JSON on the sheet page."""
     return page.evaluate(f"""() => {{
@@ -221,64 +250,6 @@ def test_akodo_feint_temp_vp(page, live_server_url):
     _roll_via_menu_or_direct(page, "knack:feint")
     assert page.locator('button:has-text("Succeeded (+4 temp VP)")').is_visible()
     assert page.locator('button:has-text("Failed (+1 temp VP)")').is_visible()
-
-
-def test_akodo_2nd_dan_wound_check_bonus(page, live_server_url):
-    """Akodo at 2nd Dan: wound check formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "AkodoWC2", "akodo_bushi",
-                 knack_overrides={"double_attack": 2, "feint": 2, "iaijutsu": 2})
-    f = _get_formula(page, "wound_check")
-    assert f is not None
-    assert "+5 from 2nd Dan" in f.get("bonus_sources", [])
-
-
-def test_akodo_3rd_dan_wc_banks_bonus(page, live_server_url):
-    """Akodo 3rd Dan: wound check pass banks bonus for next attack."""
-    _create_char(page, live_server_url, "AkodoWCBank", "akodo_bushi",
-                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
-    sa = _get_school_abilities(page)
-    assert sa.get("akodo_wc_attack_bonus") is True
-    assert sa.get("akodo_attack_skill", 0) > 0
-
-
-# ===========================================================================
-# BAYUSHI BUSHI (6 tests)
-# ===========================================================================
-
-def test_bayushi_vp_damage_on_attack(page, live_server_url):
-    """Bayushi Bushi attack modal offers VP spending for bonus damage dice."""
-    _create_char(page, live_server_url, "BayushiVPDmg", "bayushi_bushi")
-    sa = _get_school_abilities(page)
-    assert sa.get("bayushi_vp_damage") is True
-
-
-def test_bayushi_1st_dan_formula_extra_die(page, live_server_url):
-    """Bayushi 1st Dan: extra die on iaijutsu, double_attack, wound_check."""
-    _create_char(page, live_server_url, "BayushiFormula", "bayushi_bushi")
-    f_iai = _get_formula(page, "knack:iaijutsu")
-    assert f_iai is not None
-    # iaijutsu rank 1, Fire 3 (school ring), +1 from 1st Dan = 5 rolled
-    assert f_iai["rolled"] == 5
-    f_da = _get_formula(page, "knack:double_attack")
-    assert f_da is not None
-    # double_attack rank 1, Fire 3, +1 from 1st Dan = 5 rolled
-    assert f_da["rolled"] == 5
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    # Water 2, base = 3 rolled, +1 from 1st Dan = 4 rolled
-    assert f_wc["rolled"] == 4
-
-
-def test_bayushi_2nd_dan_double_attack_bonus(page, live_server_url):
-    """Bayushi at 2nd Dan: double attack formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "BayushiDA2", "bayushi_bushi",
-                 knack_overrides={"double_attack": 2, "feint": 2, "iaijutsu": 2})
-    f = _get_formula(page, "knack:double_attack")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
 def test_bayushi_3rd_dan_feint_shows_damage(page, live_server_url):
     """Bayushi at 3rd Dan: feint roll shows Roll Feint Damage button."""
     _create_char(page, live_server_url, "BayushiFeintDmg", "bayushi_bushi",
@@ -293,106 +264,6 @@ def test_bayushi_4th_dan_post_feint_raise(page, live_server_url):
                  knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
     _roll_via_menu_or_direct(page, "knack:feint")
     assert page.locator('button:has-text("Bank free raise for next attack")').is_visible()
-
-
-def test_bayushi_5th_dan_reduced_serious_wounds(page, live_server_url):
-    """Bayushi at 5th Dan: wound check formula has bayushi_5th_dan_half_lw flag."""
-    _create_char(page, live_server_url, "Bayushi5WC", "bayushi_bushi",
-                 knack_overrides={"double_attack": 5, "feint": 5, "iaijutsu": 5})
-    f = _get_formula(page, "wound_check")
-    assert f is not None
-    assert f.get("bayushi_5th_dan_half_lw") is True
-
-
-# ===========================================================================
-# BROTHERHOOD OF SHINSEI (3 tests)
-# ===========================================================================
-
-def test_brotherhood_damage_unarmed_bonus(page, live_server_url):
-    """Brotherhood 1st Dan: damage formula shows +1k1 unarmed bonus."""
-    _create_char(page, live_server_url, "BrothDmg", "brotherhood_of_shinsei_monk")
-    f = _get_formula(page, "attack")
-    assert f is not None
-    sources = f.get("damage_bonus_sources", [])
-    assert any("+1k1" in s for s in sources)
-    assert f.get("damage_extra_rolled", 0) >= 1
-    assert f.get("damage_extra_kept", 0) >= 1
-
-
-def test_brotherhood_1st_dan_formula_extra_die(page, live_server_url):
-    """Brotherhood 1st Dan: extra die on attack, damage, wound_check."""
-    _create_char(page, live_server_url, "BrothFormula", "brotherhood_of_shinsei_monk")
-    f_atk = _get_formula(page, "attack")
-    assert f_atk is not None
-    # attack rank 1, Fire 2, +1 from 1st Dan = 4 rolled
-    assert f_atk["rolled"] == 4
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    # Water 3 (school ring defaults to Water), base = 4, +1 from 1st Dan = 5
-    assert f_wc["rolled"] == 5
-
-
-def test_brotherhood_2nd_dan_attack_bonus(page, live_server_url):
-    """Brotherhood at 2nd Dan: attack formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "BrothAtk2", "brotherhood_of_shinsei_monk",
-                 knack_overrides={"conviction": 2, "otherworldliness": 2, "worldliness": 2})
-    f = _get_formula(page, "attack")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-# ===========================================================================
-# COURTIER (5 tests)
-# ===========================================================================
-
-def test_courtier_attack_air_bonus(page, live_server_url):
-    """Courtier: attack formula has +Air flat bonus."""
-    _create_char(page, live_server_url, "CourtAtk", "courtier")
-    f = _get_formula(page, "attack")
-    assert f is not None
-    # Default Air = 2, should have bonuses containing Courtier (Air)
-    assert any("Courtier" in b.get("label", "") for b in f.get("bonuses", []))
-
-
-def test_courtier_damage_air_bonus(page, live_server_url):
-    """Courtier: damage formula has +Air flat bonus."""
-    _create_char(page, live_server_url, "CourtDmg", "courtier")
-    f = _get_formula(page, "attack")
-    assert f is not None
-    sources = f.get("damage_bonus_sources", [])
-    assert any("Courtier" in s for s in sources)
-    assert f.get("damage_flat_bonus", 0) >= 3  # Air = 3 (school ring)
-
-
-def test_courtier_1st_dan_formula_extra_die(page, live_server_url):
-    """Courtier 1st Dan: extra die on tact, manipulation, wound_check."""
-    _create_char(page, live_server_url, "CourtFormula", "courtier",
-                 skill_overrides={"tact": 1, "manipulation": 1})
-    f_tact = _get_formula(page, "skill:tact")
-    assert f_tact is not None
-    # tact is Air: rank 1 + Air 3 (school ring) + 1 (1st Dan) = 5
-    assert f_tact["rolled"] == 5
-    f_manip = _get_formula(page, "skill:manipulation")
-    assert f_manip is not None
-    # manipulation is Air: rank 1 + Air 3 (school ring) + 1 (1st Dan) = 5
-    assert f_manip["rolled"] == 5
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 4  # Water 2, base = 3, +1 from 1st Dan = 4
-
-
-def test_courtier_2nd_dan_manipulation_bonus(page, live_server_url):
-    """Courtier at 2nd Dan: manipulation formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "CourtManip2", "courtier",
-                 knack_overrides={"discern_honor": 2, "oppose_social": 2, "worldliness": 2},
-                 skill_overrides={"manipulation": 1})
-    f = _get_formula(page, "skill:manipulation")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
 def test_courtier_4th_dan_temp_vp(page, live_server_url):
     """Courtier 4th Dan: temp VP button after successful attack or manipulation."""
     _create_char(page, live_server_url, "Court4VP", "courtier",
@@ -406,119 +277,6 @@ def test_courtier_4th_dan_temp_vp(page, live_server_url):
     page.wait_for_timeout(500)
     btn = page.locator('button:has-text("Gain 1 temp VP")')
     assert btn.count() >= 1
-
-
-# ===========================================================================
-# DAIDOJI YOJIMBO (4 tests)
-# ===========================================================================
-
-def test_daidoji_1st_dan_formula_extra_die(page, live_server_url):
-    """Daidoji 1st Dan: extra die on attack, counterattack, wound_check."""
-    _create_char(page, live_server_url, "DaidojiFormula", "daidoji_yojimbo")
-    f_atk = _get_formula(page, "attack")
-    assert f_atk is not None
-    assert f_atk["rolled"] == 4  # attack 1 + Fire 2 + 1 = 4
-    f_ca = _get_formula(page, "knack:counterattack")
-    assert f_ca is not None
-    assert f_ca["rolled"] == 4  # counterattack (Fire) 1 + Fire 2 + 1 = 4
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 5  # Water 3 (school ring) + 1 + 1 = 5
-
-
-def test_daidoji_2nd_dan_counterattack_bonus(page, live_server_url):
-    """Daidoji at 2nd Dan: counterattack formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "DaidojiCA2", "daidoji_yojimbo",
-                 knack_overrides={"counterattack": 2, "double_attack": 2, "iaijutsu": 2})
-    f = _get_formula(page, "knack:counterattack")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-def test_daidoji_3rd_dan_counterattack_raises_note(page, live_server_url):
-    """Daidoji at 3rd Dan: counterattack school ability flag is set with correct amount."""
-    _create_char(page, live_server_url, "DaidojiCA3", "daidoji_yojimbo",
-                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
-    sa = _get_school_abilities(page)
-    assert sa.get("daidoji_counterattack_raises") is True
-    assert sa.get("daidoji_counterattack_raises_amount", 0) > 0
-
-
-def test_daidoji_5th_dan_wc_attacker_tn_note(page, live_server_url):
-    """Daidoji at 5th Dan: wound check shows attacker TN reduction note."""
-    _create_char(page, live_server_url, "DaidojiWC5", "daidoji_yojimbo",
-                 knack_overrides={"counterattack": 5, "double_attack": 5, "iaijutsu": 5})
-    sa = _get_school_abilities(page)
-    assert sa.get("daidoji_wc_lower_tn") is True
-
-
-# ===========================================================================
-# DOJI ARTISAN (3 tests)
-# ===========================================================================
-
-def test_doji_1st_dan_formula_extra_die(page, live_server_url):
-    """Doji 1st Dan: extra die on counterattack, manipulation, wound_check."""
-    _create_char(page, live_server_url, "DojiFormula", "doji_artisan",
-                 skill_overrides={"manipulation": 1})
-    f_ca = _get_formula(page, "knack:counterattack")
-    assert f_ca is not None
-    assert f_ca["rolled"] == 4  # counterattack (Fire) 1 + Fire 2 + 1 = 4
-    f_manip = _get_formula(page, "skill:manipulation")
-    assert f_manip is not None
-    assert f_manip["rolled"] == 4  # manipulation (Air) 1 + Air 2 + 1 = 4
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 5  # Water 3 (default school ring) + 1 + 1 = 5
-
-
-def test_doji_2nd_dan_manipulation_bonus(page, live_server_url):
-    """Doji at 2nd Dan: manipulation formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "DojiManip2", "doji_artisan",
-                 knack_overrides={"counterattack": 2, "oppose_social": 2, "worldliness": 2},
-                 skill_overrides={"manipulation": 1})
-    f = _get_formula(page, "skill:manipulation")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-def test_doji_5th_dan_opponent_bonus_input(page, live_server_url):
-    """Doji 5th Dan: opponent result input appears after rolls."""
-    _create_char(page, live_server_url, "Doji5opp", "doji_artisan",
-                 knack_overrides={"counterattack": 5, "oppose_social": 5, "worldliness": 5})
-    sa = _get_school_abilities(page)
-    assert sa.get("doji_opponent_bonus") is True
-
-
-# ===========================================================================
-# HIDA BUSHI (4 tests)
-# ===========================================================================
-
-def test_hida_1st_dan_formula_extra_die(page, live_server_url):
-    """Hida 1st Dan: extra die on attack, counterattack, wound_check."""
-    _create_char(page, live_server_url, "HidaFormula", "hida_bushi")
-    f_atk = _get_formula(page, "attack")
-    assert f_atk is not None
-    assert f_atk["rolled"] == 4  # attack 1 + Fire 2 + 1 = 4
-    f_ca = _get_formula(page, "knack:counterattack")
-    assert f_ca is not None
-    assert f_ca["rolled"] == 4  # counterattack (Fire) 1 + Fire 2 + 1 = 4
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 5  # Water 3 (school ring) + 1 + 1 = 5
-
-
-def test_hida_2nd_dan_counterattack_bonus(page, live_server_url):
-    """Hida at 2nd Dan: counterattack formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "HidaCA2", "hida_bushi",
-                 knack_overrides={"counterattack": 2, "iaijutsu": 2, "lunge": 2})
-    f = _get_formula(page, "knack:counterattack")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
 def test_hida_3rd_dan_reroll_appears(page, live_server_url):
     """Hida at 3rd Dan sees dice reroll selection after attack roll."""
     _create_char(page, live_server_url, "HidaReroll", "hida_bushi",
@@ -539,46 +297,6 @@ def test_hida_4th_dan_trade_sw_button(page, live_server_url):
     sa = _get_school_abilities(page)
     assert sa.get("hida_trade_sw") is True
     assert page.locator('button:has-text("Trade 2 SW to reset LW to 0")').is_visible()
-
-
-# ===========================================================================
-# HIRUMA SCOUT (5 tests)
-# ===========================================================================
-
-def test_hiruma_1st_dan_formula_extra_die(page, live_server_url):
-    """Hiruma 1st Dan: extra die on initiative, parry, wound_check."""
-    _create_char(page, live_server_url, "HirumaFormula", "hiruma_scout")
-    f_init = _get_formula(page, "initiative")
-    assert f_init is not None
-    # Void 2, base = 3 rolled, +1 from 1st Dan = 4
-    assert f_init["rolled"] == 4
-    f_parry = _get_formula(page, "parry")
-    assert f_parry is not None
-    # parry 1 + Air 3 (school ring) + 1 = 5
-    assert f_parry["rolled"] == 5
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 4  # Water 2 + 1 + 1 = 4
-
-
-def test_hiruma_initiative_action_dice_info(page, live_server_url):
-    """Hiruma 4th Dan: initiative displays action dice -2 information."""
-    _create_char(page, live_server_url, "Hiruma4Init", "hiruma_scout",
-                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
-    f = _get_formula(page, "initiative")
-    assert f is not None
-    assert f.get("hiruma_4th_dan") is True
-
-
-def test_hiruma_post_parry_bonus(page, live_server_url):
-    """Hiruma 3rd Dan: post-parry bonus appears and applies to next attack/damage."""
-    _create_char(page, live_server_url, "Hiruma3Parry", "hiruma_scout",
-                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
-    sa = _get_school_abilities(page)
-    assert sa.get("hiruma_post_parry_bonus") is True
-    assert sa.get("hiruma_post_parry_amount", 0) > 0
-
-
 def test_hiruma_5th_dan_parry_note(page, live_server_url):
     """Hiruma 5th Dan: parry note flag is set and note text exists in DOM after parry roll."""
     _create_char(page, live_server_url, "Hiruma5Parry", "hiruma_scout",
@@ -657,77 +375,6 @@ def test_ide_feint_banks_tn_reduce(page, live_server_url):
     assert sa.get("ide_feint_tn_reduce") is True
     _roll_via_menu_or_direct(page, "knack:feint")
     assert page.locator('button:has-text("Bank -10 TN on target")').is_visible()
-
-
-# ===========================================================================
-# IKOMA BARD (3 tests)
-# ===========================================================================
-
-def test_ikoma_1st_dan_formula_extra_die(page, live_server_url):
-    """Ikoma 1st Dan: extra die on attack, bragging, wound_check."""
-    _create_char(page, live_server_url, "IkomaFormula", "ikoma_bard",
-                 skill_overrides={"bragging": 1})
-    f_atk = _get_formula(page, "attack")
-    assert f_atk is not None
-    assert f_atk["rolled"] == 4  # attack 1 + Fire 2 + 1 = 4
-    f_brag = _get_formula(page, "skill:bragging")
-    assert f_brag is not None
-    # bragging (Air) rank 1 + Air 2 + 1 = 4
-    assert f_brag["rolled"] == 4
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 5  # Water 3 (default school ring) + 1 + 1 = 5
-
-
-def test_ikoma_2nd_dan_attack_bonus(page, live_server_url):
-    """Ikoma at 2nd Dan: attack formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "IkomaAtk2", "ikoma_bard",
-                 knack_overrides={"discern_honor": 2, "oppose_knowledge": 2, "oppose_social": 2})
-    f = _get_formula(page, "attack")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-def test_ikoma_4th_dan_10_dice_floor(page, live_server_url):
-    """Ikoma 4th Dan: damage roll has 10-dice floor on unparried attacks."""
-    _create_char(page, live_server_url, "Ikoma4Dmg", "ikoma_bard",
-                 knack_overrides={"discern_honor": 4, "oppose_knowledge": 4, "oppose_social": 4})
-    sa = _get_school_abilities(page)
-    assert sa.get("ikoma_10_dice_floor") is True
-
-
-# ===========================================================================
-# ISAWA DUELIST (2 tests)
-# ===========================================================================
-
-def test_isawa_duelist_1st_dan_formula_extra_die(page, live_server_url):
-    """Isawa Duelist 1st Dan: extra die on double_attack, lunge, wound_check."""
-    _create_char(page, live_server_url, "IsawaFormula", "isawa_duelist")
-    f_da = _get_formula(page, "knack:double_attack")
-    assert f_da is not None
-    # double_attack (Fire) 1 + Fire 2 + 1 = 4
-    assert f_da["rolled"] == 4
-    f_lunge = _get_formula(page, "knack:lunge")
-    assert f_lunge is not None
-    assert f_lunge["rolled"] == 4  # lunge (Fire) 1 + Fire 2 + 1 = 4
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 5  # Water 3 (school ring) + 1 + 1 = 5
-
-
-def test_isawa_duelist_5th_dan_banks_wc_excess(page, live_server_url):
-    """Isawa Duelist at 5th Dan: wound check banks excess for future wound checks."""
-    _create_char(page, live_server_url, "Isawa5WC", "isawa_duelist",
-                 knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
-    sa = _get_school_abilities(page)
-    assert sa.get("isawa_bank_wc_excess") is True
-
-
-# ===========================================================================
-# ISAWA ISHI (4 tests)
-# ===========================================================================
-
 def test_isawa_ishi_1st_dan_skill_selection(page, live_server_url):
     """Isawa Ishi 1st Dan: technique_choices apply +1 rolled die to chosen skills."""
     _create_char(page, live_server_url, "IsawaIshi1", "isawa_ishi",
@@ -774,124 +421,6 @@ def test_isawa_ishi_vp_max_display(page, live_server_url):
         return null;
     }""")
     assert vp_max == 4  # highest ring (3) + school rank (1)
-
-
-def test_isawa_ishi_vp_spend_cap(page, live_server_url):
-    """Isawa Ishi: VP spend cap shows min(rings) - 1."""
-    _create_char(page, live_server_url, "IsawaIshiCap", "isawa_ishi")
-    config = _get_void_spend_config(page)
-    # min(rings) = 2 (default for all non-school rings), cap = 2 - 1 = 1
-    assert config.get("cap") == 1
-
-
-# ===========================================================================
-# KAKITA DUELIST (3 tests)
-# ===========================================================================
-
-def test_kakita_1st_dan_formula_extra_die(page, live_server_url):
-    """Kakita 1st Dan: extra die on double_attack, iaijutsu, initiative."""
-    _create_char(page, live_server_url, "KakitaFormula", "kakita_duelist")
-    f_da = _get_formula(page, "knack:double_attack")
-    assert f_da is not None
-    assert f_da["rolled"] == 5  # double_attack (Fire) 1 + Fire 3 (school ring) + 1 = 5
-    f_iai = _get_formula(page, "knack:iaijutsu")
-    assert f_iai is not None
-    assert f_iai["rolled"] == 5  # iaijutsu (Fire) 1 + Fire 3 + 1 = 5
-    f_init = _get_formula(page, "initiative")
-    assert f_init is not None
-    # Void 2, base = 3, +1 from 1st Dan = 4
-    assert f_init["rolled"] == 4
-
-
-def test_kakita_4th_dan_iaijutsu_damage_bonus(page, live_server_url):
-    """Kakita at 4th Dan: damage modal shows +5 bonus for iaijutsu attacks."""
-    _create_char(page, live_server_url, "Kakita4IaiDmg", "kakita_duelist",
-                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "lunge": 4})
-    f = _get_formula(page, "knack:iaijutsu")
-    assert f is not None
-    sources = f.get("damage_bonus_sources", [])
-    assert any("+5" in s and "iaijutsu" in s.lower() for s in sources)
-
-
-def test_kakita_2nd_dan_iaijutsu_bonus(page, live_server_url):
-    """Kakita at 2nd Dan: iaijutsu formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "KakitaIai2", "kakita_duelist",
-                 knack_overrides={"double_attack": 2, "iaijutsu": 2, "lunge": 2})
-    f = _get_formula(page, "knack:iaijutsu")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-# ===========================================================================
-# KITSUKI MAGISTRATE (4 tests)
-# ===========================================================================
-
-def test_kitsuki_1st_dan_formula_extra_die(page, live_server_url):
-    """Kitsuki 1st Dan: extra die on investigation, interrogation, wound_check."""
-    _create_char(page, live_server_url, "KitsukiFormula", "kitsuki_magistrate",
-                 skill_overrides={"investigation": 1, "interrogation": 1})
-    f_inv = _get_formula(page, "skill:investigation")
-    assert f_inv is not None
-    # investigation (Water) rank 1 + Water 3 (school ring) + 1 = 5
-    assert f_inv["rolled"] == 5
-    f_int = _get_formula(page, "skill:interrogation")
-    assert f_int is not None
-    # Kitsuki uses Water for interrogation: rank 1 + Water 3 (school ring) + 1 = 5
-    assert f_int["rolled"] == 5
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 5  # Water 3 (school ring) + 1 + 1 = 5
-
-
-def test_kitsuki_attack_water_bonus(page, live_server_url):
-    """Kitsuki: attack formula has +2*Water flat bonus."""
-    _create_char(page, live_server_url, "KitsukiAtk", "kitsuki_magistrate")
-    f = _get_formula(page, "attack")
-    assert f is not None
-    # Water = 3 (school ring), so +2*3 = +6
-    assert any("Water" in b.get("label", "") for b in f.get("bonuses", []))
-    assert f.get("flat", 0) >= 6
-
-
-def test_kitsuki_interrogation_uses_water(page, live_server_url):
-    """Kitsuki: interrogation roll uses Water ring value."""
-    _create_char(page, live_server_url, "KitsukiInterrW", "kitsuki_magistrate",
-                 skill_overrides={"interrogation": 1})
-    f = _get_formula(page, "skill:interrogation")
-    assert f is not None
-    assert "Water" in f.get("label", "")
-
-
-def test_kitsuki_5th_dan_ring_reduction_note(page, live_server_url):
-    """Kitsuki 5th Dan: shows ring reduction note after rolls."""
-    _create_char(page, live_server_url, "Kitsuki5Ring", "kitsuki_magistrate",
-                 knack_overrides={"discern_honor": 5, "iaijutsu": 5, "presence": 5})
-    sa = _get_school_abilities(page)
-    assert sa.get("kitsuki_reduce_rings") is True
-
-
-# ===========================================================================
-# KUNI WITCH HUNTER (2 tests)
-# ===========================================================================
-
-def test_kuni_1st_dan_formula_extra_die(page, live_server_url):
-    """Kuni 1st Dan: extra die on damage, interrogation, wound_check."""
-    _create_char(page, live_server_url, "KuniFormula", "kuni_witch_hunter",
-                 skill_overrides={"interrogation": 1})
-    f_int = _get_formula(page, "skill:interrogation")
-    assert f_int is not None
-    # interrogation rank 1 + Air 2 + 1 = 4
-    assert f_int["rolled"] == 4
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 4
-    # Damage bonus: +1 rolled die from 1st Dan
-    f_atk = _get_formula(page, "attack")
-    assert f_atk is not None
-    assert f_atk.get("damage_extra_rolled", 0) >= 1
-
-
 def test_kuni_5th_dan_reflect_damage_ui(page, live_server_url):
     """Kuni 5th Dan: reflect damage UI and self-damage calculation visible."""
     _create_char(page, live_server_url, "Kuni5Reflect", "kuni_witch_hunter",
@@ -899,103 +428,12 @@ def test_kuni_5th_dan_reflect_damage_ui(page, live_server_url):
     sa = _get_school_abilities(page)
     assert sa.get("kuni_reflect_damage") is True
     assert page.locator('text="Kuni 5th Dan - Reflect Damage"').is_visible()
-
-
-# ===========================================================================
-# MATSU BUSHI (6 tests)
-# ===========================================================================
-
-def test_matsu_1st_dan_formula_extra_die(page, live_server_url):
-    """Matsu 1st Dan: extra die on double_attack, iaijutsu, wound_check."""
-    _create_char(page, live_server_url, "MatsuFormula", "matsu_bushi")
-    f_da = _get_formula(page, "knack:double_attack")
-    assert f_da is not None
-    assert f_da["rolled"] == 5  # double_attack (Fire) 1 + Fire 3 (school ring) + 1 = 5
-    f_iai = _get_formula(page, "knack:iaijutsu")
-    assert f_iai is not None
-    assert f_iai["rolled"] == 5  # iaijutsu (Fire) 1 + Fire 3 + 1 = 5
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 4  # Water 2 + 1 + 1 = 4
-
-
-def test_matsu_5th_dan_lw_reset_15(page, live_server_url):
-    """Matsu 5th Dan: dealing serious wounds shows light wound reset to 15."""
-    _create_char(page, live_server_url, "Matsu5LW", "matsu_bushi",
-                 knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
-    sa = _get_school_abilities(page)
-    assert sa.get("matsu_lw_reset_15") is True
-
-
-def test_matsu_4th_dan_near_miss(page, live_server_url):
-    """Matsu 4th Dan: double attack near-miss shows hit with no bonus damage."""
-    _create_char(page, live_server_url, "Matsu4NM", "matsu_bushi",
-                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "lunge": 4})
-    sa = _get_school_abilities(page)
-    assert sa.get("matsu_near_miss") is True
-
-
-def test_matsu_3rd_dan_vp_wc_bonus(page, live_server_url):
-    """Matsu 3rd Dan: VP spending on wound check offers bonus option."""
-    _create_char(page, live_server_url, "Matsu3WC", "matsu_bushi",
-                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
-    sa = _get_school_abilities(page)
-    assert sa.get("matsu_vp_wc_bonus") is True
-    assert sa.get("matsu_vp_wc_amount", 0) > 0
-
-
-# ===========================================================================
-# MERCHANT (3 tests)
-# ===========================================================================
-
-def test_merchant_1st_dan_formula_extra_die(page, live_server_url):
-    """Merchant 1st Dan: extra die on interrogation, sincerity, wound_check."""
-    _create_char(page, live_server_url, "MerchFormula", "merchant",
-                 skill_overrides={"interrogation": 1, "sincerity": 1})
-    f_int = _get_formula(page, "skill:interrogation")
-    assert f_int is not None
-    assert f_int["rolled"] == 4  # interrogation (Air) 1 + Air 2 + 1 = 4
-    f_sin = _get_formula(page, "skill:sincerity")
-    assert f_sin is not None
-    assert f_sin["rolled"] == 4  # sincerity (Air) 1 + Air 2 + 1 = 4
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 5  # Water 3 (school ring) + 1 + 1 = 5
-
-
 def test_merchant_post_roll_vp_spending(page, live_server_url):
     """Merchant sees post-roll VP spending note after a skill roll."""
     _create_char(page, live_server_url, "MerchantVP", "merchant",
                  skill_overrides={"bragging": 1})
     _roll_via_menu_or_direct(page, "skill:bragging")
     assert page.locator('text="Merchant Special: spend VP after seeing the roll."').is_visible()
-
-
-# ===========================================================================
-# MIRUMOTO BUSHI (6 tests)
-# ===========================================================================
-
-def test_mirumoto_1st_dan_formula_extra_die(page, live_server_url):
-    """Mirumoto 1st Dan: extra die on parry, double_attack, wound_check."""
-    _create_char(page, live_server_url, "MirumotoFormula", "mirumoto_bushi")
-    f_parry = _get_formula(page, "parry")
-    assert f_parry is not None
-    assert f_parry["rolled"] == 4  # parry 1 + Air 2 + 1 = 4
-    f_da = _get_formula(page, "knack:double_attack")
-    assert f_da is not None
-    assert f_da["rolled"] == 4
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 4
-
-
-def test_mirumoto_parry_temp_vp(page, live_server_url):
-    """Mirumoto Bushi: parry roll adds temp VP."""
-    _create_char(page, live_server_url, "MirumotoParryVP", "mirumoto_bushi")
-    sa = _get_school_abilities(page)
-    assert sa.get("mirumoto_temp_vp_on_parry") is True
-
-
 def test_mirumoto_5th_dan_vp_plus_10(page, live_server_url):
     """Mirumoto 5th Dan: VP spending on combat rolls applies +10 and shows it."""
     _create_char(page, live_server_url, "Mirumoto5VP", "mirumoto_bushi",
@@ -1020,26 +458,6 @@ def test_mirumoto_5th_dan_vp_plus_10(page, live_server_url):
             # The +10 bonus should appear in the result breakdown
             result_text = page.locator('[data-modal="dice-roller"]').text_content()
             assert "5th Dan" in result_text
-
-
-def test_mirumoto_4th_dan_reduced_damage_dice(page, live_server_url):
-    """Mirumoto 4th Dan: failed parry shows reduced bonus damage dice."""
-    _create_char(page, live_server_url, "Mirumoto4Parry", "mirumoto_bushi",
-                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
-    sa = _get_school_abilities(page)
-    assert sa.get("mirumoto_parry_modifier") is True
-
-
-def test_mirumoto_2nd_dan_parry_bonus(page, live_server_url):
-    """Mirumoto at 2nd Dan: parry formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "MirumotoParry2", "mirumoto_bushi",
-                 knack_overrides={"counterattack": 2, "double_attack": 2, "iaijutsu": 2})
-    f = _get_formula(page, "parry")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
 def test_mirumoto_round_points_display_and_buttons(page, live_server_url):
     """Mirumoto at 3rd Dan: round points +/- and Reset buttons work."""
     _create_char(page, live_server_url, "MirumotoPoints", "mirumoto_bushi",
@@ -1066,46 +484,6 @@ def test_mirumoto_round_points_display_and_buttons(page, live_server_url):
     section.locator('button:has-text("+")').first.click()
     page.wait_for_timeout(200)
     assert display.text_content().strip() == "2"
-
-
-# ===========================================================================
-# OTAKU BUSHI (4 tests)
-# ===========================================================================
-
-def test_otaku_1st_dan_formula_extra_die(page, live_server_url):
-    """Otaku 1st Dan: extra die on iaijutsu, lunge, wound_check."""
-    _create_char(page, live_server_url, "OtakuFormula", "otaku_bushi")
-    f_iai = _get_formula(page, "knack:iaijutsu")
-    assert f_iai is not None
-    assert f_iai["rolled"] == 5  # iaijutsu (Fire) 1 + Fire 3 (school ring) + 1 = 5
-    f_lunge = _get_formula(page, "knack:lunge")
-    assert f_lunge is not None
-    assert f_lunge["rolled"] == 5  # lunge (Fire) 1 + Fire 3 + 1 = 5
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 4  # Water 2 + 1 + 1 = 4
-
-
-def test_otaku_5th_dan_trade_dice_for_sw(page, live_server_url):
-    """Otaku at 5th Dan: attack result offers the 10-dice-for-1-SW option."""
-    _create_char(page, live_server_url, "Otaku5Dice", "otaku_bushi",
-                 knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
-    sa = _get_school_abilities(page)
-    assert sa.get("otaku_trade_dice_for_sw") is True
-
-
-def test_otaku_4th_dan_lunge_extra_die(page, live_server_url):
-    """Otaku 4th Dan: lunge damage shows extra die even after failed parry."""
-    _create_char(page, live_server_url, "Otaku4Lunge", "otaku_bushi",
-                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "lunge": 4})
-    sa = _get_school_abilities(page)
-    assert sa.get("otaku_lunge_extra_die") is True
-
-
-# ===========================================================================
-# PRIEST (2 tests)
-# ===========================================================================
-
 def test_priest_1st_dan_skill_selection(page, live_server_url):
     """Priest 1st Dan: technique_choices apply +1 rolled die to chosen skills."""
     _create_char(page, live_server_url, "Priest1Dan", "priest",
@@ -1118,145 +496,12 @@ def test_priest_1st_dan_skill_selection(page, live_server_url):
     assert f is not None
     # precepts (Water) rank 1 + Water 3 (default school ring) + 1 (1st Dan) = 5
     assert f["rolled"] == 5
-
-
-def test_priest_2nd_dan_honor_bonus_raise(page, live_server_url):
-    """Priest 2nd Dan: free raise on Honor bonus rolls (bragging, precepts)."""
-    _create_char(page, live_server_url, "Priest2Honor", "priest",
-                 knack_overrides={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
-                 skill_overrides={"bragging": 1})
-    f = _get_formula(page, "skill:bragging")
-    assert f is not None
-    # Should have Priest 2nd Dan bonus
-    assert any("Priest 2nd Dan" in b.get("label", "") for b in f.get("bonuses", []))
-
-
-# ===========================================================================
-# SHIBA BUSHI (3 tests)
-# ===========================================================================
-
-def test_shiba_1st_dan_formula_extra_die(page, live_server_url):
-    """Shiba 1st Dan: extra die on double_attack, parry, wound_check."""
-    _create_char(page, live_server_url, "ShibaFormula", "shiba_bushi")
-    f_da = _get_formula(page, "knack:double_attack")
-    assert f_da is not None
-    assert f_da["rolled"] == 4  # double_attack (Fire) 1 + Fire 2 + 1 = 4
-    f_parry = _get_formula(page, "parry")
-    assert f_parry is not None
-    assert f_parry["rolled"] == 5  # parry 1 + Air 3 (school ring) + 1 = 5
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 4  # Water 2 + 1 + 1 = 4
-
-
-def test_shiba_4th_dan_wound_check_3k1_bonus(page, live_server_url):
-    """Shiba 4th Dan: wound check modal displays the 3k1 bonus."""
-    _create_char(page, live_server_url, "Shiba4WC", "shiba_bushi",
-                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
-    f = _get_formula(page, "wound_check")
-    assert f is not None
-    assert "+3k1 from 4th Dan" in f.get("bonus_sources", [])
-
-
-def test_shiba_2nd_dan_parry_bonus(page, live_server_url):
-    """Shiba at 2nd Dan: parry formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "ShibaParry2", "shiba_bushi",
-                 knack_overrides={"counterattack": 2, "double_attack": 2, "iaijutsu": 2})
-    f = _get_formula(page, "parry")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-# ===========================================================================
-# SHINJO BUSHI (4 tests)
-# ===========================================================================
-
-def test_shinjo_1st_dan_formula_extra_die(page, live_server_url):
-    """Shinjo 1st Dan: extra die in initiative, double_attack, parry."""
-    _create_char(page, live_server_url, "ShinjoFormula", "shinjo_bushi")
-    f_init = _get_formula(page, "initiative")
-    assert f_init is not None
-    # Void 2, base = 3, +1 from 1st Dan = 4
-    assert f_init["rolled"] == 4
-    f_da = _get_formula(page, "knack:double_attack")
-    assert f_da is not None
-    assert f_da["rolled"] == 4  # double_attack (Fire) 1 + Fire 2 + 1 = 4
-    f_parry = _get_formula(page, "parry")
-    assert f_parry is not None
-    assert f_parry["rolled"] == 5  # parry 1 + Air 3 (school ring) + 1 = 5
-
-
-def test_shinjo_4th_dan_initiative_highest_die_1(page, live_server_url):
-    """Shinjo 4th Dan: initiative roll sets highest die to 1."""
-    _create_char(page, live_server_url, "Shinjo4Init", "shinjo_bushi",
-                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "lunge": 4})
-    f = _get_formula(page, "initiative")
-    assert f is not None
-    assert f.get("shinjo_4th_dan") is True
-
-
-def test_shinjo_5th_dan_parry_excess_wc(page, live_server_url):
-    """Shinjo 5th Dan: wound check at 5th Dan offers parry excess application."""
-    _create_char(page, live_server_url, "Shinjo5Parry", "shinjo_bushi",
-                 knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
-    sa = _get_school_abilities(page)
-    assert sa.get("shinjo_bank_parry_excess") is True
-
-
-# ===========================================================================
-# SHOSURO ACTOR (4 tests)
-# ===========================================================================
-
-def test_shosuro_1st_dan_formula_extra_die(page, live_server_url):
-    """Shosuro 1st Dan: extra die on attack, sincerity, wound_check."""
-    _create_char(page, live_server_url, "ShosuroFormula", "shosuro_actor",
-                 skill_overrides={"sincerity": 1})
-    f_atk = _get_formula(page, "attack")
-    assert f_atk is not None
-    assert f_atk["rolled"] == 4  # attack 1 + Fire 2 + 1 = 4
-    f_sin = _get_formula(page, "skill:sincerity")
-    assert f_sin is not None
-    assert f_sin["rolled"] == 5  # sincerity (Air) 1 + Air 3 (school ring) + 1 = 5
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 4  # Water 2 + 1 + 1 = 4
-
-
 def test_shosuro_stipend_display(page, live_server_url):
     """Shosuro Actor: stipend display on character sheet."""
     _create_char(page, live_server_url, "ShosuroStipend", "shosuro_actor")
     # All characters should have a stipend displayed
     stipend_el = page.locator('text="koku/year"').first
     assert stipend_el.is_visible()
-
-
-def test_shosuro_acting_skill_bonus(page, live_server_url):
-    """Shosuro Actor: roll formulas show the acting skill bonus (extra rolled dice)."""
-    _create_char(page, live_server_url, "ShosuroActing", "shosuro_actor",
-                 skill_overrides={"acting": 2})
-    f_atk = _get_formula(page, "attack")
-    assert f_atk is not None
-    # attack 1 + Fire 2 + 1 (1st Dan on attack) + 2 (acting bonus) = 6
-    assert f_atk["rolled"] == 6
-
-
-def test_shosuro_2nd_dan_sincerity_bonus(page, live_server_url):
-    """Shosuro at 2nd Dan: sincerity formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "ShosuroSin2", "shosuro_actor",
-                 knack_overrides={"athletics": 2, "discern_honor": 2, "pontificate": 2},
-                 skill_overrides={"sincerity": 1})
-    f = _get_formula(page, "skill:sincerity")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-# ===========================================================================
-# SHUGENJA (4 tests - all skipped, school disabled in UI)
-# ===========================================================================
-
-@pytest.mark.skip(reason="Shugenja school disabled in UI")
 def test_shugenja_1st_dan_element_selection(page, live_server_url):
     """Shugenja 1st Dan element selection (after enabling school)."""
     pass
@@ -1278,37 +523,6 @@ def test_shugenja_3rd_dan_applicable_skills(page, live_server_url):
 def test_shugenja_ring_bonus_display(page, live_server_url):
     """Shugenja ring bonus display (after enabling school)."""
     pass
-
-
-# ===========================================================================
-# TOGASHI ISE ZUMI (4 tests)
-# ===========================================================================
-
-def test_togashi_1st_dan_formula_extra_die(page, live_server_url):
-    """Togashi 1st Dan: extra die on attack, parry, athletics."""
-    _create_char(page, live_server_url, "TogashiFormula", "togashi_ise_zumi")
-    f_atk = _get_formula(page, "attack")
-    assert f_atk is not None
-    assert f_atk["rolled"] == 4  # attack 1 + Fire 2 + 1 = 4
-    f_parry = _get_formula(page, "parry")
-    assert f_parry is not None
-    assert f_parry["rolled"] == 4
-    # Athletics on Air: 2*Air + athletics_rank + 1 (1st Dan)
-    # Athletics knack starts at rank 1 for Togashi; Air = 2
-    # rolled = 2*2 + 1 + 1 = 6
-    f_ath = _get_formula(page, "athletics:Air")
-    assert f_ath is not None
-    assert f_ath["rolled"] == 6
-
-
-def test_togashi_4th_dan_reroll_contested(page, live_server_url):
-    """Togashi 4th Dan: reroll button appears after contested rolls."""
-    _create_char(page, live_server_url, "Togashi4Reroll", "togashi_ise_zumi",
-                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4})
-    sa = _get_school_abilities(page)
-    assert sa.get("togashi_reroll_contested") is True
-
-
 def test_togashi_3rd_dan_athletics_raises(page, live_server_url):
     """Togashi 3rd Dan: athletics roll shows raise spending button."""
     _create_char(page, live_server_url, "Togashi3Ath", "togashi_ise_zumi",
@@ -1320,66 +534,6 @@ def test_togashi_3rd_dan_athletics_raises(page, live_server_url):
     # Roll athletics and check for the button
     _roll_via_menu_or_direct(page, "athletics:Air")
     assert page.locator('button:has-text("Spend Athletics Raise")').is_visible()
-
-
-def test_togashi_2nd_dan_athletics_bonus(page, live_server_url):
-    """Togashi at 2nd Dan: athletics formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "TogashiAth2", "togashi_ise_zumi",
-                 knack_overrides={"athletics": 2, "conviction": 2, "dragon_tattoo": 2})
-    f = _get_formula(page, "athletics:Air")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-# ===========================================================================
-# YOGO WARDEN (6 tests, 5th Dan is TBD - not included)
-# ===========================================================================
-
-def test_yogo_1st_dan_formula_extra_die(page, live_server_url):
-    """Yogo 1st Dan: extra die on attack, damage, wound_check."""
-    _create_char(page, live_server_url, "YogoFormula", "yogo_warden")
-    f_atk = _get_formula(page, "attack")
-    assert f_atk is not None
-    assert f_atk["rolled"] == 4  # attack 1 + Fire 2 + 1 = 4
-    f_wc = _get_formula(page, "wound_check")
-    assert f_wc is not None
-    assert f_wc["rolled"] == 4
-    # Damage: +1 rolled die from 1st Dan
-    assert f_atk.get("damage_extra_rolled", 0) >= 1
-
-
-def test_yogo_3rd_dan_vp_heals_lw(page, live_server_url):
-    """Yogo 3rd Dan: VP spending button reduces light wound counter."""
-    _create_char(page, live_server_url, "Yogo3VP", "yogo_warden",
-                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "feint": 3})
-    sa = _get_school_abilities(page)
-    assert sa.get("yogo_vp_heals_lw") is True
-    assert sa.get("yogo_vp_heal_amount", 0) > 0
-
-
-def test_yogo_temp_vp_on_sw(page, live_server_url):
-    """Yogo Warden: serious wound grants temp VP."""
-    _create_char(page, live_server_url, "YogoSWVP", "yogo_warden")
-    sa = _get_school_abilities(page)
-    assert sa.get("yogo_temp_vp_on_sw") is True
-
-
-def test_yogo_4th_dan_wc_vp_raise(page, live_server_url):
-    """Yogo 4th Dan: wound check VP spending gives enhanced VP bonus (+5 each)."""
-    _create_char(page, live_server_url, "Yogo4WC", "yogo_warden",
-                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "feint": 4})
-    config = _get_void_spend_config(page)
-    assert config.get("wc_vp_free_raise") is True
-
-
-# ===========================================================================
-# EXISTING TESTS (preserved from the original file)
-# ===========================================================================
-
-
-# --- Bayushi 3rd Dan: feint deals damage ---
-
 def test_bayushi_feint_damage_button(page, live_server_url):
     """Bayushi at 3rd Dan sees 'Roll Feint Damage' after a feint roll."""
     _create_char(page, live_server_url, "BayushiFeintDmg2", "bayushi_bushi",
@@ -1455,144 +609,6 @@ def test_daidoji_counterattack_school_flag(page, live_server_url):
         return data.daidoji_counterattack_raises === true;
     }""")
     assert has_flag
-
-
-# ---------------------------------------------------------------------------
-# Formula display tests (preserved from original)
-# ---------------------------------------------------------------------------
-
-def test_akodo_1st_dan_formula_display(page, live_server_url):
-    """Akodo 1st Dan: attack formula has +1 rolled die from school technique."""
-    _create_char(page, live_server_url, "AkodoFormula", "akodo_bushi")
-    # Default: attack rank 1, Fire 2, +1 rolled die from 1st Dan = rolled 4, kept 2
-    f = _get_formula(page, "attack")
-    assert f is not None
-    assert f["rolled"] == 4  # 1 + 2 + 1 (1st Dan)
-    assert f["kept"] == 2
-
-
-def test_matsu_initiative_10_dice(page, live_server_url):
-    """Matsu Bushi always rolls 10 initiative dice (Special Ability)."""
-    _create_char(page, live_server_url, "MatsuInit", "matsu_bushi")
-    f = _get_formula(page, "initiative")
-    assert f is not None
-    assert f["rolled"] == 10
-
-
-def test_kakita_initiative_phase_0(page, live_server_url):
-    """Kakita Duelist initiative formula has kakita_phase_zero flag."""
-    _create_char(page, live_server_url, "KakitaInit", "kakita_duelist")
-    f = _get_formula(page, "initiative")
-    assert f is not None
-    assert f["kakita_phase_zero"] is True
-
-
-def test_isawa_duelist_damage_shows_water(page, live_server_url):
-    """Isawa Duelist attack formula uses Water (not Fire) for damage ring."""
-    _create_char(page, live_server_url, "IsawaWater", "isawa_duelist")
-    f = _get_formula(page, "attack")
-    assert f is not None
-    assert f["damage_ring_name"] == "Water"
-
-
-# ---------------------------------------------------------------------------
-# 2nd Dan bonus visibility tests (preserved from original)
-# ---------------------------------------------------------------------------
-
-def test_matsu_2nd_dan_iaijutsu_bonus(page, live_server_url):
-    """Matsu at 2nd Dan: iaijutsu knack formula has +5 from 2nd Dan technique."""
-    _create_char(page, live_server_url, "MatsuIai2", "matsu_bushi",
-                 knack_overrides={"double_attack": 2, "iaijutsu": 2, "lunge": 2})
-    f = _get_formula(page, "knack:iaijutsu")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-def test_hiruma_2nd_dan_parry_bonus(page, live_server_url):
-    """Hiruma at 2nd Dan: parry formula has +5 from 2nd Dan technique."""
-    _create_char(page, live_server_url, "HirumaParry2", "hiruma_scout",
-                 knack_overrides={"double_attack": 2, "feint": 2, "iaijutsu": 2})
-    f = _get_formula(page, "parry")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-def test_shinjo_2nd_dan_parry_bonus(page, live_server_url):
-    """Shinjo at 2nd Dan: parry formula has +5 from 2nd Dan technique."""
-    _create_char(page, live_server_url, "ShinjoParry2", "shinjo_bushi",
-                 knack_overrides={"double_attack": 2, "iaijutsu": 2, "lunge": 2})
-    f = _get_formula(page, "parry")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-def test_kitsuki_2nd_dan_interrogation_bonus(page, live_server_url):
-    """Kitsuki at 2nd Dan: interrogation skill formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "KitsukiInterr2", "kitsuki_magistrate",
-                 knack_overrides={"discern_honor": 2, "iaijutsu": 2, "presence": 2},
-                 skill_overrides={"interrogation": 1})
-    f = _get_formula(page, "skill:interrogation")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-def test_merchant_2nd_dan_interrogation_bonus(page, live_server_url):
-    """Merchant at 2nd Dan: interrogation skill formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "MerchInterr2", "merchant",
-                 knack_overrides={"discern_honor": 2, "oppose_knowledge": 2, "worldliness": 2},
-                 skill_overrides={"interrogation": 1})
-    f = _get_formula(page, "skill:interrogation")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-def test_kuni_2nd_dan_interrogation_bonus(page, live_server_url):
-    """Kuni at 2nd Dan: interrogation skill formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "KuniInterr2", "kuni_witch_hunter",
-                 knack_overrides={"detect_taint": 2, "iaijutsu": 2, "presence": 2},
-                 skill_overrides={"interrogation": 1})
-    f = _get_formula(page, "skill:interrogation")
-    assert f is not None
-    assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
-               for b in f.get("bonuses", []))
-
-
-def test_yogo_2nd_dan_wound_check_bonus(page, live_server_url):
-    """Yogo at 2nd Dan: wound check formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "YogoWC2", "yogo_warden",
-                 knack_overrides={"double_attack": 2, "iaijutsu": 2, "feint": 2})
-    f = _get_formula(page, "wound_check")
-    assert f is not None
-    assert "+5 from 2nd Dan" in f.get("bonus_sources", [])
-
-
-def test_otaku_2nd_dan_wound_check_bonus(page, live_server_url):
-    """Otaku at 2nd Dan: wound check formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "OtakuWC2", "otaku_bushi",
-                 knack_overrides={"double_attack": 2, "iaijutsu": 2, "lunge": 2})
-    f = _get_formula(page, "wound_check")
-    assert f is not None
-    assert "+5 from 2nd Dan" in f.get("bonus_sources", [])
-
-
-def test_isawa_duelist_2nd_dan_wound_check_bonus(page, live_server_url):
-    """Isawa Duelist at 2nd Dan: wound check formula has +5 from 2nd Dan."""
-    _create_char(page, live_server_url, "IsawaWC2", "isawa_duelist",
-                 knack_overrides={"double_attack": 2, "iaijutsu": 2, "lunge": 2})
-    f = _get_formula(page, "wound_check")
-    assert f is not None
-    assert "+5 from 2nd Dan" in f.get("bonus_sources", [])
-
-
-# ---------------------------------------------------------------------------
-# 3rd Dan applicable skills tests (preserved from original)
-# ---------------------------------------------------------------------------
-
 def test_brotherhood_3rd_dan_precepts_raises(page, live_server_url):
     """Brotherhood at 3rd Dan: rolling a skill in applicable_to shows Spend button."""
     _create_char(page, live_server_url, "BrothPrecepts3", "brotherhood_of_shinsei_monk",
@@ -1740,19 +756,6 @@ def test_akodo_5th_dan_reflect_damage_ui(page, live_server_url):
     # The reflect UI appears in the wound check result - verify the flag is set
     # and the UI element exists in the DOM
     assert page.locator('text="Akodo 5th Dan - Reflect Damage"').count() > 0
-
-
-def test_courtier_5th_dan_air_bonus_on_skill(page, live_server_url):
-    """Courtier 5th Dan: +Air flat bonus appears on skill roll formulas."""
-    _create_char(page, live_server_url, "CourtierAir5", "courtier",
-                 knack_overrides={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
-                 skill_overrides={"bragging": 1})
-    f = _get_formula(page, "skill:bragging")
-    assert f is not None
-    # Should have a bonus from Courtier 5th Dan (Air)
-    assert any("5th Dan" in b.get("label", "") for b in f.get("bonuses", []))
-
-
 def test_ide_5th_dan_temp_vp_on_spend(page, live_server_url):
     """Ide 5th Dan: spending VP auto-grants temp VP."""
     _create_char(page, live_server_url, "Ide5TempVP", "ide_diplomat",
@@ -2262,7 +1265,9 @@ def test_mirumoto_2nd_dan_behavioral(page, live_server_url):
     """Mirumoto 2nd Dan: parry roll shows +5 from 2nd Dan."""
     _create_char(page, live_server_url, "Mirumoto2B", "mirumoto_bushi",
                  knack_overrides={"counterattack": 2, "double_attack": 2, "iaijutsu": 2})
+    _mock_dice_high(page)
     _roll_via_menu_or_direct(page, "parry")
+    _restore_dice(page)
     assert "2nd Dan" in _get_roll_result_text(page)
 
 
@@ -2341,19 +1346,15 @@ def test_brotherhood_unarmed_damage_behavioral(page, live_server_url):
     """Brotherhood Special: attack damage shows +1k1 unarmed bonus in breakdown."""
     _create_char(page, live_server_url, "Brotherhood_UB", "brotherhood_of_shinsei_monk",
                  knack_overrides={"conviction": 2, "otherworldliness": 2, "worldliness": 2})
-    _open_attack_modal_and_roll(page, "attack")
-    # Wait for hit, then check damage parts
-    hit = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkHit !== undefined) return d.atkHit;
-        }
-        return false;
-    }""")
-    if hit:
-        dmg_text = _get_attack_result_text(page)
-        assert "unarmed" in dmg_text.lower() or "1k1" in dmg_text
+    _mock_dice_high(page)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    dmg_text = _get_attack_result_text(page)
+    assert "unarmed" in dmg_text.lower() or "1k1" in dmg_text
 
 
 def test_courtier_air_attack_behavioral(page, live_server_url):
@@ -2379,18 +1380,30 @@ def test_isawa_duelist_water_damage_behavioral(page, live_server_url):
     """Isawa Duelist Special: attack damage uses Water ring in breakdown."""
     _create_char(page, live_server_url, "IsawaDmgB", "isawa_duelist",
                  knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
-    _open_attack_modal_and_roll(page, "attack")
-    hit = page.evaluate("""() => {
+    # Verify via formula that damage ring is Water (server-side check)
+    f = _get_formula(page, "attack")
+    assert f["damage_ring_name"] == "Water"
+    # Also roll and verify damage parts mention Water
+    _mock_dice_high(page)
+    # Open attack modal with low TN to guarantee hit
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    # Roll damage
+    modal.locator('button:has-text("Make Damage Roll")').click()
+    page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
             const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkHit !== undefined) return d.atkHit;
+            if (d && d.atkPhase === 'damage-result') return true;
         }
         return false;
-    }""")
-    if hit:
-        dmg_text = _get_attack_result_text(page)
-        assert "Water" in dmg_text
+    }""", timeout=10000)
+    dmg_text = _get_attack_result_text(page)
+    assert "Water" in dmg_text
 
 
 def test_isawa_ishi_vp_max_behavioral(page, live_server_url):
@@ -2409,14 +1422,27 @@ def test_isawa_ishi_vp_max_behavioral(page, live_server_url):
 
 
 def test_kakita_phase_0_behavioral(page, live_server_url):
-    """Kakita Special: rolling initiative shows Phase 0 note or phase 0 dice."""
+    """Kakita Special: rolling initiative with 10s shows Phase 0 dice."""
     _create_char(page, live_server_url, "KakitaP0B", "kakita_duelist",
                  knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    # Mock dice to return 10 so Phase 0 triggers (10s become Phase 0 for Kakita)
+    _mock_dice_ten(page)
     page.locator('[data-roll-key="initiative"]').click()
     _wait_roll_done(page)
-    # The initiative result should mention Phase 0 (Kakita school note)
+    _restore_dice(page)
+    # With all 10s, initiative doesn't reroll (initiative never rerolls 10s)
+    # Kakita converts 10s to Phase 0
+    action_dice = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.actionDice && d.phase === 'done') return d.actionDice;
+        }
+        return [];
+    }""")
+    assert 0 in action_dice, f"Expected Phase 0 in action dice {action_dice}"
     result = _get_roll_result_text(page)
-    assert "Phase 0" in result or "phase 0" in result.lower()
+    assert "Phase 0" in result
 
 
 def test_kitsuki_water_interrogation_behavioral(page, live_server_url):
@@ -2487,6 +1513,7 @@ def test_daidoji_3rd_dan_raises_note_behavioral(page, live_server_url):
     """Daidoji 3rd Dan: counterattack hit shows free raises note with amount."""
     _create_char(page, live_server_url, "Daidoji3B", "daidoji_yojimbo",
                  knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
+    _mock_dice_high(page)
     # Set TN very low to maximize hit chance
     page.locator('[data-roll-key="knack:counterattack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
@@ -2494,30 +1521,22 @@ def test_daidoji_3rd_dan_raises_note_behavioral(page, live_server_url):
     modal.locator('select').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
-    hit = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkHit !== undefined) return d.atkHit;
-        }
-        return false;
-    }""")
-    if hit:
-        result = _get_attack_result_text(page)
-        assert "Daidoji 3rd Dan" in result
-        assert "free raise" in result.lower()
+    result = _get_attack_result_text(page)
+    assert "Daidoji 3rd Dan" in result
+    assert "free raise" in result.lower()
 
 
 def test_daidoji_5th_dan_tn_note_behavioral(page, live_server_url):
     """Daidoji 5th Dan: passing wound check shows attacker TN reduction note."""
     _create_char(page, live_server_url, "Daidoji5B", "daidoji_yojimbo",
                  knack_overrides={"counterattack": 5, "double_attack": 5, "iaijutsu": 5})
-    # Add small LW so wound check is likely to pass
+    # Add small LW so wound check passes
     page.locator('[data-action="lw-plus"]').click()
     page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
     page.fill('input[placeholder="Amount"]', "5")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
+    _mock_dice_high(page)
     page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
     page.locator('[data-action="roll-wound-check-go"]').click()
@@ -2529,17 +1548,8 @@ def test_daidoji_5th_dan_tn_note_behavioral(page, live_server_url):
         }
         return false;
     }""", timeout=10000)
-    passed = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.wcPhase === 'result') return d.wcPassed;
-        }
-        return false;
-    }""")
-    if passed:
-        result = _get_wc_result_text(page)
-        assert "Daidoji 5th Dan" in result
+    result = _get_wc_result_text(page)
+    assert "Daidoji 5th Dan" in result
 
 
 def test_hiruma_4th_dan_initiative_note_behavioral(page, live_server_url):
@@ -2567,19 +1577,11 @@ def test_ikoma_4th_dan_10dice_note_behavioral(page, live_server_url):
     sa = _get_school_abilities(page)
     assert sa.get("ikoma_10_dice_floor") is True
     # Roll an attack and check the damage formula
+    _mock_dice_high(page)
     _open_attack_modal_and_roll(page, "attack")
-    hit = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkHit !== undefined) return d.atkHit;
-        }
-        return false;
-    }""")
-    if hit:
-        result = _get_attack_result_text(page)
-        # The 10-dice floor note shows "4th Dan, unparried" in the damage parts
-        assert "4th Dan" in result or "unparried" in result.lower()
+    result = _get_attack_result_text(page)
+    # The 10-dice floor note shows "4th Dan, unparried" in the damage parts
+    assert "4th Dan" in result or "unparried" in result.lower()
 
 
 def test_kitsuki_5th_dan_ring_note_behavioral(page, live_server_url):
@@ -2596,6 +1598,7 @@ def test_matsu_5th_dan_lw_reset_note_behavioral(page, live_server_url):
     """Matsu 5th Dan: damage result shows LW reset to 15 note."""
     _create_char(page, live_server_url, "Matsu5B", "matsu_bushi",
                  knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
+    _mock_dice_high(page)
     # Roll attack, hit, then roll damage
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
@@ -2603,27 +1606,18 @@ def test_matsu_5th_dan_lw_reset_note_behavioral(page, live_server_url):
     modal.locator('select').select_option("5")  # low TN for guaranteed hit
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
-    hit = page.evaluate("""() => {
+    # Roll damage
+    modal.locator('button:has-text("Make Damage Roll")').click()
+    page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
             const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkHit !== undefined) return d.atkHit;
+            if (d && d.atkPhase === 'damage-result') return true;
         }
         return false;
-    }""")
-    if hit:
-        # Roll damage
-        modal.locator('button:has-text("Make Damage Roll")').click()
-        page.wait_for_function("""() => {
-            const els = document.querySelectorAll('[x-data]');
-            for (const el of els) {
-                const d = window.Alpine && window.Alpine.$data(el);
-                if (d && d.atkPhase === 'damage-result') return true;
-            }
-            return false;
-        }""", timeout=10000)
-        result = _get_attack_result_text(page)
-        assert "15" in result and "reset" in result.lower()
+    }""", timeout=10000)
+    result = _get_attack_result_text(page)
+    assert "15" in result and "reset" in result.lower()
 
 
 def test_shinjo_4th_dan_initiative_highest_1_behavioral(page, live_server_url):
@@ -2717,7 +1711,8 @@ def test_yogo_serious_wound_temp_vp_behavioral(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "80")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    # Roll wound check - should fail with 80 LW
+    _mock_dice_low(page)
+    # Roll wound check - should fail with 80 LW and low dice
     page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
     page.locator('[data-action="roll-wound-check-go"]').click()
@@ -2729,20 +1724,10 @@ def test_yogo_serious_wound_temp_vp_behavioral(page, live_server_url):
         }
         return false;
     }""", timeout=10000)
-    # Check if it failed (should with 80 LW)
-    failed = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.wcPhase === 'result') return !d.wcPassed;
-        }
-        return false;
-    }""")
-    if failed:
-        # The failure auto-applies, which should grant temp VP
-        page.wait_for_timeout(500)
-        temp_after = page.evaluate("window._trackingBridge?.tempVoidPoints || 0")
-        assert temp_after > temp_before, f"Temp VP should increase from {temp_before}, got {temp_after}"
+    # The failure auto-applies, which should grant temp VP
+    page.wait_for_timeout(500)
+    temp_after = page.evaluate("window._trackingBridge?.tempVoidPoints || 0")
+    assert temp_after > temp_before, f"Temp VP should increase from {temp_before}, got {temp_after}"
 
 
 def test_yogo_3rd_dan_vp_heals_lw_behavioral(page, live_server_url):
@@ -2910,12 +1895,13 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
     """Akodo 3rd Dan: pass wound check -> bonus banked -> apply to attack."""
     _create_char(page, live_server_url, "Akodo3FB", "akodo_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
-    # Add small LW so wound check is likely to pass
+    # Add small LW so wound check passes
     page.locator('[data-action="lw-plus"]').click()
     page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
     page.fill('input[placeholder="Amount"]', "5")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
+    _mock_dice_high(page)
     # Roll wound check
     page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
@@ -2928,30 +1914,21 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
         }
         return false;
     }""", timeout=10000)
-    passed = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.wcPhase === 'result') return d.wcPassed;
-        }
-        return false;
-    }""")
-    if passed:
-        # Keep light wounds (this triggers banking)
-        page.locator('button:has-text("Keep Light Wounds")').click()
-        page.wait_for_timeout(300)
-        # Check that a bonus was banked
-        banked = page.evaluate("window._diceRoller?.akodoBankedBonuses?.filter(b => !b.spent)?.length || 0")
-        assert banked > 0, "A bonus should be banked after passing wound check"
-        # Roll an attack and check for the Apply button
-        page.locator('[data-roll-key="attack"]').click()
-        page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
-        modal = page.locator('[data-modal="attack"]')
-        modal.locator('select').select_option("5")
-        modal.locator('button:has-text("Roll")').first.click()
-        _wait_attack_result(page)
-        # The Apply button should be visible
-        assert page.locator('button:has-text("Apply +")').first.is_visible()
+    # Keep light wounds (this triggers banking)
+    page.locator('button:has-text("Keep Light Wounds")').click()
+    page.wait_for_timeout(300)
+    # Check that a bonus was banked
+    banked = page.evaluate("window._diceRoller?.akodoBankedBonuses?.filter(b => !b.spent)?.length || 0")
+    assert banked > 0, "A bonus should be banked after passing wound check"
+    # Roll an attack and check for the Apply button
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    # The Apply button should be visible
+    assert page.locator('button:has-text("Apply +")').first.is_visible()
 
 
 def test_akodo_5th_dan_reflect_ui_behavioral(page, live_server_url):
@@ -2987,6 +1964,7 @@ def test_bayushi_vp_damage_behavioral(page, live_server_url):
     # Give VP
     page.evaluate("window._trackingBridge.voidPoints = 1")
     page.wait_for_timeout(200)
+    _mock_dice_high(page)
     # Open attack modal, spend 1 VP, roll
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
@@ -2999,17 +1977,8 @@ def test_bayushi_vp_damage_behavioral(page, live_server_url):
         page.wait_for_timeout(100)
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
-    hit = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkHit !== undefined) return d.atkHit;
-        }
-        return false;
-    }""")
-    if hit:
-        result = _get_attack_result_text(page)
-        assert "Bayushi" in result or "VP" in result
+    result = _get_attack_result_text(page)
+    assert "Bayushi" in result or "VP" in result
 
 
 def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
@@ -3040,12 +2009,13 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
     """Isawa Duelist 5th Dan: pass WC banks excess, next WC can apply it."""
     _create_char(page, live_server_url, "IsawaD5FB", "isawa_duelist",
                  knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
-    # Add small LW for first wound check (likely to pass)
+    # Add small LW for first wound check
     page.locator('[data-action="lw-plus"]').click()
     page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
     page.fill('input[placeholder="Amount"]', "5")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
+    _mock_dice_high(page)
     # Roll wound check
     page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
@@ -3058,20 +2028,11 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
         }
         return false;
     }""", timeout=10000)
-    passed = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.wcPhase === 'result') return d.wcPassed;
-        }
-        return false;
-    }""")
-    if passed:
-        # Keep light wounds (triggers banking the excess)
-        page.locator('button:has-text("Keep Light Wounds")').click()
-        page.wait_for_timeout(300)
-        banked = page.evaluate("window._diceRoller?.bankedWcExcess || 0")
-        assert banked > 0, "WC excess should be banked after passing"
+    # Keep light wounds (triggers banking the excess)
+    page.locator('button:has-text("Keep Light Wounds")').click()
+    page.wait_for_timeout(300)
+    banked = page.evaluate("window._diceRoller?.bankedWcExcess || 0")
+    assert banked > 0, "WC excess should be banked after passing"
 
 
 def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):
@@ -3128,6 +2089,7 @@ def test_mirumoto_4th_dan_parry_reduction_behavioral(page, live_server_url):
     """Mirumoto 4th Dan: damage formula shows halved parry reduction."""
     _create_char(page, live_server_url, "Mirumoto4PB", "mirumoto_bushi",
                  knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
+    _mock_dice_high(page)
     # Roll attack, check the failed parry checkbox, verify halved text
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
@@ -3135,26 +2097,18 @@ def test_mirumoto_4th_dan_parry_reduction_behavioral(page, live_server_url):
     modal.locator('select').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
-    hit = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkHit !== undefined) return d.atkHit;
-        }
-        return false;
-    }""")
-    if hit:
-        # Check the failed parry checkbox using x-model attribute
-        page.locator('input[x-model="atkFailedParry"]').check()
-        page.wait_for_timeout(300)
-        result = _get_attack_result_text(page)
-        assert "halved" in result.lower() or "4th Dan" in result
+    # Check the failed parry checkbox using x-model attribute
+    page.locator('input[x-model="atkFailedParry"]').check()
+    page.wait_for_timeout(300)
+    result = _get_attack_result_text(page)
+    assert "halved" in result.lower() or "4th Dan" in result
 
 
 def test_otaku_4th_dan_lunge_parry_behavioral(page, live_server_url):
     """Otaku 4th Dan: lunge with failed parry shows extra die in damage parts."""
     _create_char(page, live_server_url, "Otaku4LB", "otaku_bushi",
                  knack_overrides={"double_attack": 4, "iaijutsu": 4, "lunge": 4})
+    _mock_dice_high(page)
     # Roll lunge
     page.locator('[data-roll-key="knack:lunge"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
@@ -3162,32 +2116,45 @@ def test_otaku_4th_dan_lunge_parry_behavioral(page, live_server_url):
     modal.locator('select').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
-    hit = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkHit !== undefined) return d.atkHit;
-        }
-        return false;
-    }""")
-    if hit:
-        # Check failed parry
-        page.locator('input[x-model="atkFailedParry"]').check()
-        page.wait_for_timeout(300)
-        result = _get_attack_result_text(page)
-        # Lunge part should be in the damage breakdown
-        assert "Lunge" in result
+    # Check failed parry
+    page.locator('input[x-model="atkFailedParry"]').check()
+    page.wait_for_timeout(300)
+    result = _get_attack_result_text(page)
+    # Lunge part should be in the damage breakdown
+    assert "Lunge" in result
 
 
 def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
-    """Otaku 5th Dan: with enough damage dice, trade-for-SW button works."""
+    """Otaku 5th Dan: trade-for-SW button appears on damage result and works."""
     _create_char(page, live_server_url, "Otaku5TB", "otaku_bushi",
                  knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
-    sa = _get_school_abilities(page)
-    assert sa.get("otaku_trade_dice_for_sw") is True
-    # The trade button appears on damage-result when rolled >= 12
-    # Verify the flag is set - actual testing requires enough damage dice
-    # which depends on the weapon and hit excess
+    _mock_dice_high(page)
+    # Roll attack with low TN to guarantee hit
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    # Roll damage
+    modal.locator('button:has-text("Make Damage Roll")').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'damage-result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    # The trade button should be visible
+    trade_btn = modal.locator('button:has-text("Trade 10 damage dice")')
+    assert trade_btn.is_visible()
+    # Click it
+    trade_btn.click()
+    page.wait_for_timeout(300)
+    result = _get_attack_result_text(page)
+    assert "serious wound" in result.lower()
 
 
 def test_shinjo_5th_dan_parry_excess_behavioral(page, live_server_url):

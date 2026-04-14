@@ -72,129 +72,212 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 ## School-Specific Abilities
 
-- [x] Bayushi 3rd Dan feint damage button -> `test_school_abilities.py::test_bayushi_feint_damage_button`
-- [x] Shiba 3rd Dan parry damage button -> `test_school_abilities.py::test_shiba_parry_damage_button`
-- [x] Feint temp VP button (non-Akodo) -> `test_school_abilities.py::test_feint_temp_vp_button_for_bayushi`
-- [x] Hida 3rd Dan reroll selection UI -> `test_school_abilities.py::test_hida_reroll_selection_appears`
-- [x] Merchant post-roll VP buttons -> `test_school_abilities.py::test_merchant_post_roll_vp_buttons`
-- [x] Mirumoto 3rd Dan round points counter -> `test_school_abilities.py::test_mirumoto_round_points_counter`
-- [x] Daidoji 3rd Dan counterattack flag set -> `test_school_abilities.py::test_daidoji_counterattack_school_flag`
-- [x] Akodo 1st Dan attack formula has extra rolled die -> `test_school_abilities.py::test_akodo_1st_dan_formula_display`
-- [x] Matsu Bushi initiative always rolls 10 dice -> `test_school_abilities.py::test_matsu_initiative_10_dice`
-- [x] Kakita Duelist initiative has phase-zero flag -> `test_school_abilities.py::test_kakita_initiative_phase_0`
-- [x] Isawa Duelist attack damage ring is Water -> `test_school_abilities.py::test_isawa_duelist_damage_shows_water`
-- [x] Matsu 2nd Dan +5 on iaijutsu -> `test_school_abilities.py::test_matsu_2nd_dan_iaijutsu_bonus`
-- [x] Hiruma 2nd Dan +5 on parry -> `test_school_abilities.py::test_hiruma_2nd_dan_parry_bonus`
-- [x] Shinjo 2nd Dan +5 on parry -> `test_school_abilities.py::test_shinjo_2nd_dan_parry_bonus`
-- [x] Kitsuki 2nd Dan +5 on interrogation -> `test_school_abilities.py::test_kitsuki_2nd_dan_interrogation_bonus`
-- [x] Merchant 2nd Dan +5 on interrogation -> `test_school_abilities.py::test_merchant_2nd_dan_interrogation_bonus`
-- [x] Kuni 2nd Dan +5 on interrogation -> `test_school_abilities.py::test_kuni_2nd_dan_interrogation_bonus`
-- [x] Yogo 2nd Dan +5 on wound check -> `test_school_abilities.py::test_yogo_2nd_dan_wound_check_bonus`
-- [x] Otaku 2nd Dan +5 on wound check -> `test_school_abilities.py::test_otaku_2nd_dan_wound_check_bonus`
-- [x] Isawa Duelist 2nd Dan +5 on wound check -> `test_school_abilities.py::test_isawa_duelist_2nd_dan_wound_check_bonus`
-- [x] Brotherhood 3rd Dan spend raise on precepts -> `test_school_abilities.py::test_brotherhood_3rd_dan_precepts_raises`
-- [x] Courtier 3rd Dan spend raise on tact -> `test_school_abilities.py::test_courtier_3rd_dan_tact_raises`
-- [x] Doji 3rd Dan spend raise on culture -> `test_school_abilities.py::test_doji_3rd_dan_culture_raises`
-- [x] Ikoma 3rd Dan spend raise on bragging -> `test_school_abilities.py::test_ikoma_3rd_dan_bragging_raises`
-- [x] Kitsuki 3rd Dan spend raise on interrogation -> `test_school_abilities.py::test_kitsuki_3rd_dan_investigation_raises`
-- [x] Kuni 3rd Dan spend raise on interrogation -> `test_school_abilities.py::test_kuni_3rd_dan_interrogation_raises`
-- [x] Merchant 3rd Dan spend raise on sincerity -> `test_school_abilities.py::test_merchant_3rd_dan_sincerity_raises`
-- [x] Shosuro 3rd Dan spend raise on sincerity -> `test_school_abilities.py::test_shosuro_3rd_dan_sincerity_raises`
-- [x] Akodo feint roll adds temp VP -> `test_school_abilities.py::test_akodo_feint_temp_vp`
-- [x] Akodo 2nd Dan wound check +5 bonus -> `test_school_abilities.py::test_akodo_2nd_dan_wound_check_bonus`
-- [x] Akodo 3rd Dan wound check banks bonus for next attack -> `test_school_abilities.py::test_akodo_3rd_dan_wc_banks_bonus`
-- [x] Bayushi VP spending for bonus damage dice -> `test_school_abilities.py::test_bayushi_vp_damage_on_attack`
-- [x] Bayushi 1st Dan extra die on iaijutsu/double_attack/wound_check -> `test_school_abilities.py::test_bayushi_1st_dan_formula_extra_die`
-- [x] Bayushi 2nd Dan +5 on double attack -> `test_school_abilities.py::test_bayushi_2nd_dan_double_attack_bonus`
-- [x] Bayushi 3rd Dan feint shows damage output -> `test_school_abilities.py::test_bayushi_3rd_dan_feint_shows_damage`
-- [x] Bayushi 4th Dan post-feint free raise -> `test_school_abilities.py::test_bayushi_4th_dan_post_feint_raise`
-- [x] Bayushi 5th Dan reduced serious wounds on wound check failure -> `test_school_abilities.py::test_bayushi_5th_dan_reduced_serious_wounds`
-- [x] Brotherhood 1st Dan +1k1 unarmed damage bonus -> `test_school_abilities.py::test_brotherhood_damage_unarmed_bonus`
-- [x] Brotherhood 1st Dan extra die on attack/damage/wound_check -> `test_school_abilities.py::test_brotherhood_1st_dan_formula_extra_die`
-- [x] Brotherhood 2nd Dan +5 on attack -> `test_school_abilities.py::test_brotherhood_2nd_dan_attack_bonus`
-- [x] Courtier attack +Air flat bonus -> `test_school_abilities.py::test_courtier_attack_air_bonus`
-- [x] Courtier damage +Air flat bonus -> `test_school_abilities.py::test_courtier_damage_air_bonus`
-- [x] Courtier 1st Dan extra die on tact/manipulation/wound_check -> `test_school_abilities.py::test_courtier_1st_dan_formula_extra_die`
-- [x] Courtier 2nd Dan +5 on manipulation -> `test_school_abilities.py::test_courtier_2nd_dan_manipulation_bonus`
-- [x] Courtier 4th Dan temp VP after successful attack or manipulation -> `test_school_abilities.py::test_courtier_4th_dan_temp_vp`
-- [x] Daidoji 1st Dan extra die on attack/counterattack/wound_check -> `test_school_abilities.py::test_daidoji_1st_dan_formula_extra_die`
-- [x] Daidoji 2nd Dan +5 on counterattack -> `test_school_abilities.py::test_daidoji_2nd_dan_counterattack_bonus`
-- [x] Daidoji 3rd Dan counterattack wound check raises note -> `test_school_abilities.py::test_daidoji_3rd_dan_counterattack_raises_note`
-- [x] Daidoji 5th Dan wound check attacker TN reduction note -> `test_school_abilities.py::test_daidoji_5th_dan_wc_attacker_tn_note`
-- [x] Doji 1st Dan extra die on counterattack/manipulation/wound_check -> `test_school_abilities.py::test_doji_1st_dan_formula_extra_die`
-- [x] Doji 2nd Dan +5 on manipulation -> `test_school_abilities.py::test_doji_2nd_dan_manipulation_bonus`
-- [x] Doji 5th Dan opponent bonus input appears -> `test_school_abilities.py::test_doji_5th_dan_opponent_bonus_input`
-- [x] Hida 1st Dan extra die on attack/counterattack/wound_check -> `test_school_abilities.py::test_hida_1st_dan_formula_extra_die`
-- [x] Hida 2nd Dan +5 on counterattack -> `test_school_abilities.py::test_hida_2nd_dan_counterattack_bonus`
-- [x] Hida 3rd Dan reroll option on counterattack/attack -> `test_school_abilities.py::test_hida_3rd_dan_reroll_appears`
-- [x] Hida 4th Dan button trades 2 SW for light wound reset -> `test_school_abilities.py::test_hida_4th_dan_trade_sw_button`
-- [x] Hiruma 1st Dan extra die on initiative/parry/wound_check -> `test_school_abilities.py::test_hiruma_1st_dan_formula_extra_die`
-- [x] Hiruma 4th Dan initiative shows action dice -2 -> `test_school_abilities.py::test_hiruma_initiative_action_dice_info`
-- [x] Hiruma 3rd Dan post-parry bonus appears -> `test_school_abilities.py::test_hiruma_post_parry_bonus`
-- [x] Hiruma 5th Dan parry note displayed -> `test_school_abilities.py::test_hiruma_5th_dan_parry_note`
-- [x] Ide 1st Dan skill selection -> `test_school_abilities.py::test_ide_1st_dan_skill_selection`
-- [x] Ide 2nd Dan skill selection -> `test_school_abilities.py::test_ide_2nd_dan_skill_selection`
-- [x] Ide 4th Dan VP regen display -> `test_school_abilities.py::test_ide_vp_regen_display`
-- [x] Ide 3rd Dan subtract-from-roll button and VP spending -> `test_school_abilities.py::test_ide_3rd_dan_subtract_button`
-- [x] Ide feint banks -10 TN and applies on next attack -> `test_school_abilities.py::test_ide_feint_banks_tn_reduce`
-- [x] Ikoma 1st Dan extra die on attack/bragging/wound_check -> `test_school_abilities.py::test_ikoma_1st_dan_formula_extra_die`
-- [x] Ikoma 2nd Dan +5 on attack -> `test_school_abilities.py::test_ikoma_2nd_dan_attack_bonus`
-- [x] Ikoma 4th Dan 10-dice floor on unparried damage -> `test_school_abilities.py::test_ikoma_4th_dan_10_dice_floor`
-- [x] Isawa Duelist 1st Dan extra die on double_attack/lunge/wound_check -> `test_school_abilities.py::test_isawa_duelist_1st_dan_formula_extra_die`
-- [x] Isawa Duelist 5th Dan banks wound check excess -> `test_school_abilities.py::test_isawa_duelist_5th_dan_banks_wc_excess`
-- [x] Isawa Ishi 1st Dan skill selection -> `test_school_abilities.py::test_isawa_ishi_1st_dan_skill_selection`
-- [x] Isawa Ishi 2nd Dan skill selection -> `test_school_abilities.py::test_isawa_ishi_2nd_dan_skill_selection`
-- [x] Isawa Ishi VP max display -> `test_school_abilities.py::test_isawa_ishi_vp_max_display`
-- [x] Isawa Ishi VP spend cap -> `test_school_abilities.py::test_isawa_ishi_vp_spend_cap`
-- [x] Kakita 1st Dan extra die on double_attack/iaijutsu/initiative -> `test_school_abilities.py::test_kakita_1st_dan_formula_extra_die`
-- [x] Kakita 4th Dan iaijutsu damage +5 bonus -> `test_school_abilities.py::test_kakita_4th_dan_iaijutsu_damage_bonus`
-- [x] Kakita 2nd Dan +5 on iaijutsu -> `test_school_abilities.py::test_kakita_2nd_dan_iaijutsu_bonus`
-- [x] Kitsuki 1st Dan extra die on investigation/interrogation/wound_check -> `test_school_abilities.py::test_kitsuki_1st_dan_formula_extra_die`
-- [x] Kitsuki attack +2*Water bonus -> `test_school_abilities.py::test_kitsuki_attack_water_bonus`
-- [x] Kitsuki interrogation uses Water ring -> `test_school_abilities.py::test_kitsuki_interrogation_uses_water`
-- [x] Kitsuki 5th Dan ring reduction note -> `test_school_abilities.py::test_kitsuki_5th_dan_ring_reduction_note`
-- [x] Kuni 1st Dan extra die on damage/interrogation/wound_check -> `test_school_abilities.py::test_kuni_1st_dan_formula_extra_die`
-- [x] Kuni 5th Dan reflect damage UI -> `test_school_abilities.py::test_kuni_5th_dan_reflect_damage_ui`
-- [x] Matsu 1st Dan extra die on double_attack/iaijutsu/wound_check -> `test_school_abilities.py::test_matsu_1st_dan_formula_extra_die`
-- [x] Matsu 5th Dan LW reset to 15 after dealing serious wounds -> `test_school_abilities.py::test_matsu_5th_dan_lw_reset_15`
-- [x] Matsu 4th Dan double attack near-miss -> `test_school_abilities.py::test_matsu_4th_dan_near_miss`
-- [x] Matsu 3rd Dan VP wound check bonus option -> `test_school_abilities.py::test_matsu_3rd_dan_vp_wc_bonus`
-- [x] Merchant 1st Dan extra die on interrogation/sincerity/wound_check -> `test_school_abilities.py::test_merchant_1st_dan_formula_extra_die`
-- [x] Merchant post-roll VP spending -> `test_school_abilities.py::test_merchant_post_roll_vp_spending`
-- [x] Mirumoto 1st Dan extra die on parry/double_attack/wound_check -> `test_school_abilities.py::test_mirumoto_1st_dan_formula_extra_die`
-- [x] Mirumoto parry roll adds temp VP -> `test_school_abilities.py::test_mirumoto_parry_temp_vp`
-- [x] Mirumoto 5th Dan VP spending +10 on combat rolls -> `test_school_abilities.py::test_mirumoto_5th_dan_vp_plus_10`
-- [x] Mirumoto 4th Dan failed parry reduced bonus damage dice -> `test_school_abilities.py::test_mirumoto_4th_dan_reduced_damage_dice`
-- [x] Mirumoto 2nd Dan +5 on parry -> `test_school_abilities.py::test_mirumoto_2nd_dan_parry_bonus`
-- [x] Mirumoto round-start point display and spending -> `test_school_abilities.py::test_mirumoto_round_points_display`
-- [x] Otaku 1st Dan extra die on iaijutsu/lunge/wound_check -> `test_school_abilities.py::test_otaku_1st_dan_formula_extra_die`
-- [x] Otaku 5th Dan 10-dice-for-1-SW option -> `test_school_abilities.py::test_otaku_5th_dan_trade_dice_for_sw`
-- [x] Otaku 4th Dan lunge extra die after failed parry -> `test_school_abilities.py::test_otaku_4th_dan_lunge_extra_die`
-- [x] Priest 1st Dan skill selection -> `test_school_abilities.py::test_priest_1st_dan_skill_selection`
-- [x] Priest 2nd Dan Honor bonus roll free raise -> `test_school_abilities.py::test_priest_2nd_dan_honor_bonus_raise`
-- [x] Shiba 1st Dan extra die on double_attack/parry/wound_check -> `test_school_abilities.py::test_shiba_1st_dan_formula_extra_die`
-- [x] Shiba 4th Dan wound check 3k1 bonus -> `test_school_abilities.py::test_shiba_4th_dan_wound_check_3k1_bonus`
-- [x] Shiba 2nd Dan +5 on parry -> `test_school_abilities.py::test_shiba_2nd_dan_parry_bonus`
-- [x] Shinjo 1st Dan extra die on initiative/double_attack/parry -> `test_school_abilities.py::test_shinjo_1st_dan_formula_extra_die`
-- [x] Shinjo 4th Dan initiative highest die set to 1 -> `test_school_abilities.py::test_shinjo_4th_dan_initiative_highest_die_1`
-- [x] Shinjo 5th Dan parry excess for wound check -> `test_school_abilities.py::test_shinjo_5th_dan_parry_excess_wc`
-- [x] Shosuro 1st Dan extra die on attack/sincerity/wound_check -> `test_school_abilities.py::test_shosuro_1st_dan_formula_extra_die`
-- [x] Shosuro Actor stipend display -> `test_school_abilities.py::test_shosuro_stipend_display`
-- [x] Shosuro Actor acting skill bonus in roll formulas -> `test_school_abilities.py::test_shosuro_acting_skill_bonus`
-- [x] Shosuro 2nd Dan +5 on sincerity -> `test_school_abilities.py::test_shosuro_2nd_dan_sincerity_bonus`
-- [ ] Shugenja 1st Dan element selection (school disabled) -> `test_school_abilities.py::test_shugenja_1st_dan_element_selection` (skipped)
-- [ ] Shugenja 2nd Dan element selection (school disabled) -> `test_school_abilities.py::test_shugenja_2nd_dan_element_selection` (skipped)
-- [ ] Shugenja 3rd Dan applicable skills (school disabled) -> `test_school_abilities.py::test_shugenja_3rd_dan_applicable_skills` (skipped)
-- [ ] Shugenja ring bonus display (school disabled) -> `test_school_abilities.py::test_shugenja_ring_bonus_display` (skipped)
-- [x] Togashi 1st Dan extra die on attack/parry/athletics -> `test_school_abilities.py::test_togashi_1st_dan_formula_extra_die`
-- [x] Togashi 4th Dan reroll button on contested rolls -> `test_school_abilities.py::test_togashi_4th_dan_reroll_contested`
-- [x] Togashi 3rd Dan athletics raise spending button -> `test_school_abilities.py::test_togashi_3rd_dan_athletics_raises`
-- [x] Togashi 2nd Dan +5 on athletics -> `test_school_abilities.py::test_togashi_2nd_dan_athletics_bonus`
-- [x] Yogo 1st Dan extra die on attack/damage/wound_check -> `test_school_abilities.py::test_yogo_1st_dan_formula_extra_die`
-- [x] Yogo 3rd Dan VP spending reduces light wounds -> `test_school_abilities.py::test_yogo_3rd_dan_vp_heals_lw`
-- [x] Yogo Warden serious wound grants temp VP -> `test_school_abilities.py::test_yogo_temp_vp_on_sw`
-- [x] Yogo 4th Dan wound check VP gives enhanced bonus -> `test_school_abilities.py::test_yogo_4th_dan_wc_vp_raise`
-- [x] Account-level sharing allows edit access -> `test_permissions.py::test_granted_user_can_access_edit_page`
+### Akodo Bushi
+
+- [x] Feint roll adds temp VP -> `test_school_abilities.py::test_akodo_feint_temp_vp`
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_akodo_1st_dan_behavioral`
+- [x] 2nd Dan behavioral wound check bonus -> `test_school_abilities.py::test_akodo_2nd_dan_behavioral`
+- [x] 3rd Dan wound check banks bonus for next attack -> `test_school_abilities.py::test_akodo_3rd_dan_bank_and_apply_behavioral`
+- [x] 5th Dan reflect damage UI elements appear -> `test_school_abilities.py::test_akodo_5th_dan_reflect_damage_ui`
+- [x] 5th Dan reflect damage behavioral flow -> `test_school_abilities.py::test_akodo_5th_dan_reflect_ui_behavioral`
+
+### Bayushi Bushi
+
+- [x] 3rd Dan feint damage button visible -> `test_school_abilities.py::test_bayushi_feint_damage_button`
+- [x] Feint temp VP button for Bayushi -> `test_school_abilities.py::test_feint_temp_vp_button_for_bayushi`
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_bayushi_1st_dan_behavioral`
+- [x] 2nd Dan behavioral double attack bonus -> `test_school_abilities.py::test_bayushi_2nd_dan_behavioral`
+- [x] 3rd Dan feint shows damage output -> `test_school_abilities.py::test_bayushi_3rd_dan_feint_shows_damage`
+- [x] 4th Dan post-feint free raise -> `test_school_abilities.py::test_bayushi_4th_dan_post_feint_raise`
+- [x] 5th Dan half light wounds on wound check failure -> `test_school_abilities.py::test_bayushi_5th_dan_half_lw_behavioral`
+- [x] VP spending for bonus damage dice on attack -> `test_school_abilities.py::test_bayushi_vp_damage_behavioral`
+
+### Brotherhood
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_brotherhood_1st_dan_behavioral`
+- [x] 2nd Dan behavioral attack bonus -> `test_school_abilities.py::test_brotherhood_2nd_dan_behavioral`
+- [x] 3rd Dan spend raise on precepts -> `test_school_abilities.py::test_brotherhood_3rd_dan_precepts_raises`
+- [x] Unarmed damage bonus behavioral -> `test_school_abilities.py::test_brotherhood_unarmed_damage_behavioral`
+
+### Courtier
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_courtier_1st_dan_behavioral`
+- [x] 2nd Dan behavioral manipulation bonus -> `test_school_abilities.py::test_courtier_2nd_dan_behavioral`
+- [x] 3rd Dan spend raise on tact -> `test_school_abilities.py::test_courtier_3rd_dan_tact_raises`
+- [x] 4th Dan temp VP after successful roll -> `test_school_abilities.py::test_courtier_4th_dan_temp_vp`
+- [x] Air ring bonus on attack rolls -> `test_school_abilities.py::test_courtier_air_attack_behavioral`
+- [x] 5th Dan Air skill behavioral bonus -> `test_school_abilities.py::test_courtier_5th_dan_air_skill_behavioral`
+
+### Daidoji
+
+- [x] Counterattack school flag set on sheet -> `test_school_abilities.py::test_daidoji_counterattack_school_flag`
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_daidoji_1st_dan_behavioral`
+- [x] 2nd Dan behavioral counterattack bonus -> `test_school_abilities.py::test_daidoji_2nd_dan_behavioral`
+- [x] 3rd Dan counterattack raises note displayed -> `test_school_abilities.py::test_daidoji_3rd_dan_raises_note_behavioral`
+- [x] 5th Dan wound check attacker TN reduction note -> `test_school_abilities.py::test_daidoji_5th_dan_tn_note_behavioral`
+
+### Doji
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_doji_1st_dan_behavioral`
+- [x] 2nd Dan behavioral manipulation bonus -> `test_school_abilities.py::test_doji_2nd_dan_behavioral`
+- [x] 3rd Dan spend raise on culture -> `test_school_abilities.py::test_doji_3rd_dan_culture_raises`
+- [x] 5th Dan opponent bonus input appears -> `test_school_abilities.py::test_doji_5th_dan_opponent_input_behavioral`
+
+### Hida
+
+- [x] 3rd Dan reroll selection UI appears -> `test_school_abilities.py::test_hida_reroll_selection_appears`
+- [x] 4th Dan trade SW button works -> `test_school_abilities.py::test_hida_trade_sw_button_works`
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_hida_1st_dan_behavioral`
+- [x] 2nd Dan behavioral counterattack bonus -> `test_school_abilities.py::test_hida_2nd_dan_behavioral`
+- [x] 3rd Dan reroll option on counterattack/attack -> `test_school_abilities.py::test_hida_3rd_dan_reroll_appears`
+- [x] 4th Dan trade SW for light wound reset behavioral -> `test_school_abilities.py::test_hida_4th_dan_trade_sw_behavioral`
+
+### Hiruma
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_hiruma_1st_dan_behavioral`
+- [x] 2nd Dan behavioral parry bonus -> `test_school_abilities.py::test_hiruma_2nd_dan_behavioral`
+- [x] 3rd Dan post-parry bonus triggers attack behavioral -> `test_school_abilities.py::test_hiruma_3rd_dan_parry_then_attack_behavioral`
+- [x] 4th Dan initiative shows action dice note -> `test_school_abilities.py::test_hiruma_4th_dan_initiative_note_behavioral`
+- [x] 5th Dan parry note displayed -> `test_school_abilities.py::test_hiruma_5th_dan_parry_note`
+
+### Ide
+
+- [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_ide_1st_dan_skill_selection`
+- [x] 2nd Dan skill selection dropdown -> `test_school_abilities.py::test_ide_2nd_dan_skill_selection`
+- [x] 3rd Dan subtract-from-roll button and VP spending -> `test_school_abilities.py::test_ide_3rd_dan_subtract_behavioral`
+- [x] Subtract button visible on applicable rolls -> `test_school_abilities.py::test_ide_subtract_button_visible`
+- [x] 4th Dan VP regen note displayed -> `test_school_abilities.py::test_ide_4th_dan_vp_regen_note_behavioral`
+- [x] 5th Dan temp VP granted on VP spend -> `test_school_abilities.py::test_ide_5th_dan_temp_vp_on_spend`
+- [x] Feint banks TN reduction for next attack -> `test_school_abilities.py::test_ide_feint_banks_tn_reduce`
+
+### Ikoma
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_ikoma_1st_dan_behavioral`
+- [x] 2nd Dan behavioral attack bonus -> `test_school_abilities.py::test_ikoma_2nd_dan_behavioral`
+- [x] 3rd Dan spend raise on bragging -> `test_school_abilities.py::test_ikoma_3rd_dan_bragging_raises`
+- [x] 4th Dan 10-dice floor note on unparried damage -> `test_school_abilities.py::test_ikoma_4th_dan_10dice_note_behavioral`
+
+### Isawa Duelist
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_isawa_duelist_1st_dan_behavioral`
+- [x] 2nd Dan behavioral wound check bonus -> `test_school_abilities.py::test_isawa_duelist_2nd_dan_behavioral`
+- [x] 3rd Dan TN trade toggle UI -> `test_school_abilities.py::test_isawa_duelist_3rd_dan_tn_trade_toggle`
+- [x] Water ring used for damage rolls -> `test_school_abilities.py::test_isawa_duelist_water_damage_behavioral`
+- [x] 5th Dan banks wound check excess for next attack -> `test_school_abilities.py::test_isawa_duelist_5th_dan_bank_excess_behavioral`
+
+### Isawa Ishi
+
+- [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_isawa_ishi_1st_dan_skill_selection`
+- [x] 2nd Dan skill selection dropdown -> `test_school_abilities.py::test_isawa_ishi_2nd_dan_skill_selection`
+- [x] VP max display and spend cap behavioral -> `test_school_abilities.py::test_isawa_ishi_vp_max_behavioral`
+
+### Kakita
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_kakita_1st_dan_behavioral`
+- [x] 2nd Dan behavioral iaijutsu bonus -> `test_school_abilities.py::test_kakita_2nd_dan_behavioral`
+- [x] Phase-zero initiative flag behavioral -> `test_school_abilities.py::test_kakita_phase_0_behavioral`
+
+### Kitsuki
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_kitsuki_1st_dan_behavioral`
+- [x] 2nd Dan behavioral interrogation bonus -> `test_school_abilities.py::test_kitsuki_2nd_dan_behavioral`
+- [x] 3rd Dan spend raise on investigation -> `test_school_abilities.py::test_kitsuki_3rd_dan_investigation_raises`
+- [x] Water ring bonus on interrogation rolls -> `test_school_abilities.py::test_kitsuki_water_interrogation_behavioral`
+- [x] 5th Dan ring reduction note displayed -> `test_school_abilities.py::test_kitsuki_5th_dan_ring_note_behavioral`
+
+### Kuni
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_kuni_1st_dan_behavioral`
+- [x] 2nd Dan behavioral interrogation bonus -> `test_school_abilities.py::test_kuni_2nd_dan_behavioral`
+- [x] 3rd Dan spend raise on interrogation -> `test_school_abilities.py::test_kuni_3rd_dan_interrogation_raises`
+- [x] 5th Dan reflect damage behavioral flow -> `test_school_abilities.py::test_kuni_5th_dan_reflect_behavioral`
+- [x] 5th Dan reflect damage UI elements appear -> `test_school_abilities.py::test_kuni_5th_dan_reflect_damage_ui`
+
+### Matsu
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_matsu_1st_dan_behavioral`
+- [x] 2nd Dan behavioral iaijutsu bonus -> `test_school_abilities.py::test_matsu_2nd_dan_behavioral`
+- [x] 3rd Dan VP wound check bonus option -> `test_school_abilities.py::test_matsu_3rd_dan_vp_wc_bonus_behavioral`
+- [x] 4th Dan double attack near-miss behavioral -> `test_school_abilities.py::test_matsu_4th_dan_near_miss_behavioral`
+- [x] 5th Dan LW reset note after dealing serious wounds -> `test_school_abilities.py::test_matsu_5th_dan_lw_reset_note_behavioral`
+- [x] Initiative always rolls 10 dice -> `test_school_abilities.py::test_matsu_10_dice_initiative_behavioral`
+
+### Merchant
+
+- [x] Post-roll VP buttons visible -> `test_school_abilities.py::test_merchant_post_roll_vp_buttons`
+- [x] Post-roll VP spending works -> `test_school_abilities.py::test_merchant_post_roll_vp_spending`
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_merchant_1st_dan_behavioral`
+- [x] 2nd Dan behavioral interrogation bonus -> `test_school_abilities.py::test_merchant_2nd_dan_behavioral`
+- [x] 3rd Dan spend raise on sincerity -> `test_school_abilities.py::test_merchant_3rd_dan_sincerity_raises`
+
+### Mirumoto
+
+- [x] 3rd Dan round points counter UI -> `test_school_abilities.py::test_mirumoto_round_points_counter`
+- [x] Round points display and spending buttons -> `test_school_abilities.py::test_mirumoto_round_points_display_and_buttons`
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_mirumoto_1st_dan_behavioral`
+- [x] 2nd Dan behavioral parry bonus -> `test_school_abilities.py::test_mirumoto_2nd_dan_behavioral`
+- [x] Parry roll adds temp VP -> `test_school_abilities.py::test_mirumoto_parry_temp_vp_behavioral`
+- [x] 5th Dan VP spending +10 on combat rolls -> `test_school_abilities.py::test_mirumoto_5th_dan_vp_plus_10`
+- [x] 4th Dan failed parry reduced bonus damage dice -> `test_school_abilities.py::test_mirumoto_4th_dan_parry_reduction_behavioral`
+
+### Otaku
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_otaku_1st_dan_behavioral`
+- [x] 2nd Dan behavioral wound check bonus -> `test_school_abilities.py::test_otaku_2nd_dan_behavioral`
+- [x] 4th Dan lunge extra die after failed parry -> `test_school_abilities.py::test_otaku_4th_dan_lunge_parry_behavioral`
+- [x] 5th Dan trade dice for SW option -> `test_school_abilities.py::test_otaku_5th_dan_trade_dice_behavioral`
+
+### Priest
+
+- [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_priest_1st_dan_skill_selection`
+- [x] 2nd Dan Honor bonus roll free raise -> `test_school_abilities.py::test_priest_2nd_dan_behavioral`
+
+### Shiba
+
+- [x] Parry damage button visible -> `test_school_abilities.py::test_shiba_parry_damage_button`
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_shiba_1st_dan_behavioral`
+- [x] 2nd Dan behavioral parry bonus -> `test_school_abilities.py::test_shiba_2nd_dan_behavioral`
+- [x] 4th Dan wound check 3k1 bonus -> `test_school_abilities.py::test_shiba_4th_dan_3k1_wound_check_behavioral`
+- [x] 5th Dan parry TN note displayed -> `test_school_abilities.py::test_shiba_5th_dan_parry_tn_note`
+
+### Shinjo
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_shinjo_1st_dan_behavioral`
+- [x] 2nd Dan behavioral parry bonus -> `test_school_abilities.py::test_shinjo_2nd_dan_behavioral`
+- [x] 4th Dan initiative highest die set to 1 -> `test_school_abilities.py::test_shinjo_4th_dan_initiative_highest_1_behavioral`
+- [x] 5th Dan parry excess applied to wound check -> `test_school_abilities.py::test_shinjo_5th_dan_parry_excess_behavioral`
+
+### Shosuro
+
+- [x] Actor stipend display on sheet -> `test_school_abilities.py::test_shosuro_stipend_display`
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_shosuro_1st_dan_behavioral`
+- [x] 2nd Dan behavioral sincerity bonus -> `test_school_abilities.py::test_shosuro_2nd_dan_behavioral`
+- [x] 3rd Dan spend raise on sincerity -> `test_school_abilities.py::test_shosuro_3rd_dan_sincerity_raises`
+- [x] Acting skill bonus in roll formulas -> `test_school_abilities.py::test_shosuro_acting_dice_behavioral`
+- [x] 5th Dan lowest 3 dice selection -> `test_school_abilities.py::test_shosuro_5th_dan_lowest_3_dice`
+
+### Shugenja (skipped - school disabled)
+
+- [ ] 1st Dan element selection (school disabled) -> `test_school_abilities.py::test_shugenja_1st_dan_element_selection` (skipped)
+- [ ] 2nd Dan element selection (school disabled) -> `test_school_abilities.py::test_shugenja_2nd_dan_element_selection` (skipped)
+- [ ] 3rd Dan applicable skills (school disabled) -> `test_school_abilities.py::test_shugenja_3rd_dan_applicable_skills` (skipped)
+- [ ] Ring bonus display (school disabled) -> `test_school_abilities.py::test_shugenja_ring_bonus_display` (skipped)
+
+### Togashi
+
+- [x] 4th Dan heal SW button works -> `test_school_abilities.py::test_togashi_heal_sw_button_works`
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_togashi_1st_dan_behavioral`
+- [x] 2nd Dan behavioral athletics bonus -> `test_school_abilities.py::test_togashi_2nd_dan_behavioral`
+- [x] 3rd Dan spend raise on athletics -> `test_school_abilities.py::test_togashi_3rd_dan_athletics_raises`
+- [x] 4th Dan reroll button on contested rolls -> `test_school_abilities.py::test_togashi_4th_dan_reroll_behavioral`
+
+### Yogo
+
+- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_yogo_1st_dan_behavioral`
+- [x] 2nd Dan behavioral wound check bonus -> `test_school_abilities.py::test_yogo_2nd_dan_behavioral`
+- [x] 3rd Dan VP spending reduces light wounds -> `test_school_abilities.py::test_yogo_3rd_dan_vp_heals_lw_behavioral`
+- [x] 4th Dan post-roll VP gives enhanced bonus -> `test_school_abilities.py::test_yogo_4th_dan_post_roll_vp_behavioral`
+- [x] Serious wound grants temp VP -> `test_school_abilities.py::test_yogo_serious_wound_temp_vp_behavioral`
 
 ## JS Error Checks
 
