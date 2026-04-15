@@ -532,6 +532,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Quick-fill "adventure XP" → `test_apply_modal.py::test_quickfill_adventure_xp`
 - [x] Quick-fill "mid-adventure" → `test_apply_modal.py::test_quickfill_mid_adventure`
 - [x] Apply disabled when empty → `test_apply_modal.py::test_apply_disabled_when_empty`
+- [x] Apply disabled without school selected → `test_apply_modal.py::test_apply_disabled_without_school`
+- [x] School locked after publish → `test_apply_modal.py::test_school_locked_after_publish`
 - [x] Cancel closes modal → `test_apply_modal.py::test_cancel_closes_modal`
 - [x] Apply redirects to sheet → `test_publish_revert.py::test_apply_redirects_to_view_sheet`
 - [x] No draft banner after apply → `test_publish_revert.py::test_apply_then_no_draft_banner`
