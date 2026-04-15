@@ -2106,6 +2106,15 @@
                             Hida 5th Dan: banked +<span x-text="atkExcess"></span> for your next wound check (counterattack excess over TN).
                         </div>
 
+                        {# Otaku 5th Dan: trade 10 damage dice for 1 auto serious wound (pre-roll) #}
+                        <label x-show="schoolAbilities.otaku_trade_dice_for_sw && atkCurrentDamage()?.rawRolled > 10" x-cloak
+                               class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
+                            <input type="checkbox" x-model="atkOtakuTradeDice" class="rounded text-accent">
+                            <span>Trade 10 damage dice for 1 automatic serious wound (5th Dan)
+                                <span class="text-xs text-ink/50">(rolled dice: <span x-text="atkCurrentDamage()?.rawRolled"></span> becomes <span x-text="Math.max(2, atkCurrentDamage()?.rawRolled - 10)"></span>)</span>
+                            </span>
+                        </label>
+
                         <button type="button" @click="rollDamage()"
                                 class="mt-3 bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
                             Make Damage Roll
@@ -2232,15 +2241,10 @@
                             If this causes serious wounds, the defender's light wounds reset to 15 instead of 0.
                         </div>
                     </div>
-                    {# Otaku 5th Dan: trade 10 rolled dice for 1 auto serious wound #}
-                    <div x-show="schoolAbilities.otaku_trade_dice_for_sw" x-cloak
-                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
-                        <button type="button"
-                                @click="atkDamageTotal = '1 serious wound (auto)'; $el.disabled = true; $el.textContent = 'Applied: 1 automatic serious wound';"
-                                class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
-                            Trade 10 damage dice for 1 automatic serious wound
-                        </button>
-                        <span class="text-xs text-ink/60 ml-1">(reduces rolled from <span x-text="atkDamageRolled"></span> to <span x-text="Math.max(2, atkDamageRolled - 10)"></span>)</span>
+                    {# Otaku 5th Dan: note that trade was applied #}
+                    <div x-show="atkOtakuTradeDice" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm font-medium text-accent">
+                        + 1 automatic serious wound (5th Dan - traded 10 damage dice)
                     </div>
                     <button type="button" @click="atkModalOpen = false"
                             class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
@@ -3227,6 +3231,7 @@
             atkDamageTotal: 0,
             atkDamageParts: [],
             atkDamageConvictionSpent: 0,
+            atkOtakuTradeDice: false,
             // Wound check
             wcModalOpen: false,
             wcPhase: 'pre',  // 'pre' | 'rolling' | 'result'
@@ -3939,6 +3944,7 @@
                 this.atkConvictionSpent = 0;
                 this.atkFailedParry = false;
                 this.atkIsawaTnTrade = false;
+                this.atkOtakuTradeDice = false;
                 this.atkParrySkill = Math.max(1, Math.floor((this.atkTN - 5) / 5));
                 this.atkShowCustomTN = false;
                 this.atkModalOpen = true;
@@ -3959,7 +3965,8 @@
                 const rk = probs.void_keys?.[String(voidCount)];
                 if (!rk || !probs.probs?.[rk]) return 0;
                 const arr = probs.probs[rk];
-                const target = Math.max(0, this.atkEffectiveTN() - (probs.flat || 0));
+                const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
+                const target = Math.max(0, this.atkEffectiveTN() - (probs.flat || 0) - vpFlat);
                 return target < arr.length ? arr[target] : 0;
             },
 
@@ -3967,7 +3974,8 @@
                 const probs = this.atkProbs[this.atkKey];
                 if (!probs) return 0;
                 const rk = probs.void_keys?.[String(voidCount)];
-                return (probs.avgs?.[rk] || 0) + (probs.flat || 0);
+                const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
+                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat;
             },
 
             atkAvgExtraDice(voidCount) {
@@ -3978,7 +3986,7 @@
                 return Math.floor(excess / 5);
             },
 
-            atkComputeDamage(extraDice, isLunge, failedParry, parrySkill, isDoubleAttack) {
+            atkComputeDamage(extraDice, isLunge, failedParry, parrySkill, isDoubleAttack, tradeDice = 0) {
                 const f = this.atkFormula;
                 if (!f) return { rolled: 0, kept: 0, flat: 0, avg: 0, parts: [] };
                 let wR = this.atkWeaponRolled;
@@ -4052,6 +4060,13 @@
                     rolled = 10;
                 }
 
+                const rawRolled = rolled;
+
+                // Otaku 5th Dan: trade dice for auto serious wound
+                if (tradeDice > 0) {
+                    rolled = Math.max(2, rolled - tradeDice);
+                }
+
                 // Apply 10k10 caps
                 let overflowFlat = 0;
                 if (rolled > 10) { kept += rolled - 10; rolled = 10; }
@@ -4060,7 +4075,7 @@
                 const rk = `${rolled},${kept}`;
                 const avg = Math.round((this.atkDamageAvgs[rk] || 0) + flat + overflowFlat);
 
-                return { rolled, kept, flat: flat + overflowFlat, avg, parts };
+                return { rolled, kept, flat: flat + overflowFlat, avg, parts, rawRolled };
             },
 
             atkAvgDamage(voidCount) {
@@ -4253,23 +4268,32 @@
             },
 
             async rollDamage() {
-                const dmg = this.atkCurrentDamage();
+                const f = this.atkFormula;
+                if (!f || !this.atkHit) return;
+                const isLunge = f.attack_variant === 'lunge';
+                const isDA = f.attack_variant === 'double_attack';
+                const trade = this.atkOtakuTradeDice ? 10 : 0;
+                const dmg = this.atkComputeDamage(
+                    this.atkExtraDice, isLunge,
+                    this.atkFailedParry, this.atkParrySkill, isDA, trade
+                );
                 if (!dmg) return;
+                const { rolled, kept, flat } = dmg;
                 this.atkPhase = 'damage-rolling';
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
                 const dice = await window.L7RDice.rollAndAnimate(
-                    dmg.rolled, true, // damage always rerolls 10s
+                    rolled, true, // damage always rerolls 10s
                     this.prefs.dice_animation_enabled, playSound, 'dice-animation-atk'
                 );
                 const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(dmg.kept, sorted.length);
+                const keptCount = Math.min(kept, sorted.length);
                 this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.atkDamageTotal = this.keptSum + dmg.flat;
-                this.atkDamageRolled = dmg.rolled;
-                this.atkDamageFlat = dmg.flat;
+                this.atkDamageTotal = this.keptSum + flat;
+                this.atkDamageRolled = rolled;
+                this.atkDamageFlat = flat;
                 this.atkDamageParts = dmg.parts || [];
                 this.atkDamageConvictionSpent = 0;
                 this.atkPhase = 'damage-result';
@@ -4314,7 +4338,9 @@
                 const probs = reroll[key];
                 const daidojiBonus = this.wcDaidojiCounterattack && this.daidojiCounterattackData
                     ? this.daidojiCounterattackData.bonus : 0;
-                const flat = (p.flat || 0) + daidojiBonus;
+                const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
+                const wcVpRaise = this.voidSpendConfig.wc_vp_free_raise ? voidCount * 5 : 0;
+                const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise;
                 const lw = this.wcLightWounds;
                 const target = Math.max(0, lw - flat);
 
