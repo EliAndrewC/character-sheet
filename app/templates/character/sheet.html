@@ -206,6 +206,7 @@
                     ? ({{ (adventure_state or {})|tojson }}).akodo_banked_bonuses.map(a => ({amount: a, spent: false}))
                     : [],
                 bayushiBankedFeintRaise: ({{ (adventure_state or {})|tojson }}).bayushi_banked_feint_raise || 0,
+                hirumaBankedAttackBonus: ({{ (adventure_state or {})|tojson }}).hiruma_banked_attack_bonus || 0,
                 hidaBankedWcBonus: ({{ (adventure_state or {})|tojson }}).hida_banked_wc_bonus || 0,
                 _charId: {{ character.id }},
                 _saving: false,
@@ -288,6 +289,7 @@
                     // Clear all combat-session bonuses
                     this.akodoBankedBonuses = [];
                     this.bayushiBankedFeintRaise = 0;
+                    this.hirumaBankedAttackBonus = 0;
                     this.hidaBankedWcBonus = 0;
                     this.mirumotoRoundPoints = 0;
                     // Also clear diceRoller combat state if available
@@ -597,6 +599,19 @@
                         (<span x-text="bayushiBankedFeintRaise / 5"></span> raise<span x-show="bayushiBankedFeintRaise > 5">s</span>)
                     </span>
                     <button @click="bayushiBankedFeintRaise = Math.max(0, bayushiBankedFeintRaise - 5); if (window._diceRoller) window._diceRoller.bayushiBankedFeintRaise = bayushiBankedFeintRaise; saveBankedBonuses()"
+                            class="text-xs text-ink/50 hover:text-accent">Mark 1 spent</button>
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('hiruma_post_parry_bonus') %}
+            <div class="mt-2 pt-2 border-t border-ink/10"
+                 x-show="hirumaBankedAttackBonus > 0" x-cloak>
+                <div class="text-sm text-ink/60 mb-1">Banked Post-Parry Bonuses</div>
+                <div class="flex items-center justify-between gap-2 text-sm">
+                    <span class="font-medium">
+                        +<span x-text="hirumaBankedAttackBonus"></span> (attack and damage)
+                    </span>
+                    <button @click="const amt = {{ school_abilities.get('hiruma_post_parry_amount', 0) }}; hirumaBankedAttackBonus = Math.max(0, hirumaBankedAttackBonus - amt); if (window._diceRoller) window._diceRoller.hirumaBankedAttackBonus = hirumaBankedAttackBonus; saveBankedBonuses()"
                             class="text-xs text-ink/50 hover:text-accent">Mark 1 spent</button>
                 </div>
             </div>
@@ -1721,7 +1736,7 @@
                     {# Banked bonus indicators #}
                     <div x-show="hirumaBankedAttackBonus > 0 || akodoBankedBonuses.some(b => !b.spent) || bayushiBankedFeintRaise > 0" x-cloak
                          class="bg-green-50 border border-green-300 rounded p-2 text-xs text-green-800 space-y-0.5">
-                        <div x-show="hirumaBankedAttackBonus > 0" x-cloak>+<span x-text="hirumaBankedAttackBonus"></span> from Hiruma post-parry bonus (attack and damage)</div>
+                        <div x-show="hirumaBankedAttackBonus > 0" x-cloak>Hiruma post-parry bonus: +<span x-text="hirumaBankedAttackBonus"></span> available (discretionary, applied after roll to attack and damage)</div>
                         <template x-for="(b, i) in akodoBankedBonuses.filter(b => !b.spent)" :key="'ab'+i">
                             <div>Akodo banked bonus: +<span x-text="b.amount"></span> (discretionary, applied after roll)</div>
                         </template>
@@ -1823,8 +1838,8 @@
                         <div x-show="formula?.isawa_tn_trade" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="schoolAbilities.isawa_tn_trade_bonus || 0"></span> from Isawa 3rd Dan TN trade
                         </div>
-                        <div x-show="formula?.hiruma_parry_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
-                            &bull; +<span x-text="formula?.hiruma_parry_bonus"></span> from Hiruma post-parry bonus
+                        <div x-show="hirumaSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="hirumaSpentThisRoll"></span> from Hiruma post-parry bonus
                         </div>
                         <div x-show="akodoSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="akodoSpentThisRoll"></span> from Akodo 3rd Dan banked bonus
@@ -1982,6 +1997,24 @@
                             </div>
                         </div>
 
+                        {# Hiruma 3rd Dan: spend banked post-parry bonuses on attack #}
+                        <div x-show="schoolAbilities.hiruma_post_parry_bonus && (hirumaBankedAttackBonus > 0 || hirumaSpentThisRoll > 0)" x-cloak
+                             class="mt-2 pt-2 border-t border-green-200">
+                            <div class="text-sm font-medium mb-1">Hiruma 3rd Dan - Post-Parry Bonus (attack and damage)</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button x-show="hirumaBankedAttackBonus > 0" type="button"
+                                        @click="const amt = schoolAbilities.hiruma_post_parry_amount || 0; hirumaBankedAttackBonus -= amt; hirumaSpentThisRoll += amt; atkRollTotal += amt; baseTotal += amt; atkFormula.hiruma_parry_bonus = (atkFormula.hiruma_parry_bonus || 0) + amt; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.hirumaBankedAttackBonus = hirumaBankedAttackBonus; window._trackingBridge?.saveBankedBonuses();"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-2 py-1 rounded text-xs">
+                                    Apply +<span x-text="schoolAbilities.hiruma_post_parry_amount"></span>
+                                </button>
+                                <button type="button" x-show="hirumaSpentThisRoll > 0"
+                                        @click="const amt = schoolAbilities.hiruma_post_parry_amount || 0; hirumaBankedAttackBonus += amt; hirumaSpentThisRoll -= amt; atkRollTotal -= amt; baseTotal -= amt; atkFormula.hiruma_parry_bonus = Math.max(0, (atkFormula.hiruma_parry_bonus || 0) - amt); _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.hirumaBankedAttackBonus = hirumaBankedAttackBonus; window._trackingBridge?.saveBankedBonuses();"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-2 py-1 rounded text-xs">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+
                         {# Courtier 4th Dan: temp VP after successful attack #}
                         <div x-show="schoolAbilities.courtier_temp_vp_on_hit" x-cloak
                              class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-sm">
@@ -2060,6 +2093,23 @@
                                 </button>
                                 <button type="button" x-show="bayushiRaisesSpentThisRoll > 0"
                                         @click="bayushiBankedFeintRaise += 5; bayushiRaisesSpentThisRoll -= 5; atkRollTotal -= 5; baseTotal -= 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-2 py-1 rounded text-xs">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+                        {# Hiruma 3rd Dan: spend banked post-parry bonuses on attack (MISS) #}
+                        <div x-show="schoolAbilities.hiruma_post_parry_bonus && (hirumaBankedAttackBonus > 0 || hirumaSpentThisRoll > 0)" x-cloak
+                             class="mt-2 pt-2 border-t border-red-200">
+                            <div class="text-sm font-medium mb-1">Hiruma 3rd Dan - Post-Parry Bonus (attack and damage)</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button x-show="hirumaBankedAttackBonus > 0" type="button"
+                                        @click="const amt = schoolAbilities.hiruma_post_parry_amount || 0; hirumaBankedAttackBonus -= amt; hirumaSpentThisRoll += amt; atkRollTotal += amt; baseTotal += amt; atkFormula.hiruma_parry_bonus = (atkFormula.hiruma_parry_bonus || 0) + amt; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.hirumaBankedAttackBonus = hirumaBankedAttackBonus; window._trackingBridge?.saveBankedBonuses();"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-2 py-1 rounded text-xs">
+                                    Apply +<span x-text="schoolAbilities.hiruma_post_parry_amount"></span>
+                                </button>
+                                <button type="button" x-show="hirumaSpentThisRoll > 0"
+                                        @click="const amt = schoolAbilities.hiruma_post_parry_amount || 0; hirumaBankedAttackBonus += amt; hirumaSpentThisRoll -= amt; atkRollTotal -= amt; baseTotal -= amt; atkFormula.hiruma_parry_bonus = Math.max(0, (atkFormula.hiruma_parry_bonus || 0) - amt); _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.hirumaBankedAttackBonus = hirumaBankedAttackBonus; window._trackingBridge?.saveBankedBonuses();"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-2 py-1 rounded text-xs">
                                     Undo
                                 </button>
@@ -3137,6 +3187,7 @@
             bankedWcExcess: 0,
             shinjoParryOpponentRoll: 0,
             hirumaBankedAttackBonus: 0,
+            hirumaSpentThisRoll: 0,
             akodoBankedBonuses: [],  // [{amount: N, spent: false}]
             akodoSpentThisRoll: 0,  // amount spent from banked bonuses on current roll
             wcPostRollVpSpent: 0,   // VP spent post-roll on wound check (Akodo/Yogo 4th Dan)
@@ -3533,9 +3584,10 @@
                         // Player enters the excess manually or we show a prompt.
                         // For now we store roll total so it can be used.
                     }
-                    // Hiruma 3rd Dan: bank 2*attack for next attack and damage after parry
+                    // Hiruma 3rd Dan: bank 2*attack for next attack and damage after parry (stacks)
                     if (key === 'parry' && this.schoolAbilities.hiruma_post_parry_bonus) {
-                        this.hirumaBankedAttackBonus = this.schoolAbilities.hiruma_post_parry_amount || 0;
+                        this.hirumaBankedAttackBonus += this.schoolAbilities.hiruma_post_parry_amount || 0;
+                        if (window._trackingBridge) window._trackingBridge.hirumaBankedAttackBonus = this.hirumaBankedAttackBonus;
                         window._trackingBridge?.saveBankedBonuses();
                     }
                     // Akodo Special: feint roll triggers temp VP (success/failure decided by user)
@@ -3905,7 +3957,13 @@
                 } else if (failedParry) {
                     parts.push(`-${parrySkill}k0 from failed parry`);
                 }
-                if (flat > 0) parts.push(`+${flat} flat bonus`);
+                if (f.hiruma_parry_bonus) {
+                    parts.push(`+${f.hiruma_parry_bonus} from Hiruma post-parry bonus`);
+                    const otherFlat = flat - f.hiruma_parry_bonus;
+                    if (otherFlat > 0) parts.push(`+${otherFlat} flat bonus`);
+                } else if (flat > 0) {
+                    parts.push(`+${flat} flat bonus`);
+                }
 
                 // Ikoma 4th Dan: 10-dice floor on unparried damage without extra kept dice
                 if (this.schoolAbilities.ikoma_10_dice_floor && !failedParry && rolled <= 10 && rolled < 10) {
@@ -3946,13 +4004,8 @@
                 let _bankedConsumed = false;
                 this.bayushiRaisesSpentThisRoll = 0;
 
-                // Hiruma 3rd Dan: apply banked post-parry bonus
-                if (this.hirumaBankedAttackBonus > 0) {
-                    formula.flat += this.hirumaBankedAttackBonus;
-                    formula.hiruma_parry_bonus = this.hirumaBankedAttackBonus;
-                    this.hirumaBankedAttackBonus = 0;
-                    _bankedConsumed = true;
-                }
+                // Hiruma 3rd Dan: parry bonuses are now discretionary (applied post-roll via buttons)
+                this.hirumaSpentThisRoll = 0;
 
                 // Akodo 3rd Dan: reset per-roll spend tracking (bonuses are applied post-roll via buttons)
                 this.akodoSpentThisRoll = 0;
@@ -3987,6 +4040,9 @@
 
                 this.atkPhase = 'rolling';
                 this.formula = formula;
+                // Store the modified formula so damage calculation can see bonuses (e.g. hiruma_parry_bonus)
+                this.atkFormula = formula;
+
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
                 const dice = await window.L7RDice.rollAndAnimate(
