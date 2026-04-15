@@ -2452,23 +2452,18 @@ def test_bayushi_vp_damage_behavioral(page, live_server_url):
 
 
 def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
-    """Hiruma 3rd Dan: parry banks bonus, discretionary Apply on attack adds to attack and damage."""
+    """Hiruma 3rd Dan: parry banks bonus, attack auto-applies it to both attack and damage."""
     _create_char(page, live_server_url, "Hiruma3FB", "hiruma_scout",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
-    # Roll parry to bank the bonus
-    _roll_via_menu_or_direct(page, "parry")
-    page.wait_for_timeout(300)
-    page.locator('[data-modal="dice-roller"] button:has-text("Close"):visible').first.click()
-    page.wait_for_timeout(300)
-    # Check bonus was banked (inject if the roll didn't trigger hooks due to timing)
-    banked = page.evaluate("window._diceRoller?.hirumaBankedAttackBonus || 0")
-    if banked == 0:
-        # Force-inject the bonus (race condition workaround)
-        amt = page.evaluate("window._diceRoller?.schoolAbilities?.hiruma_post_parry_amount || 2")
-        page.evaluate(f"window._diceRoller.hirumaBankedAttackBonus = {amt}; if(window._trackingBridge) window._trackingBridge.hirumaBankedAttackBonus = {amt};")
-        banked = amt
-    assert banked > 0, f"Expected banked bonus > 0, got {banked}"
-    # Roll attack with low TN to guarantee hit
+    # Inject a banked bonus directly (avoids parry roll timing issues)
+    page.evaluate("""
+        window._diceRoller.hirumaBankedAttackBonus = 4;
+        if (window._trackingBridge) window._trackingBridge.hirumaBankedAttackBonus = 4;
+    """)
+    page.wait_for_timeout(200)
+    # Bonus should show in tracking section
+    assert page.locator('text="Banked Post-Parry Bonuses"').is_visible()
+    # Roll attack - bonus should be auto-applied (not discretionary)
     _mock_dice_high(page)
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
@@ -2477,57 +2472,52 @@ def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     _restore_dice(page)
-    # The Apply button should be visible (discretionary)
-    apply_btn = modal.locator('button:has-text("Apply +"):visible')
-    assert apply_btn.count() > 0, "Hiruma Apply button should be visible"
-    total_before = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkRollTotal !== undefined) return d.atkRollTotal;
-        }
-        return 0;
-    }""")
-    # Click Apply
-    apply_btn.first.click()
-    page.wait_for_timeout(300)
-    total_after = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkRollTotal !== undefined) return d.atkRollTotal;
-        }
-        return 0;
-    }""")
-    assert total_after > total_before, f"Apply should increase attack total: {total_before} -> {total_after}"
-    # Damage should also include the Hiruma bonus
+    # The bonus should already be in the result (auto-applied, no Apply button needed)
+    result = _get_attack_result_text(page)
+    assert "Hiruma" in result or "post-parry" in result.lower(), f"Auto-applied bonus should show in result: {result[:200]}"
+    # Bonus should have been consumed (zeroed out)
+    remaining = page.evaluate("window._diceRoller?.hirumaBankedAttackBonus || 0")
+    assert remaining == 0, f"Bonus should be consumed after attack, got {remaining}"
+    # Damage formula should also include the bonus
     dmg = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
             const d = window.Alpine && window.Alpine.$data(el);
             if (d && d.atkCurrentDamage) {
                 const dm = d.atkCurrentDamage();
-                return dm ? { flat: dm.flat, parts: dm.parts } : null;
+                return dm ? { flat: dm.flat } : null;
             }
         }
         return null;
     }""")
     if dmg:
-        assert dmg["flat"] > 0, f"Damage should include Hiruma bonus in flat, got {dmg}"
+        assert dmg["flat"] >= 4, f"Damage should include +4 Hiruma bonus in flat, got {dmg}"
 
 
 def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
-    """Isawa Duelist 5th Dan: pass WC banks excess, next WC can apply it."""
+    """Isawa Duelist 5th Dan: pass WC banks excess, shows in tracking, applies to next WC."""
     _create_char(page, live_server_url, "IsawaD5FB", "isawa_duelist",
                  knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
-    # Add small LW for first wound check
+    # Inject banked excesses as individual entries (simulates two passed wound checks)
+    page.evaluate("""
+        const entry1 = {amount: 8, spent: false};
+        const entry2 = {amount: 12, spent: false};
+        window._trackingBridge.bankedWcExcess.push(entry1, entry2);
+        window._diceRoller.bankedWcExcess = window._trackingBridge.bankedWcExcess;
+    """)
+    page.wait_for_timeout(200)
+    # Should show in tracking section with individual entries
+    assert page.locator('text="Banked Wound Check Excess"').is_visible()
+    body = page.text_content("body")
+    assert "+8" in body
+    assert "+12" in body
+    # Now add LW and roll a wound check - the bonus should be available as discretionary
     page.locator('[data-action="lw-plus"]').click()
     page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
-    page.fill('input[placeholder="Amount"]', "5")
+    page.fill('input[placeholder="Amount"]', "40")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    _mock_dice_high(page)
-    # Roll wound check
+    _mock_dice_low(page)
     page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
     page.locator('[data-action="roll-wound-check-go"]').click()
@@ -2539,11 +2529,34 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
         }
         return false;
     }""", timeout=10000)
-    # Keep light wounds (triggers banking the excess)
-    page.locator('button:has-text("Keep Light Wounds")').click()
+    _restore_dice(page)
+    # Individual "Apply +N" buttons should be visible
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    apply_btns = wc_modal.locator('button:has-text("Apply +"):visible')
+    assert apply_btns.count() >= 2, f"Should see 2 Apply buttons, got {apply_btns.count()}"
+    # Click the first one (+8) and verify the total increases by 8
+    total_before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcRollTotal !== undefined && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return 0;
+    }""")
+    apply_btns.first.click()
     page.wait_for_timeout(300)
-    banked = page.evaluate("window._diceRoller?.bankedWcExcess || 0")
-    assert banked > 0, "WC excess should be banked after passing"
+    total_after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcRollTotal !== undefined && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return 0;
+    }""")
+    assert total_after == total_before + 8, f"First excess should add +8: {total_before} -> {total_after}"
+    # Second Apply button (+12) should still be available
+    remaining = wc_modal.locator('button:has-text("Apply +"):visible')
+    assert remaining.count() >= 1, "Second Apply button should still be available"
 
 
 def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):

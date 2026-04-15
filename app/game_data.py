@@ -895,26 +895,29 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.WATER.value,
         category="bushi",
         special_ability=(
-            "You gain four temporary void points after a successful feint "
+            "You get four temporary void points after a successful feint "
             "and one void point after an unsuccessful feint."
         ),
         school_knacks=["double_attack", "feint", "iaijutsu"],
         techniques={
-            1: (
-                "Roll an extra die on attack, double attack, and wound check rolls."
-            ),
-            2: "Free raise on wound checks.",
+            1: "Rolls one extra die on attack, double attack, and wound checks.",
+            2: "You get a free raise on wound checks.",
             3: (
-                "Excess from wound checks divided by 5 adds a bonus to future "
-                "attack rolls, scaled by attack skill."
+                "After you exceed the TN of a wound check, divide the difference "
+                "between your wound check and the damage roll by 5, rounding down. "
+                "You may add that number multiplied by X to any future attack this "
+                "combat, where X is your attack skill."
             ),
             4: (
-                "+1 Water; Water ring costs 5 fewer XP to raise; "
-                "spend void points for free raises on wound checks."
+                "Raise your current and maximum Water by 1. Raising your Water "
+                "now costs 5 fewer XP.\n"
+                "You may spend void points after rolling a wound check to receive "
+                "a free raise for each void point spent."
             ),
             5: (
-                "Spend void points after receiving damage to inflict 10 light wounds "
-                "per void point spent back to attacker (capped by damage taken)."
+                "After you take damage, you may spend void points to deal 10 light "
+                "wounds to the attacker for every void point spent, up to the amount "
+                "of damage you took."
             ),
         },
     ),
@@ -925,22 +928,27 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.FIRE.value,
         category="bushi",
         special_ability=(
-            "Add 1k1 to the damage rolls of those attacks per void point spent."
+            "When spending void points on all types of attack rolls, add 1k1 to "
+            "the damage rolls of those attacks per void point spent."
         ),
         school_knacks=["double_attack", "feint", "iaijutsu"],
         techniques={
-            1: "Roll an extra die on iaijutsu, double attack, and wound check rolls.",
-            2: "Free raise on double attack rolls.",
+            1: "Roll one extra die on iaijutsu, double attack, and wound check rolls.",
+            2: "You get a free raise on double attack rolls.",
             3: (
-                "Feints deal damage based on attack skill; "
-                "no extra damage dice are added."
+                "Your feints do Xk1 damage, where X is your attack skill. You "
+                "don't roll extra damage dice from your Fire or from exceeding "
+                "the TN, but your Special Ability may increase the damage."
             ),
             4: (
-                "+1 Fire; Fire ring costs 5 fewer XP to raise; "
-                "free raise on any attack after a successful or unsuccessful feint."
+                "Raise your current and maximum Fire by 1. Raising your Fire "
+                "now costs 5 fewer XP.\n"
+                "After a successful or unsuccessful feint, you may apply a free "
+                "raise to any future attack this combat."
             ),
             5: (
-                "Failed wound checks calculate serious wounds as half light wounds."
+                "When you fail a wound check, calculate your serious wounds as "
+                "if you had half your number of light wounds (rounded down)."
             ),
         },
     ),
@@ -951,24 +959,34 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.WATER.value,
         category="bushi",
         special_ability=(
-            "Counterattack as an interrupt action by spending only 1 action die, "
-            "but the attacker gets a free raise."
+            "You may counterattack as an interrupt action by spending only 1 "
+            "action die, but if you do so then the attacker gets a free raise "
+            "on their attack roll."
         ),
         school_knacks=["counterattack", "iaijutsu", "lunge"],
         techniques={
-            1: "Roll an extra die on attack, counterattack, and wound check rolls.",
-            2: "Free raise on all counterattack rolls.",
+            1: "Roll one extra die on attack, counterattack, and wound check rolls.",
+            2: "You get a free raise on all counterattack rolls.",
             3: (
-                "Reroll 2X dice on counterattacks or X dice on other attacks; "
-                "half effectiveness when impaired but reroll 10s."
+                "You may re-roll 2X dice on each counterattack roll or X dice on "
+                "any other attack roll, where X is your attack skill. When impaired, "
+                "your number of extra dice on these rolls is divided in half (round "
+                "up), but you reroll 10s on these rolls despite being impaired."
             ),
             4: (
-                "+1 Water; Water ring costs 5 fewer XP to raise; "
-                "trade 2 serious wounds to reset light wounds to 0."
+                "Raise your current and maximum Water by 1. Raising your Water "
+                "now costs 5 fewer XP.\n"
+                "Instead of making a wound check, you may choose to take 2 serious "
+                "wounds to reduce your light wounds to 0. You may not do this "
+                "during the iaijutsu phase of a duel."
             ),
             5: (
-                "Add counterattack excess to wound check; "
-                "may counterattack after seeing damage rolls."
+                "When you counterattack successfully, note the quantity X by which "
+                "the counterattack roll exceeded its TN. Add X to your wound check "
+                "on the damage from the attack you counterattacked. You may choose "
+                "to counterattack after seeing an opponent's damage roll, but that "
+                "roll goes through even if your counterattack impairs or kills "
+                "the opponent."
             ),
         },
     ),
@@ -984,16 +1002,23 @@ _SCHOOLS_LIST: List[School] = [
         school_knacks=["counterattack", "double_attack", "iaijutsu"],
         techniques={
             1: "Roll one extra die on parry, double attack, and wound check rolls.",
-            2: "Free raise on parry rolls.",
+            2: "You get a free raise on parry rolls.",
             3: (
-                "At the start of each round, gain 2X points to decrease action "
-                "phases for parries or +2 on any attack or parry roll."
+                "At the beginning of each round, you get 2X points, where X is "
+                "equal to your attack skill. Each point may be spent to decrease "
+                "the phase of one of your actions by 1 in order to parry, or to "
+                "provide a bonus of +2 on any type of attack or parry after you "
+                "have seen your roll."
             ),
             4: (
-                "+1 Void; Void ring costs 5 fewer XP to raise; "
-                "failed parries reduce fewer extra damage dice."
+                "Raise your current and maximum Void by 1. Raising your Void "
+                "now costs 5 fewer XP.\n"
+                "Failed parries against your double attacks do not prevent the "
+                "automatic serious wound, and against your regular attacks the "
+                "number of extra rolled damage dice the failed parry reduced is "
+                "cut in half (rounded down)."
             ),
-            5: "Void points provide +10 when spent on combat rolls.",
+            5: "Your void points provide an extra +10 when spent on combat rolls.",
         },
     ),
 
@@ -1003,22 +1028,29 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.FIRE.value,
         category="bushi",
         special_ability=(
-            "Always roll 10 dice when rolling initiative, keeping the usual number."
+            "You always roll 10 dice when rolling initiative, keeping the "
+            "usual number as action dice."
         ),
         school_knacks=["double_attack", "iaijutsu", "lunge"],
         techniques={
-            1: "Roll an extra die on double attack, iaijutsu, and wound check rolls.",
-            2: "Free raise on iaijutsu rolls.",
+            1: "Roll one extra die on double attack, iaijutsu, and wound check rolls.",
+            2: "You get a free raise on iaijutsu rolls.",
             3: (
-                "Spend a void point to add 3X to a future wound check after seeing the roll."
+                "When you spend a void point, you may add 3X to any future wound "
+                "check this combat after seeing the roll, where X is your "
+                "attack skill."
             ),
             4: (
-                "+1 Fire; Fire ring costs 5 fewer XP to raise; "
-                "near-misses on double attacks still hit with no bonus damage."
+                "Raise your current and maximum Fire by 1. Raising your Fire "
+                "now costs 5 fewer XP.\n"
+                "When you miss the TN on a double attack roll by less than 20, "
+                "you are still considered to have hit, but you deal no "
+                "extra damage."
             ),
             5: (
-                "After dealing serious wounds, reset the defender's light wounds "
-                "to 15 instead of 0."
+                "After you deal light wounds which result in the defender taking "
+                "one or more serious wounds, their light wound total is reset to "
+                "15 instead of 0."
             ),
         },
     ),
@@ -1029,24 +1061,31 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.FIRE.value,
         category="bushi",
         special_ability=(
-            "Make a lunge attack at your attacker as an interrupt action "
-            "at the cost of one action die."
+            "After an attack against you is completely resolved, you may make "
+            "a lunge attack at your attacker as an interrupt action at the cost "
+            "of one action die."
         ),
         school_knacks=["double_attack", "iaijutsu", "lunge"],
         techniques={
-            1: "Roll an extra die on iaijutsu, lunge, and wound check rolls.",
-            2: "Free raise on wound checks.",
+            1: "Roll one extra die on iaijutsu, lunge, and wound check rolls.",
+            2: "You get a free raise on wound checks.",
             3: (
-                "Increase attacker's next action dice by (6 - Fire) minimum 1, "
-                "scaled by attack skill, maximum phase 10."
+                "After you roll damage against an opponent, increase that "
+                "character's next X action dice this turn by (6 - that "
+                "character's Fire) min 1, where X is your attack skill, to a "
+                "maximum of phase 10."
             ),
             4: (
-                "+1 Fire; Fire ring costs 5 fewer XP to raise; "
-                "lunge always rolls an extra damage die even if unsuccessfully parried."
+                "Raise your current and maximum Fire by 1. Raising your Fire "
+                "now costs 5 fewer XP.\n"
+                "When you lunge, you always roll the extra damage die from using "
+                "lunge even if your attack is unsuccessfully parried."
             ),
             5: (
-                "After a successful attack, spend 10 dice to automatically deal "
-                "1 serious wound; once per damage roll."
+                "After a successful attack or lunge roll, you may decrease the "
+                "number of rolled damage dice by 10, to a minimum of 2, to "
+                "automatically deal 1 serious wound to your opponent. You may "
+                "only do this once per damage roll."
             ),
         },
     ),
@@ -1057,24 +1096,29 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.AIR.value,
         category="bushi",
         special_ability=(
-            "Each action you take in combat has a bonus of 2X, "
-            "where X is the number of phases held."
+            "Each action you take in combat has a bonus of 2X, where X is the "
+            "number of phases for which the action die was held."
         ),
         school_knacks=["double_attack", "iaijutsu", "lunge"],
         techniques={
-            1: "Roll an extra die on double attack, initiative, and parry rolls.",
-            2: "Free raise on parry rolls.",
+            1: "Roll one extra die on double attack, initiative, and parry rolls.",
+            2: "You get a free raise on parry rolls.",
             3: (
-                "After a parry, decrease all action dice by X (attack skill); "
-                "new values count as held since the reduction."
+                "After a successful or unsuccessful parry, all your action dice "
+                "are decreased by X, where X is equal to your attack skill. "
+                "Action dice are considered to have been held since their newly "
+                "lowered value. This can lower dice to negative numbers."
             ),
             4: (
-                "+1 Air; Air ring costs 5 fewer XP to raise; "
-                "highest action die set to 1 at round start."
+                "Raise your current and maximum Air by 1. Raising your Air "
+                "now costs 5 fewer XP.\n"
+                "Your highest action die is set to 1 at the beginning of each "
+                "combat round."
             ),
             5: (
-                "After a successful parry, add parry excess to a future wound "
-                "check after seeing the roll."
+                "After you successfully parry, you may add X to a future wound "
+                "check this combat after seeing your roll, where X is the amount "
+                "by which your parry roll exceeded its TN."
             ),
         },
     ),
@@ -1089,16 +1133,19 @@ _SCHOOLS_LIST: List[School] = [
         ),
         school_knacks=["double_attack", "iaijutsu", "feint"],
         techniques={
-            1: "Roll an extra die on attack, damage, and wound check rolls.",
-            2: "Free raise on all wound checks.",
+            1: "Roll one extra die on attack, damage, and wound check rolls.",
+            2: "You get a free raise on all wound check rolls.",
             3: (
-                "Spend a void point to reduce your current light wound total by 2X."
+                "Whenever you spend a void point, reduce your current light "
+                "wound total by 2X, where X is your attack skill."
             ),
             4: (
-                "+1 Earth; Earth ring costs 5 fewer XP to raise; "
-                "extra free raise per void point spent on wound checks."
+                "Raise your current and maximum Earth by 1. Raising your Earth "
+                "now costs 5 fewer XP.\n"
+                "You get an extra free raise for each void point you spend on "
+                "wound check rolls."
             ),
-            5: "(Unreleased)",
+            5: "TBD",
         },
     ),
 
@@ -1110,23 +1157,30 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.WATER.value,
         category="counterattack",
         special_ability=(
-            "Counterattack as an interrupt action by spending only 1 action die; "
-            "your opponent gets a free raise. "
-            "May counterattack for others."
+            "You may counterattack as an interrupt action by spending only 1 "
+            "action die, but if you do so then your opponent gets a free raise "
+            "on their wound check if you hit. You may counterattack for other "
+            "characters at no penalty."
         ),
         school_knacks=["counterattack", "double_attack", "iaijutsu"],
         techniques={
-            1: "Roll an extra die on attack, counterattack, and wound check rolls.",
-            2: "Free raise on counterattack rolls.",
+            1: "Roll one extra die on attack, counterattack, and wound check rolls.",
+            2: "You get a free raise on all counterattack rolls.",
             3: (
-                "Add X free raises to wound checks from counterattack damage."
+                "When you counterattack, add X free raises to the wound check "
+                "from the original attack, where X is your attack skill."
             ),
             4: (
-                "+1 Water; Water ring costs 5 fewer XP to raise; "
-                "intercept adjacent character damage before rolling."
+                "Raise your current and maximum Water by 1. Raising your Water "
+                "now costs 5 fewer XP.\n"
+                "You may choose to take the damage from a hit dealt to an "
+                "adjacent character before damage has been rolled."
             ),
             5: (
-                "Lower next attacker TN by wound check excess; minimum 0."
+                "After you or a character for whom you've counterattacked makes "
+                "a wound check, lower the TN to hit the attacker the next time "
+                "they are attacked by the amount by which the wound check "
+                "exceeded the damage roll. This can lower a TN to below 0."
             ),
         },
     ),
@@ -1137,23 +1191,29 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.AIR.value,
         category="counterattack",
         special_ability=(
-            "Parry as an interrupt action by spending your lowest 1 action die. "
-            "Parry attacks directed at other characters."
+            "You may parry as an interrupt action by spending your lowest 1 "
+            "action die, and you may parry attacks directed at other characters "
+            "with no penalty."
         ),
         school_knacks=["counterattack", "double_attack", "iaijutsu"],
         techniques={
             1: "Roll an extra die on double attack, parry, and wound check rolls.",
-            2: "Free raise on parry rolls.",
+            2: "You get a free raise on parry rolls.",
             3: (
-                "Parries deal (2X)k1 damage; no extra damage dice from ring or TN excess."
+                "Your successful or unsuccessful parry rolls deal (2X)k1 damage, "
+                "where X is equal to your attack skill. You don't roll extra "
+                "damage dice from your Fire or from exceeding the TN."
             ),
             4: (
-                "+1 Air; Air ring costs 5 fewer XP to raise; "
-                "extra 3k1 on wound checks."
+                "Raise your current and maximum Air by 1. Raising your Air "
+                "now costs 5 fewer XP.\n"
+                "You roll an extra 3k1 on wound checks."
             ),
             5: (
-                "After a successful parry, lower next attacker TN by parry excess; "
-                "can go negative."
+                "After you successfully parry, the TN to hit the parried "
+                "opponent on the next attack directed at them this combat is "
+                "lowered by the amount by which your parry roll exceeded its TN. "
+                "This can lower the TN to a negative number."
             ),
         },
     ),
@@ -1166,23 +1226,29 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.WATER.value,
         category="duelist",
         special_ability=(
-            "Add your Water instead of Fire to your rolled damage dice."
+            "You add your Water instead of Fire to your rolled damage dice."
         ),
         school_knacks=["double_attack", "iaijutsu", "lunge"],
         techniques={
-            1: "Roll an extra die on double attack, lunge, and wound check rolls.",
-            2: "Free raise on wound checks.",
+            1: "Roll one extra die on double attack, lunge, and wound check rolls.",
+            2: "You get a free raise on wound checks.",
             3: (
-                "Trade -5 TN to be hit next round for +3X on attack; "
-                "no penalty if the attack is parried."
+                "After you make any type of attack roll, you may lower your TN "
+                "to be hit by 5 for the next time that you are attacked this "
+                "round to get a bonus of 3X on your attack roll, where X is your "
+                "attack skill. If a successful or unsuccessful parry is made "
+                "against your attack, you do not suffer the TN penalty."
             ),
             4: (
-                "+1 Water; Water ring costs 5 fewer XP to raise; "
-                "lunge once per round as an interrupt action."
+                "Raise your current and maximum Water by 1. Raising your Water "
+                "now costs 5 fewer XP.\n"
+                "Once per round, you may lunge as an interrupt action at the "
+                "cost of 1 action die."
             ),
             5: (
-                "After a successful wound check, add excess to a future wound "
-                "check this combat."
+                "After a successful wound check, you may add X to a future wound "
+                "check this combat, where X is the amount by which the wound "
+                "check exceeded the light wound total."
             ),
         },
     ),
@@ -1193,24 +1259,37 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.FIRE.value,
         category="duelist",
         special_ability=(
-            "Your 10s on initiative rolls are in Phase 0 and can be used "
-            "for interrupt attacks."
+            "Your 10s on initiative rolls are considered to be in a special "
+            "Phase 0. You may use interrupt actions to attack using iaijutsu, "
+            "and any Phase 0 attacks use iaijutsu."
         ),
         school_knacks=["double_attack", "iaijutsu", "lunge"],
         techniques={
-            1: "Roll an extra die on double attack, iaijutsu, and initiative rolls.",
-            2: "Free raise on iaijutsu rolls.",
+            1: "Roll one extra die on double attack, iaijutsu, and initiative rolls.",
+            2: "You get a free raise on all iaijutsu rolls.",
             3: (
-                "Attacks gain a bonus per phase before the defender's next action; "
-                "know the next action of enemies in range."
+                "Your attacks get a bonus of X for each phase before the "
+                "defender's next action they occur, where X is equal to your "
+                "attack skill. If a defender does not have an action remaining "
+                "in this round, they are considered to act in phase 11. This "
+                "applies to all types of attacks, and you know the next action "
+                "of everyone within striking range."
             ),
             4: (
-                "+1 Fire; Fire ring costs 5 fewer XP to raise; "
-                "free raise on iaijutsu damage rolls."
+                "Raise your current and maximum Fire by 1. Raising your Fire "
+                "now costs 5 fewer XP.\n"
+                "You get a free raise to all damage rolls from attacks "
+                "using iaijutsu."
             ),
             5: (
-                "At Phase 0, contested iaijutsu with bonus damage dice per 5 excess "
-                "or penalty per 5 deficit."
+                "At the beginning of phase 0 in each combat round, make a "
+                "contested iaijutsu roll against an opponent. If the opponent "
+                "doesn't have iaijutsu, they may roll attack instead, and you "
+                "get an extra free raise. Make a damage roll against this "
+                "opponent; if you won the contested roll then roll 1 extra "
+                "damage die for every 5 by which your roll exceeded your "
+                "opponent's, and if you lost then roll 1 fewer damage die for "
+                "every 5 by which their roll exceeded yours."
             ),
         },
     ),
@@ -1227,20 +1306,27 @@ _SCHOOLS_LIST: List[School] = [
         ),
         school_knacks=["conviction", "otherworldliness", "worldliness"],
         techniques={
-            1: "Roll an extra die on attack, damage, and wound check rolls.",
-            2: "Free raise on all attack rolls.",
+            1: "Roll one extra die on attack, damage, and wound check rolls.",
+            2: "You get a free raise on all attack rolls.",
             3: (
-                "Gain 2X free raises per adventure (X = precepts skill); "
-                "apply to history, law, precepts, wound checks, attack; "
-                "can lower action dice by 5."
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your precepts skill, which may be applied to the following "
+                "rolls: history, law, precepts, wound checks, and attack. You "
+                "may not spend more than X of these free raises on a single "
+                "roll. These free raises may also be applied to action dice at "
+                "any time, lowering a single die by 5 phases."
             ),
             4: (
-                "+1 to a non-Void ring; that ring costs 5 fewer XP to raise; "
-                "failed parries don't lower damage dice."
+                "Raise your current and maximum rank in a non-Void ring of your "
+                "choice by 1. Raising this Ring now costs 5 fewer XP.\n"
+                "Failed parry attempts do not lower your rolled damage dice."
             ),
             5: (
-                "After being attacked but before damage, spend an action die to "
-                "counter-attack; negates the original attack if successful."
+                "Once per round after you have been attacked but before damage "
+                "is rolled, you may spend an action die from any phase to attack "
+                "your attacker. If your attack roll is at least as high as your "
+                "attacker's then the attack against you is canceled; your attack "
+                "continues and you hit/miss and roll damage as normal."
             ),
         },
     ),
@@ -1251,21 +1337,26 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.VOID.value,
         category="monk",
         special_ability=(
-            "Roll either 1 or 3 extra action dice at the beginning of each combat round."
+            "Roll either 1 or 3 extra action dice at the beginning of each "
+            "combat round. If you roll 1 die, it may only be spent on athletics "
+            "actions; if you roll 3 dice, all of your action dice may only be "
+            "spent on athletics actions."
         ),
         school_knacks=["athletics", "conviction", "dragon_tattoo"],
         techniques={
-            1: "Roll an extra die on attack, parry, and athletics rolls.",
-            2: "Free raise on athletics rolls.",
+            1: "Roll one extra die on attack, parry, and athletics rolls.",
+            2: "You get a free raise on athletics rolls.",
             3: (
-                "Gain 4X free raises daily (X = precepts skill) for athletics; "
-                "max X per roll."
+                "Each day you get 4X free raises which may be applied to "
+                "athletics rolls, where X is your precepts skill. You may not "
+                "spend more than X of these free raises on a single roll."
             ),
             4: (
-                "+1 to any ring; that ring costs 5 fewer XP to raise; "
-                "reroll any contested roll once after seeing the result."
+                "Raise the current and maximum rank of any Ring by 1. Raising "
+                "that Ring now costs 5 fewer XP.\n"
+                "You may reroll any contested roll once after seeing the result."
             ),
-            5: "Spend 1 void point to heal 2 serious wounds at any time.",
+            5: "At any time, you may spend 1 void point to heal 2 serious wounds.",
         },
     ),
 
@@ -1277,24 +1368,28 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.AIR.value,
         category="investigator",
         special_ability=(
-            "Two allies fighting on your left and right have their TN to be hit "
-            "raised by 5."
+            "The two allies fighting on your left and right have their TN to "
+            "be hit raised by 5."
         ),
         school_knacks=["double_attack", "feint", "iaijutsu"],
         techniques={
             1: "Roll an extra die on initiative, parry, and wound check rolls.",
-            2: "Free raise on parry rolls.",
+            2: "You get a free raise to all parry rolls.",
             3: (
-                "After a parry, add 2X to your next attack against the attacker "
-                "or adjacent targets."
+                "After making a successful or unsuccessful parry, add 2X to "
+                "your next attack and damage roll against the attacker or "
+                "someone adjacent to them, where X is your attack skill."
             ),
             4: (
-                "+1 Air; Air ring costs 5 fewer XP to raise; "
-                "lower action dice by 2 (minimum 1) after rolling initiative."
+                "Raise your current and maximum Air by 1. Raising your Air "
+                "now costs 5 fewer XP.\n"
+                "After rolling initiative, lower all of your action dice by 2, "
+                "to a minimum of 1."
             ),
             5: (
-                "After a parry, the attacker deals 10 fewer light wounds on "
-                "their next 2 damage rolls."
+                "After making a successful or unsuccessful parry roll, the "
+                "attacker deals 10 fewer light wounds on their next 2 "
+                "damage rolls."
             ),
         },
     ),
@@ -1305,25 +1400,35 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.WATER.value,
         category="investigator",
         special_ability=(
-            "Use Water for interrogation rolls and add twice your Water "
-            "to all attack rolls."
+            "You use Water for interrogation rolls, and you add twice your "
+            "Water to all attack rolls."
         ),
         school_knacks=["discern_honor", "iaijutsu", "presence"],
         techniques={
-            1: "Roll an extra die on investigation, interrogation, and wound check rolls.",
-            2: "Free raise on interrogation rolls.",
+            1: "Roll one extra die on investigation, interrogation, and wound check rolls.",
+            2: "You get a free raise on interrogation rolls.",
             3: (
-                "Gain 2X free raises per adventure (X = investigation skill); "
-                "apply to interrogation, intimidation, law, underworld, attack, "
-                "wound checks; max X per roll."
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your investigation skill, which may be applied to the following "
+                "rolls: interrogation, intimidation, law, underworld, attack, "
+                "and wound checks. You may not spend more than X of these free "
+                "raises on any single roll."
             ),
             4: (
-                "+1 Water; Water ring costs 5 fewer XP to raise; "
-                "automatically know target's Void, parry, and next action phase in combat."
+                "Raise your current and maximum Water by 1. Raising your Water "
+                "now costs 5 fewer XP.\n"
+                "You automatically know the Void, parry, and phase of the next "
+                "action of each character during combat, and you know the result "
+                "of contested rolls made against you out of combat."
             ),
             5: (
-                "Reduce targeted characters' Air, Fire, and Water by 1; "
-                "limited by total experience."
+                "Your presence is so overwhelming that the Air, Fire and Water "
+                "rings of chosen characters are reduced by one. You may do this "
+                "to any one character, or you may do it to multiple characters "
+                "so long as the sum of their experience does not exceed your "
+                "experience. This does not work during the iaijutsu phase of a "
+                "duel, and it does not stack with other Kitsuki Magistrates "
+                "targeting the same character."
             ),
         },
     ),
@@ -1334,24 +1439,34 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.EARTH.value,
         category="investigator",
         special_ability=(
-            "Never become Tainted. Extra (X+1)k(X+1) on wound checks "
-            "based on target's Shadowlands Taint level."
+            "You may never become Tainted. Roll an extra (X+1)k(X+1) on wound "
+            "checks, where X is the Shadowlands Taint of the attacker, rounded "
+            "down to the nearest whole number."
         ),
         school_knacks=["detect_taint", "iaijutsu", "presence"],
         techniques={
-            1: "Roll an extra die on damage, interrogation, and wound check rolls.",
-            2: "Free raise on interrogation rolls.",
+            1: "Roll one extra die on damage, interrogation, and wound check rolls.",
+            2: "You get a free raise a free on interrogation rolls.",
             3: (
-                "Gain 2X free raises per adventure (X = investigation skill); "
-                "apply to interrogation, intimidation, law, underworld, attack, "
-                "wound checks, damage vs Tainted; max X per roll."
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your investigation skill, which may be applied to the following "
+                "rolls: interrogation, intimidation, law, underworld, attack, "
+                "and wound checks. You may also spend these free raises on "
+                "damage rolls against targets with the Shadowlands Taint. You "
+                "may not spend more than X of these free raises on a single roll."
             ),
             4: (
-                "+1 Earth; Earth ring costs 5 fewer XP to raise; "
-                "extra action die (attacks only vs Tainted)."
+                "Raise your current and maximum Earth by 1. Raising your Earth "
+                "now costs 5 fewer XP.\n"
+                "Roll an an extra action die in combat, which may not be used to "
+                "attack targets without the Shadowlands Taint."
             ),
             5: (
-                "After a wound check, inflict light wounds back on a Tainted attacker."
+                "After you take light wounds and resolve your wound check, you "
+                "may choose to inflict that number of light wounds on the "
+                "opponent who dealt them and take half that amount yourself. If "
+                "the opponent has the Shadowlands Taint, then you may also use "
+                "an attack in the current phase to add to that damage."
             ),
         },
     ),
@@ -1366,19 +1481,25 @@ _SCHOOLS_LIST: List[School] = [
         special_ability="Add your Air to all attack and damage rolls.",
         school_knacks=["discern_honor", "oppose_social", "worldliness"],
         techniques={
-            1: "Roll an extra die on tact, manipulation, and wound check rolls.",
-            2: "Free raise on manipulation rolls.",
+            1: "Roll one extra die on tact, manipulation, and wound check rolls.",
+            2: "You get a free raise on manipulation rolls.",
             3: (
-                "Gain 2X free raises per adventure (X = tact skill); "
-                "apply to heraldry, manipulation, sincerity, tact, attack, "
-                "wound checks; max X per roll."
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your tact skill, which may be applied to the following rolls: "
+                "heraldry, manipulation, sincerity, tact, attack, and wound "
+                "checks. You may not spend more than X of these free raises on "
+                "a single roll."
             ),
             4: (
-                "+1 Air; Air ring costs 5 fewer XP to raise; "
-                "gain a temporary void point after a successful attack or "
-                "manipulation per target."
+                "Raise your current and maximum Air by 1. Raising your Air "
+                "now costs 5 fewer XP.\n"
+                "Once per target per conversation or fight, you get a temporary "
+                "void point after a successful attack or manipulation roll."
             ),
-            5: "Add your Air to all TN and contested rolls for attack rolls.",
+            5: (
+                "Add your Air to all TN and contested rolls. This stacks with "
+                "your Special Ability for attack rolls."
+            ),
         },
     ),
 
@@ -1388,26 +1509,32 @@ _SCHOOLS_LIST: List[School] = [
         school_ring="Air or Water",
         category="court",
         special_ability=(
-            "Spend a void point to counterattack as an interrupt action. "
-            "Void point still gives +1k1. "
-            "Bonus equal to attacker's roll divided by 5."
+            "You may spend a void point to counterattack as an interrupt action "
+            "at the cost of one actions die; this void point still gives your "
+            "counterattack +1k1. While counterattacking, you receive a bonus "
+            "equal to the attacker's roll divided by 5, rounded down."
         ),
         school_knacks=["counterattack", "oppose_social", "worldliness"],
         techniques={
-            1: "Roll an extra die on counterattack, manipulation, and wound check rolls.",
-            2: "Free raise on manipulation.",
+            1: "Roll one extra die on counterattack, manipulation, and wound check rolls.",
+            2: "You get a free raise on manipulation.",
             3: (
-                "Gain 2X free raises per adventure (X = culture skill); "
-                "apply to bragging, culture, heraldry, manipulation, "
-                "counterattack, wound checks; max X per roll."
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your culture skill, which may be applied to the following "
+                "rolls: bragging, culture, heraldry, manipulation, "
+                "counterattack, and wound checks. You may not spend more than X "
+                "of these free raises on a single roll."
             ),
             4: (
-                "+1 Air or Water; that ring costs 5 fewer XP to raise; "
-                "bonus equal to current phase when attacking untouched targets."
+                "Raise your current and maximum Air or Water by 1. Raising that "
+                "ring now costs 5 fewer XP.\n"
+                "When attacking a target who has not attacked you this round, "
+                "you receive a bonus equal to the current phase."
             ),
             5: (
-                "On TN/contested rolls, gain (X-10)/5 bonus where X is the "
-                "opponent's result."
+                "When making any TN or contested roll, you receive a bonus "
+                "equal to (X-10) / 5 where X is the TN or result of your "
+                "opponent's contested roll."
             ),
         },
     ),
@@ -1419,23 +1546,26 @@ _SCHOOLS_LIST: List[School] = [
         category="court",
         special_ability=(
             "After a feint which met its TN, lower the TN of the target by 10 "
-            "the next time they are attacked."
+            "the next time they are attacked, even if the feint was parried."
         ),
         school_knacks=["double_attack", "feint", "worldliness"],
         techniques={
-            1: "Roll an extra die on precepts and two chosen roll types.",
-            2: "Free raise on any chosen roll type.",
+            1: "Roll one extra die on precepts and any two rolls of your choice.",
+            2: "You get a free raise on any type of roll of your choice.",
             3: (
-                "After any roll, spend a void point to subtract Xk1; "
-                "know all contested results except sincerity/interrogation."
+                "After seeing the result of any TN or contested skill roll, you "
+                "may spend a void point to subtract Xk1 from the roll, where X "
+                "is equal to your tact skill. You know the result of all TN and "
+                "contested rolls except sincerity and interrogation."
             ),
             4: (
-                "+1 to a non-Void ring; that ring costs 5 fewer XP to raise; "
-                "regain an extra void point nightly."
+                "Raise your current and maximum in any non-Void Ring by 1. "
+                "Raising that Ring now costs 5 fewer XP.\n"
+                "You regain an extra void point every night."
             ),
             5: (
-                "Gain a temporary void point whenever spending non-technique "
-                "void points."
+                "Gain a temporary void point whenever you spend a void point "
+                "that was not gained from this technique."
             ),
         },
     ),
@@ -1445,23 +1575,33 @@ _SCHOOLS_LIST: List[School] = [
         name="Merchant",
         school_ring=Ring.WATER.value,
         category="court",
-        special_ability="Spend void points after your initial roll.",
+        special_ability=(
+            "You may spend void points after you see the results of your "
+            "initial roll."
+        ),
         school_knacks=["discern_honor", "oppose_knowledge", "worldliness"],
         techniques={
-            1: "Roll an extra die on interrogation, sincerity, and wound check rolls.",
-            2: "Free raise on interrogation rolls.",
+            1: "Roll one extra die on interrogation, sincerity, and wound check rolls.",
+            2: "You get a free raise on interrogation rolls.",
             3: (
-                "Gain 2X free raises per adventure (X = sincerity skill); "
-                "apply to commerce, heraldry, interrogation, sincerity, "
-                "attack, wound checks; max X per roll."
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your sincerity skill, which may be applied to the following "
+                "rolls: commerce, heraldry, interrogation, sincerity, attack, "
+                "and wound checks. You may not spend more than X of these free "
+                "raises on a single roll."
             ),
             4: (
-                "+1 Water; Water ring costs 5 fewer XP to raise; "
-                "Rank considered 5.0 higher for stipend."
+                "Raise your current and maximum Water by 1. Raising your Water "
+                "now costs 5 fewer XP.\n"
+                "Your Rank is considered 5.0 higher for the purpose of "
+                "calculating your stipend."
             ),
             5: (
-                "After any non-initiative roll, reroll dice totaling 5*(X-1) "
-                "where X is the number rerolled; spend void before or after."
+                "After making any non-initiative roll, you may reroll some of "
+                "the dice so long as the dice being rerolled add up to at least "
+                "5*(X-1) where X is the number of dice being rerolled. You may "
+                "only do this once per roll. As per your Special Ability, you "
+                "may spend Void Points before and/or after you make this reroll."
             ),
         },
     ),
@@ -1472,24 +1612,29 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.AIR.value,
         category="court",
         special_ability=(
-            "Roll extra dice equal to your acting skill on attack, parry, "
-            "and wound check rolls."
+            "Roll extra dice equal to your acting on attack, parry, and wound "
+            "check rolls."
         ),
         school_knacks=["athletics", "discern_honor", "pontificate"],
         techniques={
-            1: "Roll an extra die on attack, sincerity, and wound check rolls.",
-            2: "Free raise on sincerity rolls.",
+            1: "Roll one extra die on attack, sincerity, and wound check rolls.",
+            2: "You get a free raise on sincerity rolls.",
             3: (
-                "Gain 2X free raises per adventure (X = sincerity skill); "
-                "apply to acting, heraldry, sincerity, sneaking, attack, "
-                "wound checks; max X per roll."
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your sincerity skill, which may be applied to the following "
+                "rolls: acting, heraldry, sincerity, sneaking, attack, and "
+                "wound checks. You may not spend more than X of these free "
+                "raises on a single roll."
             ),
             4: (
-                "+1 Air; Air ring costs 5 fewer XP to raise; "
-                "Rank considered 5.0 higher for stipend."
+                "Raise your current and maximum Air by 1. Raising your Air "
+                "now costs 5 fewer XP.\n"
+                "Your Rank is considered 5.0 higher for the purpose of "
+                "calculating your stipend."
             ),
             5: (
-                "After TN/contested rolls, add your lowest three dice to the result."
+                "After making any TN or contested roll, add your lowest three "
+                "dice to the result. (Some dice may be counted twice.)"
             ),
         },
     ),
@@ -1502,24 +1647,35 @@ _SCHOOLS_LIST: List[School] = [
         school_ring="any non-Void",
         category="artisan",
         special_ability=(
-            "Force the opponent to spend their next available action die to "
-            "attempt to parry; they do not get a free raise."
+            "Once per round before making an attack roll against an opponent, "
+            "you may force the opponent to spend their next available action "
+            "die to attempt to parry your attack. The opponent does not get a "
+            "free raise for pre-declaring the parry."
         ),
         school_knacks=["discern_honor", "oppose_knowledge", "oppose_social"],
         techniques={
-            1: "Roll an extra die on attack, bragging, and wound check rolls.",
-            2: "Free raise on attack rolls.",
+            1: "Roll one extra die on attack, bragging, and wound check rolls.",
+            2: "You get a free raise on attack rolls.",
             3: (
-                "Gain 2X free raises per adventure (X = bragging skill); "
-                "apply to bragging, culture, heraldry, intimidation, attack, "
-                "wound checks; max X per roll."
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your bragging skill, which may be applied to the following "
+                "rolls: bragging, culture, heraldry, intimidation, attack, and "
+                "wound checks. You may not spend more than X of these free "
+                "raises on a single roll."
             ),
             4: (
-                "+1 to a non-Void ring; that ring costs 5 fewer XP to raise; "
-                "unparried attacks always roll 10 dice."
+                "Raise your current and maximum in any non-Void Ring by 1. "
+                "Raising that Ring now costs 5 fewer XP.\n"
+                "When making a damage roll for an unparried attack for which "
+                "you are not keeping extra damage dice, you always roll 10 dice."
             ),
             5: (
-                "Once per round, apply the Oppose knack or Special Ability again."
+                "Once per conversation or combat round, you can apply an oppose "
+                "knack or your Special ability an additional time. You may "
+                "choose to use your Special Ability after an opponent has made "
+                "an attack roll against you, in which case their attack is "
+                "canceled and their attack roll will be used as their "
+                "parry roll."
             ),
         },
     ),
@@ -1532,25 +1688,38 @@ _SCHOOLS_LIST: List[School] = [
         school_ring=Ring.VOID.value,
         category="spellcaster",
         special_ability=(
-            "Maximum void points equals highest ring plus school rank. "
-            "Regain lowest Ring per night, one per 2 hours partial. "
-            "May not spend more than lowest Ring minus 1 per roll."
+            "Your maximum number of void points is equal to your highest ring "
+            "plus your school rank. You regain a number of void points equal "
+            "to your lowest Ring after a full night's rest, and one void point "
+            "per 2 hours for a partial night. However, you may not spend more "
+            "void points on any one roll than your lowest Ring minus 1."
         ),
         school_knacks=["absorb_void", "kharmic_spin", "otherworldliness"],
         techniques={
-            1: "Roll an extra die on precepts and two chosen skill rolls.",
-            2: "Free raise on all rolls for a chosen skill.",
+            1: "Roll one extra die on precepts and any two skills of your choice.",
+            2: "You get a free raise on all rolls for any skill of your choice.",
             3: (
-                "After an ally's roll, spend a void point to roll Xk1 and add "
-                "the result (X = precepts skill); once per roll."
+                "After another character makes a roll for which void points may "
+                "be spent, you may spend one void point to roll Xk1 and add the "
+                "result to their total, where X is your precepts skill. You may "
+                "only do this once per roll."
             ),
             4: (
-                "+1 Void; Void ring costs 5 fewer XP to raise; "
-                "contested opponents can't spend void points."
+                "Raise your current and maximum Void by 1. Raising your Void "
+                "now costs 5 fewer XP.\n"
+                "Characters opposing you in contested rolls may not spend void "
+                "points. If someone is opposing both you and someone else, they "
+                "may spend void points, but the bonus will only count against "
+                "whoever else they're opposing."
             ),
             5: (
-                "Negate another character's school for a conversation or fight; "
-                "costs 2X void for school rank X, or experience/50 for non-school."
+                "You may completely negate another character's school or "
+                "profession for the remainder of one conversation or fight. "
+                "Against characters with a school, you must spend void points "
+                "equal to twice their school rank. Against characters with no "
+                "school, you must spend void points equal to their experience "
+                "divided by 50, rounded down. This is instantaneous and does "
+                "not require spending an action."
             ),
         },
     ),
@@ -1566,26 +1735,33 @@ _SCHOOLS_LIST: List[School] = [
         school_knacks=["conviction", "otherworldliness", "pontificate"],
         techniques={
             1: (
-                "Roll an extra die on precepts, one chosen skill, "
-                "and one combat roll type."
+                "Roll one extra die on precepts, any one skill, and any one "
+                "type of combat roll."
             ),
             2: (
-                "Free raise on all Honor bonus rolls (bragging, precepts, "
-                "open sincerity) for self and allies."
+                "You and your allies get a free raise on all rolls for which "
+                "you receive an Honor bonus (bragging, precepts, and open "
+                "sincerity)."
             ),
             3: (
-                "Roll X dice (X = precepts skill) at combat start; swap for "
-                "any rolled die on attack/parry/wound/damage; "
-                "swap lower dice for allies."
+                "Roll X dice at the beginning of combat, where X is equal to "
+                "your precepts skill. You may swap any of these dice for any "
+                "rolled die on any attack, parry, wound check, or damage roll. "
+                "You may swap any of these dice for any lower die on any of "
+                "those types of rolls made by any ally."
             ),
             4: (
-                "+1 School Ring; that ring costs 5 fewer XP to raise; "
-                "free raise for self and allies on contested rolls vs "
-                "equal or higher skills."
+                "Raise your current and maximum of your School's chosen Ring "
+                "by 1. Raising that Ring now costs 5 fewer XP.\n"
+                "You and your allies get a free raise on all contested rolls "
+                "for which your opponent has an equal or higher skill rank."
             ),
             5: (
-                "Spend Conviction points on allies' rolls; refresh per round; "
-                "spend to lower action dice for counterattack/parry."
+                "You may spend the points from your Conviction knack on your "
+                "allies' rolls, and your Conviction points refresh after each "
+                "conversation and combat round. You may also spend these points "
+                "to lower action dice in order for you or an ally to "
+                "counterattack or parry."
             ),
         },
     ),
@@ -1596,31 +1772,37 @@ _SCHOOLS_LIST: List[School] = [
         school_ring="any non-Void",
         category="spellcaster",
         special_ability=(
-            "Maximum void points equals highest ring plus school rank. "
-            "Regain lowest Ring per night, one per 2 hours partial. "
-            "May not spend more than lowest Ring minus 1 per roll."
+            "Your maximum number of void points is equal to your highest ring "
+            "plus your school rank. You regain a number of void points equal "
+            "to your lowest Ring after a full night's rest, and one void point "
+            "per 2 hours for a partial night. However, you may not spend more "
+            "void points on any one roll than your lowest Ring minus 1."
         ),
         school_knacks=["commune", "pontificate", "spellcasting"],
         techniques={
             1: (
-                "Roll an extra die on precepts or commune/spellcasting for "
-                "a chosen element."
+                "Roll one extra die when rolling precepts or with commune and "
+                "spellcasting for your chosen element."
             ),
             2: (
-                "Free raise on precepts or commune/spellcasting for a chosen element."
+                "You get a free raise when rolling precepts or with commune and "
+                "spellcasting for your chosen element."
             ),
             3: (
-                "Gain 2X free raises per adventure (X = precepts skill); "
-                "apply to bragging, intimidation, precepts, tact, wound checks, "
-                "spellcasting for element; max X per roll."
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your precepts skill, which may be applied to the following "
+                "rolls: bragging, intimidation, precepts, tact, wound checks, "
+                "and spellcasting for your chosen element. You may not spend "
+                "more than X of these free raises on any single roll."
             ),
             4: (
-                "+1 to the chosen element's ring; that ring costs 5 fewer XP to raise; "
-                "cast one spell per round as an interrupt action."
+                "Raise your current and maximum Ring of your chosen element "
+                "by 1. Raising that Ring now costs 5 fewer XP.\n"
+                "You may cast one spell per round as an interrupt action."
             ),
             5: (
-                "All non-Void rings considered 1 higher when rolling "
-                "commune/spellcasting."
+                "Your non-Void rings are all considered 1 higher when rolling "
+                "commune and spellcasting."
             ),
         },
     ),
