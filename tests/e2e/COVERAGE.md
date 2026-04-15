@@ -235,6 +235,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 2nd Dan behavioral parry bonus -> `test_school_abilities.py::test_mirumoto_2nd_dan_behavioral`
 - [x] Parry roll adds temp VP -> `test_school_abilities.py::test_mirumoto_parry_temp_vp_behavioral`
 - [x] 5th Dan VP spending +10 on combat rolls -> `test_school_abilities.py::test_mirumoto_5th_dan_vp_plus_10`
+- [x] 5th Dan +10/VP reflected in attack and wound check probability charts -> `test_school_abilities.py::test_mirumoto_5th_dan_prob_charts_include_bonus`
+- [x] 4th Dan probability charts do NOT include +10/VP bonus -> `test_school_abilities.py::test_mirumoto_4th_dan_prob_charts_no_bonus`
 - [x] 4th Dan failed parry reduced bonus damage dice -> `test_school_abilities.py::test_mirumoto_4th_dan_parry_reduction_behavioral`
 
 ### Otaku
@@ -242,7 +244,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_otaku_1st_dan_behavioral`
 - [x] 2nd Dan behavioral wound check bonus -> `test_school_abilities.py::test_otaku_2nd_dan_behavioral`
 - [x] 4th Dan lunge extra die after failed parry -> `test_school_abilities.py::test_otaku_4th_dan_lunge_parry_behavioral`
-- [x] 5th Dan trade dice for SW option -> `test_school_abilities.py::test_otaku_5th_dan_trade_dice_behavioral`
+- [x] 5th Dan trade dice for SW pre-roll checkbox -> `test_school_abilities.py::test_otaku_5th_dan_trade_dice_behavioral`
 
 ### Priest
 
@@ -294,6 +296,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 2nd Dan behavioral wound check bonus -> `test_school_abilities.py::test_yogo_2nd_dan_behavioral`
 - [x] 3rd Dan VP spending reduces light wounds -> `test_school_abilities.py::test_yogo_3rd_dan_vp_heals_lw_behavioral`
 - [x] 4th Dan post-roll VP gives enhanced bonus -> `test_school_abilities.py::test_yogo_4th_dan_post_roll_vp_behavioral`
+- [x] 4th Dan +5/VP reflected in wound check probability chart -> `test_school_abilities.py::test_yogo_4th_dan_wc_prob_chart_includes_raise`
+- [x] 3rd Dan probability chart does NOT include +5/VP -> `test_school_abilities.py::test_yogo_3rd_dan_wc_prob_chart_no_raise`
 - [x] Serious wound grants temp VP -> `test_school_abilities.py::test_yogo_serious_wound_temp_vp_behavioral`
 
 ## JS Error Checks

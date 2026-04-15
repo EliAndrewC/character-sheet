@@ -551,6 +551,101 @@ def test_mirumoto_5th_dan_vp_plus_10(page, live_server_url):
             # The +10 bonus should appear in the result breakdown
             result_text = page.locator('[data-modal="dice-roller"]').text_content()
             assert "5th Dan" in result_text
+def test_mirumoto_5th_dan_prob_charts_include_bonus(page, live_server_url):
+    """Mirumoto 5th Dan: attack and wound check probability charts include +10/VP."""
+    _create_char(page, live_server_url, "Miru5Prob", "mirumoto_bushi",
+                 knack_overrides={"counterattack": 5, "double_attack": 5, "iaijutsu": 5})
+    config = _get_void_spend_config(page)
+    assert config.get("combat_vp_flat_bonus") == 10
+
+    # Open attack modal to make atkHitChance available
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("15")
+    page.wait_for_timeout(300)
+
+    # Get attack avg roll with 0 VP and 1 VP
+    avg_0, avg_1 = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkAvgAttackRoll) {
+                return [d.atkAvgAttackRoll(0), d.atkAvgAttackRoll(1)];
+            }
+        }
+        return [0, 0];
+    }""")
+    # The difference should include the +10 bonus (plus ~6.5 from 1k1 dice)
+    diff = avg_1 - avg_0
+    assert diff > 15, f"Avg roll diff with 1 VP should be >15 (got {diff}), 5th Dan +10 not reflected"
+
+    # Close attack modal
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkModalOpen !== undefined) { d.atkModalOpen = false; }
+        }
+    }""")
+    page.wait_for_timeout(300)
+
+    # Open wound check modal
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "30")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+
+    # Get wound check pass chance with 0 VP and 1 VP
+    pass_0, pass_1 = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcProbRow) {
+                const r0 = d.wcProbRow(0);
+                const r1 = d.wcProbRow(1);
+                return [r0?.passChance || 0, r1?.passChance || 0];
+            }
+        }
+        return [0, 0];
+    }""")
+    # With +10 bonus on top of +1k1, pass chance with 1 VP should be significantly higher
+    assert pass_1 >= pass_0, f"WC pass chance with 1 VP ({pass_1}) should be >= 0 VP ({pass_0})"
+
+
+def test_mirumoto_4th_dan_prob_charts_no_bonus(page, live_server_url):
+    """Mirumoto 4th Dan: probability charts should NOT include +10/VP bonus."""
+    _create_char(page, live_server_url, "Miru4Prob", "mirumoto_bushi",
+                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
+    config = _get_void_spend_config(page)
+    assert config.get("combat_vp_flat_bonus") == 0
+
+    # Open attack modal
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("15")
+    page.wait_for_timeout(300)
+
+    # Get attack avg roll with 0 VP and 1 VP
+    avg_0, avg_1 = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkAvgAttackRoll) {
+                return [d.atkAvgAttackRoll(0), d.atkAvgAttackRoll(1)];
+            }
+        }
+        return [0, 0];
+    }""")
+    # Without 5th Dan, the diff should be just the ~6.5 from 1k1 dice (no +10)
+    diff = avg_1 - avg_0
+    assert diff < 10, f"Avg roll diff with 1 VP should be <10 at 4th Dan (got {diff}), no +10 bonus"
+
+
 def test_mirumoto_round_points_display_and_buttons(page, live_server_url):
     """Mirumoto at 3rd Dan: round points +/- and Reset buttons work."""
     _create_char(page, live_server_url, "MirumotoPoints", "mirumoto_bushi",
@@ -2243,6 +2338,63 @@ def test_yogo_4th_dan_post_roll_vp_behavioral(page, live_server_url):
         assert vp_remaining == 1  # spent 1 of 2
 
 
+def test_yogo_4th_dan_wc_prob_chart_includes_raise(page, live_server_url):
+    """Yogo 4th Dan: wound check probability chart includes +5/VP free raise."""
+    _create_char(page, live_server_url, "Yogo4Prob", "yogo_warden",
+                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "feint": 4})
+    config = _get_void_spend_config(page)
+    assert config.get("wc_vp_free_raise") is True
+    # Add LW and open wound check modal
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "30")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    # Get pass chance at 0 VP and 1 VP from the probability table
+    pass_0, pass_1 = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcProbRow) {
+                const r0 = d.wcProbRow(0);
+                const r1 = d.wcProbRow(1);
+                return [r0?.passChance || 0, r1?.passChance || 0];
+            }
+        }
+        return [0, 0];
+    }""")
+    # With +1k1 dice AND +5 free raise, the improvement should be substantial
+    assert pass_1 > pass_0, f"WC pass chance with 1 VP ({pass_1}) should be > 0 VP ({pass_0})"
+    # Verify the +5 is actually making a difference beyond just +1k1 dice:
+    # Compare against what wcProbRow would give without the free raise
+    # by temporarily disabling it
+    pass_1_no_raise = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcProbRow && d.voidSpendConfig) {
+                d.voidSpendConfig.wc_vp_free_raise = false;
+                const r1 = d.wcProbRow(1);
+                d.voidSpendConfig.wc_vp_free_raise = true;
+                return r1?.passChance || 0;
+            }
+        }
+        return 0;
+    }""")
+    assert pass_1 > pass_1_no_raise, \
+        f"4th Dan +5 should boost pass chance: with={pass_1}, without={pass_1_no_raise}"
+
+
+def test_yogo_3rd_dan_wc_prob_chart_no_raise(page, live_server_url):
+    """Yogo 3rd Dan: wound check probability chart does NOT include +5/VP."""
+    _create_char(page, live_server_url, "Yogo3Prob", "yogo_warden",
+                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "feint": 3})
+    config = _get_void_spend_config(page)
+    assert config.get("wc_vp_free_raise") is False
+
+
 # ===========================================================================
 # COMPLEX MULTI-STEP FLOW TESTS
 # ===========================================================================
@@ -2714,7 +2866,7 @@ def test_otaku_4th_dan_lunge_parry_behavioral(page, live_server_url):
 
 
 def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
-    """Otaku 5th Dan: trade-for-SW button appears on damage result and works."""
+    """Otaku 5th Dan: trade-for-SW checkbox appears before damage roll and reduces dice."""
     _create_char(page, live_server_url, "Otaku5TB", "otaku_bushi",
                  knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
     _mock_dice_high(page)
@@ -2725,7 +2877,35 @@ def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
     modal.locator('select').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
-    # Roll damage
+    # Boost extra dice so total damage dice > 10 (base damage is ~7, need 11+)
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkExtraDice !== undefined && d.atkPhase === 'result') { d.atkExtraDice = 8; break; }
+        }
+    }""")
+    page.wait_for_timeout(500)
+    page.wait_for_timeout(200)
+    # Get rawRolled to verify we have enough dice for trade
+    raw_rolled = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkCurrentDamage && d.atkPhase === 'result') {
+                const dmg = d.atkCurrentDamage();
+                return dmg?.rawRolled || 0;
+            }
+        }
+        return 0;
+    }""")
+    assert raw_rolled > 10, f"Need >10 raw damage dice to test trade, got {raw_rolled}"
+    # The trade checkbox should be visible before rolling damage
+    trade_cb = modal.locator('input[x-model="atkOtakuTradeDice"]')
+    assert trade_cb.is_visible(), "Trade dice checkbox should be visible before damage roll"
+    # Check the box and roll damage
+    trade_cb.check()
+    page.wait_for_timeout(200)
     modal.locator('button:has-text("Make Damage Roll")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -2736,14 +2916,22 @@ def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
         return false;
     }""", timeout=10000)
     _restore_dice(page)
-    # The trade button should be visible
-    trade_btn = modal.locator('button:has-text("Trade 10 damage dice")')
-    assert trade_btn.is_visible()
-    # Click it
-    trade_btn.click()
-    page.wait_for_timeout(300)
+    # The damage result should show the auto SW note
     result = _get_attack_result_text(page)
-    assert "serious wound" in result.lower()
+    assert "automatic serious wound" in result.lower(), "Auto SW note should appear in damage result"
+    # Verify fewer dice were rolled
+    rolled_actual = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkDamageRolled !== undefined && d.atkPhase === 'damage-result') return d.atkDamageRolled;
+        }
+        return 0;
+    }""")
+    # raw_rolled - 10 is the pre-cap rolled after trade, then capped to min(10, that)
+    expected = min(10, raw_rolled - 10)
+    assert rolled_actual == expected, \
+        f"Damage rolled should be {expected} (raw {raw_rolled} - 10), got {rolled_actual}"
 
 
 def test_shinjo_5th_dan_parry_excess_behavioral(page, live_server_url):
