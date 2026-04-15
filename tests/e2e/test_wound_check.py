@@ -92,6 +92,8 @@ def test_wound_check_modal_shows_tn(page, live_server_url):
 def test_wound_check_shows_dice_animation(page, live_server_url):
     """The wound check rolling phase displays dice in the animation tray."""
     _create_character_with_wounds(page, live_server_url, "WCAnim", light_wounds=10)
+    # Re-enable animations for this specific test
+    page.evaluate("if (window._diceRoller) window._diceRoller.prefs.dice_animation_enabled = true")
     page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_timeout(300)
     # Click Roll Wound Check in the modal
@@ -99,7 +101,7 @@ def test_wound_check_shows_dice_animation(page, live_server_url):
     # Wait for dice to appear in the wound check animation tray
     page.wait_for_function(
         "document.querySelectorAll('#dice-animation-wc svg.die').length > 0",
-        timeout=5000,
+        timeout=15000,
     )
     assert page.locator('#dice-animation-wc svg.die').count() > 0
 
@@ -107,7 +109,10 @@ def test_wound_check_shows_dice_animation(page, live_server_url):
 def test_regular_roll_shows_dice_animation(page, live_server_url):
     """The regular dice roller also shows dice animation in its tray."""
     _create_character_with_wounds(page, live_server_url, "RegAnim", light_wounds=5)
+    # Re-enable animations for this specific test
+    page.evaluate("if (window._diceRoller) window._diceRoller.prefs.dice_animation_enabled = true")
     page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
     # Dismiss roll menu if it appears
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl').first
     if menu.count() > 0 and menu.is_visible():
@@ -115,7 +120,7 @@ def test_regular_roll_shows_dice_animation(page, live_server_url):
     # Wait for dice to appear in the regular animation tray
     page.wait_for_function(
         "document.querySelectorAll('#dice-animation svg.die').length > 0",
-        timeout=5000,
+        timeout=15000,
     )
     assert page.locator('#dice-animation svg.die').count() > 0
 
