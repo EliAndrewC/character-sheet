@@ -108,7 +108,8 @@
                 <label class="block text-sm font-medium mb-1">Select School</label>
                 <select name="school" x-model="school"
                         @change="onSchoolChange($event)"
-                        class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                        {% if not is_first_version %}disabled{% endif %}
+                        class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent {% if not is_first_version %}opacity-60 cursor-not-allowed{% endif %}">
                     <option value="">-- Choose a school --</option>
                     {% for group_label, group_schools in schools_by_category %}
                     <optgroup label="{{ group_label }}">
@@ -119,6 +120,9 @@
                     </optgroup>
                     {% endfor %}
                 </select>
+                {% if not is_first_version %}
+                <p class="text-xs text-ink/50 mt-1">School cannot be changed after character creation.</p>
+                {% endif %}
             </div>
 
             <div x-show="school && SCHOOL_RING_OPTIONS[school] && SCHOOL_RING_OPTIONS[school].length > 1" class="mt-3">
@@ -864,7 +868,8 @@
                 <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                     <span class="text-xs sm:text-sm text-ink/60" x-text="saveStatus"></span>
                     <button type="button" @click="openApplyModal()" data-action="apply-changes"
-                            class="bg-accent hover:bg-red-900 text-parchment px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base">
+                            :disabled="!school"
+                            class="bg-accent hover:bg-red-900 text-parchment px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base disabled:opacity-40 disabled:cursor-not-allowed">
                         Apply Changes
                     </button>
                     <button type="button" @click="navigateToSheet()" data-action="view-sheet"

@@ -72,6 +72,39 @@ def test_apply_disabled_when_empty(page, live_server_url):
     assert apply_btn.is_disabled()
 
 
+def test_apply_disabled_without_school(page, live_server_url):
+    """Apply Changes button is disabled when no school is selected."""
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "No School")
+    page.wait_for_timeout(300)
+    apply_btn = page.locator('[data-action="apply-changes"]')
+    assert apply_btn.is_disabled(), "Apply Changes should be disabled without a school"
+    # Select a school and verify it becomes enabled
+    select_school(page, "akodo_bushi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    assert not apply_btn.is_disabled(), "Apply Changes should be enabled after selecting a school"
+
+
+def test_school_locked_after_publish(page, live_server_url):
+    """School select is disabled after character has been published."""
+    _go_to_new_editor(page, live_server_url)
+    # Before publishing, school select should be enabled
+    school_select = page.locator('select[name="school"]')
+    assert not school_select.is_disabled(), "School should be editable before first publish"
+    # Publish
+    apply_changes(page, "First version")
+    # Go back to edit
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('input[name="name"]')
+    # School select should now be disabled
+    school_select = page.locator('select[name="school"]')
+    assert school_select.is_disabled(), "School should be locked after publishing"
+    # The explanatory text should be visible
+    assert page.locator('text="School cannot be changed after character creation."').is_visible()
+
+
 def test_cancel_closes_modal(page, live_server_url):
     """Cancel button closes modal without applying."""
     _go_to_new_editor(page, live_server_url)
