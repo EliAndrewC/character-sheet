@@ -533,6 +533,12 @@ def build_wound_check_formula(character_data: dict) -> dict:
         kept += 1
         bonus_sources.append("+3k1 from 4th Dan")
 
+    # Kuni Witch Hunter Special: +1k1 on wound checks (base, before Taint bonus)
+    if school_id == "kuni_witch_hunter":
+        rolled += 1
+        kept += 1
+        bonus_sources.append("+1k1 from Kuni Special (untainted base)")
+
     # Strength of the Earth advantage
     advantages = character_data.get("advantages", []) or []
     if "strength_of_the_earth" in advantages:

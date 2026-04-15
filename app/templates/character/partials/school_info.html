@@ -36,7 +36,7 @@
         {% for dan, desc in school.techniques.items() %}
         <div class="text-sm mb-1 technique-item" data-dan="{{ dan }}">
             <span class="font-medium technique-label">{{ dan }}{{ 'st' if dan == 1 else ('nd' if dan == 2 else ('rd' if dan == 3 else 'th')) }} Dan:</span>
-            <span class="technique-desc">{{ desc }}</span>
+            <span class="technique-desc whitespace-pre-line">{{ desc }}</span>
         </div>
         {% endfor %}
     </div>
