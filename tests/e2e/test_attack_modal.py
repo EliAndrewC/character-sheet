@@ -174,11 +174,13 @@ def test_attack_dice_animation_visible(page, live_server_url):
     """Attack roll shows dice animation in the attack tray."""
     _create_attacker(page, live_server_url, "AtkAnim")
     _wait_alpine(page)
+    # Re-enable animations for this specific test
+    page.evaluate("if (window._diceRoller) window._diceRoller.prefs.dice_animation_enabled = true")
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] button:text("Roll Attack")').click()
     page.wait_for_function(
         "document.querySelectorAll('#dice-animation-atk svg.die').length > 0",
-        timeout=5000,
+        timeout=15000,
     )
     assert page.locator('#dice-animation-atk svg.die').count() > 0

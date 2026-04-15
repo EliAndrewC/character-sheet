@@ -40,18 +40,27 @@ def _roll_via_menu_or_direct(page, roll_key):
     """Click a roll key. If a menu appears, click the main Roll button. Otherwise wait for direct roll."""
     page.locator(f'[data-roll-key="{roll_key}"]').click()
     page.wait_for_timeout(300)
-    # Check if roll menu opened
-    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
-    if menu.is_visible():
-        # Find the "Roll <name>" button - it has font-medium but skip any "Iaijutsu Duel" button
-        buttons = menu.locator('button.font-medium')
-        for i in range(buttons.count()):
-            text = buttons.nth(i).text_content().strip()
-            if text.startswith("Roll "):
-                buttons.nth(i).click()
-                break
-        else:
-            buttons.first.click()  # fallback
+    # If the roll already completed (no-animation fast path), skip menu check
+    already_done = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""")
+    if not already_done:
+        # Check if roll menu opened (VP spending options)
+        menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
+        if menu.is_visible():
+            buttons = menu.locator('button.font-medium')
+            for i in range(buttons.count()):
+                text = buttons.nth(i).text_content().strip()
+                if text.startswith("Roll "):
+                    buttons.nth(i).click()
+                    break
+            else:
+                buttons.first.click()  # fallback
     _wait_roll_done(page)
 
 
@@ -2450,7 +2459,7 @@ def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
     _roll_via_menu_or_direct(page, "parry")
     page.wait_for_timeout(300)
     # Close the roll result via the dice roller modal's close button
-    page.locator('[data-modal="dice-roller"] button:has-text("Close")').click()
+    page.locator('[data-modal="dice-roller"] button:has-text("Close"):visible').first.click()
     page.wait_for_timeout(300)
     # Check bonus was banked
     banked = page.evaluate("window._diceRoller?.hirumaBankedAttackBonus || 0")

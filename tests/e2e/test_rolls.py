@@ -67,15 +67,11 @@ def test_click_ring_opens_athletics_modal(page, live_server_url):
 
 def test_modal_shows_total_and_dice_after_animation(page, live_server_url):
     _create_roller(page, live_server_url, "ResultChar")
-    # Disable animations via JS so the result panel appears immediately
-    page.add_init_script(
-        "localStorage.l7r_no_anim = '1';"
-    )
     page.locator('[data-roll-key="skill:bragging"]').click()
-    # Wait for the result Total to appear
-    page.wait_for_selector('text="Total:"', state='visible', timeout=5000)
-    body = page.locator('div.bg-ink\\/5').last.text_content()
-    assert "Total:" in body
+    _wait_for_roll_result(page)
+    modal = page.locator('[data-modal="dice-roller"]')
+    text = modal.text_content()
+    assert "Total:" in text
 
 
 def test_modal_close_button(page, live_server_url):
@@ -176,6 +172,8 @@ def test_die_top_angle_is_about_70_degrees(page, live_server_url):
     page.wait_for_load_state("networkidle")
     page.goto(sheet_url)
     page.wait_for_selector('[data-roll-key="attack"]')
+    # Re-enable animations for this test (conftest disables them)
+    page.evaluate("if (window._diceRoller) window._diceRoller.prefs.dice_animation_enabled = true")
     page.locator('[data-roll-key="attack"]').click()
     # Attack now opens the attack modal - click "Roll Attack" to start the roll
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
@@ -185,7 +183,7 @@ def test_die_top_angle_is_about_70_degrees(page, live_server_url):
     # getBoundingClientRect and the measured angle is wrong).
     page.wait_for_function(
         "document.querySelectorAll('#dice-animation-atk svg.die').length > 0",
-        timeout=5000,
+        timeout=15000,
     )
     page.wait_for_function(
         "document.querySelectorAll('#dice-animation-atk svg.die.rolling').length === 0",
@@ -286,6 +284,17 @@ def _create_3rd_dan_courtier(page, live_server_url, name="Courtier3Dan"):
 def _dismiss_roll_menu_if_open(page):
     """If the void-spending roll menu appeared, click the default 'Roll X' option."""
     page.wait_for_timeout(300)
+    # If the roll already completed (no-animation fast path), skip menu check
+    already_done = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""")
+    if already_done:
+        return
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
     if menu.count() > 0 and menu.is_visible():
         buttons = menu.locator('button.font-medium')

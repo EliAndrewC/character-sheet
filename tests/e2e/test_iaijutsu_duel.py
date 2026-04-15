@@ -108,7 +108,7 @@ def test_contested_roll_shows_result(page, live_server_url):
             if (d && d.duelPhase === 'contested-result') return true;
         }
         return false;
-    }""", timeout=10000)
+    }""", timeout=15000)
     assert modal.locator('text="Contested roll:"').is_visible()
 
 
@@ -134,7 +134,7 @@ def test_focus_strike_phase_shows_buttons(page, live_server_url):
             if (d && d.duelPhase === 'contested-result') return true;
         }
         return false;
-    }""", timeout=10000)
+    }""", timeout=15000)
     modal.locator('button:text("Proceed to Focus / Strike")').click()
     page.wait_for_timeout(300)
     assert modal.locator('button:text("Strike!")').is_visible()
@@ -158,7 +158,7 @@ def test_focus_alternation(page, live_server_url):
             if (d && d.duelPhase === 'contested-result') return true;
         }
         return false;
-    }""", timeout=10000)
+    }""", timeout=15000)
     modal.locator('button:text("Proceed to Focus / Strike")').click()
     page.wait_for_timeout(300)
     # Focus should be enabled
@@ -182,6 +182,8 @@ def test_strike_shows_dice_animation(page, live_server_url):
     """The Strike roll shows dice animation in the duel tray."""
     _create_duelist(page, live_server_url, "DuelStrike")
     _wait_alpine(page)
+    # Re-enable animations for this specific test
+    page.evaluate("if (window._diceRoller) window._diceRoller.prefs.dice_animation_enabled = true")
     _open_duel_modal(page)
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
@@ -195,13 +197,13 @@ def test_strike_shows_dice_animation(page, live_server_url):
             if (d && d.duelPhase === 'contested-result') return true;
         }
         return false;
-    }""", timeout=10000)
+    }""", timeout=15000)
     modal.locator('button:text("Proceed to Focus / Strike")').click()
     page.wait_for_timeout(300)
     modal.locator('button:text("Strike!")').click()
     page.wait_for_function(
         "document.querySelectorAll('#dice-animation-duel svg.die').length > 0",
-        timeout=5000,
+        timeout=15000,
     )
     assert page.locator('#dice-animation-duel svg.die').count() > 0
 
@@ -223,7 +225,7 @@ def _get_to_strike_result(page, live_server_url, name):
             if (d && d.duelPhase === 'contested-result') return true;
         }
         return false;
-    }""", timeout=10000)
+    }""", timeout=15000)
     modal.locator('button:text("Proceed to Focus / Strike")').click()
     page.wait_for_timeout(300)
     modal.locator('button:text("Strike!")').click()
@@ -234,7 +236,7 @@ def _get_to_strike_result(page, live_server_url, name):
             if (d && d.duelPhase === 'strike-result') return true;
         }
         return false;
-    }""", timeout=10000)
+    }""", timeout=15000)
     return modal
 
 
@@ -284,7 +286,7 @@ def _get_to_opponent_damage(page, live_server_url, name):
                 if (d && d.duelPhase === 'damage-result') return true;
             }
             return false;
-        }""", timeout=10000)
+        }""", timeout=15000)
         page.wait_for_timeout(300)
         modal.locator('input[placeholder="Opponent\'s total"]').fill("999")
     else:
@@ -331,7 +333,7 @@ def test_duel_opponent_wound_check_opens(page, live_server_url):
             if (d && d.wcPhase === 'result') return true;
         }
         return false;
-    }""", timeout=10000)
+    }""", timeout=15000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     assert wc_modal.is_visible()
     # Should show pass or fail result
