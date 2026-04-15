@@ -133,11 +133,11 @@
             <div x-data="{ impaired: {{ 'true' if is_impaired_now else 'false' }} }"
                  @wound-changed.window="impaired = $event.detail.serious >= {{ ring_map['Earth'] }}"
                  :class="impaired ? 'bg-red-100 border border-red-300' : 'bg-parchment'"
-                 class="rounded p-2">
-                <span class="text-ink/60">Impaired at:</span>
+                 class="rounded p-2 flex items-center flex-wrap">
+                <span class="text-ink/60">Impaired at:</span>&nbsp;
                 <span class="font-bold">{{ ring_map['Earth'] }} serious wounds</span>
                 <template x-if="impaired">
-                    <div class="mt-1 text-xs font-bold text-red-800">IMPAIRED - 10s do not reroll</div>
+                    <div class="w-full mt-1 text-xs font-bold text-red-800">IMPAIRED - 10s do not reroll</div>
                 </template>
             </div>
             {% set dying_base = ring_map['Earth'] * 2 %}
@@ -148,11 +148,11 @@
             <div x-data="{ dying: {{ 'true' if (character.current_serious_wounds or 0) >= dying_adj else 'false' }} }"
                  @wound-changed.window="dying = $event.detail.serious >= {{ dying_adj }}"
                  :class="dying ? 'bg-red-100 border border-red-300' : 'bg-parchment'"
-                 class="rounded p-2 {{ 'tooltip-trigger relative' if has_dying_tooltip else '' }}">
-                <span class="text-ink/60">Dying at:</span>
+                 class="rounded p-2 flex items-center flex-wrap {{ 'tooltip-trigger relative' if has_dying_tooltip else '' }}">
+                <span class="text-ink/60">Dying at:</span>&nbsp;
                 <span class="font-bold">{{ dying_adj }} serious wounds</span>
                 <template x-if="dying">
-                    <div class="mt-1 text-xs font-bold text-red-800">MORTALLY WOUNDED - consult GM for available options</div>
+                    <div class="w-full mt-1 text-xs font-bold text-red-800">MORTALLY WOUNDED - consult GM for available options</div>
                 </template>
                 {% if has_dying_tooltip %}
                 <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs text-left">
@@ -166,18 +166,18 @@
                 </div>
                 {% endif %}
             </div>
-            <div class="bg-parchment rounded p-2 cursor-pointer hover:ring-2 hover:ring-accent/40 transition-shadow"
+            <div class="bg-parchment rounded p-2 flex items-center flex-wrap cursor-pointer hover:ring-2 hover:ring-accent/40 transition-shadow"
                  data-roll-key="initiative" title="Click to roll Initiative">
-                <span class="text-ink/60">Initiative:</span>
+                <span class="text-ink/60">Initiative:</span>&nbsp;
                 <span class="font-bold">{{ ring_map['Void'] + 1 }} dice, keep {{ ring_map['Void'] }}</span>
             </div>
-            <div class="bg-parchment rounded p-2">
-                <span class="text-ink/60">TN to be hit:</span>
-                <span class="font-bold">{{ 5 + 5 * character.parry }}</span>
+            <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
+                <span class="text-ink/60">TN to be hit:</span>&nbsp;
+                <span class="font-bold">{{ 5 + 5 * character.parry }}</span>&nbsp;
                 <span class="text-xs text-ink/50">(parry {{ character.parry }})</span>
             </div>
-            <div class="bg-parchment rounded p-2">
-                <span class="text-ink/60">Wound Check:</span>
+            <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
+                <span class="text-ink/60">Wound Check:</span>&nbsp;
                 <span class="font-bold">{{ ring_map['Water'] + 1 }}k{{ ring_map['Water'] }}</span>
             </div>
         </div>
@@ -203,6 +203,14 @@
                 bayushiBankedFeintRaise: ({{ (adventure_state or {})|tojson }}).bayushi_banked_feint_raise || 0,
                 hirumaBankedAttackBonus: ({{ (adventure_state or {})|tojson }}).hiruma_banked_attack_bonus || 0,
                 hidaBankedWcBonus: ({{ (adventure_state or {})|tojson }}).hida_banked_wc_bonus || 0,
+                matsuBankedWcBonuses: (() => {
+                    const v = ({{ (adventure_state or {})|tojson }}).matsu_banked_wc_bonuses;
+                    if (Array.isArray(v)) return v.map(a => ({amount: a, spent: false}));
+                    // Migrate old single-number format
+                    const old = ({{ (adventure_state or {})|tojson }}).matsu_banked_wc_bonus;
+                    if (typeof old === 'number' && old > 0) return [{amount: old, spent: false}];
+                    return [];
+                })(),
                 bankedWcExcess: (() => {
                     const v = ({{ (adventure_state or {})|tojson }}).banked_wc_excess;
                     if (Array.isArray(v)) return v.map(a => ({amount: a, spent: false}));
@@ -244,7 +252,9 @@
                         this.adventureState.bayushi_banked_feint_raise = dr.bayushiBankedFeintRaise || undefined;
                         const wcExUnspent = (this.bankedWcExcess || []).filter(b => !b.spent).map(b => b.amount);
                         this.adventureState.banked_wc_excess = wcExUnspent.length > 0 ? wcExUnspent : undefined;
-                        this.adventureState.matsu_banked_wc_bonus = dr.matsuBankedWcBonus || undefined;
+                        const matsuUnspent = (dr.matsuBankedWcBonuses || []).filter(b => !b.spent).map(b => b.amount);
+                        this.adventureState.matsu_banked_wc_bonuses = matsuUnspent.length > 0 ? matsuUnspent : undefined;
+                        this.adventureState.matsu_banked_wc_bonus = undefined;  // clear old format
                         this.adventureState.ide_banked_tn_reduce = dr.ideBankedTnReduce || undefined;
                         this.adventureState.hida_banked_wc_bonus = dr.hidaBankedWcBonus || undefined;
                     }
@@ -294,6 +304,7 @@
                     this.hirumaBankedAttackBonus = 0;
                     this.hidaBankedWcBonus = 0;
                     this.bankedWcExcess = [];
+                    this.matsuBankedWcBonuses = [];
                     this.mirumotoRoundPoints = 0;
                     // Also clear diceRoller combat state if available
                     if (window._diceRoller) {
@@ -302,7 +313,7 @@
                         window._diceRoller.hirumaBankedAttackBonus = 0;
                         window._diceRoller.bayushiBankedFeintRaise = 0;
                         window._diceRoller.bankedWcExcess = this.bankedWcExcess;
-                        window._diceRoller.matsuBankedWcBonus = 0;
+                        window._diceRoller.matsuBankedWcBonuses = [];
                         window._diceRoller.ideBankedTnReduce = 0;
                         window._diceRoller.hidaBankedWcBonus = 0;
                     }
@@ -312,6 +323,7 @@
                     delete this.adventureState.bayushi_banked_feint_raise;
                     delete this.adventureState.banked_wc_excess;
                     delete this.adventureState.matsu_banked_wc_bonus;
+                    delete this.adventureState.matsu_banked_wc_bonuses;
                     delete this.adventureState.ide_banked_tn_reduce;
                     delete this.adventureState.hida_banked_wc_bonus;
                     this.save();
@@ -649,6 +661,21 @@
                         </div>
                     </template>
                 </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('matsu_vp_wc_bonus') %}
+            <div class="mt-2 pt-2 border-t border-ink/10"
+                 x-show="matsuBankedWcBonuses.some(b => !b.spent)" x-cloak>
+                <div class="text-sm text-ink/60 mb-1">Banked Wound Check Bonuses</div>
+                <template x-for="(b, i) in matsuBankedWcBonuses" :key="'matsu'+i">
+                    <div x-show="!b.spent" class="flex items-center justify-between gap-2 text-sm">
+                        <span class="font-medium">
+                            +<span x-text="b.amount"></span> to a future wound check (after seeing roll)
+                        </span>
+                    </div>
+                </template>
+                <button @click="matsuBankedWcBonuses = []; if (window._diceRoller) window._diceRoller.matsuBankedWcBonuses = []; saveBankedBonuses()"
+                        class="text-xs text-ink/50 hover:text-accent mt-1">Clear All</button>
             </div>
             {% endif %}
             {% if school_abilities.get('ide_subtract_roll') %}
@@ -1536,6 +1563,10 @@
                                     &bull; +<span x-text="mirumotoPointsSpentThisRoll * 2"></span>
                                     from <span x-text="mirumotoPointsSpentThisRoll"></span> 3rd Dan point<span x-show="mirumotoPointsSpentThisRoll > 1">s</span>
                                 </div>
+                                <div x-show="wcMatsuBonusApplied > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="wcMatsuBonusApplied"></span>
+                                    from Matsu 3rd Dan banked bonus
+                                </div>
                                 <div x-show="wcPostRollVpSpent > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                                     &bull; +<span x-text="wcPostRollVpSpent * 5"></span>
                                     from <span x-text="wcPostRollVpSpent"></span> VP spent post-roll (4th Dan, +5 each)
@@ -1633,10 +1664,17 @@
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
                                     Undo
                                 </button>
-                                <button type="button" @click="wcSpendMatsuBonus()"
-                                        x-show="matsuBankedWcBonus > 0"
-                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium">
-                                    Apply Matsu Bonus (+<span x-text="matsuBankedWcBonus"></span>)
+                                <template x-for="(b, i) in matsuBankedWcBonuses" :key="'matsu'+i">
+                                    <button x-show="!b.spent" type="button"
+                                            @click="wcSpendMatsuBonus(i)"
+                                            class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium">
+                                        Apply Matsu Bonus (+<span x-text="b.amount"></span>)
+                                    </button>
+                                </template>
+                                <button type="button" @click="wcUndoMatsuBonus()"
+                                        x-show="wcMatsuBonusApplied > 0"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
+                                    Undo Matsu Bonus
                                 </button>
                                 <template x-for="(b, i) in bankedWcExcess" :key="'wce'+i">
                                     <button x-show="!b.spent" type="button"
@@ -1926,7 +1964,7 @@
                     <div x-show="atkHit" x-cloak class="bg-green-50 border border-green-300 rounded p-3">
                         <div class="font-bold text-green-800 mb-2">
                             <template x-if="atkNearMiss">
-                                <span>NEAR-MISS HIT - missed TN by <span x-text="Math.abs(atkExcess)"></span> (no extra damage)</span>
+                                <span>HIT (4th Dan) - missed TN by <span x-text="Math.abs(atkExcess)"></span>, Matsu 4th Dan turns near-miss into a hit (no extra damage)</span>
                             </template>
                             <template x-if="!atkNearMiss && atkIsDoubleAttack()">
                                 <span>HIT - exceeded base TN by <span x-text="atkRollTotal - atkTN"></span>
@@ -3214,7 +3252,7 @@
             rollMenuHasParry: false,
             voidSpendConfig: { cap: 0, worldliness_max: 0, combat_vp_flat_bonus: 0, wc_vp_free_raise: false },
             schoolAbilities: {},
-            matsuBankedWcBonus: 0,
+            matsuBankedWcBonuses: [],
             shosuroLowest3Bonus: 0,
             akodoReflectVP: 0,
             currentRollKey: '',
@@ -3227,6 +3265,7 @@
             akodoBankedBonuses: [],  // [{amount: N, spent: false}]
             akodoSpentThisRoll: 0,  // amount spent from banked bonuses on current roll
             wcPostRollVpSpent: 0,   // VP spent post-roll on wound check (Akodo/Yogo 4th Dan)
+            wcMatsuBonusApplied: 0, // Matsu 3rd Dan banked bonus applied to this wound check
             wcExcessSpentThisRoll: 0, // Isawa 5th Dan banked excess spent on this WC
             wcBayushiHalfLw: false, // whether Bayushi 5th Dan half-LW was applied this check
             wcDaidojiCounterattack: false, // checkbox: this WC is for a counterattacked hit
@@ -3308,6 +3347,8 @@
                             // Initiative never rerolls 10s
                         } else if (f.is_unskilled) {
                             // Unskilled rolls never reroll 10s
+                        } else if (key === 'knack:iaijutsu:strike') {
+                            // Iaijutsu strike never rerolls 10s
                         } else {
                             f.reroll_tens = !nowImpaired;
                             f.no_reroll_reason = nowImpaired ? 'impaired' : '';
@@ -3325,7 +3366,7 @@
                     this.hirumaBankedAttackBonus = as.hiruma_banked_attack_bonus || 0;
                     this.bayushiBankedFeintRaise = as.bayushi_banked_feint_raise || 0;
                     if (window._trackingBridge) this.bankedWcExcess = window._trackingBridge.bankedWcExcess;
-                    this.matsuBankedWcBonus = as.matsu_banked_wc_bonus || 0;
+                    if (window._trackingBridge) this.matsuBankedWcBonuses = window._trackingBridge.matsuBankedWcBonuses;
                     this.ideBankedTnReduce = as.ide_banked_tn_reduce || 0;
                     this.hidaBankedWcBonus = as.hida_banked_wc_bonus || 0;
                 }
@@ -3531,10 +3572,13 @@
                     t.lightWounds = Math.max(0, t.lightWounds - totalSpent * yogoHeal);
                     window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                 }
-                // Matsu 3rd Dan: bank 3*attack for future wound check bonus
+                // Matsu 3rd Dan: bank 3*attack per VP for future wound check bonus
                 if (this.schoolAbilities.matsu_vp_wc_bonus) {
                     const totalSpent = (option.fromTemp || 0) + nonTempSpent;
-                    this.matsuBankedWcBonus += totalSpent * (this.schoolAbilities.matsu_vp_wc_amount || 0);
+                    const perVp = this.schoolAbilities.matsu_vp_wc_amount || 0;
+                    for (let i = 0; i < totalSpent; i++) {
+                        this.matsuBankedWcBonuses.push({ amount: perVp, spent: false });
+                    }
                     window._trackingBridge?.saveBankedBonuses();
                 }
                 t.save();
@@ -4251,10 +4295,12 @@
                 const raisesUsed = t.getCount ? t.getCount('adventure_raises') : 0;
                 const raisesAvail = Math.max(0, (this.advRaisesConfig.available || 0) - raisesUsed);
                 this.wcPostRollVpSpent = 0;
+                this.wcMatsuBonusApplied = 0;
                 const hasPostRollVp = this.voidSpendConfig.wc_vp_free_raise && (window._trackingBridge?.voidPoints || 0) > 0;
                 this.wcExcessSpentThisRoll = 0;
                 const hasUnspentWcExcess = (this.bankedWcExcess || []).some(b => !b.spent);
-                this.wcHasDiscretionary = (this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0) || this.matsuBankedWcBonus > 0 || hasUnspentWcExcess || hasPostRollVp;
+                const hasUnspentMatsu = (this.matsuBankedWcBonuses || []).some(b => !b.spent);
+                this.wcHasDiscretionary = (this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0) || hasUnspentMatsu || hasUnspentWcExcess || hasPostRollVp;
                 this.wcModalOpen = true;
             },
 
@@ -4442,18 +4488,42 @@
                 if (t?.setCount) t.setCount('adventure_raises', raisesUsed + 1);
             },
 
-            wcSpendMatsuBonus() {
-                if (this.matsuBankedWcBonus <= 0) return;
-                const bonus = this.matsuBankedWcBonus;
-                this.matsuBankedWcBonus = 0;
-                this.baseTotal += bonus;
-                this.wcRollTotal += bonus;
+            wcSpendMatsuBonus(idx) {
+                const b = this.matsuBankedWcBonuses[idx];
+                if (!b || b.spent) return;
+                b.spent = true;
+                this.wcMatsuBonusApplied += b.amount;
+                this.baseTotal += b.amount;
+                this.wcRollTotal += b.amount;
                 const lw = this.wcLightWounds;
                 if (this.wcRollTotal >= lw) {
                     this.wcPassed = true;
                     this.wcSeriousWounds = 0;
                     this.wcMargin = this.wcRollTotal - lw;
                 } else {
+                    const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
+                        ? Math.floor(lw / 2) : lw;
+                    this.wcMargin = Math.max(0, effectiveLw - this.wcRollTotal);
+                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
+                }
+                window._trackingBridge?.saveBankedBonuses();
+            },
+
+            wcUndoMatsuBonus() {
+                if (this.wcMatsuBonusApplied <= 0) return;
+                const last = [...this.matsuBankedWcBonuses].reverse().find(b => b.spent);
+                if (!last) return;
+                last.spent = false;
+                this.wcMatsuBonusApplied -= last.amount;
+                this.baseTotal -= last.amount;
+                this.wcRollTotal -= last.amount;
+                const lw = this.wcLightWounds;
+                if (this.wcRollTotal >= lw) {
+                    this.wcPassed = true;
+                    this.wcSeriousWounds = 0;
+                    this.wcMargin = this.wcRollTotal - lw;
+                } else {
+                    this.wcPassed = false;
                     const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
                         ? Math.floor(lw / 2) : lw;
                     this.wcMargin = Math.max(0, effectiveLw - this.wcRollTotal);

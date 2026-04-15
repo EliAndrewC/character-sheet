@@ -2560,25 +2560,90 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
 
 
 def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):
-    """Matsu 3rd Dan: spend VP banks WC bonus, wound check shows Apply button."""
+    """Matsu 3rd Dan: banked WC bonus shows in tracking, applies to wound check."""
     _create_char(page, live_server_url, "Matsu3FB", "matsu_bushi",
-                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
-                 skill_overrides={"bragging": 1})
-    # Give VP
-    page.evaluate("window._trackingBridge.voidPoints = 1")
+                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
+    # Inject banked bonuses directly (3 * attack_skill=1 = 3 per VP, simulate 2 VP = two +3 bonuses)
+    page.evaluate("""
+        const bonuses = [{amount: 3, spent: false}, {amount: 3, spent: false}];
+        window._diceRoller.matsuBankedWcBonuses = bonuses;
+        if (window._trackingBridge) window._trackingBridge.matsuBankedWcBonuses = bonuses;
+    """)
     page.wait_for_timeout(200)
-    # Roll bragging with 1 VP to bank the Matsu bonus
-    page.locator('[data-roll-key="skill:bragging"]').click()
+    # Should show in tracking section
+    assert page.locator('text="Banked Wound Check Bonuses"').is_visible()
+    # Add LW and roll wound check
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "40")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
-    if menu.is_visible():
-        vp_btn = menu.locator('button.text-accent').first
-        if vp_btn.is_visible():
-            vp_btn.click()
-            _wait_roll_done(page)
-            page.wait_for_timeout(300)
-            banked = page.evaluate("window._diceRoller?.matsuBankedWcBonus || 0")
-            assert banked > 0, f"Matsu WC bonus should be banked, got {banked}"
+    _mock_dice_low(page)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    # Two Apply Matsu Bonus buttons should be visible (one per banked bonus)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    apply_btns = wc_modal.locator('button:has-text("Apply Matsu Bonus"):visible')
+    assert apply_btns.count() == 2, f"Should have 2 Apply Matsu Bonus buttons, got {apply_btns.count()}"
+    # Click first and verify total increases by 3
+    total_before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcRollTotal !== undefined && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return 0;
+    }""")
+    apply_btns.first.click()
+    page.wait_for_timeout(300)
+    total_after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcRollTotal !== undefined && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return 0;
+    }""")
+    assert total_after == total_before + 3, f"Matsu bonus should add +3: {total_before} -> {total_after}"
+    # One Apply button should remain, plus Undo should be visible
+    remaining = wc_modal.locator('button:has-text("Apply Matsu Bonus"):visible')
+    assert remaining.count() == 1, f"Should have 1 remaining Apply button, got {remaining.count()}"
+    undo_btn = wc_modal.locator('button:has-text("Undo Matsu Bonus"):visible')
+    assert undo_btn.count() > 0, "Undo Matsu Bonus button should be visible after applying"
+    # Apply second bonus, total should be +6 from original
+    remaining.first.click()
+    page.wait_for_timeout(300)
+    total_both = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcRollTotal !== undefined && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return 0;
+    }""")
+    assert total_both == total_before + 6, f"Both bonuses should add +6: {total_before} -> {total_both}"
+    # Undo last bonus
+    undo_btn.first.click()
+    page.wait_for_timeout(300)
+    total_undone = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcRollTotal !== undefined && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return 0;
+    }""")
+    assert total_undone == total_before + 3, f"Undo should restore to +3: expected {total_before + 3}, got {total_undone}"
 
 
 def test_matsu_4th_dan_near_miss_behavioral(page, live_server_url):
@@ -2606,7 +2671,7 @@ def test_matsu_4th_dan_near_miss_behavioral(page, live_server_url):
     }""")
     if state and state.get("nearMiss"):
         result = _get_attack_result_text(page)
-        assert "NEAR-MISS" in result
+        assert "4th Dan" in result
 
 
 def test_mirumoto_4th_dan_parry_reduction_behavioral(page, live_server_url):
