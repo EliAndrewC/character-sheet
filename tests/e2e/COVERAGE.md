@@ -214,7 +214,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_matsu_1st_dan_behavioral`
 - [x] 2nd Dan behavioral iaijutsu bonus -> `test_school_abilities.py::test_matsu_2nd_dan_behavioral`
-- [x] 3rd Dan VP wound check bonus option -> `test_school_abilities.py::test_matsu_3rd_dan_vp_wc_bonus_behavioral`
+- [x] 3rd Dan VP wound check bonus apply and undo -> `test_school_abilities.py::test_matsu_3rd_dan_vp_wc_bonus_behavioral`
 - [x] 4th Dan double attack near-miss behavioral -> `test_school_abilities.py::test_matsu_4th_dan_near_miss_behavioral`
 - [x] 5th Dan LW reset note after dealing serious wounds -> `test_school_abilities.py::test_matsu_5th_dan_lw_reset_note_behavioral`
 - [x] Initiative always rolls 10 dice -> `test_school_abilities.py::test_matsu_10_dice_initiative_behavioral`
