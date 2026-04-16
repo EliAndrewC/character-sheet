@@ -371,6 +371,114 @@ def test_courtier_4th_dan_temp_vp(page, live_server_url):
     page.wait_for_timeout(500)
     btn = page.locator('button:has-text("Gain 1 temp VP")')
     assert btn.count() >= 1
+def test_courtier_5th_dan_wc_bonus(page, live_server_url):
+    """Courtier 5th Dan: wound check formula includes +Air."""
+    _create_char(page, live_server_url, "Court5WC", "courtier",
+                 knack_overrides={"discern_honor": 5, "oppose_social": 5, "worldliness": 5})
+    wc_formula = page.evaluate("window._diceRoller?.formulas?.wound_check || {}")
+    assert any("5th Dan" in s for s in wc_formula.get("bonus_sources", [])), \
+        f"WC should include 5th Dan bonus, got: {wc_formula.get('bonus_sources')}"
+
+
+def test_courtier_below_5th_dan_no_wc_bonus(page, live_server_url):
+    """Courtier below 5th Dan: wound check has no 5th Dan bonus."""
+    _create_char(page, live_server_url, "Court4WC", "courtier",
+                 knack_overrides={"discern_honor": 4, "oppose_social": 4, "worldliness": 4})
+    wc_formula = page.evaluate("window._diceRoller?.formulas?.wound_check || {}")
+    assert not any("5th Dan" in s for s in wc_formula.get("bonus_sources", [])), \
+        f"WC should NOT include 5th Dan bonus, got: {wc_formula.get('bonus_sources')}"
+
+
+def test_courtier_5th_dan_always_skill_has_bonus(page, live_server_url):
+    """Courtier 5th Dan: sneaking (always TN/contested) auto-includes +Air."""
+    _create_char(page, live_server_url, "Court5Sneak", "courtier",
+                 knack_overrides={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+                 skill_overrides={"sneaking": 1})
+    formula = page.evaluate("window._diceRoller?.formulas?.['skill:sneaking'] || {}")
+    assert any("5th Dan" in b.get("label", "") for b in formula.get("bonuses", [])), \
+        f"Sneaking should have 5th Dan bonus in bonuses: {formula.get('bonuses')}"
+
+
+def test_courtier_5th_dan_never_skill_no_bonus(page, live_server_url):
+    """Courtier 5th Dan: etiquette (never TN/contested) has no +Air."""
+    _create_char(page, live_server_url, "Court5Etiq", "courtier",
+                 knack_overrides={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+                 skill_overrides={"etiquette": 1})
+    formula = page.evaluate("window._diceRoller?.formulas?.['skill:etiquette'] || {}")
+    assert not any("5th Dan" in b.get("label", "") for b in formula.get("bonuses", [])), \
+        "Etiquette should NOT have 5th Dan bonus"
+    assert formula.get("courtier_5th_dan_optional", 0) == 0, \
+        "Etiquette should NOT have optional 5th Dan checkbox"
+
+
+def test_courtier_5th_dan_sheet_display(page, live_server_url):
+    """Courtier 5th Dan: sheet shows '+X from 5th Dan' without '(Air)' suffix."""
+    _create_char(page, live_server_url, "Court5Sheet", "courtier",
+                 knack_overrides={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+                 skill_overrides={"sneaking": 1})
+    # Check the skill display on the sheet
+    body = page.text_content("body")
+    assert "from 5th Dan" in body, "Sheet should show '5th Dan' bonus for sneaking"
+    assert "5th Dan (Air)" not in body, "Sheet should NOT show '(Air)' after 5th Dan"
+
+
+def test_courtier_5th_dan_sometimes_skill_checkbox(page, live_server_url):
+    """Courtier 5th Dan: bragging (sometimes TN) shows checkbox on roll result."""
+    _create_char(page, live_server_url, "Court5Brag", "courtier",
+                 knack_overrides={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+                 skill_overrides={"bragging": 1})
+    # Clear VP so roll goes direct
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    # Checkbox should be visible
+    checkbox = page.locator('input[x-model="courtier5thApplied"]')
+    assert checkbox.is_visible(), "5th Dan TN/contested checkbox should appear on bragging roll"
+    # Get total before checking
+    total_before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return d.baseTotal;
+        }
+        return 0;
+    }""")
+    # Check the box
+    checkbox.check()
+    page.wait_for_timeout(200)
+    total_after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return d.baseTotal;
+        }
+        return 0;
+    }""")
+    air_val = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.formula?.courtier_5th_dan_optional) return d.formula.courtier_5th_dan_optional;
+        }
+        return 0;
+    }""")
+    assert total_after == total_before + air_val, \
+        f"Checking box should add +{air_val}: {total_before} -> {total_after}"
+    # Uncheck should remove the bonus
+    checkbox.uncheck()
+    page.wait_for_timeout(200)
+    total_unchecked = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return d.baseTotal;
+        }
+        return 0;
+    }""")
+    assert total_unchecked == total_before, \
+        f"Unchecking should restore original: {total_before} != {total_unchecked}"
+
+
 def test_hida_3rd_dan_reroll_appears(page, live_server_url):
     """Hida at 3rd Dan sees dice reroll selection after attack roll."""
     _create_char(page, live_server_url, "HidaReroll", "hida_bushi",
@@ -721,6 +829,9 @@ def test_togashi_3rd_dan_athletics_raises(page, live_server_url):
     sa = _get_school_abilities(page)
     assert sa.get("togashi_daily_athletics_raises") is True
     assert sa.get("togashi_daily_raises_max", 0) > 0
+    # Clear VP so athletics roll goes direct without void menu
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
     # Roll athletics and check for the button
     _roll_via_menu_or_direct(page, "athletics:Air")
     assert page.locator('button:has-text("Spend Athletics Raise")').is_visible()
@@ -962,23 +1073,20 @@ def test_togashi_heal_sw_button_works(page, live_server_url):
     """Togashi 5th Dan: Spend 1 VP to heal 2 SW button works."""
     _create_char(page, live_server_url, "TogashiHeal", "togashi_ise_zumi",
                  knack_overrides={"athletics": 5, "conviction": 5, "dragon_tattoo": 5})
-    # Give VP and SW
-    vp_row = page.locator('text="Void Points"').locator('..')
-    vp_row.locator('button:has-text("+")').click()
-    page.wait_for_timeout(200)
+    # VP starts at full (2). Add 2 SW.
     sw_row = page.locator('text="Serious Wounds"').locator('..')
     sw_row.locator('button:has-text("+")').click()
     sw_row.locator('button:has-text("+")').click()
     page.wait_for_timeout(300)
 
-    # Click heal button
+    # Click heal button (costs 1 VP, heals 2 SW)
     heal_btn = page.locator('button:has-text("Spend 1 VP to heal 2 SW")')
     assert heal_btn.is_visible()
     heal_btn.click()
     page.wait_for_timeout(300)
 
-    # VP should be 0, SW should be 0
-    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "0"
+    # VP should be 1 (2 - 1), SW should be 0
+    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "1"
     assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "0"
 
 

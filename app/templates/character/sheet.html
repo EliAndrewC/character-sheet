@@ -1199,10 +1199,17 @@
 
     <!-- SECTIONS (rich-text panels: Notes, Backstory, Allies, etc.) -->
     {% for sec in (character.sections or []) %}
+    {% if not sec.get('restricted') or viewer_can_edit %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
-        <h2 class="text-xl font-bold mb-4 text-accent">{{ sec.label or "Section" }}</h2>
+        <h2 class="text-xl font-bold mb-4 text-accent">
+            {{ sec.label or "Section" }}
+            {% if sec.get('restricted') and viewer_can_edit %}
+            <span class="text-xs font-normal text-ink/40 ml-2">(restricted)</span>
+            {% endif %}
+        </h2>
         <div class="prose prose-sm max-w-none text-ink rich-section">{{ sec.html | safe }}</div>
     </section>
+    {% endif %}
     {% endfor %}
 
     <!-- VERSION HISTORY -->
@@ -1744,7 +1751,7 @@
                     </button>
                     <div x-show="luckyOriginalWasHigher" x-cloak
                          class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800 mt-2">
-                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                        Original roll was higher (<span x-text="luckyPrevBaseTotal + _wcDiscretionaryTotal()"></span>) - you may keep the original result instead.
                     </div>
                 </div>
             </div>
@@ -1796,6 +1803,9 @@
                                 <input type="number" x-model.number="atkWeaponKept" min="1" max="10"
                                        class="w-16 border rounded px-2 py-1.5 text-sm text-center" placeholder="K">
                             </div>
+                            {% if character.school == 'brotherhood_of_shinsei_monk' %}
+                            <div class="text-xs text-ink/50 mt-1">Default 1k3 (unarmed - Brotherhood special ability)</div>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -2228,7 +2238,7 @@
                     </button>
                     <div x-show="luckyOriginalWasHigher" x-cloak
                          class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
-                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                        Original roll was higher (<span x-text="luckyPrevBaseTotal + _atkDiscretionaryTotal()"></span>) - you may keep the original result instead.
                     </div>
                 </div>
 
@@ -2783,6 +2793,15 @@
                         </template>
                     </div>
 
+                    {# Courtier 5th Dan: optional TN/contested bonus #}
+                    <label x-show="formula?.courtier_5th_dan_optional > 0" x-cloak
+                           class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
+                        <input type="checkbox" x-model="courtier5thApplied"
+                               @change="if (courtier5thApplied) { baseTotal += formula.courtier_5th_dan_optional; } else { baseTotal -= formula.courtier_5th_dan_optional; }"
+                               class="rounded text-accent">
+                        <span>Courtier 5th Dan: +<span x-text="formula?.courtier_5th_dan_optional"></span> (this is a TN/contested roll)</span>
+                    </label>
+
                     {# 3rd Dan free raises: Spend / Undo #}
                     <div x-show="formula && formula.adventure_raises_max_per_roll > 0 && advRaisesConfig.available > 0"
                          x-cloak class="bg-parchment rounded p-3 text-sm">
@@ -2999,7 +3018,7 @@
                     {# Lucky reroll: original was higher (non-initiative) #}
                     <div x-show="luckyOriginalWasHigher && !formula?.is_initiative" x-cloak
                          class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
-                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                        Original roll was higher (<span x-text="luckyPrevBaseTotal + _genericDiscretionaryTotal()"></span>) - you may keep the original result instead.
                     </div>
 
                     {# Lucky reroll: initiative - always show original action dice #}
@@ -3090,9 +3109,12 @@
             // 3rd Dan free raises
             advRaisesConfig: { available: 0, used: 0 },
             raisesSpentThisRoll: 0,
+            // Courtier 5th Dan optional TN/contested bonus
+            courtier5thApplied: false,
             // Lucky reroll
             luckyUsedThisRoll: false,
             luckyPrevTotal: 0,
+            luckyPrevBaseTotal: 0,
             luckyPrevActionDice: [],
             luckyOriginalWasHigher: false,
 
@@ -3105,22 +3127,40 @@
                 return !t.getToggle('lucky_used');
             },
 
+            _genericDiscretionaryTotal() {
+                return (this.raisesSpentThisRoll || 0) * 5
+                    + (this.mirumotoPointsSpentThisRoll || 0) * 2
+                    + (this.courtier5thApplied ? (this.formula?.courtier_5th_dan_optional || 0) : 0);
+            },
+            _atkDiscretionaryTotal() {
+                return (this.atkRaisesSpent || 0) * 5
+                    + (this.mirumotoPointsSpentThisRoll || 0) * 2
+                    + (this.akodoSpentThisRoll || 0)
+                    + (this.bayushiRaisesSpentThisRoll || 0) * 5;
+            },
+            _wcDiscretionaryTotal() {
+                return (this.wcRaisesSpent || 0) * 5
+                    + (this.mirumotoPointsSpentThisRoll || 0) * 2
+                    + (this.wcMatsuBonusApplied || 0)
+                    + (this.wcPostRollVpSpent || 0) * 5
+                    + (this.wcExcessSpentThisRoll || 0);
+            },
+
             _saveLuckyPrev() {
+                const disc = this._genericDiscretionaryTotal();
+                this.luckyPrevBaseTotal = this.baseTotal - disc;
                 this.luckyPrevTotal = this.baseTotal;
                 this.luckyPrevActionDice = [...this.actionDice];
                 this.luckyOriginalWasHigher = false;
-                this.mirumotoPointsSpentThisRoll = 0;
             },
 
             _checkLuckyResult(isInit) {
                 if (isInit) {
-                    // For initiative, always show both so user can choose
-                    this.luckyOriginalWasHigher = true;
-                } else if (this.luckyPrevTotal > this.baseTotal) {
                     this.luckyOriginalWasHigher = true;
                 } else {
-                    this.luckyOriginalWasHigher = false;
-                this.mirumotoPointsSpentThisRoll = 0;
+                    const disc = this._genericDiscretionaryTotal();
+                    const newDiceOnly = this.baseTotal - disc;
+                    this.luckyOriginalWasHigher = this.luckyPrevBaseTotal > newDiceOnly;
                 }
             },
 
@@ -3131,8 +3171,12 @@
                 this.luckyUsedThisRoll = true;
                 this._saveLuckyPrev();
                 const isInit = this.formula?.is_initiative;
-                // Re-run whatever roll was in progress
-                this.runRoll().then(() => this._checkLuckyResult(isInit));
+                const disc = this._genericDiscretionaryTotal();
+                this.runRoll().then(() => {
+                    // runRoll sets baseTotal to dice-only; re-add carried-over bonuses
+                    this.baseTotal += disc;
+                    this._checkLuckyResult(isInit);
+                });
             },
 
             async _rerollDice(rolled, rerollTens, trayId) {
@@ -3148,10 +3192,11 @@
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
-                const prevTotal = this.wcRollTotal;
-                this.luckyPrevTotal = prevTotal;
+                const disc = this._wcDiscretionaryTotal();
+                this.luckyPrevBaseTotal = this.wcRollTotal - disc;
+                this.luckyPrevTotal = this.wcRollTotal;
                 this.luckyOriginalWasHigher = false;
-                this.mirumotoPointsSpentThisRoll = 0;
+                // Do NOT reset discretionary state - bonuses carry over
                 this.wcPhase = 'rolling';
                 const f = this.formula;
                 const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-wc');
@@ -3162,10 +3207,10 @@
                 this.keptDice = keptDice;
                 this.unkeptDice = sorted.slice(0, sorted.length - keptCount);
                 this.keptSum = keptDice.reduce((s, d) => s + d.value, 0);
-                this.baseTotal = this.keptSum + f.flat;
+                const newDiceOnly = this.keptSum + f.flat;
+                this.baseTotal = newDiceOnly + disc;
                 const lw = this.wcLightWounds;
                 this.wcRollTotal = this.baseTotal;
-                this.wcRaisesSpent = 0;
                 if (this.wcRollTotal >= lw) {
                     this.wcPassed = true;
                     this.wcSeriousWounds = 0;
@@ -3179,7 +3224,7 @@
                 }
                 this.wcResultApplied = false;
                 this.wcPhase = 'result';
-                this.luckyOriginalWasHigher = prevTotal > this.wcRollTotal;
+                this.luckyOriginalWasHigher = this.luckyPrevBaseTotal > newDiceOnly;
             },
 
             async useLuckyAttack() {
@@ -3187,10 +3232,11 @@
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
-                const prevTotal = this.atkRollTotal;
-                this.luckyPrevTotal = prevTotal;
+                const disc = this._atkDiscretionaryTotal();
+                this.luckyPrevBaseTotal = this.atkRollTotal - disc;
+                this.luckyPrevTotal = this.atkRollTotal;
                 this.luckyOriginalWasHigher = false;
-                this.mirumotoPointsSpentThisRoll = 0;
+                // Do NOT reset discretionary state - bonuses carry over
                 this.atkPhase = 'rolling';
                 const f = this.formula;
                 const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-atk');
@@ -3200,14 +3246,13 @@
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.baseTotal = this.keptSum + f.flat;
+                const newDiceOnly = this.keptSum + f.flat;
+                this.baseTotal = newDiceOnly + disc;
                 this.atkRollTotal = this.baseTotal;
-                this.atkRaisesSpent = 0;
-                this.atkConvictionSpent = 0;
                 this.atkFailedParry = false;
                 this._atkUpdateHitState();
                 this.atkPhase = 'result';
-                this.luckyOriginalWasHigher = prevTotal > this.atkRollTotal;
+                this.luckyOriginalWasHigher = this.luckyPrevBaseTotal > newDiceOnly;
             },
 
             async useLuckyDamage() {
@@ -3321,8 +3366,8 @@
             duelOpponentRoll: '',
             duelOpponentHit: false,
             duelOpponentDamage: '',
-            duelWeaponRolled: 4,
-            duelWeaponKept: 2,
+            duelWeaponRolled: {{ 1 if character.school == 'brotherhood_of_shinsei_monk' else 4 }},
+            duelWeaponKept: {{ 3 if character.school == 'brotherhood_of_shinsei_monk' else 2 }},
             duelDamageTotal: 0,
             duelVoidSelected: 0,
             // Attack modal
@@ -3333,8 +3378,8 @@
             atkProbs: {},
             atkDamageAvgs: {},
             atkTN: 20,
-            atkWeaponRolled: 4,
-            atkWeaponKept: 2,
+            atkWeaponRolled: {{ 1 if character.school == 'brotherhood_of_shinsei_monk' else 4 }},
+            atkWeaponKept: {{ 3 if character.school == 'brotherhood_of_shinsei_monk' else 2 }},
             atkVoidSelected: 0,
             atkCustomTN: '',
             atkShowCustomTN: false,
@@ -3598,6 +3643,7 @@
             executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason) {
                 this.rollMenuOpen = false;
                 this.luckyUsedThisRoll = false;
+                this.courtier5thApplied = false;
                 this._postRollHooksFired = false;
                 this.luckyOriginalWasHigher = false;
                 this.mirumotoPointsSpentThisRoll = 0;
@@ -3640,6 +3686,7 @@
             executeRoll(key, voidSpent, option) {
                 this.rollMenuOpen = false;
                 this.luckyUsedThisRoll = false;
+                this.courtier5thApplied = false;
                 this._postRollHooksFired = false;
                 this.luckyOriginalWasHigher = false;
                 this.mirumotoPointsSpentThisRoll = 0;
@@ -3885,6 +3932,7 @@
                 this.duelRestartBonus = 0;
                 this.duelVoidSelected = 0;
                 this.luckyUsedThisRoll = false;
+                this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.duelOpen = true;
             },
@@ -3916,6 +3964,7 @@
                 }
 
                 this.luckyUsedThisRoll = false;
+                this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.duelPhase = 'contested-rolling';
                 this.formula = f;
@@ -3957,6 +4006,7 @@
                 const f = { ...this.formulas['knack:iaijutsu:strike'] };
                 f.flat += this.duelRestartBonus;
                 this.luckyUsedThisRoll = false;
+                this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.duelPhase = 'strike-rolling';
                 this.formula = f;
@@ -3998,6 +4048,7 @@
             async duelRollDamage() {
                 const dmg = this.duelComputeDamage();
                 this.luckyUsedThisRoll = false;
+                this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.duelPhase = 'damage-rolling';
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice

@@ -193,7 +193,17 @@ class TestSanitizeSections:
 
     def test_single_section_passes_through_safe_html(self):
         result = sanitize_sections([{"label": "Notes", "html": "<p>hello</p>"}])
-        assert result == [{"label": "Notes", "html": "<p>hello</p>"}]
+        assert result == [{"label": "Notes", "html": "<p>hello</p>", "restricted": False}]
+
+    def test_restricted_flag_preserved(self):
+        result = sanitize_sections([
+            {"label": "Secret", "html": "<p>hidden</p>", "restricted": True},
+        ])
+        assert result[0]["restricted"] is True
+
+    def test_restricted_defaults_to_false(self):
+        result = sanitize_sections([{"label": "Notes", "html": "<p>open</p>"}])
+        assert result[0]["restricted"] is False
 
     def test_section_with_dangerous_html_sanitized(self):
         result = sanitize_sections([

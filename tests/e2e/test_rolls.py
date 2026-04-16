@@ -22,6 +22,9 @@ def _create_roller(page, live_server_url, name="Roller"):
     click_plus(page, "skill_bragging", 1)
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Roller setup")
+    # Set VP to 0 so rolls go directly without a void spending menu
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
 
 
 def test_click_skill_opens_modal_with_skill_name(page, live_server_url):

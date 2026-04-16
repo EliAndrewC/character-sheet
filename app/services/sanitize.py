@@ -102,5 +102,6 @@ def sanitize_sections(sections):
         text_only = bleach.clean(html, tags=set(), strip=True).strip() if html else ""
         if not label and not text_only:
             continue
-        out.append({"label": label, "html": html})
+        restricted = bool(s.get("restricted", False))
+        out.append({"label": label, "html": html, "restricted": restricted})
     return out

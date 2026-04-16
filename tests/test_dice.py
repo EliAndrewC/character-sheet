@@ -800,7 +800,19 @@ class TestSchoolAbilities:
         assert f.rolled == 5
 
     # --- Courtier 5th Dan: +Air to all TN and contested rolls ---
-    def test_courtier_5th_dan_skill_air_bonus(self):
+    def test_courtier_5th_dan_skill_air_bonus_always(self):
+        """Courtier 5th Dan: always-TN skills get automatic bonus."""
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+            skills={"sneaking": 2},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        f = build_skill_formula("sneaking", char)
+        assert any("5th Dan" in b["label"] and b["amount"] == 3 for b in f.bonuses)
+
+    def test_courtier_5th_dan_skill_air_bonus_sometimes(self):
+        """Courtier 5th Dan: sometimes-TN skills get optional bonus field."""
         char = make_character_data(
             school="courtier",
             knacks={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
@@ -808,8 +820,20 @@ class TestSchoolAbilities:
             rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
         )
         f = build_skill_formula("bragging", char)
-        # Should have +3 (Air) from 5th Dan
-        assert any("5th Dan" in b["label"] and b["amount"] == 3 for b in f.bonuses)
+        assert f.courtier_5th_dan_optional == 3
+        assert not any("5th Dan" in b["label"] for b in f.bonuses)
+
+    def test_courtier_5th_dan_skill_air_bonus_never(self):
+        """Courtier 5th Dan: never-TN skills get no bonus."""
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+            skills={"etiquette": 2},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        f = build_skill_formula("etiquette", char)
+        assert f.courtier_5th_dan_optional == 0
+        assert not any("5th Dan" in b["label"] for b in f.bonuses)
 
     def test_courtier_5th_dan_combat_air_bonus(self):
         char = make_character_data(
@@ -853,6 +877,28 @@ class TestSchoolAbilities:
         )
         f = build_skill_formula("bragging", char)
         assert not any("5th Dan" in b.get("label", "") for b in f.bonuses)
+        assert f.courtier_5th_dan_optional == 0
+
+    def test_courtier_5th_dan_wound_check_bonus(self):
+        """Courtier 5th Dan: wound check gets +Air."""
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        wc = build_wound_check_formula(char)
+        assert wc["flat"] >= 3
+        assert any("5th Dan" in s for s in wc["bonus_sources"])
+
+    def test_courtier_below_5th_dan_no_wound_check_bonus(self):
+        """Courtier below 5th Dan: no wound check bonus."""
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 4, "oppose_social": 4, "worldliness": 4},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        wc = build_wound_check_formula(char)
+        assert not any("5th Dan" in s for s in wc["bonus_sources"])
 
     # --- Bayushi 5th Dan: half light wounds flag on wound check ---
     def test_bayushi_5th_dan_half_lw_flag(self):

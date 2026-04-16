@@ -199,3 +199,59 @@ def test_section_with_formatting_persists(page, live_server_url):
     page.goto(sheet_url)
     sheet_html = page.locator('.rich-section').first.inner_html()
     assert "<strong>" in sheet_html or "<b>" in sheet_html
+
+
+def test_restricted_checkbox_exists(page, live_server_url):
+    """Each section has a 'Restricted' checkbox in the editor."""
+    _go_to_editor_for_new_character(page, live_server_url, "RestrictedCBChar")
+    _add_section(page, "Secrets", "My dark secret.")
+    card = page.locator('#sections-container > div').first
+    checkbox = card.locator('input.section-restricted')
+    assert checkbox.is_visible(), "Restricted checkbox should be visible"
+    assert not checkbox.is_checked(), "Restricted should be unchecked by default"
+
+
+def test_restricted_persists_on_reload(page, live_server_url):
+    """Checking 'Restricted' persists after reload."""
+    _go_to_editor_for_new_character(page, live_server_url, "RestrictedPersist")
+    _add_section(page, "Secrets", "My dark secret.")
+    card = page.locator('#sections-container > div').first
+    card.locator('input.section-restricted').check()
+    _flush_autosave(page)
+    page.reload()
+    page.wait_for_function("document.querySelectorAll('#sections-container > div').length > 0")
+    card = page.locator('#sections-container > div').first
+    assert card.locator('input.section-restricted').is_checked(), \
+        "Restricted should remain checked after reload"
+
+
+def test_restricted_section_visible_to_editor(page, live_server_url):
+    """Restricted sections are shown on sheet to editors (with a label)."""
+    _go_to_editor_for_new_character(page, live_server_url, "RestrictedVisible")
+    _add_section(page, "Open Section", "This is public.")
+    _add_section(page, "Secret Section", "This is private.")
+    # Mark second section as restricted
+    cards = page.locator('#sections-container > div')
+    cards.nth(1).locator('input.section-restricted').check()
+    _flush_autosave(page)
+    # View the sheet (as the owner/editor)
+    sheet_url = page.url.replace("/edit", "")
+    page.goto(sheet_url)
+    body = page.text_content("body")
+    assert "Open Section" in body
+    assert "Secret Section" in body
+    assert "This is private." in body
+    # The restricted label should be shown to editors
+    assert "(restricted)" in body
+
+
+def test_unrestricted_section_has_no_label(page, live_server_url):
+    """Non-restricted sections do not show a (restricted) label."""
+    _go_to_editor_for_new_character(page, live_server_url, "UnrestrictedLabel")
+    _add_section(page, "Notes", "Just regular notes.")
+    _flush_autosave(page)
+    sheet_url = page.url.replace("/edit", "")
+    page.goto(sheet_url)
+    body = page.text_content("body")
+    assert "Notes" in body
+    assert "(restricted)" not in body

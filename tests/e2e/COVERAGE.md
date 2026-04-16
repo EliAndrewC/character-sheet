@@ -47,6 +47,11 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Lucky button on attack result (present/absent) -> `test_ui_interactions.py::test_lucky_reroll_on_attack`, `test_no_lucky_on_attack_without_advantage`
 - [x] Lucky button on damage result (present) -> `test_ui_interactions.py::test_lucky_reroll_on_damage`
 - [x] Lucky button on wound check result (present/absent) -> `test_ui_interactions.py::test_lucky_reroll_on_wound_check`, `test_no_lucky_on_wound_check_without_advantage`
+- [x] Lucky reroll carries over free raise (attack) -> `test_ui_interactions.py::test_lucky_carries_over_free_raise_attack`
+- [x] Lucky reroll carries over free raise (wound check) -> `test_ui_interactions.py::test_lucky_carries_over_free_raise_wc`
+- [x] Lucky reroll carries over post-roll VP (wound check) -> `test_ui_interactions.py::test_lucky_carries_over_wc_post_roll_vp`
+- [x] Lucky reroll carries over Akodo banked bonus -> `test_ui_interactions.py::test_lucky_carries_over_akodo_bonus`
+- [x] Lucky prev total updates reactively with post-reroll bonuses -> `test_ui_interactions.py::test_lucky_prevtotal_updates_with_post_reroll_bonus`
 - [x] Failed parry checkbox changes damage formula -> `test_ui_interactions.py::test_failed_parry_checkbox`
 - [x] Predeclared parry rolls with +5 bonus -> `test_ui_interactions.py::test_predeclared_parry_with_bonus`
 
@@ -121,6 +126,12 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 4th Dan temp VP after successful roll -> `test_school_abilities.py::test_courtier_4th_dan_temp_vp`
 - [x] Air ring bonus on attack rolls -> `test_school_abilities.py::test_courtier_air_attack_behavioral`
 - [x] 5th Dan Air skill behavioral bonus -> `test_school_abilities.py::test_courtier_5th_dan_air_skill_behavioral`
+- [x] 5th Dan wound check includes +Air -> `test_school_abilities.py::test_courtier_5th_dan_wc_bonus`
+- [x] Below 5th Dan no wound check bonus -> `test_school_abilities.py::test_courtier_below_5th_dan_no_wc_bonus`
+- [x] 5th Dan always-TN skill (sneaking) auto-bonus -> `test_school_abilities.py::test_courtier_5th_dan_always_skill_has_bonus`
+- [x] 5th Dan never-TN skill (etiquette) no bonus -> `test_school_abilities.py::test_courtier_5th_dan_never_skill_no_bonus`
+- [x] 5th Dan sheet display says "5th Dan" without "(Air)" -> `test_school_abilities.py::test_courtier_5th_dan_sheet_display`
+- [x] 5th Dan sometimes-TN skill (bragging) checkbox -> `test_school_abilities.py::test_courtier_5th_dan_sometimes_skill_checkbox`
 
 ### Daidoji
 
@@ -347,6 +358,10 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Empty hint shown when no sections; hidden after first add → `test_sections.py::test_empty_sections_list_shows_hint`
 - [x] Dangerous HTML (script tags, javascript: links) sanitized server-side → `test_sections.py::test_dangerous_html_is_sanitized`
 - [x] Bold formatting via Quill toolbar persists round-trip and renders on sheet → `test_sections.py::test_section_with_formatting_persists`
+- [x] Restricted checkbox exists on each section → `test_sections.py::test_restricted_checkbox_exists`
+- [x] Restricted flag persists after reload → `test_sections.py::test_restricted_persists_on_reload`
+- [x] Restricted sections visible to editors with label → `test_sections.py::test_restricted_section_visible_to_editor`
+- [x] Unrestricted sections have no restricted label → `test_sections.py::test_unrestricted_section_has_no_label`
 
 ## Gaming Groups
 
