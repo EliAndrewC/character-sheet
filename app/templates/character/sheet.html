@@ -1805,6 +1805,8 @@
                             </div>
                             {% if character.school == 'brotherhood_of_shinsei_monk' %}
                             <div class="text-xs text-ink/50 mt-1">Default 1k3 (unarmed - Brotherhood special ability)</div>
+                            {% elif school and school.category not in ('bushi', 'counterattack', 'duelist', 'investigator') %}
+                            <div class="text-xs text-ink/50 mt-1">Default 3k2 (non-bushi)</div>
                             {% endif %}
                         </div>
                     </div>
@@ -3366,7 +3368,7 @@
             duelOpponentRoll: '',
             duelOpponentHit: false,
             duelOpponentDamage: '',
-            duelWeaponRolled: {{ 1 if character.school == 'brotherhood_of_shinsei_monk' else 4 }},
+            duelWeaponRolled: {{ 1 if character.school == 'brotherhood_of_shinsei_monk' else (4 if school and school.category in ('bushi', 'counterattack', 'duelist', 'investigator') else 3) }},
             duelWeaponKept: {{ 3 if character.school == 'brotherhood_of_shinsei_monk' else 2 }},
             duelDamageTotal: 0,
             duelVoidSelected: 0,
@@ -3378,7 +3380,7 @@
             atkProbs: {},
             atkDamageAvgs: {},
             atkTN: 20,
-            atkWeaponRolled: {{ 1 if character.school == 'brotherhood_of_shinsei_monk' else 4 }},
+            atkWeaponRolled: {{ 1 if character.school == 'brotherhood_of_shinsei_monk' else (4 if school and school.category in ('bushi', 'counterattack', 'duelist', 'investigator') else 3) }},
             atkWeaponKept: {{ 3 if character.school == 'brotherhood_of_shinsei_monk' else 2 }},
             atkVoidSelected: 0,
             atkCustomTN: '',
