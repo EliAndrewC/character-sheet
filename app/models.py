@@ -171,6 +171,15 @@ class Character(Base):
         server_default=func.now(), onupdate=func.now()
     )
 
+    # Google Sheets export: stores the spreadsheet ID of the most recent export
+    # so future exports can update in place instead of creating a new sheet.
+    # google_sheet_exported_state stores a to_dict() snapshot at export time
+    # so we can detect whether the character has changed since the last export.
+    google_sheet_id: Mapped[Optional[str]] = mapped_column(String, default=None)
+    google_sheet_exported_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON, default=None
+    )
+
     # Gaming group assignment. Real-world session metadata, NOT versioned.
     # Deliberately excluded from to_dict() so it never enters published_state
     # snapshots, version diffs, or the "modified" badge.
@@ -228,6 +237,22 @@ class Character(Base):
         return False
 
     @property
+    def google_sheet_is_stale(self) -> bool:
+        """True when the character has changed since the last Google Sheets export."""
+        if not self.google_sheet_id or self.google_sheet_exported_state is None:
+            return True
+        current = self.to_dict()
+        exported = self.google_sheet_exported_state
+        skip = {"id", "created_at", "updated_at", "owner_discord_id",
+                "editor_discord_ids", "google_sheet_id"}
+        for key in current:
+            if key in skip:
+                continue
+            if current[key] != exported.get(key):
+                return True
+        return False
+
+    @property
     def publish_status(self) -> str:
         """Return 'unpublished', 'published', or 'modified'."""
         if not self.is_published:
@@ -276,6 +301,7 @@ class Character(Base):
             "current_temp_void_points": self.current_temp_void_points,
             "notes": self.notes,
             "sections": self.sections or [],
+            "google_sheet_id": self.google_sheet_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

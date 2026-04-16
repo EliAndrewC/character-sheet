@@ -47,6 +47,28 @@
         </div>
     </div>
 
+    <!-- GOOGLE SHEETS EXPORT BANNERS -->
+    {% if request.query_params.get('sheets_url') %}
+    <div class="bg-green-100 border border-green-400 text-green-800 rounded px-4 py-2 text-sm flex items-center justify-between mb-4">
+        <span>Character exported to Google Sheets.</span>
+        <a href="{{ request.query_params.get('sheets_url') }}" target="_blank" rel="noopener"
+           class="underline font-medium ml-2 whitespace-nowrap">Open Sheet</a>
+    </div>
+    {% endif %}
+    {% if request.query_params.get('sheets_error') %}
+    <div class="bg-red-100 border border-red-400 text-red-800 rounded px-4 py-2 text-sm mb-4">
+        {% if request.query_params.get('sheets_error') == 'auth_failed' %}
+        Google Sheets export failed - could not authenticate with Google. Please try again.
+        {% elif request.query_params.get('sheets_error') == 'api_failed' %}
+        Google Sheets export failed - could not create the spreadsheet. Please try again.
+        {% elif request.query_params.get('sheets_error') == 'expired' %}
+        Google Sheets export session expired. Please try again.
+        {% else %}
+        Google Sheets export failed. Please try again.
+        {% endif %}
+    </div>
+    {% endif %}
+
     <h1 class="text-3xl font-bold mb-6">Edit: {{ character.name }}</h1>
 
     <form class="space-y-8">
@@ -867,14 +889,50 @@
                 </div>
                 <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                     <span class="text-xs sm:text-sm text-ink/60" x-text="saveStatus"></span>
+                    <button type="button" @click="navigateToSheet()" data-action="view-sheet"
+                            class="bg-ink/20 hover:bg-ink/30 text-ink px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm">
+                        View Sheet
+                    </button>
+                    <div class="relative">
+                        <button type="button" @click="sheetsMenu = !sheetsMenu"
+                                class="bg-green-700 hover:bg-green-800 text-parchment px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm flex items-center gap-1">
+                            Google Sheets
+                            <svg class="w-3 h-3" :class="sheetsMenu ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div x-show="sheetsMenu" x-cloak @click.outside="sheetsMenu = false"
+                             class="absolute bottom-full mb-1 right-0 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm w-56">
+                            {% if not character.google_sheet_id %}
+                            <a href="/auth/google/export/{{ character.id }}"
+                               class="block w-full text-left px-3 py-2 hover:bg-parchment text-ink">
+                                Export to Google Sheets
+                            </a>
+                            {% else %}
+                            <template x-if="sheetsStale">
+                                <a href="/auth/google/export/{{ character.id }}"
+                                   class="block w-full text-left px-3 py-2 hover:bg-parchment text-ink">
+                                    Update Google Sheets with current stats
+                                </a>
+                            </template>
+                            <template x-if="!sheetsStale">
+                                <div class="block w-full text-left px-3 py-2 text-ink/40 cursor-default tooltip-trigger relative">
+                                    Update Google Sheets with current stats
+                                    <div class="tooltip-content absolute right-0 bottom-full mb-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-48 text-left">
+                                        Google Sheets is up to date with the current character stats.
+                                    </div>
+                                </div>
+                            </template>
+                            <a href="https://docs.google.com/spreadsheets/d/{{ character.google_sheet_id }}/edit"
+                               target="_blank" rel="noopener"
+                               class="block w-full text-left px-3 py-2 hover:bg-parchment text-ink border-t border-ink/10">
+                                View in Google Sheets
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
                     <button type="button" @click="openApplyModal()" data-action="apply-changes"
                             :disabled="!school"
                             class="bg-accent hover:bg-red-900 text-parchment px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base disabled:opacity-40 disabled:cursor-not-allowed">
                         Apply Changes
-                    </button>
-                    <button type="button" @click="navigateToSheet()" data-action="view-sheet"
-                            class="bg-ink/20 hover:bg-ink/30 text-ink px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm">
-                        View Sheet
                     </button>
                 </div>
             </div>
@@ -1021,6 +1079,8 @@ function characterForm() {
         awardModalRepText: '',
         _awardSourceTimers: {},
         saveStatus: '',
+        sheetsStale: {{ 'true' if character.google_sheet_is_stale else 'false' }},
+        sheetsMenu: false,
         _exclusivePairs: [
             {% for a_id, a_name, b_id, b_name in exclusive_pairs %}
             ["{{ a_id }}", "{{ a_name }}", "{{ b_id }}", "{{ b_name }}"],
@@ -1101,6 +1161,7 @@ function characterForm() {
 
         markDirty() {
             this._dirty = true;
+            this.sheetsStale = true;
             this.debounceSave();
         },
 

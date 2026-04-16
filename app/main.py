@@ -1,6 +1,9 @@
 """L7R Character Builder — FastAPI application entry point."""
 
+import logging
 import os
+import threading
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -9,8 +12,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
-from app.routes import auth, characters, pages
+from app.routes import auth, characters, google_sheets, pages
 from app.services.auth import is_admin
+
+log = logging.getLogger(__name__)
 
 app = FastAPI(title="L7R Character Builder")
 
@@ -21,6 +26,14 @@ templates = Jinja2Templates(
 # Make is_admin available to all templates so the admin nav link can be gated
 # without every route having to pass it in the context.
 templates.env.globals["is_admin"] = is_admin
+
+
+def get_backup_error():
+    """Return backup error string for admin banner, or None."""
+    return backup_status.get("last_error")
+
+
+templates.env.globals["get_backup_error"] = get_backup_error
 
 # Static files
 _static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -99,12 +112,62 @@ app.add_middleware(AuthMiddleware)
 app.include_router(pages.router)
 app.include_router(characters.router)
 app.include_router(auth.router)
+app.include_router(google_sheets.router)
+
+
+# Global backup status (read by routes for admin banner)
+backup_status = {"last_success": None, "last_error": None, "in_progress": False}
 
 
 @app.on_event("startup")
 def on_startup():
     init_db()
     _seed_campaign_players()
+    threading.Thread(target=_check_and_backup, daemon=True).start()
+
+
+def _check_and_backup():
+    """Background thread: check if backup is needed, run if so.
+
+    Waits 30 seconds after startup before importing boto3 to avoid
+    memory pressure during the critical startup window when Fly.io
+    health checks are running.
+    """
+    import time
+    time.sleep(30)
+
+    from app.services.backup import get_last_backup_time, run_backup, should_backup
+
+    try:
+        bucket = os.environ.get("S3_BACKUP_BUCKET")
+        if not bucket:
+            return  # No backup configured, skip silently
+
+        region = os.environ.get("S3_BACKUP_REGION", "us-east-1")
+        db_path = os.environ.get("DATABASE_URL", "l7r.db")
+
+        last = get_last_backup_time(bucket, region)
+        now = datetime.now(timezone.utc)
+        if not should_backup(last, now):
+            backup_status["last_success"] = last
+            log.info("Backup not needed (last: %s)", last)
+            return
+
+        backup_status["in_progress"] = True
+        result = run_backup(db_path, bucket, region)
+        backup_status["in_progress"] = False
+
+        if result["success"]:
+            backup_status["last_success"] = now
+            backup_status["last_error"] = None
+            log.info("Backup completed: %s", result["key"])
+        else:
+            backup_status["last_error"] = result["error"]
+            log.error("Backup failed: %s", result["error"])
+    except Exception as e:
+        backup_status["in_progress"] = False
+        backup_status["last_error"] = str(e)
+        log.error("Backup check failed: %s", e)
 
 
 def _seed_campaign_players():
