@@ -1678,7 +1678,7 @@ class SectionsManager {
         this.container = document.getElementById(containerId);
         this.emptyHint = document.getElementById(emptyHintId);
         this.sections = []; // [{wrapper, quill}]
-        (initialSections || []).forEach(s => this.addSection(s.label || '', s.html || '', /*fromInit=*/true));
+        (initialSections || []).forEach(s => this.addSection(s.label || '', s.html || '', /*fromInit=*/true, !!s.restricted));
         this.updateButtons();
         this.toggleEmptyHint();
     }
@@ -1689,7 +1689,7 @@ class SectionsManager {
             .replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     }
 
-    addSection(label = '', html = '', fromInit = false) {
+    addSection(label = '', html = '', fromInit = false, restricted = false) {
         const wrapper = document.createElement('div');
         wrapper.className = 'border border-ink/20 rounded p-3 bg-parchment/40';
         wrapper.innerHTML = `
@@ -1701,6 +1701,10 @@ class SectionsManager {
                 <button type="button" class="move-down bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 rounded text-sm" title="Move down">&darr;</button>
                 <button type="button" class="delete bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded text-sm" title="Delete section">Delete</button>
             </div>
+            <label class="flex items-center gap-2 text-xs text-ink/60 mb-2 cursor-pointer">
+                <input type="checkbox" class="section-restricted rounded text-accent" ${restricted ? 'checked' : ''}>
+                Restricted (only visible to you and the GM)
+            </label>
             <div class="quill-host"></div>
         `;
         const editorEl = wrapper.querySelector('.quill-host');
@@ -1720,6 +1724,7 @@ class SectionsManager {
         if (html) quill.root.innerHTML = html;
 
         wrapper.querySelector('.section-label').addEventListener('input', () => this.markDirty());
+        wrapper.querySelector('.section-restricted').addEventListener('change', () => this.markDirty());
         quill.on('text-change', () => this.markDirty());
         wrapper.querySelector('.move-up').addEventListener('click', () => this.move(wrapper, -1));
         wrapper.querySelector('.move-down').addEventListener('click', () => this.move(wrapper, 1));
@@ -1775,6 +1780,7 @@ class SectionsManager {
         return this.sections.map(s => ({
             label: s.wrapper.querySelector('.section-label').value,
             html: s.quill.root.innerHTML,
+            restricted: s.wrapper.querySelector('.section-restricted').checked,
         }));
     }
 

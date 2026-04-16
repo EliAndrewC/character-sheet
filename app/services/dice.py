@@ -39,6 +39,18 @@ from app.services.rolls import (
 from app.game_data import ADVANTAGES, CAMPAIGN_ADVANTAGES
 
 
+# Courtier 5th Dan: +Air on TN/contested rolls
+# Skills that are ALWAYS TN or contested (bonus auto-applies)
+_COURTIER_5TH_ALWAYS = frozenset({
+    "sneaking", "interrogation", "manipulation", "heraldry", "investigation",
+})
+# Skills that are NEVER TN or contested (bonus never applies)
+_COURTIER_5TH_NEVER = frozenset({
+    "etiquette", "acting", "history",
+})
+# All other skills: sometimes TN/contested (checkbox on roll result)
+
+
 # ---------------------------------------------------------------------------
 # Result dataclass
 # ---------------------------------------------------------------------------
@@ -80,6 +92,7 @@ class RollFormula:
     alternatives: List[dict] = field(default_factory=list)
     bonuses: List[dict] = field(default_factory=list)
     adventure_raises_max_per_roll: int = 0
+    courtier_5th_dan_optional: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -244,11 +257,14 @@ def build_skill_formula(
     tech_choices = character_data.get("technique_choices") or {}
     _apply_school_technique_bonus(formula, skill_id, school_id, knacks, tech_choices)
 
-    # Courtier 5th Dan: +Air to all TN and contested rolls
+    # Courtier 5th Dan: +Air to TN and contested rolls
     dan = compute_dan(knacks) if knacks else 0
     if school_id == "courtier" and dan >= 5:
         air_val = rings.get("Air", 2)
-        _add_flat_bonus(formula, "Courtier 5th Dan (Air)", air_val)
+        if skill_id in _COURTIER_5TH_ALWAYS:
+            _add_flat_bonus(formula, "Courtier 5th Dan", air_val)
+        elif skill_id not in _COURTIER_5TH_NEVER:
+            formula.courtier_5th_dan_optional = air_val
 
     # --- Advantage bonuses (free raises = +5 each) ---
     advantages = character_data.get("advantages", []) or []
@@ -397,7 +413,7 @@ def build_knack_formula(
     # Courtier 5th Dan: +Air to all TN and contested rolls
     if school_id == "courtier" and dan >= 5:
         air_val = rings.get("Air", 2)
-        _add_flat_bonus(formula, "Courtier 5th Dan (Air)", air_val)
+        _add_flat_bonus(formula, "Courtier 5th Dan", air_val)
 
     _finalize_caps(formula)
     return formula
@@ -446,7 +462,7 @@ def build_combat_formula(
     # Courtier 5th Dan: +Air to all TN and contested rolls
     if school_id == "courtier" and dan >= 5:
         air_val = rings.get("Air", 2)
-        _add_flat_bonus(formula, "Courtier 5th Dan (Air)", air_val)
+        _add_flat_bonus(formula, "Courtier 5th Dan", air_val)
 
     _finalize_caps(formula)
     return formula
@@ -538,6 +554,12 @@ def build_wound_check_formula(character_data: dict) -> dict:
         rolled += 1
         kept += 1
         bonus_sources.append("+1k1 from Kuni Special (untainted base)")
+
+    # Courtier 5th Dan: +Air on wound checks (TN = light wounds)
+    if school_id == "courtier" and dan >= 5:
+        air_val = rings.get("Air", 2)
+        flat += air_val
+        bonus_sources.append(f"+{air_val} from Courtier 5th Dan")
 
     # Strength of the Earth advantage
     advantages = character_data.get("advantages", []) or []
@@ -715,14 +737,13 @@ def build_all_roll_formulas(
             formula_dict["damage_extra_kept"] = damage_extra_kept
             formula_dict["damage_bonus_sources"] = variant_damage_sources
             formula_dict["is_bushi"] = is_bushi
-            # Courtier also gets +Air flat on attack rolls
+            # Courtier also gets +Air flat on attack rolls (special ability)
             if school_id == "courtier":
                 air_val = rings.get("Air", 2)
                 formula_dict["flat"] = formula_dict.get("flat", 0) + air_val
-                if not any("Courtier" in b.get("label", "") for b in formula_dict.get("bonuses", [])):
-                    formula_dict.setdefault("bonuses", []).append(
-                        {"label": "Courtier (Air)", "amount": air_val}
-                    )
+                formula_dict.setdefault("bonuses", []).append(
+                    {"label": "Courtier Special (Air)", "amount": air_val}
+                )
         return formula_dict
 
     # Skills with rank > 0

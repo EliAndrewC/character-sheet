@@ -67,8 +67,9 @@ def test_void_points_persist(page, live_server_url):
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Test")
 
+    # VP starts at 2 (full). Decrement to 1, reload, verify persistence.
     vp_row = page.locator('text="Void Points"').locator('..')
-    vp_row.locator('button', has_text="+").click()
+    vp_row.locator('button', has_text="-").click()
     page.wait_for_timeout(500)
     page.reload()
     page.wait_for_selector('text="Void Points"')
@@ -87,8 +88,7 @@ def test_void_points_max_enforced(page, live_server_url):
     vp_row = page.locator('text="Void Points"').locator('..')
     plus = vp_row.locator('button', has_text="+")
     # Default rings: Air=2, Fire=2, Earth=2, Water=3, Void=2 -> max = 2
-    plus.click()
-    plus.click()
+    # VP starts at max, so + should already be disabled
     page.wait_for_timeout(300)
     assert plus.is_disabled()
 

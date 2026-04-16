@@ -41,17 +41,17 @@ def test_tracking_renders_with_per_adventure_abilities(page, live_server_url):
 
 
 def test_tracking_shows_initial_values(page, live_server_url):
-    """The tracking section should show 0 for all counters on a fresh character."""
+    """The tracking section shows correct initial values on a fresh character."""
     _create_published_character(page, live_server_url, "Initial Values")
 
     # Wait for Alpine to initialize
     page.wait_for_selector('text="Tracking"')
     page.wait_for_timeout(500)
 
-    # Check that the numbers are visible and show 0
+    # Wounds start at 0, void points start at max (min ring = 2)
     assert page.locator('[x-text="lightWounds"]').text_content().strip() == "0"
     assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "0"
-    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "0"
+    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "2"
 
 
 def test_wound_tracking_persists(page, live_server_url):
@@ -75,17 +75,16 @@ def test_wound_tracking_persists(page, live_server_url):
 
 
 def test_void_points_tracking(page, live_server_url):
-    """Void points can be incremented and decremented."""
+    """Void points can be decremented and incremented."""
     _create_published_character(page, live_server_url, "Void Tracker")
 
-    # Find the void section buttons via the parent of the VP label
+    # VP starts at 2 (full, min ring = 2). Decrement first.
     void_row = page.locator('text="Void Points"').locator('..')
-    void_row.locator('button', has_text="+").click()
-    page.wait_for_timeout(500)
-
-    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "1"
-
-    # Remove it
     void_row.locator('button', has_text="-").click()
     page.wait_for_timeout(500)
-    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "0"
+    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "1"
+
+    # Increment back
+    void_row.locator('button', has_text="+").click()
+    page.wait_for_timeout(500)
+    assert page.locator('[x-text="voidPoints"]').text_content().strip() == "2"

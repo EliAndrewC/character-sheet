@@ -277,7 +277,217 @@ def test_no_lucky_on_wound_check_without_advantage(page, live_server_url):
 
 
 # ---------------------------------------------------------------------------
-# 6. Iaijutsu duel restart
+# 8. Lucky reroll carries over discretionary bonuses
+# ---------------------------------------------------------------------------
+
+def test_lucky_carries_over_free_raise_attack(page, live_server_url):
+    """Lucky reroll on attack preserves previously-spent free raises."""
+    _create_char(page, live_server_url, "LuckyRaiseAtk", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("25")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    # Spend a free raise
+    raise_btn = modal.locator('button:has-text("Spend Free Raise"):visible')
+    if raise_btn.count() > 0:
+        total_before_raise = page.evaluate("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.atkPhase === 'result') return d.atkRollTotal;
+            }
+            return 0;
+        }""")
+        raise_btn.first.click()
+        page.wait_for_timeout(200)
+        total_with_raise = page.evaluate("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.atkPhase === 'result') return d.atkRollTotal;
+            }
+            return 0;
+        }""")
+        assert total_with_raise == total_before_raise + 5
+        # Now use Lucky
+        lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
+        assert lucky_btn.count() > 0
+        lucky_btn.first.click()
+        _wait_attack_result(page)
+        # The rerolled total should still include the +5 from the raise
+        new_total = page.evaluate("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.atkPhase === 'result') return {
+                    total: d.atkRollTotal,
+                    raisesSpent: d.atkRaisesSpent
+                };
+            }
+            return null;
+        }""")
+        assert new_total["raisesSpent"] == 1, "Free raise should be preserved after Lucky"
+        # The new dice-only total may differ, but the raise is included
+        new_dice_only = new_total["total"] - 5
+        assert new_dice_only > 0, "Should have a valid dice total"
+
+
+def test_lucky_carries_over_free_raise_wc(page, live_server_url):
+    """Lucky reroll on wound check preserves previously-spent free raises."""
+    _create_char(page, live_server_url, "LuckyRaiseWC", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    _add_lw_and_open_wc(page, 40)
+    _roll_wc(page)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    raise_btn = wc_modal.locator('button:has-text("Spend Free Raise"):visible')
+    if raise_btn.count() > 0:
+        raise_btn.first.click()
+        page.wait_for_timeout(200)
+        lucky_btn = wc_modal.locator('button:has-text("Use Lucky"):visible')
+        assert lucky_btn.count() > 0
+        lucky_btn.first.click()
+        _wait_wc_result(page)
+        state = page.evaluate("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.wcPhase === 'result') return {
+                    total: d.wcRollTotal,
+                    raisesSpent: d.wcRaisesSpent
+                };
+            }
+            return null;
+        }""")
+        assert state["raisesSpent"] == 1, "WC free raise should be preserved after Lucky"
+
+
+def test_lucky_carries_over_wc_post_roll_vp(page, live_server_url):
+    """Lucky reroll on wound check preserves previously-spent post-roll VP (4th Dan)."""
+    _create_char(page, live_server_url, "LuckyVPWC", "akodo_bushi",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    # Give VP
+    page.evaluate("window._trackingBridge.voidPoints = 3")
+    page.wait_for_timeout(200)
+    _add_lw_and_open_wc(page, 40)
+    _roll_wc(page)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    # Spend VP post-roll
+    vp_btn = wc_modal.locator('button:has-text("Spend VP (+5)"):visible')
+    if vp_btn.count() > 0:
+        vp_btn.first.click()
+        page.wait_for_timeout(200)
+        lucky_btn = wc_modal.locator('button:has-text("Use Lucky"):visible')
+        assert lucky_btn.count() > 0
+        lucky_btn.first.click()
+        _wait_wc_result(page)
+        state = page.evaluate("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.wcPhase === 'result') return {
+                    total: d.wcRollTotal,
+                    vpSpent: d.wcPostRollVpSpent
+                };
+            }
+            return null;
+        }""")
+        assert state["vpSpent"] == 1, "Post-roll VP should be preserved after Lucky"
+
+
+def test_lucky_carries_over_akodo_bonus(page, live_server_url):
+    """Lucky reroll on attack preserves previously-spent Akodo banked bonus."""
+    _create_char(page, live_server_url, "LuckyAkodo", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    # Inject a banked bonus
+    page.evaluate("""() => {
+        const dr = window._diceRoller;
+        dr.akodoBankedBonuses = [{amount: 10, spent: false}];
+        if (window._trackingBridge) window._trackingBridge.akodoBankedBonuses = dr.akodoBankedBonuses;
+    }""")
+    page.wait_for_timeout(200)
+    # Roll attack with high TN to miss
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("30")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    # Apply Akodo bonus
+    apply_btn = modal.locator('button:has-text("Apply +10"):visible')
+    if apply_btn.count() > 0:
+        apply_btn.first.click()
+        page.wait_for_timeout(200)
+        lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
+        assert lucky_btn.count() > 0
+        lucky_btn.first.click()
+        _wait_attack_result(page)
+        state = page.evaluate("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.atkPhase === 'result') return {
+                    total: d.atkRollTotal,
+                    akodoSpent: d.akodoSpentThisRoll,
+                    bonusStillSpent: d.akodoBankedBonuses?.[0]?.spent
+                };
+            }
+            return null;
+        }""")
+        assert state["akodoSpent"] == 10, "Akodo bonus should be preserved after Lucky"
+        assert state["bonusStillSpent"] is True, "Akodo bonus should remain marked spent"
+
+
+def test_lucky_prevtotal_updates_with_post_reroll_bonus(page, live_server_url):
+    """After Lucky reroll, spending more raises updates the displayed original total too."""
+    _create_char(page, live_server_url, "LuckyPrevUpd", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("25")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    # Use Lucky immediately (no bonuses spent yet)
+    lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
+    assert lucky_btn.count() > 0
+    lucky_btn.first.click()
+    _wait_attack_result(page)
+    # Get the displayed prev total
+    prev_total_1 = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result' && d.luckyPrevBaseTotal !== undefined) {
+                return d.luckyPrevBaseTotal + d._atkDiscretionaryTotal();
+            }
+        }
+        return 0;
+    }""")
+    # Now spend a free raise AFTER the Lucky reroll
+    raise_btn = modal.locator('button:has-text("Spend Free Raise"):visible')
+    if raise_btn.count() > 0:
+        raise_btn.first.click()
+        page.wait_for_timeout(200)
+        # The displayed prev total should have increased by 5 (bonus applies to both)
+        prev_total_2 = page.evaluate("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.atkPhase === 'result' && d.luckyPrevBaseTotal !== undefined) {
+                    return d.luckyPrevBaseTotal + d._atkDiscretionaryTotal();
+                }
+            }
+            return 0;
+        }""")
+        assert prev_total_2 == prev_total_1 + 5, \
+            f"Original total should increase by 5 when raise spent post-reroll: {prev_total_1} -> {prev_total_2}"
+
+
+# ---------------------------------------------------------------------------
+# 9. Iaijutsu duel restart
 # ---------------------------------------------------------------------------
 
 def test_duel_restart_resets_tns(page, live_server_url):

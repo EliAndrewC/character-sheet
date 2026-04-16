@@ -8,7 +8,7 @@ pytestmark = [pytest.mark.rolls, pytest.mark.tracking]
 
 def _create_char_with_void(page, live_server_url, name="VoidTest",
                             void_points=2, temp_void=0):
-    """Create a character, apply, then set void points via tracking."""
+    """Create a character, apply, then set void points via JS."""
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     page.wait_for_selector('input[name="name"]')
@@ -17,19 +17,12 @@ def _create_char_with_void(page, live_server_url, name="VoidTest",
     click_plus(page, "skill_bragging", 1)
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Setup")
-    # Set void points via the + button
-    vp_section = page.locator('text="Void Points"').first.locator('..')
-    for _ in range(void_points):
-        vp_section.locator('button', has_text="+").click()
-        page.wait_for_timeout(100)
-    # Set temp void if applicable (Akodo Bushi has temp void)
+    # Set void points directly via JS (characters now start at full VP)
+    page.evaluate(f"window._trackingBridge.voidPoints = {void_points}")
     if temp_void > 0:
-        tv_section = page.locator('text="Temp Void"').first.locator('..')
-        for _ in range(temp_void):
-            tv_section.locator('button', has_text="+").click()
-            page.wait_for_timeout(100)
+        page.evaluate(f"window._trackingBridge.tempVoidPoints = {temp_void}")
+    page.evaluate("window._trackingBridge.save()")
     page.wait_for_timeout(500)
-    # Reload to ensure the tracking state is fresh in all Alpine scopes
     page.reload()
     page.wait_for_load_state("networkidle")
 
