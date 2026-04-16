@@ -89,6 +89,7 @@ async def create_character(request: Request, db: Session = Depends(get_db)):
         name="New Character",
         owner_discord_id=user["discord_id"],
         player_name=user.get("display_name", ""),
+        current_void_points=2,  # start with full VP (all rings default to 2)
     )
     db.add(character)
     db.commit()
@@ -244,6 +245,21 @@ async def autosave_character(
         character.ring_earth = rings.get("Earth", character.ring_earth)
         character.ring_water = rings.get("Water", character.ring_water)
         character.ring_void = rings.get("Void", character.ring_void)
+        # For unpublished characters, keep void points at max as rings change
+        if not character.is_published:
+            ring_vals = [character.ring_air, character.ring_fire,
+                         character.ring_earth, character.ring_water,
+                         character.ring_void]
+            if character.school in ("shugenja", "isawa_ishi"):
+                from app.game_data import void_points_max_shugenja, compute_dan
+                rings = {"Air": character.ring_air, "Fire": character.ring_fire,
+                         "Earth": character.ring_earth, "Water": character.ring_water,
+                         "Void": character.ring_void}
+                knacks = character.knacks or {}
+                dan = compute_dan(knacks) if knacks else 0
+                character.current_void_points = void_points_max_shugenja(rings, dan)
+            else:
+                character.current_void_points = min(ring_vals)
     if "attack" in body:
         character.attack = body["attack"]
     if "parry" in body:

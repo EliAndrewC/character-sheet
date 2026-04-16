@@ -1736,6 +1736,16 @@
                             </button>
                         </div>
                     </div>
+
+                    {# Lucky reroll for wound check #}
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyWoundCheck()"
+                            class="bg-gold/20 hover:bg-gold/30 text-ink px-4 py-2 rounded text-sm font-medium mt-2">
+                        Use Lucky to reroll wound check
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800 mt-2">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                    </div>
                 </div>
             </div>
         </div>
@@ -2210,6 +2220,16 @@
                             Close
                         </button>
                     </div>
+
+                    {# Lucky reroll for attack #}
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyAttack()"
+                            class="bg-gold/20 hover:bg-gold/30 text-ink px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll attack
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                    </div>
                 </div>
 
                 {# ── DAMAGE RESULT ── #}
@@ -2245,6 +2265,15 @@
                     <div x-show="atkOtakuTradeDice" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm font-medium text-accent">
                         + 1 automatic serious wound (5th Dan - traded 10 damage dice)
+                    </div>
+                    {# Lucky reroll for damage #}
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyDamage()"
+                            class="bg-gold/20 hover:bg-gold/30 text-ink px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll damage
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
                     </div>
                     <button type="button" @click="atkModalOpen = false"
                             class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
@@ -2346,6 +2375,14 @@
                             </div>
                         </template>
                     </div>
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyDuelContested()"
+                            class="bg-gold/20 hover:bg-gold/30 text-ink px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                    </div>
                     <button type="button" @click="duelProceedToFocusStrike()"
                             class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
                         Proceed to Focus / Strike
@@ -2438,6 +2475,16 @@
                         <div class="font-bold text-red-800 mb-2">MISSED</div>
                     </div>
 
+                    {# Lucky reroll for duel strike #}
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyDuelStrike()"
+                            class="bg-gold/20 hover:bg-gold/30 text-ink px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll strike
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                    </div>
+
                     {# Opponent's roll input (always shown after strike) #}
                     <div class="bg-parchment rounded p-3 space-y-2">
                         <label class="block text-sm font-medium">Opponent's iaijutsu roll total:</label>
@@ -2465,6 +2512,16 @@
                     </div>
                     <div class="bg-ink/5 rounded p-3">
                         <div class="font-bold text-2xl text-accent" x-text="duelDamageTotal + ' damage'"></div>
+                    </div>
+
+                    {# Lucky reroll for duel damage #}
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyDuelDamage()"
+                            class="bg-gold/20 hover:bg-gold/30 text-ink px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll damage
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
                     </div>
 
                     {# If opponent also needs to resolve #}
@@ -3175,6 +3232,74 @@
                 this.luckyOriginalWasHigher = prevTotal > this.atkDamageTotal;
             },
 
+            async useLuckyDuelContested() {
+                if (!this.canUseLucky()) return;
+                const t = window._trackingBridge;
+                t.setToggle('lucky_used', true);
+                this.luckyUsedThisRoll = true;
+                const prevTotal = this.duelContestedRoll;
+                this.luckyPrevTotal = prevTotal;
+                this.luckyOriginalWasHigher = false;
+                this.duelPhase = 'contested-rolling';
+                const f = this.formula;
+                const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-duel');
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(f.kept, sorted.length);
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = this.keptSum + f.flat;
+                this.duelContestedRoll = this.baseTotal;
+                this.duelPhase = 'contested-result';
+                this.luckyOriginalWasHigher = prevTotal > this.duelContestedRoll;
+            },
+
+            async useLuckyDuelStrike() {
+                if (!this.canUseLucky()) return;
+                const t = window._trackingBridge;
+                t.setToggle('lucky_used', true);
+                this.luckyUsedThisRoll = true;
+                const prevTotal = this.duelStrikeRoll;
+                this.luckyPrevTotal = prevTotal;
+                this.luckyOriginalWasHigher = false;
+                this.duelPhase = 'strike-rolling';
+                const f = this.formula;
+                const dice = await this._rerollDice(f.rolled, false, 'dice-animation-duel');
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(f.kept, sorted.length);
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = this.keptSum + f.flat;
+                this.duelStrikeRoll = this.baseTotal;
+                const excess = this.duelStrikeRoll - this.duelOpponentTN;
+                this.duelStrikeHit = excess >= 0;
+                this.duelStrikeExcess = excess;
+                this.duelPhase = 'strike-result';
+                this.luckyOriginalWasHigher = prevTotal > this.duelStrikeRoll;
+            },
+
+            async useLuckyDuelDamage() {
+                if (!this.canUseLucky()) return;
+                const t = window._trackingBridge;
+                t.setToggle('lucky_used', true);
+                this.luckyUsedThisRoll = true;
+                const prevTotal = this.duelDamageTotal;
+                this.luckyPrevTotal = prevTotal;
+                this.luckyOriginalWasHigher = false;
+                this.duelPhase = 'damage-rolling';
+                const dmg = this.duelComputeDamage();
+                const dice = await this._rerollDice(dmg.rolled, true, 'dice-animation-duel');
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(dmg.kept, sorted.length);
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.duelDamageTotal = this.keptSum + dmg.flat;
+                this.duelPhase = 'damage-result';
+                this.luckyOriginalWasHigher = prevTotal > this.duelDamageTotal;
+            },
+
             // Threshold data for wound check notifications
             _earthRing: {{ ring_map['Earth'] }},
             _dyingThreshold: {{ dying_adj }},
@@ -3759,6 +3884,8 @@
                 this.duelOpponentCanFocus = true;
                 this.duelRestartBonus = 0;
                 this.duelVoidSelected = 0;
+                this.luckyUsedThisRoll = false;
+                this.luckyOriginalWasHigher = false;
                 this.duelOpen = true;
             },
 
@@ -3788,6 +3915,8 @@
                     if (options[voidCount - 1]) this.deductVoidPoints(options[voidCount - 1]);
                 }
 
+                this.luckyUsedThisRoll = false;
+                this.luckyOriginalWasHigher = false;
                 this.duelPhase = 'contested-rolling';
                 this.formula = f;
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
@@ -3827,6 +3956,8 @@
             async duelRollStrike() {
                 const f = { ...this.formulas['knack:iaijutsu:strike'] };
                 f.flat += this.duelRestartBonus;
+                this.luckyUsedThisRoll = false;
+                this.luckyOriginalWasHigher = false;
                 this.duelPhase = 'strike-rolling';
                 this.formula = f;
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
@@ -3866,6 +3997,8 @@
 
             async duelRollDamage() {
                 const dmg = this.duelComputeDamage();
+                this.luckyUsedThisRoll = false;
+                this.luckyOriginalWasHigher = false;
                 this.duelPhase = 'damage-rolling';
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;

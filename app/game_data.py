@@ -112,7 +112,6 @@ ADVANTAGE_DETAIL_FIELDS = {
 
 EXCLUSIVE_PAIRS = [
     ("vain", "Vain", "unkempt", "Unkempt"),
-    ("lucky", "Lucky", "unlucky", "Unlucky"),
     ("imperial_favor", "Imperial Favor", "imperial_disdain", "Imperial Disdain"),
     ("quick_healer", "Quick Healer", "slow_healer", "Slow Healer"),
     ("virtue", "Virtue", "unconventional", "Unconventional"),

@@ -61,6 +61,39 @@ class TestCreateCharacter:
         assert char.is_published is False
         assert char.owner_discord_id == "183026066498125825"
 
+    def test_create_starts_with_full_void_points(self, client):
+        """New characters start with full void points (min ring = 2)."""
+        client.post("/characters")
+        char = query_db(client).first()
+        assert char.current_void_points == 2
+
+    def test_autosave_updates_void_for_unpublished(self, client):
+        """Autosave on unpublished character keeps VP at max when rings change."""
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        # Raise Void ring to 3 - void max should become 2 (min of all rings)
+        client.post(f"/characters/{cid}/autosave", json={
+            "rings": {"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 3}
+        })
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.current_void_points == 2  # min ring is still 2
+        # Raise all rings to 3
+        client.post(f"/characters/{cid}/autosave", json={
+            "rings": {"Air": 3, "Fire": 3, "Earth": 3, "Water": 3, "Void": 3}
+        })
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.current_void_points == 3  # min ring is now 3
+
+    def test_autosave_does_not_change_void_for_published(self, client):
+        """Autosave on published character does NOT reset VP when rings change."""
+        cid = _seed_character(client, current_void_points=1, is_published=True)
+        client.post(f"/characters/{cid}/autosave", json={
+            "rings": {"Air": 3, "Fire": 3, "Earth": 3, "Water": 3, "Void": 3}
+        })
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.current_void_points == 1  # unchanged
+
 
 class TestViewCharacter:
     def test_view_character(self, client):

@@ -43,8 +43,10 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Hit shows Make Damage Roll button -> `test_attack_modal.py::test_attack_hit_shows_damage_roll_button`
 - [x] Dice animation visible during attack roll -> `test_attack_modal.py::test_attack_dice_animation_visible`
 - [x] Damage roll produces result after hit -> `test_attack_modal.py::test_attack_damage_roll_produces_result`
-- [x] Lucky reroll on attack produces new result -> `test_ui_interactions.py::test_lucky_reroll_on_attack`
-- [x] Lucky reroll on wound check produces new result -> `test_ui_interactions.py::test_lucky_reroll_on_wound_check`
+- [x] Lucky button on regular roll (present/absent) -> `test_ui_interactions.py::test_lucky_on_regular_roll`, `test_no_lucky_on_regular_roll_without_advantage`
+- [x] Lucky button on attack result (present/absent) -> `test_ui_interactions.py::test_lucky_reroll_on_attack`, `test_no_lucky_on_attack_without_advantage`
+- [x] Lucky button on damage result (present) -> `test_ui_interactions.py::test_lucky_reroll_on_damage`
+- [x] Lucky button on wound check result (present/absent) -> `test_ui_interactions.py::test_lucky_reroll_on_wound_check`, `test_no_lucky_on_wound_check_without_advantage`
 - [x] Failed parry checkbox changes damage formula -> `test_ui_interactions.py::test_failed_parry_checkbox`
 - [x] Predeclared parry rolls with +5 bonus -> `test_ui_interactions.py::test_predeclared_parry_with_bonus`
 
@@ -490,8 +492,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 - [x] Vain disables Unkempt → `test_exclusive_pairs.py::test_vain_disables_unkempt`
 - [x] Unkempt disables Vain → `test_exclusive_pairs.py::test_unkempt_disables_vain`
-- [x] Lucky disables Unlucky → `test_exclusive_pairs.py::test_lucky_disables_unlucky`
-- [x] Unlucky disables Lucky → `test_exclusive_pairs.py::test_unlucky_disables_lucky`
+- [x] Lucky and Unlucky can coexist → `test_exclusive_pairs.py::test_lucky_and_unlucky_can_coexist`
 - [x] Imperial Favor disables Imperial Disdain → `test_exclusive_pairs.py::test_imperial_favor_disables_imperial_disdain`
 - [x] Imperial Disdain disables Imperial Favor → `test_exclusive_pairs.py::test_imperial_disdain_disables_imperial_favor`
 - [x] Quick Healer disables Slow Healer → `test_exclusive_pairs.py::test_quick_healer_disables_slow_healer`

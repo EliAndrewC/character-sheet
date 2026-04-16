@@ -177,7 +177,8 @@ def test_die_top_angle_is_about_70_degrees(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     # Attack now opens the attack modal - click "Roll Attack" to start the roll
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
-    page.locator('[data-modal="attack"] button:text("Roll Attack")').click()
+    page.locator('[data-modal="attack"] select').select_option("5")
+    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
     # Wait until the rolling phase has rendered the dice tray AND the dice
     # have stopped tumbling (otherwise the rotation transform skews
     # getBoundingClientRect and the measured angle is wrong).

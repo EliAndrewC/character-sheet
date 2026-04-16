@@ -103,7 +103,7 @@ def test_attack_roll_shows_hit_or_miss(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # Use a low TN to increase hit chance
     page.locator('[data-modal="attack"] select').first.select_option("5")
-    page.locator('[data-modal="attack"] button:text("Roll Attack")').click()
+    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
     # Wait for result
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -126,7 +126,7 @@ def test_attack_hit_shows_damage_roll_button(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # TN 5 should almost always hit
     page.locator('[data-modal="attack"] select').first.select_option("5")
-    page.locator('[data-modal="attack"] button:text("Roll Attack")').click()
+    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -147,7 +147,7 @@ def test_attack_damage_roll_produces_result(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] select').first.select_option("5")
-    page.locator('[data-modal="attack"] button:text("Roll Attack")').click()
+    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -178,7 +178,7 @@ def test_attack_dice_animation_visible(page, live_server_url):
     page.evaluate("if (window._diceRoller) window._diceRoller.prefs.dice_animation_enabled = true")
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
-    page.locator('[data-modal="attack"] button:text("Roll Attack")').click()
+    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
     page.wait_for_function(
         "document.querySelectorAll('#dice-animation-atk svg.die').length > 0",
         timeout=15000,

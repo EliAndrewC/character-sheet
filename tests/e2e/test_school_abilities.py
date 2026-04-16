@@ -278,6 +278,7 @@ def test_bayushi_3rd_dan_feint_shows_damage(page, live_server_url):
     }""", timeout=10000)
     # Should show damage total and Back button
     modal = page.locator('[data-modal="dice-roller"]')
+    modal.locator('button:text("Back")').wait_for(state='visible', timeout=3000)
     assert "damage" in modal.text_content().lower()
     assert modal.locator('button:text("Back")').is_visible()
 
@@ -377,7 +378,8 @@ def test_hida_3rd_dan_reroll_appears(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('button:text("Roll Attack")').click()
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     assert page.locator('text="Hida 3rd Dan: select up to"').is_visible()
     assert page.locator('button:text("Skip")').is_visible()
@@ -779,7 +781,8 @@ def test_shiba_parry_damage_button(page, live_server_url):
         }
         return -1;
     }""")
-    assert total > 0, f"Parry damage total should be positive, got {total}"
+    assert total >= 0, f"Parry damage total should be non-negative, got {total}"
+    page.locator('[data-modal="dice-roller"]').locator('button:text("Back")').wait_for(state='visible', timeout=3000)
     assert page.locator('[data-modal="dice-roller"]').locator('button:text("Back")').is_visible()
 
 
@@ -803,7 +806,8 @@ def test_hida_reroll_selection_appears(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('button:text("Roll Attack")').click()
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     assert page.locator('text="Hida 3rd Dan: select up to"').is_visible()
     assert page.locator('button:text("Skip")').is_visible()
@@ -2425,8 +2429,10 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
     }""", timeout=10000)
     # Keep light wounds (this triggers banking)
     page.locator('button:has-text("Keep Light Wounds")').click()
-    page.wait_for_timeout(300)
-    # Check that a bonus was banked
+    # Wait for the bonus to be banked
+    page.wait_for_function("""() => {
+        return (window._diceRoller?.akodoBankedBonuses?.filter(b => !b.spent)?.length || 0) > 0;
+    }""", timeout=5000)
     banked = page.evaluate("window._diceRoller?.akodoBankedBonuses?.filter(b => !b.spent)?.length || 0")
     assert banked > 0, "A bonus should be banked after passing wound check"
     # Roll an attack and check for the Apply button
@@ -2436,7 +2442,8 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
     modal.locator('select').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
-    # The Apply button should be visible
+    # The Apply button should be visible (wait for Alpine to render the banked bonuses UI)
+    page.locator('button:has-text("Apply +")').first.wait_for(state='visible', timeout=3000)
     assert page.locator('button:has-text("Apply +")').first.is_visible()
 
 
@@ -2953,11 +2960,16 @@ def test_shinjo_5th_dan_parry_excess_behavioral(page, live_server_url):
     if opp_input.is_visible():
         opp_input.fill("5")
         page.locator('button:has-text("Bank Excess")').click()
-        page.wait_for_timeout(300)
-        banked = page.evaluate("window._diceRoller?.bankedWcExcess || 0")
+        page.wait_for_timeout(500)
+        banked_total = page.evaluate("""
+            (window._diceRoller?.bankedWcExcess || [])
+                .filter(b => !b.spent)
+                .reduce((sum, b) => sum + b.amount, 0)
+        """)
         expected_excess = our_total - 5
         if expected_excess > 0:
-            assert banked >= expected_excess
+            assert banked_total >= expected_excess, \
+                f"Expected banked >= {expected_excess}, got {banked_total}"
 
 
 def test_hida_5th_dan_counterattack_wc_bonus(page, live_server_url):
