@@ -199,11 +199,12 @@ async def google_callback(
         if roll.rolled > 0:
             skill_rolls[sid] = roll
 
-    # Create the Google Sheet
+    # Create or update the Google Sheet
     try:
         sheet_url = create_spreadsheet(
             access_token, character, char_dict, school, char_knacks,
             dan, xp_breakdown, effective, skill_rolls,
+            existing_sheet_id=character.google_sheet_id,
         )
     except Exception:
         log.exception("Google Sheets API failed for character %s", char_id)
