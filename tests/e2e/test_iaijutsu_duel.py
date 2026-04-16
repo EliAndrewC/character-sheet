@@ -99,7 +99,7 @@ def test_contested_roll_shows_result(page, live_server_url):
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
-    page.wait_for_timeout(300)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=3000)
     modal.locator('button:text("Roll Contested Iaijutsu")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -125,7 +125,7 @@ def test_focus_strike_phase_shows_buttons(page, live_server_url):
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
-    page.wait_for_timeout(300)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=3000)
     modal.locator('button:text("Roll Contested Iaijutsu")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -149,7 +149,7 @@ def test_focus_alternation(page, live_server_url):
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
-    page.wait_for_timeout(300)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=3000)
     modal.locator('button:text("Roll Contested Iaijutsu")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -188,7 +188,7 @@ def test_strike_shows_dice_animation(page, live_server_url):
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
-    page.wait_for_timeout(300)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=3000)
     modal.locator('button:text("Roll Contested Iaijutsu")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -199,7 +199,7 @@ def test_strike_shows_dice_animation(page, live_server_url):
         return false;
     }""", timeout=15000)
     modal.locator('button:text("Proceed to Focus / Strike")').click()
-    page.wait_for_timeout(300)
+    modal.locator('button:text("Strike!")').wait_for(state='visible', timeout=3000)
     modal.locator('button:text("Strike!")').click()
     page.wait_for_function(
         "document.querySelectorAll('#dice-animation-duel svg.die').length > 0",
@@ -216,7 +216,7 @@ def _get_to_strike_result(page, live_server_url, name):
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
-    page.wait_for_timeout(300)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=3000)
     modal.locator('button:text("Roll Contested Iaijutsu")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -227,7 +227,7 @@ def _get_to_strike_result(page, live_server_url, name):
         return false;
     }""", timeout=15000)
     modal.locator('button:text("Proceed to Focus / Strike")').click()
-    page.wait_for_timeout(300)
+    modal.locator('button:text("Strike!")').wait_for(state='visible', timeout=3000)
     modal.locator('button:text("Strike!")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -258,6 +258,7 @@ def test_duel_strike_hit_shows_damage_button(page, live_server_url):
 def test_duel_strike_shows_opponent_input(page, live_server_url):
     """After a strike, opponent roll input is shown."""
     modal = _get_to_strike_result(page, live_server_url, "DuelOppInput")
+    modal.locator('input[placeholder="Enter total"]').wait_for(state='visible', timeout=3000)
     assert modal.locator('input[placeholder="Enter total"]').is_visible()
 
 

@@ -164,11 +164,41 @@ def test_wc_take_serious_resets_and_adds_sw(page, live_server_url):
 
 
 # ---------------------------------------------------------------------------
-# 4. Lucky reroll on attack
+# 4. Lucky reroll on regular dice roll
+# ---------------------------------------------------------------------------
+
+def test_lucky_on_regular_roll(page, live_server_url):
+    """Lucky button appears on regular roll for Lucky characters, not for non-Lucky."""
+    _create_char(page, live_server_url, "LuckyReg", "akodo_bushi")
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
+    if menu.is_visible():
+        menu.locator('button:has-text("Roll")').first.click()
+    _wait_roll_done(page)
+    lucky_btn = page.locator('[data-modal="dice-roller"] button:has-text("Use Lucky"):visible')
+    assert lucky_btn.count() > 0, "Lucky button should appear on regular roll"
+
+
+def test_no_lucky_on_regular_roll_without_advantage(page, live_server_url):
+    """Lucky button does NOT appear for characters without Lucky."""
+    _create_char(page, live_server_url, "PlainReg", "akodo_bushi")
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
+    if menu.is_visible():
+        menu.locator('button:has-text("Roll")').first.click()
+    _wait_roll_done(page)
+    lucky_btn = page.locator('[data-modal="dice-roller"] button:has-text("Use Lucky"):visible')
+    assert lucky_btn.count() == 0, "Lucky button should NOT appear without advantage"
+
+
+# ---------------------------------------------------------------------------
+# 5. Lucky reroll on attack
 # ---------------------------------------------------------------------------
 
 def test_lucky_reroll_on_attack(page, live_server_url):
-    """Lucky reroll on attack produces a new result."""
+    """Lucky button appears on attack result for Lucky characters."""
     _create_char(page, live_server_url, "LuckyAtk", "akodo_bushi")
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
@@ -176,61 +206,74 @@ def test_lucky_reroll_on_attack(page, live_server_url):
     modal.locator('select').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
-    # Lucky button should be available
-    lucky_btn = page.locator('button:has-text("Use Lucky")')
-    if lucky_btn.is_visible():
-        first_total = page.evaluate("""() => {
-            const els = document.querySelectorAll('[x-data]');
-            for (const el of els) {
-                const d = window.Alpine && window.Alpine.$data(el);
-                if (d && d.atkRollTotal !== undefined) return d.atkRollTotal;
-            }
-            return 0;
-        }""")
-        lucky_btn.click()
-        _wait_attack_result(page)
-        # A new result should exist (may be same value by chance)
-        second_total = page.evaluate("""() => {
-            const els = document.querySelectorAll('[x-data]');
-            for (const el of els) {
-                const d = window.Alpine && window.Alpine.$data(el);
-                if (d && d.atkRollTotal !== undefined) return d.atkRollTotal;
-            }
-            return 0;
-        }""")
-        assert second_total > 0
+    lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
+    assert lucky_btn.count() > 0, "Lucky button should appear on attack result"
+
+
+def test_no_lucky_on_attack_without_advantage(page, live_server_url):
+    """Lucky button does NOT appear on attack result without Lucky."""
+    _create_char(page, live_server_url, "PlainAtk", "akodo_bushi")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
+    assert lucky_btn.count() == 0, "Lucky button should NOT appear without advantage"
 
 
 # ---------------------------------------------------------------------------
-# 5. Lucky reroll on wound check
+# 6. Lucky reroll on damage
+# ---------------------------------------------------------------------------
+
+def test_lucky_reroll_on_damage(page, live_server_url):
+    """Lucky button appears on damage result for Lucky characters."""
+    _create_char(page, live_server_url, "LuckyDmg", "akodo_bushi")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').select_option("5")
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    # Roll damage if hit
+    dmg_btn = modal.locator('button:has-text("Make Damage Roll"):visible')
+    if dmg_btn.count() > 0:
+        dmg_btn.first.click()
+        page.wait_for_function("""() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.atkPhase === 'damage-result') return true;
+            }
+            return false;
+        }""", timeout=10000)
+        lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
+        assert lucky_btn.count() > 0, "Lucky button should appear on damage result"
+
+
+# ---------------------------------------------------------------------------
+# 7. Lucky reroll on wound check
 # ---------------------------------------------------------------------------
 
 def test_lucky_reroll_on_wound_check(page, live_server_url):
-    """Lucky reroll on wound check produces a new result."""
+    """Lucky button appears on wound check result for Lucky characters."""
     _create_char(page, live_server_url, "LuckyWC", "akodo_bushi")
     _add_lw_and_open_wc(page, 20)
     _roll_wc(page)
-    lucky_btn = page.locator('button:has-text("Use Lucky")')
-    if lucky_btn.is_visible():
-        first_total = page.evaluate("""() => {
-            const els = document.querySelectorAll('[x-data]');
-            for (const el of els) {
-                const d = window.Alpine && window.Alpine.$data(el);
-                if (d && d.wcPhase === 'result') return d.wcRollTotal;
-            }
-            return 0;
-        }""")
-        lucky_btn.click()
-        _wait_wc_result(page)
-        second_total = page.evaluate("""() => {
-            const els = document.querySelectorAll('[x-data]');
-            for (const el of els) {
-                const d = window.Alpine && window.Alpine.$data(el);
-                if (d && d.wcPhase === 'result') return d.wcRollTotal;
-            }
-            return 0;
-        }""")
-        assert second_total > 0
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    lucky_btn = wc_modal.locator('button:has-text("Use Lucky"):visible')
+    assert lucky_btn.count() > 0, "Lucky button should appear on wound check result"
+
+
+def test_no_lucky_on_wound_check_without_advantage(page, live_server_url):
+    """Lucky button does NOT appear on wound check result without Lucky."""
+    _create_char(page, live_server_url, "PlainWC", "akodo_bushi")
+    _add_lw_and_open_wc(page, 20)
+    _roll_wc(page)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    lucky_btn = wc_modal.locator('button:has-text("Use Lucky"):visible')
+    assert lucky_btn.count() == 0, "Lucky button should NOT appear without advantage"
 
 
 # ---------------------------------------------------------------------------

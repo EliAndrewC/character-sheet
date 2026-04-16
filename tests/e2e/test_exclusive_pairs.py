@@ -39,14 +39,17 @@ def test_unkempt_disables_vain(page, live_server_url):
     _check_pair(page, "dis_unkempt", "dis_vain")
 
 
-def test_lucky_disables_unlucky(page, live_server_url):
+def test_lucky_and_unlucky_can_coexist(page, live_server_url):
+    """Lucky and Unlucky can both be taken at the same time."""
     _go_to_editor(page, live_server_url)
-    _check_pair(page, "adv_lucky", "dis_unlucky")
-
-
-def test_unlucky_disables_lucky(page, live_server_url):
-    _go_to_editor(page, live_server_url)
-    _check_pair(page, "dis_unlucky", "adv_lucky")
+    page.check('input[name="adv_lucky"]')
+    page.wait_for_timeout(200)
+    assert not page.locator('input[name="dis_unlucky"]').is_disabled(), \
+        "Unlucky should NOT be disabled when Lucky is checked"
+    page.check('input[name="dis_unlucky"]')
+    page.wait_for_timeout(200)
+    assert page.locator('input[name="adv_lucky"]').is_checked()
+    assert page.locator('input[name="dis_unlucky"]').is_checked()
 
 
 def test_imperial_favor_disables_imperial_disdain(page, live_server_url):
