@@ -69,6 +69,8 @@ def _migrate_add_columns():
         ("rank_recognition_awards", "TEXT", "'[]'"),
         ("current_temp_void_points", "INTEGER", "0"),
         ("technique_choices", "TEXT", "'{}'"),
+        ("google_sheet_id", "TEXT", "NULL"),
+        ("google_sheet_exported_state", "TEXT", "NULL"),
     ]
 
     for col_name, col_type, default in needed:

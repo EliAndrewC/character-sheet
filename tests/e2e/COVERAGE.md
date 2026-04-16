@@ -725,6 +725,16 @@ Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pyt
 
 ---
 
+## Google Sheets Export
+
+- [ ] Export to Sheets button visible to logged-in users on character sheet
+- [ ] Export to Sheets button hidden for anonymous visitors
+- [ ] Export button present alongside Edit/Delete for editors
+- [ ] Success banner displays with link after export (requires mocked Google API)
+- [ ] Error banner displays on export failure (requires mocked Google API)
+
+---
+
 ## Coverage Summary
 
 **Covered:** ~280 test functions across 32 test files

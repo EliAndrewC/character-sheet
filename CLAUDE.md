@@ -26,6 +26,8 @@ A `.env` file (gitignored) holds credentials for deployment and external service
 
 - `FLY_API_TOKEN` - Fly.io API token for deployments
 - `TEST_LOGIN_TOKENS` - UUID-to-discord-id mapping for test user login (format: `uuid:discord_id,uuid:discord_id`)
+- `GOOGLE_CLIENT_ID` - Google OAuth 2.0 client ID (for Google Sheets export)
+- `GOOGLE_CLIENT_SECRET` - Google OAuth 2.0 client secret
 
 Values with spaces or special characters must be quoted (e.g. `KEY="value with spaces"`). Load before deploying: `set -a && source .env && set +a`
 
@@ -35,6 +37,10 @@ The following are stored as **Fly secrets** (not in `.env`):
 - `DISCORD_WHITELIST_IDS` - comma-separated Discord IDs allowed to log in
 - `ADMIN_DISCORD_IDS` - comma-separated Discord IDs with GM/admin privileges
 - `TEST_LOGIN_TOKENS` - also set as a Fly secret (same value as in `.env`)
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - also set as Fly secrets (same values as in `.env`)
+- `S3_BACKUP_BUCKET` - S3 bucket name for database backups (e.g. `l7r-character-sheet-backups`)
+- `S3_BACKUP_REGION` - AWS region (default: `us-east-1`)
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` - IAM credentials for S3 backup (needs PutObject, GetObject, DeleteObject, ListBucket on the bucket)
 
 ## Running the App
 
@@ -99,8 +105,10 @@ app/
   database.py          - SQLAlchemy engine, session, Base, get_db dependency
   models.py            - Character SQLAlchemy model
   services/xp.py       - XP calculation engine
+  services/sheets.py   - Google Sheets spreadsheet building and formatting
   routes/pages.py      - Full HTML page routes (index, create, view, edit)
   routes/characters.py - Character CRUD + HTMX partial endpoints
+  routes/google_sheets.py - Google OAuth2 flow + Sheets export
   templates/           - Jinja2 templates
 tests/                 - Unit test suite (pytest)
 tests/e2e/             - E2E clicktests (Playwright)
@@ -121,6 +129,42 @@ The canonical rules live at: https://github.com/EliAndrewC/l7r/tree/master/rules
 - **Knacks start at rank 1 for free** (given by the school). XP cost for knacks only applies for ranks above 1.
 - **Dan = minimum school knack rank.** A character's Dan level equals the lowest rank among their three school knacks.
 - **New model columns require a migration entry.** When adding a column to any SQLAlchemy model, you MUST also add it to `_migrate_add_columns()` in `database.py`. The production SQLite database on Fly.io persists across deploys - `create_all` only creates new tables, it does not add columns to existing ones. Tests won't catch this because they use a fresh in-memory database each run.
+
+## Google Sheets Export
+
+Users with edit access can export a character to a Google Sheet from the edit page. The "Google Sheets" dropdown in the sticky bottom bar has "Export to Google Sheets" and (if previously exported) "View in Google Sheets".
+
+### How it works
+
+The export uses a one-shot Google OAuth2 flow - no refresh tokens are stored. Each export requires the user to sign in with Google:
+
+1. User clicks "Export to Google Sheets" on the edit page
+2. `GET /auth/google/export/{char_id}` renders an HTML page that redirects to Google's consent screen (the page also pings `/auth/google/keepalive` every 5 seconds to prevent the Fly machine from auto-stopping)
+3. User authorizes on Google's consent screen (scope: `drive.file` only)
+4. Google redirects to `GET /auth/google/callback` with an auth code
+5. Callback exchanges the code for an access token, loads the character, builds a 5-tab formatted spreadsheet via the Sheets REST API, and redirects back to the edit page with a success banner
+
+### Key constraints
+
+- **No `google-api-python-client` library.** It loads the full API discovery document into memory and OOMs on the 256MB Fly machine. Instead, `app/services/sheets.py` makes direct HTTP calls to `https://sheets.googleapis.com/v4/spreadsheets` using `httpx`.
+- **No stored tokens.** The Google OAuth consent screen is in "testing" mode (avoids Google's $4,500+ verification process for restricted scopes). Refresh tokens expire after 7 days in testing mode, so we don't bother storing them - each export is a fresh OAuth round-trip.
+- **Test users must be added manually** in the Google Cloud Console under APIs & Services > OAuth consent screen > Test users. Only listed emails can authorize.
+- **`drive.file` scope only.** This restricts the app to files it created - it cannot see or modify the user's other Drive files. Do not add the `spreadsheets` scope (it grants access to all of a user's sheets).
+- **Keepalive page.** The export entry point renders an HTML page (not a server-side redirect) that pings the server while the user is on Google's consent screen. This prevents Fly's `auto_stop_machines` from killing the machine before the callback arrives.
+
+### Spreadsheet structure (5 tabs)
+
+Each tab has its own column widths. Formatting uses `batchUpdate` with dark red (#8b0000) section headers, alternating row colors, and frozen title rows.
+
+1. **Character Sheet** - identity, rings, derived stats, combat skills, knacks, status, techniques
+2. **Skills** - grouped by category (social/knowledge, basic/advanced), with roll formulas
+3. **Advantages & Disadvantages** - with detail text, campaign items marked
+4. **XP Breakdown** - itemized spending per category with totals
+5. **Notes** - rich-text sections stripped to plain text
+
+### Future: update in place
+
+`Character.google_sheet_id` stores the spreadsheet ID of the most recent export. This enables a future feature where re-exporting updates the existing sheet instead of creating a new one. The `drive.file` scope grants access to files the app previously created, so re-authenticating gives access to the old sheet.
 
 ## Style & Design Preferences
 
@@ -152,7 +196,24 @@ fly auth login                          # interactive login (requires browser or
 fly deploy
 ```
 
-Requires a persistent volume named `l7r_data` mounted at `/data`. The `DATABASE_URL` env var is set to `/data/l7r.db` in fly.toml.
+Requires a persistent volume named `l7r_data` mounted at `/data`. The `DATABASE_URL` env var is set to `/data/l7r.db` in fly.toml. The VM is configured for 512MB RAM (shared CPU) to accommodate boto3 imports for the backup system.
+
+## Database Backups
+
+Automated S3 backups run on app startup via a background thread. The system:
+
+- **Triggers on startup** if >= 20 hours since the last backup (checked via S3 listing)
+- **Delays 30 seconds** after startup before importing boto3 to avoid memory pressure during Fly.io health checks
+- **Uses SQLite backup API** (`connection.backup()`) for a consistent snapshot even during writes
+- **Rolling retention**: 7 most recent (daily), 4 weekly, 12 monthly, yearly forever
+- **Graceful failure**: if S3 is unreachable, the app starts normally and shows an admin-only banner
+
+Key files:
+- `app/services/backup.py` - S3 upload, retention logic, snapshot creation
+- `app/main.py` - `_check_and_backup()` background thread, `backup_status` global, `get_backup_error()` template global
+- `app/templates/base.html` - admin-only "backups offline" banner
+
+S3 key format: `backups/l7r-YYYY-MM-DDTHH-MM-SSZ.db`. If `S3_BACKUP_BUCKET` is not set, backups are silently skipped (safe for local dev).
 
 ## Test Users
 
