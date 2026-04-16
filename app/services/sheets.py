@@ -592,6 +592,25 @@ def _merge_title_request(sheet_id: int, num_cols: int) -> dict:
 SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets"
 
 
+def _clear_sheet_request(sheet_id: int) -> dict:
+    """Build an UpdateCells request that clears all content and formatting."""
+    return {
+        "updateCells": {
+            "range": {"sheetId": sheet_id},
+            "fields": "userEnteredValue,userEnteredFormat",
+        }
+    }
+
+
+def _unmerge_all_request(sheet_id: int) -> dict:
+    """Unmerge all cells on a sheet so we can re-merge the title row cleanly."""
+    return {
+        "unmergeCells": {
+            "range": {"sheetId": sheet_id},
+        }
+    }
+
+
 def create_spreadsheet(
     access_token: str,
     character,
@@ -602,8 +621,13 @@ def create_spreadsheet(
     xp_breakdown: dict,
     effective,
     skill_rolls: dict,
+    existing_sheet_id: Optional[str] = None,
 ) -> str:
-    """Create a formatted Google Sheet and return its URL.
+    """Create or update a formatted Google Sheet and return its URL.
+
+    If ``existing_sheet_id`` is provided, attempts to update that spreadsheet
+    in place (clear all tabs, repopulate). Falls back to creating a new sheet
+    if the existing one is inaccessible (deleted, permissions revoked, etc.).
 
     Uses direct HTTP calls to the Sheets API instead of the heavy
     google-api-python-client library (which OOMs on 256MB machines).
@@ -635,20 +659,44 @@ def create_spreadsheet(
 
     tab_rows = [overview_rows, skills_rows, adv_rows, xp_rows, notes_rows]
 
-    # Create the spreadsheet with all tabs
-    spreadsheet_body = {
-        "properties": {"title": title},
-        "sheets": [_sheet_properties(name, sid) for name, sid in tabs],
-    }
-
     with httpx.Client(timeout=30) as http:
-        resp = http.post(SHEETS_API, headers=headers, json=spreadsheet_body)
-        resp.raise_for_status()
-        spreadsheet = resp.json()
-        spreadsheet_id = spreadsheet["spreadsheetId"]
+        spreadsheet_id = None
+        spreadsheet_url = None
+
+        # Try to update the existing spreadsheet
+        if existing_sheet_id:
+            resp = http.get(f"{SHEETS_API}/{existing_sheet_id}", headers=headers)
+            if resp.status_code == 200:
+                spreadsheet_id = existing_sheet_id
+                spreadsheet_url = resp.json().get("spreadsheetUrl")
+
+        # Create a new spreadsheet if we don't have one to update
+        if not spreadsheet_id:
+            spreadsheet_body = {
+                "properties": {"title": title},
+                "sheets": [_sheet_properties(name, sid) for name, sid in tabs],
+            }
+            resp = http.post(SHEETS_API, headers=headers, json=spreadsheet_body)
+            resp.raise_for_status()
+            spreadsheet = resp.json()
+            spreadsheet_id = spreadsheet["spreadsheetId"]
+            spreadsheet_url = spreadsheet["spreadsheetUrl"]
 
         # Build all batchUpdate requests
         requests: List[dict] = []
+
+        # If updating an existing sheet, clear all tabs first
+        if existing_sheet_id and existing_sheet_id == spreadsheet_id:
+            # Update the title
+            requests.append({
+                "updateSpreadsheetProperties": {
+                    "properties": {"title": title},
+                    "fields": "title",
+                }
+            })
+            for _tab_name, sheet_id in tabs:
+                requests.append(_unmerge_all_request(sheet_id))
+                requests.append(_clear_sheet_request(sheet_id))
 
         for (tab_name, sheet_id), rows in zip(tabs, tab_rows):
             if rows:
@@ -667,4 +715,4 @@ def create_spreadsheet(
             )
             resp.raise_for_status()
 
-    return spreadsheet["spreadsheetUrl"]
+    return spreadsheet_url
