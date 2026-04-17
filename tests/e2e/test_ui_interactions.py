@@ -672,6 +672,59 @@ def test_wc_post_roll_vp_spend(page, live_server_url):
 
 
 # ---------------------------------------------------------------------------
+# 10a. WC post-roll VP spending with worldliness
+# ---------------------------------------------------------------------------
+
+def test_wc_post_roll_vp_with_worldliness(page, live_server_url):
+    """Post-roll VP spend on wound check works with worldliness VP."""
+    # Create Akodo 4th Dan (has wc_vp_free_raise)
+    _create_char(page, live_server_url, "AkodoWL", "akodo_bushi",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    # Inject worldliness into perAdventure and voidSpendConfig so the character
+    # has worldliness VP even though Akodo doesn't normally get it
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.perAdventure.push({ id: 'worldliness', type: 'counter', label: 'Worldliness', max: 3 });
+        window._diceRoller.voidSpendConfig.worldliness_max = 3;
+    }""")
+    # Set regular=0, temp=0 so only worldliness is available
+    page.evaluate("window._trackingBridge.voidPoints = 0")
+    page.evaluate("window._trackingBridge.tempVoidPoints = 0")
+    page.wait_for_timeout(200)
+    _add_lw_and_open_wc(page, 30)
+    _roll_wc(page)
+    # Spend VP (+5) button should be visible
+    spend_btn = page.locator('button:has-text("Spend VP (+5)"):visible')
+    assert spend_btn.count() > 0
+    total_before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return 0;
+    }""")
+    spend_btn.first.click()
+    page.wait_for_timeout(300)
+    # Worldliness counter should have incremented
+    assert page.evaluate("window._trackingBridge.getCount('worldliness')") == 1
+    total_after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return d.wcRollTotal;
+        }
+        return 0;
+    }""")
+    assert total_after == total_before + 5
+    # Undo should refund worldliness
+    undo_btn = page.locator('button:has-text("Undo VP"):visible')
+    undo_btn.first.click()
+    page.wait_for_timeout(300)
+    assert page.evaluate("window._trackingBridge.getCount('worldliness')") == 0
+
+
+# ---------------------------------------------------------------------------
 # 10. Akodo banked bonus applies on MISS to turn it into a hit
 # ---------------------------------------------------------------------------
 

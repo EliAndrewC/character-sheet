@@ -285,13 +285,13 @@ def compute_skill_roll(
             bonus_parts.append((bonus, f"+{bonus} from Recognition"))
 
     # --- Courtier 5th Dan: +Air on TN/contested rolls ---
-    from app.services.dice import _COURTIER_5TH_ALWAYS, _COURTIER_5TH_NEVER
+    from app.services.dice import _5TH_DAN_TN_ALWAYS, _5TH_DAN_TN_NEVER
     if school_id == "courtier" and dan >= 5:
         air_val = rings.get("Air", 2)
-        if skill_id in _COURTIER_5TH_ALWAYS:
+        if skill_id in _5TH_DAN_TN_ALWAYS:
             result.flat_bonus += air_val
             bonus_parts.append((air_val, f"+{air_val} from 5th Dan"))
-        elif skill_id not in _COURTIER_5TH_NEVER:
+        elif skill_id not in _5TH_DAN_TN_NEVER:
             bonus_parts.append((0, f"+{air_val} from 5th Dan if TN/contested"))
 
     # --- 3rd Dan: adventure free raises (not added to flat_bonus, shown separately) ---

@@ -272,6 +272,15 @@
                 getToggle(id) { return !!this.adventureState[id]; },
                 setToggle(id, val) { this.adventureState[id] = val; this.save(); },
 
+                worldlinessAvailable() {
+                    const wa = (this.perAdventure || []).find(a => a.id === 'worldliness');
+                    if (!wa) return 0;
+                    return Math.max(0, (wa.max || 0) - this.getCount('worldliness'));
+                },
+                anyVPAvailable() {
+                    return (this.voidPoints || 0) + (this.tempVoidPoints || 0) + this.worldlinessAvailable();
+                },
+
                 hasAnythingSpent() {
                     for (const a of this.perAdventure) {
                         if (a.type === 'counter' && this.getCount(a.id) > 0) return true;
@@ -516,7 +525,9 @@
                     Void Points
                     <span class="text-xs text-ink/40" x-text="'(max ' + voidMax + ')'"></span>
                     {% if school_abilities.get('ide_extra_vp_regen') %}
-                    <span class="text-xs text-accent/70">+1/night</span>
+                    <span class="tooltip-trigger relative text-xs text-accent/70">+2/night
+                        <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">Ide 4th Dan: regain an extra +1 VP per night above the normal 1 per night</span>
+                    </span>
                     {% endif %}
                 </div>
                 <div class="flex items-center gap-2">
@@ -554,8 +565,8 @@
             {% if school_abilities.get('togashi_heal_sw') or school_abilities.get('hida_trade_sw') %}
             <div class="flex flex-wrap gap-2 mt-2">
                 {% if school_abilities.get('togashi_heal_sw') %}
-                <button @click="if (voidPoints > 0 && seriousWounds >= 2) { voidPoints--; seriousWounds = Math.max(0, seriousWounds - 2); save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } })); }"
-                        :disabled="voidPoints <= 0 || seriousWounds < 2"
+                <button @click="if (anyVPAvailable() > 0 && seriousWounds >= 2) { if (tempVoidPoints > 0) { tempVoidPoints--; } else if (voidPoints > 0) { voidPoints--; } else { setCount('worldliness', getCount('worldliness') + 1); } seriousWounds = Math.max(0, seriousWounds - 2); save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } })); }"
+                        :disabled="anyVPAvailable() <= 0 || seriousWounds < 2"
                         class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                     Spend 1 VP to heal 2 SW
                 </button>
@@ -679,18 +690,15 @@
             </div>
             {% endif %}
             {% if school_abilities.get('ide_subtract_roll') %}
-            <div class="mt-2 pt-2 border-t border-ink/10" x-data="{ ideRolled: false, ideResult: 0 }">
+            <div class="mt-2 pt-2 border-t border-ink/10">
                 <div class="text-sm text-ink/60 mb-1">Ide 3rd Dan - Subtract from Roll</div>
-                <div x-show="!ideRolled" class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
                     <button type="button"
-                            @click="const t = window._trackingBridge; if (!t || t.voidPoints <= 0) return; t.voidPoints--; t.save(); const x = {{ school_abilities.get('ide_subtract_x', 0) }}; window.L7RDice.rollAllDice(x, true).then ? undefined : undefined; (async () => { const dice = await window._diceRoller._rerollDice(x, true, null); const s = [...dice].sort((a,b)=>a.value-b.value); ideResult = s[s.length-1].value; ideRolled = true; })()"
-                            :disabled="(window._trackingBridge?.voidPoints || 0) <= 0"
+                            @click="const t = window._trackingBridge; if (!t || (t.anyVPAvailable?.() || 0) <= 0) return; window._diceRoller?.rollIdeSubtract({ x: {{ school_abilities.get('ide_subtract_x', 0) }} })"
+                            :disabled="(window._trackingBridge?.anyVPAvailable?.() || 0) <= 0"
                             class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                         Spend 1 VP to subtract <span>{{ school_abilities.get('ide_subtract_x', 0) }}</span>k1
                     </button>
-                </div>
-                <div x-show="ideRolled" x-cloak class="text-sm font-bold text-accent">
-                    Subtract <span x-text="ideResult"></span> from opponent's roll
                 </div>
             </div>
             {% endif %}
@@ -1430,6 +1438,13 @@
                         Bonuses: <span x-text="formulas.wound_check?.bonus_sources?.join(', ')"></span>
                     </div>
 
+                    {# Doji Artisan 5th Dan: auto-bonus from light wounds #}
+                    <div x-show="formulas.wound_check?.doji_5th_dan_wc && wcLightWounds >= 10" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Doji 5th Dan: +<span x-text="Math.max(0, Math.floor((wcLightWounds - 10) / 5))"></span>
+                        bonus (from <span x-text="wcLightWounds"></span> light wounds)
+                    </div>
+
                     {# Probability table #}
                     <div class="overflow-x-auto">
                         <table class="text-sm w-full">
@@ -1601,14 +1616,14 @@
                              class="mb-3 pt-2 border-t border-green-200">
                             <div class="flex flex-wrap items-center gap-2">
                                 <button type="button"
-                                        x-show="(window._trackingBridge?.voidPoints || 0) > 0"
-                                        @click="const t = window._trackingBridge; if (t && t.voidPoints > 0) { t.voidPoints--; t.save(); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; wcMargin = wcRollTotal - wcLightWounds; }"
+                                        x-show="(window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
+                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) { t.tempVoidPoints--; src = 'temp'; } else if ((t.voidPoints || 0) > 0) { t.voidPoints--; src = 'regular'; } else { t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); src = 'worldliness'; } wcPostRollVpSources.push(src); t.save(); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; wcMargin = wcRollTotal - wcLightWounds;"
                                         class="bg-green-700 hover:bg-green-800 text-white px-3 py-1.5 rounded text-sm font-medium">
                                     Spend VP (+5)
                                 </button>
                                 <button type="button"
                                         x-show="wcPostRollVpSpent > 0"
-                                        @click="const t = window._trackingBridge; if (t) { t.voidPoints++; t.save(); wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; wcMargin = wcRollTotal - wcLightWounds; }"
+                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; wcMargin = wcRollTotal - wcLightWounds; }"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
                                     Undo VP
                                 </button>
@@ -1698,14 +1713,14 @@
                                 </button>
                                 {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each #}
                                 <button type="button"
-                                        x-show="voidSpendConfig.wc_vp_free_raise && (window._trackingBridge?.voidPoints || 0) > 0"
-                                        @click="const t = window._trackingBridge; if (t && t.voidPoints > 0) { t.voidPoints--; t.save(); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
+                                        x-show="voidSpendConfig.wc_vp_free_raise && (window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
+                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) { t.tempVoidPoints--; src = 'temp'; } else if ((t.voidPoints || 0) > 0) { t.voidPoints--; src = 'regular'; } else { t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); src = 'worldliness'; } wcPostRollVpSources.push(src); t.save(); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; }"
                                         class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium">
                                     Spend VP (+5)
                                 </button>
                                 <button type="button"
                                         x-show="wcPostRollVpSpent > 0"
-                                        @click="const t = window._trackingBridge; if (t) { t.voidPoints++; t.save(); wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
+                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
                                     Undo VP
                                 </button>
@@ -1736,7 +1751,7 @@
                                    :max="Math.floor(wcLightWounds / 10) || 1"
                                    class="w-16 border rounded px-2 py-1 text-sm text-center">
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t && akodoReflectVP > 0 && t.voidPoints >= akodoReflectVP) { t.voidPoints -= akodoReflectVP; t.save(); } akodoReflectVP = 0;"
+                                    @click="const t = window._trackingBridge; if (t && akodoReflectVP > 0 && (t.anyVPAvailable?.() || 0) >= akodoReflectVP) { for (let i = 0; i < akodoReflectVP; i++) { if ((t.tempVoidPoints || 0) > 0) t.tempVoidPoints--; else if ((t.voidPoints || 0) > 0) t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); } t.save(); } akodoReflectVP = 0;"
                                     :disabled="akodoReflectVP <= 0"
                                     class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm font-medium disabled:opacity-30">
                                 Reflect <span x-text="(akodoReflectVP || 0) * 10"></span> LW
@@ -1838,6 +1853,19 @@
                             <div>Akodo banked bonus: +<span x-text="b.amount"></span> (discretionary, applied after roll)</div>
                         </template>
                         <div x-show="bayushiBankedFeintRaise > 0" x-cloak>Bayushi feint raise<span x-show="bayushiBankedFeintRaise > 5">s</span>: +<span x-text="bayushiBankedFeintRaise"></span> available (discretionary, applied after roll)</div>
+                    </div>
+
+                    {# Doji Artisan 5th Dan: auto-bonus from TN #}
+                    <div x-show="atkFormula?.doji_5th_dan_always" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Doji 5th Dan: +<span x-text="Math.max(0, Math.floor((atkTN - 10) / 5))"></span>
+                        bonus (from TN <span x-text="atkTN"></span>)
+                    </div>
+
+                    {# Ikoma 4th Dan: 10-dice floor on unparried damage #}
+                    <div x-show="schoolAbilities.ikoma_10_dice_floor" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Ikoma 4th Dan: unparried attacks always roll at least 10 damage dice. Avg Damage below reflects this.
                     </div>
 
                     {# Probability table #}
@@ -1947,6 +1975,9 @@
                         <div x-show="mirumotoPointsSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="mirumotoPointsSpentThisRoll * 2"></span>
                             from <span x-text="mirumotoPointsSpentThisRoll"></span> 3rd Dan point<span x-show="mirumotoPointsSpentThisRoll > 1">s</span>
+                        </div>
+                        <div x-show="formula?.doji_5th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="formula?.doji_5th_dan_bonus"></span> from Doji 5th Dan (TN <span x-text="atkTN"></span>)
                         </div>
                     </div>
 
@@ -2944,11 +2975,12 @@
                         Hiruma 5th Dan: the attacker deals 10 fewer light wounds on their next 2 damage rolls.
                     </div>
 
-                    {# Doji 5th Dan: bonus from opponent's result #}
-                    <div x-show="phase === 'done' && schoolAbilities.doji_opponent_bonus" x-cloak
+                    {# Doji 5th Dan: always-TN skills - show input directly #}
+                    <div x-show="phase === 'done' && formula?.doji_5th_dan_always" x-cloak
+                         data-testid="doji-5th-always"
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <div class="flex items-center gap-2">
-                            <label class="text-xs">Opponent's TN or contested result:</label>
+                            <label class="text-xs">TN or opponent's result (Doji 5th Dan):</label>
                             <input type="number" x-model.number="dojiOpponentResult" min="0"
                                    class="w-20 border rounded px-2 py-1 text-sm text-center">
                             <span class="text-xs" x-show="dojiOpponentResult >= 10" x-cloak>
@@ -2957,6 +2989,30 @@
                         </div>
                         <div x-show="dojiOpponentResult >= 10" x-cloak class="text-xs text-ink/60 mt-1">
                             Adjusted total: <span class="font-bold" x-text="baseTotal + Math.floor(((dojiOpponentResult || 0) - 10) / 5)"></span>
+                        </div>
+                    </div>
+
+                    {# Doji 5th Dan: sometimes-TN skills - checkbox then input #}
+                    <div x-show="phase === 'done' && formula?.doji_5th_dan_optional" x-cloak
+                         data-testid="doji-5th-optional"
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" x-model="dojiTnRollApplied"
+                                   class="rounded text-accent">
+                            <span class="text-xs">This is a TN/contested roll (Doji 5th Dan)</span>
+                        </label>
+                        <div x-show="dojiTnRollApplied" x-cloak class="mt-2">
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs">TN or opponent's result:</label>
+                                <input type="number" x-model.number="dojiOpponentResult" min="0"
+                                       class="w-20 border rounded px-2 py-1 text-sm text-center">
+                                <span class="text-xs" x-show="dojiOpponentResult >= 10" x-cloak>
+                                    +<span x-text="Math.floor((dojiOpponentResult - 10) / 5)"></span> bonus
+                                </span>
+                            </div>
+                            <div x-show="dojiOpponentResult >= 10" x-cloak class="text-xs text-ink/60 mt-1">
+                                Adjusted total: <span class="font-bold" x-text="baseTotal + Math.floor(((dojiOpponentResult || 0) - 10) / 5)"></span>
+                            </div>
                         </div>
                     </div>
 
@@ -3442,6 +3498,7 @@
             akodoBankedBonuses: [],  // [{amount: N, spent: false}]
             akodoSpentThisRoll: 0,  // amount spent from banked bonuses on current roll
             wcPostRollVpSpent: 0,   // VP spent post-roll on wound check (Akodo/Yogo 4th Dan)
+            wcPostRollVpSources: [], // tracks which VP type each post-roll spend came from
             wcMatsuBonusApplied: 0, // Matsu 3rd Dan banked bonus applied to this wound check
             wcExcessSpentThisRoll: 0, // Isawa 5th Dan banked excess spent on this WC
             wcBayushiHalfLw: false, // whether Bayushi 5th Dan half-LW was applied this check
@@ -3450,6 +3507,7 @@
             ideBankedTnReduce: 0,
             hidaBankedWcBonus: 0,
             dojiOpponentResult: 0,
+            dojiTnRollApplied: false,
             hidaRerollPhase: '',  // '' | 'selecting' | 'done'
             hidaRerollSelections: [],
             hidaRerollMax: 0,
@@ -3646,6 +3704,8 @@
                 this.rollMenuOpen = false;
                 this.luckyUsedThisRoll = false;
                 this.courtier5thApplied = false;
+                this.dojiOpponentResult = 0;
+                this.dojiTnRollApplied = false;
                 this._postRollHooksFired = false;
                 this.luckyOriginalWasHigher = false;
                 this.mirumotoPointsSpentThisRoll = 0;
@@ -3689,6 +3749,8 @@
                 this.rollMenuOpen = false;
                 this.luckyUsedThisRoll = false;
                 this.courtier5thApplied = false;
+                this.dojiOpponentResult = 0;
+                this.dojiTnRollApplied = false;
                 this._postRollHooksFired = false;
                 this.luckyOriginalWasHigher = false;
                 this.mirumotoPointsSpentThisRoll = 0;
@@ -4145,6 +4207,11 @@
                 return this.atkIsDoubleAttack() ? this.atkTN + 20 : this.atkTN;
             },
 
+            _dojiAtkBonus() {
+                return this.atkFormula?.doji_5th_dan_always
+                    ? Math.max(0, Math.floor((this.atkTN - 10) / 5)) : 0;
+            },
+
             atkHitChance(voidCount) {
                 const probs = this.atkProbs[this.atkKey];
                 if (!probs) return 0;
@@ -4152,7 +4219,8 @@
                 if (!rk || !probs.probs?.[rk]) return 0;
                 const arr = probs.probs[rk];
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
-                const target = Math.max(0, this.atkEffectiveTN() - (probs.flat || 0) - vpFlat);
+                const dojiBonus = this._dojiAtkBonus();
+                const target = Math.max(0, this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus);
                 return target < arr.length ? arr[target] : 0;
             },
 
@@ -4161,7 +4229,8 @@
                 if (!probs) return 0;
                 const rk = probs.void_keys?.[String(voidCount)];
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
-                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat;
+                const dojiBonus = this._dojiAtkBonus();
+                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus;
             },
 
             atkAvgExtraDice(voidCount) {
@@ -4282,6 +4351,15 @@
                     formula.flat += this.schoolAbilities.isawa_tn_trade_bonus || 0;
                     formula.isawa_tn_trade = true;
                     this.atkIsawaTnTrade = true;
+                }
+
+                // Doji Artisan 5th Dan: auto-apply bonus from TN
+                if (formula.doji_5th_dan_always) {
+                    const dojiBonus = Math.max(0, Math.floor((this.atkTN - 10) / 5));
+                    if (dojiBonus > 0) {
+                        formula.flat += dojiBonus;
+                        formula.doji_5th_dan_bonus = dojiBonus;
+                    }
                 }
 
                 // Bayushi 4th Dan: feint raises are now discretionary (applied post-roll via buttons)
@@ -4505,8 +4583,9 @@
                 const raisesUsed = t.getCount ? t.getCount('adventure_raises') : 0;
                 const raisesAvail = Math.max(0, (this.advRaisesConfig.available || 0) - raisesUsed);
                 this.wcPostRollVpSpent = 0;
+                this.wcPostRollVpSources = [];
                 this.wcMatsuBonusApplied = 0;
-                const hasPostRollVp = this.voidSpendConfig.wc_vp_free_raise && (window._trackingBridge?.voidPoints || 0) > 0;
+                const hasPostRollVp = this.voidSpendConfig.wc_vp_free_raise && (window._trackingBridge?.anyVPAvailable?.() || 0) > 0;
                 this.wcExcessSpentThisRoll = 0;
                 const hasUnspentWcExcess = (this.bankedWcExcess || []).some(b => !b.spent);
                 const hasUnspentMatsu = (this.matsuBankedWcBonuses || []).some(b => !b.spent);
@@ -4526,7 +4605,9 @@
                     ? this.daidojiCounterattackData.bonus : 0;
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const wcVpRaise = this.voidSpendConfig.wc_vp_free_raise ? voidCount * 5 : 0;
-                const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise;
+                const dojiBonus = this.formulas['wound_check']?.doji_5th_dan_wc
+                    ? Math.max(0, Math.floor((this.wcLightWounds - 10) / 5)) : 0;
+                const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise + dojiBonus;
                 const lw = this.wcLightWounds;
                 const target = Math.max(0, lw - flat);
 
@@ -4609,6 +4690,17 @@
                     this.hidaBankedWcBonus = 0;
                     if (window._trackingBridge) window._trackingBridge.hidaBankedWcBonus = 0;
                     window._trackingBridge?.saveBankedBonuses();
+                }
+
+                // Doji Artisan 5th Dan: auto-apply bonus from light wounds
+                if (formula.doji_5th_dan_wc) {
+                    const dojiBonus = Math.max(0, Math.floor((this.wcLightWounds - 10) / 5));
+                    if (dojiBonus > 0) {
+                        formula.flat += dojiBonus;
+                        formula.doji_5th_dan_bonus = dojiBonus;
+                        if (!formula.bonus_sources) formula.bonus_sources = [];
+                        formula.bonus_sources.push('+' + dojiBonus + ' from Doji 5th Dan');
+                    }
                 }
 
                 // Daidoji 3rd Dan: counterattack free raises
@@ -4819,6 +4911,48 @@
                     this.applyWoundCheckFailure();
                 }
                 this.wcModalOpen = false;
+            },
+
+            async rollIdeSubtract({ x }) {
+                // Deduct 1 VP through deductVoidPoints so school hooks fire
+                // (e.g. Ide 5th Dan grants temp VP on regular VP spend).
+                // Priority: temp > regular > worldliness.
+                const t = window._trackingBridge;
+                const fromTemp = (t?.tempVoidPoints || 0) > 0 ? 1 : 0;
+                const fromRegular = !fromTemp && (t?.voidPoints || 0) > 0 ? 1 : 0;
+                const fromWorldliness = (!fromTemp && !fromRegular) ? 1 : 0;
+                this.deductVoidPoints({ fromRegular, fromTemp, fromWorldliness });
+
+                this.title = 'Ide 3rd Dan - Subtract from Roll';
+                this.formulaText = `${x}k1`;
+                this.formula = { rolled: x, kept: 1, flat: 0, reroll_tens: true, is_initiative: false };
+                this.raisesSpentThisRoll = 0;
+                this.luckyUsedThisRoll = false;
+                this.courtier5thApplied = false;
+                this.mirumotoPointsSpentThisRoll = 0;
+                this._postRollHooksFired = true;
+                this.phase = 'rolling';
+                this.finalDice = [];
+                this.unkeptDice = [];
+                this.keptDice = [];
+                this.baseTotal = 0;
+                this.keptSum = 0;
+                this.open = true;
+
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                const dice = await window.L7RDice.rollAndAnimate(
+                    x, true, this.prefs.dice_animation_enabled, playSound, 'dice-animation'
+                );
+
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = 1;
+                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
+                this.keptDice = sorted.slice(sorted.length - keptCount);
+                this.unkeptDice = sorted.slice(0, sorted.length - keptCount);
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = this.keptSum;
+                this.phase = 'done';
             },
 
             close() {

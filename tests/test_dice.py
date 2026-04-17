@@ -900,6 +900,92 @@ class TestSchoolAbilities:
         wc = build_wound_check_formula(char)
         assert not any("5th Dan" in s for s in wc["bonus_sources"])
 
+    # --- Doji Artisan 5th Dan: TN-dependent bonus flags ---
+    def test_doji_5th_dan_skill_always_tn(self):
+        """Doji 5th Dan: always-TN skills get doji_5th_dan_always flag."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
+            skills={"manipulation": 3},
+        )
+        f = build_skill_formula("manipulation", char)
+        assert f.doji_5th_dan_always is True
+        assert f.doji_5th_dan_optional is False
+
+    def test_doji_5th_dan_skill_sometimes_tn(self):
+        """Doji 5th Dan: sometimes-TN skills get doji_5th_dan_optional flag."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
+            skills={"bragging": 2},
+        )
+        f = build_skill_formula("bragging", char)
+        assert f.doji_5th_dan_optional is True
+        assert f.doji_5th_dan_always is False
+
+    def test_doji_5th_dan_skill_never_tn(self):
+        """Doji 5th Dan: never-TN skills get no flags."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
+            skills={"etiquette": 2},
+        )
+        f = build_skill_formula("etiquette", char)
+        assert f.doji_5th_dan_always is False
+        assert f.doji_5th_dan_optional is False
+
+    def test_doji_5th_dan_knack_always(self):
+        """Doji 5th Dan: knacks always get the always flag."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
+        )
+        f = build_knack_formula("counterattack", char)
+        assert f.doji_5th_dan_always is True
+
+    def test_doji_5th_dan_attack_flag(self):
+        """Doji 5th Dan: attack formulas get the always flag."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
+            attack=3,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.doji_5th_dan_always is True
+
+    def test_doji_5th_dan_wound_check_flag(self):
+        """Doji 5th Dan: wound check gets doji_5th_dan_wc flag."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
+        )
+        wc = build_wound_check_formula(char)
+        assert wc["doji_5th_dan_wc"] is True
+
+    def test_doji_below_5th_dan_no_flags(self):
+        """Doji below 5th Dan: no flags set."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 4, "oppose_social": 4, "worldliness": 4},
+            skills={"manipulation": 2, "bragging": 2},
+        )
+        f_always = build_skill_formula("manipulation", char)
+        assert f_always.doji_5th_dan_always is False
+        f_sometimes = build_skill_formula("bragging", char)
+        assert f_sometimes.doji_5th_dan_optional is False
+        wc = build_wound_check_formula(char)
+        assert wc["doji_5th_dan_wc"] is False
+
+    def test_shared_tn_groupings_values(self):
+        """Verify the shared TN groupings contain expected skills."""
+        from app.services.dice import _5TH_DAN_TN_ALWAYS, _5TH_DAN_TN_NEVER
+        assert _5TH_DAN_TN_ALWAYS == frozenset({
+            "sneaking", "interrogation", "manipulation", "heraldry", "investigation",
+        })
+        assert _5TH_DAN_TN_NEVER == frozenset({
+            "etiquette", "acting", "history",
+        })
+
     # --- Bayushi 5th Dan: half light wounds flag on wound check ---
     def test_bayushi_5th_dan_half_lw_flag(self):
         char = make_character_data(
