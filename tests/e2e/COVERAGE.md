@@ -31,6 +31,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Keep Light Wounds closes modal without changes -> `test_ui_interactions.py::test_wc_keep_light_wounds_closes`
 - [x] Take 1 Serious Wound adds SW and resets LW -> `test_ui_interactions.py::test_wc_take_serious_resets_and_adds_sw`
 - [x] Post-roll VP spend (+5) on wound check -> `test_ui_interactions.py::test_wc_post_roll_vp_spend`
+- [x] Post-roll VP spend with worldliness VP and undo -> `test_ui_interactions.py::test_wc_post_roll_vp_with_worldliness`
 
 ## Attack Modal
 
@@ -149,7 +150,11 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_doji_1st_dan_behavioral`
 - [x] 2nd Dan behavioral manipulation bonus -> `test_school_abilities.py::test_doji_2nd_dan_behavioral`
 - [x] 3rd Dan spend raise on culture -> `test_school_abilities.py::test_doji_3rd_dan_culture_raises`
-- [x] 5th Dan opponent bonus input appears -> `test_school_abilities.py::test_doji_5th_dan_opponent_input_behavioral`
+- [x] 5th Dan always-TN skill shows input directly -> `test_school_abilities.py::test_doji_5th_dan_always_tn_skill_input`
+- [x] 5th Dan sometimes-TN skill shows checkbox then input -> `test_school_abilities.py::test_doji_5th_dan_sometimes_tn_skill_checkbox`
+- [x] 5th Dan never-TN skill shows no input/checkbox -> `test_school_abilities.py::test_doji_5th_dan_never_tn_skill_no_input`
+- [x] 5th Dan attack auto-applies bonus from TN -> `test_school_abilities.py::test_doji_5th_dan_attack_auto_bonus`
+- [x] 5th Dan wound check auto-applies bonus from LW -> `test_school_abilities.py::test_doji_5th_dan_wound_check_auto_bonus`
 
 ### Hida
 
@@ -174,10 +179,16 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 - [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_ide_1st_dan_skill_selection`
 - [x] 2nd Dan skill selection dropdown -> `test_school_abilities.py::test_ide_2nd_dan_skill_selection`
-- [x] 3rd Dan subtract-from-roll button and VP spending -> `test_school_abilities.py::test_ide_3rd_dan_subtract_behavioral`
+- [x] 3rd Dan subtract-from-roll button opens modal with dice animation and roll results -> `test_school_abilities.py::test_ide_3rd_dan_subtract_behavioral`
 - [x] Subtract button visible on applicable rolls -> `test_school_abilities.py::test_ide_subtract_button_visible`
-- [x] 4th Dan VP regen note displayed -> `test_school_abilities.py::test_ide_4th_dan_vp_regen_note_behavioral`
+- [x] 4th Dan VP regen +2/night displayed -> `test_school_abilities.py::test_ide_4th_dan_vp_regen_note_behavioral`
+- [x] 4th Dan VP regen tooltip explains extra +1 -> `test_school_abilities.py::test_ide_4th_dan_regen_tooltip`
 - [x] 5th Dan temp VP granted on VP spend -> `test_school_abilities.py::test_ide_5th_dan_temp_vp_on_spend`
+- [x] 5th Dan temp VP granted on subtract button VP spend -> `test_school_abilities.py::test_ide_5th_dan_subtract_grants_temp_vp`
+- [x] 3rd Dan subtract spends temp VP before regular VP -> `test_school_abilities.py::test_ide_3rd_dan_subtract_spends_temp_vp`
+- [x] 3rd Dan subtract enabled with only temp VP -> `test_school_abilities.py::test_ide_3rd_dan_subtract_enabled_with_only_temp_vp`
+- [x] 3rd Dan subtract spends worldliness VP when regular and temp are 0 -> `test_school_abilities.py::test_ide_3rd_dan_subtract_spends_worldliness_vp`
+- [x] 3rd Dan subtract disabled when all VP types exhausted -> `test_school_abilities.py::test_ide_3rd_dan_subtract_disabled_all_vp_exhausted`
 - [x] Feint banks TN reduction for next attack -> `test_school_abilities.py::test_ide_feint_banks_tn_reduce`
 
 ### Ikoma
@@ -186,6 +197,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 2nd Dan behavioral attack bonus -> `test_school_abilities.py::test_ikoma_2nd_dan_behavioral`
 - [x] 3rd Dan spend raise on bragging -> `test_school_abilities.py::test_ikoma_3rd_dan_bragging_raises`
 - [x] 4th Dan 10-dice floor note on unparried damage -> `test_school_abilities.py::test_ikoma_4th_dan_10dice_note_behavioral`
+- [x] 4th Dan attack modal shows 10-dice floor reminder -> `test_school_abilities.py::test_ikoma_4th_dan_attack_modal_note`
 
 ### Isawa Duelist
 

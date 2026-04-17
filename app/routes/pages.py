@@ -316,8 +316,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "togashi_reroll_contested": character.school == "togashi_ise_zumi" and dan >= 4,
         # Ide Special: feint -> lower target TN by 10
         "ide_feint_tn_reduce": character.school == "ide_diplomat",
-        # Doji 5th Dan: bonus = (opponent_result - 10) / 5
-        "doji_opponent_bonus": character.school == "doji_artisan" and dan >= 5,
         # Hiruma 5th Dan: attacker deals 10 fewer LW after parry (display note)
         "hiruma_parry_reduce_lw": character.school == "hiruma_scout" and dan >= 5,
         # Bayushi 3rd Dan: feints deal Xk1 damage

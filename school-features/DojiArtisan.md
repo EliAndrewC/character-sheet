@@ -84,11 +84,29 @@
 
 > When making any TN or contested roll, you receive a bonus equal to (X-10) / 5 where X is the TN or result of your opponent's contested roll.
 
-**Status:** Fully implemented.
-- Server: `app/routes/pages.py` passes `doji_opponent_bonus: true` in school_abilities.
-- Client: shows opponent result input after any TN/contested roll. Computes `floor((opponent - 10) / 5)` and displays the adjusted total.
+**Status:** Fully implemented with three-tier skill grouping and auto-apply on combat/wound checks.
+
+**Implementation:**
+- Server: `app/services/dice.py` sets `doji_5th_dan_always` (always-TN skills/knacks/combat) or `doji_5th_dan_optional` (sometimes-TN skills) flags on `RollFormula`. Wound check formula gets `doji_5th_dan_wc` flag. Uses shared `_5TH_DAN_TN_ALWAYS` / `_5TH_DAN_TN_NEVER` constants (same groupings as Courtier 5th Dan).
+- Client skill rolls: always-TN skills show TN input directly; sometimes-TN skills show checkbox then input; never-TN skills show nothing. Computes `floor((X - 10) / 5)` and displays adjusted total.
+- Client attack rolls: bonus auto-calculated from selected TN, reflected in probability chart (`atkHitChance`, `atkAvgAttackRoll`), auto-applied to roll, shown in result breakdown.
+- Client wound checks: bonus auto-calculated from light wounds, reflected in probability chart (`wcProbRow`), auto-applied to roll, shown in `bonus_sources`.
+
+**Unit tests:**
+- `test_dice.py::test_doji_5th_dan_skill_always_tn`
+- `test_dice.py::test_doji_5th_dan_skill_sometimes_tn`
+- `test_dice.py::test_doji_5th_dan_skill_never_tn`
+- `test_dice.py::test_doji_5th_dan_knack_always`
+- `test_dice.py::test_doji_5th_dan_attack_flag`
+- `test_dice.py::test_doji_5th_dan_wound_check_flag`
+- `test_dice.py::test_doji_below_5th_dan_no_flags`
+- `test_dice.py::test_shared_tn_groupings_values`
 
 **Clicktests:**
-- `test_school_abilities.py::test_doji_5th_dan_opponent_bonus_input`
+- `test_school_abilities.py::test_doji_5th_dan_always_tn_skill_input`
+- `test_school_abilities.py::test_doji_5th_dan_sometimes_tn_skill_checkbox`
+- `test_school_abilities.py::test_doji_5th_dan_never_tn_skill_no_input`
+- `test_school_abilities.py::test_doji_5th_dan_attack_auto_bonus`
+- `test_school_abilities.py::test_doji_5th_dan_wound_check_auto_bonus`
 
 

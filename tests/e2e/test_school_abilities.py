@@ -552,12 +552,12 @@ def test_ide_2nd_dan_skill_selection(page, live_server_url):
 
 
 def test_ide_vp_regen_display(page, live_server_url):
-    """Ide 4th Dan: VP regen display shows +1/night."""
+    """Ide 4th Dan: VP regen display shows +2/night with tooltip."""
     _create_char(page, live_server_url, "Ide4Regen", "ide_diplomat",
                  knack_overrides={"double_attack": 4, "feint": 4, "worldliness": 4})
     sa = _get_school_abilities(page)
     assert sa.get("ide_extra_vp_regen") is True
-    assert page.locator('text="+1/night"').is_visible()
+    assert page.locator('text="+2/night"').is_visible()
 
 
 def test_ide_3rd_dan_subtract_button(page, live_server_url):
@@ -2093,11 +2093,11 @@ def test_hiruma_4th_dan_initiative_note_behavioral(page, live_server_url):
 
 
 def test_ide_4th_dan_vp_regen_note_behavioral(page, live_server_url):
-    """Ide 4th Dan: sheet shows +1/night regen text near VP counter."""
+    """Ide 4th Dan: sheet shows +2/night regen text with tooltip near VP counter."""
     _create_char(page, live_server_url, "Ide4B", "ide_diplomat",
                  knack_overrides={"double_attack": 4, "feint": 4, "worldliness": 4})
     body = page.text_content("body")
-    assert "+1/night" in body
+    assert "+2/night" in body
 
 
 def test_ikoma_4th_dan_10dice_note_behavioral(page, live_server_url):
@@ -2112,6 +2112,18 @@ def test_ikoma_4th_dan_10dice_note_behavioral(page, live_server_url):
     result = _get_attack_result_text(page)
     # The 10-dice floor note shows "4th Dan, unparried" in the damage parts
     assert "4th Dan" in result or "unparried" in result.lower()
+
+
+def test_ikoma_4th_dan_attack_modal_note(page, live_server_url):
+    """Ikoma 4th Dan: attack modal shows note about 10-dice floor for unparried attacks."""
+    _create_char(page, live_server_url, "Ikoma4Note", "ikoma_bard",
+                 knack_overrides={"discern_honor": 4, "oppose_knowledge": 4, "oppose_social": 4})
+    # Open attack modal (don't roll, just check the pre-roll note)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    assert "Ikoma 4th Dan" in modal.text_content()
+    assert "10 damage dice" in modal.text_content()
 
 
 def test_kitsuki_5th_dan_ring_note_behavioral(page, live_server_url):
@@ -2231,7 +2243,7 @@ def test_hida_trade_sw_can_be_used_multiple_times(page, live_server_url):
 
 
 def test_ide_3rd_dan_subtract_behavioral(page, live_server_url):
-    """Ide 3rd Dan: clicking subtract deducts VP and shows subtraction result."""
+    """Ide 3rd Dan: clicking subtract deducts VP and opens roll results modal."""
     _create_char(page, live_server_url, "Ide3SB", "ide_diplomat",
                  knack_overrides={"double_attack": 3, "feint": 3, "worldliness": 3},
                  skill_overrides={"tact": 2})
@@ -2244,13 +2256,140 @@ def test_ide_3rd_dan_subtract_behavioral(page, live_server_url):
     subtract_btn = page.locator('button:has-text("Spend 1 VP to subtract")')
     assert subtract_btn.is_visible()
     subtract_btn.click()
-    page.wait_for_timeout(1000)  # async dice roll needs time
+    # Wait for roll to complete in the modal
+    _wait_roll_done(page)
     # VP should be deducted
     vp_after = page.evaluate("window._trackingBridge.voidPoints")
     assert vp_after == 0
-    # Result should show the subtraction amount
-    body = page.text_content("body")
-    assert "Subtract" in body or "subtract" in body.lower()
+    # Modal should be open with correct title and formula
+    modal = page.locator('[data-modal="dice-roller"]')
+    assert modal.is_visible()
+    assert "Ide 3rd Dan" in modal.text_content()
+    assert "2k1" in modal.text_content()
+    # Should show kept/unkept dice breakdown
+    assert page.locator('text="Kept dice"').is_visible()
+    assert page.locator('text="Unkept dice"').is_visible()
+    # Total should be shown
+    total = page.evaluate("window._diceRoller.baseTotal")
+    assert total > 0
+    # Close the modal - button should still be visible for reuse
+    modal.locator('button:has-text("\u00d7")').click()
+    page.wait_for_timeout(200)
+    assert subtract_btn.is_visible()
+
+
+def test_ide_4th_dan_regen_tooltip(page, live_server_url):
+    """Ide 4th Dan: +2/night label has tooltip explaining the extra VP regen."""
+    _create_char(page, live_server_url, "Ide4Tip", "ide_diplomat",
+                 knack_overrides={"double_attack": 4, "feint": 4, "worldliness": 4})
+    regen_label = page.locator('text="+2/night"')
+    assert regen_label.is_visible()
+    # The tooltip content should exist in the DOM (shown on hover)
+    tooltip = page.locator('text="Ide 4th Dan: regain an extra +1 VP per night above the normal 1 per night"')
+    assert tooltip.count() > 0
+
+
+def test_ide_5th_dan_subtract_grants_temp_vp(page, live_server_url):
+    """Ide 5th Dan: subtract button spending VP grants temp VP."""
+    _create_char(page, live_server_url, "Ide5Sub", "ide_diplomat",
+                 knack_overrides={"double_attack": 5, "feint": 5, "worldliness": 5},
+                 skill_overrides={"tact": 2})
+    sa = _get_school_abilities(page)
+    assert sa.get("ide_temp_vp_on_spend") is True
+    # Give VP
+    page.evaluate("window._trackingBridge.voidPoints = 1")
+    page.evaluate("window._trackingBridge.tempVoidPoints = 0")
+    page.wait_for_timeout(200)
+    # Click subtract button
+    subtract_btn = page.locator('button:has-text("Spend 1 VP to subtract")')
+    assert subtract_btn.is_visible()
+    subtract_btn.click()
+    _wait_roll_done(page)
+    # VP should be deducted
+    vp_after = page.evaluate("window._trackingBridge.voidPoints")
+    assert vp_after == 0
+    # Temp VP should be granted (Ide 5th Dan: gain temp VP when spending regular VP)
+    temp_vp = page.evaluate("window._trackingBridge.tempVoidPoints")
+    assert temp_vp == 1
+
+
+def test_ide_3rd_dan_subtract_spends_temp_vp(page, live_server_url):
+    """Ide 3rd Dan: subtract button spends temp VP before regular VP."""
+    _create_char(page, live_server_url, "Ide3Temp", "ide_diplomat",
+                 knack_overrides={"double_attack": 3, "feint": 3, "worldliness": 3},
+                 skill_overrides={"tact": 2})
+    # Give both regular and temp VP
+    page.evaluate("window._trackingBridge.voidPoints = 1")
+    page.evaluate("window._trackingBridge.tempVoidPoints = 1")
+    page.wait_for_timeout(200)
+    # Click subtract - should spend temp VP first
+    subtract_btn = page.locator('button:has-text("Spend 1 VP to subtract")')
+    subtract_btn.click()
+    _wait_roll_done(page)
+    assert page.evaluate("window._trackingBridge.tempVoidPoints") == 0
+    assert page.evaluate("window._trackingBridge.voidPoints") == 1
+    # Close modal and click again - should now spend regular VP
+    page.locator('[data-modal="dice-roller"]').locator('button:has-text("\u00d7")').click()
+    page.wait_for_timeout(200)
+    subtract_btn.click()
+    _wait_roll_done(page)
+    assert page.evaluate("window._trackingBridge.voidPoints") == 0
+    # Button should still be enabled because worldliness VP is available
+    assert not subtract_btn.is_disabled()
+
+
+def test_ide_3rd_dan_subtract_enabled_with_only_temp_vp(page, live_server_url):
+    """Ide 3rd Dan: subtract button enabled when only temp VP available."""
+    _create_char(page, live_server_url, "Ide3TOnly", "ide_diplomat",
+                 knack_overrides={"double_attack": 3, "feint": 3, "worldliness": 3},
+                 skill_overrides={"tact": 2})
+    # Only temp VP, no regular
+    page.evaluate("window._trackingBridge.voidPoints = 0")
+    page.evaluate("window._trackingBridge.tempVoidPoints = 1")
+    page.wait_for_timeout(200)
+    subtract_btn = page.locator('button:has-text("Spend 1 VP to subtract")')
+    assert not subtract_btn.is_disabled()
+    subtract_btn.click()
+    _wait_roll_done(page)
+    assert page.evaluate("window._trackingBridge.tempVoidPoints") == 0
+
+
+def test_ide_3rd_dan_subtract_spends_worldliness_vp(page, live_server_url):
+    """Ide 3rd Dan: subtract button spends worldliness VP when regular and temp are 0."""
+    _create_char(page, live_server_url, "Ide3World", "ide_diplomat",
+                 knack_overrides={"double_attack": 3, "feint": 3, "worldliness": 3},
+                 skill_overrides={"tact": 2})
+    # No regular or temp VP, only worldliness available (rank 3 = 3 uses)
+    page.evaluate("window._trackingBridge.voidPoints = 0")
+    page.evaluate("window._trackingBridge.tempVoidPoints = 0")
+    page.wait_for_timeout(200)
+    worldliness_before = page.evaluate("window._trackingBridge.getCount('worldliness')")
+    assert worldliness_before == 0
+    # Button should be enabled (worldliness VP available)
+    subtract_btn = page.locator('button:has-text("Spend 1 VP to subtract")')
+    assert not subtract_btn.is_disabled()
+    subtract_btn.click()
+    _wait_roll_done(page)
+    # Worldliness counter should have incremented
+    worldliness_after = page.evaluate("window._trackingBridge.getCount('worldliness')")
+    assert worldliness_after == 1
+    # Regular and temp VP should be unchanged
+    assert page.evaluate("window._trackingBridge.voidPoints") == 0
+    assert page.evaluate("window._trackingBridge.tempVoidPoints") == 0
+
+
+def test_ide_3rd_dan_subtract_disabled_all_vp_exhausted(page, live_server_url):
+    """Ide 3rd Dan: subtract button disabled when all VP types exhausted."""
+    _create_char(page, live_server_url, "Ide3Exhaust", "ide_diplomat",
+                 knack_overrides={"double_attack": 3, "feint": 3, "worldliness": 3},
+                 skill_overrides={"tact": 2})
+    # Exhaust all VP: regular=0, temp=0, worldliness fully used (rank 3, used 3)
+    page.evaluate("window._trackingBridge.voidPoints = 0")
+    page.evaluate("window._trackingBridge.tempVoidPoints = 0")
+    page.evaluate("window._trackingBridge.setCount('worldliness', 3)")
+    page.wait_for_timeout(200)
+    subtract_btn = page.locator('button:has-text("Spend 1 VP to subtract")')
+    assert subtract_btn.is_disabled()
 
 
 def test_mirumoto_parry_temp_vp_behavioral(page, live_server_url):
@@ -2325,12 +2464,12 @@ def test_yogo_3rd_dan_vp_heals_lw_behavioral(page, live_server_url):
             assert lw_after < lw_before, f"LW should decrease from {lw_before}, got {lw_after}"
 
 
-def test_doji_5th_dan_opponent_input_behavioral(page, live_server_url):
-    """Doji 5th Dan: entering opponent result shows adjusted total."""
-    _create_char(page, live_server_url, "Doji5OB", "doji_artisan",
+def test_doji_5th_dan_always_tn_skill_input(page, live_server_url):
+    """Doji 5th Dan: always-TN skills show input directly (no checkbox)."""
+    _create_char(page, live_server_url, "Doji5Always", "doji_artisan",
                  knack_overrides={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
-                 skill_overrides={"bragging": 1})
-    _roll_via_menu_or_direct(page, "skill:bragging")
+                 skill_overrides={"manipulation": 1})
+    _roll_via_menu_or_direct(page, "skill:manipulation")
     base = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -2339,15 +2478,143 @@ def test_doji_5th_dan_opponent_input_behavioral(page, live_server_url):
         }
         return 0;
     }""")
+    # The always-TN section should be visible
+    always_section = page.locator('[data-testid="doji-5th-always"]')
+    assert always_section.is_visible()
+    # The optional section should NOT be visible
+    assert not page.locator('[data-testid="doji-5th-optional"]').is_visible()
     # Enter opponent result of 30 -> bonus = floor((30-10)/5) = 4
-    page.fill('input[x-model\\.number="dojiOpponentResult"]', "30")
+    opponent_input = always_section.locator('input[x-model\\.number="dojiOpponentResult"]')
+    opponent_input.fill("30")
     page.wait_for_timeout(300)
-    # Should show adjusted total
-    modal = page.locator('[data-modal="dice-roller"]')
-    result = modal.text_content()
+    result = always_section.text_content()
     assert "Adjusted total" in result
     expected_adjusted = base + 4
     assert str(expected_adjusted) in result
+
+
+def test_doji_5th_dan_sometimes_tn_skill_checkbox(page, live_server_url):
+    """Doji 5th Dan: sometimes-TN skills show checkbox, then input when checked."""
+    _create_char(page, live_server_url, "Doji5Sometimes", "doji_artisan",
+                 knack_overrides={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    # The optional section should be visible
+    optional_section = page.locator('[data-testid="doji-5th-optional"]')
+    assert optional_section.is_visible()
+    # The always section should NOT be visible
+    assert not page.locator('[data-testid="doji-5th-always"]').is_visible()
+    # Checkbox should be visible
+    checkbox = optional_section.locator('input[x-model="dojiTnRollApplied"]')
+    assert checkbox.is_visible()
+    # Input should NOT be visible yet (hidden until checkbox is checked)
+    opponent_input = optional_section.locator('input[x-model\\.number="dojiOpponentResult"]')
+    assert not opponent_input.is_visible()
+    # Check the checkbox
+    checkbox.click()
+    page.wait_for_timeout(300)
+    # Now the input should be visible
+    assert opponent_input.is_visible()
+    # Enter a TN
+    base = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return d.baseTotal;
+        }
+        return 0;
+    }""")
+    opponent_input.fill("25")
+    page.wait_for_timeout(300)
+    result = optional_section.text_content()
+    assert "Adjusted total" in result
+    # floor((25-10)/5) = 3
+    expected_adjusted = base + 3
+    assert str(expected_adjusted) in result
+
+
+def test_doji_5th_dan_never_tn_skill_no_input(page, live_server_url):
+    """Doji 5th Dan: never-TN skills show no Doji input or checkbox."""
+    _create_char(page, live_server_url, "Doji5Never", "doji_artisan",
+                 knack_overrides={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
+                 skill_overrides={"etiquette": 1})
+    _roll_via_menu_or_direct(page, "skill:etiquette")
+    # Neither section should be visible
+    assert not page.locator('[data-testid="doji-5th-always"]').is_visible()
+    assert not page.locator('[data-testid="doji-5th-optional"]').is_visible()
+
+
+def test_doji_5th_dan_attack_auto_bonus(page, live_server_url):
+    """Doji 5th Dan: attack rolls auto-apply bonus from TN and show in result."""
+    _create_char(page, live_server_url, "Doji5Atk", "doji_artisan",
+                 knack_overrides={"counterattack": 5, "oppose_social": 5, "worldliness": 5})
+    # Open attack modal - default TN is 20, so bonus = floor((20-10)/5) = 2
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    # Verify the pre-roll Doji note is visible
+    pre_text = modal.text_content()
+    assert "Doji 5th Dan" in pre_text
+    # Roll
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    # Verify the bonus is in the result breakdown
+    result_text = modal.text_content()
+    assert "Doji 5th Dan" in result_text
+    # Verify the bonus was actually applied to the formula
+    bonus = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return d.formula?.doji_5th_dan_bonus || 0;
+        }
+        return 0;
+    }""")
+    assert bonus == 2  # floor((20-10)/5)
+
+
+def test_doji_5th_dan_wound_check_auto_bonus(page, live_server_url):
+    """Doji 5th Dan: wound check auto-applies bonus from light wounds."""
+    _create_char(page, live_server_url, "Doji5WC", "doji_artisan",
+                 knack_overrides={"counterattack": 5, "oppose_social": 5, "worldliness": 5})
+    # Set light wounds to 30 -> bonus = floor((30-10)/5) = 4
+    _set_light_wounds(page, 30)
+    # Open wound check modal
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openWoundCheckModal === 'function') {
+                d.openWoundCheckModal();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_timeout(300)
+    modal = page.locator('[data-modal="wound-check"]')
+    # Verify the pre-roll Doji note is visible
+    pre_text = modal.text_content()
+    assert "Doji 5th Dan" in pre_text
+    # Roll the wound check (button inside modal)
+    modal.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    # Verify the bonus was applied
+    bonus = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return d.formula?.doji_5th_dan_bonus || 0;
+        }
+        return 0;
+    }""")
+    assert bonus == 4  # floor((30-10)/5)
 
 
 def test_togashi_4th_dan_reroll_behavioral(page, live_server_url):

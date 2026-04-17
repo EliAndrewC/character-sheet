@@ -39,13 +39,13 @@ from app.services.rolls import (
 from app.game_data import ADVANTAGES, CAMPAIGN_ADVANTAGES
 
 
-# Courtier 5th Dan: +Air on TN/contested rolls
+# TN/contested skill groupings for 5th Dan court bonuses (Courtier, Doji Artisan)
 # Skills that are ALWAYS TN or contested (bonus auto-applies)
-_COURTIER_5TH_ALWAYS = frozenset({
+_5TH_DAN_TN_ALWAYS = frozenset({
     "sneaking", "interrogation", "manipulation", "heraldry", "investigation",
 })
 # Skills that are NEVER TN or contested (bonus never applies)
-_COURTIER_5TH_NEVER = frozenset({
+_5TH_DAN_TN_NEVER = frozenset({
     "etiquette", "acting", "history",
 })
 # All other skills: sometimes TN/contested (checkbox on roll result)
@@ -93,6 +93,8 @@ class RollFormula:
     bonuses: List[dict] = field(default_factory=list)
     adventure_raises_max_per_roll: int = 0
     courtier_5th_dan_optional: int = 0
+    doji_5th_dan_always: bool = False
+    doji_5th_dan_optional: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -261,10 +263,17 @@ def build_skill_formula(
     dan = compute_dan(knacks) if knacks else 0
     if school_id == "courtier" and dan >= 5:
         air_val = rings.get("Air", 2)
-        if skill_id in _COURTIER_5TH_ALWAYS:
+        if skill_id in _5TH_DAN_TN_ALWAYS:
             _add_flat_bonus(formula, "Courtier 5th Dan", air_val)
-        elif skill_id not in _COURTIER_5TH_NEVER:
+        elif skill_id not in _5TH_DAN_TN_NEVER:
             formula.courtier_5th_dan_optional = air_val
+
+    # Doji Artisan 5th Dan: bonus = floor((TN - 10) / 5) on TN/contested rolls
+    if school_id == "doji_artisan" and dan >= 5:
+        if skill_id in _5TH_DAN_TN_ALWAYS:
+            formula.doji_5th_dan_always = True
+        elif skill_id not in _5TH_DAN_TN_NEVER:
+            formula.doji_5th_dan_optional = True
 
     # --- Advantage bonuses (free raises = +5 each) ---
     advantages = character_data.get("advantages", []) or []
@@ -415,6 +424,10 @@ def build_knack_formula(
         air_val = rings.get("Air", 2)
         _add_flat_bonus(formula, "Courtier 5th Dan", air_val)
 
+    # Doji Artisan 5th Dan: knacks are always TN/contested
+    if school_id == "doji_artisan" and dan >= 5:
+        formula.doji_5th_dan_always = True
+
     _finalize_caps(formula)
     return formula
 
@@ -463,6 +476,10 @@ def build_combat_formula(
     if school_id == "courtier" and dan >= 5:
         air_val = rings.get("Air", 2)
         _add_flat_bonus(formula, "Courtier 5th Dan", air_val)
+
+    # Doji Artisan 5th Dan: flag for client-side bonus (TN known from attack modal)
+    if school_id == "doji_artisan" and dan >= 5:
+        formula.doji_5th_dan_always = True
 
     _finalize_caps(formula)
     return formula
@@ -570,6 +587,9 @@ def build_wound_check_formula(character_data: dict) -> dict:
     # Bayushi Bushi 5th Dan: halve light wounds for serious wound calculation
     bayushi_5th_dan_half_lw = school_id == "bayushi_bushi" and dan >= 5
 
+    # Doji Artisan 5th Dan: flag for client-side bonus (TN = light wounds)
+    doji_5th_dan_wc = school_id == "doji_artisan" and dan >= 5
+
     return {
         "label": "Wound Check",
         "rolled": rolled,
@@ -583,6 +603,7 @@ def build_wound_check_formula(character_data: dict) -> dict:
         "bonuses": [],
         "adventure_raises_max_per_roll": 0,
         "bayushi_5th_dan_half_lw": bayushi_5th_dan_half_lw,
+        "doji_5th_dan_wc": doji_5th_dan_wc,
     }
 
 
