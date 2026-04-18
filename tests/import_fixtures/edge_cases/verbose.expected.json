@@ -1,0 +1,19 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Isawa Kaede",
+    "school": "isawa_ishi",
+    "ring_air": 2,
+    "ring_fire": 2,
+    "ring_earth": 2,
+    "ring_water": 2,
+    "ring_void": 4,
+    "skills_must_contain_keys": ["precepts"],
+    "knacks_must_contain_keys": ["absorb_void", "kharmic_spin", "otherworldliness"],
+    "advantages_must_contain": ["higher_purpose"],
+    "disadvantages_must_contain": ["humble"]
+  },
+  "sections_expectations": {
+    "Import Notes": {"must_contain": ["Isawa Ishi"]}
+  }
+}

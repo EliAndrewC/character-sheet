@@ -1,0 +1,37 @@
+Brother Taro
+Player: Craig
+School: Brotherhood of Shinsei Monk
+School Ring: Fire
+
+Rings
+  Air: 2
+  Fire: 3  (school ring)
+  Earth: 2
+  Water: 2
+  Void: 2
+
+Combat: Attack 2, Parry 2
+
+Skills
+  Precepts 3
+  Meditation 2           <-- not a skill; should be dropped
+  Sincerity 2
+
+Knacks (Brotherhood of Shinsei Monk)
+  Conviction 2
+  Otherworldliness 2
+  Worldliness 2
+
+Advantages
+  Higher Purpose: to seek enlightenment (applies to Precepts)
+
+Disadvantages
+  Humble
+  Poor
+
+Honor 4.0, Rank 7.5, Recognition 7.5
+
+(The Brotherhood of Shinsei Monk school has a player-chosen school ring
+(any non-Void). The player chose Fire. The importer must capture this in
+school_ring_choice="Fire" so the XP engine knows Fire 3 is free. Without
+school_ring_choice set correctly, XP math for rings is wrong.)

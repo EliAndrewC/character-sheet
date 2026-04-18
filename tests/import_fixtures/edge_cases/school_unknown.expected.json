@@ -1,0 +1,15 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Yoritomo Kazuki",
+    "school": ""
+  },
+  "import_notes": {
+    "must_contain": [
+      "Void Monk of the Lost Isles",
+      "could not match"
+    ],
+    "severity_at_least": "high"
+  },
+  "low_confidence_fields": ["school"]
+}

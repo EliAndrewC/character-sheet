@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1/character.txt",
+  "mock_response": null,
+  "expected": {
+    "outcome": "reject",
+    "error_code": "url_blocked_ssrf",
+    "user_message_must_contain": ["not allowed", "private"],
+    "no_draft_created": true
+  },
+  "note": "Loopback addresses are blocked by the SSRF defense (design §5.2) before any HTTP request is issued."
+}

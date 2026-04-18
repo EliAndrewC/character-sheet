@@ -1,0 +1,18 @@
+Shopping list for the week
+
+Eggs, a dozen
+Whole wheat bread
+Olive oil
+Tomatoes
+Pasta (linguine)
+Parmesan cheese
+Coffee beans
+Yogurt
+Apples
+Mixed greens
+
+Also remember to pick up the dry cleaning and return the library book.
+
+This document is obviously not a Legend of the Five Rings character
+sheet. The importer must detect that no L7R character data is present
+and reject the import with a clear error. No Draft should be created.

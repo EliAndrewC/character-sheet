@@ -1,0 +1,16 @@
+{
+  "url": "https://short.example.com/abc",
+  "mock_responses": [
+    {"url": "https://short.example.com/abc",       "status": 302, "headers": {"Location": "https://short.example.com/def"}},
+    {"url": "https://short.example.com/def",       "status": 302, "headers": {"Location": "https://short.example.com/ghi"}},
+    {"url": "https://short.example.com/ghi",       "status": 302, "headers": {"Location": "https://short.example.com/jkl"}},
+    {"url": "https://short.example.com/jkl",       "status": 302, "headers": {"Location": "https://short.example.com/mno"}}
+  ],
+  "expected": {
+    "outcome": "reject",
+    "error_code": "url_redirect_chain_too_long",
+    "user_message_must_contain": ["too many redirects"],
+    "no_draft_created": true
+  },
+  "note": "Redirect cap is 3 hops (design §5.2). The fourth redirect should be refused."
+}

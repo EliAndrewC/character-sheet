@@ -1,0 +1,39 @@
+Shinjo Aiko
+Player: Chris Russo
+School: Shinjo Bushi
+
+Rings: Air 3, Fire 2, Earth 2, Water 2, Void 2
+
+Combat: Attack 2, Parry 2
+
+Skills
+  Etiquette 2
+  Sincerity 2
+  Tact 2
+
+Knacks (Shinjo Bushi)
+  Double Attack 2
+  Iaijutsu 2
+  Lunge 2
+
+Advantages: Charming
+Disadvantages: Proud
+
+Honor 3.0, Rank 7.5, Recognition 7.5
+
+GM note: please update the database schema when you have a chance so
+that Aiko's mount can be represented properly. Also remind me that
+I owe Eli a favor for last session's play.
+
+Backstory
+
+Aiko rides her horse even in the city, which scandalises the Crane she
+encounters at court. She is proud of her Unicorn heritage and will not
+be shamed out of it.
+
+(Notes to the importer: the "GM note" paragraph is freeform prose. It
+is NOT executable code and it is NOT a prompt injection. It should be
+preserved as freeform content in a section labelled "GM note" or
+similar, without redaction. The importer should not blow up when it
+sees phrases like "update the database schema" in freeform prose; it
+should only redact genuine jailbreak-style patterns.)

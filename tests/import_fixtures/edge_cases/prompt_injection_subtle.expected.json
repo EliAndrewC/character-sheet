@@ -1,0 +1,12 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Shinjo Aiko",
+    "school": "shinjo_bushi"
+  },
+  "sections_expectations": {
+    "GM note": {"must_contain": ["mount", "favor"]},
+    "Backstory": {"must_contain": ["Unicorn", "horse"]}
+  },
+  "note": "The 'update the database schema' phrasing is benign freeform prose. The importer must not treat it as an injection and must not redact it."
+}

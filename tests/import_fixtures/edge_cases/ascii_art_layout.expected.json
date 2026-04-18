@@ -1,0 +1,18 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Shosuro Kaori",
+    "school": "shosuro_actor",
+    "ring_air": 3,
+    "ring_fire": 2,
+    "ring_earth": 2,
+    "ring_water": 2,
+    "ring_void": 2,
+    "attack": 1,
+    "parry": 2,
+    "skills_must_contain_keys": ["acting", "sincerity", "etiquette", "manipulation", "tact"],
+    "knacks_must_contain_keys": ["athletics", "discern_honor", "pontificate"],
+    "advantages_must_contain": ["charming", "worldly"],
+    "disadvantages_must_contain": ["transparent"]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "url": "https://docs.google.com/document/d/2PrivateDocIdXXXXXXXXXXXXXXXXXXXXXXXXXX/edit",
+  "mock_response": {
+    "status": 302,
+    "headers": {
+      "Location": "https://accounts.google.com/ServiceLogin?continue=https://docs.google.com/document/d/2PrivateDocIdXXXXXXXXXXXXXXXXXXXXXXXXXX/edit"
+    }
+  },
+  "expected": {
+    "outcome": "reject",
+    "error_code": "document_not_public",
+    "user_message_must_contain": [
+      "not publicly accessible",
+      "Share",
+      "Anyone with the link"
+    ],
+    "no_draft_created": true
+  },
+  "note": "Private Google Docs redirect unauthenticated requests to accounts.google.com. The importer detects this and shows the dedicated share-it-publicly instructions page."
+}

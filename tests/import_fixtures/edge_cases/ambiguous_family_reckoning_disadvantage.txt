@@ -1,0 +1,35 @@
+Bayushi Kenta
+Player: Julie
+School: Bayushi Bushi
+
+Rings
+  Air: 3
+  Fire: 2
+  Earth: 2
+  Water: 2
+  Void: 2
+
+Skills
+  Etiquette 2
+  Sincerity 2
+  Sneaking 2
+  Manipulation 1
+
+Knacks (school: Bayushi Bushi)
+  Double Attack 2
+  Feint 2
+  Iaijutsu 2
+
+Advantages
+  Charming
+
+Disadvantages
+  Family Reckoning
+  Proud
+
+Honor: 1.5
+Rank: 7.5
+Recognition: 7.5
+
+(Disambiguation: "Family Reckoning" is listed under Disadvantages, so the
+importer should choose "Family Reckoning: Venomous Sting".)

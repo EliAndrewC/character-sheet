@@ -329,6 +329,108 @@ class TestViewCharacter:
         assert "After making any non-initiative roll" in resp.text
 
 
+class TestPerAdventureTracking:
+    """The sheet embeds a per_adventure JSON list for the tracking panel."""
+
+    def test_togashi_3rd_dan_has_daily_athletics_raises_pool(self, client):
+        cid = _seed_character(
+            client,
+            name="Togashi 3D",
+            school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            ring_void=3,
+            skills={"precepts": 3},
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert '"id": "togashi_daily_athletics_raises"' in resp.text
+        assert '"name": "Daily Athletics Raises"' in resp.text
+        # 4 * precepts = 12
+        assert '"max": 12' in resp.text
+        assert '"per_day": true' in resp.text
+
+    def _per_adventure_ids(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(r"perAdventure:\s*(\[.*?\]),", resp.text)
+        assert m is not None
+        return [e["id"] for e in json.loads(m.group(1))]
+
+    def test_togashi_below_3rd_dan_has_no_daily_raises_pool(self, client):
+        cid = _seed_character(
+            client,
+            name="Togashi 2D",
+            school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            ring_void=3,
+            skills={"precepts": 3},
+            knacks={"athletics": 2, "conviction": 2, "dragon_tattoo": 2},
+        )
+        assert "togashi_daily_athletics_raises" not in self._per_adventure_ids(client, cid)
+
+    def test_togashi_3rd_dan_without_precepts_has_no_daily_raises_pool(self, client):
+        cid = _seed_character(
+            client,
+            name="Togashi 3D No Precepts",
+            school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            ring_void=3,
+            skills={},
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+        )
+        assert "togashi_daily_athletics_raises" not in self._per_adventure_ids(client, cid)
+
+    def test_non_togashi_has_no_daily_raises_pool(self, client):
+        cid = _seed_character(
+            client,
+            name="Akodo",
+            school="akodo_bushi",
+            school_ring_choice="Water",
+            skills={"precepts": 5},
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+        )
+        assert "togashi_daily_athletics_raises" not in self._per_adventure_ids(client, cid)
+
+    def test_conviction_entry_is_flagged_per_day(self, client):
+        cid = _seed_character(
+            client,
+            name="Conviction Char",
+            school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            ring_void=3,
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        # Conviction is the first match in a per_day-carrying object
+        assert '"id": "conviction"' in resp.text
+        # Extract the per_adventure JSON via a regex and verify the flag
+        import json, re
+        m = re.search(r"perAdventure:\s*(\[.*?\]),", resp.text)
+        assert m is not None
+        entries = json.loads(m.group(1))
+        conviction = next(e for e in entries if e["id"] == "conviction")
+        assert conviction.get("per_day") is True
+
+    def test_otherworldliness_entry_is_not_flagged_per_day(self, client):
+        cid = _seed_character(
+            client,
+            name="OW Char",
+            school="brotherhood_of_shinsei_monk",
+            school_ring_choice="Air",
+            ring_air=3,
+            knacks={"conviction": 3, "otherworldliness": 3, "worldliness": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        import json, re
+        m = re.search(r"perAdventure:\s*(\[.*?\]),", resp.text)
+        assert m is not None
+        entries = json.loads(m.group(1))
+        ow = next(e for e in entries if e["id"] == "otherworldliness")
+        assert ow.get("per_day") is not True
+
+
 class TestEditCharacter:
     def test_edit_page_loads(self, client):
         cid = _seed_character(client, name="Edit Test")

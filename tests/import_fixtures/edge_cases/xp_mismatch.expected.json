@@ -1,0 +1,21 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Matsu Daiyu",
+    "school": "matsu_bushi",
+    "starting_xp": 150
+  },
+  "import_notes": {
+    "must_contain": [
+      "XP reconciliation",
+      "60",
+      "133"
+    ]
+  },
+  "xp_reconciliation": {
+    "expected_computed_spent": 133,
+    "source_stated_spent": 60,
+    "source_stated_unspent": 90,
+    "discrepancy_must_be_nonzero": true
+  }
+}

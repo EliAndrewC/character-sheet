@@ -1,0 +1,14 @@
+{
+  "url": "https://example.com/my-character-sheet",
+  "mock_response": {
+    "status": 403,
+    "headers": {"Content-Type": "text/html"},
+    "body_inline": "<html><body>Forbidden</body></html>"
+  },
+  "expected": {
+    "outcome": "reject",
+    "error_code": "url_fetch_failed",
+    "user_message_must_contain": ["403", "could not"],
+    "no_draft_created": true
+  }
+}

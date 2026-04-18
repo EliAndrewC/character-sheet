@@ -1,0 +1,14 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Doji Harumi",
+    "school": "kakita_duelist"
+  },
+  "import_notes": {
+    "must_contain": [
+      "Crane Duelist",
+      "Kakita Duelist"
+    ]
+  },
+  "low_confidence_fields": ["school"]
+}

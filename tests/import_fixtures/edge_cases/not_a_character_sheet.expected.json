@@ -1,0 +1,9 @@
+{
+  "outcome": "reject",
+  "error_code": "not_a_character_sheet",
+  "user_message_must_contain": [
+    "doesn't look like",
+    "character sheet"
+  ],
+  "no_draft_created": true
+}

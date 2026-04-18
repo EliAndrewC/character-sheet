@@ -245,17 +245,35 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
 
     # Spendable knacks: conviction, otherworldliness, worldliness.
     # Conviction and otherworldliness both give 2X points per day (X = rank);
-    # worldliness pool is X.
+    # worldliness pool is X. Conviction is marked per_day so the tracker
+    # shows a dedicated "reset" button.
     for knack_id in ("conviction", "otherworldliness", "worldliness"):
         if knack_id in char_knacks:
             knack_rank = char_knacks[knack_id]["rank"]
             knack_name = char_knacks[knack_id]["data"].name
             pool_max = knack_rank * 2 if knack_id in ("otherworldliness", "conviction") else knack_rank
-            per_adventure.append({
+            entry = {
                 "id": knack_id,
                 "name": knack_name,
                 "type": "counter",
                 "max": pool_max,
+            }
+            if knack_id == "conviction":
+                entry["per_day"] = True
+            per_adventure.append(entry)
+
+    # Togashi 3rd Dan: daily pool of 4X athletics free raises (X = precepts).
+    # Per-day pool, so gets a dedicated reset button in addition to the
+    # per-adventure reset.
+    if character.school == "togashi_ise_zumi" and dan >= 3:
+        precepts_rank = (character.skills or {}).get("precepts", 0)
+        if precepts_rank > 0:
+            per_adventure.append({
+                "id": "togashi_daily_athletics_raises",
+                "name": "Daily Athletics Raises",
+                "type": "counter",
+                "max": 4 * precepts_rank,
+                "per_day": True,
             })
 
     # Compute void points max and void-spend config

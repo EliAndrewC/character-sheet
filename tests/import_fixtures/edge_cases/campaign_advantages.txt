@@ -1,0 +1,40 @@
+Ikoma Hayate
+Player: Eli
+School: Ikoma Bard
+
+Rings: Air 3, Fire 2, Earth 2, Water 3, Void 2
+
+Combat: Attack 1, Parry 2
+
+Skills
+  Etiquette 3
+  Sincerity 2
+  History 2
+  Heraldry 2
+  Culture 2
+  Bragging 2
+
+Knacks (Ikoma Bard)
+  Discern Honor 2
+  Oppose Knowledge 2
+  Oppose Social 2
+
+Advantages
+  Charming
+  Highest Regard           [campaign]
+  Household Wealth         [campaign]
+  Minor Clan Major Ally: Mantis   [campaign]
+
+Disadvantages
+  Streetwise               [campaign]
+  Crane-indebted           [campaign]
+
+Honor 3.0, Rank 7.5, Recognition 7.5
+
+(This character uses many advantages/disadvantages from the campaign
+lists, not the base lists. The importer must split them correctly:
+advantages from CAMPAIGN_ADVANTAGES go into campaign_advantages, not
+advantages. Same for disadvantages. Note: "Streetwise" is labelled as
+a disadvantage here but in CAMPAIGN_ADVANTAGES it's an advantage - the
+importer should believe the catalog, not the fixture's mis-categorisation,
+and flag it.)

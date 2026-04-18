@@ -1,0 +1,10 @@
+{
+  "url": "https://docs.google.com/spreadsheets/d/1XyZaBcDeFgHiJkLmNoPqRsTuVwXyZ9876543210/edit#gid=0",
+  "mock_response": {
+    "status": 200,
+    "headers": {"Content-Type": "text/csv; charset=utf-8"},
+    "body_file": "happy_google_sheet_body.csv"
+  },
+  "expected": {"same_as": "canonical"},
+  "note": "Public Google Sheet. The importer rewrites to /export?format=csv."
+}

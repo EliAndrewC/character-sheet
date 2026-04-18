@@ -1,0 +1,21 @@
+Character: Doji Harumi
+Player: Joel
+School: Crane Duelist
+
+Rings
+  Air 2, Fire 3, Earth 2, Water 2, Void 2
+
+Combat
+  Attack 2, Parry 2
+
+Skills: Etiquette 2, Sincerity 2, Tact 2
+
+School knacks: Iaijutsu 2, Double Attack 1, Lunge 1
+
+Advantages: Charming
+Disadvantages: Proud
+
+Honor 3, Rank 7.5, Recognition 7.5
+
+(The player wrote "Crane Duelist" but the canonical school name is
+"Kakita Duelist". The importer should resolve this alias and note it.)

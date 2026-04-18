@@ -1,0 +1,19 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Akodo Taro",
+    "school": "akodo_bushi",
+    "ring_air": 2,
+    "ring_fire": 2,
+    "ring_earth": 2,
+    "ring_water": 3,
+    "ring_void": 2
+  },
+  "import_notes": {
+    "must_contain": [
+      "pool",
+      "halved"
+    ]
+  },
+  "low_confidence_fields": ["ring_air", "ring_fire", "ring_earth", "ring_water", "ring_void"]
+}

@@ -1,0 +1,29 @@
+Yoritomo Kazuki
+Player: Phil
+School: Void Monk of the Lost Isles
+
+Rings
+  Air 2, Fire 2, Earth 2, Water 2, Void 3
+
+Skills
+  Precepts 2
+  Meditation 2
+  Sincerity 1
+
+Knacks
+  Otherworldliness 2
+  Conviction 2
+  Pontificate 2
+
+Advantages
+  Higher Purpose (enlightenment)
+
+Disadvantages
+  Poor
+
+Honor 4, Rank 7.5, Recognition 7.5
+
+(The school name written here is not a real L7R school. The importer
+should leave the school blank, import what it can, and flag the missing
+school as a high-severity issue so the user picks a real school from
+the edit page dropdown.)

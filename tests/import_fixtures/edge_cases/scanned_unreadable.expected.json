@@ -1,0 +1,10 @@
+{
+  "outcome": "reject",
+  "error_code": "document_unreadable",
+  "note": "Both pypdf text extraction AND the Gemini multimodal fallback return empty. The test mocks both to produce no usable extraction.",
+  "user_message_must_contain": [
+    "could not read",
+    "plain text or .docx"
+  ],
+  "no_draft_created": true
+}

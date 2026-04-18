@@ -1,0 +1,17 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Mirumoto Haru",
+    "school": "mirumoto_bushi",
+    "skills_must_contain_keys": ["etiquette", "history", "sincerity"],
+    "skills_must_not_contain_keys": ["gourmet", "cooking", "kenjutsu"]
+  },
+  "import_notes": {
+    "must_contain": [
+      "Gourmet",
+      "Cooking",
+      "Kenjutsu",
+      "not a recognised skill"
+    ]
+  }
+}

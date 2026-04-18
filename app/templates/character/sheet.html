@@ -286,6 +286,15 @@
                 getToggle(id) { return !!this.adventureState[id]; },
                 setToggle(id, val) { this.adventureState[id] = val; this.save(); },
 
+                resetAbility(id) {
+                    const ability = (this.perAdventure || []).find(a => a.id === id);
+                    if (!ability) return;
+                    if (ability.type === 'counter') this.adventureState[id + '_used'] = 0;
+                    if (ability.type === 'toggle') this.adventureState[id] = false;
+                    this.save();
+                    window.dispatchEvent(new CustomEvent('adventure-state-changed'));
+                },
+
                 worldlinessAvailable() {
                     const wa = (this.perAdventure || []).find(a => a.id === 'worldliness');
                     if (!wa) return 0;
@@ -772,6 +781,13 @@
                         <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
                                 :disabled="getCount('{{ ability.id }}') <= 0"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
+                        {% if ability.per_day %}
+                        <button @click="resetAbility('{{ ability.id }}')"
+                                :disabled="getCount('{{ ability.id }}') <= 0"
+                                data-action="reset-ability-{{ ability.id }}"
+                                title="This pool resets each day"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded disabled:opacity-30">Reset</button>
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -1464,7 +1480,7 @@
                 </div>
             </template>
             <div class="relative"
-                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker"
+                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasParry"
                  @mouseenter="owHoverRow = 'roll'"
                  @mouseleave="owHoverRow = null">
                 <button type="button"
@@ -1486,7 +1502,7 @@
                     </template>
                 </div>
             </div>
-            <template x-for="opt in (rollMenuHasAthleticsPicker ? [] : rollMenuOptions)" :key="'r'+opt.count">
+            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasParry ? [] : rollMenuOptions)" :key="'r'+opt.count">
                 <div class="relative"
                      @mouseenter="owHoverRow = 'r' + opt.count"
                      @mouseleave="owHoverRow = null">
@@ -1511,19 +1527,51 @@
                 </div>
             </template>
             <template x-if="rollMenuHasParry">
-                <div class="border-t border-ink/10">
-                    <button type="button"
-                            @click="executeRollWithExtraFlat(rollMenuKey, 0, null, 5, 'predeclared parry')"
-                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
-                        Predeclared Parry <span class="text-xs text-ink/50">(+5)</span>
-                    </button>
-                    <template x-for="opt in rollMenuOptions" :key="'p'+opt.count">
+                <div data-parry-menu>
+                    <div class="relative"
+                         @mouseenter="parryHoverRow = 'roll'"
+                         @mouseleave="parryHoverRow = null">
                         <button type="button"
-                                @click="executeRollWithExtraFlat(rollMenuKey, opt.count, opt, 5, 'predeclared parry')"
-                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
-                            <span x-text="opt.label + ' + predeclared (+5)'"></span>
+                                @click="executeRoll(rollMenuKey, 0, null)"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                            <span>Roll <span x-text="rollMenuTitle"></span></span>
+                            <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
                         </button>
-                    </template>
+                        <div x-show="parryHoverRow === 'roll' && rollMenuOptions.length > 0"
+                             x-cloak
+                             data-parry-void-submenu="roll"
+                             class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                            <template x-for="opt in rollMenuOptions" :key="'pr'+opt.count">
+                                <button type="button"
+                                        @click="executeRoll(rollMenuKey, opt.count, opt)"
+                                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                    <span x-text="opt.label"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="relative"
+                         @mouseenter="parryHoverRow = 'predeclared'"
+                         @mouseleave="parryHoverRow = null">
+                        <button type="button"
+                                @click="executeRollWithExtraFlat(rollMenuKey, 0, null, 5, 'predeclared parry')"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                            <span>Predeclared Parry <span class="text-xs text-ink/50">(+5)</span></span>
+                            <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                        </button>
+                        <div x-show="parryHoverRow === 'predeclared' && rollMenuOptions.length > 0"
+                             x-cloak
+                             data-parry-void-submenu="predeclared"
+                             class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                            <template x-for="opt in rollMenuOptions" :key="'pp'+opt.count">
+                                <button type="button"
+                                        @click="executeRollWithExtraFlat(rollMenuKey, opt.count, opt, 5, 'predeclared parry')"
+                                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                    <span x-text="opt.label + ' + predeclared (+5)'"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
                 </div>
             </template>
         </div>
@@ -3257,19 +3305,31 @@
                     </div>
 
                     {# Togashi 3rd Dan: daily athletics raises #}
-                    <div x-show="phase === 'done' && schoolAbilities.togashi_daily_athletics_raises && currentRollKey?.startsWith('athletics:')" x-cloak
-                         class="bg-parchment rounded p-2 text-sm"
-                         x-data="{ spent: 0 }">
-                        <div class="flex items-center gap-2">
+                    <div x-show="phase === 'done'
+                                 && schoolAbilities.togashi_daily_athletics_raises
+                                 && currentRollKey?.startsWith('athletics:')
+                                 && (togashiRaisesPoolAvail() > 0 || togashiRaisesSpentThisRoll > 0)"
+                         x-cloak class="bg-parchment rounded p-2 text-sm">
+                        <div class="flex items-center gap-2 flex-wrap">
                             <button type="button"
-                                    @click="if (spent < (schoolAbilities.togashi_daily_raises_per_roll || 0)) { spent++; baseTotal += 5; }"
-                                    :disabled="spent >= (schoolAbilities.togashi_daily_raises_per_roll || 0)"
+                                    @click="spendTogashiRaise()"
+                                    :disabled="!canSpendTogashiRaise()"
+                                    data-action="spend-togashi-raise"
                                     class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
                                 Spend Athletics Raise (+5)
                             </button>
-                            <span class="text-xs text-ink/60" x-text="spent + ' / ' + (schoolAbilities.togashi_daily_raises_per_roll || 0) + ' max per roll'"></span>
+                            <button type="button"
+                                    x-show="togashiRaisesSpentThisRoll > 0"
+                                    @click="undoTogashiRaise()"
+                                    data-action="undo-togashi-raise"
+                                    class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm">
+                                Undo
+                            </button>
+                            <span class="text-xs text-ink/60"
+                                  x-text="togashiRaisesSpentThisRoll + ' / ' + togashiRaisesPerRollCap() + ' this roll'"></span>
                         </div>
-                        <div class="text-xs text-ink/50 mt-1" x-text="'Daily pool: ' + (schoolAbilities.togashi_daily_raises_max || 0) + ' total'"></div>
+                        <div class="text-xs text-ink/50 mt-1"
+                             x-text="'Daily pool: ' + togashiRaisesPoolAvail() + ' / ' + (schoolAbilities.togashi_daily_raises_max || 0) + ' remaining'"></div>
                     </div>
 
                     {# No-reroll note (impaired, iaijutsu strike, or unskilled) - only when a 10 was actually rolled #}
@@ -3624,6 +3684,7 @@
             advRaisesConfig: { available: 0, used: 0 },
             convictionConfig: { rank: 0, max_per_roll: 0, daily_max: 0 },
             convictionSpentThisRoll: 0,
+            togashiRaisesSpentThisRoll: 0,
             priestAllies: [],  // [{priest_id, name, rank, max_per_roll, pool_max, used}]
             priestAllySpentThisRoll: {},  // {priest_id: N spent on the current roll}
             raisesSpentThisRoll: 0,
@@ -3958,6 +4019,7 @@
             athHoverRow: null,
             rollMenuOwCapacity: 0,
             owHoverRow: null,
+            parryHoverRow: null,
             // Merchant 5th Dan selective reroll state
             merchant5thPhase: 'idle',  // 'idle' | 'selecting'
             merchant5thSelections: [],
@@ -4114,14 +4176,10 @@
                         && this.formulas['athletics:Fire']
                         && this.formulas['athletics:Water']
                         && this.formulas['athletics:Earth']) {
-                    const rect = el.getBoundingClientRect();
-                    const menuWidth = 280;
-                    let left = rect.left;
-                    if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 8;
-                    if (left < 8) left = 8;
+                    const pos = this._computeRollMenuPos(el);
                     this.rollMenuKey = key;
                     this.rollMenuTitle = 'Athletics';
-                    this.rollMenuPos = { top: rect.bottom + 4, left };
+                    this.rollMenuPos = pos;
                     this.rollMenuOptions = this.schoolAbilities.merchant_post_roll_vp
                         ? [] : this.computeVoidOptions();
                     this.rollMenuHasStrike = false;
@@ -4131,6 +4189,7 @@
                     this.rollMenuOwCapacity = 0;
                     this.owHoverRow = null;
                     this.athHoverRow = null;
+                    this.parryHoverRow = null;
                     this.rollMenuOpen = true;
                     return;
                 }
@@ -4139,14 +4198,10 @@
                 // (normal + 1 athletics die, OR all-athletics with +3 dice).
                 if (f.is_initiative && f.togashi_ise_zumi
                         && this.formulas['initiative:athletics']) {
-                    const rect = el.getBoundingClientRect();
-                    const menuWidth = 280;
-                    let left = rect.left;
-                    if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 8;
-                    if (left < 8) left = 8;
+                    const pos = this._computeRollMenuPos(el);
                     this.rollMenuKey = key;
                     this.rollMenuTitle = f.label;
-                    this.rollMenuPos = { top: rect.bottom + 4, left };
+                    this.rollMenuPos = pos;
                     this.rollMenuOptions = [];
                     this.rollMenuHasStrike = false;
                     this.rollMenuHasParry = false;
@@ -4155,6 +4210,7 @@
                     this.rollMenuOwCapacity = 0;
                     this.owHoverRow = null;
                     this.athHoverRow = null;
+                    this.parryHoverRow = null;
                     this.rollMenuOpen = true;
                     return;
                 }
@@ -4193,15 +4249,11 @@
                 }
 
                 // Position the menu near the clicked element
-                const rect = el.getBoundingClientRect();
-                const menuWidth = 280;
-                let left = rect.left;
-                if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 8;
-                if (left < 8) left = 8;
+                const pos = this._computeRollMenuPos(el);
 
                 this.rollMenuKey = key;
                 this.rollMenuTitle = f.label;
-                this.rollMenuPos = { top: rect.bottom + 4, left };
+                this.rollMenuPos = pos;
                 this.rollMenuOptions = options;
                 this.rollMenuHasStrike = hasStrike;
                 this.rollMenuHasParry = hasParry;
@@ -4210,7 +4262,26 @@
                 this.rollMenuOwCapacity = f.otherworldliness_capacity || 0;
                 this.owHoverRow = null;
                 this.athHoverRow = null;
+                this.parryHoverRow = null;
                 this.rollMenuOpen = true;
+            },
+
+            _computeRollMenuPos(el) {
+                // Position the roll-menu flyout near the clicked element,
+                // but clamp into the viewport so the menu doesn't open off-screen.
+                const rect = el.getBoundingClientRect();
+                const menuWidth = 280;
+                const menuHeight = 280;  // generous estimate covering most menu variants
+                let left = rect.left;
+                if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 8;
+                if (left < 8) left = 8;
+                let top = rect.bottom + 4;
+                if (top + menuHeight > window.innerHeight) {
+                    // Flip above the clicked element if there's more room there.
+                    const above = rect.top - menuHeight - 4;
+                    top = above > 8 ? above : Math.max(8, window.innerHeight - menuHeight - 8);
+                }
+                return { top, left };
             },
 
             getOwPoolAvail() {
@@ -4431,9 +4502,11 @@
 
             executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason) {
                 this.rollMenuOpen = false;
+                this.parryHoverRow = null;
                 this.luckyUsedThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.convictionSpentThisRoll = 0;
+                this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
                 this.courtier5thApplied = false;
                 this.dojiOpponentResult = 0;
@@ -4480,9 +4553,11 @@
             executeRoll(key, voidSpent, option, owSpent = 0) {
                 this.rollMenuOpen = false;
                 this.owHoverRow = null;
+                this.parryHoverRow = null;
                 this.luckyUsedThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.convictionSpentThisRoll = 0;
+                this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
                 this.courtier5thApplied = false;
                 this.dojiOpponentResult = 0;
@@ -4795,6 +4870,42 @@
                 }
                 if (target === 'wc') this._wcUpdateMargin();
             },
+            // --- Togashi 3rd Dan daily athletics raises ---
+            togashiRaisesPoolAvail() {
+                const t = window._trackingBridge;
+                if (!t) return 0;
+                const max = this.schoolAbilities.togashi_daily_raises_max || 0;
+                return Math.max(0, max - (t.getCount('togashi_daily_athletics_raises') || 0));
+            },
+            togashiRaisesPerRollCap() {
+                const perRoll = this.schoolAbilities.togashi_daily_raises_per_roll || 0;
+                // Never allow more than what the daily pool has left (counting this roll's spends).
+                return Math.min(perRoll, this.togashiRaisesPoolAvail() + this.togashiRaisesSpentThisRoll);
+            },
+            canSpendTogashiRaise() {
+                return this.togashiRaisesSpentThisRoll < this.togashiRaisesPerRollCap();
+            },
+            spendTogashiRaise() {
+                if (!this.canSpendTogashiRaise()) return;
+                this.togashiRaisesSpentThisRoll++;
+                this.baseTotal += 5;
+                const t = window._trackingBridge;
+                if (t) {
+                    t.setCount('togashi_daily_athletics_raises',
+                        (t.getCount('togashi_daily_athletics_raises') || 0) + 1);
+                }
+            },
+            undoTogashiRaise() {
+                if (this.togashiRaisesSpentThisRoll <= 0) return;
+                this.togashiRaisesSpentThisRoll--;
+                this.baseTotal -= 5;
+                const t = window._trackingBridge;
+                if (t) {
+                    t.setCount('togashi_daily_athletics_raises',
+                        Math.max(0, (t.getCount('togashi_daily_athletics_raises') || 0) - 1));
+                }
+            },
+
             _wcUpdateMargin() {
                 // Recompute wound check pass/fail + margin after flat adjustments.
                 const lw = this.wcLightWounds;
@@ -5279,6 +5390,7 @@
                 const voidCount = this.atkVoidSelected;
                 const formula = { ...this.formulas[this.atkKey] };
                 this.convictionSpentThisRoll = 0;
+                this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
 
                 // Isawa Duelist 3rd Dan: auto-apply TN trade bonus (user can undo post-roll)
@@ -5489,6 +5601,7 @@
                 // Damage is a separate roll from the attack; Conviction points
                 // spent on the attack do not carry over.
                 this.convictionSpentThisRoll = 0;
+                this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
                 const isLunge = f.attack_variant === 'lunge';
                 const isDA = f.attack_variant === 'double_attack';
@@ -5618,6 +5731,7 @@
                 const voidCount = this.wcIsStrike ? 0 : this.wcVoidSelected;
                 const formula = { ...this.formulas['wound_check'] };
                 this.convictionSpentThisRoll = 0;
+                this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
 
                 // Iaijutsu strike: no reroll
