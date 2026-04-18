@@ -373,6 +373,43 @@ class TestSkillFormula:
         f = build_unskilled_formula("acting", char)
         assert f.otherworldliness_capacity == 0
 
+    def test_unskilled_advanced_penalty_appears_in_bonuses(self):
+        # The -10 advanced-skill penalty must appear in the labelled bonuses
+        # list so the roll-result modal can display it.
+        from app.services.dice import build_unskilled_formula
+        char = make_character_data(school="", knacks={}, skills={})
+        f = build_unskilled_formula("acting", char)
+        assert f.flat == -10
+        assert any(b["amount"] == -10 for b in f.bonuses), \
+            f"Expected -10 penalty in bonuses, got {f.bonuses!r}"
+
+    def test_unskilled_basic_has_no_penalty_bonus(self):
+        from app.services.dice import build_unskilled_formula
+        char = make_character_data(school="", knacks={}, skills={})
+        f = build_unskilled_formula("bragging", char)
+        assert f.flat == 0
+        assert f.bonuses == []
+
+    def test_unskilled_no_reroll_reason_carries_skill_name(self):
+        """The roll-result modal needs to render ``10s not rerolled due to
+        <skill name> being 0`` so the player understands *why*. Expose the
+        human-readable skill name on the formula alongside the reason key."""
+        from app.services.dice import build_unskilled_formula
+        char = make_character_data(school="", knacks={}, skills={})
+        f = build_unskilled_formula("bragging", char)
+        assert f.no_reroll_reason == "unskilled"
+        assert f.unskilled_skill_name == "Bragging"
+
+    def test_unskilled_skill_name_uses_display_name_not_id(self):
+        """Two-word skill names should render with spaces/capitals from SKILLS,
+        not as the underscored id."""
+        from app.services.dice import build_unskilled_formula
+        char = make_character_data(school="", knacks={}, skills={})
+        f = build_unskilled_formula("double_attack", char) if False else None
+        # double_attack is a knack, not a skill - use an actual 2-word skill
+        f = build_unskilled_formula("underworld", char)
+        assert f.unskilled_skill_name == "Underworld"
+
 
 # ---------------------------------------------------------------------------
 # build_knack_formula

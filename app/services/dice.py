@@ -89,6 +89,7 @@ class RollFormula:
     flat: int = 0
     reroll_tens: bool = True
     no_reroll_reason: str = ""
+    unskilled_skill_name: str = ""
     alternatives: List[dict] = field(default_factory=list)
     bonuses: List[dict] = field(default_factory=list)
     adventure_raises_max_per_roll: int = 0
@@ -213,13 +214,16 @@ def build_unskilled_formula(
     rings = character_data.get("rings", {})
     ring_val = rings.get(skill_def.ring.value, 2)
     flat = -10 if skill_def.is_advanced else 0
+    bonuses = [{"label": "unskilled advanced penalty", "amount": -10}] if skill_def.is_advanced else []
     return RollFormula(
         label=f"{skill_def.name} ({skill_def.ring.value})",
         rolled=ring_val,
         kept=ring_val,
         flat=flat,
+        bonuses=bonuses,
         reroll_tens=False,
         no_reroll_reason="unskilled",
+        unskilled_skill_name=skill_def.name,
         otherworldliness_capacity=5 if not skill_def.is_advanced else 0,
     )
 
