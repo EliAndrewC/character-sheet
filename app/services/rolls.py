@@ -169,6 +169,33 @@ def compute_skill_roll(
             result.flat_bonus += FREE_RAISE_VALUE
             bonus_parts.append((FREE_RAISE_VALUE, "+5 from 2nd Dan"))
 
+    # Priest 2nd Dan (self): free raise on Honor-bonus rolls
+    # (bragging, precepts; sincerity only on open rolls).
+    if school_id == "priest" and dan >= 2 and skill_id in ("bragging", "precepts", "sincerity"):
+        if skill_id == "sincerity":
+            bonus_parts.append((0, "+5 on open rolls from Priest 2nd Dan"))
+        else:
+            result.flat_bonus += FREE_RAISE_VALUE
+            bonus_parts.append((FREE_RAISE_VALUE, "+5 from Priest 2nd Dan"))
+    # Priest 2nd Dan (ally): same bonus if any party member is a Priest dan >= 2.
+    elif skill_id in ("bragging", "precepts", "sincerity") and party_members:
+        ally_priest = next(
+            (p for p in party_members
+             if p.get("school") == "priest" and (p.get("dan") or 0) >= 2),
+            None,
+        )
+        if ally_priest is not None:
+            ally_name = ally_priest.get("name", "an ally")
+            if skill_id == "sincerity":
+                bonus_parts.append(
+                    (0, f"+5 on open rolls from {ally_name}'s Priest 2nd Dan")
+                )
+            else:
+                result.flat_bonus += FREE_RAISE_VALUE
+                bonus_parts.append(
+                    (FREE_RAISE_VALUE, f"+5 from {ally_name}'s Priest 2nd Dan")
+                )
+
     # --- Advantage bonuses (free raises = +5 each) ---
     advantages = character_data.get("advantages", [])
     for adv_id in advantages:

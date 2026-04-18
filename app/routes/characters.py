@@ -193,6 +193,59 @@ def delete_character(request: Request, char_id: int, db: Session = Depends(get_d
 # ---------------------------------------------------------------------------
 
 
+@router.post("/{char_id}/ally-conviction")
+async def ally_conviction(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Priest 5th Dan: any party member can spend this priest's conviction on
+    their own rolls. The endpoint updates the priest's ``conviction_used``
+    counter in ``adventure_state`` by the requested ``delta`` (+1 or -1).
+    Caller must be logged in and in the same gaming group as the priest, and
+    the priest must actually be a Priest at dan>=5.
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    priest = db.query(Character).filter(Character.id == char_id).first()
+    if not priest:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    if priest.school != "priest":
+        return JSONResponse({"error": "Not a priest"}, status_code=400)
+    # Priest must be at 5th Dan (lowest school knack >= 5).
+    from app.game_data import SCHOOLS
+    p_school_obj = SCHOOLS.get(priest.school)
+    p_knack_ranks = [
+        (priest.knacks or {}).get(k, 1) for k in (p_school_obj.school_knacks or [])
+    ] if p_school_obj else []
+    p_dan = min(p_knack_ranks) if p_knack_ranks else 0
+    if p_dan < 5:
+        return JSONResponse({"error": "Priest is not at 5th Dan"}, status_code=400)
+    # Caller must share the priest's gaming group.
+    caller_chars = db.query(Character).filter(
+        Character.owner_discord_id == user["discord_id"],
+        Character.gaming_group_id == priest.gaming_group_id,
+    ).all()
+    if not priest.gaming_group_id or not caller_chars:
+        return JSONResponse(
+            {"error": "Caller is not in the priest's gaming group"}, status_code=403
+        )
+    body = await request.json()
+    try:
+        delta = int(body.get("delta", 0))
+    except (TypeError, ValueError):
+        delta = 0
+    if delta not in (-1, 1):
+        return JSONResponse({"error": "delta must be +1 or -1"}, status_code=400)
+    adv_state = dict(priest.adventure_state or {})
+    pool_max = 2 * (priest.knacks or {}).get("conviction", 0)
+    used = int(adv_state.get("conviction_used", 0))
+    new_used = max(0, min(pool_max, used + delta))
+    adv_state["conviction_used"] = new_used
+    priest.adventure_state = adv_state
+    db.commit()
+    return JSONResponse({"used": new_used, "pool_max": pool_max})
+
+
 @router.post("/{char_id}/autosave")
 async def autosave_character(
     request: Request, char_id: int, db: Session = Depends(get_db)

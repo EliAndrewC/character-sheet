@@ -24,6 +24,7 @@ from app.game_data import (
 )
 from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
 from app.services.auth import can_view_drafts, get_admin_ids, is_admin, can_edit_character, format_editor_list_text
+from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.rolls import compute_skill_roll
 from app.services.status import compute_effective_status
@@ -135,34 +136,67 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             .all()
         )
         for p in party_chars:
+            # Compute party member's Dan (lowest school knack rank).
+            p_dan = 0
+            p_school_obj = SCHOOLS.get(p.school)
+            if p_school_obj:
+                p_knack_ranks = [
+                    (p.knacks or {}).get(k, 1) for k in p_school_obj.school_knacks
+                ]
+                p_dan = min(p_knack_ranks) if p_knack_ranks else 0
             party_members_data.append({
                 "name": p.name,
+                "school": p.school,
+                "dan": p_dan,
                 "advantages": p.advantages or [],
                 "disadvantages": p.disadvantages or [],
                 "campaign_advantages": p.campaign_advantages or [],
                 "campaign_disadvantages": p.campaign_disadvantages or [],
             })
             # Check if this party member is a Daidoji with 3rd Dan counterattack raises
-            if p.school == "daidoji_yojimbo":
-                p_school = SCHOOLS.get(p.school)
-                if p_school:
-                    p_knack_ranks = [
-                        (p.knacks or {}).get(k, 1) for k in p_school.school_knacks
-                    ]
-                    p_dan = min(p_knack_ranks) if p_knack_ranks else 0
-                    if p_dan >= 3:
-                        p_attack = (p.skills or {}).get("attack", 1)
-                        daidoji_counterattack_party.append({
-                            "name": p.name,
-                            "raises": p_attack,
-                            "bonus": p_attack * 5,
-                        })
+            if p.school == "daidoji_yojimbo" and p_dan >= 3:
+                p_attack = (p.skills or {}).get("attack", 1)
+                daidoji_counterattack_party.append({
+                    "name": p.name,
+                    "raises": p_attack,
+                    "bonus": p_attack * 5,
+                })
+
+    # Party-priest 5th Dan conviction: each Priest ally at dan >= 5 with a
+    # conviction knack lets this character spend from the priest's pool.
+    priest_conviction_allies = []
+    if character.gaming_group_id:
+        for p in party_chars:
+            if p.school != "priest":
+                continue
+            p_school_obj = SCHOOLS.get(p.school)
+            if not p_school_obj:  # pragma: no cover - "priest" is always in SCHOOLS
+                continue
+            p_knack_ranks = [
+                (p.knacks or {}).get(k, 1) for k in p_school_obj.school_knacks
+            ]
+            p_dan = min(p_knack_ranks) if p_knack_ranks else 0
+            if p_dan < 5:
+                continue
+            conv_rank = (p.knacks or {}).get("conviction", 0)
+            if conv_rank < 1:  # pragma: no cover - priest knacks start at rank 1
+                continue
+            adv_state = p.adventure_state or {}
+            conv_used = int(adv_state.get("conviction_used", 0))
+            priest_conviction_allies.append({
+                "priest_id": p.id,
+                "name": p.name,
+                "rank": conv_rank,
+                "max_per_roll": conv_rank,
+                "pool_max": 2 * conv_rank,
+                "used": conv_used,
+            })
 
     effective = compute_effective_status(char_dict, party_members=party_members_data)
     all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
 
     # Pre-compute every roll formula needed by the click-to-roll UI on the sheet.
-    roll_formulas = build_all_roll_formulas(char_dict)
+    roll_formulas = build_all_roll_formulas(char_dict, party_members=party_members_data)
     is_impaired_now = is_impaired(char_dict)
 
     # Viewer's dice preferences (default both on if missing)
@@ -209,12 +243,14 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     if "unlucky" in disadvantages:
         per_adventure.append({"id": "unlucky_used", "name": "Unlucky (GM penalty)", "type": "toggle"})
 
-    # Spendable knacks: conviction, otherworldliness, worldliness
+    # Spendable knacks: conviction, otherworldliness, worldliness.
+    # Conviction and otherworldliness both give 2X points per day (X = rank);
+    # worldliness pool is X.
     for knack_id in ("conviction", "otherworldliness", "worldliness"):
         if knack_id in char_knacks:
             knack_rank = char_knacks[knack_id]["rank"]
             knack_name = char_knacks[knack_id]["data"].name
-            pool_max = knack_rank * 2 if knack_id == "otherworldliness" else knack_rank
+            pool_max = knack_rank * 2 if knack_id in ("otherworldliness", "conviction") else knack_rank
             per_adventure.append({
                 "id": knack_id,
                 "name": knack_name,
@@ -275,8 +311,17 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "otaku_lunge_extra_die": character.school == "otaku_bushi" and dan >= 4,
         # Brotherhood 3rd Dan: adventure raises can lower action die by 5
         "brotherhood_lower_action_die": character.school == "brotherhood_of_shinsei_monk" and dan >= 3,
-        # Shosuro 5th Dan: add lowest 3 dice to result on TN/contested rolls
+        # Shosuro 5th Dan: add lowest 3 dice to result on any non-initiative roll
         "shosuro_add_lowest_3": character.school == "shosuro_actor" and dan >= 5,
+        # Lookup table of average 3-lowest-dice bonus keyed by "<reroll>:<rolled>"
+        # (stringified so JSON preserves keys); client uses this to surface the
+        # average Shosuro 5th Dan bonus on damage/probability displays.
+        "shosuro_lowest_3_avg": (
+            {f"{int(reroll)}:{rolled}": avg
+             for reroll, inner in shosuro_lowest_3_avg.items()
+             for rolled, avg in inner.items()}
+            if character.school == "shosuro_actor" and dan >= 5 else {}
+        ),
         # Matsu 4th Dan: miss by <20 on double attack = hit with no extra damage
         "matsu_near_miss": character.school == "matsu_bushi" and dan >= 4,
         # Ide 4th Dan: +1 VP nightly regen (display only)
@@ -365,11 +410,17 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     # spending level so the client can show a probability table without
     # downloading the full ~720KB probability tables.
     from app.data import prob as _prob_table
+    from app.data import shosuro_lowest_3_for
+    shosuro_5th = character.school == "shosuro_actor" and dan >= 5
     wc_formula = roll_formulas.get("wound_check", {})
     wc_base_rolled = wc_formula.get("rolled", 3)
     wc_base_kept = wc_formula.get("kept", 2)
     wc_flat = wc_formula.get("flat", 0)
     wc_probs = {"flat": wc_flat, "void_cap": void_spend_cap}
+    if shosuro_5th:
+        # Per-(rolled,kept) average 3-lowest-dice bonus. Client adds this to
+        # the target offset so probability displays reflect the 5th Dan bonus.
+        wc_probs["shosuro_flats"] = {}
     max_target = 151
     # Probability slices for reroll=True (normal) at each void level
     wc_probs["probs"] = {}
@@ -386,6 +437,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             wc_probs["probs"][key] = [
                 round(_prob_table[True][r, k, x], 4) for x in range(max_target)
             ]
+            if shosuro_5th:
+                wc_probs["shosuro_flats"][key] = round(
+                    shosuro_lowest_3_for(r, True)
+                )
     # Also include a no-reroll slice for iaijutsu strike wound checks (base only)
     r, k = wc_base_rolled, wc_base_kept
     wc_probs["probs_no_reroll"] = {
@@ -393,6 +448,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             round(_prob_table[False][r, k, x], 4) for x in range(max_target)
         ]
     }
+    if shosuro_5th:
+        wc_probs.setdefault("shosuro_flats_no_reroll", {})[f"{r},{k}"] = round(
+            shosuro_lowest_3_for(r, False)
+        )
     # Map void count -> rolled,kept key (after caps)
     wc_probs["void_keys"] = {}
     for v in range(void_spend_cap + 1):
@@ -414,6 +473,8 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         ap["probs"] = {}
         ap["avgs"] = {}
         ap["void_keys"] = {}
+        if shosuro_5th:
+            ap["shosuro_flats"] = {}
         for v in range(void_spend_cap + 1):
             r, k = base_r + v, base_k + v
             if r > 10: k += r - 10; r = 10
@@ -426,6 +487,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                     for x in range(151)
                 ]
                 ap["avgs"][rk] = round(_prob_table[reroll_for_attack].get((r, k), 0), 2)
+                if shosuro_5th:
+                    ap["shosuro_flats"][rk] = round(
+                        shosuro_lowest_3_for(r, reroll_for_attack)
+                    )
         attack_probs[key] = ap
 
     # Damage average lookup table: avg of NkM with reroll-10s for reasonable combos
@@ -483,6 +548,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "has_temp_void": character.school in SCHOOLS_WITH_TEMP_VOID,
             "school_abilities": school_abilities,
             "daidoji_counterattack_party": daidoji_counterattack_party,
+            "priest_conviction_allies": priest_conviction_allies,
         },
     )
 

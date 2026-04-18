@@ -43,6 +43,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Attack roll shows HIT or MISSED -> `test_attack_modal.py::test_attack_roll_shows_hit_or_miss`
 - [x] Hit shows Make Damage Roll button -> `test_attack_modal.py::test_attack_hit_shows_damage_roll_button`
 - [x] Dice animation visible during attack roll -> `test_attack_modal.py::test_attack_dice_animation_visible`
+- [x] Attack probability table shows "Attack Roll" column with (r)k(k) values per void level -> `test_attack_modal.py::test_attack_modal_shows_attack_roll_rk_column`
 - [x] Damage roll produces result after hit -> `test_attack_modal.py::test_attack_damage_roll_produces_result`
 - [x] Lucky button on regular roll (present/absent) -> `test_ui_interactions.py::test_lucky_on_regular_roll`, `test_no_lucky_on_regular_roll_without_advantage`
 - [x] Lucky button on attack result (present/absent) -> `test_ui_interactions.py::test_lucky_reroll_on_attack`, `test_no_lucky_on_attack_without_advantage`
@@ -309,7 +310,9 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 2nd Dan behavioral sincerity bonus -> `test_school_abilities.py::test_shosuro_2nd_dan_behavioral`
 - [x] 3rd Dan spend raise on sincerity -> `test_school_abilities.py::test_shosuro_3rd_dan_sincerity_raises`
 - [x] Acting skill bonus in roll formulas -> `test_school_abilities.py::test_shosuro_acting_dice_behavioral`
-- [x] 5th Dan lowest 3 dice selection -> `test_school_abilities.py::test_shosuro_5th_dan_lowest_3_dice`
+- [x] 5th Dan lowest 3 dice on skill rolls -> `test_school_abilities.py::test_shosuro_5th_dan_lowest_3_dice`
+- [x] 5th Dan lowest 3 dice on attack rolls (pre-roll note + result breakdown) -> `test_school_abilities.py::test_shosuro_5th_dan_attack_lowest_3_dice`
+- [x] 5th Dan lowest 3 dice on wound check rolls (pre-roll note + result breakdown) -> `test_school_abilities.py::test_shosuro_5th_dan_wound_check_lowest_3_dice`
 
 ### Shugenja (skipped - school disabled)
 
@@ -321,10 +324,35 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 ### Togashi
 
 - [x] 4th Dan heal SW button works -> `test_school_abilities.py::test_togashi_heal_sw_button_works`
-- [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_togashi_1st_dan_behavioral`
+- [x] 1st Dan grants +1 rolled die on wound check (also athletics/init) -> `test_school_abilities.py::test_togashi_1st_dan_behavioral`
 - [x] 2nd Dan behavioral athletics bonus -> `test_school_abilities.py::test_togashi_2nd_dan_behavioral`
 - [x] 3rd Dan spend raise on athletics -> `test_school_abilities.py::test_togashi_3rd_dan_athletics_raises`
 - [x] 4th Dan reroll button on contested rolls -> `test_school_abilities.py::test_togashi_4th_dan_reroll_behavioral`
+- [x] 4th Dan reroll limited to once per roll (button hidden after use, reappears on next roll; post-reroll banner notes original is discarded) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_only_once_per_roll`
+- [x] 4th Dan reroll hidden on initiative (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_initiative`
+- [x] 4th Dan reroll hidden on Etiquette (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_etiquette`
+- [x] 4th Dan reroll hidden on Heraldry (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_heraldry`
+- [x] Dragon Tattoo does not offer void spending (damage roll, not skill roll) -> `test_school_abilities.py::test_togashi_dragon_tattoo_no_void_spend`
+- [x] Conviction spend button appears on skill roll results -> `test_school_abilities.py::test_conviction_button_appears_on_skill_roll`
+- [x] Conviction spend button does NOT appear on initiative rolls -> `test_school_abilities.py::test_conviction_not_on_initiative`
+- [x] Conviction spend adds +1 and decrements the daily pool -> `test_school_abilities.py::test_conviction_spend_adds_plus_one_and_decrements_pool`
+- [x] Conviction points persist through Togashi 4th Dan reroll -> `test_school_abilities.py::test_conviction_survives_togashi_reroll`
+- [x] Akodo 1st Dan: attack modal pre-roll shows +1 rolled die note -> `test_school_abilities.py::test_akodo_1st_dan_attack_modal_pre_roll_extra_die`
+- [x] Ikoma 2nd Dan: attack modal pre-roll shows +5 free raise -> `test_school_abilities.py::test_ikoma_2nd_dan_attack_modal_pre_roll_free_raise`
+- [x] Brotherhood 2nd Dan: attack modal pre-roll shows +5 free raise -> `test_school_abilities.py::test_brotherhood_2nd_dan_attack_modal_pre_roll_free_raise`
+- [x] Bayushi 2nd Dan: double_attack modal pre-roll shows +5 free raise -> `test_school_abilities.py::test_bayushi_2nd_dan_double_attack_modal_pre_roll`
+- [x] Hida 2nd Dan: counterattack modal pre-roll shows +5 free raise -> `test_school_abilities.py::test_hida_2nd_dan_counterattack_modal_pre_roll`
+- [x] Daidoji 2nd Dan: counterattack modal pre-roll shows +5 free raise -> `test_school_abilities.py::test_daidoji_2nd_dan_counterattack_modal_pre_roll`
+- [x] Kitsuki Special: attack modal pre-roll shows +2*Water -> `test_school_abilities.py::test_kitsuki_attack_modal_pre_roll_shows_water_bonus`
+- [x] Courtier Special: attack modal pre-roll shows +Air -> `test_school_abilities.py::test_courtier_special_attack_modal_pre_roll_shows_air_bonus`
+- [x] Courtier 5th Dan: attack modal pre-roll shows +Air (both special and 5th Dan) -> `test_school_abilities.py::test_courtier_5th_dan_attack_modal_pre_roll_shows_air_bonus`
+- [x] Shosuro Special: attack modal pre-roll shows +acting rolled dice -> `test_school_abilities.py::test_shosuro_acting_dice_attack_modal_pre_roll`
+- [x] Dragon Tattoo knack rolls (2X)k1 damage (not ring-based) -> `test_school_abilities.py::test_togashi_dragon_tattoo_rolls_2x_k1_damage`
+- [x] Dragon Tattoo does not reroll 10s when impaired -> `test_school_abilities.py::test_togashi_dragon_tattoo_impaired_disables_reroll_10s`
+- [x] Initiative box shows both variants ("3k2 plus 1 athletics" and "6k5 athletics") and dropdown opens on click -> `test_school_abilities.py::test_togashi_initiative_dropdown_shows_both_variants`
+- [x] Normal initiative variant rolls correct total dice count (base+1 athletics) -> `test_school_abilities.py::test_togashi_initiative_normal_variant_rolls_correct_dice`
+- [x] Athletics initiative variant rolls correct total dice count (base+3) -> `test_school_abilities.py::test_togashi_initiative_athletics_variant_rolls_correct_dice`
+- [x] 1st Dan +1 die remains in effect past dan 1 (init display) -> `test_school_abilities.py::test_togashi_initiative_dan_advancement_bonus`
 
 ### Yogo
 
@@ -361,6 +389,11 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Click Attack opens attack modal → `test_rolls.py::test_click_attack_opens_attack_modal`
 - [x] Click Parry opens modal with "Parry" title → `test_rolls.py::test_click_parry_opens_modal`
 - [x] Click a Ring opens an Athletics roll modal → `test_rolls.py::test_click_ring_opens_athletics_modal`
+- [x] Click a Ring always opens the roll menu (even with 0 VP) → `test_rolls.py::test_click_ring_always_shows_menu_even_with_zero_vp`
+- [x] Click a Ring with VP shows "Spend N void points" dropdown options → `test_rolls.py::test_click_ring_shows_void_options_when_vp_available`
+- [x] Athletics knack die icon opens a ring picker (Air/Fire/Water/Earth) → `test_rolls.py::test_athletics_knack_icon_opens_ring_picker`
+- [x] Selecting a ring from the athletics picker rolls that ring's Athletics formula → `test_rolls.py::test_athletics_knack_picker_rolls_selected_ring`
+- [x] Hovering a ring in the athletics picker reveals a void-spend submenu → `test_rolls.py::test_athletics_knack_picker_void_submenu`
 - [x] Modal shows Total and dice after the animation phase → `test_rolls.py::test_modal_shows_total_and_dice_after_animation`
 - [x] Modal close button hides the modal → `test_rolls.py::test_modal_close_button`
 - [x] Impaired character's roll modal shows "10s not rerolled" note → `test_rolls.py::test_impaired_character_modal_shows_no_reroll_note`
@@ -403,6 +436,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Setting group does not create a "modified" badge → `test_groups.py::test_set_group_does_not_create_modified_badge`
 - [x] Homepage clusters characters by group with section headings → `test_groups.py::test_homepage_clusters_characters_by_group`
 - [x] Party member's Thoughtless adds inline +10 note on other character's Tact → `test_groups.py::test_party_thoughtless_inline_on_other_tact`
+- [x] Party member Priest at 2nd Dan grants free raise to ally bragging (shown in tooltip and baked into formula) → `test_groups.py::test_party_priest_2nd_dan_grants_bragging_free_raise`
+- [x] Party member Priest at 5th Dan exposes a "Spend [Priest]'s Conviction (+1)" button on ally roll results → `test_groups.py::test_party_priest_5th_dan_ally_conviction_button`
 - [x] Self Thoughtless inline on own Tact (and not on Sincerity) → `test_groups.py::test_self_thoughtless_inline_on_own_tact`
 - [x] Standalone Party Effects section is removed entirely → `test_groups.py::test_no_party_effects_section_present`
 

@@ -137,7 +137,7 @@
                 <span class="text-ink/60">Impaired at:</span>&nbsp;
                 <span class="font-bold">{{ ring_map['Earth'] }} serious wounds</span>
                 <template x-if="impaired">
-                    <div class="w-full mt-1 text-xs font-bold text-red-800">IMPAIRED - 10s do not reroll</div>
+                    <div class="w-full mt-1 text-xs font-bold text-red-800">IMPAIRED - 10s do not reroll on skill rolls</div>
                 </template>
             </div>
             {% set dying_base = ring_map['Earth'] * 2 %}
@@ -166,11 +166,25 @@
                 </div>
                 {% endif %}
             </div>
-            <div class="bg-parchment rounded p-2 flex items-center flex-wrap cursor-pointer hover:ring-2 hover:ring-accent/40 transition-shadow"
-                 data-roll-key="initiative" title="Click to roll Initiative">
-                <span class="text-ink/60">Initiative:</span>&nbsp;
-                <span class="font-bold">{{ ring_map['Void'] + 1 }} dice, keep {{ ring_map['Void'] }}</span>
-            </div>
+            {% if character.school == 'togashi_ise_zumi' %}
+                {% set _togashi_base_rolled = ring_map['Void'] + 1 + (1 if dan >= 1 else 0) %}
+                {% set _togashi_base_kept = ring_map['Void'] %}
+                {% set _togashi_ath_rolled = _togashi_base_rolled + 3 %}
+                {% set _togashi_ath_kept = _togashi_base_kept + 3 %}
+                <div class="bg-parchment rounded p-2 flex items-center flex-wrap cursor-pointer hover:ring-2 hover:ring-accent/40 transition-shadow"
+                     data-roll-key="initiative" title="Click for initiative options">
+                    <span class="text-ink/60">Initiative:</span>&nbsp;
+                    <span class="font-bold">{{ _togashi_base_rolled }}k{{ _togashi_base_kept }} plus 1 athletics action</span>&nbsp;
+                    <span class="text-ink/60">or</span>&nbsp;
+                    <span class="font-bold">{{ _togashi_ath_rolled }}k{{ _togashi_ath_kept }} athletics actions</span>
+                </div>
+            {% else %}
+                <div class="bg-parchment rounded p-2 flex items-center flex-wrap cursor-pointer hover:ring-2 hover:ring-accent/40 transition-shadow"
+                     data-roll-key="initiative" title="Click to roll Initiative">
+                    <span class="text-ink/60">Initiative:</span>&nbsp;
+                    <span class="font-bold">{{ ring_map['Void'] + 1 }} dice, keep {{ ring_map['Void'] }}</span>
+                </div>
+            {% endif %}
             <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
                 <span class="text-ink/60">TN to be hit:</span>&nbsp;
                 <span class="font-bold">{{ 5 + 5 * character.parry }}</span>&nbsp;
@@ -1375,12 +1389,66 @@
         "available": adv_raises_max.val,
         "used": (adventure_state or {}).get('adventure_raises_used', 0),
     } | tojson }}</script>
+    {% set _conv_rank = (char_knacks.get('conviction', {}) or {}).get('rank', 0) %}
+    <script type="application/json" id="conviction-config">{{ {
+        "rank": _conv_rank,
+        "max_per_roll": _conv_rank,
+        "daily_max": 2 * _conv_rank,
+    } | tojson }}</script>
+    <script type="application/json" id="priest-conviction-allies">{{ priest_conviction_allies | tojson }}</script>
     <script src="/static/js/dice.js?v={{ static_v('js/dice.js') }}"></script>
     <div x-data="diceRoller()" x-init="init()">
         {# ── Roll menu (void spending + iaijutsu strike) ── #}
         <div x-show="rollMenuOpen" x-cloak @click.outside="rollMenuOpen = false"
              class="fixed z-50 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[240px]"
              :style="'top:' + rollMenuPos.top + 'px; left:' + rollMenuPos.left + 'px'">
+            <template x-if="rollMenuHasAthleticsPicker">
+                <div data-athletics-picker-menu>
+                    <template x-for="ring in ['Air', 'Fire', 'Water', 'Earth']" :key="ring">
+                        <div class="relative"
+                             @mouseenter="athHoverRow = ring"
+                             @mouseleave="athHoverRow = null">
+                            <button type="button"
+                                    :data-athletics-ring="ring"
+                                    @click="executeRoll('athletics:' + ring, 0, null)"
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                                <span>Athletics (<span x-text="ring"></span>)
+                                    <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:' + ring]?.rolled || 0) + 'k' + (formulas['athletics:' + ring]?.kept || 0) + ')'"></span>
+                                </span>
+                                <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                            </button>
+                            <div x-show="athHoverRow === ring && rollMenuOptions.length > 0"
+                                 x-cloak
+                                 :data-athletics-void-submenu="ring"
+                                 class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                <template x-for="opt in rollMenuOptions" :key="'ath'+ring+opt.count">
+                                    <button type="button"
+                                            @click="executeRoll('athletics:' + ring, opt.count, opt)"
+                                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                        <span x-text="opt.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            <template x-if="rollMenuHasTogashiInit">
+                <div data-togashi-init-menu>
+                    <button type="button"
+                            data-togashi-init-normal
+                            @click="executeRoll('initiative', 0, null)"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10 font-medium">
+                        <span x-text="(formulas.initiative.togashi_base_rolled) + 'k' + (formulas.initiative.togashi_base_kept) + ' + 1 athletics action'"></span>
+                    </button>
+                    <button type="button"
+                            data-togashi-init-athletics
+                            @click="executeRoll('initiative:athletics', 0, null)"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
+                        <span x-text="formulas['initiative:athletics'].rolled + 'k' + formulas['initiative:athletics'].kept + ' athletics actions'"></span>
+                    </button>
+                </div>
+            </template>
             <template x-if="rollMenuHasStrike">
                 <div>
                     <button type="button"
@@ -1396,6 +1464,7 @@
                 </div>
             </template>
             <div class="relative"
+                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker"
                  @mouseenter="owHoverRow = 'roll'"
                  @mouseleave="owHoverRow = null">
                 <button type="button"
@@ -1417,7 +1486,7 @@
                     </template>
                 </div>
             </div>
-            <template x-for="opt in rollMenuOptions" :key="'r'+opt.count">
+            <template x-for="opt in (rollMenuHasAthleticsPicker ? [] : rollMenuOptions)" :key="'r'+opt.count">
                 <div class="relative"
                      @mouseenter="owHoverRow = 'r' + opt.count"
                      @mouseleave="owHoverRow = null">
@@ -1491,6 +1560,12 @@
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
                         Doji 5th Dan: +<span x-text="Math.max(0, Math.floor((wcLightWounds - 10) / 5))"></span>
                         bonus (from <span x-text="wcLightWounds"></span> light wounds)
+                    </div>
+
+                    {# Shosuro Actor 5th Dan: note that lowest-3 bonus is baked into probabilities #}
+                    <div x-show="formulas.wound_check?.shosuro_5th_dan" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Shosuro 5th Dan: sum of lowest 3 dice is added to each roll (some dice may be counted twice). The probabilities below include this bonus.
                     </div>
 
                     {# Probability table #}
@@ -1608,7 +1683,7 @@
                             <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="wcLightWounds"></span></span>
                         </div>
                         {# Show breakdown only when there are bonuses beyond the kept dice #}
-                        <template x-if="(formula?.flat || 0) > 0 || (formula?.void_spent || 0) > 0 || wcRaisesSpent > 0 || mirumotoPointsSpentThisRoll > 0 || wcDaidojiCounterattack || wcExcessSpentThisRoll > 0">
+                        <template x-if="(formula?.flat || 0) > 0 || (formula?.void_spent || 0) > 0 || wcRaisesSpent > 0 || mirumotoPointsSpentThisRoll > 0 || wcDaidojiCounterattack || wcExcessSpentThisRoll > 0 || shosuroLowest3Bonus > 0 || convictionSpentThisRoll > 0">
                             <div>
                                 <div class="text-xs text-ink/70 mt-0.5">
                                     &bull; <span x-text="keptSum"></span> from the kept dice
@@ -1644,6 +1719,14 @@
                                 <div x-show="wcExcessSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                                     &bull; +<span x-text="wcExcessSpentThisRoll"></span>
                                     from banked wound check excess (5th Dan)
+                                </div>
+                                <div x-show="shosuroLowest3Bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="shosuroLowest3Bonus"></span>
+                                    from Shosuro 5th Dan (lowest 3 dice added to result)
+                                </div>
+                                <div x-show="convictionSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="convictionSpentThisRoll"></span>
+                                    from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
                                 </div>
                             </div>
                         </template>
@@ -1772,6 +1855,39 @@
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
                                     Undo VP
                                 </button>
+                                {# Conviction: +1 per point (wound check) #}
+                                <button type="button"
+                                        x-show="convictionConfig.rank > 0 && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
+                                        @click="spendConviction('wc')" :disabled="!canSpendConviction()"
+                                        data-action="spend-conviction-wc"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                                    Spend Conviction (+1)
+                                </button>
+                                <button type="button"
+                                        x-show="convictionSpentThisRoll > 0 && convictionConfig.rank > 0"
+                                        @click="undoConviction('wc')"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
+                                    Undo Conviction
+                                </button>
+                                {# Priest 5th Dan ally (wound check) #}
+                                <template x-for="priest in priestAllies" :key="'wc-p-' + priest.priest_id">
+                                    <span class="inline-flex items-center gap-1">
+                                        <button type="button"
+                                                x-show="priestAllyPoolAvail(priest) > 0 || priestAllySpent(priest.priest_id) > 0"
+                                                @click="spendPriestAlly(priest, 'wc')"
+                                                :disabled="!canSpendPriestAlly(priest)"
+                                                :data-action="'spend-priest-ally-wc-' + priest.priest_id"
+                                                class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                                            Spend <span x-text="priest.name"></span>'s Conviction (+1)
+                                        </button>
+                                        <button type="button"
+                                                x-show="priestAllySpent(priest.priest_id) > 0"
+                                                @click="undoPriestAlly(priest, 'wc')"
+                                                class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
+                                            Undo
+                                        </button>
+                                    </span>
+                                </template>
                             </div>
                             <button type="button" @click="wcAcceptResult()"
                                     class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium mt-2">
@@ -1916,12 +2032,19 @@
                         Ikoma 4th Dan: unparried attacks always roll at least 10 damage dice. Avg Damage below reflects this.
                     </div>
 
+                    {# Shosuro Actor 5th Dan: note that lowest-3 bonus is baked into probabilities #}
+                    <div x-show="atkFormula?.shosuro_5th_dan" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Shosuro 5th Dan: sum of lowest 3 dice is added to each roll (some dice may be counted twice). The averages below include this bonus.
+                    </div>
+
                     {# Probability table #}
                     <div class="overflow-x-auto">
                         <table class="text-sm w-full">
                             <thead>
                                 <tr class="border-b border-ink/20">
                                     <th class="text-left py-1 pr-3">Void</th>
+                                    <th class="text-right py-1 px-2">Attack Roll</th>
                                     <th class="text-right py-1 px-2">Hit %</th>
                                     <th class="text-right py-1 px-2">Avg Extra Dice</th>
                                     <th class="text-right py-1 px-2">Avg Damage</th>
@@ -1932,6 +2055,8 @@
                                     <tr class="border-b border-ink/5"
                                         :class="v === atkVoidSelected ? 'bg-accent/10 font-medium' : ''">
                                         <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
+                                        <td class="text-right py-1 px-2 font-mono text-xs text-ink/70"
+                                            x-text="(atkProbs[atkKey]?.void_keys?.[String(v)] || '').replace(',', 'k')"></td>
                                         <td class="text-right py-1 px-2 text-green-700"
                                             x-text="Math.round(atkHitChance(v) * 100) + '%'"></td>
                                         <td class="text-right py-1 px-2"
@@ -2027,6 +2152,13 @@
                         <div x-show="formula?.doji_5th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="formula?.doji_5th_dan_bonus"></span> from Doji 5th Dan (TN <span x-text="atkTN"></span>)
                         </div>
+                        <div x-show="shosuroLowest3Bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="shosuroLowest3Bonus"></span> from Shosuro 5th Dan (lowest 3 dice added to result)
+                        </div>
+                        <div x-show="convictionSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="convictionSpentThisRoll"></span>
+                            from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
+                        </div>
                     </div>
 
                     {# Hida 3rd Dan: reroll dice selection (any die, not just kept) #}
@@ -2115,6 +2247,57 @@
                                 </button>
                             </div>
                         </div>
+
+                        {# Conviction: +1 per point spent (attack) #}
+                        <div x-show="convictionConfig.rank > 0 && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
+                             x-cloak class="mt-2 pt-2 border-t border-green-200" data-conviction-block-atk>
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button" @click="spendConviction('attack')"
+                                        :disabled="!canSpendConviction()"
+                                        data-action="spend-conviction-atk"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Conviction (+1)
+                                </button>
+                                <button type="button" @click="undoConviction('attack')"
+                                        :disabled="!canUndoConviction()"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60">
+                                    <span x-text="convictionSpentThisRoll"></span>/<span x-text="convictionConfig.max_per_roll"></span> max
+                                    <span class="mx-1">&middot;</span>
+                                    <span x-text="convictionPoolAvail()"></span> remaining today
+                                </span>
+                            </div>
+                        </div>
+
+                        {# Priest 5th Dan ally (attack): spend from a party Priest's pool #}
+                        <template x-for="priest in priestAllies" :key="'atk-p-' + priest.priest_id">
+                            <div class="mt-2 pt-2 border-t border-green-200"
+                                 x-show="priestAllyPoolAvail(priest) > 0 || priestAllySpent(priest.priest_id) > 0"
+                                 x-cloak :data-priest-ally-block-atk="priest.priest_id">
+                                <div class="flex items-center gap-2 text-sm">
+                                    <button type="button"
+                                            @click="spendPriestAlly(priest, 'attack')"
+                                            :disabled="!canSpendPriestAlly(priest)"
+                                            :data-action="'spend-priest-ally-atk-' + priest.priest_id"
+                                            class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                        Spend <span x-text="priest.name"></span>'s Conviction (+1)
+                                    </button>
+                                    <button type="button"
+                                            @click="undoPriestAlly(priest, 'attack')"
+                                            :disabled="!canUndoPriestAlly(priest)"
+                                            class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
+                                        Undo
+                                    </button>
+                                    <span class="text-xs text-ink/60">
+                                        <span x-text="priestAllySpent(priest.priest_id)"></span>/<span x-text="priest.max_per_roll"></span> max
+                                        <span class="mx-1">&middot;</span>
+                                        <span x-text="priestAllyPoolAvail(priest)"></span> available
+                                    </span>
+                                </div>
+                            </div>
+                        </template>
 
                         {# Mirumoto 3rd Dan: spend points for +2 on attack #}
                         <div x-show="schoolAbilities.mirumoto_round_points && ((window._trackingBridge?.mirumotoRoundPoints || 0) > 0 || mirumotoPointsSpentThisRoll > 0)" x-cloak class="mt-2 pt-2 border-t border-green-200">
@@ -2335,7 +2518,7 @@
                     </div>
                     <div class="bg-ink/5 rounded p-3">
                         <div class="font-bold text-2xl text-accent" x-text="atkDamageTotal + ' damage'"></div>
-                        <template x-if="atkDamageParts.length > 0 && atkDamageFlat > 0">
+                        <template x-if="atkDamageParts.length > 0 && (atkDamageFlat > 0 || atkDamageShosuroBonus > 0 || convictionSpentThisRoll > 0)">
                             <div class="mt-1">
                                 <div class="text-xs text-ink/70">
                                     &bull; <span x-text="keptSum"></span> from kept dice
@@ -2345,6 +2528,13 @@
                                         &bull; <span x-text="p"></span>
                                     </div>
                                 </template>
+                                <div x-show="atkDamageShosuroBonus > 0" x-cloak class="text-xs text-ink/70">
+                                    &bull; +<span x-text="atkDamageShosuroBonus"></span> from Shosuro 5th Dan (lowest 3 dice added to damage)
+                                </div>
+                                <div x-show="convictionSpentThisRoll > 0" x-cloak class="text-xs text-ink/70">
+                                    &bull; +<span x-text="convictionSpentThisRoll"></span>
+                                    from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
+                                </div>
                             </div>
                         </template>
                         <div x-show="schoolAbilities.matsu_lw_reset_15" x-cloak
@@ -2357,6 +2547,55 @@
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm font-medium text-accent">
                         + 1 automatic serious wound (5th Dan - traded 10 damage dice)
                     </div>
+                    {# Conviction: +1 per point (damage) #}
+                    <div x-show="convictionConfig.rank > 0 && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
+                         x-cloak class="bg-parchment rounded p-2 text-sm" data-conviction-block-damage>
+                        <div class="flex items-center gap-2">
+                            <button type="button" @click="spendConviction('damage')"
+                                    :disabled="!canSpendConviction()"
+                                    data-action="spend-conviction-damage"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                Spend Conviction (+1)
+                            </button>
+                            <button type="button" @click="undoConviction('damage')"
+                                    :disabled="!canUndoConviction()"
+                                    class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
+                                Undo
+                            </button>
+                            <span class="text-xs text-ink/60">
+                                <span x-text="convictionSpentThisRoll"></span>/<span x-text="convictionConfig.max_per_roll"></span> max
+                                <span class="mx-1">&middot;</span>
+                                <span x-text="convictionPoolAvail()"></span> remaining today
+                            </span>
+                        </div>
+                    </div>
+                    {# Priest 5th Dan ally (damage) #}
+                    <template x-for="priest in priestAllies" :key="'dmg-p-' + priest.priest_id">
+                        <div class="bg-parchment rounded p-2 text-sm"
+                             x-show="priestAllyPoolAvail(priest) > 0 || priestAllySpent(priest.priest_id) > 0"
+                             x-cloak :data-priest-ally-block-dmg="priest.priest_id">
+                            <div class="flex items-center gap-2">
+                                <button type="button"
+                                        @click="spendPriestAlly(priest, 'damage')"
+                                        :disabled="!canSpendPriestAlly(priest)"
+                                        :data-action="'spend-priest-ally-dmg-' + priest.priest_id"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend <span x-text="priest.name"></span>'s Conviction (+1)
+                                </button>
+                                <button type="button"
+                                        @click="undoPriestAlly(priest, 'damage')"
+                                        :disabled="!canUndoPriestAlly(priest)"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60">
+                                    <span x-text="priestAllySpent(priest.priest_id)"></span>/<span x-text="priest.max_per_roll"></span> max
+                                    <span class="mx-1">&middot;</span>
+                                    <span x-text="priestAllyPoolAvail(priest)"></span> available
+                                </span>
+                            </div>
+                        </div>
+                    </template>
                     {# Lucky reroll for damage #}
                     <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyDamage()"
                             class="bg-gold/20 hover:bg-gold/30 text-ink px-4 py-2 rounded text-sm font-medium">
@@ -2716,7 +2955,7 @@
                     <div x-show="formula && formula.is_initiative" x-cloak>
                         <div class="bg-ink/5 rounded p-3 text-sm">
                             <div class="font-bold text-lg mb-2">Action Dice</div>
-                            <div class="flex flex-wrap gap-2 mb-2">
+                            <div class="flex flex-wrap items-center gap-2 mb-2">
                                 <template x-for="(phase, i) in actionDice" :key="i">
                                     <span class="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 font-mono font-bold text-lg"
                                           :class="phase === 0
@@ -2725,6 +2964,14 @@
                                                   ? 'border-accent bg-accent/10 text-accent'
                                                   : 'border-ink/30 bg-parchment text-ink'"
                                           x-text="phase === 0 ? '0' : phase"></span>
+                                </template>
+                                <template x-if="togashiAthleticsDie > 0">
+                                    <div class="flex items-center gap-2 pl-2 ml-1 border-l border-ink/20">
+                                        <span class="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 font-mono font-bold text-lg border-sky-600 bg-sky-100 text-sky-700"
+                                              title="Athletics-only action die (Togashi special ability)"
+                                              x-text="togashiAthleticsDie"></span>
+                                        <span class="text-xs text-sky-800 italic">athletics only</span>
+                                    </div>
                                 </template>
                             </div>
                             <div class="text-xs text-ink/60">
@@ -2741,6 +2988,9 @@
                             </template>
                             <template x-if="formula && formula.hiruma_4th_dan">
                                 <div class="text-ink/70 italic">Hiruma 4th Dan: all action dice lowered by 2 (min 1).</div>
+                            </template>
+                            <template x-if="togashiAthleticsDie > 0">
+                                <div class="text-sky-700 italic">Togashi Special: the blue action die is a bonus die that may only be spent on athletics actions.</div>
                             </template>
                         </div>
                     </div>
@@ -2877,6 +3127,14 @@
                             from <span x-text="mirumotoPointsSpentThisRoll"></span> 3rd Dan point<span x-show="mirumotoPointsSpentThisRoll > 1">s</span>
                         </div>
 
+                        {# Conviction points spent on this roll #}
+                        <div x-show="convictionSpentThisRoll > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="convictionSpentThisRoll"></span>
+                            from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
+                        </div>
+
                         <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
                             <div class="mt-2 pt-2 border-t border-ink/10">
                                 <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
@@ -2922,6 +3180,60 @@
                                 / <span x-text="advRaisesConfig.available"></span>
                             </div>
                         </div>
+
+                    {# Conviction: spend points for +1 each (non-initiative rolls only) #}
+                    <div x-show="convictionConfig.rank > 0 && !formula?.is_initiative && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
+                         x-cloak class="bg-parchment rounded p-3 text-sm" data-conviction-block>
+                        <div class="flex items-center gap-2 mb-1">
+                            <button type="button" @click="spendConviction()" :disabled="!canSpendConviction()"
+                                    data-action="spend-conviction"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                Spend Conviction (+1)
+                            </button>
+                            <button type="button" @click="undoConviction()" :disabled="!canUndoConviction()"
+                                    data-action="undo-conviction"
+                                    class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                Undo
+                            </button>
+                        </div>
+                        <div class="text-xs text-ink/60">
+                            This roll: <span class="font-mono font-bold" x-text="convictionSpentThisRoll"></span>
+                            / <span x-text="convictionConfig.max_per_roll"></span> max
+                            <span class="mx-1">&middot;</span>
+                            Remaining today: <span class="font-mono font-bold" x-text="convictionPoolAvail()"></span>
+                            / <span x-text="convictionConfig.daily_max"></span>
+                        </div>
+                    </div>
+
+                    {# Priest 5th Dan ally: spend from a party Priest's Conviction pool #}
+                    <template x-for="priest in (formula?.is_initiative ? [] : priestAllies)" :key="priest.priest_id">
+                        <div class="bg-parchment rounded p-3 text-sm"
+                             x-show="priestAllyPoolAvail(priest) > 0 || priestAllySpent(priest.priest_id) > 0"
+                             x-cloak :data-priest-ally-block="priest.priest_id">
+                            <div class="flex items-center gap-2 mb-1">
+                                <button type="button"
+                                        @click="spendPriestAlly(priest)"
+                                        :disabled="!canSpendPriestAlly(priest)"
+                                        :data-action="'spend-priest-ally-' + priest.priest_id"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                    Spend <span x-text="priest.name"></span>'s Conviction (+1)
+                                </button>
+                                <button type="button"
+                                        @click="undoPriestAlly(priest)"
+                                        :disabled="!canUndoPriestAlly(priest)"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                    Undo
+                                </button>
+                            </div>
+                            <div class="text-xs text-ink/60">
+                                This roll: <span class="font-mono font-bold" x-text="priestAllySpent(priest.priest_id)"></span>
+                                / <span x-text="priest.max_per_roll"></span> max
+                                <span class="mx-1">&middot;</span>
+                                Available: <span class="font-mono font-bold" x-text="priestAllyPoolAvail(priest)"></span>
+                                / <span x-text="priest.pool_max"></span>
+                            </div>
+                        </div>
+                    </template>
                     </div>
 
                     {# Mirumoto 3rd Dan: spend points for +2 on parry/attack in regular roll #}
@@ -3045,13 +3357,22 @@
                         </button>
                     </div>
 
-                    {# Togashi 4th Dan: reroll contested roll #}
-                    <div x-show="phase === 'done' && schoolAbilities.togashi_reroll_contested && !luckyUsedThisRoll" x-cloak
+                    {# Togashi 4th Dan: reroll contested roll (once per roll, commits).
+                       Hidden on rolls that are never contested (initiative, etiquette, heraldry). #}
+                    <div x-show="phase === 'done' && schoolAbilities.togashi_reroll_contested && !luckyUsedThisRoll && !togashiRerollUsed && !formula?.is_initiative && currentRollKey !== 'skill:etiquette' && currentRollKey !== 'skill:heraldry'" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
-                        <button type="button" @click="_saveLuckyPrev(); runRoll().then(() => _checkLuckyResult(false))"
+                        <button type="button"
+                                @click="togashiOrigTotal = baseTotal; togashiRerollUsed = true; runRoll()"
                                 class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
-                            Reroll (Togashi 4th Dan)
+                            Reroll (Togashi 4th Dan) <span class="text-xs text-parchment/80">(only if contested)</span>
                         </button>
+                        <div class="text-xs text-ink/70 mt-1">
+                            You must take the new result - you may not keep the original.
+                        </div>
+                    </div>
+                    <div x-show="togashiRerollUsed" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Togashi 4th Dan rerolled. Original result (<span x-text="togashiOrigTotal"></span>) is discarded; the new result stands.
                     </div>
 
                     {# Hiruma 5th Dan: parry note about -10 LW on attacker #}
@@ -3293,6 +3614,7 @@
             baseTotal: 0,
             keptSum: 0,
             actionDice: [],
+            togashiAthleticsDie: 0,  // standalone die from Togashi normal init (0 = not rolled)
             subDamageDice: [],
             subDamageTotal: 0,
             subDamageLabel: '',
@@ -3300,11 +3622,17 @@
             prefs: { dice_animation_enabled: true, dice_sound_enabled: true },
             // 3rd Dan free raises
             advRaisesConfig: { available: 0, used: 0 },
+            convictionConfig: { rank: 0, max_per_roll: 0, daily_max: 0 },
+            convictionSpentThisRoll: 0,
+            priestAllies: [],  // [{priest_id, name, rank, max_per_roll, pool_max, used}]
+            priestAllySpentThisRoll: {},  // {priest_id: N spent on the current roll}
             raisesSpentThisRoll: 0,
             // Courtier 5th Dan optional TN/contested bonus
             courtier5thApplied: false,
             // Lucky reroll
             luckyUsedThisRoll: false,
+            togashiRerollUsed: false,
+            togashiOrigTotal: 0,
             luckyPrevTotal: 0,
             luckyPrevBaseTotal: 0,
             luckyPrevActionDice: [],
@@ -3464,7 +3792,14 @@
                 this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.atkDamageTotal = this.keptSum + (f.flat || 0);
+                // Shosuro 5th Dan: recompute lowest-3 bonus on rerolled damage
+                this.atkDamageShosuroBonus = 0;
+                if (this.atkFormula?.shosuro_5th_dan) {
+                    const allValues = sorted.map(d => d.value);
+                    const lowest3 = allValues.slice(0, Math.min(3, allValues.length));
+                    this.atkDamageShosuroBonus = lowest3.reduce((s, v) => s + v, 0);
+                }
+                this.atkDamageTotal = this.keptSum + (f.flat || 0) + this.atkDamageShosuroBonus + this.convictionSpentThisRoll + this.totalPriestAllySpentThisRoll();
                 this.atkPhase = 'damage-result';
                 this.luckyOriginalWasHigher = prevTotal > this.atkDamageTotal;
             },
@@ -3588,6 +3923,7 @@
             atkParrySkill: 3,
             // Damage state
             atkDamageRolled: 0,
+            atkDamageShosuroBonus: 0,
             atkDamageKept: 0,
             atkDamageFlat: 0,
             atkDamageTotal: 0,
@@ -3617,6 +3953,9 @@
             rollMenuOptions: [],
             rollMenuHasStrike: false,
             rollMenuHasParry: false,
+            rollMenuHasTogashiInit: false,
+            rollMenuHasAthleticsPicker: false,
+            athHoverRow: null,
             rollMenuOwCapacity: 0,
             owHoverRow: null,
             // Merchant 5th Dan selective reroll state
@@ -3666,6 +4005,16 @@
                         document.getElementById('adventure-raises-config').textContent || '{}'
                     );
                 } catch (e) { /* keep defaults */ }
+                try {
+                    this.convictionConfig = JSON.parse(
+                        document.getElementById('conviction-config').textContent || '{}'
+                    );
+                } catch (e) { /* keep defaults */ }
+                try {
+                    this.priestAllies = JSON.parse(
+                        document.getElementById('priest-conviction-allies').textContent || '[]'
+                    );
+                } catch (e) { this.priestAllies = []; }
                 try {
                     this.voidSpendConfig = JSON.parse(
                         document.getElementById('void-spend-config').textContent || '{}'
@@ -3758,6 +4107,58 @@
                 const f = this.formulas[key];
                 if (!f) return;
 
+                // Athletics knack: show a ring picker instead of rolling the
+                // default-ring formula, since Athletics varies by ring.
+                if (key === 'knack:athletics'
+                        && this.formulas['athletics:Air']
+                        && this.formulas['athletics:Fire']
+                        && this.formulas['athletics:Water']
+                        && this.formulas['athletics:Earth']) {
+                    const rect = el.getBoundingClientRect();
+                    const menuWidth = 280;
+                    let left = rect.left;
+                    if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 8;
+                    if (left < 8) left = 8;
+                    this.rollMenuKey = key;
+                    this.rollMenuTitle = 'Athletics';
+                    this.rollMenuPos = { top: rect.bottom + 4, left };
+                    this.rollMenuOptions = this.schoolAbilities.merchant_post_roll_vp
+                        ? [] : this.computeVoidOptions();
+                    this.rollMenuHasStrike = false;
+                    this.rollMenuHasParry = false;
+                    this.rollMenuHasTogashiInit = false;
+                    this.rollMenuHasAthleticsPicker = true;
+                    this.rollMenuOwCapacity = 0;
+                    this.owHoverRow = null;
+                    this.athHoverRow = null;
+                    this.rollMenuOpen = true;
+                    return;
+                }
+
+                // Togashi Ise Zumi: initiative has a dropdown with two variants
+                // (normal + 1 athletics die, OR all-athletics with +3 dice).
+                if (f.is_initiative && f.togashi_ise_zumi
+                        && this.formulas['initiative:athletics']) {
+                    const rect = el.getBoundingClientRect();
+                    const menuWidth = 280;
+                    let left = rect.left;
+                    if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 8;
+                    if (left < 8) left = 8;
+                    this.rollMenuKey = key;
+                    this.rollMenuTitle = f.label;
+                    this.rollMenuPos = { top: rect.bottom + 4, left };
+                    this.rollMenuOptions = [];
+                    this.rollMenuHasStrike = false;
+                    this.rollMenuHasParry = false;
+                    this.rollMenuHasTogashiInit = true;
+                    this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuOwCapacity = 0;
+                    this.owHoverRow = null;
+                    this.athHoverRow = null;
+                    this.rollMenuOpen = true;
+                    return;
+                }
+
                 // Initiative rolls directly (no void spending)
                 if (f.is_initiative) {
                     this.executeRoll(key, 0, null);
@@ -3772,17 +4173,21 @@
 
                 // Compute void options (merchants spend VP only after seeing the roll,
                 // so pre-roll VP options are hidden - no reason to commit in advance).
-                const options = this.schoolAbilities.merchant_post_roll_vp
+                // Damage rolls (e.g. Dragon Tattoo) don't accept void spending.
+                const options = (this.schoolAbilities.merchant_post_roll_vp || f.is_damage_roll)
                     ? [] : this.computeVoidOptions();
                 // Check for special roll variants
                 const hasStrike = key === 'knack:iaijutsu' && !!this.formulas['knack:iaijutsu:strike'];
                 const hasParry = key === 'parry';
+                // Athletics ring clicks always show a menu so the player can
+                // pick a different ring or spend void without re-clicking.
+                const isAthleticsRing = key.startsWith('athletics:');
                 // Otherworldliness submenu also keeps the menu open
                 const owCap = f.otherworldliness_capacity || 0;
                 const owMax = Math.min(owCap, this.getOwPoolAvail());
 
                 // If no options, no special variants, and no OW available, roll directly
-                if (options.length === 0 && !hasStrike && !hasParry && owMax === 0) {
+                if (options.length === 0 && !hasStrike && !hasParry && !isAthleticsRing && owMax === 0) {
                     this.executeRoll(key, 0, null);
                     return;
                 }
@@ -3800,8 +4205,11 @@
                 this.rollMenuOptions = options;
                 this.rollMenuHasStrike = hasStrike;
                 this.rollMenuHasParry = hasParry;
+                this.rollMenuHasTogashiInit = false;
+                this.rollMenuHasAthleticsPicker = false;
                 this.rollMenuOwCapacity = f.otherworldliness_capacity || 0;
                 this.owHoverRow = null;
+                this.athHoverRow = null;
                 this.rollMenuOpen = true;
             },
 
@@ -4024,6 +4432,9 @@
             executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason) {
                 this.rollMenuOpen = false;
                 this.luckyUsedThisRoll = false;
+                this.togashiRerollUsed = false;
+                this.convictionSpentThisRoll = 0;
+                this.priestAllySpentThisRoll = {};
                 this.courtier5thApplied = false;
                 this.dojiOpponentResult = 0;
                 this.dojiTnRollApplied = false;
@@ -4070,6 +4481,9 @@
                 this.rollMenuOpen = false;
                 this.owHoverRow = null;
                 this.luckyUsedThisRoll = false;
+                this.togashiRerollUsed = false;
+                this.convictionSpentThisRoll = 0;
+                this.priestAllySpentThisRoll = {};
                 this.courtier5thApplied = false;
                 this.dojiOpponentResult = 0;
                 this.dojiTnRollApplied = false;
@@ -4217,8 +4631,19 @@
                     this.baseTotal += this.shosuroLowest3Bonus;
                 }
 
+                // Conviction: carry forward any points already spent (they
+                // persist across rerolls, including Togashi/Lucky).
+                if (!isInit && this.convictionSpentThisRoll > 0) {
+                    this.baseTotal += this.convictionSpentThisRoll;
+                }
+                // Priest 5th Dan ally conviction: also persists across rerolls.
+                if (!isInit) {
+                    this.baseTotal += this.totalPriestAllySpentThisRoll();
+                }
+
                 // Initiative: compute action dice with school effects
                 this.actionDice = [];
+                this.togashiAthleticsDie = 0;
                 if (isInit) {
                     let actions = this.keptDice.map(d => d.value).sort((a, b) => a - b);
                     // Hiruma 4th Dan: lower all action dice by 2 (min 1)
@@ -4234,6 +4659,17 @@
                         actions = actions.map(v => v === 10 ? 0 : v);
                     }
                     this.actionDice = actions.sort((a, b) => a - b);
+
+                    // Togashi Ise Zumi normal variant: roll one additional
+                    // standalone athletics-only action die alongside the
+                    // main initiative roll (same animation area so players
+                    // see it appear after the main dice settle).
+                    if (this.formula.togashi_athletics_extra_die) {
+                        const athDice = await window.L7RDice.rollAndAnimate(
+                            1, false, this.prefs.dice_animation_enabled, playSound
+                        );
+                        this.togashiAthleticsDie = athDice[0]?.value || 0;
+                    }
                 }
 
                 // Post-roll school ability hooks (non-initiative only)
@@ -4306,6 +4742,132 @@
                     window._trackingBridge.setCount('adventure_raises', this.advRaisesConfig.used);
                 }
             },
+
+            // --- Conviction: daily-pool points, +1 each, max X per roll ---
+            convictionPoolAvail() {
+                const t = window._trackingBridge;
+                if (!t) return 0;
+                const used = t.getCount ? (t.getCount('conviction') || 0) : 0;
+                return Math.max(0, (this.convictionConfig.daily_max || 0) - used);
+            },
+            convictionRollRemaining() {
+                return Math.max(0, (this.convictionConfig.max_per_roll || 0) - this.convictionSpentThisRoll);
+            },
+            canSpendConviction() {
+                return this.convictionConfig.rank > 0
+                    && this.convictionRollRemaining() > 0
+                    && this.convictionPoolAvail() > 0;
+            },
+            canUndoConviction() {
+                return this.convictionSpentThisRoll > 0;
+            },
+            spendConviction(target) {
+                if (!this.canSpendConviction()) return;
+                this.convictionSpentThisRoll++;
+                this.baseTotal += 1;
+                if (target === 'attack') this.atkRollTotal += 1;
+                if (target === 'wc') this.wcRollTotal += 1;
+                if (target === 'damage') this.atkDamageTotal += 1;
+                const t = window._trackingBridge;
+                if (t) {
+                    const used = (t.getCount('conviction') || 0);
+                    t.setCount('conviction', used + 1);
+                }
+                if (target === 'attack' && typeof this._atkUpdateHitState === 'function') {
+                    this._atkUpdateHitState();
+                }
+                if (target === 'wc') this._wcUpdateMargin();
+            },
+            undoConviction(target) {
+                if (!this.canUndoConviction()) return;
+                this.convictionSpentThisRoll--;
+                this.baseTotal -= 1;
+                if (target === 'attack') this.atkRollTotal -= 1;
+                if (target === 'wc') this.wcRollTotal -= 1;
+                if (target === 'damage') this.atkDamageTotal -= 1;
+                const t = window._trackingBridge;
+                if (t) {
+                    const used = (t.getCount('conviction') || 0);
+                    t.setCount('conviction', Math.max(0, used - 1));
+                }
+                if (target === 'attack' && typeof this._atkUpdateHitState === 'function') {
+                    this._atkUpdateHitState();
+                }
+                if (target === 'wc') this._wcUpdateMargin();
+            },
+            _wcUpdateMargin() {
+                // Recompute wound check pass/fail + margin after flat adjustments.
+                const lw = this.wcLightWounds;
+                if (this.wcRollTotal >= lw) {
+                    this.wcPassed = true;
+                    this.wcSeriousWounds = 0;
+                    this.wcMargin = this.wcRollTotal - lw;
+                } else {
+                    this.wcPassed = false;
+                    const effLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
+                        ? Math.floor(lw / 2) : lw;
+                    this.wcMargin = Math.max(0, effLw - this.wcRollTotal);
+                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
+                }
+            },
+
+            // --- Priest 5th Dan ally conviction ---
+            priestAllySpent(priestId) {
+                return this.priestAllySpentThisRoll[priestId] || 0;
+            },
+            priestAllyPoolAvail(priest) {
+                return Math.max(0, (priest.pool_max || 0) - (priest.used || 0));
+            },
+            priestAllyRollRemaining(priest) {
+                return Math.max(0, (priest.max_per_roll || 0) - this.priestAllySpent(priest.priest_id));
+            },
+            canSpendPriestAlly(priest) {
+                return this.priestAllyRollRemaining(priest) > 0
+                    && this.priestAllyPoolAvail(priest) > 0;
+            },
+            canUndoPriestAlly(priest) {
+                return this.priestAllySpent(priest.priest_id) > 0;
+            },
+            spendPriestAlly(priest, target) {
+                if (!this.canSpendPriestAlly(priest)) return;
+                this.priestAllySpentThisRoll[priest.priest_id] = this.priestAllySpent(priest.priest_id) + 1;
+                priest.used = (priest.used || 0) + 1;
+                this.baseTotal += 1;
+                if (target === 'attack') this.atkRollTotal += 1;
+                if (target === 'wc') this.wcRollTotal += 1;
+                if (target === 'damage') this.atkDamageTotal += 1;
+                this._postPriestAllyDelta(priest.priest_id, +1);
+                if (target === 'attack' && typeof this._atkUpdateHitState === 'function') {
+                    this._atkUpdateHitState();
+                }
+                if (target === 'wc') this._wcUpdateMargin();
+            },
+            undoPriestAlly(priest, target) {
+                if (!this.canUndoPriestAlly(priest)) return;
+                this.priestAllySpentThisRoll[priest.priest_id] -= 1;
+                priest.used = Math.max(0, (priest.used || 0) - 1);
+                this.baseTotal -= 1;
+                if (target === 'attack') this.atkRollTotal -= 1;
+                if (target === 'wc') this.wcRollTotal -= 1;
+                if (target === 'damage') this.atkDamageTotal -= 1;
+                this._postPriestAllyDelta(priest.priest_id, -1);
+                if (target === 'attack' && typeof this._atkUpdateHitState === 'function') {
+                    this._atkUpdateHitState();
+                }
+                if (target === 'wc') this._wcUpdateMargin();
+            },
+            totalPriestAllySpentThisRoll() {
+                return Object.values(this.priestAllySpentThisRoll).reduce((a, b) => a + b, 0);
+            },
+            _postPriestAllyDelta(priestId, delta) {
+                // Update the priest's persisted conviction_used counter. The
+                // endpoint validates that caller is in the same gaming group.
+                fetch(`/characters/${priestId}/ally-conviction`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({delta}),
+                }).catch(() => { /* best-effort; UI already decremented locally */ });
+            },
             raisesRemainingAdventure() {
                 return Math.max(0, this.advRaisesConfig.available - this.advRaisesConfig.used);
             },
@@ -4343,6 +4905,7 @@
                 this.duelRestartBonus = 0;
                 this.duelVoidSelected = 0;
                 this.luckyUsedThisRoll = false;
+                this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.duelOpen = true;
@@ -4375,6 +4938,7 @@
                 }
 
                 this.luckyUsedThisRoll = false;
+                this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.duelPhase = 'contested-rolling';
@@ -4417,6 +4981,7 @@
                 const f = { ...this.formulas['knack:iaijutsu:strike'] };
                 f.flat += this.duelRestartBonus;
                 this.luckyUsedThisRoll = false;
+                this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.duelPhase = 'strike-rolling';
@@ -4459,6 +5024,7 @@
             async duelRollDamage() {
                 const dmg = this.duelComputeDamage();
                 this.luckyUsedThisRoll = false;
+                this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.duelPhase = 'damage-rolling';
@@ -4567,7 +5133,9 @@
                 const arr = probs.probs[rk];
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const dojiBonus = this._dojiAtkBonus();
-                const target = Math.max(0, this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus);
+                const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
+                const target = Math.max(0,
+                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - shosuroFlat);
                 return target < arr.length ? arr[target] : 0;
             },
 
@@ -4577,7 +5145,8 @@
                 const rk = probs.void_keys?.[String(voidCount)];
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const dojiBonus = this._dojiAtkBonus();
-                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus;
+                const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
+                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + shosuroFlat;
             },
 
             atkAvgExtraDice(voidCount) {
@@ -4586,6 +5155,14 @@
                 const excess = avg - this.atkTN;
                 if (excess <= 0) return 0;
                 return Math.floor(excess / 5);
+            },
+
+            shosuroAvgFor(rolled, rerollTens) {
+                // Lookup average 3-lowest-dice bonus (clamps rolled to 3..10).
+                const table = this.schoolAbilities.shosuro_lowest_3_avg || {};
+                const r = Math.max(3, Math.min(10, rolled || 0));
+                const k = (rerollTens ? '1' : '0') + ':' + r;
+                return table[k] || 0;
             },
 
             atkComputeDamage(extraDice, isLunge, failedParry, parrySkill, isDoubleAttack, tradeDice = 0) {
@@ -4675,9 +5252,19 @@
                 if (kept > 10) { overflowFlat = 2 * (kept - 10); kept = 10; }
 
                 const rk = `${rolled},${kept}`;
-                const avg = Math.round((this.atkDamageAvgs[rk] || 0) + flat + overflowFlat);
+                // Shosuro Actor 5th Dan: add average of 3 lowest dice (damage rerolls 10s).
+                // Baked into the "avg" for pre-roll display; the post-roll result
+                // shows the actual lowest-3 sum via atkDamageShosuroBonus.
+                const shosuroAvg = f.shosuro_5th_dan
+                    ? (this.shosuroAvgFor(rolled, true) || 0) : 0;
+                const avg = Math.round((this.atkDamageAvgs[rk] || 0) + flat + overflowFlat + shosuroAvg);
 
-                return { rolled, kept, flat: flat + overflowFlat, avg, parts, rawRolled };
+                return {
+                    rolled, kept,
+                    flat: flat + overflowFlat,
+                    avg, parts, rawRolled,
+                    shosuro_5th_dan: !!f.shosuro_5th_dan,
+                };
             },
 
             atkAvgDamage(voidCount) {
@@ -4691,6 +5278,8 @@
             async rollAttack() {
                 const voidCount = this.atkVoidSelected;
                 const formula = { ...this.formulas[this.atkKey] };
+                this.convictionSpentThisRoll = 0;
+                this.priestAllySpentThisRoll = {};
 
                 // Isawa Duelist 3rd Dan: auto-apply TN trade bonus (user can undo post-roll)
                 this.atkIsawaTnTrade = false;
@@ -4773,6 +5362,22 @@
                 this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
                 this.baseTotal = this.keptSum + formula.flat;
+
+                // Shosuro Actor 5th Dan: add sum of lowest 3 dice (post-roll)
+                this.shosuroLowest3Bonus = 0;
+                if (formula.shosuro_5th_dan) {
+                    const allValues = sorted.map(d => d.value);
+                    const lowest3 = allValues.slice(0, Math.min(3, allValues.length));
+                    this.shosuroLowest3Bonus = lowest3.reduce((s, v) => s + v, 0);
+                    this.baseTotal += this.shosuroLowest3Bonus;
+                }
+
+                // Conviction: carry forward any points already spent.
+                if (this.convictionSpentThisRoll > 0) {
+                    this.baseTotal += this.convictionSpentThisRoll;
+                }
+                // Priest 5th Dan ally conviction persists across rerolls.
+                this.baseTotal += this.totalPriestAllySpentThisRoll();
 
                 this.atkRollTotal = this.baseTotal;
                 this.atkRaisesSpent = 0;
@@ -4881,6 +5486,10 @@
             async rollDamage() {
                 const f = this.atkFormula;
                 if (!f || !this.atkHit) return;
+                // Damage is a separate roll from the attack; Conviction points
+                // spent on the attack do not carry over.
+                this.convictionSpentThisRoll = 0;
+                this.priestAllySpentThisRoll = {};
                 const isLunge = f.attack_variant === 'lunge';
                 const isDA = f.attack_variant === 'double_attack';
                 const trade = this.atkOtakuTradeDice ? 10 : 0;
@@ -4902,7 +5511,14 @@
                 this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.atkDamageTotal = this.keptSum + flat;
+                // Shosuro 5th Dan: add sum of lowest 3 dice to damage (post-roll)
+                this.atkDamageShosuroBonus = 0;
+                if (dmg.shosuro_5th_dan) {
+                    const allValues = sorted.map(d => d.value);
+                    const lowest3 = allValues.slice(0, Math.min(3, allValues.length));
+                    this.atkDamageShosuroBonus = lowest3.reduce((s, v) => s + v, 0);
+                }
+                this.atkDamageTotal = this.keptSum + flat + this.atkDamageShosuroBonus + this.convictionSpentThisRoll + this.totalPriestAllySpentThisRoll();
                 this.atkDamageRolled = rolled;
                 this.atkDamageFlat = flat;
                 this.atkDamageParts = dmg.parts || [];
@@ -4936,7 +5552,9 @@
                 this.wcExcessSpentThisRoll = 0;
                 const hasUnspentWcExcess = (this.bankedWcExcess || []).some(b => !b.spent);
                 const hasUnspentMatsu = (this.matsuBankedWcBonuses || []).some(b => !b.spent);
-                this.wcHasDiscretionary = (this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0) || hasUnspentMatsu || hasUnspentWcExcess || hasPostRollVp;
+                const hasConviction = (this.convictionConfig.rank || 0) > 0 && this.convictionPoolAvail() > 0;
+                const hasPriestAlly = (this.priestAllies || []).some(p => this.priestAllyPoolAvail(p) > 0);
+                this.wcHasDiscretionary = (this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0) || hasUnspentMatsu || hasUnspentWcExcess || hasPostRollVp || hasConviction || hasPriestAlly;
                 this.wcModalOpen = true;
             },
 
@@ -4954,7 +5572,10 @@
                 const wcVpRaise = this.voidSpendConfig.wc_vp_free_raise ? voidCount * 5 : 0;
                 const dojiBonus = this.formulas['wound_check']?.doji_5th_dan_wc
                     ? Math.max(0, Math.floor((this.wcLightWounds - 10) / 5)) : 0;
-                const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise + dojiBonus;
+                const shosuroFlat = this.wcIsStrike
+                    ? (p.shosuro_flats_no_reroll?.[key] || 0)
+                    : (p.shosuro_flats?.[key] || 0);
+                const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise + dojiBonus + shosuroFlat;
                 const lw = this.wcLightWounds;
                 const target = Math.max(0, lw - flat);
 
@@ -4996,6 +5617,8 @@
             async rollWoundCheck() {
                 const voidCount = this.wcIsStrike ? 0 : this.wcVoidSelected;
                 const formula = { ...this.formulas['wound_check'] };
+                this.convictionSpentThisRoll = 0;
+                this.priestAllySpentThisRoll = {};
 
                 // Iaijutsu strike: no reroll
                 if (this.wcIsStrike) {
@@ -5074,7 +5697,23 @@
                 const sorted = [...dice].sort((a, b) => a.value - b.value);
                 const keptCount = Math.min(formula.kept, sorted.length);
                 const keptDice = sorted.slice(sorted.length - keptCount);
-                const rollTotal = keptDice.reduce((s, d) => s + d.value, 0) + formula.flat;
+                let rollTotal = keptDice.reduce((s, d) => s + d.value, 0) + formula.flat;
+
+                // Shosuro Actor 5th Dan: add sum of lowest 3 dice (post-roll)
+                this.shosuroLowest3Bonus = 0;
+                if (formula.shosuro_5th_dan) {
+                    const allValues = sorted.map(d => d.value);
+                    const lowest3 = allValues.slice(0, Math.min(3, allValues.length));
+                    this.shosuroLowest3Bonus = lowest3.reduce((s, v) => s + v, 0);
+                    rollTotal += this.shosuroLowest3Bonus;
+                }
+
+                // Conviction: carry forward any points already spent.
+                if (this.convictionSpentThisRoll > 0) {
+                    rollTotal += this.convictionSpentThisRoll;
+                }
+                // Priest 5th Dan ally conviction persists across rerolls.
+                rollTotal += this.totalPriestAllySpentThisRoll();
 
                 // Store result
                 this.formula = formula;
@@ -5275,6 +5914,7 @@
                 this.formula = { rolled: x, kept: 1, flat: 0, reroll_tens: true, is_initiative: false };
                 this.raisesSpentThisRoll = 0;
                 this.luckyUsedThisRoll = false;
+                this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.mirumotoPointsSpentThisRoll = 0;
                 this._postRollHooksFired = true;

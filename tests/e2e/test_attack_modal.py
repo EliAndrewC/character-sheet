@@ -80,6 +80,22 @@ def test_attack_modal_shows_probability_table(page, live_server_url):
     assert modal.locator('td:text("None")').is_visible()
 
 
+def test_attack_modal_shows_attack_roll_rk_column(page, live_server_url):
+    """The attack probability table shows an 'Attack Roll' column with the (r)k(k) value per void level."""
+    _create_attacker(page, live_server_url, "AtkRK")
+    _wait_alpine(page)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    modal = page.locator('[data-modal="attack"]')
+    assert modal.locator('th:text("Attack Roll")').is_visible()
+    # The first row's Attack Roll cell should match attack_probs void_keys['0']
+    import json
+    probs = page.evaluate("""() => JSON.parse(document.getElementById('attack-probs').textContent)""")
+    rk0 = probs['attack']['void_keys']['0'].replace(',', 'k')
+    first_row_text = modal.locator('table tbody tr').first.text_content()
+    assert rk0 in first_row_text
+
+
 def test_attack_modal_tn_dropdown(page, live_server_url):
     """The TN dropdown shows common values."""
     _create_attacker(page, live_server_url, "AtkTN")

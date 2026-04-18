@@ -1264,6 +1264,45 @@ def test_hida_trade_sw_button_works(page, live_server_url):
     assert page.locator('[x-text="lightWounds"]').text_content().strip() == "0"
 
 
+def test_togashi_dragon_tattoo_rolls_2x_k1_damage(page, live_server_url):
+    """Dragon Tattoo knack: (2 * rank)k1 damage roll, not a ring-based knack roll."""
+    _create_char(page, live_server_url, "TogashiDragonTat", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3})
+    f = _get_formula(page, "knack:dragon_tattoo")
+    assert f is not None
+    assert f["rolled"] == 6
+    assert f["kept"] == 1
+    assert "Damage" in f["label"]
+
+
+def test_togashi_dragon_tattoo_impaired_disables_reroll_10s(page, live_server_url):
+    """When impaired, Dragon Tattoo damage does not reroll 10s."""
+    _create_char(page, live_server_url, "TogashiDragonImpaired", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 2, "conviction": 2, "dragon_tattoo": 2})
+    # Earth is 2 by default -> impaired at 2 SW. Bump via the tracking bridge.
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.seriousWounds = 2;
+        t.save();
+        window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: 2 } }));
+    }""")
+    page.wait_for_timeout(200)
+    # Read live formula state from the Alpine dice-roller component
+    f = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.formulas && d.formulas['knack:dragon_tattoo']) {
+                return d.formulas['knack:dragon_tattoo'];
+            }
+        }
+        return null;
+    }""")
+    assert f is not None
+    assert f["reroll_tens"] is False
+    assert f["no_reroll_reason"] == "impaired"
+
+
 def test_togashi_heal_sw_button_works(page, live_server_url):
     """Togashi 5th Dan: Spend 1 VP to heal 2 SW button works."""
     _create_char(page, live_server_url, "TogashiHeal", "togashi_ise_zumi",
@@ -1398,6 +1437,57 @@ def test_shosuro_5th_dan_lowest_3_dice(page, live_server_url):
     # The lowest 3 dice bonus should appear in the result
     result_text = page.locator('[data-modal="dice-roller"]').text_content()
     assert "5th Dan" in result_text and "lowest 3" in result_text
+
+
+def test_shosuro_5th_dan_attack_lowest_3_dice(page, live_server_url):
+    """Shosuro 5th Dan: lowest 3 dice bonus applies to attack rolls."""
+    _create_char(page, live_server_url, "Shosuro5Atk", "shosuro_actor",
+                 knack_overrides={"athletics": 5, "discern_honor": 5, "pontificate": 5})
+    # Verify the flag is on the attack formula
+    f = _get_formula(page, "attack")
+    assert f.get("shosuro_5th_dan") is True
+    # Pre-roll note appears on the attack modal
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    pre_text = page.locator('[data-modal="attack"]').text_content()
+    assert "Shosuro 5th Dan" in pre_text
+    # Roll the attack; bonus row should appear in result
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    result_text = page.locator('[data-modal="attack"]').text_content()
+    assert "Shosuro 5th Dan" in result_text and "lowest 3" in result_text
+
+
+def test_shosuro_5th_dan_wound_check_lowest_3_dice(page, live_server_url):
+    """Shosuro 5th Dan: lowest 3 dice bonus applies to wound check rolls."""
+    _create_char(page, live_server_url, "Shosuro5WC", "shosuro_actor",
+                 knack_overrides={"athletics": 5, "discern_honor": 5, "pontificate": 5})
+    # Flag present on the WC formula
+    wc = _get_formula(page, "wound_check")
+    assert wc.get("shosuro_5th_dan") is True
+    # Add light wounds so a wound check can be triggered
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "10")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    # Open WC modal and check the pre-roll note
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    pre_text = page.locator('[data-modal="wound-check"]').text_content()
+    assert "Shosuro 5th Dan" in pre_text
+    # Roll; the result breakdown should include the lowest-3 line
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    result_text = page.locator('[data-modal="wound-check"]').text_content()
+    assert "Shosuro 5th Dan" in result_text and "lowest 3" in result_text
 
 
 # ===========================================================================
@@ -1592,12 +1682,95 @@ def test_shosuro_1st_dan_behavioral(page, live_server_url):
 
 
 def test_togashi_1st_dan_behavioral(page, live_server_url):
-    """Togashi 1st Dan: rolling attack shows 4 dice."""
-    _create_char(page, live_server_url, "Togashi1B", "togashi_ise_zumi")
-    expected = _get_formula(page, "attack")["rolled"]
-    _open_attack_modal_and_roll(page, "attack")
-    assert _get_attack_result_rolled(page) == expected
-    assert _count_attack_result_dice(page) > 0  # dice are visible in result
+    """Togashi 1st Dan: wound check gets +1 rolled die (athletics/WC/init)."""
+    _create_char(page, live_server_url, "Togashi1B", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 1, "conviction": 1, "dragon_tattoo": 1})
+    wc = _get_formula(page, "wound_check")
+    # Water=2 -> base 3k2; 1st Dan +1 rolled -> 4k2
+    assert wc["rolled"] == 4
+    assert wc["kept"] == 2
+
+
+def test_togashi_initiative_dropdown_shows_both_variants(page, live_server_url):
+    """Togashi initiative box opens a dropdown with normal+athletics variants."""
+    # Default Togashi character: Void=3, dan=1 (school knacks free at rank 1),
+    # so base initiative is (V+1+1)kV = 5k3.
+    _create_char(page, live_server_url, "TogashiInitUI", "togashi_ise_zumi")
+    init_box = page.locator('[data-roll-key="initiative"]')
+    box_text = init_box.text_content()
+    assert "5k3 plus 1 athletics action" in box_text
+    assert "8k6 athletics actions" in box_text
+    # Click opens dropdown (does not roll directly)
+    init_box.click()
+    page.wait_for_selector('[data-togashi-init-menu]', state='visible', timeout=3000)
+    assert page.locator('[data-togashi-init-normal]').is_visible()
+    assert page.locator('[data-togashi-init-athletics]').is_visible()
+
+
+def test_togashi_initiative_normal_variant_rolls_correct_dice(page, live_server_url):
+    """Togashi normal initiative: main roll is (V+1+dan)kV (5 dice for default char)
+    and a separate standalone athletics-only die is also rolled."""
+    _create_char(page, live_server_url, "TogashiInitN", "togashi_ise_zumi")
+    page.locator('[data-roll-key="initiative"]').click()
+    page.wait_for_selector('[data-togashi-init-normal]', state='visible')
+    page.locator('[data-togashi-init-normal]').click()
+    _wait_roll_done(page)
+    # Void=3, dan=1: main init 5k3. finalDice carries only the main roll.
+    assert _count_result_dice(page) == 5
+    # The standalone athletics die was rolled; read the Alpine state.
+    ath = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.togashiAthleticsDie === 'number') return d.togashiAthleticsDie;
+        }
+        return 0;
+    }""")
+    assert 1 <= ath <= 10
+
+
+def test_togashi_initiative_normal_variant_shows_athletics_die_label(page, live_server_url):
+    """Togashi normal initiative result modal shows the athletics-only die as a
+    distinct blue die with an 'athletics only' label."""
+    _create_char(page, live_server_url, "TogashiInitNLab", "togashi_ise_zumi")
+    page.locator('[data-roll-key="initiative"]').click()
+    page.wait_for_selector('[data-togashi-init-normal]', state='visible')
+    page.locator('[data-togashi-init-normal]').click()
+    _wait_roll_done(page)
+    text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "athletics only" in text.lower()
+
+
+def test_togashi_initiative_athletics_variant_rolls_correct_dice(page, live_server_url):
+    """Togashi athletics initiative rolls base+3 dice (8 dice for default char)."""
+    _create_char(page, live_server_url, "TogashiInitA", "togashi_ise_zumi")
+    page.locator('[data-roll-key="initiative"]').click()
+    page.wait_for_selector('[data-togashi-init-athletics]', state='visible')
+    page.locator('[data-togashi-init-athletics]').click()
+    _wait_roll_done(page)
+    # Void=3, dan=1: base 5k3 + 3 athletics dice = 8k6
+    assert _count_result_dice(page) == 8
+    # No standalone athletics die on this variant.
+    ath = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.togashiAthleticsDie === 'number') return d.togashiAthleticsDie;
+        }
+        return null;
+    }""")
+    assert ath == 0
+
+
+def test_togashi_initiative_dan_advancement_bonus(page, live_server_url):
+    """Advancing Togashi past 1st Dan keeps the +1 init bonus (same dan tier)."""
+    _create_char(page, live_server_url, "TogashiInit2D", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 2, "conviction": 2, "dragon_tattoo": 2})
+    init_box = page.locator('[data-roll-key="initiative"]')
+    box_text = init_box.text_content()
+    # Still 1st-Dan extra die: Void=3 -> base 5k3 + 1 athletics OR 8k6 athletics
+    assert "5k3 plus 1 athletics action" in box_text
+    assert "8k6 athletics actions" in box_text
 
 
 def test_yogo_1st_dan_behavioral(page, live_server_url):
@@ -2841,6 +3014,283 @@ def test_togashi_4th_dan_reroll_behavioral(page, live_server_url):
             return 0;
         }""")
         assert second_total > 0  # a roll happened
+
+
+def test_togashi_4th_dan_reroll_only_once_per_roll(page, live_server_url):
+    """Togashi 4th Dan: Reroll button disappears after first use, reappears on next roll."""
+    _create_char(page, live_server_url, "Togashi4Once", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
+    assert reroll_btn.is_visible(), "Reroll button should be visible after initial roll"
+    # Note: this reroll commits to the new result - the post-reroll banner says so
+    reroll_btn.click()
+    _wait_roll_done(page)
+    assert not reroll_btn.is_visible(), "Reroll button should be hidden after first use"
+    # Post-reroll banner mentions the original is discarded
+    result_text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "discarded" in result_text.lower() or "original" in result_text.lower()
+    # Close modal and roll again -> button should be available again
+    page.locator('[data-modal="dice-roller"] button:has-text("×")').click()
+    page.wait_for_timeout(200)
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    assert reroll_btn.is_visible(), "Reroll button should be visible on a fresh roll"
+
+
+def test_togashi_4th_dan_reroll_hidden_on_initiative(page, live_server_url):
+    """Togashi 4th Dan: reroll button not shown on initiative rolls."""
+    _create_char(page, live_server_url, "Togashi4Init", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4})
+    # Togashi initiative is a dropdown (two variants); pick the normal variant
+    page.locator('[data-roll-key="initiative"]').click()
+    page.wait_for_selector('[data-togashi-init-normal]', state='visible', timeout=3000)
+    page.locator('[data-togashi-init-normal]').click()
+    _wait_roll_done(page)
+    reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
+    assert not reroll_btn.is_visible(), "Reroll must not appear on initiative (never contested)"
+
+
+def test_togashi_4th_dan_reroll_hidden_on_etiquette(page, live_server_url):
+    """Togashi 4th Dan: reroll button not shown on etiquette (never contested)."""
+    _create_char(page, live_server_url, "Togashi4Etq", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
+                 skill_overrides={"etiquette": 1})
+    _roll_via_menu_or_direct(page, "skill:etiquette")
+    reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
+    assert not reroll_btn.is_visible(), "Reroll must not appear on etiquette"
+
+
+def test_togashi_4th_dan_reroll_hidden_on_heraldry(page, live_server_url):
+    """Togashi 4th Dan: reroll button not shown on heraldry (never contested)."""
+    _create_char(page, live_server_url, "Togashi4Her", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
+                 skill_overrides={"heraldry": 1})
+    _roll_via_menu_or_direct(page, "skill:heraldry")
+    reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
+    assert not reroll_btn.is_visible(), "Reroll must not appear on heraldry"
+
+
+def _open_attack_modal(page, roll_key):
+    """Open the attack modal for a roll key without rolling."""
+    page.locator(f'[data-roll-key="{roll_key}"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+
+
+def _attack_modal_bonus_text(page):
+    """Return the 'Bonuses: ...' line text on the attack modal pre-roll panel."""
+    return page.locator('[data-modal="attack"]').text_content()
+
+
+# ===========================================================================
+# ATTACK MODAL PRE-ROLL: bonus display + probability chart sanity
+# ===========================================================================
+
+
+def test_akodo_1st_dan_attack_modal_pre_roll_extra_die(page, live_server_url):
+    """Akodo 1st Dan: attack modal pre-roll calls out the +1 rolled die."""
+    _create_char(page, live_server_url, "Akodo1PR", "akodo_bushi")
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    assert "1st Dan" in text
+    # Probability chart should reflect the extra rolled die via rolled count.
+    f = _get_formula(page, "attack")
+    # Akodo base: 1(attack)+2(Fire) = 3. 1st Dan extra die -> 4k2.
+    assert f["rolled"] >= 4
+
+
+def test_ikoma_2nd_dan_attack_modal_pre_roll_free_raise(page, live_server_url):
+    """Ikoma 2nd Dan: attack modal pre-roll mentions the +5 free raise."""
+    _create_char(page, live_server_url, "Ikoma2PR", "ikoma_bard",
+                 knack_overrides={"discern_honor": 2, "oppose_knowledge": 2, "oppose_social": 2})
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    assert "2nd Dan" in text
+    f = _get_formula(page, "attack")
+    assert f["flat"] == 5
+
+
+def test_brotherhood_2nd_dan_attack_modal_pre_roll_free_raise(page, live_server_url):
+    """Brotherhood 2nd Dan: attack modal pre-roll mentions the +5 free raise."""
+    _create_char(page, live_server_url, "Bro2PR", "brotherhood_of_shinsei_monk",
+                 knack_overrides={"conviction": 2, "otherworldliness": 2, "worldliness": 2})
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    assert "2nd Dan" in text
+    f = _get_formula(page, "attack")
+    assert f["flat"] == 5
+
+
+def test_bayushi_2nd_dan_double_attack_modal_pre_roll(page, live_server_url):
+    """Bayushi 2nd Dan: double_attack modal pre-roll calls out the +5 free raise."""
+    _create_char(page, live_server_url, "Bayushi2PR", "bayushi_bushi",
+                 knack_overrides={"double_attack": 2, "feint": 2, "iaijutsu": 2})
+    _open_attack_modal(page, "knack:double_attack")
+    text = _attack_modal_bonus_text(page)
+    assert "2nd Dan" in text
+    f = _get_formula(page, "knack:double_attack")
+    assert f["flat"] == 5
+
+
+def test_hida_2nd_dan_counterattack_modal_pre_roll(page, live_server_url):
+    """Hida 2nd Dan: counterattack modal pre-roll calls out the +5 free raise."""
+    _create_char(page, live_server_url, "Hida2PR", "hida_bushi",
+                 knack_overrides={"counterattack": 2, "iaijutsu": 2, "lunge": 2})
+    _open_attack_modal(page, "knack:counterattack")
+    text = _attack_modal_bonus_text(page)
+    assert "2nd Dan" in text
+    f = _get_formula(page, "knack:counterattack")
+    assert f["flat"] == 5
+
+
+def test_daidoji_2nd_dan_counterattack_modal_pre_roll(page, live_server_url):
+    """Daidoji 2nd Dan: counterattack modal pre-roll calls out the +5 free raise."""
+    _create_char(page, live_server_url, "Daid2PR", "daidoji_yojimbo",
+                 knack_overrides={"counterattack": 2, "double_attack": 2, "iaijutsu": 2})
+    _open_attack_modal(page, "knack:counterattack")
+    text = _attack_modal_bonus_text(page)
+    assert "2nd Dan" in text
+    f = _get_formula(page, "knack:counterattack")
+    assert f["flat"] == 5
+
+
+def test_kitsuki_attack_modal_pre_roll_shows_water_bonus(page, live_server_url):
+    """Kitsuki Special: attack modal pre-roll shows the +2*Water bonus."""
+    _create_char(page, live_server_url, "KitsukiPR", "kitsuki_magistrate")
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    assert "Kitsuki" in text
+    f = _get_formula(page, "attack")
+    # +2*Water: default Water=2 (non-school-ring) unless school ring is Water.
+    assert f["flat"] >= 4  # at least +2*2
+
+
+def test_courtier_special_attack_modal_pre_roll_shows_air_bonus(page, live_server_url):
+    """Courtier Special: attack modal pre-roll shows the +Air bonus."""
+    _create_char(page, live_server_url, "CourtierSpPR", "courtier")
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    assert "Courtier Special" in text
+    f = _get_formula(page, "attack")
+    assert f["flat"] >= 2  # at least +Air
+
+
+def test_courtier_5th_dan_attack_modal_pre_roll_shows_air_bonus(page, live_server_url):
+    """Courtier 5th Dan: pre-roll lists both the special Air bonus and the 5th Dan Air bonus."""
+    _create_char(page, live_server_url, "Courtier5PR", "courtier",
+                 knack_overrides={"discern_honor": 5, "oppose_social": 5, "worldliness": 5})
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    assert "Courtier Special" in text
+    assert "5th Dan" in text
+
+
+def test_shosuro_acting_dice_attack_modal_pre_roll(page, live_server_url):
+    """Shosuro Special: pre-roll shows the +acting rolled dice note."""
+    _create_char(page, live_server_url, "ShosActPR", "shosuro_actor",
+                 skill_overrides={"acting": 3})
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    assert "Acting" in text
+    f = _get_formula(page, "attack")
+    # Shosuro attack base 1+Fire(2)=3 rolled, +1 from 1st Dan, +3 from acting = 7.
+    assert f["rolled"] >= 7
+
+
+def test_conviction_button_appears_on_skill_roll(page, live_server_url):
+    """Characters with the conviction knack see a Spend Conviction (+1) button
+    on skill roll results."""
+    _create_char(page, live_server_url, "ConvSkill", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    spend = page.locator('[data-action="spend-conviction"]')
+    assert spend.is_visible()
+
+
+def test_conviction_not_on_initiative(page, live_server_url):
+    """Conviction spend button should NOT appear on initiative rolls."""
+    _create_char(page, live_server_url, "ConvInit", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3})
+    page.locator('[data-roll-key="initiative"]').click()
+    page.wait_for_selector('[data-togashi-init-normal]', state='visible', timeout=3000)
+    page.locator('[data-togashi-init-normal]').click()
+    _wait_roll_done(page)
+    assert not page.locator('[data-action="spend-conviction"]').is_visible()
+
+
+def test_conviction_spend_adds_plus_one_and_decrements_pool(page, live_server_url):
+    """Clicking Spend Conviction raises baseTotal by 1 and decrements the pool."""
+    _create_char(page, live_server_url, "ConvSpend", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 2, "conviction": 2, "dragon_tattoo": 2},
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.baseTotal === 'number') return {
+                total: d.baseTotal, spent: d.convictionSpentThisRoll,
+                pool: d.convictionPoolAvail(),
+            };
+        }
+        return null;
+    }""")
+    page.locator('[data-action="spend-conviction"]').click()
+    page.wait_for_timeout(150)
+    after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.baseTotal === 'number') return {
+                total: d.baseTotal, spent: d.convictionSpentThisRoll,
+                pool: d.convictionPoolAvail(),
+            };
+        }
+        return null;
+    }""")
+    assert after["total"] == before["total"] + 1
+    assert after["spent"] == before["spent"] + 1
+    assert after["pool"] == before["pool"] - 1
+
+
+def test_conviction_survives_togashi_reroll(page, live_server_url):
+    """Spent conviction points persist after a Togashi 4th Dan reroll."""
+    _create_char(page, live_server_url, "ConvReroll", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    # Spend 2 conviction
+    spend = page.locator('[data-action="spend-conviction"]')
+    spend.click()
+    page.wait_for_timeout(100)
+    spend.click()
+    page.wait_for_timeout(100)
+    before_spent = page.evaluate("() => window._diceRoller?.convictionSpentThisRoll")
+    assert before_spent == 2
+    # Togashi reroll
+    page.locator('button:has-text("Reroll (Togashi 4th Dan)")').click()
+    _wait_roll_done(page)
+    after_spent = page.evaluate("() => window._diceRoller?.convictionSpentThisRoll")
+    assert after_spent == 2, f"conviction spent should survive reroll; got {after_spent}"
+    # The breakdown should still show the 2-point conviction line
+    result_text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "Conviction" in result_text
+
+
+def test_togashi_dragon_tattoo_no_void_spend(page, live_server_url):
+    """Dragon Tattoo is a damage roll, so clicking it does not offer void spending."""
+    _create_char(page, live_server_url, "TogashiDragonVP", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3})
+    vp = page.evaluate("window._trackingBridge?.voidPoints")
+    assert vp > 0, "precondition: char has VP"
+    page.locator('[data-roll-key="knack:dragon_tattoo"]').click()
+    page.wait_for_timeout(300)
+    # Should either roll directly or (if menu appears) the menu should not contain void options.
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    if menu.is_visible():
+        text = menu.text_content()
+        assert "void point" not in text.lower(), f"damage roll menu should not show void options: {text!r}"
 
 
 def test_kuni_5th_dan_reflect_behavioral(page, live_server_url):

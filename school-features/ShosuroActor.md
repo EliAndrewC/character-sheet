@@ -117,12 +117,38 @@
 
 ## 5th Dan
 
-> After making any TN or contested roll, add your lowest three dice to the result. (Some dice may be counted twice.)
+> After making any non-initiative roll, add your lowest three dice to the result. (Some dice may be counted twice.)
 
-**Status:** Fully implemented.
-- Server: `app/routes/pages.py` passes `shosuro_add_lowest_3: true` in school_abilities.
-- Client: `app/templates/character/sheet.html` auto-adds the 3 lowest dice values to the total after any TN/contested roll (not initiative). Bonus is displayed in the roll result breakdown.
+**Status:** Fully implemented across all non-initiative rolls (skill, knack, attack, parry, wound check, damage).
+
+**Server wiring:**
+- `app/services/dice.py:build_combat_formula` sets `formula.shosuro_5th_dan = True` for attack and parry.
+- `app/services/dice.py:_annotate_attack_type` stamps the flag on all attack-type formulas (double_attack, counterattack, lunge).
+- `app/services/dice.py:build_wound_check_formula` emits `shosuro_5th_dan` in the return dict.
+- `app/routes/pages.py` passes `shosuro_add_lowest_3: true` in `school_abilities` (legacy flag for the general-purpose dice roller) and embeds a `shosuro_lowest_3_avg` lookup table keyed by `"<reroll>:<rolled>"`.
+- `app/routes/pages.py` also augments `attack_probs[*]["shosuro_flats"]` and `wc_probs["shosuro_flats"]` / `wc_probs["shosuro_flats_no_reroll"]` with the average bonus per (rolled,kept) cell, so the probability charts account for the 5th Dan bonus.
+
+**Client wiring:**
+- Main dice-roller modal: existing path in `runRoll()` uses `schoolAbilities.shosuro_add_lowest_3`.
+- Attack modal: `rollAttack()` reads `formula.shosuro_5th_dan` and adds the lowest-3 sum before hit / excess / extra dice math.
+- Wound check modal: `rollWoundCheck()` reads `formula.shosuro_5th_dan` and adds the lowest-3 sum before the pass/fail decision.
+- Damage modal: `atkComputeDamage()` adds the table's expected bonus into `avg` / `parts`; `rollDamage()` and the Lucky-damage reroll add the actual lowest-3 sum to the displayed total.
+- Probability displays (`atkHitChance`, `atkAvgAttackRoll`, `wcProbRow`) read `shosuro_flats` per `(rolled,kept)` key so every void level uses a bonus appropriate to that dice pool.
+
+**Avg Bonus Table:** `app/data/shosuro_5th_dan.py` - Monte Carlo (200k trials per cell, seed=1337). Keyed by `reroll_tens` and `rolled` (3..10). `app/data/__init__.py` exposes `shosuro_lowest_3_for(rolled, reroll_tens)` with clamp.
+
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_on_attack`
+- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_on_parry`
+- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_on_wound_check`
+- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_on_attack_in_all_roll_formulas`
+- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_not_set_below_5th_dan`
+- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_not_set_other_schools`
+- `test_shosuro_lookup.py` (full suite: table shape, monotonicity, helper clamping)
+- `test_routes.py::TestViewCharacter::test_view_shosuro_5th_dan_bakes_probabilities`
 
 **Clicktests:**
-- `test_school_abilities.py::test_shosuro_5th_dan_lowest_3_dice`
+- `test_school_abilities.py::test_shosuro_5th_dan_lowest_3_dice` (skill roll)
+- `test_school_abilities.py::test_shosuro_5th_dan_attack_lowest_3_dice`
+- `test_school_abilities.py::test_shosuro_5th_dan_wound_check_lowest_3_dice`
 

@@ -109,6 +109,180 @@ class TestCreateCharacter:
         assert char.current_void_points == 1  # unchanged
 
 
+class TestPriestAllyConviction:
+    """POST /characters/{priest_id}/ally-conviction: party members can
+    spend a Priest 5th Dan's conviction pool on their own rolls."""
+
+    def _setup_priest_and_ally(self, client, priest_rank=5):
+        """Create a Priest at 5th Dan and a non-priest ally in the same group.
+
+        ``priest_rank`` is used for all three school knacks (so dan == rank).
+        """
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="Tuesday Group")
+        session.add(group); session.commit()
+        priest_id = _seed_character(
+            client, name="Priest Ally", school="priest",
+            knacks={"conviction": priest_rank, "otherworldliness": priest_rank,
+                    "pontificate": priest_rank},
+            gaming_group_id=group.id, is_published=True,
+        )
+        ally_id = _seed_character(
+            client, name="Bushi", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            gaming_group_id=group.id, is_published=True,
+        )
+        return priest_id, ally_id, group.id
+
+    def test_ally_can_spend_priest_conviction(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        resp = client.post(f"/characters/{priest_id}/ally-conviction",
+                           json={"delta": 1})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["used"] == 1
+        assert data["pool_max"] == 10  # 2 * rank(5)
+
+    def test_ally_can_undo_priest_conviction(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        client.post(f"/characters/{priest_id}/ally-conviction", json={"delta": 1})
+        client.post(f"/characters/{priest_id}/ally-conviction", json={"delta": 1})
+        resp = client.post(f"/characters/{priest_id}/ally-conviction",
+                           json={"delta": -1})
+        assert resp.status_code == 200
+        assert resp.json()["used"] == 1
+
+    def test_rejects_non_priest_target(self, client):
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        resp = client.post(f"/characters/{ally_id}/ally-conviction",
+                           json={"delta": 1})
+        assert resp.status_code == 400
+
+    def test_rejects_priest_below_5th_dan(self, client):
+        """Priest 4th Dan doesn't yet get the cross-character spending rule."""
+        # Seed a priest at dan 4 (knacks 4,4,4).
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="Low Dan Group")
+        session.add(group); session.commit()
+        priest_id = _seed_character(
+            client, name="Dan4", school="priest",
+            knacks={"conviction": 4, "otherworldliness": 4, "pontificate": 4},
+            gaming_group_id=group.id, is_published=True,
+        )
+        resp = client.post(f"/characters/{priest_id}/ally-conviction",
+                           json={"delta": 1})
+        assert resp.status_code == 400
+
+    def test_rejects_unknown_priest(self, client):
+        resp = client.post("/characters/99999/ally-conviction", json={"delta": 1})
+        assert resp.status_code == 404
+
+    def test_rejects_caller_not_in_group(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        # Unassign the priest from any group; the endpoint requires that
+        # the priest belong to a gaming group the caller shares.
+        session = client._test_session_factory()
+        priest = session.query(Character).filter(Character.id == priest_id).first()
+        priest.gaming_group_id = None
+        session.commit()
+        resp = client.post(f"/characters/{priest_id}/ally-conviction",
+                           json={"delta": 1})
+        assert resp.status_code == 403
+
+    def test_rejects_bad_delta(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        resp = client.post(f"/characters/{priest_id}/ally-conviction",
+                           json={"delta": 5})
+        assert resp.status_code == 400
+        resp = client.post(f"/characters/{priest_id}/ally-conviction",
+                           json={"delta": "bogus"})
+        assert resp.status_code == 400
+
+    def test_used_clamps_to_pool_max(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client, priest_rank=5)
+        # pool_max = 10. Spend 15 times; used should cap at 10.
+        for _ in range(15):
+            client.post(f"/characters/{priest_id}/ally-conviction", json={"delta": 1})
+        session = client._test_session_factory()
+        p = session.query(Character).filter(Character.id == priest_id).first()
+        assert (p.adventure_state or {}).get("conviction_used") == 10
+
+    def test_used_cannot_go_below_zero(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        resp = client.post(f"/characters/{priest_id}/ally-conviction",
+                           json={"delta": -1})
+        assert resp.status_code == 200
+        assert resp.json()["used"] == 0
+
+    def test_sheet_exposes_priest_ally_script(self, client):
+        """The ally's sheet page embeds priest-conviction-allies JSON with the priest."""
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        resp = client.get(f"/characters/{ally_id}")
+        assert resp.status_code == 200
+        assert 'id="priest-conviction-allies"' in resp.text
+        assert "Priest Ally" in resp.text
+
+    def test_sheet_skips_priest_below_5th_dan(self, client):
+        """A priest in the party at dan < 5 is not exposed as a conviction ally source
+        (priest-conviction-allies JSON stays empty)."""
+        import json as _json
+        import re
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="Group")
+        session.add(group); session.commit()
+        _seed_character(
+            client, name="Low Dan Priest", school="priest",
+            knacks={"conviction": 3, "otherworldliness": 3, "pontificate": 3},
+            gaming_group_id=group.id, is_published=True,
+        )
+        ally_id = _seed_character(
+            client, name="Bushi", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            gaming_group_id=group.id, is_published=True,
+        )
+        resp = client.get(f"/characters/{ally_id}")
+        m = re.search(
+            r'id="priest-conviction-allies">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        assert _json.loads(m.group(1)) == []
+
+
+class TestAllyConvictionAuth:
+    def test_requires_authentication(self):
+        """Unauthenticated caller gets a 401 from ally-conviction endpoint."""
+        from fastapi.testclient import TestClient
+        from starlette.requests import Request
+        from starlette.responses import Response
+        from app.main import app
+
+        # Temporarily install middleware that clears the user on request.state.
+        async def clear_user(request, call_next):
+            request.state.user = None
+            return await call_next(request)
+
+        # Simpler: directly call the endpoint function with a stub request.
+        import asyncio
+        from app.routes.characters import ally_conviction
+
+        class _Req:
+            class state: pass
+            state = state()
+            async def json(self): return {"delta": 1}
+
+        req = _Req()
+        req.state.user = None
+        # Use a dummy db session; the endpoint should 401 before using it.
+        resp = asyncio.get_event_loop().run_until_complete(
+            ally_conviction(req, 1, db=None)
+        )
+        assert resp.status_code == 401
+
+
 class TestViewCharacter:
     def test_view_character(self, client):
         cid = _seed_character(
@@ -135,6 +309,24 @@ class TestViewCharacter:
     def test_view_nonexistent_404(self, client):
         resp = client.get("/characters/999")
         assert resp.status_code == 404
+
+    def test_view_shosuro_5th_dan_bakes_probabilities(self, client):
+        """Shosuro 5th Dan sheet should embed shosuro_flats in attack/WC probs."""
+        cid = _seed_character(
+            client,
+            name="Shosuro 5D",
+            school="shosuro_actor",
+            school_ring_choice="Air",
+            ring_air=3,
+            attack=2,
+            parry=2,
+            knacks={"athletics": 5, "discern_honor": 5, "pontificate": 5},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert "shosuro_flats" in resp.text
+        # The 5th Dan rule text should now be the new wording
+        assert "After making any non-initiative roll" in resp.text
 
 
 class TestEditCharacter:

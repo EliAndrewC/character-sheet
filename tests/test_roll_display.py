@@ -10,6 +10,83 @@ from app.services.rolls import compute_skill_roll, RollResult
 from tests.conftest import make_character_data
 
 
+def _priest_party_member(name="Kuni Shouzo", dan=2):
+    return {
+        "name": name, "school": "priest", "dan": dan,
+        "advantages": [], "disadvantages": [],
+        "campaign_advantages": [], "campaign_disadvantages": [],
+    }
+
+
+class TestPriestPartyBonus:
+    """Priest 2nd Dan grants a free raise to all party members on
+    bragging / precepts / open-sincerity rolls."""
+
+    def test_self_priest_bragging_flat_includes_free_raise(self):
+        data = make_character_data(
+            school="priest",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+            skills={"bragging": 2},
+        )
+        result = compute_skill_roll("bragging", data)
+        # Honor on bragging (mult 5) + Priest 2nd Dan (+5).
+        assert result.flat_bonus >= 5
+        assert "Priest 2nd Dan" in result.tooltip
+
+    def test_self_priest_sincerity_conditional_note(self):
+        data = make_character_data(
+            school="priest",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+            skills={"sincerity": 2},
+        )
+        result = compute_skill_roll("sincerity", data)
+        assert "Priest 2nd Dan" in result.tooltip
+        assert "open rolls" in result.tooltip
+
+    def test_ally_priest_adds_free_raise_on_bragging(self):
+        data = make_character_data(
+            school="akodo_bushi",
+            skills={"bragging": 2},
+        )
+        result = compute_skill_roll("bragging", data, party_members=[_priest_party_member()])
+        assert "Priest 2nd Dan" in result.tooltip
+        assert "Kuni Shouzo" in result.tooltip
+
+    def test_ally_priest_below_2nd_dan_does_not_add(self):
+        data = make_character_data(
+            school="akodo_bushi",
+            skills={"bragging": 2},
+        )
+        result = compute_skill_roll(
+            "bragging", data, party_members=[_priest_party_member(dan=1)]
+        )
+        assert "Priest 2nd Dan" not in result.tooltip
+
+    def test_ally_priest_sincerity_conditional(self):
+        data = make_character_data(
+            school="akodo_bushi",
+            skills={"sincerity": 2},
+        )
+        result = compute_skill_roll(
+            "sincerity", data, party_members=[_priest_party_member()]
+        )
+        assert "Priest 2nd Dan" in result.tooltip
+        assert "open rolls" in result.tooltip
+
+    def test_self_priest_and_ally_priest_do_not_stack(self):
+        """A Priest 2nd Dan character with a Priest ally still gets only one free raise."""
+        data = make_character_data(
+            school="priest",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+            skills={"bragging": 2},
+        )
+        r_solo = compute_skill_roll("bragging", data)
+        r_with_ally = compute_skill_roll(
+            "bragging", data, party_members=[_priest_party_member("Kakita Bard", 3)]
+        )
+        assert r_solo.flat_bonus == r_with_ally.flat_bonus
+
+
 class TestBaseRoll:
     def test_basic_skill_roll(self):
         """Bragging 2 with Air 3 = (2+3)k3 = 5k3."""
