@@ -251,7 +251,7 @@ def _grant_free_school_knacks(
     """Schools grant their three knacks at rank 1 for free. Ensure any of
     the school's canonical knacks appear at rank >= 1 in the output."""
     school = SCHOOLS.get(school_id)
-    if school is None:
+    if school is None:  # pragma: no cover - caller gates on school_id truthy
         return knacks
     school_knack_ids = set(school.school_knacks)
     # Track whether the user's knacks intersect the school's knacks.

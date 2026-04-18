@@ -1,6 +1,6 @@
 """E2E: Create a character end-to-end (new flow: POST creates blank, auto-saves)."""
 
-from tests.e2e.helpers import select_school, click_plus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 import pytest
 
 pytestmark = pytest.mark.apply_changes
@@ -11,8 +11,7 @@ def test_create_and_edit_character(page, live_server_url):
     page.goto(live_server_url)
 
     # Click "New Character" button (now a form POST)
-    page.locator('button:text("New Character")').click()
-
+    start_new_character(page)
     # Should redirect to edit page
     page.wait_for_selector('input[name="name"]')
     assert "/edit" in page.url
@@ -45,7 +44,7 @@ def test_create_and_edit_character(page, live_server_url):
 def test_create_minimal_character(page, live_server_url):
     """Create and publish a character with just a name and school."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
 
     page.fill('input[name="name"]', "Minimal Samurai")

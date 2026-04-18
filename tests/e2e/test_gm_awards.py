@@ -1,6 +1,6 @@
 """E2E: GM-awarded Rank/Recognition bonuses (modal, history list, lock-out)."""
 
-from tests.e2e.helpers import select_school, apply_changes
+from tests.e2e.helpers import select_school, apply_changes, start_new_character
 import pytest
 
 pytestmark = [pytest.mark.gm_awards, pytest.mark.honor_rank_recognition]
@@ -8,7 +8,7 @@ pytestmark = [pytest.mark.gm_awards, pytest.mark.honor_rank_recognition]
 
 def _go_to_editor(page, live_server_url, name="Award Test"):
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "akodo_bushi")

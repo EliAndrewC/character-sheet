@@ -1,14 +1,14 @@
 """E2E: Light wounds modal — add, set total, take serious, minus dropdown."""
 
 import pytest
-from tests.e2e.helpers import select_school, apply_changes
+from tests.e2e.helpers import select_school, apply_changes, start_new_character
 
 pytestmark = pytest.mark.tracking
 
 
 def _create_char(page, live_server_url):
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     select_school(page, "akodo_bushi")
     page.wait_for_selector('text="Saved"', timeout=5000)

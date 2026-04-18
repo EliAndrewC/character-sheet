@@ -208,6 +208,144 @@ def _wrap_document(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# E2E test stub (only fires when IMPORT_USE_TEST_STUB is truthy)
+#
+# Clicktests run the real app as a uvicorn subprocess, so the ``monkeypatch``
+# tricks that work for unit tests don't apply. This stub is gated on an env
+# var the e2e conftest sets; in production the env var is never present and
+# the stub is a no-op. When active, the stub inspects the outgoing request
+# body for the document text and returns a canned response based on
+# content markers - deliberately simple so tests can predict outcomes.
+# ---------------------------------------------------------------------------
+
+
+def _stub_mode() -> bool:
+    return os.environ.get("IMPORT_USE_TEST_STUB", "").lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+def _canonical_stub_payload() -> Dict[str, Any]:
+    """Match ``tests/import_fixtures/happy_path/canonical.expected.json``
+    in shape and content."""
+    return {
+        "name": "Kakita Tomoe", "player_name": "Eli",
+        "school_name_as_written": "Kakita Duelist",
+        "school_ring_choice": "Fire",
+        "rings": {"air": 2, "fire": 4, "earth": 2, "water": 3, "void": 2},
+        "attack": 3, "parry": 3,
+        "skills": [
+            {"name_as_written": "Etiquette", "rank": 3},
+            {"name_as_written": "Sincerity", "rank": 3},
+            {"name_as_written": "Tact", "rank": 2},
+            {"name_as_written": "Heraldry", "rank": 2},
+            {"name_as_written": "History", "rank": 2},
+            {"name_as_written": "Culture", "rank": 2},
+            {"name_as_written": "Strategy", "rank": 1},
+        ],
+        "knacks": [
+            {"name_as_written": "Iaijutsu", "rank": 3},
+            {"name_as_written": "Double Attack", "rank": 2},
+            {"name_as_written": "Lunge", "rank": 2},
+        ],
+        "advantages": [
+            {"name_as_written": "Virtue", "detail": "Courage"},
+            {"name_as_written": "Charming"},
+            {"name_as_written": "Kind Eye"},
+            {"name_as_written": "Highest Regard"},
+        ],
+        "disadvantages": [
+            {"name_as_written": "Proud"},
+            {"name_as_written": "Contrary"},
+        ],
+        "first_dan_choices": [], "second_dan_choice": None,
+        "honor": 3.0, "rank": 7.5, "recognition": 7.5,
+        "starting_xp": 150,
+        "source_stated_spent_xp": 118,
+        "source_stated_earned_xp": None,
+        "source_stated_unspent_xp": 32,
+        "freeform_sections": [],
+        "multi_character_detected": False,
+        "not_a_character_sheet": False,
+        "ambiguities": [], "per_field_confidence": {},
+    }
+
+
+def _stub_raw_response(body: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a Gemini-shaped JSON body for the given request body.
+
+    Inspects the user-role text to pick a canned payload (happy / multi /
+    not-a-sheet). Also handles the single-field-extraction schema used
+    by ``extract_single_field`` - we return a null ``value`` because the
+    per-field path is a Phase 5 primitive that has no clicktest yet.
+    """
+    # Single-field extraction requests a specific one-key schema. We
+    # can't return a full ExtractedCharacter against that schema, so we
+    # answer the "value=null" question.
+    schema = body.get("generationConfig", {}).get("responseSchema", {})
+    if (schema.get("properties") or {}).keys() == {"value"}:
+        return {"candidates": [{
+            "content": {"parts": [{"text": json.dumps({"value": None})}]},
+            "finishReason": "STOP",
+        }]}
+
+    # Extract the document text from the user-role content parts.
+    contents = body.get("contents") or []
+    document_text = ""
+    for c in contents:
+        for part in (c.get("parts") or []):
+            text = part.get("text") or ""
+            if "<document>" in text:
+                document_text = text
+                break
+        if document_text:
+            break
+
+    payload = _stub_response_for(document_text)
+    return {"candidates": [{
+        "content": {"parts": [{"text": json.dumps(payload)}]},
+        "finishReason": "STOP",
+    }]}
+
+
+def _stub_response_for(document_text: str) -> Dict[str, Any]:
+    """Pick a canned response based on content markers in the document.
+
+    The markers match the Phase 2 fixtures so each clicktest can pair a
+    fixture file with the rejection path it wants to exercise. Anything
+    without a marker falls through to the canonical Kakita Tomoe payload.
+    """
+    text = document_text.lower()
+    if "character 1:" in text and "character 2:" in text:
+        payload = _canonical_stub_payload()
+        payload["multi_character_detected"] = True
+        return payload
+    if "shopping list" in text:
+        payload = {
+            "name": None, "player_name": None,
+            "school_name_as_written": None,
+            "school_ring_choice": None,
+            "rings": {"air": None, "fire": None, "earth": None,
+                      "water": None, "void": None},
+            "attack": None, "parry": None,
+            "skills": [], "knacks": [],
+            "advantages": [], "disadvantages": [],
+            "first_dan_choices": [], "second_dan_choice": None,
+            "honor": None, "rank": None, "recognition": None,
+            "starting_xp": None,
+            "source_stated_spent_xp": None,
+            "source_stated_earned_xp": None,
+            "source_stated_unspent_xp": None,
+            "freeform_sections": [],
+            "multi_character_detected": False,
+            "not_a_character_sheet": True,
+            "ambiguities": [], "per_field_confidence": {},
+        }
+        return payload
+    return _canonical_stub_payload()
+
+
+# ---------------------------------------------------------------------------
 # HTTP client + retry primitive
 # ---------------------------------------------------------------------------
 
@@ -266,6 +404,8 @@ def _call_with_retry(
     max_retries: int = 1,
 ) -> Dict[str, Any]:
     """POST to Gemini with transport-layer retry (design §10.3 layer 1)."""
+    if _stub_mode():
+        return _stub_raw_response(body)
     url = _gemini_url(model)
     api_key = _api_key()
     last_exc: Optional[Exception] = None

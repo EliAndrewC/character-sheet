@@ -162,7 +162,7 @@ def _fmt_ambiguity(amb: AmbiguityEntry) -> str:
         resolved_display = _display_knack(amb.resolved_id)
     elif amb.kind in ("advantage", "disadvantage"):
         resolved_display = _display_advantage(amb.resolved_id)
-    else:
+    else:  # pragma: no cover - defensive; we only produce the kinds above
         resolved_display = amb.resolved_id
     detail = (
         f"{kind_label} <em>{_h(amb.name_as_written)}</em> was "
@@ -387,6 +387,7 @@ def run_post_llm_pipeline(
     from app.services.import_validate import validate_and_normalise
 
     character_data, report = validate_and_normalise(extracted)
+    xp = reconcile_xp(character_data, report)
 
     # Freeform sections from the LLM are list-of-dicts; pydantic turns
     # them into ExtractedSection models. Convert back to plain dicts.
@@ -395,16 +396,16 @@ def run_post_llm_pipeline(
         for s in (extracted.freeform_sections or [])
     ]
 
-    sections = reconcile_and_build_sections(
+    sections = build_sections(
         character_data,
         extracted_sections,
         report,
+        xp,
         source_descriptor=source_descriptor,
         model_used=model_used,
         fallback_used=fallback_used,
         extra_warnings=extra_warnings,
     )
-    xp = reconcile_xp(character_data, report)  # called again to return the struct
 
     return {
         "character_data": character_data,
@@ -419,6 +420,6 @@ __all__ = [
     "XpReconciliation",
     "reconcile_xp",
     "build_import_notes_html",
-    "reconcile_and_build_sections",
+    "build_sections",
     "run_post_llm_pipeline",
 ]

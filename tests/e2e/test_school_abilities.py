@@ -1,7 +1,7 @@
 """E2E: School-specific ability UI - buttons, banked bonuses, display notes."""
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = [pytest.mark.rolls]
 
@@ -9,7 +9,7 @@ pytestmark = [pytest.mark.rolls]
 def _create_char(page, live_server_url, name, school, knack_overrides=None, skill_overrides=None):
     """Create a character with a specific school and navigate to the sheet."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, school)
@@ -1080,7 +1080,7 @@ def test_merchant_spend_one_vp_preserves_existing_dice(page, live_server_url):
 def _make_merchant_5th_dan(page, live_server_url, name):
     """Create a merchant with Dan=5 (all three school knacks at rank 5)."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "merchant")
@@ -4220,4 +4220,99 @@ def test_oppose_knowledge_roll_shows_penalty(page, live_server_url):
     total = page.evaluate("window._diceRoller.baseTotal")
     expected_penalty = total // 5
     assert str(expected_penalty) in modal_text
+
+
+# --- Initiative resets per-round ability pools ---
+
+def _init_reset_messages(page):
+    return page.locator('[data-testid="per-round-reset-messages"]')
+
+
+def test_mirumoto_3rd_dan_initiative_refills_round_points(page, live_server_url):
+    """Mirumoto 3rd Dan: rolling initiative while round points are below max
+    refills them to max and shows a refresh message in the result modal."""
+    _create_char(page, live_server_url, "MiruInitRefill", "mirumoto_bushi",
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
+    max_points = page.evaluate(
+        "() => window._trackingBridge.mirumotoRoundPointsMax"
+    )
+    assert max_points > 0  # sanity (2 * attack = 2)
+    # Simulate a partially-spent pool: fill to max then spend one.
+    page.evaluate(
+        "() => { const t = window._trackingBridge; t.mirumotoRoundPoints = t.mirumotoRoundPointsMax - 1; }"
+    )
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    msgs = _init_reset_messages(page)
+    assert msgs.is_visible()
+    assert "Mirumoto 3rd Dan points refreshed" in msgs.text_content()
+    # Pool should now be at max.
+    current = page.evaluate("() => window._trackingBridge.mirumotoRoundPoints")
+    assert current == max_points
+
+
+def test_mirumoto_3rd_dan_initiative_no_message_when_pool_full(page, live_server_url):
+    """No refresh message when the per-round pool was already at max."""
+    _create_char(page, live_server_url, "MiruInitFull", "mirumoto_bushi",
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
+    page.evaluate(
+        "() => { const t = window._trackingBridge; t.mirumotoRoundPoints = t.mirumotoRoundPointsMax; }"
+    )
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    assert not _init_reset_messages(page).is_visible()
+
+
+def test_priest_5th_dan_initiative_refreshes_conviction(page, live_server_url):
+    """Priest 5th Dan: initiative roll resets conviction_used to 0 and shows
+    the Conviction refresh message."""
+    _create_char(page, live_server_url, "Priest5Init", "priest",
+                 knack_overrides={"conviction": 5, "otherworldliness": 5, "pontificate": 5})
+    # Spend 3 conviction via the tracking bridge, which persists to the DB.
+    page.evaluate("() => window._trackingBridge.setCount('conviction', 3)")
+    # Sanity: pool reflects the spend.
+    used_before = page.evaluate("() => window._trackingBridge.getCount('conviction')")
+    assert used_before == 3
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    msgs = _init_reset_messages(page)
+    assert msgs.is_visible()
+    assert "Conviction pool refreshed" in msgs.text_content()
+    used_after = page.evaluate("() => window._trackingBridge.getCount('conviction')")
+    assert used_after == 0
+
+
+def test_priest_5th_dan_initiative_no_message_when_conviction_unspent(page, live_server_url):
+    """No Conviction refresh message when none was spent."""
+    _create_char(page, live_server_url, "Priest5NoSpend", "priest",
+                 knack_overrides={"conviction": 5, "otherworldliness": 5, "pontificate": 5})
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    assert not _init_reset_messages(page).is_visible()
+
+
+def test_priest_4th_dan_initiative_does_not_reset_conviction(page, live_server_url):
+    """Priest below 5th Dan: conviction is per-day, not per-round, so
+    initiative must NOT reset it."""
+    _create_char(page, live_server_url, "Priest4Init", "priest",
+                 knack_overrides={"conviction": 4, "otherworldliness": 4, "pontificate": 4})
+    page.evaluate("() => window._trackingBridge.setCount('conviction', 2)")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    assert not _init_reset_messages(page).is_visible()
+    used_after = page.evaluate("() => window._trackingBridge.getCount('conviction')")
+    assert used_after == 2
+
+
+def test_non_initiative_roll_does_not_trigger_reset(page, live_server_url):
+    """Only initiative rolls trigger per-round resets. A skill roll must not
+    refill the Mirumoto 3rd Dan pool."""
+    _create_char(page, live_server_url, "MiruSkillNoReset", "mirumoto_bushi",
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3},
+                 skill_overrides={"bragging": 1})
+    # Pool starts at 0 by default; do not fill it.
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    assert not _init_reset_messages(page).is_visible()
+    current = page.evaluate("() => window._trackingBridge.mirumotoRoundPoints")
+    assert current == 0
     _restore_dice(page)

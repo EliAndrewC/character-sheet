@@ -1,6 +1,6 @@
 """E2E: Advanced sheet display — stipend, tooltips, XP colors, version editing, disadvantage display."""
 
-from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply
+from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply, start_new_character
 import pytest
 
 pytestmark = [pytest.mark.status_display, pytest.mark.xp_summary, pytest.mark.version_history, pytest.mark.tracking]
@@ -20,7 +20,7 @@ def test_stipend_tooltip(page, live_server_url):
 def test_stipend_with_household_wealth(page, live_server_url):
     """Stipend changes with Household Wealth campaign advantage."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "HW Stipend")
     select_school(page, "akodo_bushi")
@@ -34,7 +34,7 @@ def test_stipend_with_household_wealth(page, live_server_url):
 def test_stipend_with_merchant_school(page, live_server_url):
     """Stipend changes with Merchant school."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Merchant Stipend")
     select_school(page, "merchant")
@@ -47,7 +47,7 @@ def test_stipend_with_merchant_school(page, live_server_url):
 def test_xp_overspend_red(page, live_server_url):
     """XP overspend shown in red on character sheet."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Overspend Sheet")
     select_school(page, "akodo_bushi")
@@ -66,7 +66,7 @@ def test_xp_overspend_red(page, live_server_url):
 def test_disadvantages_green(page, live_server_url):
     """Disadvantage XP shown with green styling on character sheet."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Dis Green")
     select_school(page, "akodo_bushi")
@@ -80,7 +80,7 @@ def test_disadvantages_green(page, live_server_url):
 def test_disadvantage_listed_on_sheet(page, live_server_url):
     """Disadvantages listed with names on the sheet."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Dis Listed")
     select_school(page, "akodo_bushi")
@@ -94,7 +94,7 @@ def test_disadvantage_listed_on_sheet(page, live_server_url):
 def test_advantage_detail_inline_on_sheet(page, live_server_url):
     """Advantage detail text shown inline on character sheet."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Detail Inline")
     select_school(page, "akodo_bushi")
@@ -111,7 +111,7 @@ def test_advantage_detail_inline_on_sheet(page, live_server_url):
 def test_campaign_advantage_xp_on_sheet(page, live_server_url):
     """Campaign advantage XP reflected in character sheet totals."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Camp Adv Sheet")
     select_school(page, "akodo_bushi")
@@ -164,7 +164,7 @@ def test_version_edit_escape_cancels(page, live_server_url):
 def test_unlucky_toggle(page, live_server_url):
     """Unlucky toggle shown for characters with Unlucky disadvantage."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Unlucky Char")
     select_school(page, "akodo_bushi")

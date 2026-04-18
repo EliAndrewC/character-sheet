@@ -1,6 +1,6 @@
 """E2E: Advanced tracking — per-adventure counters, toggles, reset, boundary conditions."""
 
-from tests.e2e.helpers import select_school, click_plus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 import pytest
 
 pytestmark = pytest.mark.tracking
@@ -9,7 +9,7 @@ def _create_character_with_lucky(page, live_server_url):
     """Create and apply a character with the Lucky advantage."""
 
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Lucky Character")
     select_school(page, "akodo_bushi")
@@ -21,7 +21,7 @@ def _create_character_with_lucky(page, live_server_url):
 def test_serious_wounds_increment_decrement(page, live_server_url):
     """Serious wounds + and - work correctly."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     select_school(page, "akodo_bushi")
     page.wait_for_selector('text="Saved"', timeout=5000)
@@ -44,7 +44,7 @@ def test_serious_wounds_increment_decrement(page, live_server_url):
 def test_serious_wounds_persist(page, live_server_url):
     """Serious wounds persist across reload."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     select_school(page, "akodo_bushi")
     page.wait_for_selector('text="Saved"', timeout=5000)
@@ -61,7 +61,7 @@ def test_serious_wounds_persist(page, live_server_url):
 def test_void_points_persist(page, live_server_url):
     """Void points persist across reload."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     select_school(page, "akodo_bushi")
     page.wait_for_selector('text="Saved"', timeout=5000)
@@ -79,7 +79,7 @@ def test_void_points_persist(page, live_server_url):
 def test_void_points_max_enforced(page, live_server_url):
     """Void points + button disabled at max (lowest ring)."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     select_school(page, "akodo_bushi")
     page.wait_for_selector('text="Saved"', timeout=5000)
@@ -96,7 +96,7 @@ def test_void_points_max_enforced(page, live_server_url):
 def test_wound_minus_disabled_at_zero(page, live_server_url):
     """Wound - button disabled when at 0."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     select_school(page, "akodo_bushi")
     page.wait_for_selector('text="Saved"', timeout=5000)
@@ -158,7 +158,7 @@ def _create_togashi_3rd_dan(page, live_server_url, precepts=2):
     """Togashi Ise Zumi 3rd Dan with a per-day athletics raise pool of 4*precepts."""
     from tests.e2e.helpers import select_school, click_plus, apply_changes
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Togashi3D Tracker")
     select_school(page, "togashi_ise_zumi")
@@ -254,7 +254,7 @@ def test_non_per_day_counter_has_no_reset_button(page, live_server_url):
     # Brotherhood of Shinsei Monk has otherworldliness as a school knack
     from tests.e2e.helpers import select_school, click_plus, apply_changes
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Shinsei OW")
     select_school(page, "brotherhood_of_shinsei_monk")

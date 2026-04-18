@@ -1,13 +1,13 @@
 """E2E: School ring interactions — fixed ring, multi-ring dropdown, changing schools."""
 
-from tests.e2e.helpers import select_school
+from tests.e2e.helpers import select_school, start_new_character
 import pytest
 
 pytestmark = pytest.mark.school_rings
 
 def _go_to_editor(page, live_server_url):
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
 
 

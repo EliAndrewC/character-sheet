@@ -1,7 +1,7 @@
 """E2E: Attack modal - opens for attack types, probability table, damage roll."""
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = [pytest.mark.rolls]
 
@@ -9,7 +9,7 @@ pytestmark = [pytest.mark.rolls]
 def _create_attacker(page, live_server_url, name="Attacker", school="akodo_bushi"):
     """Create a character with attack rank 2 and bragging 1, apply, stay on sheet."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, school)

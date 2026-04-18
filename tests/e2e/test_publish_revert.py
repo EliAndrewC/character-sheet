@@ -1,6 +1,6 @@
 """E2E: Apply Changes redirects to view sheet, revert works via modal."""
 
-from tests.e2e.helpers import select_school, apply_changes
+from tests.e2e.helpers import select_school, apply_changes, start_new_character
 import pytest
 
 pytestmark = [pytest.mark.apply_changes, pytest.mark.version_history]
@@ -9,7 +9,7 @@ def _create_character(page, live_server_url, name="Test Character"):
     """Create a character, fill name and school, wait for autosave."""
 
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "akodo_bushi")

@@ -3,7 +3,7 @@
 import re
 import pytest
 
-from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply
+from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply, start_new_character
 
 pytestmark = [pytest.mark.groups]
 
@@ -119,7 +119,7 @@ def test_party_thoughtless_inline_on_other_tact(page, live_server_url):
     character's Tact skill row."""
     # Character A: takes Thoughtless and has Tact rank > 0 (so Tact appears)
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "ThoughtlessOne")
     select_school(page, "akodo_bushi")
@@ -131,7 +131,7 @@ def test_party_thoughtless_inline_on_other_tact(page, live_server_url):
 
     # Character B: same group, takes Tact 1
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "TactPartner")
     select_school(page, "akodo_bushi")
@@ -153,7 +153,7 @@ def test_party_priest_5th_dan_ally_conviction_button(page, live_server_url):
     button on ally roll modals. Spending it raises the ally's roll by 1."""
     # Character A: Priest at 5th Dan (all school knacks at rank 5)
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "High Priest")
     select_school(page, "priest")
@@ -166,7 +166,7 @@ def test_party_priest_5th_dan_ally_conviction_button(page, live_server_url):
 
     # Character B: same group, takes Bragging 1
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "RegularAlly")
     select_school(page, "akodo_bushi")
@@ -229,7 +229,7 @@ def test_party_priest_2nd_dan_grants_bragging_free_raise(page, live_server_url):
     line and the dice-roll formula."""
     # Character A: Priest at 2nd Dan (conviction/otherworldliness/pontificate rank 2)
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "PriestAlly")
     select_school(page, "priest")
@@ -242,7 +242,7 @@ def test_party_priest_2nd_dan_grants_bragging_free_raise(page, live_server_url):
 
     # Character B: same group, takes Bragging 1
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "BraggingPartner")
     select_school(page, "akodo_bushi")
@@ -271,7 +271,7 @@ def test_self_thoughtless_inline_on_own_tact(page, live_server_url):
     """A character with Thoughtless sees the +20 note on their own Tact row,
     NOT on Sincerity."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "SelfThoughtless")
     select_school(page, "akodo_bushi")
@@ -294,7 +294,7 @@ def test_no_party_effects_section_present(page, live_server_url):
     """The standalone Party Effects section is removed entirely — no character
     should ever show it, even with group-effect disadvantages."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "NoSectionTest")
     select_school(page, "akodo_bushi")
