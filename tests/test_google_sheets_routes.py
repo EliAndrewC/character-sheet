@@ -261,6 +261,214 @@ class TestCallback:
         char = query_db(client).filter(Character.id == char_id).first()
         assert char.google_sheet_is_stale is True
 
+    @patch("app.routes.google_sheets.httpx.AsyncClient")
+    def test_missing_user_after_state_check(self, mock_client_cls, client, engine):
+        """State/cookies OK but the request has no authenticated user — an
+        unauthenticated client can still have the state cookie. Redirect as
+        auth_failed."""
+        from fastapi.testclient import TestClient
+        from sqlalchemy.orm import sessionmaker
+        from app.database import get_db
+        from app.main import app
+
+        connection = engine.connect()
+        transaction = connection.begin()
+        TestSession = sessionmaker(bind=connection)
+
+        def _override():
+            s = TestSession()
+            try:
+                yield s
+            finally:
+                s.close()
+
+        app.dependency_overrides[get_db] = _override
+        with TestClient(app) as c:  # no X-Test-User header
+            c.cookies.set("google_oauth_state", "s1")
+            c.cookies.set("google_export_char_id", "1")
+            resp = c.get(
+                "/auth/google/callback?code=x&state=s1", follow_redirects=False
+            )
+        assert resp.status_code == 303
+        assert "sheets_error=auth_failed" in resp.headers["location"]
+
+        transaction.rollback()
+        connection.close()
+        app.dependency_overrides.clear()
+
+    def test_missing_google_credentials_in_callback(self, client):
+        char_id = _create_character(client)
+        client.cookies.set("google_oauth_state", "s1")
+        client.cookies.set("google_export_char_id", str(char_id))
+        with patch.dict(os.environ, {"GOOGLE_CLIENT_ID": "", "GOOGLE_CLIENT_SECRET": ""}, clear=False):
+            resp = client.get(
+                "/auth/google/callback?code=c&state=s1", follow_redirects=False
+            )
+        assert resp.status_code == 303
+        assert "sheets_error=api_failed" in resp.headers["location"]
+
+    @patch("app.routes.google_sheets.httpx.AsyncClient")
+    def test_empty_access_token_is_auth_failed(self, mock_client_cls, client):
+        char_id = _create_character(client)
+        client.cookies.set("google_oauth_state", "s1")
+        client.cookies.set("google_export_char_id", str(char_id))
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {}  # no access_token
+        mock_http = AsyncMock()
+        mock_http.post.return_value = mock_response
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_http
+
+        with patch.dict(os.environ, {
+            "GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "secret",
+        }):
+            resp = client.get(
+                "/auth/google/callback?code=c&state=s1", follow_redirects=False
+            )
+        assert resp.status_code == 303
+        assert "sheets_error=auth_failed" in resp.headers["location"]
+
+    @patch("app.routes.google_sheets.httpx.AsyncClient")
+    def test_character_deleted_between_export_start_and_callback(
+        self, mock_client_cls, client
+    ):
+        """If the character is deleted while the user is on Google's consent
+        screen, the callback redirects with not_found instead of exploding."""
+        char_id = _create_character(client)
+        # Delete the character before the callback fires
+        session = client._test_session_factory()
+        session.query(Character).filter(Character.id == char_id).delete()
+        session.commit()
+
+        client.cookies.set("google_oauth_state", "s1")
+        client.cookies.set("google_export_char_id", str(char_id))
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"access_token": "tok"}
+        mock_http = AsyncMock()
+        mock_http.post.return_value = mock_response
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_http
+
+        with patch.dict(os.environ, {
+            "GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "secret",
+        }):
+            resp = client.get(
+                "/auth/google/callback?code=c&state=s1", follow_redirects=False
+            )
+        assert resp.status_code == 303
+        assert "sheets_error=not_found" in resp.headers["location"]
+
+    @patch("app.routes.google_sheets.create_spreadsheet")
+    @patch("app.routes.google_sheets.httpx.AsyncClient")
+    def test_callback_loads_knacks_and_skills(self, mock_client_cls, mock_create, client):
+        """A fully-populated character exercises the knack loop and skill_rolls
+        loop during callback."""
+        # Seed a character with school + skills + knacks
+        cid = _create_character(client)
+        session = client._test_session_factory()
+        char = session.query(Character).filter(Character.id == cid).first()
+        char.school = "akodo_bushi"
+        char.school_ring_choice = "Water"
+        char.ring_water = 3
+        char.knacks = {"double_attack": 2, "feint": 2, "iaijutsu": 2}
+        char.skills = {"bragging": 3, "etiquette": 2}
+        session.commit()
+
+        client.cookies.set("google_oauth_state", "s1")
+        client.cookies.set("google_export_char_id", str(cid))
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"access_token": "tok"}
+        mock_http = AsyncMock()
+        mock_http.post.return_value = mock_response
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_http
+
+        mock_create.return_value = "https://docs.google.com/spreadsheets/d/xyz/edit"
+
+        with patch.dict(os.environ, {
+            "GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "secret",
+        }):
+            resp = client.get(
+                "/auth/google/callback?code=c&state=s1", follow_redirects=False
+            )
+        assert resp.status_code == 303
+        # create_spreadsheet was called with non-empty skill_rolls & char_knacks
+        _, _, char_dict, _, char_knacks, _, _, _, skill_rolls = mock_create.call_args.args[:9]
+        assert len(char_knacks) == 3  # akodo_bushi has 3 school knacks
+        assert "bragging" in skill_rolls
+
+    @patch("app.routes.google_sheets.create_spreadsheet")
+    @patch("app.routes.google_sheets.httpx.AsyncClient")
+    def test_sheet_url_without_d_segment_stored_without_id(
+        self, mock_client_cls, mock_create, client
+    ):
+        """When create_spreadsheet returns a URL that lacks the ``/d/<id>/``
+        segment, we still redirect successfully but don't persist a sheet_id.
+        This exercises the ``if len(parts) > 1`` branch."""
+        cid = _create_character(client)
+        client.cookies.set("google_oauth_state", "s1")
+        client.cookies.set("google_export_char_id", str(cid))
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"access_token": "tok"}
+        mock_http = AsyncMock()
+        mock_http.post.return_value = mock_response
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_http
+        mock_create.return_value = "https://docs.google.com/weird-url"
+
+        with patch.dict(os.environ, {
+            "GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "secret",
+        }):
+            resp = client.get(
+                "/auth/google/callback?code=c&state=s1", follow_redirects=False
+            )
+        assert resp.status_code == 303
+        assert "sheets_url=" in resp.headers["location"]
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.google_sheet_id is None  # Not set because URL has no /d/
+
+
+class TestExportStartPermissionDenied:
+    def test_non_owner_non_admin_forbidden(self, client):
+        from app.models import User
+        session = client._test_session_factory()
+        session.add(User(discord_id="999", discord_name="owner", display_name="Owner"))
+        session.commit()
+        cid = _create_character(client)
+        # Re-own the character to someone else
+        s2 = client._test_session_factory()
+        char = s2.query(Character).filter(Character.id == cid).first()
+        char.owner_discord_id = "999"
+        s2.commit()
+        with patch.dict(os.environ, {"GOOGLE_CLIENT_ID": "test-client-id"}):
+            resp = client.get(
+                f"/auth/google/export/{cid}",
+                headers={"X-Test-User": "test_user_1:Test User 1"},
+                follow_redirects=False,
+            )
+        assert resp.status_code == 403
+
+
+class TestKeepaliveEndpoint:
+    def test_keepalive_returns_ok(self, client):
+        resp = client.get("/auth/google/keepalive")
+        assert resp.status_code == 200
+        assert resp.text == "ok"
+
+
+class TestApiFailureAtCallback:
     @patch("app.routes.google_sheets.create_spreadsheet")
     @patch("app.routes.google_sheets.httpx.AsyncClient")
     def test_api_failure_returns_error(self, mock_client_cls, mock_create, client):

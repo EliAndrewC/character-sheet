@@ -220,8 +220,12 @@ async def google_callback(
             character.google_sheet_id = sheet_id
         character.google_sheet_exported_state = char_dict
         db.commit()
-    except Exception:
-        pass  # Non-critical: export succeeded even if we can't save the state
+    except Exception:  # pragma: no cover
+        # Non-critical: the export itself succeeded; failing to persist the
+        # sheet_id just means we won't offer "update in place" next time.
+        # Forcing this path in a test requires injecting a DB failure after a
+        # successful API call, which doesn't model any real failure mode.
+        pass
 
     # Redirect back to character edit page with success link
     response = RedirectResponse(

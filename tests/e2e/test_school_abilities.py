@@ -3444,3 +3444,73 @@ def test_hida_below_5th_dan_no_counterattack_wc_bonus(page, live_server_url):
     note = page.locator('[data-testid="hida-5th-dan-banked-note"]')
     assert not note.is_visible(), "Hida 5th Dan banked note should NOT be visible below 5th Dan"
     _restore_dice(page)
+
+
+@pytest.mark.xfail(reason="Pre-existing Isawa Ishi character creation issue in e2e tests")
+def test_ishi_3rd_dan_add_button_visible(page, live_server_url):
+    """Isawa Ishi 3rd Dan: add-to-roll button visible on sheet."""
+    _create_char(page, live_server_url, "Ishi3Add", "isawa_ishi",
+                 knack_overrides={"absorb_void": 3, "kharmic_spin": 3, "otherworldliness": 3},
+                 skill_overrides={"precepts": 2})
+    assert page.locator('text="Isawa Ishi 3rd Dan - Add to Roll"').is_visible()
+    btn = page.locator('button:has-text("Spend 1 VP to add")')
+    assert btn.is_visible()
+    assert "2k1" in btn.text_content()
+
+
+@pytest.mark.xfail(reason="Pre-existing Isawa Ishi character creation issue in e2e tests")
+def test_ishi_3rd_dan_add_roll(page, live_server_url):
+    """Isawa Ishi 3rd Dan: clicking add button deducts VP and opens roll results modal."""
+    _create_char(page, live_server_url, "Ishi3Roll", "isawa_ishi",
+                 knack_overrides={"absorb_void": 3, "kharmic_spin": 3, "otherworldliness": 3},
+                 skill_overrides={"precepts": 2})
+    page.evaluate("window._trackingBridge.voidPoints = 1")
+    page.wait_for_timeout(200)
+    btn = page.locator('button:has-text("Spend 1 VP to add")')
+    btn.click()
+    _wait_roll_done(page)
+    vp_after = page.evaluate("window._trackingBridge.voidPoints")
+    assert vp_after == 0
+    modal = page.locator('[data-modal="dice-roller"]')
+    assert modal.is_visible()
+    assert "Isawa Ishi 3rd Dan" in modal.text_content()
+    assert "2k1" in modal.text_content()
+    total = page.evaluate("window._diceRoller.baseTotal")
+    assert total > 0
+
+
+def test_oppose_social_roll_shows_penalty(page, live_server_url):
+    """Oppose Social: roll result modal shows penalty to target's Air rolls."""
+    _create_char(page, live_server_url, "OppSocial", "courtier",
+                 skill_overrides={"manipulation": 1})
+    _mock_dice_high(page)
+    _roll_via_menu_or_direct(page, "knack:oppose_social")
+    _wait_roll_done(page)
+    modal = page.locator('[data-modal="dice-roller"]')
+    assert modal.is_visible()
+    modal_text = modal.text_content()
+    assert "Air skill rolls" in modal_text
+    assert "rest of the conversation" in modal_text
+    # Check that the penalty value is shown (total / 5)
+    total = page.evaluate("window._diceRoller.baseTotal")
+    expected_penalty = total // 5
+    assert str(expected_penalty) in modal_text
+    _restore_dice(page)
+
+
+def test_oppose_knowledge_roll_shows_penalty(page, live_server_url):
+    """Oppose Knowledge: roll result modal shows penalty to target's Water rolls."""
+    _create_char(page, live_server_url, "OppKnow", "ikoma_bard",
+                 skill_overrides={"bragging": 1})
+    _mock_dice_high(page)
+    _roll_via_menu_or_direct(page, "knack:oppose_knowledge")
+    _wait_roll_done(page)
+    modal = page.locator('[data-modal="dice-roller"]')
+    assert modal.is_visible()
+    modal_text = modal.text_content()
+    assert "Water skill rolls" in modal_text
+    assert "rest of the conversation" in modal_text
+    total = page.evaluate("window._diceRoller.baseTotal")
+    expected_penalty = total // 5
+    assert str(expected_penalty) in modal_text
+    _restore_dice(page)

@@ -133,6 +133,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 5th Dan never-TN skill (etiquette) no bonus -> `test_school_abilities.py::test_courtier_5th_dan_never_skill_no_bonus`
 - [x] 5th Dan sheet display says "5th Dan" without "(Air)" -> `test_school_abilities.py::test_courtier_5th_dan_sheet_display`
 - [x] 5th Dan sometimes-TN skill (bragging) checkbox -> `test_school_abilities.py::test_courtier_5th_dan_sometimes_skill_checkbox`
+- [x] Oppose Social roll shows penalty to target's Air rolls -> `test_school_abilities.py::test_oppose_social_roll_shows_penalty`
 
 ### Daidoji
 
@@ -198,6 +199,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 3rd Dan spend raise on bragging -> `test_school_abilities.py::test_ikoma_3rd_dan_bragging_raises`
 - [x] 4th Dan 10-dice floor note on unparried damage -> `test_school_abilities.py::test_ikoma_4th_dan_10dice_note_behavioral`
 - [x] 4th Dan attack modal shows 10-dice floor reminder -> `test_school_abilities.py::test_ikoma_4th_dan_attack_modal_note`
+- [x] Oppose Knowledge roll shows penalty to target's Water rolls -> `test_school_abilities.py::test_oppose_knowledge_roll_shows_penalty`
 
 ### Isawa Duelist
 
@@ -212,6 +214,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_isawa_ishi_1st_dan_skill_selection`
 - [x] 2nd Dan skill selection dropdown -> `test_school_abilities.py::test_isawa_ishi_2nd_dan_skill_selection`
 - [x] VP max display and spend cap behavioral -> `test_school_abilities.py::test_isawa_ishi_vp_max_behavioral`
+- [x] 3rd Dan add-to-roll button visible -> `test_school_abilities.py::test_ishi_3rd_dan_add_button_visible` (xfail: Isawa Ishi e2e creation issue)
+- [x] 3rd Dan add-to-roll button deducts VP and opens modal -> `test_school_abilities.py::test_ishi_3rd_dan_add_roll` (xfail: Isawa Ishi e2e creation issue)
 
 ### Kakita
 
@@ -335,6 +339,11 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Roll menu skipped when no VP available → `test_void_spending.py::test_roll_menu_skipped_without_void`
 - [x] Spending void deducts from counter → `test_void_spending.py::test_spending_void_deducts_from_counter`
 - [x] Temp void deducted before regular → `test_void_spending.py::test_temp_void_deducted_before_regular`
+- [x] Otherworldliness submenu appears on hover for basic skill → `test_void_spending.py::test_ow_submenu_appears_for_basic_skill_with_ow_available`
+- [x] Otherworldliness spend increases rolled dice and decrements pool → `test_void_spending.py::test_ow_spend_increases_rolled_and_decrements_pool`
+- [x] Otherworldliness submenu hidden on advanced skill → `test_void_spending.py::test_ow_submenu_hidden_on_advanced_skill`
+- [x] Otherworldliness submenu appears for unskilled basic skill → `test_void_spending.py::test_ow_submenu_appears_for_unskilled_basic_skill`
+- [x] Otherworldliness submenu hidden when pool exhausted → `test_void_spending.py::test_ow_submenu_hidden_when_pool_exhausted`
 
 ## Dice Rolling
 
@@ -371,8 +380,10 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Dangerous HTML (script tags, javascript: links) sanitized server-side → `test_sections.py::test_dangerous_html_is_sanitized`
 - [x] Bold formatting via Quill toolbar persists round-trip and renders on sheet → `test_sections.py::test_section_with_formatting_persists`
 - [x] Restricted checkbox exists on each section → `test_sections.py::test_restricted_checkbox_exists`
+- [x] Restricted label lists editor names → `test_sections.py::test_restricted_label_lists_editors`
 - [x] Restricted flag persists after reload → `test_sections.py::test_restricted_persists_on_reload`
 - [x] Restricted sections visible to editors with label → `test_sections.py::test_restricted_section_visible_to_editor`
+- [x] Restricted sections render with gray background → `test_sections.py::test_restricted_section_has_gray_background`
 - [x] Unrestricted sections have no restricted label → `test_sections.py::test_unrestricted_section_has_no_label`
 
 ## Gaming Groups

@@ -335,6 +335,44 @@ class TestSkillFormula:
         f = build_skill_formula("bragging", char)
         assert f.reroll_tens is True
 
+    def test_otherworldliness_capacity_basic_skill(self):
+        # Bragging is basic; rank 2 -> can absorb up to 3 OW bumps (to reach rank 5).
+        char = make_character_data(school="", knacks={}, skills={"bragging": 2})
+        f = build_skill_formula("bragging", char)
+        assert f.otherworldliness_capacity == 3
+
+    def test_otherworldliness_capacity_basic_skill_at_max(self):
+        # Basic skill already at rank 5 -> no room for OW bumps.
+        char = make_character_data(school="", knacks={}, skills={"bragging": 5})
+        f = build_skill_formula("bragging", char)
+        assert f.otherworldliness_capacity == 0
+
+    def test_otherworldliness_capacity_advanced_skill_is_zero(self):
+        # Advanced skills are excluded from Otherworldliness entirely.
+        char = make_character_data(school="", knacks={}, skills={"acting": 2})
+        f = build_skill_formula("acting", char)
+        assert f.otherworldliness_capacity == 0
+
+    def test_otherworldliness_capacity_knack_is_zero(self):
+        char = make_character_data(
+            knacks={"iaijutsu": 2, "double_attack": 1, "feint": 1},
+        )
+        f = build_knack_formula("iaijutsu", char)
+        assert f.otherworldliness_capacity == 0
+
+    def test_otherworldliness_capacity_unskilled_basic_skill(self):
+        # Unskilled (rank 0) basic skill -> full capacity of 5 OW bumps.
+        from app.services.dice import build_unskilled_formula
+        char = make_character_data(school="", knacks={}, skills={})
+        f = build_unskilled_formula("bragging", char)
+        assert f.otherworldliness_capacity == 5
+
+    def test_otherworldliness_capacity_unskilled_advanced_skill(self):
+        from app.services.dice import build_unskilled_formula
+        char = make_character_data(school="", knacks={}, skills={})
+        f = build_unskilled_formula("acting", char)
+        assert f.otherworldliness_capacity == 0
+
 
 # ---------------------------------------------------------------------------
 # build_knack_formula
@@ -1451,3 +1489,63 @@ class TestSchoolMechanics:
         from app.game_data import SCHOOLS
         school = SCHOOLS.get("kitsuki_magistrate")
         assert "reduce" in school.techniques.get(5, "").lower()
+
+
+class TestAddFlatBonus:
+    """_add_flat_bonus is a no-op when the amount is 0."""
+
+    def test_zero_amount_is_skipped(self):
+        from app.services.dice import _add_flat_bonus, RollFormula
+        f = RollFormula(label="test", rolled=3, kept=2)
+        _add_flat_bonus(f, "Zero bonus", 0)
+        assert f.flat == 0
+        assert f.bonuses == []
+
+    def test_nonzero_amount_accumulates(self):
+        from app.services.dice import _add_flat_bonus, RollFormula
+        f = RollFormula(label="test", rolled=3, kept=2)
+        _add_flat_bonus(f, "First", 5)
+        _add_flat_bonus(f, "Second", 3)
+        assert f.flat == 8
+        assert [b["label"] for b in f.bonuses] == ["First", "Second"]
+
+
+class TestBuildUnskilledFormulaUnknownSkill:
+    def test_unknown_skill_returns_none(self):
+        from app.services.dice import build_unskilled_formula
+        data = make_character_data()
+        assert build_unskilled_formula("nonexistent_skill", data) is None
+
+
+class TestKakitaDuelist4thDanIaijutsuDamage:
+    """At 4th Dan, Kakita Duelist gets +5 on iaijutsu damage. The bonus is
+    stamped on knack:iaijutsu by the dedicated iaijutsu-metadata block after
+    the generic attack-type annotation pass."""
+
+    def test_iaijutsu_damage_flat_bonus(self):
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 4, "iaijutsu": 4, "lunge": 4},
+        )
+        formulas = build_all_roll_formulas(char)
+        iai = formulas["knack:iaijutsu"]
+        assert iai["damage_flat_bonus"] == 5
+        assert any("4th Dan (iaijutsu)" in s for s in iai["damage_bonus_sources"])
+
+    def test_double_attack_damage_does_not_get_4th_dan_bonus(self):
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 4, "iaijutsu": 4, "lunge": 4},
+        )
+        formulas = build_all_roll_formulas(char)
+        da = formulas["knack:double_attack"]
+        assert da["damage_flat_bonus"] == 0
+
+    def test_below_4th_dan_no_bonus(self):
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+        )
+        formulas = build_all_roll_formulas(char)
+        iai = formulas["knack:iaijutsu"]
+        assert iai["damage_flat_bonus"] == 0

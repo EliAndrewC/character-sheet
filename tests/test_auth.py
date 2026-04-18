@@ -9,6 +9,7 @@ from app.services.auth import (
     is_whitelisted,
     is_admin,
     can_edit_character,
+    format_editor_list_text,
 )
 
 
@@ -69,6 +70,59 @@ class TestCanEditCharacter:
             granted_editors=[],
             admin_ids=["999"],
         )
+
+
+class TestFormatEditorListText:
+    def test_no_extra_editors(self):
+        # Only the owner-viewer and admins - reads "you and the GM"
+        assert format_editor_list_text(
+            viewer_id="111",
+            all_editors=[],
+            admin_ids=["999"],
+            resolve_name=lambda _id: "",
+        ) == "you and the GM"
+
+    def test_one_extra_editor(self):
+        assert format_editor_list_text(
+            viewer_id="111",
+            all_editors=["222"],
+            admin_ids=["999"],
+            resolve_name=lambda _id: "Alice" if _id == "222" else "",
+        ) == "you, the GM, and Alice"
+
+    def test_two_extra_editors(self):
+        assert format_editor_list_text(
+            viewer_id="111",
+            all_editors=["222", "333"],
+            admin_ids=["999"],
+            resolve_name=lambda _id: {"222": "Alice", "333": "Bob"}.get(_id, ""),
+        ) == "you, the GM, Alice, and Bob"
+
+    def test_viewer_excluded_from_list(self):
+        # The viewer is in all_editors (e.g. they're a non-owner editor) but shows as "you"
+        assert format_editor_list_text(
+            viewer_id="222",
+            all_editors=["222", "333"],
+            admin_ids=["999"],
+            resolve_name=lambda _id: {"333": "Bob"}.get(_id, ""),
+        ) == "you, the GM, and Bob"
+
+    def test_admin_excluded_from_list(self):
+        # Admins are shown as "the GM", not by name
+        assert format_editor_list_text(
+            viewer_id="111",
+            all_editors=["999"],
+            admin_ids=["999"],
+            resolve_name=lambda _id: "GmPerson",
+        ) == "you and the GM"
+
+    def test_empty_name_falls_back_to_id(self):
+        assert format_editor_list_text(
+            viewer_id="111",
+            all_editors=["222"],
+            admin_ids=["999"],
+            resolve_name=lambda _id: "",
+        ) == "you, the GM, and 222"
 
 
 class TestUserModel:
@@ -262,3 +316,197 @@ class TestTestAuthBypass:
         resp = client.post("/characters", follow_redirects=False)
         assert resp.status_code == 303
         assert "/edit" in resp.headers["location"]
+
+
+class TestLoginRoute:
+    def test_login_missing_client_id(self, client, monkeypatch):
+        """If DISCORD_CLIENT_ID is unset, /auth/login returns a 500 error."""
+        monkeypatch.delenv("DISCORD_CLIENT_ID", raising=False)
+        resp = client.get("/auth/login", follow_redirects=False)
+        assert resp.status_code == 500
+        assert "not configured" in resp.text.lower()
+
+    def test_login_redirects_to_discord(self, client, monkeypatch):
+        """With DISCORD_CLIENT_ID set, /auth/login redirects to Discord authorize URL."""
+        monkeypatch.setenv("DISCORD_CLIENT_ID", "fake_client_id")
+        resp = client.get("/auth/login", follow_redirects=False)
+        assert resp.status_code == 307
+        assert resp.headers["location"].startswith("https://discord.com/api/oauth2/authorize")
+        assert "client_id=fake_client_id" in resp.headers["location"]
+        assert "oauth_state" in resp.cookies
+
+    def test_login_uses_forwarded_proto_and_host(self, client, monkeypatch):
+        """When behind a proxy, use the x-forwarded-proto and host headers."""
+        monkeypatch.setenv("DISCORD_CLIENT_ID", "fake_client_id")
+        resp = client.get(
+            "/auth/login",
+            follow_redirects=False,
+            headers={"x-forwarded-proto": "https", "host": "example.com"},
+        )
+        assert resp.status_code == 307
+        assert "https%3A%2F%2Fexample.com%2Fauth%2Fcallback" in resp.headers["location"]
+
+
+class _FakeHttpResponse:
+    def __init__(self, status_code, json_data=None):
+        self.status_code = status_code
+        self._json = json_data or {}
+
+    def json(self):
+        return self._json
+
+
+class _FakeAsyncClient:
+    """Replacement for httpx.AsyncClient that returns pre-programmed responses."""
+
+    token_response: _FakeHttpResponse | None = None
+    user_response: _FakeHttpResponse | None = None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return None
+
+    async def post(self, url, data=None, headers=None):
+        return _FakeAsyncClient.token_response
+
+    async def get(self, url, headers=None):
+        return _FakeAsyncClient.user_response
+
+
+class TestCallbackRoute:
+    """Exercises the /auth/callback error paths and happy path via a mocked httpx."""
+
+    def _setup_credentials(self, monkeypatch):
+        monkeypatch.setenv("DISCORD_CLIENT_ID", "fake_client_id")
+        monkeypatch.setenv("DISCORD_CLIENT_SECRET", "fake_secret")
+
+    def _patch_httpx(self, monkeypatch, token_resp, user_resp=None):
+        _FakeAsyncClient.token_response = token_resp
+        _FakeAsyncClient.user_response = user_resp
+        monkeypatch.setattr("app.routes.auth.httpx.AsyncClient", _FakeAsyncClient)
+
+    def test_missing_state_returns_400(self, client, monkeypatch):
+        self._setup_credentials(monkeypatch)
+        resp = client.get("/auth/callback?code=abc", follow_redirects=False)
+        assert resp.status_code == 400
+        assert "Invalid OAuth state" in resp.text
+
+    def test_mismatched_state_returns_400(self, client, monkeypatch):
+        self._setup_credentials(monkeypatch)
+        client.cookies.set("oauth_state", "expected_state")
+        resp = client.get(
+            "/auth/callback?code=abc&state=wrong_state", follow_redirects=False
+        )
+        assert resp.status_code == 400
+
+    def test_missing_client_credentials_returns_500(self, client, monkeypatch):
+        monkeypatch.delenv("DISCORD_CLIENT_ID", raising=False)
+        monkeypatch.delenv("DISCORD_CLIENT_SECRET", raising=False)
+        client.cookies.set("oauth_state", "st")
+        resp = client.get("/auth/callback?code=abc&state=st", follow_redirects=False)
+        assert resp.status_code == 500
+        assert "not configured" in resp.text.lower()
+
+    def test_token_exchange_failure_returns_400(self, client, monkeypatch):
+        self._setup_credentials(monkeypatch)
+        self._patch_httpx(monkeypatch, token_resp=_FakeHttpResponse(401))
+        client.cookies.set("oauth_state", "st")
+        resp = client.get("/auth/callback?code=bad&state=st", follow_redirects=False)
+        assert resp.status_code == 400
+        assert "token" in resp.text.lower()
+
+    def test_user_info_failure_returns_400(self, client, monkeypatch):
+        self._setup_credentials(monkeypatch)
+        self._patch_httpx(
+            monkeypatch,
+            token_resp=_FakeHttpResponse(200, {"access_token": "tok"}),
+            user_resp=_FakeHttpResponse(401),
+        )
+        client.cookies.set("oauth_state", "st")
+        resp = client.get("/auth/callback?code=ok&state=st", follow_redirects=False)
+        assert resp.status_code == 400
+        assert "user info" in resp.text.lower()
+
+    def test_non_whitelisted_user_rejected(self, client, monkeypatch):
+        self._setup_credentials(monkeypatch)
+        self._patch_httpx(
+            monkeypatch,
+            token_resp=_FakeHttpResponse(200, {"access_token": "tok"}),
+            user_resp=_FakeHttpResponse(200, {"id": "999999999", "username": "attacker"}),
+        )
+        client.cookies.set("oauth_state", "st")
+        resp = client.get("/auth/callback?code=ok&state=st", follow_redirects=False)
+        assert resp.status_code == 403
+        assert "not authorized" in resp.text.lower()
+
+    def test_happy_path_creates_user_and_session(self, client, monkeypatch):
+        """Successful OAuth flow upserts a new user and sets a session cookie."""
+        self._setup_credentials(monkeypatch)
+        self._patch_httpx(
+            monkeypatch,
+            token_resp=_FakeHttpResponse(200, {"access_token": "tok"}),
+            user_resp=_FakeHttpResponse(
+                200, {"id": "183026066498125825", "username": "eli"}
+            ),
+        )
+        client.cookies.set("oauth_state", "st")
+        resp = client.get("/auth/callback?code=ok&state=st", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
+        assert "session_id" in resp.cookies
+
+        session = client._test_session_factory()
+        created = session.query(User).filter(User.discord_id == "183026066498125825").first()
+        assert created is not None
+        assert created.discord_name == "eli"
+
+    def test_happy_path_updates_existing_user(self, client, monkeypatch):
+        """If a user already exists, their discord_name is updated but no duplicate row is made."""
+        self._setup_credentials(monkeypatch)
+        session = client._test_session_factory()
+        session.add(User(discord_id="183026066498125825", discord_name="old_name", display_name="Eli"))
+        session.commit()
+
+        self._patch_httpx(
+            monkeypatch,
+            token_resp=_FakeHttpResponse(200, {"access_token": "tok"}),
+            user_resp=_FakeHttpResponse(
+                200, {"id": "183026066498125825", "username": "new_name"}
+            ),
+        )
+        client.cookies.set("oauth_state", "st")
+        resp = client.get("/auth/callback?code=ok&state=st", follow_redirects=False)
+        assert resp.status_code == 303
+
+        session2 = client._test_session_factory()
+        rows = session2.query(User).filter(User.discord_id == "183026066498125825").all()
+        assert len(rows) == 1
+        assert rows[0].discord_name == "new_name"
+
+
+class TestLogoutRoute:
+    def test_logout_with_session_deletes_row(self, client):
+        """Logging out clears the session cookie AND deletes the server-side AuthSession row."""
+        from app.models import Session as AuthSession
+
+        session = client._test_session_factory()
+        session.add(AuthSession(session_id="abc123", discord_id="183026066498125825"))
+        session.commit()
+
+        client.cookies.set("session_id", "abc123")
+        resp = client.get("/auth/logout", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
+
+        session2 = client._test_session_factory()
+        remaining = session2.query(AuthSession).filter(AuthSession.session_id == "abc123").first()
+        assert remaining is None
+
+    def test_logout_without_session_still_redirects(self, client):
+        """Logout with no session cookie should still redirect to home cleanly."""
+        client.cookies.clear()
+        resp = client.get("/auth/logout", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"

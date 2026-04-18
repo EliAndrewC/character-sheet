@@ -7,7 +7,7 @@ character edit permissions.
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 
 def _get_list_from_env(key: str) -> List[str]:
@@ -79,6 +79,34 @@ def get_all_editors(
 ) -> List[str]:
     """Merge character-level editors with owner's account-level grants."""
     return list(set(character_editor_ids + owner_granted_ids))
+
+
+def format_editor_list_text(
+    viewer_id: str,
+    all_editors: List[str],
+    admin_ids: List[str],
+    resolve_name: Callable[[str], str],
+) -> str:
+    """Build the "you and the GM" / "you, the GM, and Alice" label text.
+
+    The viewer is always "you"; admins are collapsed into "the GM". Any
+    other granted editors are listed by display name (falling back to the
+    raw discord id if resolve_name returns an empty string).
+    """
+    extras = []
+    seen = set()
+    for editor_id in all_editors:
+        if editor_id == viewer_id or editor_id in admin_ids or editor_id in seen:
+            continue
+        seen.add(editor_id)
+        name = resolve_name(editor_id) or editor_id
+        extras.append(name)
+
+    if not extras:
+        return "you and the GM"
+    if len(extras) == 1:
+        return f"you, the GM, and {extras[0]}"
+    return "you, the GM, " + ", ".join(extras[:-1]) + f", and {extras[-1]}"
 
 
 def can_edit_character(

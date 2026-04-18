@@ -357,3 +357,297 @@ class TestNotesRows:
         rows = _build_notes_rows(data)
         labels = [r[0]["userEnteredValue"]["stringValue"] for r in rows if r]
         assert "Empty" not in labels
+
+
+# ---------------------------------------------------------------------------
+# Status modifier rows (rank/recognition/honor modifiers surfaced in overview)
+# ---------------------------------------------------------------------------
+
+class TestOverviewStatusModifiers:
+    """When the effective status has modifiers (rank/recognition/honor), they
+    render as indented sub-rows under the main status lines."""
+
+    def test_rank_modifier_rendered(self):
+        data = make_character_data(disadvantages=["bad_reputation"])
+        char = _FakeCharacter(data)
+        school = SCHOOLS.get("akodo_bushi")
+        knacks = _make_knacks("akodo_bushi", data["knacks"])
+        effective = compute_effective_status(data)
+        rows = _build_overview_rows(char, data, school, knacks, 1, effective, {})
+        found = False
+        for row in rows:
+            if len(row) >= 2:
+                label = row[0].get("userEnteredValue", {}).get("stringValue", "")
+                val = row[1].get("userEnteredValue", {}).get("stringValue", "")
+                if "Rank modifier" in label and "Bad Reputation" in val:
+                    found = True
+                    break
+        assert found
+
+
+# ---------------------------------------------------------------------------
+# Unknown advantage/disadvantage IDs are silently skipped
+# ---------------------------------------------------------------------------
+
+class TestAdvantageRowsUnknownIds:
+    def test_unknown_advantage_id_skipped(self):
+        """An advantage ID not in ADVANTAGES nor CAMPAIGN_ADVANTAGES is ignored."""
+        data = make_character_data(advantages=["lucky", "mystery_adv_that_was_removed"])
+        rows = _build_advantages_rows(data, {})
+        # Lucky appears
+        assert any(
+            row and row[0].get("userEnteredValue", {}).get("stringValue") == "Lucky"
+            for row in rows
+        )
+        # Mystery ID does not appear in any form
+        for row in rows:
+            for cell in row:
+                val = cell.get("userEnteredValue", {}).get("stringValue", "")
+                assert "mystery_adv" not in val.lower()
+
+    def test_unknown_disadvantage_id_skipped(self):
+        data = make_character_data(disadvantages=["proud", "mystery_dis_that_was_removed"])
+        rows = _build_advantages_rows(data, {})
+        assert any(
+            row and row[0].get("userEnteredValue", {}).get("stringValue") == "Proud"
+            for row in rows
+        )
+        for row in rows:
+            for cell in row:
+                val = cell.get("userEnteredValue", {}).get("stringValue", "")
+                assert "mystery_dis" not in val.lower()
+
+    def test_campaign_disadvantage_gets_campaign_suffix(self):
+        data = make_character_data(campaign_disadvantages=["peasantborn"])
+        rows = _build_advantages_rows(data, {})
+        found = False
+        for row in rows:
+            val = row[0].get("userEnteredValue", {}).get("stringValue", "") if row else ""
+            if "Peasantborn" in val and "(campaign)" in val:
+                found = True
+                break
+        assert found
+
+
+# ---------------------------------------------------------------------------
+# XP rows — note items are skipped inside subsections
+# ---------------------------------------------------------------------------
+
+class TestXpRowsSubsectionNote:
+    """Lines in a subsection marked with ``"note": True`` are informational
+    hints for the UI and must be omitted from the spreadsheet."""
+
+    def test_subsection_note_row_is_skipped(self):
+        data = make_character_data()
+        # Hand-crafted breakdown: a subsection containing a note row and a
+        # regular row. The note row should not appear in the output.
+        xp_breakdown = {
+            "rings": {"label": "Rings", "total": 0, "rows": []},
+            "school_knacks": {"label": "School Knacks", "total": 0, "rows": []},
+            "skills": {
+                "label": "Skills", "total": 5,
+                "subsections": [
+                    {"label": "Basic Skills", "rows": [
+                        {"xp": 5, "label": "Bragging", "from_val": 0, "to_val": 1},
+                        {"xp": 0, "label": "This is a note", "note": True},
+                    ]},
+                    {"label": "Advanced Skills", "rows": []},
+                ],
+            },
+            "combat_skills": {"label": "Attack / Parry", "total": 0, "rows": []},
+            "advantages": {"label": "Advantages", "total": 0, "rows": []},
+            "honor_rank_recognition": {
+                "label": "Honor / Rank / Recognition", "total": 0, "rows": [],
+            },
+            "disadvantages": {"label": "Disadvantages", "total": 0, "rows": []},
+            "grand_total": 5,
+        }
+        rows = _build_xp_rows(xp_breakdown, data)
+        note_found = False
+        bragging_found = False
+        for row in rows:
+            for cell in row:
+                val = cell.get("userEnteredValue", {}).get("stringValue", "")
+                if "This is a note" in val:
+                    note_found = True
+                if val == "Bragging":
+                    bragging_found = True
+        assert bragging_found
+        assert not note_found
+
+
+# ---------------------------------------------------------------------------
+# Low-level request builders for the Sheets batchUpdate API
+# ---------------------------------------------------------------------------
+
+class TestSheetsApiRequestBuilders:
+    def test_sheet_properties(self):
+        from app.services.sheets import _sheet_properties
+        out = _sheet_properties("My Tab", 3)
+        assert out["properties"]["sheetId"] == 3
+        assert out["properties"]["title"] == "My Tab"
+        assert out["properties"]["gridProperties"]["frozenRowCount"] == 1
+
+    def test_col_width_requests(self):
+        from app.services.sheets import _col_width_requests
+        reqs = _col_width_requests(5, [100, 200, 300])
+        assert len(reqs) == 3
+        assert reqs[0]["updateDimensionProperties"]["range"]["sheetId"] == 5
+        assert reqs[0]["updateDimensionProperties"]["properties"]["pixelSize"] == 100
+        assert reqs[1]["updateDimensionProperties"]["range"]["startIndex"] == 1
+        assert reqs[2]["updateDimensionProperties"]["properties"]["pixelSize"] == 300
+
+    def test_col_width_requests_empty(self):
+        from app.services.sheets import _col_width_requests
+        assert _col_width_requests(5, []) == []
+
+    def test_rows_to_update_cells(self):
+        from app.services.sheets import _rows_to_update_cells, _str_cell
+        rows = [[_str_cell("A"), _str_cell("B")], [], [_str_cell("C")]]
+        req = _rows_to_update_cells(2, rows)
+        assert req["updateCells"]["start"]["sheetId"] == 2
+        assert len(req["updateCells"]["rows"]) == 3
+        # Empty row gets a single blank cell (Sheets API requires at least one value)
+        assert len(req["updateCells"]["rows"][1]["values"]) == 1
+
+    def test_merge_title_request(self):
+        from app.services.sheets import _merge_title_request
+        req = _merge_title_request(sheet_id=7, num_cols=4)
+        rng = req["mergeCells"]["range"]
+        assert rng["sheetId"] == 7
+        assert rng["endColumnIndex"] == 4
+        assert req["mergeCells"]["mergeType"] == "MERGE_ALL"
+
+    def test_clear_sheet_request(self):
+        from app.services.sheets import _clear_sheet_request
+        req = _clear_sheet_request(4)
+        assert req["updateCells"]["range"]["sheetId"] == 4
+        assert "userEnteredValue" in req["updateCells"]["fields"]
+
+    def test_unmerge_all_request(self):
+        from app.services.sheets import _unmerge_all_request
+        req = _unmerge_all_request(9)
+        assert req["unmergeCells"]["range"]["sheetId"] == 9
+
+
+# ---------------------------------------------------------------------------
+# create_spreadsheet — full flow with mocked httpx client
+# ---------------------------------------------------------------------------
+
+class _FakeHttpResponse:
+    def __init__(self, status_code=200, json_data=None):
+        self.status_code = status_code
+        self._json = json_data or {}
+        self.text = ""
+
+    def json(self):
+        return self._json
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise Exception(f"HTTP {self.status_code}")
+
+
+class _FakeHttpClient:
+    """httpx.Client replacement: programs sequenced get/post responses."""
+
+    def __init__(self, timeout=None):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return None
+
+    # The test sets these class-level slots before each call.
+    get_response = None
+    post_responses: list = []  # sequential: first call returns [0], then [1], ...
+
+    def get(self, url, headers=None):
+        return _FakeHttpClient.get_response
+
+    def post(self, url, headers=None, json=None):
+        _FakeHttpClient.last_post_json = json
+        _FakeHttpClient.last_post_url = url
+        if _FakeHttpClient.post_responses:
+            return _FakeHttpClient.post_responses.pop(0)
+        return _FakeHttpResponse(200)
+
+
+class TestCreateSpreadsheet:
+    def _fixtures(self):
+        from app.services.status import compute_effective_status
+        from app.services.xp import calculate_xp_breakdown
+        data = make_character_data()
+        char = _FakeCharacter(data)
+        school = SCHOOLS.get("akodo_bushi")
+        knacks = _make_knacks("akodo_bushi", data["knacks"])
+        effective = compute_effective_status(data)
+        xp = calculate_xp_breakdown(data)
+        return data, char, school, knacks, effective, xp
+
+    def test_creates_new_spreadsheet(self, monkeypatch):
+        """No existing_sheet_id → POST to create, then batchUpdate."""
+        from app.services import sheets as sheets_mod
+        data, char, school, knacks, effective, xp = self._fixtures()
+
+        _FakeHttpClient.get_response = None
+        _FakeHttpClient.post_responses = [
+            _FakeHttpResponse(200, {
+                "spreadsheetId": "new-id",
+                "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/new-id/edit",
+            }),
+            _FakeHttpResponse(200, {}),  # batchUpdate
+        ]
+        monkeypatch.setattr(sheets_mod.httpx, "Client", _FakeHttpClient)
+
+        url = sheets_mod.create_spreadsheet(
+            "tok", char, data, school, knacks, 1, xp, effective, {},
+            existing_sheet_id=None,
+        )
+        assert url == "https://docs.google.com/spreadsheets/d/new-id/edit"
+
+    def test_updates_existing_spreadsheet(self, monkeypatch):
+        """existing_sheet_id fetches OK → reuses that sheet, no create POST."""
+        from app.services import sheets as sheets_mod
+        data, char, school, knacks, effective, xp = self._fixtures()
+
+        _FakeHttpClient.get_response = _FakeHttpResponse(200, {
+            "spreadsheetId": "old-id",
+            "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/old-id/edit",
+        })
+        _FakeHttpClient.post_responses = [_FakeHttpResponse(200, {})]  # batchUpdate
+        monkeypatch.setattr(sheets_mod.httpx, "Client", _FakeHttpClient)
+
+        url = sheets_mod.create_spreadsheet(
+            "tok", char, data, school, knacks, 1, xp, effective, {},
+            existing_sheet_id="old-id",
+        )
+        assert url == "https://docs.google.com/spreadsheets/d/old-id/edit"
+        # batchUpdate should have included a title update + clears
+        batch = _FakeHttpClient.last_post_json
+        req_types = {next(iter(r)) for r in batch["requests"]}
+        assert "updateSpreadsheetProperties" in req_types
+        assert "unmergeCells" in req_types
+
+    def test_falls_back_to_create_when_existing_sheet_gone(self, monkeypatch):
+        """If the provided existing_sheet_id returns 404, create a fresh sheet."""
+        from app.services import sheets as sheets_mod
+        data, char, school, knacks, effective, xp = self._fixtures()
+
+        _FakeHttpClient.get_response = _FakeHttpResponse(404, {})
+        _FakeHttpClient.post_responses = [
+            _FakeHttpResponse(200, {
+                "spreadsheetId": "fresh-id",
+                "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/fresh-id/edit",
+            }),
+            _FakeHttpResponse(200, {}),  # batchUpdate
+        ]
+        monkeypatch.setattr(sheets_mod.httpx, "Client", _FakeHttpClient)
+
+        url = sheets_mod.create_spreadsheet(
+            "tok", char, data, school, knacks, 1, xp, effective, {},
+            existing_sheet_id="dead-id",
+        )
+        assert "fresh-id" in url

@@ -23,7 +23,7 @@ from app.game_data import (
     Ring,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
-from app.services.auth import can_view_drafts, get_admin_ids, is_admin, can_edit_character
+from app.services.auth import can_view_drafts, get_admin_ids, is_admin, can_edit_character, format_editor_list_text
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.rolls import compute_skill_roll
 from app.services.status import compute_effective_status
@@ -214,11 +214,12 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         if knack_id in char_knacks:
             knack_rank = char_knacks[knack_id]["rank"]
             knack_name = char_knacks[knack_id]["data"].name
+            pool_max = knack_rank * 2 if knack_id == "otherworldliness" else knack_rank
             per_adventure.append({
                 "id": knack_id,
                 "name": knack_name,
                 "type": "counter",
-                "max": knack_rank,
+                "max": pool_max,
             })
 
     # Compute void points max and void-spend config
@@ -348,6 +349,9 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Ide Diplomat 3rd Dan: spend VP to subtract Xk1 from someone's roll
         "ide_subtract_roll": character.school == "ide_diplomat" and dan >= 3,
         "ide_subtract_x": (char_dict.get("skills") or {}).get("tact", 0) if character.school == "ide_diplomat" and dan >= 3 else 0,
+        # Isawa Ishi 3rd Dan: spend VP to add Xk1 to someone's roll
+        "ishi_add_roll": character.school == "isawa_ishi" and dan >= 3,
+        "ishi_add_x": (char_dict.get("skills") or {}).get("precepts", 0) if character.school == "isawa_ishi" and dan >= 3 else 0,
         # Kuni Witch Hunter 5th Dan: reflect damage
         "kuni_reflect_damage": character.school == "kuni_witch_hunter" and dan >= 5,
         # Hida 5th Dan: bank counterattack excess for wound check bonus
@@ -518,6 +522,14 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
     all_players = db.query(UserModel).order_by(UserModel.display_name).all()
     all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
 
+    name_by_id = {p.discord_id: (p.display_name or p.discord_name) for p in all_players}
+    editor_list_text = format_editor_list_text(
+        viewer_id=user["discord_id"],
+        all_editors=all_editors,
+        admin_ids=get_admin_ids(),
+        resolve_name=lambda _id: name_by_id.get(_id, ""),
+    )
+
     return _templates().TemplateResponse(
         request=request,
         name="character/edit.html",
@@ -544,6 +556,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "exclusive_pairs": EXCLUSIVE_PAIRS,
             "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
             "is_first_version": not character.is_published,
+            "editor_list_text": editor_list_text,
         },
     )
 

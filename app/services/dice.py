@@ -95,6 +95,7 @@ class RollFormula:
     courtier_5th_dan_optional: int = 0
     doji_5th_dan_always: bool = False
     doji_5th_dan_optional: bool = False
+    otherworldliness_capacity: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -219,6 +220,7 @@ def build_unskilled_formula(
         flat=flat,
         reroll_tens=False,
         no_reroll_reason="unskilled",
+        otherworldliness_capacity=5 if not skill_def.is_advanced else 0,
     )
 
 
@@ -252,6 +254,7 @@ def build_skill_formula(
         rolled=rank + ring_val,
         kept=ring_val,
         flat=0,
+        otherworldliness_capacity=max(0, 5 - rank) if not skill_def.is_advanced else 0,
         **_reroll_fields(character_data),
     )
 
@@ -743,11 +746,6 @@ def build_all_roll_formulas(
             # per-variant additions don't bleed into other attack types.
             variant_damage_flat = damage_flat_bonus
             variant_damage_sources = list(damage_bonus_sources)
-
-            # Kakita Duelist 4th Dan: +5 on iaijutsu damage
-            if school_id == "kakita_duelist" and dan >= 4 and bare == "iaijutsu":
-                variant_damage_flat += FREE_RAISE_VALUE
-                variant_damage_sources.append("+5 from 4th Dan (iaijutsu)")
 
             formula_dict["is_attack_type"] = True
             formula_dict["attack_variant"] = bare

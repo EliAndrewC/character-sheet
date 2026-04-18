@@ -504,3 +504,66 @@ class TestRunBackup:
             # we verify the function completes without leaving state)
         finally:
             os.unlink(db_path)
+
+    @patch("app.services.backup._get_s3_client")
+    def test_retention_actually_deletes_old_keys(self, mock_get_client):
+        """When ``compute_retention`` flags old backups for deletion, each one
+        must actually be ``delete_object``-ed on the S3 client."""
+        from tests.test_backup import _dt, _key
+
+        client = MagicMock()
+        mock_get_client.return_value = client
+        paginator = MagicMock()
+        client.get_paginator.return_value = paginator
+
+        # Seed 30+ backups across Jan-Feb-Mar-Apr 2026. Anything beyond
+        # daily+weekly+monthly tiers drops to yearly and loses duplicates.
+        old_keys = []
+        for month in (1, 2, 3, 4):
+            for day in range(1, 9):
+                old_keys.append({"Key": _key(_dt(2026, month, day))})
+        paginator.paginate.return_value = [{"Contents": old_keys}]
+
+        fd, db_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE t (i INTEGER)")
+        conn.commit()
+        conn.close()
+
+        try:
+            result = run_backup(db_path, "bucket", "us-east-1")
+            assert result["success"] is True
+            # Some old backups must have been deleted to satisfy retention.
+            assert client.delete_object.called
+        finally:
+            os.unlink(db_path)
+
+
+class TestGetS3Client:
+    """``_get_s3_client`` imports boto3 lazily and returns a real client.
+    This exercises the import branch that's otherwise always patched out."""
+
+    def test_returns_s3_client(self):
+        pytest.importorskip("boto3")
+        from app.services.backup import _get_s3_client
+        client = _get_s3_client("us-east-1")
+        assert client is not None
+        assert client.meta.region_name == "us-east-1"
+        assert client.meta.service_model.service_name == "s3"
+
+
+class TestGetLastBackupTimeWithUnparseableKeys:
+    @patch("app.services.backup.list_backup_keys")
+    def test_unparseable_keys_are_skipped(self, mock_list):
+        """Keys that don't match the expected format are silently ignored,
+        not raised. The latest valid timestamp still wins."""
+        mock_list.return_value = [
+            "backups/l7r-2026-04-15T03-00-00Z.db",
+            "backups/garbage_filename.db",  # unparseable - no l7r- prefix
+            "backups/l7r-NOT-A-TIMESTAMP.db",  # unparseable - bad ts format
+            "backups/l7r-2026-04-16T03-00-00Z.db",  # latest valid
+        ]
+        from datetime import datetime, timezone
+        result = get_last_backup_time("bucket", "us-east-1")
+        assert result == datetime(2026, 4, 16, 3, tzinfo=timezone.utc)

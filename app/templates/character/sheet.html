@@ -694,10 +694,23 @@
                 <div class="text-sm text-ink/60 mb-1">Ide 3rd Dan - Subtract from Roll</div>
                 <div class="flex items-center gap-2">
                     <button type="button"
-                            @click="const t = window._trackingBridge; if (!t || (t.anyVPAvailable?.() || 0) <= 0) return; window._diceRoller?.rollIdeSubtract({ x: {{ school_abilities.get('ide_subtract_x', 0) }} })"
+                            @click="const t = window._trackingBridge; if (!t || (t.anyVPAvailable?.() || 0) <= 0) return; window._diceRoller?.rollSpendVPForXk1({ x: {{ school_abilities.get('ide_subtract_x', 0) }}, title: 'Ide 3rd Dan - Subtract from Roll' })"
                             :disabled="(window._trackingBridge?.anyVPAvailable?.() || 0) <= 0"
                             class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                         Spend 1 VP to subtract <span>{{ school_abilities.get('ide_subtract_x', 0) }}</span>k1
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('ishi_add_roll') %}
+            <div class="mt-2 pt-2 border-t border-ink/10">
+                <div class="text-sm text-ink/60 mb-1">Isawa Ishi 3rd Dan - Add to Roll</div>
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            @click="const t = window._trackingBridge; if (!t || (t.anyVPAvailable?.() || 0) <= 0) return; window._diceRoller?.rollSpendVPForXk1({ x: {{ school_abilities.get('ishi_add_x', 0) }}, title: 'Isawa Ishi 3rd Dan - Add to Roll' })"
+                            :disabled="(window._trackingBridge?.anyVPAvailable?.() || 0) <= 0"
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                        Spend 1 VP to add <span>{{ school_abilities.get('ishi_add_x', 0) }}</span>k1
                     </button>
                 </div>
             </div>
@@ -1208,7 +1221,8 @@
     <!-- SECTIONS (rich-text panels: Notes, Backstory, Allies, etc.) -->
     {% for sec in (character.sections or []) %}
     {% if not sec.get('restricted') or viewer_can_edit %}
-    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+    <section data-restricted="{{ '1' if sec.get('restricted') else '0' }}"
+             class="{{ 'bg-gray-200' if sec.get('restricted') else 'bg-white' }} rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">
             {{ sec.label or "Section" }}
             {% if sec.get('restricted') and viewer_can_edit %}
@@ -1381,17 +1395,51 @@
                     </button>
                 </div>
             </template>
-            <button type="button"
-                    @click="executeRoll(rollMenuKey, 0, null)"
-                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
-                Roll <span x-text="rollMenuTitle"></span>
-            </button>
-            <template x-for="opt in rollMenuOptions" :key="'r'+opt.count">
+            <div class="relative"
+                 @mouseenter="owHoverRow = 'roll'"
+                 @mouseleave="owHoverRow = null">
                 <button type="button"
-                        @click="executeRoll(rollMenuKey, opt.count, opt)"
-                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
-                    <span x-text="opt.label"></span>
+                        @click="executeRoll(rollMenuKey, 0, null)"
+                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                    <span>Roll <span x-text="rollMenuTitle"></span></span>
+                    <span x-show="getOwMax() > 0" class="text-xs text-accent" title="Otherworldliness available">&#9656;</span>
                 </button>
+                <div x-show="owHoverRow === 'roll' && getOwMax() > 0"
+                     x-cloak
+                     data-ow-submenu="roll"
+                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                    <template x-for="n in owRange(getOwMax())" :key="'owroll'+n">
+                        <button type="button"
+                                @click="executeRoll(rollMenuKey, 0, null, n)"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                            <span x-text="'Spend ' + n + ' Otherworldliness (skill rank ' + (owBaseSkillRank() + n) + ')'"></span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+            <template x-for="opt in rollMenuOptions" :key="'r'+opt.count">
+                <div class="relative"
+                     @mouseenter="owHoverRow = 'r' + opt.count"
+                     @mouseleave="owHoverRow = null">
+                    <button type="button"
+                            @click="executeRoll(rollMenuKey, opt.count, opt)"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent flex items-center justify-between gap-2">
+                        <span x-text="opt.label"></span>
+                        <span x-show="getOwMax() > 0" class="text-xs" title="Otherworldliness available">&#9656;</span>
+                    </button>
+                    <div x-show="owHoverRow === ('r' + opt.count) && getOwMax() > 0"
+                         x-cloak
+                         :data-ow-submenu="'r' + opt.count"
+                         class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                        <template x-for="n in owRange(getOwMax())" :key="'owr'+opt.count+'-'+n">
+                            <button type="button"
+                                    @click="executeRoll(rollMenuKey, opt.count, opt, n)"
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                <span x-text="'Spend ' + n + ' Otherworldliness (skill rank ' + (owBaseSkillRank() + n) + ')'"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
             </template>
             <template x-if="rollMenuHasParry">
                 <div class="border-t border-ink/10">
@@ -2781,6 +2829,15 @@
                             spent void point<span x-show="formula?.void_spent > 1">s</span>
                         </div>
 
+                        {# Otherworldliness spent on this roll #}
+                        <div x-show="formula?.ow_spent > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            Rolled +<span x-text="formula?.ow_spent"></span>
+                            from <span x-text="formula?.ow_spent"></span>
+                            spent Otherworldliness
+                        </div>
+
                         {# Mirumoto 5th Dan: +10 per VP on combat rolls #}
                         <div x-show="formula?.void_spent > 0 && voidSpendConfig.combat_vp_flat_bonus > 0" x-cloak
                              class="text-xs text-ink/70 list-disc list-inside mt-0.5">
@@ -2948,6 +3005,24 @@
                                 class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs">
                             Bank -10 TN on target (Ide Special)
                         </button>
+                    </div>
+
+                    {# Oppose Knowledge: show penalty applied to target's Water rolls #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:oppose_knowledge'" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
+                        Target's Water skill rolls are reduced by
+                        <span class="font-bold text-accent" x-text="Math.floor(baseTotal / 5)"></span>
+                        for the rest of the conversation
+                        <span class="text-xs text-ink/40">(result <span x-text="baseTotal"></span> / 5)</span>
+                    </div>
+
+                    {# Oppose Social: show penalty applied to target's Air rolls #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:oppose_social'" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
+                        Target's Air skill rolls are reduced by
+                        <span class="font-bold text-accent" x-text="Math.floor(baseTotal / 5)"></span>
+                        for the rest of the conversation
+                        <span class="text-xs text-ink/40">(result <span x-text="baseTotal"></span> / 5)</span>
                     </div>
 
                     {# Courtier 4th Dan: temp VP after successful manipulation #}
@@ -3483,6 +3558,8 @@
             rollMenuOptions: [],
             rollMenuHasStrike: false,
             rollMenuHasParry: false,
+            rollMenuOwCapacity: 0,
+            owHoverRow: null,
             voidSpendConfig: { cap: 0, worldliness_max: 0, combat_vp_flat_bonus: 0, wc_vp_free_raise: false },
             schoolAbilities: {},
             matsuBankedWcBonuses: [],
@@ -3656,7 +3733,29 @@
                 this.rollMenuOptions = options;
                 this.rollMenuHasStrike = hasStrike;
                 this.rollMenuHasParry = hasParry;
+                this.rollMenuOwCapacity = f.otherworldliness_capacity || 0;
+                this.owHoverRow = null;
                 this.rollMenuOpen = true;
+            },
+
+            getOwPoolAvail() {
+                const t = window._trackingBridge;
+                if (!t) return 0;
+                const entry = (t.perAdventure || []).find(a => a.id === 'otherworldliness');
+                if (!entry) return 0;
+                return Math.max(0, (entry.max || 0) - (t.getCount('otherworldliness') || 0));
+            },
+            getOwMax() {
+                return Math.min(this.rollMenuOwCapacity || 0, this.getOwPoolAvail());
+            },
+            owRange(n) {
+                const arr = [];
+                for (let i = 1; i <= n; i++) arr.push(i);
+                return arr;
+            },
+            owBaseSkillRank() {
+                // Derived from capacity: capacity = 5 - rank, so rank = 5 - capacity.
+                return 5 - (this.rollMenuOwCapacity || 0);
             },
 
             computeVoidOptions() {
@@ -3745,8 +3844,9 @@
                 this.runRoll();
             },
 
-            executeRoll(key, voidSpent, option) {
+            executeRoll(key, voidSpent, option, owSpent = 0) {
                 this.rollMenuOpen = false;
+                this.owHoverRow = null;
                 this.luckyUsedThisRoll = false;
                 this.courtier5thApplied = false;
                 this.dojiOpponentResult = 0;
@@ -3757,21 +3857,21 @@
                 this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
 
+                if (owSpent > 0) {
+                    const cap = f.otherworldliness_capacity || 0;
+                    const applied = Math.min(owSpent, cap);
+                    f.rolled += applied;
+                    f.ow_spent = applied;
+                    const t = window._trackingBridge;
+                    if (t && applied > 0) {
+                        t.setCount('otherworldliness', (t.getCount('otherworldliness') || 0) + applied);
+                    }
+                }
+
                 if (voidSpent > 0 && option) {
                     f.rolled += voidSpent;
                     f.kept += voidSpent;
                     f.void_spent = voidSpent;
-
-                    // Apply 10k10 caps client-side
-                    let overflowBonus = 0;
-                    if (f.rolled > 10) { f.kept += f.rolled - 10; f.rolled = 10; }
-                    if (f.kept > 10) {
-                        const overflow = f.kept - 10;
-                        overflowBonus = 2 * overflow;
-                        f.flat += overflowBonus;
-                        f.kept = 10;
-                    }
-                    f.void_overflow_bonus = overflowBonus;
 
                     // Mirumoto 5th Dan: +10 per VP on combat rolls (parry and knack combat rolls)
                     const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
@@ -3781,6 +3881,19 @@
 
                     // Deduct void points via tracking bridge
                     this.deductVoidPoints(option);
+                }
+
+                // Apply 10k10 caps client-side (after both OW and VP additions)
+                if (voidSpent > 0 || owSpent > 0) {
+                    let overflowBonus = 0;
+                    if (f.rolled > 10) { f.kept += f.rolled - 10; f.rolled = 10; }
+                    if (f.kept > 10) {
+                        const overflow = f.kept - 10;
+                        overflowBonus = 2 * overflow;
+                        f.flat += overflowBonus;
+                        f.kept = 10;
+                    }
+                    f.void_overflow_bonus = overflowBonus;
                 }
 
                 this.formula = f;
@@ -4913,7 +5026,7 @@
                 this.wcModalOpen = false;
             },
 
-            async rollIdeSubtract({ x }) {
+            async rollSpendVPForXk1({ x, title }) {
                 // Deduct 1 VP through deductVoidPoints so school hooks fire
                 // (e.g. Ide 5th Dan grants temp VP on regular VP spend).
                 // Priority: temp > regular > worldliness.
@@ -4923,7 +5036,7 @@
                 const fromWorldliness = (!fromTemp && !fromRegular) ? 1 : 0;
                 this.deductVoidPoints({ fromRegular, fromTemp, fromWorldliness });
 
-                this.title = 'Ide 3rd Dan - Subtract from Roll';
+                this.title = title;
                 this.formulaText = `${x}k1`;
                 this.formula = { rolled: x, kept: 1, flat: 0, reroll_tens: true, is_initiative: false };
                 this.raisesSpentThisRoll = 0;

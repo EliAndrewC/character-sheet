@@ -126,6 +126,78 @@ class TestDiffSummary:
         diffs = compute_diff_summary(old, new)
         assert any("name" in d.lower() for d in diffs)
 
+    def test_advantage_removed(self):
+        old = {"advantages": ["lucky"]}
+        new = {"advantages": []}
+        diffs = compute_diff_summary(old, new)
+        assert any("Removed advantage" in d and "Lucky" in d for d in diffs)
+
+    def test_advantage_removed_unknown_id_falls_back_to_label(self):
+        old = {"advantages": ["totally_made_up_adv"]}
+        new = {"advantages": []}
+        diffs = compute_diff_summary(old, new)
+        assert any("Totally Made Up Adv" in d for d in diffs)
+
+    def test_disadvantage_added(self):
+        old = {"disadvantages": []}
+        new = {"disadvantages": ["proud"]}
+        diffs = compute_diff_summary(old, new)
+        assert any("Added disadvantage" in d and "Proud" in d for d in diffs)
+
+    def test_disadvantage_added_unknown_id_falls_back_to_label(self):
+        old = {"disadvantages": []}
+        new = {"disadvantages": ["made_up_dis"]}
+        diffs = compute_diff_summary(old, new)
+        assert any("Made Up Dis" in d for d in diffs)
+
+    def test_campaign_advantage_added(self):
+        old = {"campaign_advantages": []}
+        new = {"campaign_advantages": ["highest_regard"]}
+        diffs = compute_diff_summary(old, new)
+        assert any("Added campaign advantage" in d and "Highest Regard" in d for d in diffs)
+
+    def test_campaign_advantage_added_unknown_id_falls_back_to_label(self):
+        old = {"campaign_advantages": []}
+        new = {"campaign_advantages": ["mystery_boon"]}
+        diffs = compute_diff_summary(old, new)
+        assert any("Mystery Boon" in d for d in diffs)
+
+    def test_campaign_advantage_removed(self):
+        old = {"campaign_advantages": ["highest_regard"]}
+        new = {"campaign_advantages": []}
+        diffs = compute_diff_summary(old, new)
+        assert any("Removed campaign advantage" in d and "Highest Regard" in d for d in diffs)
+
+    def test_campaign_advantage_removed_unknown_id_falls_back_to_label(self):
+        old = {"campaign_advantages": ["mystery_boon"]}
+        new = {"campaign_advantages": []}
+        diffs = compute_diff_summary(old, new)
+        assert any("Removed campaign advantage" in d and "Mystery Boon" in d for d in diffs)
+
+    def test_campaign_disadvantage_added(self):
+        old = {"campaign_disadvantages": []}
+        new = {"campaign_disadvantages": ["peasantborn"]}
+        diffs = compute_diff_summary(old, new)
+        assert any("Added campaign disadvantage" in d and "Peasantborn" in d for d in diffs)
+
+    def test_campaign_disadvantage_added_unknown_id_falls_back_to_label(self):
+        old = {"campaign_disadvantages": []}
+        new = {"campaign_disadvantages": ["mystery_curse"]}
+        diffs = compute_diff_summary(old, new)
+        assert any("Mystery Curse" in d for d in diffs)
+
+    def test_campaign_disadvantage_removed(self):
+        old = {"campaign_disadvantages": ["peasantborn"]}
+        new = {"campaign_disadvantages": []}
+        diffs = compute_diff_summary(old, new)
+        assert any("Removed campaign disadvantage" in d and "Peasantborn" in d for d in diffs)
+
+    def test_campaign_disadvantage_removed_unknown_id_falls_back_to_label(self):
+        old = {"campaign_disadvantages": ["mystery_curse"]}
+        new = {"campaign_disadvantages": []}
+        diffs = compute_diff_summary(old, new)
+        assert any("Removed campaign disadvantage" in d and "Mystery Curse" in d for d in diffs)
+
 
 class TestPublishCharacter:
     def test_first_publish(self, db):
@@ -202,6 +274,18 @@ class TestRevertCharacter:
         assert "revert" in v3.summary.lower()
         assert char.name == "V1 Name"
         assert char.published_state["name"] == "V1 Name"
+
+    def test_revert_with_unknown_version_id_raises(self, db):
+        char = Character(name="Target", school="akodo_bushi",
+                         school_ring_choice="Water", ring_water=3,
+                         owner_discord_id="123",
+                         knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+        db.add(char)
+        db.flush()
+        publish_character(char, db)
+
+        with pytest.raises(ValueError, match="Version 99999 not found"):
+            revert_character(char, 99999, db)
 
     def test_revert_restores_all_fields(self, db):
         char = Character(name="Original", school="akodo_bushi",

@@ -76,9 +76,20 @@ Available marks, which features they cover, and which test files they map to are
 
 ### Coverage Policy
 
-We target 100% branch coverage for all code that is actually exercised in tests. The only accepted exception is `database.py:get_db()`, which is overridden by the test fixture with an in-memory database - testing the real `get_db` would just test SQLAlchemy's session lifecycle, not our code.
+**Coverage must report 100%.** Either write a real test, or add `# pragma: no cover` with a one-line comment explaining why the line is untestable. The pragma forces the "why not" to be deliberate and visible in the diff, instead of hidden in a policy doc that drifts out of date.
 
-If a function is called at all during tests, every branch in that function must be covered. When adding new code, write tests that exercise all branches including error/edge cases (e.g. invalid inputs, boundary values, unknown IDs). Do not leave defensive branches untested.
+Qualifying reasons for `# pragma: no cover` (look at the existing uses for examples):
+- **Framework scaffolding overridden by tests** - e.g. `database.py:get_db()`, which the test fixture replaces with an in-memory engine. Testing the real body would just test SQLAlchemy's session lifecycle.
+- **First-run-on-old-schema migration branches** - e.g. the `ALTER TABLE ADD COLUMN` paths in `_migrate_add_columns`. Tests use a fresh in-memory DB where `create_all` covers every column, so these branches never fire. Exercising them requires staging a pre-migration schema snapshot, which doesn't catch real bugs.
+- **Import-time guards** that raise on malformed static data (e.g. the `SCHOOL_RING_OPTIONS` fallback in `game_data.py`). These fire only if someone mistypes the data at dev time.
+- **Defensive `except: pass` blocks** where the failure is non-critical and the trigger is a contrived DB/service injection that doesn't model a real failure mode.
+
+Do NOT use `# pragma: no cover` for:
+- Error paths you haven't gotten around to testing (write the test).
+- Rarely-hit branches that are still reachable (write the test).
+- Permission checks, validation, or any code that guards a security/data-integrity invariant (write the test).
+
+When adding new code, write tests that exercise all branches including error/edge cases (invalid inputs, boundary values, unknown IDs, permission denials). Prefer a real test over a pragma every time you have a choice.
 
 ## Development Workflow
 
