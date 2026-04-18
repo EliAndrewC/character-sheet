@@ -1734,6 +1734,8 @@ function characterForm() {
 // Sections (rich-text Notes / Backstory / Allies / etc.)
 // ---------------------------------------------------------------------------
 
+const EDITOR_LIST_TEXT = {{ editor_list_text|tojson }};
+
 class SectionsManager {
     constructor(containerId, emptyHintId, initialSections) {
         this.container = document.getElementById(containerId);
@@ -1764,7 +1766,7 @@ class SectionsManager {
             </div>
             <label class="flex items-center gap-2 text-xs text-ink/60 mb-2 cursor-pointer">
                 <input type="checkbox" class="section-restricted rounded text-accent" ${restricted ? 'checked' : ''}>
-                Restricted (only visible to you and the GM)
+                Restricted - only visible to editors (${SectionsManager.escapeAttr(EDITOR_LIST_TEXT)})
             </label>
             <div class="quill-host"></div>
         `;

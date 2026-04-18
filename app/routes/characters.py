@@ -251,12 +251,14 @@ async def autosave_character(
                          character.ring_earth, character.ring_water,
                          character.ring_void]
             if character.school in ("shugenja", "isawa_ishi"):
-                from app.game_data import void_points_max_shugenja, compute_dan
+                from app.game_data import void_points_max_shugenja, SCHOOLS
                 rings = {"Air": character.ring_air, "Fire": character.ring_fire,
                          "Earth": character.ring_earth, "Water": character.ring_water,
                          "Void": character.ring_void}
                 knacks = character.knacks or {}
-                dan = compute_dan(knacks) if knacks else 0
+                school_def = SCHOOLS.get(character.school)
+                school_knack_ranks = [knacks.get(k, 1) for k in school_def.school_knacks] if school_def else [0]
+                dan = min(school_knack_ranks) if school_knack_ranks else 0
                 character.current_void_points = void_points_max_shugenja(rings, dan)
             else:
                 character.current_void_points = min(ring_vals)

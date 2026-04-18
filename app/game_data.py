@@ -2377,8 +2377,14 @@ for _sid, _school in SCHOOLS.items():
         SCHOOL_RING_OPTIONS[_sid] = ["Air", "Fire", "Earth", "Water"]
     elif _school.school_ring == "Air or Water":
         SCHOOL_RING_OPTIONS[_sid] = ["Air", "Water"]
-    else:
-        SCHOOL_RING_OPTIONS[_sid] = ["Air", "Fire", "Earth", "Water", "Void"]
+    else:  # pragma: no cover
+        # Import-time guard: fires only if someone adds a school with a
+        # school_ring format this loop doesn't recognize. Can't test without
+        # monkey-patching SCHOOLS mid-import.
+        raise ValueError(
+            f"School {_sid!r} has unrecognized school_ring {_school.school_ring!r}; "
+            "add it to SCHOOL_RING_OPTIONS handling in game_data.py."
+        )
 
 
 # ---------------------------------------------------------------------------

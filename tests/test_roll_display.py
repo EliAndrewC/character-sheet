@@ -541,6 +541,88 @@ class TestDanComputation:
         assert compute_dan({}) == 0
 
 
+class TestCourtier5thDanAirBonus:
+    """Courtier 5th Dan: +Air flat on TN-always skills; noted as optional on TN-sometimes skills."""
+
+    def _courtier_at_5th_dan(self, **overrides):
+        data = make_character_data(
+            school="courtier",
+            school_ring_choice="Air",
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+            knacks={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+        )
+        data.update(overrides)
+        return data
+
+    def test_tn_always_skill_gets_flat_air_bonus(self):
+        data = self._courtier_at_5th_dan(skills={"manipulation": 3})
+        result = compute_skill_roll("manipulation", data)
+        assert "+4 from 5th Dan" in result.tooltip
+
+    def test_tn_sometimes_skill_gets_conditional_note(self):
+        """Skills that are neither always nor never TN/contested get a conditional note, not flat."""
+        data = self._courtier_at_5th_dan(skills={"bragging": 3})
+        result = compute_skill_roll("bragging", data)
+        assert "+4 from 5th Dan if TN/contested" in result.tooltip
+        assert "+4 from 5th Dan\n" not in result.tooltip
+
+    def test_tn_never_skill_gets_no_bonus(self):
+        """Etiquette/acting/history never contested - no 5th Dan bonus at all."""
+        data = self._courtier_at_5th_dan(skills={"etiquette": 3})
+        result = compute_skill_roll("etiquette", data)
+        assert "5th Dan" not in result.tooltip
+
+    def test_below_5th_dan_gets_no_bonus(self):
+        data = self._courtier_at_5th_dan(
+            knacks={"discern_honor": 4, "oppose_social": 4, "worldliness": 4},
+            skills={"manipulation": 3},
+        )
+        result = compute_skill_roll("manipulation", data)
+        assert "5th Dan" not in result.tooltip
+
+    def test_non_courtier_at_5th_dan_gets_no_bonus(self):
+        """Only Courtier school triggers this bonus, not any 5th Dan character."""
+        data = make_character_data(
+            school="akodo_bushi",
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+            knacks={"double_attack": 5, "feint": 5, "iaijutsu": 5},
+            skills={"manipulation": 3},
+        )
+        result = compute_skill_roll("manipulation", data)
+        assert "5th Dan" not in result.tooltip or "Courtier" not in result.tooltip
+
+
+class TestTenKTenCap:
+    """The L7R 10k10 cap: rolled > 10 folds into kept; kept > 10 becomes +2 flat per die."""
+
+    def test_rolled_over_ten_converts_excess_to_kept(self):
+        """Ring 6 + skill 6 = 12k6 rolled. Excess 2 moves to kept -> 10k8."""
+        data = make_character_data(
+            rings={"Air": 6, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+            skills={"bragging": 6},
+            honor=0.0,
+            recognition=0.0,
+        )
+        result = compute_skill_roll("bragging", data)
+        assert result.rolled == 10
+        assert result.kept == 8
+
+    def test_kept_over_ten_converts_to_flat_two_per_die(self):
+        """Pushing kept past 10: each excess kept die becomes +2 flat bonus."""
+        data = make_character_data(
+            rings={"Air": 10, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+            skills={"bragging": 4},
+            honor=0.0,
+            recognition=0.0,
+        )
+        result = compute_skill_roll("bragging", data)
+        # Base: 14 rolled, 10 kept; rolled cap -> 10k14; kept cap -> 10k10 + 2*4 = +8
+        assert result.rolled == 10
+        assert result.kept == 10
+        assert result.flat_bonus >= 8
+        assert "extra dice above 10k10" in result.tooltip
+
+
 class TestParryAttackRule:
     def test_parry_over_attack_plus_1_invalid(self):
         from app.services.xp import validate_character

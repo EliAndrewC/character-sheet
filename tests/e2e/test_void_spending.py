@@ -132,3 +132,144 @@ def test_temp_void_deducted_before_regular(page, live_server_url):
     regular_after = page.evaluate("window._trackingBridge?.voidPoints")
     assert temp_after == 0, "Temp void should be spent first"
     assert regular_after == 1, "Regular void should be untouched"
+
+
+# ---------------------------------------------------------------------------
+# Otherworldliness submenu (priests / monks / Isawa Ishi)
+# ---------------------------------------------------------------------------
+
+
+def _create_priest_with_bragging(page, live_server_url):
+    """Priest with OW knack rank 2 (pool = 4) and bragging rank 3 (OW capacity = 2)."""
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "OWPriest")
+    select_school(page, "priest")
+    click_plus(page, "knack_conviction", 1)       # rank 2
+    click_plus(page, "knack_otherworldliness", 1) # rank 2
+    click_plus(page, "knack_pontificate", 1)      # rank 2
+    click_plus(page, "skill_bragging", 3)         # rank 3
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Setup OW")
+
+
+def test_ow_submenu_appears_for_basic_skill_with_ow_available(page, live_server_url):
+    """Hovering a VP option on a basic skill reveals OW submenu options."""
+    _create_priest_with_bragging(page, live_server_url)
+    _wait_alpine(page)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    # Hover the "Roll" 0-VP row - submenu to the right should appear
+    page.locator('[data-ow-submenu="roll"]').wait_for(state='attached', timeout=2000)
+    page.locator('.fixed.z-50 >> text="Roll "').first.hover()
+    page.wait_for_timeout(200)
+    submenu = page.locator('[data-ow-submenu="roll"]')
+    assert submenu.is_visible(), "OW submenu should be visible on hover"
+    text = submenu.text_content()
+    assert "Spend 1 Otherworldliness" in text
+    assert "Spend 2 Otherworldliness" in text
+    # Only 2 options: capacity = 5 - rank(3) = 2
+    assert "Spend 3 Otherworldliness" not in text
+
+
+def test_ow_spend_increases_rolled_and_decrements_pool(page, live_server_url):
+    """Clicking an OW option rolls with +N rolled dice and deducts the pool."""
+    _create_priest_with_bragging(page, live_server_url)
+    _wait_alpine(page)
+    ow_before = page.evaluate(
+        "window._trackingBridge?.adventureState?.otherworldliness_used || 0"
+    )
+    assert ow_before == 0
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    page.locator('.fixed.z-50 >> text="Roll "').first.hover()
+    page.wait_for_timeout(200)
+    page.locator('[data-ow-submenu="roll"] button:has-text("Spend 2 Otherworldliness")').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    ow_after = page.evaluate("window._trackingBridge.adventureState.otherworldliness_used")
+    assert ow_after == 2, f"Expected 2 OW used, got {ow_after}"
+    # Verify the formula got the +2 rolled bump
+    ow_spent = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.formula) return d.formula.ow_spent;
+        }
+        return null;
+    }""")
+    assert ow_spent == 2
+
+
+def test_ow_submenu_hidden_on_advanced_skill(page, live_server_url):
+    """Advanced skills (e.g. acting) get no OW submenu even with OW available."""
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "OWAdvanced")
+    select_school(page, "priest")
+    click_plus(page, "knack_otherworldliness", 1)
+    click_plus(page, "skill_acting", 1)  # advanced skill
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Setup advanced")
+    _wait_alpine(page)
+    # Character starts with 2 VP - menu will open
+    page.locator('[data-roll-key="skill:acting"]').click()
+    page.wait_for_timeout(300)
+    # Roll row exists but submenu chevron should be hidden (no OW capacity)
+    ow_cap = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.rollMenuOwCapacity === 'number') return d.rollMenuOwCapacity;
+        }
+        return null;
+    }""")
+    assert ow_cap == 0, f"Advanced skill should have OW capacity 0, got {ow_cap}"
+
+
+def test_ow_submenu_appears_for_unskilled_basic_skill(page, live_server_url):
+    """OW submenu also appears when rolling a basic skill the character has no ranks in."""
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "OWUnskilled")
+    select_school(page, "priest")
+    click_plus(page, "knack_otherworldliness", 1)  # rank 2 -> pool 4
+    # Do NOT add any skill ranks - bragging stays at 0 (unskilled)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Setup unskilled")
+    _wait_alpine(page)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    page.locator('.fixed.z-50 >> text="Roll "').first.hover()
+    page.wait_for_timeout(200)
+    submenu = page.locator('[data-ow-submenu="roll"]')
+    assert submenu.is_visible(), "OW submenu should appear for unskilled basic skill"
+    text = submenu.text_content()
+    # Unskilled basic skill: capacity=5, pool=4, so 4 options (1..4)
+    assert "Spend 1 Otherworldliness" in text
+    assert "Spend 4 Otherworldliness" in text
+    assert "Spend 5 Otherworldliness" not in text  # pool-limited
+
+
+def test_ow_submenu_hidden_when_pool_exhausted(page, live_server_url):
+    """When the OW pool is fully spent, the submenu does not appear."""
+    _create_priest_with_bragging(page, live_server_url)
+    _wait_alpine(page)
+    # Exhaust the pool (rank 2 -> max 4)
+    page.evaluate("window._trackingBridge.setCount('otherworldliness', 4)")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    page.locator('.fixed.z-50 >> text="Roll "').first.hover()
+    page.wait_for_timeout(200)
+    submenu = page.locator('[data-ow-submenu="roll"]')
+    assert not submenu.is_visible(), "OW submenu should be hidden when pool exhausted"

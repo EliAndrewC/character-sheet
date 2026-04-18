@@ -211,6 +211,18 @@ def test_restricted_checkbox_exists(page, live_server_url):
     assert not checkbox.is_checked(), "Restricted should be unchecked by default"
 
 
+def test_restricted_label_lists_editors(page, live_server_url):
+    """The Restricted label spells out which editors can see the section."""
+    _go_to_editor_for_new_character(page, live_server_url, "RestrictedLabelTest")
+    _add_section(page, "Secrets", "Secret stuff.")
+    card = page.locator('#sections-container > div').first
+    label = card.locator('label:has(input.section-restricted)')
+    text = label.text_content().strip()
+    # Default: no extra editors shared, so reads "you and the GM"
+    assert "Restricted - only visible to editors (you and the GM)" in text, \
+        f"Got label: {text!r}"
+
+
 def test_restricted_persists_on_reload(page, live_server_url):
     """Checking 'Restricted' persists after reload."""
     _go_to_editor_for_new_character(page, live_server_url, "RestrictedPersist")
@@ -243,6 +255,29 @@ def test_restricted_section_visible_to_editor(page, live_server_url):
     assert "This is private." in body
     # The restricted label should be shown to editors
     assert "(restricted)" in body
+
+
+def test_restricted_section_has_gray_background(page, live_server_url):
+    """Restricted sections render with a gray background; normal sections stay white."""
+    _go_to_editor_for_new_character(page, live_server_url, "RestrictedBg")
+    _add_section(page, "Public Section", "Visible stuff.")
+    _add_section(page, "Private Section", "Hidden stuff.")
+    cards = page.locator('#sections-container > div')
+    cards.nth(1).locator('input.section-restricted').check()
+    _flush_autosave(page)
+    sheet_url = page.url.replace("/edit", "")
+    page.goto(sheet_url)
+    public_bg = page.evaluate("""() => {
+        const sec = document.querySelector('section[data-restricted="0"]');
+        return sec ? getComputedStyle(sec).backgroundColor : null;
+    }""")
+    restricted_bg = page.evaluate("""() => {
+        const sec = document.querySelector('section[data-restricted="1"]');
+        return sec ? getComputedStyle(sec).backgroundColor : null;
+    }""")
+    assert public_bg is not None and restricted_bg is not None
+    assert public_bg != restricted_bg, \
+        f"Restricted section bg ({restricted_bg}) should differ from public ({public_bg})"
 
 
 def test_unrestricted_section_has_no_label(page, live_server_url):
