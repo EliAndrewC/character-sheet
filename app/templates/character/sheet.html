@@ -1447,6 +1447,47 @@
                             </div>
                         </div>
                     </template>
+                    {# Athletics (Attack/Parry): rules p05 §Athletics — may be used to attack or parry. #}
+                    <template x-if="formulas['athletics:attack']">
+                        <div class="relative border-t border-ink/10"
+                             @mouseenter="athHoverRow = 'attack'"
+                             @mouseleave="athHoverRow = null">
+                            <button type="button"
+                                    data-athletics-combat="attack"
+                                    @click="rollMenuOpen = false; openAttackModal('athletics:attack')"
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
+                                Athletics (Attack)
+                                <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:attack']?.rolled || 0) + 'k' + (formulas['athletics:attack']?.kept || 0) + ')'"></span>
+                            </button>
+                        </div>
+                    </template>
+                    <template x-if="formulas['athletics:parry']">
+                        <div class="relative"
+                             @mouseenter="athHoverRow = 'parry'"
+                             @mouseleave="athHoverRow = null">
+                            <button type="button"
+                                    data-athletics-combat="parry"
+                                    @click="executeRoll('athletics:parry', 0, null)"
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                                <span>Athletics (Parry)
+                                    <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:parry']?.rolled || 0) + 'k' + (formulas['athletics:parry']?.kept || 0) + ')'"></span>
+                                </span>
+                                <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                            </button>
+                            <div x-show="athHoverRow === 'parry' && rollMenuOptions.length > 0"
+                                 x-cloak
+                                 data-athletics-void-submenu="parry"
+                                 class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                <template x-for="opt in rollMenuOptions" :key="'athparry'+opt.count">
+                                    <button type="button"
+                                            @click="executeRoll('athletics:parry', opt.count, opt)"
+                                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                        <span x-text="opt.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </template>
             <template x-if="rollMenuHasTogashiInit">
@@ -1480,7 +1521,7 @@
                 </div>
             </template>
             <div class="relative"
-                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasParry"
+                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasParry && !rollMenuHasAttackChoice"
                  @mouseenter="owHoverRow = 'roll'"
                  @mouseleave="owHoverRow = null">
                 <button type="button"
@@ -1502,7 +1543,7 @@
                     </template>
                 </div>
             </div>
-            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasParry ? [] : rollMenuOptions)" :key="'r'+opt.count">
+            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasParry || rollMenuHasAttackChoice ? [] : rollMenuOptions)" :key="'r'+opt.count">
                 <div class="relative"
                      @mouseenter="owHoverRow = 'r' + opt.count"
                      @mouseleave="owHoverRow = null">
@@ -1572,6 +1613,53 @@
                             </template>
                         </div>
                     </div>
+                    {# Athletics parry: only appears when the parry menu is for the regular ``parry`` key and an athletics:parry formula exists. #}
+                    <template x-if="rollMenuKey === 'parry' && formulas['athletics:parry']">
+                        <div class="relative border-t border-ink/10"
+                             @mouseenter="parryHoverRow = 'athletics'"
+                             @mouseleave="parryHoverRow = null">
+                            <button type="button"
+                                    data-parry-menu-athletics
+                                    @click="executeRoll('athletics:parry', 0, null)"
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                                <span>Athletics Parry
+                                    <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:parry']?.rolled || 0) + 'k' + (formulas['athletics:parry']?.kept || 0) + ')'"></span>
+                                </span>
+                                <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                            </button>
+                            <div x-show="parryHoverRow === 'athletics' && rollMenuOptions.length > 0"
+                                 x-cloak
+                                 data-parry-void-submenu="athletics"
+                                 class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                <template x-for="opt in rollMenuOptions" :key="'parryath'+opt.count">
+                                    <button type="button"
+                                            @click="executeRoll('athletics:parry', opt.count, opt)"
+                                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                        <span x-text="opt.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            {# Attack button opens a menu (instead of jumping straight to the modal) when an athletics:attack formula is available, letting the player choose regular vs athletics attack. #}
+            <template x-if="rollMenuHasAttackChoice">
+                <div data-attack-choice-menu>
+                    <button type="button"
+                            data-attack-choice="attack"
+                            @click="rollMenuOpen = false; openAttackModal('attack')"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10 font-medium">
+                        Roll Attack
+                        <span class="text-xs text-ink/50" x-text="'(' + (formulas.attack?.rolled || 0) + 'k' + (formulas.attack?.kept || 0) + ')'"></span>
+                    </button>
+                    <button type="button"
+                            data-attack-choice="athletics_attack"
+                            @click="rollMenuOpen = false; openAttackModal('athletics:attack')"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
+                        Athletics Attack
+                        <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:attack']?.rolled || 0) + 'k' + (formulas['athletics:attack']?.kept || 0) + ')'"></span>
+                    </button>
                 </div>
             </template>
         </div>
@@ -2002,9 +2090,10 @@
                             <label class="block text-sm font-medium mb-1">
                                 Opponent's Base TN
                                 <span x-show="atkIsDoubleAttack()" x-cloak class="text-xs text-ink/60 font-normal">(+20 for double attack)</span>
+                                <span x-show="atkIsAthleticsAttack()" x-cloak class="text-xs text-ink/60 font-normal">(athletics attack: TN = 5 + 10 &times; Parry)</span>
                             </label>
                             <div x-show="!atkShowCustomTN">
-                                <select x-model.number="atkTN" @change="if($event.target.value === 'other') { atkShowCustomTN = true; }"
+                                <select x-show="!atkIsAthleticsAttack()" x-model.number="atkTN" @change="if($event.target.value === 'other') { atkShowCustomTN = true; }"
                                         class="w-full border rounded px-2 py-1.5 text-sm">
                                     <option value="5">5 (Parry 0)</option>
                                     <option value="10">10 (Parry 1)</option>
@@ -2012,6 +2101,16 @@
                                     <option value="20">20 (Parry 3)</option>
                                     <option value="25">25 (Parry 4)</option>
                                     <option value="30">30 (Parry 5)</option>
+                                    <option value="other">Other...</option>
+                                </select>
+                                <select x-show="atkIsAthleticsAttack()" x-cloak x-model.number="atkTN" @change="if($event.target.value === 'other') { atkShowCustomTN = true; }"
+                                        class="w-full border rounded px-2 py-1.5 text-sm">
+                                    <option value="5">5 (Parry 0)</option>
+                                    <option value="15">15 (Parry 1)</option>
+                                    <option value="25">25 (Parry 2)</option>
+                                    <option value="35">35 (Parry 3)</option>
+                                    <option value="45">45 (Parry 4)</option>
+                                    <option value="55">55 (Parry 5)</option>
                                     <option value="other">Other...</option>
                                 </select>
                             </div>
@@ -4043,6 +4142,7 @@
             rollMenuHasParry: false,
             rollMenuHasTogashiInit: false,
             rollMenuHasAthleticsPicker: false,
+            rollMenuHasAttackChoice: false,
             athHoverRow: null,
             rollMenuOwCapacity: 0,
             owHoverRow: null,
@@ -4250,6 +4350,29 @@
                 // Initiative rolls directly (no void spending)
                 if (f.is_initiative) {
                     this.executeRoll(key, 0, null);
+                    return;
+                }
+
+                // Attack (regular) with athletics available: show a choice menu
+                // so the player can pick regular vs athletics attack. All other
+                // attack variants (double_attack, counterattack, lunge, iaijutsu
+                // strike, athletics:attack) jump straight to the modal.
+                if (key === 'attack' && this.formulas['athletics:attack']) {
+                    const pos = this._computeRollMenuPos(el);
+                    this.rollMenuKey = key;
+                    this.rollMenuTitle = f.label;
+                    this.rollMenuPos = pos;
+                    this.rollMenuOptions = [];
+                    this.rollMenuHasStrike = false;
+                    this.rollMenuHasParry = false;
+                    this.rollMenuHasTogashiInit = false;
+                    this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuHasAttackChoice = true;
+                    this.rollMenuOwCapacity = 0;
+                    this.owHoverRow = null;
+                    this.athHoverRow = null;
+                    this.parryHoverRow = null;
+                    this.rollMenuOpen = true;
                     return;
                 }
 
@@ -5251,13 +5374,26 @@
                 this.atkFailedParry = false;
                 this.atkIsawaTnTrade = false;
                 this.atkOtakuTradeDice = false;
-                this.atkParrySkill = Math.max(1, Math.floor((this.atkTN - 5) / 5));
+                // Athletics-attack TN = 5 + 10*parry; regular TN = 5 + 5*parry.
+                // Reset atkTN to a sane default if the previous value isn't one of
+                // the new variant's dropdown options (so the <select> isn't blank).
+                const validTNs = f.is_athletics_attack
+                    ? [5, 15, 25, 35, 45, 55] : [5, 10, 15, 20, 25, 30];
+                if (!validTNs.includes(this.atkTN)) {
+                    this.atkTN = f.is_athletics_attack ? 25 : 20;
+                }
+                const tnStep = f.is_athletics_attack ? 10 : 5;
+                this.atkParrySkill = Math.max(1, Math.floor((this.atkTN - 5) / tnStep));
                 this.atkShowCustomTN = false;
                 this.atkModalOpen = true;
             },
 
             atkIsDoubleAttack() {
                 return this.atkFormula?.attack_variant === 'double_attack';
+            },
+
+            atkIsAthleticsAttack() {
+                return this.atkFormula?.attack_variant === 'athletics_attack';
             },
 
             atkEffectiveTN() {

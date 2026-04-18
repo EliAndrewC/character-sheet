@@ -177,6 +177,75 @@ Each tab has its own column widths. Formatting uses `batchUpdate` with dark red 
 
 `Character.google_sheet_id` stores the spreadsheet ID of the most recent export. This enables a future feature where re-exporting updates the existing sheet instead of creating a new one. The `drive.file` scope grants access to files the app previously created, so re-authenticating gives access to the old sheet.
 
+## Character Import
+
+Players can import an existing character sheet into the app rather than re-entering it by hand. The importer accepts almost any document format, extracts structured fields with Gemini, and produces a Draft the user reviews before clicking Apply Changes. The full design lives in `import-design/CLAUDE.md` (with an implementation-tracking checklist in `import-design/design.md`); this section is the production summary.
+
+### How it works
+
+1. From any logged-in page, the "New Character" nav dropdown offers "Import a character", which routes to `GET /import`.
+2. The user uploads a file or pastes a URL (public Google Doc, public Google Sheet, or arbitrary HTTP(S) URL).
+3. `POST /import` validates the request, enforces the per-user rate limit, and dispatches an async job in an in-memory worker (see `app/services/import_jobs.py`). The route redirects to `/import/progress/<id>` immediately.
+4. The worker runs the full pipeline:
+   - **Ingest** (`import_ingest.py`): libmagic-based format detection, per-format text extraction, PDF multimodal fallback flag.
+   - **Fetch** (`import_url.py`): SSRF-hardened URL fetcher with DNS-resolve-and-check, Google Docs/Sheets export rewriting, private-doc redirect detection.
+   - **Extract** (`import_llm.py`): Gemini structured-output call with flash-primary / pro-fallback logic, multimodal PDF path via `pypdfium2`.
+   - **Resolve** (`import_match.py`, `import_validate.py`): fuzzy-match "as written" strings to canonical IDs, clamp numeric fields, split advantages into base-vs-campaign lists, cross-check school knacks.
+   - **Reconcile** (`import_reconcile.py`): recompute XP via the existing engine, compare to source-stated totals, build the Import Notes section.
+5. The progress page polls `/import/status/<id>` every 1.5s. On success the browser redirects to the Draft's edit page; on failure the progress page shows the error banner plus a retry link.
+6. The edit page for the imported Draft shows an amber "This character was imported" banner that disappears after Apply Changes.
+
+### Key constraints
+
+- **1 MB upload cap.** Enforced before any extraction work. Character sheets are small documents; anything larger is almost certainly not one.
+- **Multi-character documents are rejected**, not silently picked-from. The user is told to split the document.
+- **Never stored.** The importer does not save a copy of the uploaded file or the fetched URL content anywhere - not on the persistent volume and not in S3 backups.
+- **Character art is never imported**, even if embedded or linked in the source. Image handling is reserved for a separate future feature.
+- **Public Google Docs / Sheets only.** We do not OAuth for import; the document must be shared "Anyone with the link". Private documents surface a dedicated instructions banner rather than a generic error.
+- **XP is recomputed from stats, never trusted from the source.** Source-stated totals are compared and any discrepancy is flagged in Import Notes.
+- **Drafts only.** The importer always saves `is_published=False`. The user must click Apply Changes to create the first version.
+
+### Gemini model fallback
+
+The pipeline calls `GEMINI_MODEL_PRIMARY` (default `gemini-2.5-flash`) first. If the extraction result looks too sparse (name and school both empty, OR every ring null, AND the model did not self-report `not_a_character_sheet=true`), the pipeline retries once with `GEMINI_MODEL_FALLBACK` (default `gemini-2.5-pro`). The Import Notes section records which model produced the final result and whether the fallback fired.
+
+Per-field re-extraction (`extract_single_field`) is available as a primitive for future use; the current orchestrator relies on the main call + model-upgrade retry only.
+
+### Rate limit + kill switch
+
+- **Rate limit:** per-user, 10 successful imports per 24 hours. Counted by looking for characters owned by the user whose sections include the Import Notes label and whose `created_at` falls in the last 24 hours. No extra schema.
+- **Kill switch:** `IMPORT_ENABLED=false` disables the route with a 503 "temporarily unavailable" banner. Useful when quota spikes or for cost control without redeploying.
+
+### Env vars and Fly secrets
+
+The pipeline reads these env vars. Production secrets go in Fly:
+
+```bash
+fly secrets set GEMINI_API_KEY="AIza..."
+# Models are optional; set only if you want to override the defaults.
+fly secrets set GEMINI_MODEL_PRIMARY="gemini-2.5-flash"
+fly secrets set GEMINI_MODEL_FALLBACK="gemini-2.5-pro"
+```
+
+Everything else (`IMPORT_ENABLED`, `IMPORT_RATE_LIMIT_PER_DAY`, `IMPORT_MAX_UPLOAD_MB`, timeouts, PDF caps) has production-safe defaults and does not need to be set explicitly. See `.env.example` for the full list.
+
+For local dev, the same vars go in `.env`. For e2e tests, the harness sets `IMPORT_USE_TEST_STUB=1` in the subprocess env; that short-circuits the real Gemini call in favour of canned responses based on document content markers. Never set that in production.
+
+### Key architectural decisions
+
+- **No `google-generativeai` SDK.** The pipeline makes direct `httpx` calls to `https://generativelanguage.googleapis.com/v1beta` - same pattern as `app/services/sheets.py` and for the same reason (SDK startup cost on a 256MB machine).
+- **LLM output is schema-constrained.** Gemini's `responseMimeType: application/json` + `responseSchema` means the model physically cannot emit free-form text, function calls, or tool calls. This is the primary defense against prompt injection in source documents; the sanitizer layer is belt-and-braces.
+- **Async worker, in-memory registry.** Jobs live in a process-local dict keyed by UUID, reaped 10 minutes after completion. Good enough for the current single-machine Fly deployment; would need a Redis-backed registry if we scaled past one machine.
+- **"As written" strings stay raw through the LLM call.** The LLM returns `"name_as_written"` fields like `"Crane Duelist"`; Python fuzzy-matches against `game_data.py` in Phase 5. This keeps the LLM's context small and catalog drift out of the prompt.
+- **No new DB schema.** The Import Notes section stores provenance and the rate-limit counter reads from the `sections` JSON column. A copy of the uploaded document is never persisted.
+
+### Future work
+
+- Per-field re-extraction driver (the primitive exists; no caller yet).
+- Image-file direct imports (deferred to a separate workflow).
+- `.sxw` (pre-fork OpenOffice) fixture (extractor code path exists; no real sample to test against - see `tests/import_fixtures/happy_path/DEFERRED.md`).
+- Cross-machine job registry if we scale beyond one Fly machine.
+
 ## Style & Design Preferences
 
 - **No em-dashes or en-dashes.** Use hyphens (`-`) everywhere - in templates, user-facing text, tooltips, and banners. Never use `&mdash;`, `&ndash;`, or the literal Unicode em/en-dash characters.

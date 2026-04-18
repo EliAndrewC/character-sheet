@@ -123,6 +123,215 @@ class TestAthletics:
 
 
 # ---------------------------------------------------------------------------
+# Athletics used as attack/parry (p05 §Athletics: "You may also use this
+# knack to attack or parry"). Exposed as ``athletics:attack`` / ``athletics:parry``
+# keys in build_all_roll_formulas.
+# ---------------------------------------------------------------------------
+
+
+class TestAthleticsCombat:
+    def test_athletics_attack_not_present_without_athletics_knack(self):
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},  # no athletics
+        )
+        formulas = build_all_roll_formulas(char)
+        assert "athletics:attack" not in formulas
+        assert "athletics:parry" not in formulas
+
+    def test_athletics_attack_present_with_athletics_knack(self):
+        char = make_character_data(
+            school="togashi_ise_zumi",  # has athletics as school knack
+            knacks={"athletics": 3, "jiujutsu": 1, "tattoo": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        assert "athletics:attack" in formulas
+        assert "athletics:parry" in formulas
+
+    def test_athletics_attack_uses_fire_ring(self):
+        """Athletics-attack uses Fire ring (the combat attack ring).
+        Base formula is 2*Fire + athletics_rank rolled, Fire kept."""
+        char = make_character_data(
+            school="",  # no school bonuses
+            rings={"Air": 2, "Fire": 3, "Earth": 2, "Water": 2, "Void": 2},
+            knacks={"athletics": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        a = formulas["athletics:attack"]
+        assert a["rolled"] == 2 * 3 + 2  # 2*Fire + athletics
+        assert a["kept"] == 3  # Fire
+
+    def test_athletics_parry_uses_air_ring(self):
+        """Athletics-parry uses Air ring (the combat parry ring)."""
+        char = make_character_data(
+            school="",
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+            knacks={"athletics": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        p = formulas["athletics:parry"]
+        assert p["rolled"] == 2 * 4 + 1  # 2*Air + athletics
+        assert p["kept"] == 4  # Air
+
+    def test_athletics_attack_is_attack_type_with_variant(self):
+        """athletics:attack opens the attack modal and is tagged
+        ``is_athletics_attack`` so the modal can apply the doubled TN."""
+        char = make_character_data(
+            school="",
+            knacks={"athletics": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        a = formulas["athletics:attack"]
+        assert a["is_attack_type"] is True
+        assert a["attack_variant"] == "athletics_attack"
+        assert a["is_athletics_attack"] is True
+
+    def test_athletics_parry_is_not_attack_type(self):
+        """athletics:parry rolls through the normal roll menu, not the
+        attack modal (parry doesn't open the modal either)."""
+        char = make_character_data(
+            school="",
+            knacks={"athletics": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        p = formulas["athletics:parry"]
+        assert not p.get("is_attack_type")
+
+    def test_athletics_attack_inherits_attack_bonus_kitsuki(self):
+        """Per user intent: anything that bonuses ``attack`` also bonuses
+        ``athletics:attack``. Kitsuki Magistrate adds +2*Water on attack."""
+        char = make_character_data(
+            school="kitsuki_magistrate",
+            knacks={"athletics": 1, "discern_honor": 1, "iaijutsu": 1, "presence": 1},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        a = formulas["athletics:attack"]
+        assert a["flat"] == 6  # 2*Water(3)
+        assert any("Kitsuki" in b["label"] for b in a.get("bonuses", []))
+
+    def test_athletics_parry_inherits_parry_bonus_shinjo(self):
+        """Shinjo Bushi has parry in first_dan_extra_die and as second_dan_free_raise."""
+        char = make_character_data(
+            school="shinjo_bushi",
+            school_ring_choice="Air",
+            knacks={"athletics": 2, "double_attack": 2, "horsemanship": 2, "lunge": 2},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        p = formulas["athletics:parry"]
+        # Base: 2*Air(3) + athletics(2) = 8 rolled, 3 kept.
+        # +1 die from 1st Dan (parry in first_dan_extra_die) → 9 rolled.
+        # +5 flat from 2nd Dan free raise (parry).
+        assert p["rolled"] == 9
+        assert p["kept"] == 3
+        assert p["flat"] == 5
+
+    def test_athletics_attack_inherits_first_dan_extra_die(self):
+        """Akodo Bushi has ``attack`` in first_dan_extra_die, so athletics:attack
+        gets the +1 rolled die too."""
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"athletics": 1, "double_attack": 1, "feint": 1, "iaijutsu": 1},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        a = formulas["athletics:attack"]
+        # Base: 2*Fire(2) + athletics(1) = 5. +1 from 1st Dan (attack).
+        assert a["rolled"] == 6
+        assert a["kept"] == 2
+
+    def test_athletics_attack_inherits_courtier_air_bonus(self):
+        """Courtier Special: +Air flat on attack rolls."""
+        char = make_character_data(
+            school="courtier",
+            school_ring_choice="Air",
+            knacks={"athletics": 1, "discern_honor": 1, "oppose_social": 1, "worldliness": 1},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        a = formulas["athletics:attack"]
+        # Courtier Special: +Air flat (3).
+        assert a["flat"] >= 3
+        assert any("Courtier" in b.get("label", "") for b in a.get("bonuses", []))
+
+    def test_athletics_attack_inherits_shosuro_acting_bonus(self):
+        """Shosuro Actor: +acting_rank rolled dice on attack and parry."""
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 1, "discern_honor": 1, "pontificate": 1},
+            skills={"acting": 3},
+        )
+        formulas = build_all_roll_formulas(char)
+        a = formulas["athletics:attack"]
+        # Base: 2*Fire(2) + athletics(1) = 5. 1st Dan (attack): +1. Acting: +3.
+        assert a["rolled"] == 9
+
+    def test_athletics_attack_label(self):
+        char = make_character_data(
+            school="",
+            knacks={"athletics": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        a = formulas["athletics:attack"]
+        assert "Athletics" in a["label"]
+        assert "Attack" in a["label"]
+
+    def test_athletics_parry_label(self):
+        char = make_character_data(
+            school="",
+            knacks={"athletics": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        p = formulas["athletics:parry"]
+        assert "Athletics" in p["label"]
+        assert "Parry" in p["label"]
+
+    def test_build_athletics_combat_formula_invalid_which(self):
+        from app.services.dice import build_athletics_combat_formula
+        char = make_character_data(knacks={"athletics": 1})
+        assert build_athletics_combat_formula("stab", char) is None
+
+    def test_build_athletics_combat_formula_no_knack(self):
+        from app.services.dice import build_athletics_combat_formula
+        char = make_character_data(knacks={"double_attack": 1})
+        assert build_athletics_combat_formula("attack", char) is None
+
+    def test_athletics_attack_courtier_5th_dan_air_bonus(self):
+        """Courtier 5th Dan: +Air flat on all TN-based combat rolls."""
+        char = make_character_data(
+            school="courtier",
+            school_ring_choice="Air",
+            knacks={"athletics": 5, "discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        a = formulas["athletics:attack"]
+        assert any("Courtier 5th Dan" == b.get("label") for b in a.get("bonuses", []))
+
+    def test_athletics_attack_doji_artisan_5th_dan_flag(self):
+        """Doji Artisan 5th Dan: client-side bonus flag based on TN."""
+        char = make_character_data(
+            school="doji_artisan",
+            school_ring_choice="Air",
+            knacks={"athletics": 5, "calligraphy": 5, "courtly_sway": 5, "sincerity": 5},
+        )
+        formulas = build_all_roll_formulas(char)
+        a = formulas["athletics:attack"]
+        assert a.get("doji_5th_dan_always") is True
+
+    def test_athletics_attack_shosuro_5th_dan_flag(self):
+        """Shosuro Actor 5th Dan: sum of lowest 3 dice added post-roll."""
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 5, "discern_honor": 5, "pontificate": 5},
+        )
+        formulas = build_all_roll_formulas(char)
+        a = formulas["athletics:attack"]
+        assert a.get("shosuro_5th_dan") is True
+
+
+# ---------------------------------------------------------------------------
 # build_skill_formula — basic + bonuses
 # ---------------------------------------------------------------------------
 
