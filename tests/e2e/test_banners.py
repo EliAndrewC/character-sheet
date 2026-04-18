@@ -1,6 +1,6 @@
 """E2E: Draft status banners on character sheet and homepage badges."""
 
-from tests.e2e.helpers import select_school, apply_changes, create_and_apply
+from tests.e2e.helpers import select_school, apply_changes, create_and_apply, start_new_character
 import pytest
 
 pytestmark = [pytest.mark.banners, pytest.mark.homepage]
@@ -9,7 +9,7 @@ def test_draft_banner_for_new_character(page, live_server_url):
     """Never-applied character shows 'Draft' banner."""
 
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Draft Banner Test")
     select_school(page, "akodo_bushi")
@@ -44,7 +44,7 @@ def test_draft_changes_banner_after_edit(page, live_server_url):
 def test_homepage_draft_badge(page, live_server_url):
     """Homepage shows 'Draft' badge for never-applied character."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Homepage Draft Badge")
     select_school(page, "akodo_bushi")

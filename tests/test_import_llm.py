@@ -800,3 +800,86 @@ def test_invalid_integer_env_var_falls_through_to_default(monkeypatch) -> None:
 def test_invalid_float_env_var_falls_through_to_default(monkeypatch) -> None:
     monkeypatch.setenv("IMPORT_LLM_RETRY_BACKOFF_SEC", "not-a-float")
     assert llm._env_float("IMPORT_LLM_RETRY_BACKOFF_SEC", 2.0) == 2.0
+
+
+# ---------------------------------------------------------------------------
+# E2E-only stub path
+#
+# Clicktests run the real app in a subprocess so they can't monkey-patch
+# httpx the way unit tests do. Setting IMPORT_USE_TEST_STUB makes the
+# LLM client return a canned response based on markers in the document
+# text. These tests verify the stub does what clicktests expect.
+# ---------------------------------------------------------------------------
+
+
+def test_stub_mode_off_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("IMPORT_USE_TEST_STUB", raising=False)
+    assert llm._stub_mode() is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on"])
+def test_stub_mode_on_for_truthy_env(monkeypatch, value) -> None:
+    monkeypatch.setenv("IMPORT_USE_TEST_STUB", value)
+    assert llm._stub_mode() is True
+
+
+def test_stub_mode_off_for_empty_string(monkeypatch) -> None:
+    monkeypatch.setenv("IMPORT_USE_TEST_STUB", "")
+    assert llm._stub_mode() is False
+
+
+def test_stub_short_circuits_real_http_and_returns_canonical(monkeypatch) -> None:
+    """With the stub on, extract_character returns the canonical Kakita
+    Tomoe payload regardless of whether httpx would succeed."""
+    monkeypatch.setenv("IMPORT_USE_TEST_STUB", "1")
+    # Poison httpx so any real call would fail loudly.
+    _install_transport(monkeypatch, lambda req: pytest.fail(
+        "stub mode must skip the HTTP call"
+    ))
+    result = llm.extract_character("A Kakita Tomoe character sheet.")
+    assert result.name == "Kakita Tomoe"
+    assert result.school_name_as_written == "Kakita Duelist"
+    assert result.rings.fire == 4
+
+
+def test_stub_dispatches_to_multi_character_when_marker_present(monkeypatch) -> None:
+    monkeypatch.setenv("IMPORT_USE_TEST_STUB", "1")
+    _install_transport(monkeypatch, lambda req: pytest.fail("no HTTP"))
+    doc = (
+        "Party roster\n\nCharacter 1: Akira\n...\n\n"
+        "Character 2: Bayushi\n..."
+    )
+    result = llm.extract_character(doc)
+    assert result.multi_character_detected is True
+
+
+def test_stub_dispatches_to_not_a_sheet_when_shopping_list(monkeypatch) -> None:
+    monkeypatch.setenv("IMPORT_USE_TEST_STUB", "1")
+    _install_transport(monkeypatch, lambda req: pytest.fail("no HTTP"))
+    doc = "Shopping list\n- eggs\n- bread\n"
+    result = llm.extract_character(doc)
+    assert result.not_a_character_sheet is True
+    assert result.name is None
+
+
+def test_stub_returns_null_value_for_single_field_schema(monkeypatch) -> None:
+    """extract_single_field uses a schema with a single `value` key; the
+    stub can't produce a valid character under that schema, so it
+    answers 'not present' (null). This keeps Phase 5's per-field
+    re-extraction from crashing if it somehow fires in stub mode."""
+    monkeypatch.setenv("IMPORT_USE_TEST_STUB", "1")
+    _install_transport(monkeypatch, lambda req: pytest.fail("no HTTP"))
+    v = llm.extract_single_field(
+        "some text", "name", field_description="Character name.",
+    )
+    assert v is None
+
+
+def test_stub_missing_api_key_still_works(monkeypatch) -> None:
+    """Stub mode bypasses the API-key check so clicktests don't need to
+    expose a real key via their env."""
+    monkeypatch.setenv("IMPORT_USE_TEST_STUB", "1")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    _install_transport(monkeypatch, lambda req: pytest.fail("no HTTP"))
+    result = llm.extract_character("A Kakita character document.")
+    assert result.name == "Kakita Tomoe"

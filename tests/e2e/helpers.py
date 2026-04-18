@@ -1,6 +1,21 @@
 """Shared helpers for e2e tests."""
 
 
+def start_new_character(page):
+    """Click "New Character" and route through the dropdown's
+    "Create a character" option. Backwards-compatible with the old
+    direct-submit button in case an older build is running."""
+    page.locator('button:text("New Character")').click()
+    create_option = page.locator('[data-testid="new-character-option-create"]')
+    # Wait briefly for Alpine to open the dropdown. If it never appears we
+    # must be on the older direct-submit build, so proceed without clicking.
+    try:
+        create_option.wait_for(state="visible", timeout=1000)
+        create_option.click()
+    except Exception:
+        pass
+
+
 def select_school(page, school_id):
     """Select a school and wait for HTMX to load details.
 
@@ -35,7 +50,7 @@ def create_and_apply(page, live_server_url, name="Test Character", school="akodo
     Returns the character sheet URL after apply.
     """
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, school)

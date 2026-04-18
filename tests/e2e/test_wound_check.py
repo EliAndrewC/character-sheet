@@ -2,7 +2,7 @@
 rolling animation, post-roll result application."""
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = [pytest.mark.rolls, pytest.mark.tracking]
 
@@ -11,7 +11,7 @@ def _create_character_with_wounds(page, live_server_url, name="WCTest",
                                    school="akodo_bushi", light_wounds=10):
     """Create a character, apply, then add light wounds on the sheet."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, school)
@@ -45,7 +45,7 @@ def test_wound_check_button_visible_with_light_wounds(page, live_server_url):
 def test_wound_check_button_hidden_with_zero_wounds(page, live_server_url):
     """Roll Wound Check button is hidden when light wounds = 0."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "WCBtnHidden")
     select_school(page, "akodo_bushi")

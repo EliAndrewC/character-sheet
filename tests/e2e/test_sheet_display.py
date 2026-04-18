@@ -1,6 +1,6 @@
 """E2E: Character sheet display — status, skills, XP, advantages, version history details."""
 
-from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply
+from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply, start_new_character
 import pytest
 
 pytestmark = [pytest.mark.status_display, pytest.mark.skill_rolls, pytest.mark.xp_summary, pytest.mark.version_history]
@@ -9,7 +9,7 @@ def _create_full_character(page, live_server_url):
     """Create a character with skills, advantages, and details for display testing."""
 
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Display Test")
     select_school(page, "akodo_bushi")
@@ -161,7 +161,7 @@ def test_revert_not_shown_on_latest(page, live_server_url):
 def _create_xp_rich_character(page, live_server_url):
     """Build a character with non-zero XP in every visible XP-summary category."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "XP Rich")
     select_school(page, "akodo_bushi")

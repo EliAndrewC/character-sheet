@@ -66,10 +66,14 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `mirumoto_round_points: true` and `mirumoto_round_points_max: 2*attack_skill`. Client: tracking section shows a per-round points counter with +/- and Reset. "Spend 3rd Dan Point (+2)" button appears on attack and parry roll results. Points can be spent for +2 flat on the roll.
+- Pool is auto-refilled to max when the character rolls initiative (new combat round), with a "Mirumoto 3rd Dan points refreshed for the new combat round" message in the initiative result modal. See `_resetPerRoundAbilities` in `app/templates/character/sheet.html`. No message appears when the pool was already full.
 
 **Clicktests:**
 - `test_school_abilities.py::test_mirumoto_round_points_display_and_buttons`
 - `test_school_abilities.py::test_mirumoto_round_points_counter`
+- `test_school_abilities.py::test_mirumoto_3rd_dan_initiative_refills_round_points`
+- `test_school_abilities.py::test_mirumoto_3rd_dan_initiative_no_message_when_pool_full`
+- `test_school_abilities.py::test_non_initiative_roll_does_not_trigger_reset`
 
 **Questions (ANSWERED):**
 - X = attack skill rank. So 2 * attack_skill points per round.

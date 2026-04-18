@@ -7,7 +7,7 @@ HTML on the sheet.
 
 import pytest
 
-from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply
+from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply, start_new_character
 
 pytestmark = [pytest.mark.sections]
 
@@ -15,7 +15,7 @@ pytestmark = [pytest.mark.sections]
 def _go_to_editor_for_new_character(page, live_server_url, name):
     """Create a new draft character and land on its editor."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "akodo_bushi")

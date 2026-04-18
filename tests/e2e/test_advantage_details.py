@@ -1,6 +1,6 @@
 """E2E: Advantage detail fields (text, skill selection) appear and auto-save."""
 
-from tests.e2e.helpers import select_school, apply_changes
+from tests.e2e.helpers import select_school, apply_changes, start_new_character
 import pytest
 
 pytestmark = pytest.mark.advantage_details
@@ -9,7 +9,7 @@ def test_higher_purpose_shows_detail_fields(page, live_server_url):
     """Checking Higher Purpose reveals text field and skill checkboxes."""
 
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Purpose Test")
     select_school(page, "akodo_bushi")
@@ -33,7 +33,7 @@ def test_higher_purpose_shows_detail_fields(page, live_server_url):
 def test_virtue_shows_text_field(page, live_server_url):
     """Checking Virtue reveals a text field for the specific virtue."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Virtue Test")
     select_school(page, "akodo_bushi")
@@ -52,7 +52,7 @@ def test_virtue_shows_text_field(page, live_server_url):
 
 def _go_to_editor(page, live_server_url):
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     select_school(page, "akodo_bushi")
 

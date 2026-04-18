@@ -1,13 +1,13 @@
 """E2E: Combat skills (Attack and Parry) in the editor."""
 
-from tests.e2e.helpers import select_school, click_plus, click_minus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, click_minus, apply_changes, start_new_character
 import pytest
 
 pytestmark = pytest.mark.combat_skills
 
 def _go_to_editor(page, live_server_url):
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
 
 

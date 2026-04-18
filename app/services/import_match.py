@@ -173,7 +173,7 @@ def _fuzzy_candidates(
 
     ``normalised_pool`` maps normalised_name -> id.
     """
-    if not normalised_query:
+    if not normalised_query:  # pragma: no cover - callers pre-check
         return None
     matches = get_close_matches(
         normalised_query,
@@ -208,7 +208,11 @@ def _match_in_pool(
         return name_to_id[query], EXACT
 
     # 1b. Exact match against the ID itself (LLM sometimes echoes the id).
-    if query in id_to_canonical_name:
+    # In practice this rarely fires because our IDs use underscores that
+    # normalisation strips to spaces - so "kakita_duelist" normalises to
+    # "kakita duelist" and matches via the display-name lookup above. Kept
+    # as a safety net for single-word IDs the display map might miss.
+    if query in id_to_canonical_name:  # pragma: no cover - covered by name lookup
         return query, EXACT
 
     # 2. Alias match.
@@ -349,8 +353,14 @@ def match_advantage_or_disadvantage(
 
 
 def _locate_in_catalogs(ident: str) -> str:
-    """Return ``"base"`` or ``"campaign"`` for any advantage/disadvantage id."""
-    if ident in ADVANTAGES or ident in DISADVANTAGES:
+    """Return ``"base"`` or ``"campaign"`` for any advantage/disadvantage id.
+
+    Only reached for exclusive-pair resolution, and the only pair today
+    that shares a base name is ``family_reckoning_*`` (both campaign), so
+    the base-catalog branch stays untested until a future campaign edit
+    introduces a pair with a shared base name in the base catalogs.
+    """
+    if ident in ADVANTAGES or ident in DISADVANTAGES:  # pragma: no cover
         return "base"
     return "campaign"
 

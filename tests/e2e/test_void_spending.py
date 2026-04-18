@@ -1,7 +1,7 @@
 """E2E: Void point spending on rolls - menu options, deduction, priority order."""
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = [pytest.mark.rolls, pytest.mark.tracking]
 
@@ -10,7 +10,7 @@ def _create_char_with_void(page, live_server_url, name="VoidTest",
                             void_points=2, temp_void=0):
     """Create a character, apply, then set void points via JS."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "akodo_bushi")
@@ -142,7 +142,7 @@ def test_temp_void_deducted_before_regular(page, live_server_url):
 def _create_priest_with_bragging(page, live_server_url):
     """Priest with OW knack rank 2 (pool = 4) and bragging rank 3 (OW capacity = 2)."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "OWPriest")
     select_school(page, "priest")
@@ -218,7 +218,7 @@ def test_ow_spend_increases_rolled_and_decrements_pool(page, live_server_url):
 def test_ow_submenu_hidden_on_advanced_skill(page, live_server_url):
     """Advanced skills (e.g. acting) get no OW submenu even with OW available."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "OWAdvanced")
     select_school(page, "priest")
@@ -246,7 +246,7 @@ def test_ow_spend_on_unskilled_roll_enables_reroll_tens(page, live_server_url):
     """Spending OW on an unskilled basic skill grants the skill for that roll,
     so 10s reroll and the unskilled no-reroll note disappears."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "OWRerollTens")
     select_school(page, "priest")
@@ -283,7 +283,7 @@ def test_ow_spend_on_unskilled_roll_enables_reroll_tens(page, live_server_url):
 def test_ow_spend_on_unskilled_roll_while_impaired_keeps_no_reroll(page, live_server_url):
     """Impaired characters never reroll 10s, even if OW grants them the skill."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "OWImpaired")
     select_school(page, "priest")
@@ -322,7 +322,7 @@ def test_ow_spend_on_unskilled_roll_while_impaired_keeps_no_reroll(page, live_se
 def test_ow_submenu_appears_for_unskilled_basic_skill(page, live_server_url):
     """OW submenu also appears when rolling a basic skill the character has no ranks in."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "OWUnskilled")
     select_school(page, "priest")

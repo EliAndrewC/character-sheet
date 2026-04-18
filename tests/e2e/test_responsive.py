@@ -6,7 +6,7 @@ and label truncation producing zero-width elements.
 """
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = pytest.mark.responsive
 
@@ -48,7 +48,7 @@ def _assert_no_horizontal_overflow(page):
 def _create_character_then_phone(page, live_server_url, name="Phone Test"):
     """Create a character at desktop width, then return the sheet URL."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "akodo_bushi")

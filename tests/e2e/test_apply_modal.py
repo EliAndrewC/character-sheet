@@ -1,13 +1,13 @@
 """E2E: Apply Changes modal — pre-population, quick-fill, disabled state."""
 
-from tests.e2e.helpers import select_school, apply_changes
+from tests.e2e.helpers import select_school, apply_changes, start_new_character
 import pytest
 
 pytestmark = pytest.mark.apply_changes
 
 def _go_to_new_editor(page, live_server_url):
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Modal Test")
     select_school(page, "akodo_bushi")
@@ -75,7 +75,7 @@ def test_apply_disabled_when_empty(page, live_server_url):
 def test_apply_disabled_without_school(page, live_server_url):
     """Apply Changes button is disabled when no school is selected."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "No School")
     page.wait_for_timeout(300)

@@ -7,7 +7,7 @@ can trigger template/Alpine errors.
 """
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = [pytest.mark.rolls, pytest.mark.status_display]
 
@@ -24,7 +24,7 @@ SCHOOLS_TO_TEST = [
 def _create_and_view(page, live_server_url, school, name):
     """Create a character with the given school, apply, and stay on the sheet."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, school)

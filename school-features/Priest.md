@@ -81,4 +81,18 @@
 
 > You may spend the points from your Conviction knack on your allies' rolls, and your Conviction points refresh after each conversation and combat round. You may also spend these points to lower action dice in order for you or an ally to counterattack or parry.
 
-**Status:** Out of scope - requires cross-sheet resource spending (Conviction points on allies' rolls).
+**Status:** Partially implemented.
+- **Cross-sheet spending on allies' rolls:** implemented. A 5th Dan priest in the same gaming group appears in `priest_conviction_allies` on party members' sheets, and allies can spend from the priest's pool via `POST /characters/{priest_id}/ally-conviction`. See `app/routes/pages.py` (priest discovery) and `app/routes/characters.py::ally_conviction`.
+- **Per-round refresh:** implemented. The `priest_round_conviction_refresh` flag in `school_abilities` (set when dan >= 5) triggers a client-side reset of `adventure_state.conviction_used` whenever the priest rolls initiative. The refreshed pool message "Conviction pool refreshed for the new combat round" shows in the initiative result modal when the pool was not already full. See `app/templates/character/sheet.html` (`_resetPerRoundAbilities`).
+- **Per-conversation refresh:** not implemented (no "conversation start" trigger exists in the UI).
+- **Lower action dice to counterattack/parry:** not implemented.
+
+**Unit tests:**
+- `test_routes.py::TestInitiativePerRoundResetFlags::test_priest_5th_dan_has_round_conviction_refresh`
+- `test_routes.py::TestInitiativePerRoundResetFlags::test_priest_4th_dan_does_not_have_round_conviction_refresh`
+- `test_routes.py::TestPriestAllyConviction` (ally-spend endpoint suite)
+
+**Clicktests:**
+- `test_school_abilities.py::test_priest_5th_dan_initiative_refreshes_conviction`
+- `test_school_abilities.py::test_priest_5th_dan_initiative_no_message_when_conviction_unspent`
+- `test_school_abilities.py::test_priest_4th_dan_initiative_does_not_reset_conviction`

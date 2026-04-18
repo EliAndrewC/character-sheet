@@ -1,6 +1,6 @@
 """E2E: Editor field controls — min/max, disabled states, recognition halving, rank lock."""
 
-from tests.e2e.helpers import select_school, click_plus, click_minus
+from tests.e2e.helpers import select_school, click_plus, click_minus, start_new_character
 import pytest
 
 pytestmark = [pytest.mark.rings, pytest.mark.knacks, pytest.mark.combat_skills, pytest.mark.skills, pytest.mark.honor_rank_recognition, pytest.mark.advantages]
@@ -22,7 +22,7 @@ def test_editor_has_no_javascript_console_errors(page, live_server_url):
     )
 
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     # Pick a school so the full editor renders (school knacks, advantage tooltips, etc.)
     select_school(page, "akodo_bushi")
@@ -32,7 +32,7 @@ def test_editor_has_no_javascript_console_errors(page, live_server_url):
 
 def _go_to_editor(page, live_server_url, school="akodo_bushi"):
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     select_school(page, school)
 

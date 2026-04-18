@@ -30,6 +30,13 @@ def live_server_url():
     env["TEST_AUTH_BYPASS"] = "true"
     env["DISCORD_WHITELIST_IDS"] = "183026066498125825,test_user_1,test_user_2"
     env["ADMIN_DISCORD_IDS"] = "183026066498125825"
+    # Keep the Gemini API offline for clicktests; the stub returns canned
+    # responses based on markers in the uploaded document. See
+    # app/services/import_llm.py::_stub_response_for.
+    env["IMPORT_USE_TEST_STUB"] = "1"
+    # Don't leak a real Gemini key into the subprocess - the stub short-
+    # circuits before the key check, but belt-and-braces.
+    env.pop("GEMINI_API_KEY", None)
 
     proc = subprocess.Popen(
         [

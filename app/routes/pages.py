@@ -411,6 +411,9 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Mirumoto 3rd Dan: 2X points per round
         "mirumoto_round_points": character.school == "mirumoto_bushi" and dan >= 3,
         "mirumoto_round_points_max": 2 * attack_skill if character.school == "mirumoto_bushi" and dan >= 3 else 0,
+        # Priest 5th Dan: conviction pool refreshes after each combat round
+        # (drives the per-round reset fired by initiative rolls).
+        "priest_round_conviction_refresh": character.school == "priest" and dan >= 5,
         # Ide Diplomat 3rd Dan: spend VP to subtract Xk1 from someone's roll
         "ide_subtract_roll": character.school == "ide_diplomat" and dan >= 3,
         "ide_subtract_x": (char_dict.get("skills") or {}).get("tact", 0) if character.school == "ide_diplomat" and dan >= 3 else 0,

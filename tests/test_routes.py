@@ -431,6 +431,53 @@ class TestPerAdventureTracking:
         assert ow.get("per_day") is not True
 
 
+class TestInitiativePerRoundResetFlags:
+    """School-abilities JSON flags that drive the per-round reset on initiative.
+
+    The initiative roll resets any per-round ability pools and displays a
+    message about what was refreshed. Two abilities currently need reset:
+      - Mirumoto 3rd Dan round points (``mirumoto_round_points``)
+      - Priest 5th Dan conviction refresh (``priest_round_conviction_refresh``)
+    """
+
+    def _school_abilities(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(
+            r'id="school-abilities">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        return json.loads(m.group(1))
+
+    def test_priest_5th_dan_has_round_conviction_refresh(self, client):
+        cid = _seed_character(
+            client, name="Priest5D", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 5, "otherworldliness": 5, "pontificate": 5},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("priest_round_conviction_refresh") is True
+
+    def test_priest_4th_dan_does_not_have_round_conviction_refresh(self, client):
+        cid = _seed_character(
+            client, name="Priest4D", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 4, "otherworldliness": 4, "pontificate": 4},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("priest_round_conviction_refresh") is False
+
+    def test_non_priest_does_not_have_round_conviction_refresh(self, client):
+        cid = _seed_character(
+            client, name="Akodo5D", school="akodo_bushi",
+            knacks={"double_attack": 5, "feint": 5, "iaijutsu": 5},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("priest_round_conviction_refresh") is False
+
+
 class TestEditCharacter:
     def test_edit_page_loads(self, client):
         cid = _seed_character(client, name="Edit Test")

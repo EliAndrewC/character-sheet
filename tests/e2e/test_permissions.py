@@ -1,6 +1,6 @@
 """E2E: Permission-based visibility — edit/delete buttons, version history, owner dropdown."""
 
-from tests.e2e.helpers import create_and_apply
+from tests.e2e.helpers import create_and_apply, start_new_character
 import pytest
 
 pytestmark = pytest.mark.permissions
@@ -112,7 +112,7 @@ def test_owner_dropdown_hidden_for_nonadmin(page, page_nonadmin, live_server_url
     """Non-GM does not see owner dropdown on edit page."""
     # Create a character owned by nonadmin
     page_nonadmin.goto(live_server_url)
-    page_nonadmin.locator('button:text("New Character")').click()
+    start_new_character(page_nonadmin)
     page_nonadmin.wait_for_selector('input[name="name"]')
     # The owner dropdown should not be a select for non-admin
     assert not page_nonadmin.locator('select[name="owner_discord_id"]').is_visible()

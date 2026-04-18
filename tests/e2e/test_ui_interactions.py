@@ -1,7 +1,7 @@
 """E2E: UI interaction tests for buttons/elements with no prior clicktest coverage."""
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = [pytest.mark.rolls]
 
@@ -9,7 +9,7 @@ pytestmark = [pytest.mark.rolls]
 def _create_char(page, live_server_url, name, school, knack_overrides=None, skill_overrides=None):
     """Create a character with a specific school and navigate to the sheet."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, school)

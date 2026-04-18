@@ -268,6 +268,9 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 - [x] 3rd Dan round points counter UI -> `test_school_abilities.py::test_mirumoto_round_points_counter`
 - [x] Round points display and spending buttons -> `test_school_abilities.py::test_mirumoto_round_points_display_and_buttons`
+- [x] 3rd Dan round points auto-refill on initiative roll -> `test_school_abilities.py::test_mirumoto_3rd_dan_initiative_refills_round_points`
+- [x] 3rd Dan no refresh message when pool already full -> `test_school_abilities.py::test_mirumoto_3rd_dan_initiative_no_message_when_pool_full`
+- [x] 3rd Dan pool is NOT refilled by non-initiative rolls -> `test_school_abilities.py::test_non_initiative_roll_does_not_trigger_reset`
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_mirumoto_1st_dan_behavioral`
 - [x] 2nd Dan behavioral parry bonus -> `test_school_abilities.py::test_mirumoto_2nd_dan_behavioral`
 - [x] Parry roll adds temp VP -> `test_school_abilities.py::test_mirumoto_parry_temp_vp_behavioral`
@@ -287,6 +290,9 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 - [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_priest_1st_dan_skill_selection`
 - [x] 2nd Dan Honor bonus roll free raise -> `test_school_abilities.py::test_priest_2nd_dan_behavioral`
+- [x] 5th Dan Conviction pool refreshes on initiative roll -> `test_school_abilities.py::test_priest_5th_dan_initiative_refreshes_conviction`
+- [x] 5th Dan no refresh message when Conviction pool full -> `test_school_abilities.py::test_priest_5th_dan_initiative_no_message_when_conviction_unspent`
+- [x] 4th Dan Conviction is NOT refreshed by initiative (per-day, not per-round) -> `test_school_abilities.py::test_priest_4th_dan_initiative_does_not_reset_conviction`
 
 ### Shiba
 
@@ -817,6 +823,69 @@ Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pyt
 - [ ] Export button present alongside Edit/Delete for editors
 - [ ] Success banner displays with link after export (requires mocked Google API)
 - [ ] Error banner displays on export failure (requires mocked Google API)
+
+---
+
+## Character Import (mark: `import`)
+
+Clicktests in `tests/e2e/test_import.py` cover the interactive surface.
+Gemini is stubbed via `IMPORT_USE_TEST_STUB=1` (set in
+`tests/e2e/conftest.py`); the stub dispatches on document-content
+markers so the same fixtures drive both happy and rejection paths.
+
+Entry points & nav:
+
+- [x] Nav "New Character" dropdown opens on click -> `test_import.py::test_new_character_dropdown_opens_on_click`
+- [x] Dropdown "Create a character" posts to /characters (pre-import
+      flow) -> `test_import.py::test_dropdown_create_option_posts_to_characters`
+- [x] Dropdown "Import a character" option navigates to /import -> `test_import.py::test_dropdown_import_option_navigates_to_import`
+- [x] Dropdown closes on click-outside -> `test_import.py::test_dropdown_closes_on_click_outside`
+
+Import form (`/import`):
+
+- [x] Upload-file tab is selected by default -> `test_import.py::test_import_form_defaults_to_file_tab`
+- [x] Tabs switch between file and URL panels -> `test_import.py::test_import_form_tabs_switch_visible_panel`
+- [x] Submit with no file and no URL shows the inline error banner -> `test_import.py::test_submit_with_no_source_shows_inline_error`
+- [x] Happy-path file import ends on the edit page -> `test_import.py::test_happy_file_import_ends_on_edit_page_with_banner`
+- [x] Oversize file shows the 1 MB error banner -> `test_import.py::test_oversize_file_shows_size_error`
+- [x] Unsupported-format file shows the format-error banner -> `test_import.py::test_unsupported_format_shows_format_error`
+
+Progress page (`/import/progress/{id}`):
+
+- [x] Happy path redirects to /characters/{id}/edit on success -> `test_import.py::test_progress_page_shows_stage_text_before_redirecting`
+- [x] Error banner surfaces after a multi-character rejection -> `test_import.py::test_multi_character_fixture_shows_split_error`
+- [x] Not-a-character-sheet rejection surfaces -> `test_import.py::test_not_a_character_sheet_fixture_shows_not_a_sheet_error`
+- [ ] Progress page rejects jobs that belong to a different user
+      (covered by unit suite
+      `test_import_routes.py::test_progress_page_rejects_other_users_jobs`;
+      awkward in Playwright because the shared browser context uses
+      one auth header throughout a session)
+
+Edit-page affordances:
+
+- [x] Import Notes banner appears on drafts created by the importer -> `test_import.py::test_happy_file_import_ends_on_edit_page_with_banner`
+- [x] Import Notes banner disappears after Apply Changes -> `test_import.py::test_edit_page_banner_disappears_after_apply_changes`
+- [ ] Non-imported drafts do NOT show the banner (covered by unit
+      suite: `test_import_routes.py::test_edit_page_no_import_banner_for_non_imported_characters`)
+
+Kill switch & rate limit (covered by unit suite only):
+
+- [ ] GET /import with `IMPORT_ENABLED=false` shows the 503 banner
+      (unit: `test_import_routes.py::test_get_import_kill_switch_shows_503`;
+      clicktest would need to restart the shared live server with
+      a different env var, which the current harness doesn't support)
+- [ ] Rate-limit hit shows the banner
+      (unit: `test_import_routes.py::test_post_rate_limit_blocks_before_job_creation`)
+
+Responsive sanity:
+
+- [x] /import - no horizontal overflow at phone width -> `test_import.py::test_import_page_no_horizontal_overflow_at_phone_width`
+- [x] /import/progress/{id} - no horizontal overflow at phone width -> `test_import.py::test_progress_page_no_horizontal_overflow_at_phone_width`
+
+JS-error sanity:
+
+- [x] No JS errors on /import -> `test_import.py::test_no_js_errors_on_import_page`
+- [x] No JS errors on /import/progress/{id} -> `test_import.py::test_no_js_errors_on_progress_page`
 
 ---
 

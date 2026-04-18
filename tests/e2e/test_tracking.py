@@ -1,6 +1,6 @@
 """E2E: Live tracking of wounds, void points, and per-adventure abilities."""
 
-from tests.e2e.helpers import select_school, apply_changes
+from tests.e2e.helpers import select_school, apply_changes, start_new_character
 import pytest
 
 pytestmark = pytest.mark.tracking
@@ -9,7 +9,7 @@ def _create_published_character(page, live_server_url, name="Track Test", school
     """Create, publish, and navigate to character sheet."""
 
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, school)
@@ -21,7 +21,7 @@ def test_tracking_renders_with_per_adventure_abilities(page, live_server_url):
     """Tracking section renders correctly even with per-adventure JSON data."""
     # Use a school that doesn't have per-adventure abilities but add Lucky
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Lucky Tracker")
     select_school(page, "akodo_bushi")

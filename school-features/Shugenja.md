@@ -5,7 +5,7 @@
 **School Ring:** "any non-Void" - Player chooses from Air, Fire, Earth, or Water. Confirmed in `SCHOOL_RING_OPTIONS`.
 **School Knacks:** commune, pontificate, spellcasting - Commune is rollable (varies by element). Pontificate is rollable (Water). Spellcasting is rollable (varies by element).
 
-**DISABLED IN UI:** The Shugenja school is currently disabled in the school selection dropdown with "(coming soon)" label. See `app/templates/character/edit.html:117`.
+**DISABLED IN UI:** The Shugenja school is currently disabled in the school selection dropdown with "(not yet implemented)" label. See `app/templates/character/edit.html:117`.
 
 ---
 

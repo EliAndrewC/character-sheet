@@ -7,7 +7,7 @@ toggles.
 
 import pytest
 
-from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply
+from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply, start_new_character
 
 pytestmark = [pytest.mark.rolls]
 
@@ -15,7 +15,7 @@ pytestmark = [pytest.mark.rolls]
 def _create_roller(page, live_server_url, name="Roller"):
     """Make a character with bragging rank 1 (so a roll formula exists)."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "akodo_bushi")
@@ -180,7 +180,7 @@ def _create_athletics_knack_char(page, live_server_url, name="AthKnack"):
     """Make a character whose school has athletics as a school knack (Togashi)."""
     from tests.e2e.helpers import select_school, apply_changes
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "togashi_ise_zumi")
@@ -441,7 +441,7 @@ def test_initiative_no_total_shown(page, live_server_url):
 def _create_3rd_dan_courtier(page, live_server_url, name="Courtier3Dan"):
     """Create a Courtier at 3rd Dan with Tact 3 and Manipulation 2."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "courtier")
@@ -501,7 +501,7 @@ def _wait_for_roll_result(page):
 def test_unskilled_advanced_skill_shows_minus_10_in_breakdown(page, live_server_url):
     """Rolling an advanced skill at rank 0 lists the -10 penalty in the result breakdown."""
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "UnskilledAdv")
     select_school(page, "akodo_bushi")

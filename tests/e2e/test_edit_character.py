@@ -1,6 +1,6 @@
 """E2E: Edit a character and verify auto-save persists changes."""
 
-from tests.e2e.helpers import select_school, click_plus, apply_changes
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
 import pytest
 
 pytestmark = pytest.mark.autosave
@@ -9,7 +9,7 @@ def _create_and_publish(page, live_server_url, name="Edit Target"):
     """Create and publish a character, return to its sheet."""
 
     page.goto(live_server_url)
-    page.locator('button:text("New Character")').click()
+    start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
     select_school(page, "bayushi_bushi")

@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
-from app.routes import auth, characters, google_sheets, pages
+from app.routes import auth, characters, google_sheets, import_char, pages
 from app.services.auth import is_admin
 
 log = logging.getLogger(__name__)
@@ -113,6 +113,7 @@ app.include_router(pages.router)
 app.include_router(characters.router)
 app.include_router(auth.router)
 app.include_router(google_sheets.router)
+app.include_router(import_char.router)
 
 
 # Global backup status (read by routes for admin banner)

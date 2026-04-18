@@ -3041,6 +3041,13 @@
                                 <div class="text-sky-700 italic">Togashi Special: the blue action die is a bonus die that may only be spent on athletics actions.</div>
                             </template>
                         </div>
+                        <div x-show="perRoundResetMessages.length > 0" x-cloak
+                             data-testid="per-round-reset-messages"
+                             class="mt-2 bg-accent/5 border border-accent/30 rounded p-2 text-xs text-accent space-y-0.5">
+                            <template x-for="msg in perRoundResetMessages" :key="msg">
+                                <div x-text="msg"></div>
+                            </template>
+                        </div>
                     </div>
 
                     {# ── NORMAL (non-initiative) result: Pool view ── #}
@@ -3333,7 +3340,7 @@
                     </div>
 
                     {# No-reroll note (impaired, iaijutsu strike, or unskilled) - only when a 10 was actually rolled #}
-                    <div x-show="formula && !formula.reroll_tens && finalDice.some(d => d.value === 10)"
+                    <div x-show="formula && !formula.reroll_tens && formula?.no_reroll_reason && finalDice.some(d => d.value === 10)"
                          x-cloak class="text-xs italic text-red-700 font-medium">
                         <span x-show="formula?.no_reroll_reason === 'iaijutsu_strike'">
                             10s not rerolled for the strike in an iaijutsu duel
@@ -3343,9 +3350,6 @@
                         </span>
                         <span x-show="formula?.no_reroll_reason === 'unskilled'">
                             10s not rerolled due to <span x-text="formula?.unskilled_skill_name"></span> being 0
-                        </span>
-                        <span x-show="formula?.no_reroll_reason !== 'iaijutsu_strike' && formula?.no_reroll_reason !== 'impaired' && formula?.no_reroll_reason !== 'unskilled' && !formula?.reroll_tens">
-                            10s not rerolled
                         </span>
                     </div>
 
@@ -3698,6 +3702,29 @@
             luckyPrevBaseTotal: 0,
             luckyPrevActionDice: [],
             luckyOriginalWasHigher: false,
+            perRoundResetMessages: [],
+
+            // Pools that were already full are skipped so the initiative
+            // modal doesn't show a "refreshed" message when nothing changed.
+            _resetPerRoundAbilities() {
+                const messages = [];
+                const t = window._trackingBridge;
+                if (!t) return messages;
+                if (this.schoolAbilities.mirumoto_round_points) {
+                    const max = t.mirumotoRoundPointsMax || 0;
+                    if ((t.mirumotoRoundPoints || 0) < max) {
+                        t.mirumotoRoundPoints = max;
+                        messages.push('Mirumoto 3rd Dan points refreshed for the new combat round');
+                    }
+                }
+                if (this.schoolAbilities.priest_round_conviction_refresh) {
+                    if ((t.getCount ? t.getCount('conviction') : 0) > 0) {
+                        t.setCount('conviction', 0);
+                        messages.push('Conviction pool refreshed for the new combat round');
+                    }
+                }
+                return messages;
+            },
 
             canUseLucky() {
                 const t = window._trackingBridge;
@@ -4054,6 +4081,11 @@
             mirumotoPointsSpentThisRoll: 0,
 
             init() {
+                // Alpine auto-calls init() on an x-data object that defines
+                // one, and x-init="init()" on the template invokes it again.
+                // Guard so event listeners only register once.
+                if (this._inited) return;
+                this._inited = true;
                 try {
                     this.formulas = JSON.parse(document.getElementById('roll-formulas').textContent || '{}');
                 } catch (e) { this.formulas = {}; }
@@ -4567,6 +4599,8 @@
                 this.mirumotoPointsSpentThisRoll = 0;
                 this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
+                this.perRoundResetMessages = f.is_initiative
+                    ? this._resetPerRoundAbilities() : [];
 
                 if (owSpent > 0) {
                     const cap = f.otherworldliness_capacity || 0;

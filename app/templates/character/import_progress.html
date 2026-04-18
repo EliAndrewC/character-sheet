@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}L7R - Importing...{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto"
+     x-data="importPoller('{{ job_id }}')"
+     x-init="start()"
+     data-testid="import-progress-page"
+     data-job-id="{{ job_id }}">
+    <h1 class="text-3xl font-bold mb-2">Importing your character</h1>
+    <p class="text-ink/70 mb-6">
+        This usually takes 10 to 30 seconds. You can leave this page
+        open - we'll redirect you to the edit page as soon as the
+        Draft is ready.
+    </p>
+
+    <div class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <div class="flex items-center gap-3 mb-4" x-show="!error">
+            <div class="w-6 h-6 rounded-full border-2 border-accent border-t-transparent animate-spin"
+                 aria-hidden="true"></div>
+            <div>
+                <div class="text-sm text-ink/60">Current stage</div>
+                <div class="text-lg font-medium" data-testid="import-progress-stage"
+                     x-text="stage"></div>
+            </div>
+        </div>
+
+        <div class="h-2 rounded bg-ink/10 overflow-hidden mb-4" x-show="!error">
+            <div class="h-full bg-accent transition-all"
+                 :style="`width: ${progressPct}%`"></div>
+        </div>
+
+        <template x-if="error">
+            <div class="rounded bg-red-50 border border-red-300 text-red-900 px-4 py-3"
+                 data-testid="import-error-banner"
+                 :data-error-code="errorCode">
+                <strong>Import failed:</strong>
+                <span x-text="error"></span>
+                <div class="mt-3">
+                    <a href="/import"
+                       class="text-sm underline"
+                       data-testid="import-retry-link">
+                        Try again
+                    </a>
+                </div>
+            </div>
+        </template>
+
+        <p class="text-xs text-ink/50 mt-2" x-show="!error"
+           x-text="'Elapsed: ' + elapsed + 's'"></p>
+    </div>
+
+    <p class="text-xs text-ink/60 mt-4">
+        We never store a copy of your uploaded document. Only the
+        extracted character stats are saved, as a Draft you can
+        review and edit before you Apply.
+    </p>
+</div>
+
+<script>
+function importPoller(jobId) {
+    return {
+        jobId: jobId,
+        stage: 'Queued',
+        state: 'pending',
+        error: '',
+        errorCode: '',
+        startedAt: Date.now(),
+        intervalHandle: null,
+        // Progress % is a rough visual cue based on stage label, not a
+        // real measurement - the pipeline doesn't report granular %.
+        _stageOrder: ['Queued', 'Reading the document',
+                      'Saving the draft', 'Done'],
+        get elapsed() {
+            return Math.round((Date.now() - this.startedAt) / 1000);
+        },
+        get progressPct() {
+            const idx = this._stageOrder.indexOf(this.stage);
+            if (idx < 0) return 35;
+            return Math.min(95, 15 + idx * 30);
+        },
+        async poll() {
+            let resp;
+            try {
+                resp = await fetch(`/import/status/${this.jobId}`, {
+                    credentials: 'same-origin',
+                });
+            } catch (e) {
+                this.error = "Lost connection to the server. Try again.";
+                this.stopPolling();
+                return;
+            }
+            if (!resp.ok) {
+                this.error = "Lost track of this import job. Start a new one.";
+                this.stopPolling();
+                return;
+            }
+            const data = await resp.json();
+            this.stage = data.stage || this.stage;
+            this.state = data.state;
+            if (data.state === 'succeeded' && data.redirect_url) {
+                this.stopPolling();
+                window.location = data.redirect_url;
+            } else if (data.state === 'failed') {
+                this.error = data.error_message || 'Import failed.';
+                this.errorCode = data.error_code || '';
+                this.stopPolling();
+            }
+        },
+        start() {
+            this.poll();
+            this.intervalHandle = setInterval(() => this.poll(), 1500);
+            // Hard UI timeout after 3 minutes - server-side timeout is
+            // the real backstop; this just stops the spinner.
+            setTimeout(() => {
+                if (this.state !== 'succeeded' && !this.error) {
+                    this.error = "Import took too long. Try again.";
+                    this.stopPolling();
+                }
+            }, 180000);
+        },
+        stopPolling() {
+            if (this.intervalHandle) {
+                clearInterval(this.intervalHandle);
+                this.intervalHandle = null;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

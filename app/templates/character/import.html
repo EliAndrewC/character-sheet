@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}L7R - Import Character{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto"
+     x-data="{ mode: 'file' }"
+     data-testid="import-page">
+    <h1 class="text-3xl font-bold mb-2">Import a Character</h1>
+    <p class="text-ink/70 mb-6">
+        Upload a character sheet in any format, or paste a link to a
+        public Google Doc or Sheet. The importer extracts as much as it
+        can and drops you on the edit page with a Draft to review.
+        You'll see an "Import Notes" section at the top of the draft
+        that flags anything ambiguous.
+    </p>
+
+    {% if error_message %}
+        {% if error_code == "document_not_public" %}
+        <div class="rounded bg-amber-50 border border-amber-400 text-amber-900 px-4 py-3 mb-6"
+             data-testid="import-error-banner"
+             data-error-code="{{ error_code }}">
+            <strong>This document isn't publicly accessible.</strong>
+            <p class="mt-1">To import it, open the document in Google,
+            click <strong>Share</strong>, change "General access" to
+            <strong>Anyone with the link</strong> (Viewer), then paste
+            the URL again.</p>
+        </div>
+        {% else %}
+        <div class="rounded bg-red-50 border border-red-300 text-red-900 px-4 py-3 mb-6"
+             data-testid="import-error-banner"
+             {% if error_code %}data-error-code="{{ error_code }}"{% endif %}>
+            <strong>Import failed:</strong> {{ error_message }}
+        </div>
+        {% endif %}
+    {% endif %}
+
+    <form method="POST" action="/import" enctype="multipart/form-data"
+          class="space-y-6 bg-white rounded-lg shadow p-6 border border-ink/10">
+
+        {# Tabs: file vs URL. Only the active tab's field submits, so
+           the POST handler sees exactly one source. #}
+        <div class="flex rounded border border-ink/20 overflow-hidden"
+             role="tablist" data-testid="import-tabs">
+            <button type="button" role="tab"
+                    :aria-selected="mode === 'file'"
+                    :class="mode === 'file'
+                        ? 'bg-accent text-parchment'
+                        : 'bg-parchment text-ink/70 hover:bg-white'"
+                    class="flex-1 px-4 py-2 text-sm font-medium transition-colors"
+                    data-testid="import-tab-file"
+                    @click="mode = 'file'">
+                Upload a file
+            </button>
+            <button type="button" role="tab"
+                    :aria-selected="mode === 'url'"
+                    :class="mode === 'url'
+                        ? 'bg-accent text-parchment'
+                        : 'bg-parchment text-ink/70 hover:bg-white'"
+                    class="flex-1 px-4 py-2 text-sm font-medium transition-colors border-l border-ink/20"
+                    data-testid="import-tab-url"
+                    @click="mode = 'url'">
+                Paste a URL
+            </button>
+        </div>
+
+        <div x-show="mode === 'file'" data-testid="import-panel-file">
+            <label class="block text-sm font-medium mb-1" for="import-file">
+                Document
+            </label>
+            <input id="import-file" type="file"
+                   data-testid="import-file"
+                   x-bind:name="mode === 'file' ? 'file' : ''"
+                   accept=".txt,.md,.rtf,.html,.htm,.pdf,.doc,.docx,.xls,.xlsx,.odt,.ods,.sxw,.csv"
+                   class="block w-full text-sm text-ink/80 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-accent file:text-parchment file:hover:bg-red-900">
+            <p class="text-xs text-ink/60 mt-1">
+                Accepted: plain text, Markdown, RTF, HTML, PDF, Word
+                (.doc / .docx), Excel (.xls / .xlsx), LibreOffice /
+                OpenOffice. Max size: {{ max_upload_mb or 1 }} MB.
+            </p>
+        </div>
+
+        <div x-show="mode === 'url'" data-testid="import-panel-url">
+            <label class="block text-sm font-medium mb-1" for="import-url">
+                URL
+            </label>
+            <input id="import-url" type="url"
+                   x-bind:name="mode === 'url' ? 'url' : ''"
+                   placeholder="https://docs.google.com/document/d/..."
+                   class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+            <p class="text-xs text-ink/60 mt-1">
+                Public Google Docs and Google Sheets are supported. For
+                a Google Doc, click Share &gt; General access &gt;
+                Anyone with the link &gt; Viewer.
+            </p>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+            <a href="/" class="text-sm text-ink/60 hover:text-ink">Cancel</a>
+            <button type="submit"
+                    class="bg-accent hover:bg-red-900 text-parchment px-6 py-2 rounded font-medium"
+                    data-testid="import-submit">
+                Import Character
+            </button>
+        </div>
+    </form>
+
+    <p class="text-xs text-ink/60 mt-4">
+        The importer never stores a copy of your uploaded document.
+        It extracts the stats and flags anything ambiguous, then lets
+        you review the Draft before you Apply. Character art is never
+        imported - by design.
+    </p>
+</div>
+{% endblock %}
