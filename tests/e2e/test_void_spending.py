@@ -162,7 +162,7 @@ def test_ow_submenu_appears_for_basic_skill_with_ow_available(page, live_server_
     page.wait_for_timeout(300)
     # Hover the "Roll" 0-VP row - submenu to the right should appear
     page.locator('[data-ow-submenu="roll"]').wait_for(state='attached', timeout=2000)
-    page.locator('.fixed.z-50 >> text="Roll "').first.hover()
+    page.locator('[data-roll-menu="root"] >> text="Roll "').first.hover()
     page.wait_for_timeout(200)
     submenu = page.locator('[data-ow-submenu="roll"]')
     assert submenu.is_visible(), "OW submenu should be visible on hover"
@@ -183,7 +183,7 @@ def test_ow_spend_increases_rolled_and_decrements_pool(page, live_server_url):
     assert ow_before == 0
     page.locator('[data-roll-key="skill:bragging"]').click()
     page.wait_for_timeout(300)
-    page.locator('.fixed.z-50 >> text="Roll "').first.hover()
+    page.locator('[data-roll-menu="root"] >> text="Roll "').first.hover()
     page.wait_for_timeout(200)
     page.locator('[data-ow-submenu="roll"] button:has-text("Spend 2 Otherworldliness")').click()
     page.wait_for_function("""() => {
@@ -257,7 +257,7 @@ def test_ow_spend_on_unskilled_roll_enables_reroll_tens(page, live_server_url):
     # Bragging is basic & unranked; the unskilled formula starts with no_reroll_reason=unskilled
     page.locator('[data-roll-key="skill:bragging"]').click()
     page.wait_for_timeout(300)
-    page.locator('.fixed.z-50 >> text="Roll "').first.hover()
+    page.locator('[data-roll-menu="root"] >> text="Roll "').first.hover()
     page.wait_for_timeout(200)
     page.locator('[data-ow-submenu="roll"] button:has-text("Spend 1 Otherworldliness")').click()
     page.wait_for_function("""() => {
@@ -296,7 +296,7 @@ def test_ow_spend_on_unskilled_roll_while_impaired_keeps_no_reroll(page, live_se
     page.wait_for_timeout(200)
     page.locator('[data-roll-key="skill:bragging"]').click()
     page.wait_for_timeout(300)
-    page.locator('.fixed.z-50 >> text="Roll "').first.hover()
+    page.locator('[data-roll-menu="root"] >> text="Roll "').first.hover()
     page.wait_for_timeout(200)
     page.locator('[data-ow-submenu="roll"] button:has-text("Spend 1 Otherworldliness")').click()
     page.wait_for_function("""() => {
@@ -333,7 +333,7 @@ def test_ow_submenu_appears_for_unskilled_basic_skill(page, live_server_url):
     _wait_alpine(page)
     page.locator('[data-roll-key="skill:bragging"]').click()
     page.wait_for_timeout(300)
-    page.locator('.fixed.z-50 >> text="Roll "').first.hover()
+    page.locator('[data-roll-menu="root"] >> text="Roll "').first.hover()
     page.wait_for_timeout(200)
     submenu = page.locator('[data-ow-submenu="roll"]')
     assert submenu.is_visible(), "OW submenu should appear for unskilled basic skill"
@@ -353,7 +353,7 @@ def test_ow_submenu_hidden_when_pool_exhausted(page, live_server_url):
     page.wait_for_timeout(200)
     page.locator('[data-roll-key="skill:bragging"]').click()
     page.wait_for_timeout(300)
-    page.locator('.fixed.z-50 >> text="Roll "').first.hover()
+    page.locator('[data-roll-menu="root"] >> text="Roll "').first.hover()
     page.wait_for_timeout(200)
     submenu = page.locator('[data-ow-submenu="roll"]')
     assert not submenu.is_visible(), "OW submenu should be hidden when pool exhausted"

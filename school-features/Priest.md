@@ -11,9 +11,53 @@
 
 > You have all 10 rituals listed under the Priest profession.
 
-**Status:** Out of scope - narrative ability (rituals are not encoded in the app).
+**Status:** Mostly narrative; three of the rituals are exposed mechanically.
+The remaining 7 stay narrative.
 
-**Implementation:** `app/game_data.py:1564` (definition only).
+Mechanical rituals:
+
+1. **Bless conversation topic** (2k1) — button on the Priest's own sheet
+   (Tracking panel). Opens the dice modal with a 2k1 formula and a
+   ritual-specific title. Conviction may be spent; void may not (roll menu is
+   bypassed). Gated by `priest_bless_rituals` in `school_abilities`.
+2. **Bless research** (2k1) — same shape as above, different title + tooltip.
+3. **Sick-or-impaired ritual** (reroll) — shown on the **target's** sheet, not
+   the priest's. When the target's Impaired 10-not-rerolled note appears and
+   there is at least one priest in the target's gaming group (any Dan), a
+   button "<priest name> priest blessed for 10 rerolls" appears beside the
+   note. Clicking it rerolls the Impaired 10s (new dice explode normally) and
+   updates finalDice / keptSum / baseTotal. Discretionary spends already made
+   on the roll (raises, Conviction, Mirumoto round points, Shosuro 5th Dan
+   lowest-3) carry through; Shosuro lowest-3 is recomputed against the new
+   pool. The list of priests is exposed via the `party_priests` context var
+   (populated from `party_chars` with `p.school == "priest"`), excluding the
+   character themselves.
+
+**Implementation:**
+- `app/game_data.py:1564` — school definition.
+- `app/routes/pages.py` — `priest_bless_rituals` flag; `party_priests` list.
+- `app/templates/character/sheet.html` — Bless buttons in the Tracking panel;
+  `rollBless(title)` and `rerollImpairedTens(priest)` methods on the
+  `diceRoller` Alpine component; reroll button wrapper gated on
+  `formula.no_reroll_reason === 'impaired' && finalDice.some(d => d.value === 10) && partyPriests.length > 0`.
+
+**Unit tests:**
+- `test_routes.py::TestPriestBlessRituals` (flag + button rendering, priest vs non-priest)
+- `test_routes.py::TestPartyPriestsContext` (party_priests includes all party priests at any Dan, excludes self, empty if no group or no priests)
+
+**Clicktests:**
+- `test_school_abilities.py::test_priest_bless_conversation_topic_rolls_2k1`
+- `test_school_abilities.py::test_priest_bless_research_rolls_2k1`
+- `test_school_abilities.py::test_priest_bless_buttons_have_rules_tooltips`
+- `test_school_abilities.py::test_priest_bless_roll_allows_conviction_spending`
+- `test_school_abilities.py::test_priest_bless_roll_offers_no_void_spending`
+- `test_school_abilities.py::test_priest_bless_buttons_absent_on_non_priest`
+- `test_school_abilities.py::test_priest_bless_reroll_button_shows_on_impaired_10`
+- `test_school_abilities.py::test_priest_bless_reroll_button_tooltip_has_rules_text`
+- `test_school_abilities.py::test_priest_bless_reroll_replaces_10s_and_updates_total`
+- `test_school_abilities.py::test_priest_bless_reroll_button_hides_after_click`
+- `test_school_abilities.py::test_priest_bless_reroll_button_hidden_without_party_priest`
+- `test_school_abilities.py::test_priest_bless_reroll_button_hidden_when_not_impaired`
 
 ---
 

@@ -1,5 +1,7 @@
 """Character API routes — CRUD, auto-save, publish, revert, and HTMX partials."""
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -704,9 +706,38 @@ async def track_state(
         character.current_temp_void_points = max(0, int(body["current_temp_void_points"]))
     if "adventure_state" in body:
         character.adventure_state = body["adventure_state"]
+    if "action_dice" in body:
+        character.action_dice = _sanitize_action_dice(body["action_dice"])
 
     db.commit()
     return JSONResponse({"status": "ok"})
+
+
+def _sanitize_action_dice(raw: Any) -> list:
+    """Coerce a client-supplied action_dice list into safe storage shape.
+
+    Each entry becomes ``{"value": int, "spent": bool}`` with the value
+    clamped to 0-10. An optional ``"spent_by"`` string (describing the
+    action that auto-spent the die) is preserved, capped at 500 chars.
+    Malformed or non-list payloads become ``[]``.
+    """
+    if not isinstance(raw, list):
+        return []
+    cleaned = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            value = int(entry.get("value", 0))
+        except (TypeError, ValueError):
+            continue
+        value = max(0, min(10, value))
+        out = {"value": value, "spent": bool(entry.get("spent", False))}
+        spent_by = entry.get("spent_by")
+        if isinstance(spent_by, str) and spent_by:
+            out["spent_by"] = spent_by[:500]
+        cleaned.append(out)
+    return cleaned
 
 
 # ---------------------------------------------------------------------------
