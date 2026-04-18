@@ -102,10 +102,21 @@ def test_granted_user_can_access_edit_page(page, page_nonadmin, live_server_url)
     page.locator('button[type="submit"]', has_text="Save").click()
     page.wait_for_load_state("networkidle")
 
-    # Now nonadmin should be able to load the edit page
-    page_nonadmin.goto(f"{live_server_url}/characters/{char_id}/edit")
-    page_nonadmin.wait_for_selector('input[name="name"]', timeout=5000)
-    assert page_nonadmin.input_value('input[name="name"]') == "Shared Char"
+    try:
+        # Now nonadmin should be able to load the edit page
+        page_nonadmin.goto(f"{live_server_url}/characters/{char_id}/edit")
+        page_nonadmin.wait_for_selector('input[name="name"]', timeout=5000)
+        assert page_nonadmin.input_value('input[name="name"]') == "Shared Char"
+    finally:
+        # Revoke the grant so later tests see a clean slate. The live_server
+        # DB persists across tests, so leaving the grant in place makes the
+        # admin's default editor list include Test User 1 for every later test.
+        page.goto(f"{live_server_url}/profile")
+        grant_cb = page.locator('input[name="grant_test_user_1"]')
+        if grant_cb.is_checked():
+            grant_cb.uncheck()
+        page.locator('button[type="submit"]', has_text="Save").click()
+        page.wait_for_load_state("networkidle")
 
 
 def test_owner_dropdown_hidden_for_nonadmin(page, page_nonadmin, live_server_url):

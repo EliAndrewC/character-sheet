@@ -4481,9 +4481,12 @@ def test_priest_bless_reroll_button_shows_on_impaired_10(page, live_server_url):
     _wait_roll_done(page)
     _restore_dice(page)
 
-    btn = page.locator('[data-priest-bless-reroll-block] button').first
+    # The live_server_url DB persists across tests, so other tests may have
+    # added priests to the shared Tuesday Group. Match this test's priest by name.
+    btn = page.locator('[data-priest-bless-reroll-block] button').filter(
+        has_text="Isawa Blesser"
+    ).first
     assert btn.is_visible()
-    assert "Isawa Blesser" in btn.text_content()
     assert "priest blessed for 10 rerolls" in btn.text_content()
 
 
@@ -4495,7 +4498,12 @@ def test_priest_bless_reroll_button_tooltip_has_rules_text(page, live_server_url
     _wait_roll_done(page)
     _restore_dice(page)
 
-    tooltip = page.locator('[data-priest-bless-reroll-block] .tooltip-content').first
+    # Scope to the row for THIS test's priest (others may exist in Tuesday Group
+    # because the live_server DB persists across tests).
+    row = page.locator('[data-priest-bless-reroll-block] > div').filter(
+        has_text="Kuni Blesser"
+    ).first
+    tooltip = row.locator('.tooltip-content').first
     text = tooltip.text_content()
     assert "Kuni Blesser" in text
     assert "already suffering penalties from being sick or impaired" in text
@@ -4547,6 +4555,11 @@ def test_priest_bless_reroll_button_hides_after_click(page, live_server_url):
     page.locator('[data-priest-bless-reroll-block] button').first.click()
     _wait_roll_done(page)
     _restore_dice(page)
+    # Wait for the x-show to re-evaluate and hide the block.
+    page.wait_for_function("""() => {
+        const el = document.querySelector('[data-priest-bless-reroll-block]');
+        return !el || el.offsetParent === null;
+    }""", timeout=3000)
     block = page.locator('[data-priest-bless-reroll-block]')
     assert not block.is_visible()
 
