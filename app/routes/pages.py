@@ -337,6 +337,8 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "togashi_daily_raises_per_roll": (char_dict.get("skills") or {}).get("precepts", 0) if character.school == "togashi_ise_zumi" and dan >= 3 else 0,
         # Merchant Special: spend VP after seeing roll
         "merchant_post_roll_vp": character.school == "merchant",
+        # Merchant 5th Dan: once-per-roll selective reroll, subject to sum >= 5*(X-1)
+        "merchant_5th_dan_reroll": character.school == "merchant" and dan >= 5,
         # Shiba 5th Dan: lower opponent TN after parry (display note)
         "shiba_parry_lower_tn": character.school == "shiba_bushi" and dan >= 5,
         # Daidoji 5th Dan: lower attacker TN after wound check (display note)

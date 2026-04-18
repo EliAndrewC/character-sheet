@@ -252,6 +252,13 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 - [x] Post-roll VP buttons visible -> `test_school_abilities.py::test_merchant_post_roll_vp_buttons`
 - [x] Post-roll VP spending works -> `test_school_abilities.py::test_merchant_post_roll_vp_spending`
+- [x] Pre-roll menu has no VP options -> `test_school_abilities.py::test_merchant_pre_roll_menu_has_no_vp_options`
+- [x] Spend 1 VP button clickable multiple times -> `test_school_abilities.py::test_merchant_spend_one_vp_button_clickable_multiple_times`
+- [x] Spend 1 VP preserves existing dice and adds one new die -> `test_school_abilities.py::test_merchant_spend_one_vp_preserves_existing_dice`
+- [x] 5th Dan reroll button visible at Dan 5 -> `test_school_abilities.py::test_merchant_5th_dan_reroll_button_visible_at_dan_5`
+- [x] 5th Dan reroll button hidden below Dan 5 -> `test_school_abilities.py::test_merchant_5th_dan_reroll_hidden_below_dan_5`
+- [x] 5th Dan reroll requires sum >= 5*(count-1) -> `test_school_abilities.py::test_merchant_5th_dan_reroll_constraint_enforced`
+- [x] 5th Dan reroll shows +/- delta in breakdown -> `test_school_abilities.py::test_merchant_5th_dan_reroll_applies_delta_bullet`
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_merchant_1st_dan_behavioral`
 - [x] 2nd Dan behavioral interrogation bonus -> `test_school_abilities.py::test_merchant_2nd_dan_behavioral`
 - [x] 3rd Dan spend raise on sincerity -> `test_school_abilities.py::test_merchant_3rd_dan_sincerity_raises`

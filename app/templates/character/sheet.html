@@ -2837,6 +2837,14 @@
                             by Otherworldliness
                         </div>
 
+                        {# Merchant 5th Dan reroll net effect #}
+                        <div x-show="formula?.merchant_5th_dan_used" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            <span x-text="((formula?.merchant_5th_dan_bonus || 0) >= 0 ? '+' : '') + (formula?.merchant_5th_dan_bonus || 0)"></span>
+                            from Merchant 5th Dan reroll
+                        </div>
+
                         {# Mirumoto 5th Dan: +10 per VP on combat rolls #}
                         <div x-show="formula?.void_spent > 0 && voidSpendConfig.combat_vp_flat_bonus > 0" x-cloak
                              class="text-xs text-ink/70 list-disc list-inside mt-0.5">
@@ -3135,18 +3143,67 @@
                         Kitsuki 5th Dan: you may reduce chosen characters' Air, Fire, and Water by 1. You may target any one character, or multiple characters whose total XP does not exceed yours. Does not work during iaijutsu duels. Does not stack with other Kitsuki Magistrates.
                     </div>
 
-                    {# Merchant Special: post-roll VP spending (re-rolls with extra dice) #}
-                    <div x-show="phase === 'done' && schoolAbilities.merchant_post_roll_vp && !formula?.merchant_vp_spent && !formula?.is_initiative" x-cloak
+                    {# Merchant Special: post-roll VP spending (1 VP at a time, re-rolls with extra dice) #}
+                    <div x-show="phase === 'done' && schoolAbilities.merchant_post_roll_vp && !formula?.is_initiative && merchantVpStillAvailable()" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
-                        <div class="text-xs text-ink/60 mb-1">Merchant Special: spend VP after seeing the roll.</div>
-                        <div class="flex flex-wrap gap-1">
-                            <template x-for="opt in computeVoidOptions()" :key="'mv'+opt.count">
+                        <div class="text-xs text-ink/60 mb-1">
+                            Merchant Special: spend VP after seeing the roll.
+                            <span x-show="(formula?.merchant_vp_spent || 0) > 0"
+                                  x-text="'(' + (formula?.merchant_vp_spent || 0) + ' spent this roll)'"></span>
+                        </div>
+                        <button type="button"
+                                @click="merchantSpendOneVp()"
+                                class="bg-accent hover:bg-red-900 text-parchment px-2 py-1 rounded text-xs">
+                            Spend 1 VP (+1k1)
+                        </button>
+                    </div>
+
+                    {# Merchant 5th Dan: once-per-roll selective reroll #}
+                    <div x-show="phase === 'done' && schoolAbilities.merchant_5th_dan_reroll && !formula?.is_initiative && !formula?.merchant_5th_dan_used && merchant5thPhase === 'idle'" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="text-xs text-ink/60 mb-1">
+                            Merchant 5th Dan: reroll dice if the selected dice sum to at least 5 * (count - 1).
+                        </div>
+                        <button type="button"
+                                data-action="merchant-5th-start"
+                                @click="merchant5thStart()"
+                                class="bg-accent hover:bg-red-900 text-parchment px-2 py-1 rounded text-xs">
+                            Merchant 5th Dan Reroll
+                        </button>
+                    </div>
+
+                    {# Merchant 5th Dan: dice selection UI #}
+                    <div x-show="merchant5thPhase === 'selecting'" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-3 text-sm">
+                        <div class="font-medium text-amber-800 mb-2">
+                            Merchant 5th Dan: select dice to reroll
+                            (sum must be &ge; <span x-text="merchant5thMinRequired()"></span>;
+                            selected sum: <span x-text="merchant5thSelectedSum()"></span>)
+                        </div>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                            <template x-for="(d, i) in finalDice" :key="'m5'+i">
                                 <button type="button"
-                                        @click="formula.rolled += opt.count; formula.kept += opt.count; if (formula.rolled > 10) { formula.kept += formula.rolled - 10; formula.rolled = 10; } if (formula.kept > 10) { formula.flat += 2*(formula.kept-10); formula.kept = 10; } formula.void_spent = (formula.void_spent||0) + opt.count; formula.merchant_vp_spent = opt.count; deductVoidPoints(opt); phase = 'rolling'; runRoll();"
-                                        class="bg-accent hover:bg-red-900 text-parchment px-2 py-1 rounded text-xs"
-                                        x-text="'Spend ' + opt.count + ' VP (+' + opt.count + 'k' + opt.count + ')'">
+                                        data-action="merchant-5th-die"
+                                        @click="merchant5thToggle(i)"
+                                        class="w-10 h-10 rounded-full border-2 font-mono font-bold text-sm transition-colors"
+                                        :class="merchant5thSelections.includes(i) ? 'border-accent bg-accent/20 text-accent' : d.kept ? 'border-ink/30 bg-white text-ink' : 'border-ink/20 bg-ink/5 text-ink/50'"
+                                        x-text="d.value">
                                 </button>
                             </template>
+                        </div>
+                        <div class="text-xs text-amber-700 mb-2">Kept dice are bold. Unkept dice are dimmed. Rerolling may change which dice are kept.</div>
+                        <div class="flex gap-2">
+                            <button type="button"
+                                    data-action="merchant-5th-confirm"
+                                    @click="merchant5thConfirm()"
+                                    :disabled="!merchant5thCanConfirm()"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-xs disabled:opacity-30">
+                                Reroll <span x-text="merchant5thSelections.length"></span>
+                            </button>
+                            <button type="button" @click="merchant5thCancel()"
+                                    class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-xs">
+                                Cancel
+                            </button>
                         </div>
                     </div>
 
@@ -3562,6 +3619,9 @@
             rollMenuHasParry: false,
             rollMenuOwCapacity: 0,
             owHoverRow: null,
+            // Merchant 5th Dan selective reroll state
+            merchant5thPhase: 'idle',  // 'idle' | 'selecting'
+            merchant5thSelections: [],
             voidSpendConfig: { cap: 0, worldliness_max: 0, combat_vp_flat_bonus: 0, wc_vp_free_raise: false },
             schoolAbilities: {},
             matsuBankedWcBonuses: [],
@@ -3710,14 +3770,19 @@
                     return;
                 }
 
-                // Compute void options
-                const options = this.computeVoidOptions();
+                // Compute void options (merchants spend VP only after seeing the roll,
+                // so pre-roll VP options are hidden - no reason to commit in advance).
+                const options = this.schoolAbilities.merchant_post_roll_vp
+                    ? [] : this.computeVoidOptions();
                 // Check for special roll variants
                 const hasStrike = key === 'knack:iaijutsu' && !!this.formulas['knack:iaijutsu:strike'];
                 const hasParry = key === 'parry';
+                // Otherworldliness submenu also keeps the menu open
+                const owCap = f.otherworldliness_capacity || 0;
+                const owMax = Math.min(owCap, this.getOwPoolAvail());
 
-                // If no void options and no special variants, roll directly
-                if (options.length === 0 && !hasStrike && !hasParry) {
+                // If no options, no special variants, and no OW available, roll directly
+                if (options.length === 0 && !hasStrike && !hasParry && owMax === 0) {
                     this.executeRoll(key, 0, null);
                     return;
                 }
@@ -3758,6 +3823,161 @@
             owBaseSkillRank() {
                 // Derived from capacity: capacity = 5 - rank, so rank = 5 - capacity.
                 return 5 - (this.rollMenuOwCapacity || 0);
+            },
+
+            merchantVpStillAvailable() {
+                const t = window._trackingBridge;
+                if (!t) return false;
+                const wMax = this.voidSpendConfig.worldliness_max || 0;
+                const wAvail = wMax > 0 ? Math.max(0, wMax - (t.getCount('worldliness') || 0)) : 0;
+                const poolAvail = (t.tempVoidPoints || 0) + (t.voidPoints || 0) + wAvail;
+                const spentThisRoll = this.formula?.merchant_vp_spent || 0;
+                const capRemaining = (this.voidSpendConfig.cap || 0) - spentThisRoll;
+                return poolAvail > 0 && capRemaining > 0;
+            },
+
+            merchant5thStart() {
+                if (!this.schoolAbilities.merchant_5th_dan_reroll) return;
+                if (this.formula?.merchant_5th_dan_used) return;
+                this.merchant5thSelections = [];
+                this.merchant5thPhase = 'selecting';
+            },
+
+            merchant5thToggle(i) {
+                const idx = this.merchant5thSelections.indexOf(i);
+                if (idx >= 0) this.merchant5thSelections.splice(idx, 1);
+                else this.merchant5thSelections.push(i);
+            },
+
+            merchant5thSelectedSum() {
+                let s = 0;
+                for (const i of this.merchant5thSelections) {
+                    s += (this.finalDice[i]?.value || 0);
+                }
+                return s;
+            },
+
+            merchant5thMinRequired() {
+                return Math.max(0, 5 * (this.merchant5thSelections.length - 1));
+            },
+
+            merchant5thCanConfirm() {
+                return this.merchant5thSelections.length > 0
+                    && this.merchant5thSelectedSum() >= this.merchant5thMinRequired();
+            },
+
+            async merchant5thConfirm() {
+                if (!this.merchant5thCanConfirm()) return;
+                const selected = [...this.merchant5thSelections].sort((a, b) => a - b);
+                const oldKeptSum = this.keptSum;
+                // Reconstitute the pool with parts preserved (finalDice drops the
+                // exploded-parts array; kept/unkept retain it).
+                const allWithParts = [...this.keptDice, ...this.unkeptDice];
+                const partsByValue = new Map();
+                for (const d of allWithParts) {
+                    if (!partsByValue.has(d.value)) partsByValue.set(d.value, []);
+                    partsByValue.get(d.value).push(d.parts);
+                }
+                const pool = this.finalDice.map(d => {
+                    const arr = partsByValue.get(d.value);
+                    const parts = (arr && arr.length > 0) ? arr.shift() : [d.value];
+                    return { value: d.value, parts };
+                });
+                this.merchant5thPhase = 'rerolling';
+                this.phase = 'rolling';
+                const newDice = await this._rerollDice(
+                    selected.length, this.formula.reroll_tens, 'dice-animation'
+                );
+                selected.forEach((idx, j) => {
+                    pool[idx] = { value: newDice[j].value, parts: newDice[j].parts };
+                });
+                // Re-sort and re-select kept
+                const sortedAsc = pool.slice().sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(this.formula.kept, sortedAsc.length);
+                const isInit = this.formula.is_initiative;
+                const keptSet = new Set();
+                if (isInit) {
+                    for (let i = 0; i < keptCount; i++) keptSet.add(i);
+                } else {
+                    for (let i = sortedAsc.length - keptCount; i < sortedAsc.length; i++) keptSet.add(i);
+                }
+                this.finalDice = sortedAsc.map((d, i) => ({ value: d.value, kept: keptSet.has(i) }));
+                this.keptDice = sortedAsc.filter((_, i) => keptSet.has(i));
+                this.unkeptDice = sortedAsc.filter((_, i) => !keptSet.has(i));
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                const delta = this.keptSum - oldKeptSum;
+                this.baseTotal += delta;
+                this.formula.merchant_5th_dan_bonus = delta;
+                this.formula.merchant_5th_dan_used = true;
+                this.merchant5thPhase = 'idle';
+                this.merchant5thSelections = [];
+                this.phase = 'done';
+            },
+
+            merchant5thCancel() {
+                this.merchant5thPhase = 'idle';
+                this.merchant5thSelections = [];
+            },
+
+            async merchantSpendOneVp() {
+                const t = window._trackingBridge;
+                if (!t || !this.merchantVpStillAvailable()) return;
+                // Pick source in priority order: temp > regular > worldliness
+                let opt;
+                if ((t.tempVoidPoints || 0) > 0) {
+                    opt = { count: 1, fromTemp: 1, fromRegular: 0, fromWorldliness: 0 };
+                } else if ((t.voidPoints || 0) > 0) {
+                    opt = { count: 1, fromTemp: 0, fromRegular: 1, fromWorldliness: 0 };
+                } else {
+                    opt = { count: 1, fromTemp: 0, fromRegular: 0, fromWorldliness: 1 };
+                }
+                // Snapshot discretionary bonuses already applied to baseTotal so we can re-add.
+                const disc = this._genericDiscretionaryTotal();
+                // Physical dice currently in the pool
+                const oldPhysical = this.finalDice.length;
+                // Update formula dimensions + apply 10k10 caps
+                this.formula.rolled += 1;
+                this.formula.kept += 1;
+                if (this.formula.rolled > 10) {
+                    this.formula.kept += this.formula.rolled - 10;
+                    this.formula.rolled = 10;
+                }
+                if (this.formula.kept > 10) {
+                    this.formula.flat += 2 * (this.formula.kept - 10);
+                    this.formula.kept = 10;
+                }
+                this.formula.void_spent = (this.formula.void_spent || 0) + 1;
+                this.formula.merchant_vp_spent = (this.formula.merchant_vp_spent || 0) + 1;
+                this.deductVoidPoints(opt);
+                // Roll the new physical die(s) - 0 (cap hit) or 1 - and merge into pool.
+                // Use keptDice/unkeptDice as the source since they retain the exploded
+                // .parts breakdown that the template renders; finalDice drops that field.
+                const newCount = Math.max(0, this.formula.rolled - oldPhysical);
+                const existing = [...(this.keptDice || []), ...(this.unkeptDice || [])];
+                let pool = existing.map(d => ({ parts: d.parts, value: d.value }));
+                if (newCount > 0) {
+                    this.phase = 'rolling';
+                    const newDice = await this._rerollDice(
+                        newCount, this.formula.reroll_tens, 'dice-animation'
+                    );
+                    pool = pool.concat(newDice.map(d => ({ parts: d.parts, value: d.value })));
+                }
+                // Re-sort and re-select kept (top N for normal, bottom N for initiative)
+                const sortedAsc = pool.slice().sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(this.formula.kept, sortedAsc.length);
+                const isInit = this.formula.is_initiative;
+                const keptSet = new Set();
+                if (isInit) {
+                    for (let i = 0; i < keptCount; i++) keptSet.add(i);
+                } else {
+                    for (let i = sortedAsc.length - keptCount; i < sortedAsc.length; i++) keptSet.add(i);
+                }
+                this.finalDice = sortedAsc.map((d, i) => ({ value: d.value, kept: keptSet.has(i) }));
+                this.keptDice = sortedAsc.filter((_, i) => keptSet.has(i));
+                this.unkeptDice = sortedAsc.filter((_, i) => !keptSet.has(i));
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+                this.baseTotal = this.keptSum + this.formula.flat + disc;
+                this.phase = 'done';
             },
 
             computeVoidOptions() {

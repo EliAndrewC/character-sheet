@@ -116,4 +116,8 @@
 
 > After making any non-initiative roll, you may reroll some of the dice so long as the dice being rerolled add up to at least 5*(X-1) where X is the number of dice being rerolled. You may only do this once per roll. As per your Special Ability, you may spend Void Points before and/or after you make this reroll.
 
-**Status:** Out of scope - complex selective reroll mechanic with value constraints.
+**Status:** Implemented.
+- Server gating: `merchant_5th_dan_reroll` flag in `app/routes/pages.py` when `school == "merchant"` and `dan >= 5`.
+- Client: `merchant5thStart` / `merchant5thToggle` / `merchant5thConfirm` on the dice roller in `app/templates/character/sheet.html`. Users select dice via the post-roll selection UI; the confirm button is disabled until the selected-sum constraint is satisfied. Delta is displayed as a bullet ("+N from Merchant 5th Dan reroll").
+- Interacts with the Merchant Special (post-roll VP spending) in any order; both operate on the same pool and share the `merchant_5th_dan_used` flag for once-per-roll enforcement.
+- Clicktests: `test_merchant_5th_dan_reroll_*` in `tests/e2e/test_school_abilities.py`.

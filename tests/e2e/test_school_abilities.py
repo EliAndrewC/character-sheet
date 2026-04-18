@@ -945,6 +945,201 @@ def test_merchant_post_roll_vp_buttons(page, live_server_url):
     assert page.locator('text="Merchant Special: spend VP after seeing the roll."').is_visible()
 
 
+def test_merchant_pre_roll_menu_has_no_vp_options(page, live_server_url):
+    """Merchant pre-roll: VP options are hidden because VP is spent after the roll."""
+    _create_char(page, live_server_url, "MerchantNoPreVP", "merchant",
+                 skill_overrides={"bragging": 1})
+    # Character starts with 2 VP and 2 cap, so a non-merchant would see a menu with options.
+    # For merchants, the menu should either skip directly to rolling, or show only a
+    # single "Roll X" button (if OW/other extras force it open).
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(400)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
+    if menu.is_visible():
+        text = menu.text_content()
+        assert "Spend 1 void point" not in text
+        assert "Spend 2 void points" not in text
+
+
+def test_merchant_spend_one_vp_preserves_existing_dice(page, live_server_url):
+    """Merchant VP spend adds ONE die to the pool without re-rolling existing dice."""
+    _create_char(page, live_server_url, "MerchantAddOne", "merchant",
+                 skill_overrides={"bragging": 2})
+    # bragging 2 + air 2 -> 4k2, so rolled=4 dice in pool
+    _mock_dice_low(page)  # initial roll: all 1s -> dice [1,1,1,1], kept [1,1], keptSum=2
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    _restore_dice(page)
+    dice_before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.finalDice) return d.finalDice.map(x => x.value);
+        }
+        return null;
+    }""")
+    assert dice_before == [1, 1, 1, 1]
+    # Mock the next die to be a 7 so we know it came from this VP spend
+    _mock_dice_high(page)
+    page.locator('[data-modal="dice-roller"] button:has-text("Spend 1 VP")').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    dice_after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.finalDice) return d.finalDice.map(x => x.value);
+        }
+        return null;
+    }""")
+    # Pool is now [1,1,1,1,7] - existing 1s are preserved, new 7 added
+    assert sorted(dice_after) == [1, 1, 1, 1, 7]
+    # Kept/unkept dice retain the .parts breakdown so the Pool view renders them
+    kept_parts_ok = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.keptDice) return d.keptDice.every(x => Array.isArray(x.parts));
+        }
+        return false;
+    }""")
+    assert kept_parts_ok, "keptDice entries must have a .parts array for rendering"
+    # Kept is now 3 (was 2+1 from VP). Top 3 = [1, 1, 7], keptSum = 9
+    kept_sum = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.keptSum === 'number') return d.keptSum;
+        }
+        return null;
+    }""")
+    assert kept_sum == 9
+
+
+def _make_merchant_5th_dan(page, live_server_url, name):
+    """Create a merchant with Dan=5 (all three school knacks at rank 5)."""
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, "merchant")
+    click_plus(page, "knack_discern_honor", 4)  # 1 -> 5
+    click_plus(page, "knack_oppose_knowledge", 4)
+    click_plus(page, "knack_worldliness", 4)
+    click_plus(page, "skill_bragging", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Setup 5th")
+
+
+def test_merchant_5th_dan_reroll_button_visible_at_dan_5(page, live_server_url):
+    _make_merchant_5th_dan(page, live_server_url, "Merchant5Visible")
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    assert page.locator('[data-action="merchant-5th-start"]').is_visible()
+
+
+def test_merchant_5th_dan_reroll_hidden_below_dan_5(page, live_server_url):
+    _create_char(page, live_server_url, "MerchantLowDan", "merchant",
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    assert not page.locator('[data-action="merchant-5th-start"]').is_visible()
+
+
+def test_merchant_5th_dan_reroll_constraint_enforced(page, live_server_url):
+    """Reroll confirm is disabled until selected dice sum >= 5*(count-1)."""
+    _make_merchant_5th_dan(page, live_server_url, "Merchant5Constraint")
+    _mock_dice_low(page)  # initial roll: all 1s, dice [1,1,1,1]
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    _restore_dice(page)
+    page.locator('[data-action="merchant-5th-start"]').click()
+    page.wait_for_timeout(200)
+    # Select 1 die -> sum=1, min=0 -> valid
+    dice = page.locator('[data-action="merchant-5th-die"]')
+    dice.nth(0).click()
+    page.wait_for_timeout(100)
+    confirm = page.locator('[data-action="merchant-5th-confirm"]')
+    assert confirm.is_enabled()
+    # Select 2 dice -> sum=2, min=5 -> invalid
+    dice.nth(1).click()
+    page.wait_for_timeout(100)
+    assert confirm.is_disabled()
+    # Select 3 dice -> sum=3, min=10 -> invalid
+    dice.nth(2).click()
+    page.wait_for_timeout(100)
+    assert confirm.is_disabled()
+
+
+def test_merchant_5th_dan_reroll_applies_delta_bullet(page, live_server_url):
+    """After confirming a reroll, the breakdown shows the net +/- from Merchant 5th Dan."""
+    _make_merchant_5th_dan(page, live_server_url, "Merchant5Delta")
+    _mock_dice_low(page)  # roll all 1s -> [1,1,1,1], keptSum=2
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    _restore_dice(page)
+    page.locator('[data-action="merchant-5th-start"]').click()
+    page.wait_for_timeout(200)
+    # Select 1 die (sum=1, min=0, valid)
+    page.locator('[data-action="merchant-5th-die"]').nth(0).click()
+    page.wait_for_timeout(100)
+    # Mock reroll to a 7 so the delta is deterministic
+    _mock_dice_high(page)
+    page.locator('[data-action="merchant-5th-confirm"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    # Pool is [1,1,1,7]; kept top 2 = [1,7], keptSum=8. Old keptSum was 2 -> delta +6.
+    delta = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.formula) return d.formula.merchant_5th_dan_bonus;
+        }
+        return null;
+    }""")
+    assert delta == 6
+    modal_text = " ".join(page.locator('[data-modal="dice-roller"]').text_content().split())
+    assert "+6 from Merchant 5th Dan reroll" in modal_text
+    # Button should no longer be visible (once per roll)
+    assert not page.locator('[data-action="merchant-5th-start"]').is_visible()
+
+
+def test_merchant_spend_one_vp_button_clickable_multiple_times(page, live_server_url):
+    """Merchant's post-roll 'Spend 1 VP' button can be clicked repeatedly until max."""
+    _create_char(page, live_server_url, "MerchantMulti", "merchant",
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    # Default VP: min ring = 2 -> 2 VP, cap = 2. We should be able to click 2 times.
+    modal = page.locator('[data-modal="dice-roller"]')
+    btn = modal.locator('button:has-text("Spend 1 VP")')
+    assert btn.is_visible(), "Spend 1 VP button should be visible"
+    btn.click()
+    page.wait_for_timeout(200)
+    _wait_roll_done(page)
+    # After 1 click: merchant_vp_spent=1, formula.rolled should have increased
+    vp_spent = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.formula) return d.formula.merchant_vp_spent || 0;
+        }
+        return 0;
+    }""")
+    assert vp_spent == 1
+    # Click again - should still be visible (cap is 2)
+    assert btn.is_visible(), "Button should remain visible after first click"
+    btn.click()
+    page.wait_for_timeout(200)
+    _wait_roll_done(page)
+    vp_spent = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.formula) return d.formula.merchant_vp_spent || 0;
+        }
+        return 0;
+    }""")
+    assert vp_spent == 2
+    # Now cap is reached, button should hide
+    page.wait_for_timeout(300)
+    assert not btn.is_visible(), "Button should hide once per-roll cap is reached"
+
+
 # --- Mirumoto 3rd Dan: round points counter ---
 
 def test_mirumoto_round_points_counter(page, live_server_url):
