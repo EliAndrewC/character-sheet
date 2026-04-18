@@ -2,9 +2,7 @@
 
 This is the phased implementation plan for the new Mantis Wave-Treader bushi school. The school's rules and current status live in [./school-features/MantisWaveTreader.md](./school-features/MantisWaveTreader.md). Read that first - this document assumes familiarity with the ability text.
 
-The school is unusually UI-heavy because it centres on per-phase posture selection. To keep reviewable diffs small and to surface open questions early, the work is broken into the phases below. The phases exist to make the work easier to review and validate incrementally - they are not a commit plan. The user handles all git operations (commits, pushes, deploys) and decides when those happen. Claude should not commit or push between phases unless explicitly asked. A likely flow is that the user commits and pushes between phases, but that's the user's call. Each phase should still land with unit tests, a `COVERAGE.md` entry, and clicktests for any frontend changes, per the workflow in `CLAUDE.md`.
-
-Open questions for the user are collected in the "Open Questions" section at the bottom. **Please review those before we begin Phase 1** - several answers gate the scope of later phases.
+The school is unusually UI-heavy because it centres on per-phase posture selection. To keep reviewable diffs small, the work is broken into the phases below. The phases exist to make the work easier to review and validate incrementally - they are not a commit plan. The user handles all git operations (commits, pushes, deploys) and decides when those happen. Claude should not commit or push between phases unless explicitly asked. A likely flow is that the user commits and pushes between phases, but that's the user's call. Each phase should still land with unit tests, a `COVERAGE.md` entry, and clicktests for any frontend changes, per the workflow in `CLAUDE.md`.
 
 ---
 
@@ -88,16 +86,20 @@ Scope: build the per-phase posture clicker without wiring any mechanical effects
   - Both disabled when `posturePhase > 10`.
   - Clicking appends to `postureHistory` and increments `posturePhase`.
   - Below the buttons, a "Current: Phase X - <Posture>" line when a posture has been selected.
-- Wire `rollInitiative()` (and `rollInitiativeAthleticsVariant()` for Togashi-style variants, though Mantis doesn't have those) to reset `posturePhase = 1` and `postureHistory = []`.
+- **Two reset triggers, both full per-round resets:**
+  - Rolling initiative (wire into `rollInitiative()` and `rollInitiativeAthleticsVariant()`).
+  - Clicking the action-dice "Clear" button (and the future "Clear bonuses" button in Phase 8 - they are equivalent end-of-round actions).
+  - Both zero `posturePhase` back to 1 and empty `postureHistory`. Phases 6, 7, and 8 hang additional state off these same triggers (5th Dan counters, 3rd Dan accumulators, etc.), so centralise the reset in a single helper (e.g. `resetMantisRound()`) that all triggers call.
 - Persist `posturePhase` and `postureHistory` through the tracking bridge so they survive page reloads (same pattern as `actionDice`).
 - Clicktests in `test_school_abilities.py` mark `@pytest.mark.school_abilities`:
   - Buttons appear on Mantis sheets and are absent on non-Mantis.
   - Clicking advances X and records the chosen posture.
   - Both buttons disable at X=11.
   - Rolling initiative resets state back to Phase 1.
+  - Clicking the action-dice "Clear" button also resets state back to Phase 1.
 - Update `COVERAGE.md`.
 
-**Done when:** a Mantis sheet shows the posture tracker, clicks advance it through Phase 10, and initiative resets it.
+**Done when:** a Mantis sheet shows the posture tracker, clicks advance it through Phase 10, and both initiative and the action-dice "Clear" button reset it.
 
 ---
 
@@ -136,9 +138,8 @@ Scope: per-round running totals from each posture declaration.
   - Damage: overlay the labeled line into `atkDamageParts` via the same `atkComputeDamage` extension from Phases 3/5/7.
   - Wound check: overlay into the WC modal's `bonus_sources` via the same extension from Phase 5.
   - TN display: add `defensivePhaseCount` to the Mantis's displayed TN with an enumerated tooltip.
-- Reset on initiative roll (already handled since `postureHistory` is reset in Phase 4).
-- Unit tests and clicktests covering accumulation across multiple phases and reset on initiative. Each clicktest must assert the labeled line is present in the relevant modal, not just that the total shifted.
-- See **Open Question #3** about the "Clear bonuses" button's effect on these counters.
+- Reset on both triggers from Phase 4 (initiative roll and the action-dice "Clear" button) - derived from `postureHistory` so they follow automatically once `postureHistory` resets.
+- Unit tests and clicktests covering accumulation across multiple phases and reset on both triggers. Each clicktest must assert the labeled line is present in the relevant modal, not just that the total shifted.
 
 **Done when:** a Dan 5 Mantis clicking offensive posture on phases 1, 3, 5 sees a persistent +3 on attack rolls that resets next round.
 
@@ -177,11 +178,9 @@ Scope: spend-action-die-for-X-wound-check/TN button and the full "Clear" plumbin
   - **Wound checks** - overlay a labeled `"+X from Mantis 3rd Dan (defensive)"` entry into the WC modal's `bonus_sources` display and into `wcRollTotal` / `wcMargin` / `wcSeriousWounds` / `wcPassed`. This reuses the same WC-modal overlay path that Phase 5 sets up for the defensive posture +5.
   - **Displayed TN** - add `defensive3rdDanAccum` to the sheet's TN display, with a tooltip that enumerates the contributing bonuses (defensive posture +5, 3rd Dan accumulator, 5th Dan accumulator if Dan 5).
 - **Clear bonuses button:** next to the defensive 3rd Dan button. Always visible when any of the accumulators are non-zero or any action die is present.
-  - Zeros `offensive3rdDanAccum`, `defensive3rdDanAccum`.
-  - Calls `clearActionDice()` (clears ALL action dice, same as the existing action-dice "Clear" button).
-  - Does NOT clear the 5th Dan phase counters (per Phase 6 default - pending confirmation on Open Question #3).
-- **Wire the action-dice "Clear" button** to also zero both 3rd Dan accumulators, so the two buttons stay equivalent.
-- Clicktests covering: defensive button appears and fires; the accumulator applies to the next wound check with a labeled line; "Clear bonuses" zeros accumulators and dice; action-dice "Clear" also zeros accumulators; the TN display reflects the accumulator and clears with it.
+  - Semantically marks the **end of the combat round** - it is fully equivalent to the action-dice "Clear" button from Phase 4.
+  - Both buttons call the same `resetMantisRound()` helper, which zeros `offensive3rdDanAccum`, `defensive3rdDanAccum`, empties `postureHistory`, resets `posturePhase` to 1, and calls `clearActionDice()` (clears ALL action dice). The 5th Dan counters fall out automatically since they are derived from `postureHistory`.
+- Clicktests covering: defensive button appears and fires; the accumulator applies to the next wound check with a labeled line; clicking "Clear bonuses" zeros all accumulators, 5th Dan counters, posture history (back to Phase 1), and action dice; clicking the action-dice "Clear" button has the exact same effect; the TN display reflects the accumulators and clears with them.
 
 ---
 
@@ -203,7 +202,7 @@ Scope: make the probability / expected-serious-wounds display in the wound check
 
 Scope: the Dan 4 mechanics. Left late because the ring-raise code needs the "Any" handling added in Phase 1, and the extra-die UI should reuse the infrastructure built in earlier phases.
 
-- **Ring raise:** confirm `enforceFourthDanRing()` (editor) and `calculate_ring_xp()` (server) honour the player's chosen school ring for Mantis. Since Phase 1 added "Any" to `SCHOOL_RING_OPTIONS` and the selected ring is stored in `school_ring_choice`, this should be mostly free. Add unit tests covering: all five rings as the school ring, 4th Dan raises the chosen ring's current and max by 1, costs the discounted 5-XP-fewer rate.
+- **Ring raise:** the 4th Dan raises the **school ring** only (not any arbitrary ring of the player's choice). This is the standard behaviour already enforced by `enforceFourthDanRing()` (editor) and `calculate_ring_xp()` (server), and for Mantis the school ring is whatever the player picked at character creation from the "Any" option (per Phase 1). Confirm both functions read `school_ring_choice` rather than the static `school_ring` value, so a Mantis who chose Void as their school ring gets +1 Void at Dan 4. Add unit tests covering: all five rings as the school ring choice, 4th Dan raises that ring's current and max by 1, costs the discounted 5-XP-fewer rate, and Dan 4 cannot be spent on a non-school ring.
 - **Bonus athletics die:** after initiative is rolled, append a blue "1" die to `actionDice` with `value=1, spent=false, locked_value=true, restricted_to='movement/athletics/mantis_3rd_dan'`. Render with a distinct colour (reuse gold/blue variant) and a tooltip explaining the restriction. It's not actually rolled - it's added deterministically in `build_initiative_formula()` for Mantis Dan 4+ (mirroring the Togashi athletics-only pattern but always adding `[1]` regardless of variant).
 - Enforcement of the spending restriction is display-only (same approach as Togashi today).
 - Reset on initiative roll (recreated each round).
@@ -218,24 +217,3 @@ Scope: the Dan 4 mechanics. Left late because the ring-raise code needs the "Any
 - Ensure every new clicktest appears in `tests/e2e/COVERAGE.md`.
 - Run the full `@pytest.mark.school_abilities` clicktest suite locally.
 - Deploy to Fly.io, then kick off the full e2e suite in the background per `CLAUDE.md` step 8.
-
----
-
-## Open Questions
-
-**Please answer these before we start Phase 1.** Several answers change the scope below. Interim answers - even "whatever you think" - unblock us.
-
-1. **"Free raise to damage rolls" meaning.** Free raises on attack rolls are unambiguous (+5 to the roll, raises the TN). But "free raise to damage rolls" is unusual - damage rolls don't normally have raises. Is "free raise" here shorthand for "+5 to damage total", or "+1 kept die", or "+1 rolled die"? The plan assumes `+5 to damage total` for simplicity; flag if you meant something else.
-
-2. **"Clear bonuses" and the 5th Dan accumulators.** The 3rd Dan accumulators and the "free raise" special-ability bonus are clearly cleared by this button. Should the 5th Dan `offensivePhaseCount` / `defensivePhaseCount` ALSO be cleared, or do they persist (since they represent past phase declarations, not bonuses you'd want to accidentally wipe)? The plan assumes they persist. If they should clear, it's a one-line change.
-
-3. **3rd Dan defensive timing.** The rules say "after seeing the result of an attack roll made against you". The user spec puts the button on the View Sheet itself (not in a modal that appears after an enemy attack). So the button is always available in defensive posture and the player self-enforces the "after seeing an attack result" timing. Confirming this is intended - it keeps the implementation simple.
-
-4. **4th Dan extra die spending enforcement.** The Togashi Ise Zumi handles athletics-only dice by labelling them and trusting the player not to spend them on non-athletics actions. Fine to do the same here, or do you want hard enforcement (disable spend on non-matching rolls)?
-
-5. **Stacking interactions.** Can the same Mantis apply in a single attack roll: the special-ability +5 free raise, a 3rd Dan `+X` accumulator, a 5th Dan `+N` accumulator, AND a 2nd Dan free raise (if the 2nd Dan choice was "attack")? The rules don't forbid stacking and the plan assumes yes. Flag if any combination should be excluded.
-
-6. **Initiative reset vs combat-end reset.** Per-round resets currently fire on initiative roll. If the combat ends and the player doesn't immediately roll initiative again, are the posture counters still "live" for display purposes? The plan treats an initiative roll as the only reset trigger (matching every other per-round reset in the app). OK?
-
-7. **Dan 4 ring raise when school ring is Void.** The 4th Dan raise "raises the current and maximum rank of any Ring by 1". The plan treats the school ring as the ring being raised. But at character creation the Mantis can pick any ring, including Void. Void has a starting cap of 5 (versus 6 for other rings); the 4th Dan raise typically raises the cap to 7. Is that intended for Mantis choosing Void as school ring? Or does Void-as-school-ring follow a different cap progression?
-

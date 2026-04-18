@@ -75,10 +75,10 @@ The "Clear bonuses" button clears all posture-accumulated bonuses AND clears the
 
 ## 4th Dan
 
-> Raise the current and maximum rank of any Ring by 1. Raising that Ring now costs 5 fewer XP. Begin each combat round with an athletics action die set to 1, which may only be spent on movement, athletics actions, or your 3rd Dan technique.
+> Raise the current and maximum rank of your School Ring by 1. Raising that Ring now costs 5 fewer XP. Begin each combat round with an athletics action die set to 1, which may only be spent on movement, athletics actions, or your 3rd Dan technique.
 
 **Status:** Not yet implemented.
-- **Ring raise** - Since `school_ring` is "Any" the player's chosen school ring is what the Dan 4 raise applies to. The existing `enforceFourthDanRing()` / `calculate_ring_xp()` pair already supports variable school rings (see Priest's "any non-Void" handling), so it should generalize once "Any" is added to `SCHOOL_RING_OPTIONS`.
+- **Ring raise** - The Dan 4 raise applies to the player's chosen school ring (picked from the "Any" option at character creation - per Phase 1, Mantis defaults to Void). The player may not redirect this raise to a different ring. This is the standard behaviour enforced by `enforceFourthDanRing()` / `calculate_ring_xp()`, so it should work for Mantis once those functions read `school_ring_choice` rather than the static `school_ring` value.
 - **Bonus athletics action die** - After rolling initiative, render a blue "1" die (always value 1, never rolled) alongside the standard action dice. This is analogous to the Togashi Ise Zumi's "1 athletics action" die, but it is always a literal 1 and is always present regardless of which initiative variant the player picks. The die is restricted in spending to movement, athletics rolls, or the Mantis 3rd Dan technique (offensive or defensive branch). The app tracks the restriction as a label/tooltip; action-die spending enforcement is lightweight (display-only, same approach as Togashi's athletics-only dice today).
 
 **Unit tests:** TBD.
