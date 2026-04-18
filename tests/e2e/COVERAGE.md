@@ -409,6 +409,14 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Athletics knack die icon opens a ring picker (Air/Fire/Water/Earth) → `test_rolls.py::test_athletics_knack_icon_opens_ring_picker`
 - [x] Selecting a ring from the athletics picker rolls that ring's Athletics formula → `test_rolls.py::test_athletics_knack_picker_rolls_selected_ring`
 - [x] Hovering a ring in the athletics picker reveals a void-spend submenu → `test_rolls.py::test_athletics_knack_picker_void_submenu`
+- [x] Athletics picker shows Athletics (Attack) and Athletics (Parry) buttons (athletics knack only) → `test_rolls.py::test_athletics_picker_shows_attack_and_parry_options`
+- [x] Clicking Athletics (Attack) in the picker opens the attack modal with a doubled-TN (5+10*P) dropdown → `test_rolls.py::test_athletics_picker_attack_opens_attack_modal`
+- [x] Clicking Athletics (Parry) in the picker rolls the athletics:parry formula → `test_rolls.py::test_athletics_picker_parry_rolls_athletics_parry`
+- [x] Clicking Attack with athletics available opens a choice menu (Roll Attack / Athletics Attack) → `test_rolls.py::test_attack_button_shows_athletics_choice_when_athletics_available`
+- [x] Clicking Attack without athletics goes straight to the attack modal (no choice menu) → `test_rolls.py::test_attack_button_no_choice_menu_for_non_athletics_character`
+- [x] Selecting Athletics Attack from the choice menu opens the modal with the doubled-TN dropdown → `test_rolls.py::test_attack_choice_athletics_opens_modal_with_doubled_tn`
+- [x] Parry menu includes an Athletics Parry entry when athletics is available → `test_rolls.py::test_parry_menu_shows_athletics_parry_option`
+- [x] Parry menu has no Athletics Parry entry for characters without athletics → `test_rolls.py::test_parry_menu_no_athletics_for_non_athletics_character`
 - [x] Modal shows Total and dice after the animation phase → `test_rolls.py::test_modal_shows_total_and_dice_after_animation`
 - [x] Modal close button hides the modal → `test_rolls.py::test_modal_close_button`
 - [x] Impaired character's roll modal shows "10s not rerolled" note → `test_rolls.py::test_impaired_character_modal_shows_no_reroll_note`

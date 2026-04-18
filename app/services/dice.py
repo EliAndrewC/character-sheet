@@ -609,7 +609,7 @@ def build_athletics_combat_formula(
     formula = build_athletics_formula(ring_name, character_data)
     if formula is None:  # pragma: no cover — ring_name is always Fire/Air (valid), so build_athletics_formula cannot return None here; guard is defensive against future refactors.
         return None
-    formula.label = f"Athletics ({'Attack' if which == 'attack' else 'Parry'})"
+    formula.label = f"Athletics {'Attack' if which == 'attack' else 'Parry'} ({ring_name})"
 
     school_id = character_data.get("school", "")
     tech_choices = character_data.get("technique_choices") or {}

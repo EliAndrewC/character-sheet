@@ -225,6 +225,99 @@ def test_athletics_knack_picker_void_submenu(page, live_server_url):
     assert "Spend 1 void point" in text
 
 
+# ---------------------------------------------------------------------------
+# Athletics used as attack/parry (rules p05 §Athletics). Exposed as two
+# additional entries in the athletics picker menu AND as choices when clicking
+# the Attack/Parry buttons directly.
+# ---------------------------------------------------------------------------
+
+
+def test_athletics_picker_shows_attack_and_parry_options(page, live_server_url):
+    """The athletics picker shows Athletics (Attack) and Athletics (Parry) buttons."""
+    _create_athletics_knack_char(page, live_server_url, "AthCombatPick")
+    page.locator('[data-roll-key="knack:athletics"]').click()
+    page.wait_for_selector('[data-athletics-picker-menu]', state='visible', timeout=3000)
+    assert page.locator('[data-athletics-combat="attack"]').is_visible()
+    assert page.locator('[data-athletics-combat="parry"]').is_visible()
+
+
+def test_athletics_picker_attack_opens_attack_modal(page, live_server_url):
+    """Clicking Athletics (Attack) in the picker opens the attack modal with the
+    doubled-TN dropdown (TN = 5 + 10 * parry)."""
+    _create_athletics_knack_char(page, live_server_url, "AthAtkModal")
+    page.locator('[data-roll-key="knack:athletics"]').click()
+    page.wait_for_selector('[data-athletics-picker-menu]', state='visible', timeout=3000)
+    page.locator('[data-athletics-combat="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    # Title should show "Athletics Attack" (label stripped of "(Fire)")
+    title = page.locator('[data-modal="attack"] h3.text-accent').text_content()
+    assert "Athletics" in title and "Attack" in title
+    # Doubled-TN dropdown: the "(Parry 3)" option should be TN 35, not 20
+    body = page.locator('[data-modal="attack"]').text_content()
+    assert "35 (Parry 3)" in body
+
+
+def test_athletics_picker_parry_rolls_athletics_parry(page, live_server_url):
+    """Clicking Athletics (Parry) in the picker rolls the athletics:parry formula."""
+    _create_athletics_knack_char(page, live_server_url, "AthParryPick")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(150)
+    page.locator('[data-roll-key="knack:athletics"]').click()
+    page.wait_for_selector('[data-athletics-picker-menu]', state='visible', timeout=3000)
+    page.locator('[data-athletics-combat="parry"]').click()
+    page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
+    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
+    assert "Athletics" in title and "Parry" in title
+
+
+def test_attack_button_shows_athletics_choice_when_athletics_available(page, live_server_url):
+    """Clicking the Attack button opens a menu with Roll Attack / Athletics Attack
+    when the character has athletics knack."""
+    _create_athletics_knack_char(page, live_server_url, "AtkChoice")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-attack-choice-menu]', state='visible', timeout=3000)
+    assert page.locator('[data-attack-choice="attack"]').is_visible()
+    assert page.locator('[data-attack-choice="athletics_attack"]').is_visible()
+
+
+def test_attack_button_no_choice_menu_for_non_athletics_character(page, live_server_url):
+    """Akodo (no athletics knack) clicks attack → attack modal opens directly."""
+    _create_roller(page, live_server_url, "AkodoAtk")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    # No choice menu should appear
+    assert not page.locator('[data-attack-choice-menu]').is_visible()
+
+
+def test_attack_choice_athletics_opens_modal_with_doubled_tn(page, live_server_url):
+    """Selecting Athletics Attack from the choice menu opens the modal with 5+10*P TN options."""
+    _create_athletics_knack_char(page, live_server_url, "AtkChoiceAth")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-attack-choice-menu]', state='visible', timeout=3000)
+    page.locator('[data-attack-choice="athletics_attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    body = page.locator('[data-modal="attack"]').text_content()
+    assert "athletics attack" in body.lower()
+    assert "35 (Parry 3)" in body
+
+
+def test_parry_menu_shows_athletics_parry_option(page, live_server_url):
+    """Clicking parry with athletics available shows an Athletics Parry option
+    in the parry menu."""
+    _create_athletics_knack_char(page, live_server_url, "ParryAth")
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    assert page.locator('[data-parry-menu-athletics]').is_visible()
+
+
+def test_parry_menu_no_athletics_for_non_athletics_character(page, live_server_url):
+    """Akodo (no athletics knack) parry menu has no Athletics Parry entry."""
+    _create_roller(page, live_server_url, "AkodoParry")
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    assert not page.locator('[data-parry-menu-athletics]').is_visible()
+
+
 def test_modal_shows_total_and_dice_after_animation(page, live_server_url):
     _create_roller(page, live_server_url, "ResultChar")
     page.locator('[data-roll-key="skill:bragging"]').click()
