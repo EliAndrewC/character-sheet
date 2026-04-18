@@ -1,6 +1,6 @@
 # Character Import - Design & Implementation Tracker
 
-**Status:** Phase 1 (design) in progress. No code written yet.
+**Status:** Phases 1-9 complete. Deployed to Fly 2026-04-18.
 **Owner:** eli
 **Last updated:** 2026-04-18
 
@@ -1180,19 +1180,25 @@ Docs work (safe, done in this session):
   architectural decisions, future work. Links to
   `import-design/CLAUDE.md` for the implementation tracker.
 
-Deploy + prod secrets (**not run from this session** - coordinate
-with any concurrent Claude Code session before deploying so one
-doesn't clobber the other's unmerged work):
+Deploy + prod secrets:
 
-- [ ] User merges `feature/import` (or whichever branch this work
-  landed on) into `main` on the remote.
-- [ ] User runs `fly secrets set GEMINI_API_KEY="..."` (and optionally
-  the two model overrides) before the first deploy that includes this
-  feature.
-- [ ] User runs `fly deploy` from a checkout whose `main` has the
-  import branch merged in.
-- [ ] User confirms the deployed `/import` page loads and a quick
-  plaintext fixture imports successfully against the real Gemini API.
+- [x] All work on `main`; user coordinated with the other concurrent
+  session before deploying. Clean working tree, up to date with
+  `origin/main`.
+- [x] Staged `GEMINI_API_KEY` as a Fly secret via
+  `fly secrets set --stage`. Model vars left to their safe defaults.
+- [x] `fly deploy` ran to completion. Image ~244 MB, within the
+  512 MB machine budget. Rolling deploy touched the single app
+  machine without incident.
+- [x] Post-deploy structural checks passed: `GET /` returned 200,
+  `GET /import` without auth redirected to `/auth/login`,
+  `GET /import/status/<bogus>` returned 401 (auth guard first),
+  authenticated `GET /import` rendered the form with every expected
+  `data-testid` hook present.
+- [ ] Live smoke test against real Gemini (upload an actual fixture
+  and watch it import end-to-end) - recommended the next time the
+  user is logged in, not automatable from this session without
+  exposing the prod API key to a curl flow.
 
 ## 16. Constraints (summary)
 
