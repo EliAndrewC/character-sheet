@@ -1,0 +1,9 @@
+{
+  "outcome": "reject",
+  "error_code": "file_parse_error",
+  "user_message_must_contain": [
+    "Couldn't parse",
+    "corrupted"
+  ],
+  "no_draft_created": true
+}

@@ -1,0 +1,18 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Bayushi Kenta",
+    "school": "bayushi_bushi",
+    "campaign_disadvantages_must_contain": ["family_reckoning_venomous_sting"],
+    "campaign_advantages_must_not_contain": ["family_reckoning_righteous_sting"],
+    "disadvantages_must_contain": ["proud"]
+  },
+  "import_notes": {
+    "must_contain": [
+      "Family Reckoning",
+      "ambiguous",
+      "Venomous Sting"
+    ]
+  },
+  "low_confidence_fields": ["campaign_disadvantages"]
+}

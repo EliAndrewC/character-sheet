@@ -1,0 +1,10 @@
+{
+  "url": "http://10.0.0.1/internal",
+  "mock_response": null,
+  "expected": {
+    "outcome": "reject",
+    "error_code": "url_blocked_ssrf",
+    "user_message_must_contain": ["not allowed", "private"],
+    "no_draft_created": true
+  }
+}

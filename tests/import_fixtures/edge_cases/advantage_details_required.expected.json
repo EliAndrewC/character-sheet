@@ -1,0 +1,29 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Shiba Kenji",
+    "school": "shiba_bushi",
+    "advantages_must_contain": ["virtue", "higher_purpose", "specialization"],
+    "disadvantages_must_contain": ["dark_secret", "humble"],
+    "advantage_details_shape": {
+      "virtue": {"text_must_contain": "Compassion"},
+      "higher_purpose": {
+        "text_must_contain": "protect my daimyo",
+        "skills_non_empty": true
+      },
+      "specialization": {
+        "text_must_contain": "Etiquette",
+        "skills": ["etiquette"]
+      },
+      "dark_secret": {
+        "text_must_contain": "betrayed",
+        "player_field_present": true
+      }
+    }
+  },
+  "import_notes": {
+    "must_contain": ["Dark Secret", "player"],
+    "note": "Dark Secret requires referencing another player character; the importer cannot resolve that from a document, so the player field is left blank and a note asks the user to pick the target PC on the edit page."
+  },
+  "low_confidence_fields": ["advantage_details"]
+}

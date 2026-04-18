@@ -1,0 +1,17 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Hida Gorobei",
+    "school": "hida_bushi",
+    "knacks_must_contain_keys": ["discern_honor", "oppose_social", "worldliness"]
+  },
+  "import_notes": {
+    "must_contain": [
+      "Hida Bushi",
+      "knacks",
+      "don't match"
+    ],
+    "severity_at_least": "high"
+  },
+  "low_confidence_fields": ["knacks"]
+}

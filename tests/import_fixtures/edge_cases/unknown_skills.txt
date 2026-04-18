@@ -1,0 +1,30 @@
+Mirumoto Haru
+Player: Sean
+School: Mirumoto Bushi
+
+Rings: Air 2, Fire 3, Earth 2, Water 2, Void 3
+
+Combat: Attack 2, Parry 2
+
+Skills
+  Etiquette 2
+  History 1
+  Gourmet 2           <-- not a real L7R skill
+  Cooking 3           <-- not a real L7R skill either
+  Sincerity 2
+  Kenjutsu 3          <-- kenjutsu is a combat style, not a skill in L7R
+
+Knacks (Mirumoto Bushi)
+  Counterattack 2
+  Double Attack 2
+  Iaijutsu 2
+
+Advantages: Worldly
+Disadvantages: Proud
+
+Honor 3.0, Rank 7.5, Recognition 7.5
+
+(Gourmet, Cooking, and Kenjutsu should be dropped silently from the
+imported skills. Each one gets a dedicated "unknown skill" entry in
+Import Notes so the user can decide how to represent them - either as
+freeform advantage text or by picking real skills.)

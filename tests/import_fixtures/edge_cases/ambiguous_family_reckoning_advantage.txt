@@ -1,0 +1,38 @@
+Shiba Rei
+Player: Marshall
+School: Shiba Bushi
+
+Rings
+  Air: 2
+  Fire: 2
+  Earth: 3
+  Water: 2
+  Void: 2
+
+Skills
+  Etiquette 2
+  Sincerity 2
+  Heraldry 1
+  Tact 1
+
+Knacks (school: Shiba Bushi)
+  Counterattack 2
+  Double Attack 2
+  Iaijutsu 2
+
+Advantages
+  Family Reckoning
+  Charming
+
+Disadvantages
+  Proud
+
+Honor: 3.0
+Rank: 7.5
+Recognition: 7.5
+
+Notes
+The player wrote only "Family Reckoning" in the advantages list. Because
+the advantage catalog has "Family Reckoning: Righteous Sting" (a campaign
+advantage) and "Family Reckoning: Venomous Sting" (a campaign disadvantage),
+the importer must disambiguate by position. Listed under Advantages -> Righteous.

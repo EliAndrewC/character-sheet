@@ -1,0 +1,10 @@
+{
+  "url": "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890ABC/edit",
+  "mock_response": {
+    "status": 200,
+    "headers": {"Content-Type": "text/plain; charset=utf-8"},
+    "body_file": "../happy_path/happy_plaintext.txt"
+  },
+  "expected": {"same_as": "canonical"},
+  "note": "Public Google Doc. The importer rewrites the /edit URL to /export?format=txt and retrieves the body as plain text."
+}

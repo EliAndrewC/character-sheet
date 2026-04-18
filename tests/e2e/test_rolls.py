@@ -46,18 +46,95 @@ def test_click_attack_opens_attack_modal(page, live_server_url):
 
 
 def test_click_parry_shows_predeclare_option(page, live_server_url):
-    """Clicking parry shows roll menu with predeclared parry option."""
+    """Clicking parry shows roll menu with Roll Parry and Predeclared Parry."""
     _create_roller(page, live_server_url, "ClickParry")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_timeout(300)
-    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
-    assert menu.is_visible()
-    assert menu.locator('text=Predeclared Parry').count() > 0
-    # Click normal parry to roll
-    menu.locator('button.font-medium').first.click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    menu = page.locator('[data-parry-menu]')
+    text = menu.text_content()
+    assert "Roll Parry" in text
+    assert "Predeclared Parry" in text
+    # Click the Roll Parry option to roll normally
+    menu.locator('button:has-text("Roll Parry")').first.click()
     _wait_for_roll_result(page)
     title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Parry" in title
+
+
+def test_parry_hover_reveals_void_submenu_on_roll(page, live_server_url):
+    """Hovering Roll Parry reveals the void-spend submenu when VP is available."""
+    _create_roller(page, live_server_url, "ParryHoverRoll")
+    page.evaluate("window._trackingBridge.voidPoints = 2; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.hover()
+    page.wait_for_selector('[data-parry-void-submenu="roll"]', state='visible', timeout=3000)
+    submenu = page.locator('[data-parry-void-submenu="roll"]')
+    text = submenu.text_content()
+    assert "Spend 1 void point" in text
+    assert "Spend 2 void points" in text
+
+
+def test_parry_hover_reveals_void_submenu_on_predeclared(page, live_server_url):
+    """Hovering Predeclared Parry reveals its own void-spend submenu with +5 label."""
+    _create_roller(page, live_server_url, "ParryHoverPre")
+    page.evaluate("window._trackingBridge.voidPoints = 1; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    page.locator('[data-parry-menu] button:has-text("Predeclared Parry")').first.hover()
+    page.wait_for_selector('[data-parry-void-submenu="predeclared"]', state='visible', timeout=3000)
+    submenu = page.locator('[data-parry-void-submenu="predeclared"]')
+    text = submenu.text_content()
+    assert "Spend 1 void point" in text
+    assert "predeclared" in text.lower()
+
+
+def test_parry_void_submenu_click_rolls_with_void(page, live_server_url):
+    """Clicking a void option under Roll Parry rolls parry with void spent."""
+    _create_roller(page, live_server_url, "ParryVoidRoll")
+    page.evaluate("window._trackingBridge.voidPoints = 1; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.hover()
+    page.wait_for_selector('[data-parry-void-submenu="roll"]', state='visible', timeout=3000)
+    page.locator('[data-parry-void-submenu="roll"] button:has-text("Spend 1 void point")').click()
+    _wait_for_roll_result(page)
+    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
+    assert "Parry" in title
+    # VP should have been deducted
+    vp_after = page.evaluate("window._trackingBridge.voidPoints")
+    assert vp_after == 0
+
+
+def test_parry_void_submenu_click_rolls_predeclared_with_void(page, live_server_url):
+    """Clicking a void option under Predeclared Parry rolls with +5 bonus and void spent."""
+    _create_roller(page, live_server_url, "ParryVoidPre")
+    page.evaluate("window._trackingBridge.voidPoints = 1; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    page.locator('[data-parry-menu] button:has-text("Predeclared Parry")').first.hover()
+    page.wait_for_selector('[data-parry-void-submenu="predeclared"]', state='visible', timeout=3000)
+    page.locator('[data-parry-void-submenu="predeclared"] button').first.click()
+    _wait_for_roll_result(page)
+    result = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "predeclared" in result.lower() or "+5" in result
+
+
+def test_parry_no_void_submenu_arrow_when_no_vp(page, live_server_url):
+    """With 0 VP, the parry options do not show the void-submenu arrow indicator."""
+    _create_roller(page, live_server_url, "ParryNoVP")
+    # _create_roller already sets VP to 0
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    # Hovering should not reveal any submenu
+    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.hover()
+    page.wait_for_timeout(200)
+    assert page.locator('[data-parry-void-submenu="roll"]').count() == 0 \
+        or not page.locator('[data-parry-void-submenu="roll"]').is_visible()
 
 
 def test_click_ring_opens_athletics_modal(page, live_server_url):

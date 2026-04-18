@@ -1,0 +1,39 @@
+Hida Gorobei
+Player: Alex
+School: Hida Bushi
+
+Rings
+  Air: 2
+  Fire: 2
+  Earth: 4
+  Water: 3
+  Void: 2
+
+Combat
+  Attack: 3
+  Parry: 2
+
+Skills
+  Intimidation 2
+  Etiquette 1
+  Heraldry 1
+
+Knacks (written as Hida Bushi's school knacks but wrong - these belong to Courtier)
+  Discern Honor 3
+  Oppose Social 2
+  Worldliness 2
+
+Advantages
+  Fierce
+
+Disadvantages
+  Bad Reputation
+
+Honor: 2.5
+Rank: 7.5
+Recognition: 7.5
+
+Note to GM: the character lists Hida Bushi as their school but the three
+knacks they wrote down are the Courtier school knacks. We want the importer
+to import the knacks as written AND raise a high-severity note flagging the
+mismatch so the player can correct either the school or the knacks.

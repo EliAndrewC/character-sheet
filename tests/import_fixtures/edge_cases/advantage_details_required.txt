@@ -1,0 +1,35 @@
+Shiba Kenji
+Player: Sean
+School: Shiba Bushi
+
+Rings: Air 3, Fire 2, Earth 3, Water 2, Void 2
+
+Combat: Attack 2, Parry 2
+
+Skills
+  Etiquette 2
+  Sincerity 2
+  Heraldry 1
+
+Knacks (Shiba Bushi)
+  Counterattack 2
+  Double Attack 2
+  Iaijutsu 2
+
+Advantages
+  Virtue: Compassion          <-- has detail
+  Higher Purpose: to protect my daimyo at any cost (applies to Bushido)
+  Specialization: Etiquette   <-- skill detail
+
+Disadvantages
+  Dark Secret: betrayed his brother during the Scorpion Clan Coup
+  Humble
+
+Honor 4.0, Rank 7.5, Recognition 7.5
+
+(Several advantages have detail requirements:
+ - Virtue needs a text field (virtue name)
+ - Higher Purpose needs text + one-or-more skill selections
+ - Specialization needs text + a single skill
+ - Dark Secret needs text + a PC-reference (player)
+The importer must populate advantage_details accordingly.)

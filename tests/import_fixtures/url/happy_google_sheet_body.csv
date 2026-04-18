@@ -1,0 +1,51 @@
+Field,Value
+Name,Kakita Tomoe
+Player,Eli
+School,Kakita Duelist
+Dan,2
+,
+Ring,Value
+Air,2
+Fire,4 (school)
+Earth,2
+Water,3
+Void,2
+,
+Combat,
+Attack,3
+Parry,3
+,
+Skill,Rank
+Etiquette,3
+Sincerity,3
+Tact,2
+Heraldry,2
+History,2
+Culture,2
+Strategy,1
+,
+Knack,Rank
+Iaijutsu,3
+Double Attack,2
+Lunge,2
+,
+Advantage,Type
+Virtue (Courage),standard
+Charming,standard
+Kind Eye,standard
+Highest Regard,campaign
+,
+Disadvantage,
+Proud,
+Contrary,
+,
+Status,Value
+Honor,3.0
+Rank,7.5
+Recognition,7.5
+,
+XP,Value
+Starting,150
+Earned,0
+Spent,118
+Unspent,32

@@ -1,0 +1,15 @@
+{
+  "outcome": "success",
+  "extraction_path": "multimodal_fallback",
+  "note": "pypdf text extraction returns near-empty, so the importer switches to the Gemini multimodal path (design §6.1). The test mocks the multimodal LLM call to return the canonical character's JSON, producing a character with Kakita Tomoe's stats. Used to prove the fallback path is wired.",
+  "character_excerpt": {
+    "name": "Kakita Tomoe",
+    "school": "kakita_duelist"
+  },
+  "import_notes": {
+    "must_contain": [
+      "multimodal",
+      "image"
+    ]
+  }
+}

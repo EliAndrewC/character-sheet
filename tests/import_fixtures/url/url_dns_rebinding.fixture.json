@@ -1,0 +1,14 @@
+{
+  "url": "http://rebind.example.invalid/character.txt",
+  "dns_mock": {
+    "rebind.example.invalid": "10.0.0.5"
+  },
+  "mock_response": null,
+  "expected": {
+    "outcome": "reject",
+    "error_code": "url_blocked_ssrf",
+    "user_message_must_contain": ["not allowed", "private"],
+    "no_draft_created": true
+  },
+  "note": "DNS resolves a public-looking hostname to a private IP. The importer must resolve DNS itself, check the IP, and refuse - not trust the hostname."
+}

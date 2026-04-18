@@ -1,0 +1,16 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Togashi Naoki",
+    "school": "togashi_ise_zumi",
+    "ring_fire": 3
+  },
+  "import_notes": {
+    "must_contain": [
+      "Fire",
+      "contradictory",
+      "3"
+    ]
+  },
+  "low_confidence_fields": ["ring_fire"]
+}

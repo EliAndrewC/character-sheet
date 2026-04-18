@@ -1,0 +1,11 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Ide Tetsuya",
+    "school": "ide_diplomat",
+    "technique_choices": {
+      "first_dan_choices": ["etiquette", "sincerity", "commerce"],
+      "second_dan_choice": "etiquette"
+    }
+  }
+}

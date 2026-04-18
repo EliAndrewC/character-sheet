@@ -53,7 +53,7 @@ def _roll_via_menu_or_direct(page, roll_key):
         # Check if roll menu opened (VP spending options)
         menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
         if menu.is_visible():
-            buttons = menu.locator('button.font-medium')
+            buttons = menu.locator('button.font-medium:visible')
             for i in range(buttons.count()):
                 text = buttons.nth(i).text_content().strip()
                 if text.startswith("Roll "):
@@ -835,6 +835,68 @@ def test_togashi_3rd_dan_athletics_raises(page, live_server_url):
     # Roll athletics and check for the button
     _roll_via_menu_or_direct(page, "athletics:Air")
     assert page.locator('button:has-text("Spend Athletics Raise")').is_visible()
+
+
+def test_togashi_athletics_raise_decrements_daily_pool(page, live_server_url):
+    """Spending a Togashi athletics raise decrements the daily pool in the tracker."""
+    _create_char(page, live_server_url, "TogashiDecr", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+                 skill_overrides={"precepts": 2})
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    _roll_via_menu_or_direct(page, "athletics:Air")
+    page.locator('[data-action="spend-togashi-raise"]').click()
+    page.wait_for_timeout(200)
+    used = page.evaluate("window._trackingBridge.getCount('togashi_daily_athletics_raises')")
+    assert used == 1
+
+
+def test_togashi_athletics_raise_undo_restores_pool(page, live_server_url):
+    """Undoing a spent Togashi athletics raise restores the daily pool."""
+    _create_char(page, live_server_url, "TogashiUndo", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+                 skill_overrides={"precepts": 2})
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    _roll_via_menu_or_direct(page, "athletics:Air")
+    page.locator('[data-action="spend-togashi-raise"]').click()
+    page.wait_for_timeout(200)
+    page.locator('[data-action="undo-togashi-raise"]').click()
+    page.wait_for_timeout(200)
+    used = page.evaluate("window._trackingBridge.getCount('togashi_daily_athletics_raises')")
+    assert used == 0
+
+
+def test_togashi_athletics_raise_capped_by_pool_remaining(page, live_server_url):
+    """Per-roll cap respects the remaining daily pool, not just the per-roll max."""
+    # With precepts=3, per_roll=3 and max=12. Pre-spend 11 so only 1 is left in the pool.
+    _create_char(page, live_server_url, "TogashiCap", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+                 skill_overrides={"precepts": 3})
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.evaluate("window._trackingBridge.setCount('togashi_daily_athletics_raises', 11)")
+    page.wait_for_timeout(200)
+    _roll_via_menu_or_direct(page, "athletics:Air")
+    spend_btn = page.locator('[data-action="spend-togashi-raise"]')
+    # First click spends the last remaining raise.
+    spend_btn.click()
+    page.wait_for_timeout(200)
+    # Button should now be disabled because the daily pool is exhausted.
+    assert spend_btn.is_disabled()
+    used = page.evaluate("window._trackingBridge.getCount('togashi_daily_athletics_raises')")
+    assert used == 12
+
+
+def test_togashi_athletics_raise_button_hidden_when_pool_empty(page, live_server_url):
+    """When the daily pool is exhausted and nothing spent this roll, the button row is hidden."""
+    _create_char(page, live_server_url, "TogashiHidden", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+                 skill_overrides={"precepts": 1})
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.evaluate("window._trackingBridge.setCount('togashi_daily_athletics_raises', 4)")
+    page.wait_for_timeout(200)
+    _roll_via_menu_or_direct(page, "athletics:Air")
+    assert not page.locator('[data-action="spend-togashi-raise"]').is_visible()
 def test_bayushi_feint_damage_button(page, live_server_url):
     """Bayushi feint damage: Back button returns to feint result."""
     _create_char(page, live_server_url, "BayushiFeintDmg2", "bayushi_bushi",

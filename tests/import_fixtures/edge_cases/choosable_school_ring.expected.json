@@ -1,0 +1,14 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Brother Taro",
+    "school": "brotherhood_of_shinsei_monk",
+    "school_ring_choice": "Fire",
+    "ring_fire": 3,
+    "skills_must_contain_keys": ["precepts", "sincerity"],
+    "skills_must_not_contain_keys": ["meditation"]
+  },
+  "import_notes": {
+    "must_contain": ["Meditation", "not a recognised skill"]
+  }
+}

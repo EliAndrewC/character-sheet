@@ -327,6 +327,10 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 1st Dan grants +1 rolled die on wound check (also athletics/init) -> `test_school_abilities.py::test_togashi_1st_dan_behavioral`
 - [x] 2nd Dan behavioral athletics bonus -> `test_school_abilities.py::test_togashi_2nd_dan_behavioral`
 - [x] 3rd Dan spend raise on athletics -> `test_school_abilities.py::test_togashi_3rd_dan_athletics_raises`
+- [x] 3rd Dan athletics raise decrements daily pool -> `test_school_abilities.py::test_togashi_athletics_raise_decrements_daily_pool`
+- [x] 3rd Dan athletics raise undo restores pool -> `test_school_abilities.py::test_togashi_athletics_raise_undo_restores_pool`
+- [x] 3rd Dan athletics raise per-roll capped by pool remaining -> `test_school_abilities.py::test_togashi_athletics_raise_capped_by_pool_remaining`
+- [x] 3rd Dan athletics raise button hidden when pool empty -> `test_school_abilities.py::test_togashi_athletics_raise_button_hidden_when_pool_empty`
 - [x] 4th Dan reroll button on contested rolls -> `test_school_abilities.py::test_togashi_4th_dan_reroll_behavioral`
 - [x] 4th Dan reroll limited to once per roll (button hidden after use, reappears on next roll; post-reroll banner notes original is discarded) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_only_once_per_roll`
 - [x] 4th Dan reroll hidden on initiative (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_initiative`
@@ -387,7 +391,12 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Click a skill row opens the modal with the skill name → `test_rolls.py::test_click_skill_opens_modal_with_skill_name`
 - [x] Unskilled advanced skill rolls show the -10 penalty in the breakdown → `test_rolls.py::test_unskilled_advanced_skill_shows_minus_10_in_breakdown`
 - [x] Click Attack opens attack modal → `test_rolls.py::test_click_attack_opens_attack_modal`
-- [x] Click Parry opens modal with "Parry" title → `test_rolls.py::test_click_parry_opens_modal`
+- [x] Click Parry shows menu with Roll Parry and Predeclared Parry options → `test_rolls.py::test_click_parry_shows_predeclare_option`
+- [x] Hovering Roll Parry reveals a void-spend submenu when VP available → `test_rolls.py::test_parry_hover_reveals_void_submenu_on_roll`
+- [x] Hovering Predeclared Parry reveals its own void-spend submenu with +5 label → `test_rolls.py::test_parry_hover_reveals_void_submenu_on_predeclared`
+- [x] Clicking a void option under Roll Parry rolls with void spent → `test_rolls.py::test_parry_void_submenu_click_rolls_with_void`
+- [x] Clicking a void option under Predeclared Parry rolls with +5 and void spent → `test_rolls.py::test_parry_void_submenu_click_rolls_predeclared_with_void`
+- [x] Parry menu hides void-submenu arrows when VP is 0 → `test_rolls.py::test_parry_no_void_submenu_arrow_when_no_vp`
 - [x] Click a Ring opens an Athletics roll modal → `test_rolls.py::test_click_ring_opens_athletics_modal`
 - [x] Click a Ring always opens the roll menu (even with 0 VP) → `test_rolls.py::test_click_ring_always_shows_menu_even_with_zero_vp`
 - [x] Click a Ring with VP shows "Spend N void points" dropdown options → `test_rolls.py::test_click_ring_shows_void_options_when_vp_available`
@@ -672,6 +681,13 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Unlucky toggle shown → `test_sheet_advanced.py::test_unlucky_toggle`
 - [x] Reset per-adventure → `test_tracking_advanced.py::test_reset_per_adventure`
 - [x] Reset modal lists abilities to restore → `test_tracking_advanced.py::test_reset_modal_lists_abilities_to_restore`
+- [x] Togashi 3rd Dan sheet shows Daily Athletics Raises tracker → `test_tracking_advanced.py::test_togashi_3rd_dan_daily_raises_tracker_row`
+- [x] Per-day abilities have a dedicated Reset button with tooltip → `test_tracking_advanced.py::test_per_day_ability_has_its_own_reset_button_with_tooltip`
+- [x] Per-day reset button is disabled until spent → `test_tracking_advanced.py::test_per_day_reset_button_disabled_until_spent`
+- [x] Per-day reset button restores just that pool → `test_tracking_advanced.py::test_per_day_reset_button_restores_pool`
+- [x] Per-day reset leaves other counters alone → `test_tracking_advanced.py::test_per_day_reset_leaves_other_counters_alone`
+- [x] Per-adventure reset still clears per-day pools → `test_tracking_advanced.py::test_per_adventure_reset_also_clears_per_day_pools`
+- [x] Non-per-day counter has no per-ability reset button → `test_tracking_advanced.py::test_non_per_day_counter_has_no_reset_button`
 - [x] Tracking buttons hidden for non-editors → `test_permissions.py::test_tracking_buttons_hidden_for_nonadmin`
 
 ## Character Sheet — Skill Roll Display

@@ -1,0 +1,9 @@
+{
+  "outcome": "reject",
+  "error_code": "multi_character_document",
+  "user_message_must_contain": [
+    "more than one character",
+    "split"
+  ],
+  "no_draft_created": true
+}

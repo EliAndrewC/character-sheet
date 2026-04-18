@@ -1,0 +1,22 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Shinjo Batu",
+    "school": "shinjo_bushi",
+    "school_ring_choice": "Air",
+    "ring_air": 3,
+    "ring_fire": 2,
+    "ring_earth": 2,
+    "ring_water": 2,
+    "ring_void": 2,
+    "skills": {},
+    "advantages": [],
+    "disadvantages": []
+  },
+  "import_notes": {
+    "must_contain": [
+      "minimal",
+      "review"
+    ]
+  }
+}

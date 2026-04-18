@@ -1,0 +1,15 @@
+{
+  "url": "https://bulky.example.com/log",
+  "mock_response": {
+    "status": 200,
+    "headers": {"Content-Type": "text/plain", "Content-Length": "52428800"},
+    "streams_bytes": 52428800,
+    "note": "The test harness streams 50MB of filler bytes. The importer should abort after the 1 MB cap is hit (design §5.4) and refuse the import."
+  },
+  "expected": {
+    "outcome": "reject",
+    "error_code": "url_response_too_large",
+    "user_message_must_contain": ["1 MB", "too large"],
+    "no_draft_created": true
+  }
+}

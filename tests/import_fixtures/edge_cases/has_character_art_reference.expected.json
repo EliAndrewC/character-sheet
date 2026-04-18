@@ -1,0 +1,17 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Kitsuki Tomoko",
+    "school": "kitsuki_magistrate"
+  },
+  "import_notes": {
+    "must_not_contain": [
+      "example.invalid",
+      "tomoko-art.png",
+      "ink-wash"
+    ]
+  },
+  "http_requests_during_import": {
+    "must_not_include_url_substrings": ["example.invalid"]
+  }
+}

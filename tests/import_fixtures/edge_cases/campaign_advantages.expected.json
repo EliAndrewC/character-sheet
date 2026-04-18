@@ -1,0 +1,29 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Ikoma Hayate",
+    "school": "ikoma_bard",
+    "campaign_advantages_must_contain": [
+      "highest_regard",
+      "household_wealth",
+      "minor_clan_major_ally_mantis",
+      "streetwise"
+    ],
+    "campaign_disadvantages_must_contain": [
+      "crane_indebted"
+    ],
+    "advantages_must_contain": ["charming"],
+    "advantages_must_not_contain": [
+      "highest_regard",
+      "household_wealth",
+      "streetwise"
+    ]
+  },
+  "import_notes": {
+    "must_contain": [
+      "Streetwise",
+      "advantage"
+    ]
+  },
+  "low_confidence_fields": ["campaign_advantages"]
+}

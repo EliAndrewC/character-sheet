@@ -1,0 +1,13 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Daidoji Kenshiro",
+    "school": "daidoji_yojimbo"
+  },
+  "sections_expectations": {
+    "Import Notes": {"must_contain": ["Daidoji Yojimbo"]},
+    "Backstory": {"must_contain": ["Daidoji", "dueling academy", "Daidoji Uji"]},
+    "Physical Description": {"must_contain": ["topknot", "silver-grey eyes"]},
+    "Goals": {"must_contain": ["restore", "father"]}
+  }
+}

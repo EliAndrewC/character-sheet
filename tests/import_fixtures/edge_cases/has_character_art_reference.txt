@@ -1,0 +1,28 @@
+Kitsuki Tomoko
+Player: Marshall
+School: Kitsuki Magistrate
+
+Portrait: attached below (see image at https://example.invalid/tomoko-art.png)
+Artwork by my friend, commissioned last year.
+
+Rings: Air 2, Fire 2, Earth 2, Water 3, Void 2
+
+Combat: Attack 2, Parry 2
+
+Skills: Etiquette 2, Investigation 3, Law 2, Sincerity 2
+
+Knacks (Kitsuki Magistrate): Discern Honor 3, Iaijutsu 2, Presence 2
+
+Advantages: Kind Eye
+Disadvantages: Meddler
+
+Honor 4.0, Rank 7.5, Recognition 7.5
+
+[IMAGE: illustration of Tomoko in formal attire, drawn in ink-wash style]
+
+(This document contains a reference to character art - a URL and a
+bracketed IMAGE tag. Per design.md §2 non-goals, the importer must
+IGNORE character art entirely. It should not fetch the URL, not
+attempt to describe the image, not add the URL to any field. The
+character's stats and text should import normally; the image reference
+is simply dropped.)

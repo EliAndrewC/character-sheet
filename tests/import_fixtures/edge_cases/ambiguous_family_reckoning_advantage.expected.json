@@ -1,0 +1,19 @@
+{
+  "outcome": "success",
+  "character_excerpt": {
+    "name": "Shiba Rei",
+    "school": "shiba_bushi",
+    "campaign_advantages_must_contain": ["family_reckoning_righteous_sting"],
+    "campaign_disadvantages_must_not_contain": ["family_reckoning_venomous_sting"],
+    "advantages_must_contain": ["charming"],
+    "disadvantages_must_contain": ["proud"]
+  },
+  "import_notes": {
+    "must_contain": [
+      "Family Reckoning",
+      "ambiguous",
+      "Righteous Sting"
+    ]
+  },
+  "low_confidence_fields": ["campaign_advantages"]
+}

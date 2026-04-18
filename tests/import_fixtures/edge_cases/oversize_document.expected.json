@@ -1,0 +1,11 @@
+{
+  "outcome": "reject",
+  "error_code": "file_too_large",
+  "note": "The source fixture is GENERATED at test-runtime (not committed) by padding the canonical happy-path plaintext to >1 MB. Design doc §5.4 caps uploads at 1 MB, so the importer rejects before extraction.",
+  "user_message_must_contain": [
+    "1 MB",
+    "too large"
+  ],
+  "no_draft_created": true,
+  "generation_recipe": "Take happy_path/happy_plaintext.txt and append enough filler prose to exceed 1,048,576 bytes. The content beyond the cap is irrelevant; the rejection happens at the byte-count check."
+}

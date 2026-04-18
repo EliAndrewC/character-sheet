@@ -1,0 +1,33 @@
+Wasp Campaign Roster - Session 12
+
+===========================
+Character 1: Shinjo Gorobei
+===========================
+Player: Patrick
+School: Shinjo Bushi
+
+Rings: Air 3, Fire 2, Earth 2, Water 2, Void 2
+Combat: Attack 2, Parry 2
+Skills: Etiquette 2, Heraldry 1, Sincerity 1
+Knacks: Double Attack 2, Iaijutsu 2, Lunge 2
+Advantages: Charming
+Disadvantages: Proud
+Honor 3.0, Rank 7.5, Recognition 7.5
+
+===========================
+Character 2: Kakita Minami
+===========================
+Player: Joel
+School: Kakita Duelist
+
+Rings: Air 2, Fire 3, Earth 2, Water 2, Void 2
+Combat: Attack 3, Parry 2
+Skills: Etiquette 2, Sincerity 2, Tact 2
+Knacks: Iaijutsu 3, Double Attack 2, Lunge 1
+Advantages: Kind Eye
+Disadvantages: Contrary
+Honor 3.5, Rank 7.5, Recognition 7.5
+
+(This document clearly describes two characters. Per design doc §2 and
+§12, the importer must reject with a message asking the user to split
+the document into per-character files. No Draft should be created.)

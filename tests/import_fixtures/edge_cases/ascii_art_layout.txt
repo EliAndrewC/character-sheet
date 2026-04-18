@@ -1,0 +1,37 @@
++-----------------------------------------------------------+
+|                    L5R CHARACTER SHEET                    |
+|                    (homebrew L7R rules)                   |
++-----------------------------------------------------------+
+
+Name: Shosuro Kaori                    Player: Eli
+School: Shosuro Actor                  Dan: 1
+Honor: 2.0   Rank: 7.5   Recognition:  7.5
+
++------+-------+------+-------+-------+------+
+| Ring | Air   | Fire | Earth | Water | Void |
++------+-------+------+-------+-------+------+
+| Rank |   3   |  2   |   2   |   2   |  2   |
++------+-------+------+-------+-------+------+
+
++=============== SKILLS ===============+
+|  Acting ....................... 3    |
+|  Sincerity .................... 2    |
+|  Etiquette .................... 2    |
+|  Manipulation ................. 2    |
+|  Tact ......................... 1    |
++======================================+
+
++=============== KNACKS ===============+
+|  Athletics .................... 2    |
+|  Discern Honor ................ 2    |
+|  Pontificate .................. 2    |
++======================================+
+
+ADVANTAGES:     Charming, Worldly
+DISADVANTAGES:  Transparent
+
+Combat: Attack 1 / Parry 2
+
+(This is a 2005-era plain-text character sheet that uses ASCII box-drawing
+characters for tables. Skills and ranks are separated by dots. The importer
+must still extract the stats despite the ornate layout.)

@@ -154,6 +154,122 @@ def test_reset_per_adventure(page, live_server_url):
     assert "unused" in section.text_content()
 
 
+def _create_togashi_3rd_dan(page, live_server_url, precepts=2):
+    """Togashi Ise Zumi 3rd Dan with a per-day athletics raise pool of 4*precepts."""
+    from tests.e2e.helpers import select_school, click_plus, apply_changes
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Togashi3D Tracker")
+    select_school(page, "togashi_ise_zumi")
+    # Boost school knacks to rank 3 (Dan 3)
+    for knack in ("athletics", "conviction", "dragon_tattoo"):
+        for _ in range(2):
+            click_plus(page, f"knack_{knack}", 1)
+    if precepts > 0:
+        click_plus(page, "skill_precepts", precepts)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Togashi 3D setup")
+
+
+def test_togashi_3rd_dan_daily_raises_tracker_row(page, live_server_url):
+    """Togashi 3rd Dan sheet shows 'Daily Athletics Raises' tracker with 4*precepts pool."""
+    _create_togashi_3rd_dan(page, live_server_url, precepts=2)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    row = page.locator('text="Daily Athletics Raises"').locator('..')
+    assert "8 / 8" in row.text_content()
+
+
+def test_per_day_ability_has_its_own_reset_button_with_tooltip(page, live_server_url):
+    """Conviction and Daily Athletics Raises each have a 'Reset' button labelled as per-day."""
+    _create_togashi_3rd_dan(page, live_server_url, precepts=1)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    # Conviction is also per-day
+    conviction_btn = page.locator('[data-action="reset-ability-conviction"]')
+    assert conviction_btn.count() == 1
+    assert conviction_btn.get_attribute("title") == "This pool resets each day"
+    # Togashi daily athletics raises
+    raises_btn = page.locator('[data-action="reset-ability-togashi_daily_athletics_raises"]')
+    assert raises_btn.count() == 1
+    assert raises_btn.get_attribute("title") == "This pool resets each day"
+
+
+def test_per_day_reset_button_disabled_until_spent(page, live_server_url):
+    """The per-day reset button is disabled when nothing has been spent."""
+    _create_togashi_3rd_dan(page, live_server_url, precepts=1)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    btn = page.locator('[data-action="reset-ability-togashi_daily_athletics_raises"]')
+    assert btn.is_disabled()
+
+
+def test_per_day_reset_button_restores_pool(page, live_server_url):
+    """Clicking the per-day reset button on a counter restores its full pool."""
+    _create_togashi_3rd_dan(page, live_server_url, precepts=1)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    # Spend 2 raises by manipulating the tracking bridge directly
+    page.evaluate("window._trackingBridge.setCount('togashi_daily_athletics_raises', 2)")
+    page.wait_for_timeout(300)
+    row = page.locator('text="Daily Athletics Raises"').locator('..')
+    assert "2 / 4" in row.text_content()
+    # Click the dedicated Reset button
+    page.locator('[data-action="reset-ability-togashi_daily_athletics_raises"]').click()
+    page.wait_for_timeout(300)
+    assert "4 / 4" in row.text_content()
+
+
+def test_per_day_reset_leaves_other_counters_alone(page, live_server_url):
+    """Resetting one per-day ability does not touch other per-adventure counters."""
+    _create_togashi_3rd_dan(page, live_server_url, precepts=1)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    # Spend 1 raise and 1 conviction
+    page.evaluate("window._trackingBridge.setCount('togashi_daily_athletics_raises', 1)")
+    page.evaluate("window._trackingBridge.setCount('conviction', 1)")
+    page.wait_for_timeout(300)
+    # Reset only athletics raises
+    page.locator('[data-action="reset-ability-togashi_daily_athletics_raises"]').click()
+    page.wait_for_timeout(300)
+    conviction_used = page.evaluate("window._trackingBridge.getCount('conviction')")
+    raises_used = page.evaluate("window._trackingBridge.getCount('togashi_daily_athletics_raises')")
+    assert conviction_used == 1
+    assert raises_used == 0
+
+
+def test_per_adventure_reset_also_clears_per_day_pools(page, live_server_url):
+    """The global per-adventure reset still clears conviction and daily athletics raises."""
+    _create_togashi_3rd_dan(page, live_server_url, precepts=1)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    page.evaluate("window._trackingBridge.setCount('togashi_daily_athletics_raises', 2)")
+    page.evaluate("window._trackingBridge.setCount('conviction', 1)")
+    page.wait_for_timeout(300)
+    page.locator('[data-action="open-reset-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+    page.locator('[data-action="confirm-reset"]').click()
+    page.wait_for_timeout(400)
+    assert page.evaluate("window._trackingBridge.getCount('togashi_daily_athletics_raises')") == 0
+    assert page.evaluate("window._trackingBridge.getCount('conviction')") == 0
+
+
+def test_non_per_day_counter_has_no_reset_button(page, live_server_url):
+    """Otherworldliness (not per_day) should not render a per-ability reset button."""
+    # Brotherhood of Shinsei Monk has otherworldliness as a school knack
+    from tests.e2e.helpers import select_school, click_plus, apply_changes
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Shinsei OW")
+    select_school(page, "brotherhood_of_shinsei_monk")
+    for knack in ("conviction", "otherworldliness", "worldliness"):
+        for _ in range(2):
+            click_plus(page, f"knack_{knack}", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Shinsei setup")
+    page.wait_for_selector('text="Otherworldliness"', timeout=3000)
+    assert page.locator('[data-action="reset-ability-otherworldliness"]').count() == 0
+    assert page.locator('[data-action="reset-ability-worldliness"]').count() == 0
+    # Conviction should still have one (per-day)
+    assert page.locator('[data-action="reset-ability-conviction"]').count() == 1
+
+
 def test_reset_modal_lists_abilities_to_restore(page, live_server_url):
     """The reset modal lists which specific abilities will be restored."""
     _create_character_with_lucky(page, live_server_url)

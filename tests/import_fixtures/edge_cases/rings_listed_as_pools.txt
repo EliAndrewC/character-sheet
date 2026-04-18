@@ -1,0 +1,27 @@
+Akodo Taro
+Player: Chris Larkin
+School: Akodo Bushi
+
+Rings (listed as POOLS, i.e. ring x 2)
+  Air Pool: 4
+  Fire Pool: 4
+  Earth Pool: 4
+  Water Pool: 6
+  Void Pool: 4
+
+Combat
+  Attack: 2
+  Parry: 2
+
+Skills: Etiquette 1, Strategy 2
+
+Knacks: Double Attack 1, Feint 1, Iaijutsu 2
+
+Advantages: Fierce
+Disadvantages: Proud
+
+Honor 3.5, Rank 7.5, Recognition 7.5
+
+(All listed values are even and > 6 in at least one case, so the importer
+should infer these are pools not ranks and halve them. Expected rings
+after halving: Air 2, Fire 2, Earth 2, Water 3, Void 2.)

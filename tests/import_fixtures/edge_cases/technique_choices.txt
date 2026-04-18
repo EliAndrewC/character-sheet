@@ -1,0 +1,40 @@
+Ide Tetsuya
+Player: Phil
+School: Ide Diplomat
+
+Rings
+  Air: 3
+  Fire: 2
+  Earth: 2
+  Water: 3
+  Void: 2
+
+Combat
+  Attack: 2
+  Parry: 2
+
+Skills
+  Etiquette 3
+  Sincerity 3
+  Heraldry 2
+  Commerce 2
+  Tact 2
+
+Knacks (school: Ide Diplomat)
+  Double Attack 2
+  Feint 2
+  Worldliness 2
+
+Technique Choices
+  1st Dan chosen skills: Etiquette, Sincerity, Commerce
+  2nd Dan chosen skill: Etiquette
+
+Advantages: Charming
+Disadvantages: Proud
+
+Honor 3.5, Rank 7.5, Recognition 7.5
+
+(The Ide Diplomat school has player-chosen 1st and 2nd Dan techniques.
+The importer should capture the chosen skill ids into
+technique_choices: {"first_dan_choices": ["etiquette", "sincerity",
+"commerce"], "second_dan_choice": "etiquette"}.)

@@ -1,0 +1,30 @@
+Togashi Naoki
+Player: Craig
+School: Togashi Ise Zumi
+
+Stats Summary (quick reference - may be out of date):
+  Air 2 / Fire 4 / Earth 3 / Water 2 / Void 3
+
+Rings (full detail)
+  Air Ring: 2
+  Fire Ring: 3
+  Earth Ring: 3
+  Water Ring: 2
+  Void Ring: 3
+
+Combat
+  Attack: 2
+  Parry: 2
+
+Skills: Precepts 2, Etiquette 1
+
+Knacks: Athletics 2, Conviction 2, Dragon Tattoo 2
+
+Advantages: Virtue (Compassion)
+Disadvantages: Humble
+
+Honor 4.0, Rank 7.5, Recognition 7.5
+
+(Fire ring is listed as 4 in the Quick Reference but 3 in the detailed
+Rings section. The importer should prefer the structurally-confident
+source - the labelled "Rings" section - and flag the discrepancy.)

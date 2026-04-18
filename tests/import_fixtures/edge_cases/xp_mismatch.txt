@@ -1,0 +1,46 @@
+Matsu Daiyu
+Player: Patrick
+School: Matsu Bushi
+
+Rings
+  Air: 2
+  Fire: 5
+  Earth: 3
+  Water: 2
+  Void: 2
+
+Combat
+  Attack: 4
+  Parry: 3
+
+Skills
+  Intimidation 3
+  Etiquette 2
+  Heraldry 2
+  Strategy 2
+  Tact 1
+
+Knacks (school: Matsu Bushi)
+  Double Attack 3
+  Iaijutsu 3
+  Lunge 2
+
+Advantages
+  Fierce
+  Charming
+
+Disadvantages
+  Short Temper
+
+Honor 3.0, Rank 7.5, Recognition 7.5
+
+XP
+  Starting: 150
+  Earned: 0
+  Spent: 60       <-- user wrote this (but real cost is much higher)
+  Unspent: 90
+
+(The user's stated XP spent is 60, but the actual XP our engine would
+compute for these stats is much higher. The importer should recompute,
+ignore the user's spent/unspent numbers for the character fields, and
+write a reconciliation section to Import Notes showing the discrepancy.)
