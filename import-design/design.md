@@ -1165,22 +1165,34 @@ function that takes bytes + filename and returns plain text."
 - [x] JS-error sanity tests pass on both /import and the progress
   page.
 
-### Phase 9 - Deploy & abuse-monitor
+### Phase 9 - Deploy & update docs
 
-- [ ] Deploy to Fly
-- [ ] Set Fly secrets: `GEMINI_API_KEY`, `GEMINI_MODEL_PRIMARY`,
-  `GEMINI_MODEL_FALLBACK` (deferred from Phase 4 - set them here so
-  prod has what it needs the first time the route goes live).
-- [ ] Update `.env.example` / README with every new env var the
-  pipeline reads (deferred from Phase 3 and Phase 4).
-- [ ] Update the top-level `CLAUDE.md` with a "Character Import"
-  section mirroring the structure of the existing "Google Sheets
-  Export" section: how it works end-to-end, key constraints (1 MB
-  cap, multi-character rejection, no source-doc storage, no
-  character art), Gemini model fallback behaviour, rate limit, and
-  which env vars / Fly secrets are required. Link to
-  `import-design/CLAUDE.md` for the implementation-tracking doc.
-- [ ] Run full e2e suite in background
+Docs work (safe, done in this session):
+
+- [x] `.env.example` created documenting every env var the app reads,
+  with safe placeholders. Variables grouped by feature
+  (test-login, Google OAuth, Fly, Gemini, import runtime knobs,
+  test-only stub). No real secrets leaked; confirmed via grep.
+- [x] Top-level `CLAUDE.md` gained a "Character Import" section
+  mirroring the "Google Sheets Export" structure: how it works
+  end-to-end, key constraints, Gemini model fallback behaviour,
+  rate-limit + kill-switch, env-var / Fly-secret summary, key
+  architectural decisions, future work. Links to
+  `import-design/CLAUDE.md` for the implementation tracker.
+
+Deploy + prod secrets (**not run from this session** - coordinate
+with any concurrent Claude Code session before deploying so one
+doesn't clobber the other's unmerged work):
+
+- [ ] User merges `feature/import` (or whichever branch this work
+  landed on) into `main` on the remote.
+- [ ] User runs `fly secrets set GEMINI_API_KEY="..."` (and optionally
+  the two model overrides) before the first deploy that includes this
+  feature.
+- [ ] User runs `fly deploy` from a checkout whose `main` has the
+  import branch merged in.
+- [ ] User confirms the deployed `/import` page loads and a quick
+  plaintext fixture imports successfully against the real Gemini API.
 
 ## 16. Constraints (summary)
 

@@ -581,6 +581,67 @@ def build_athletics_formula(
     return formula
 
 
+def build_athletics_combat_formula(
+    which: str, character_data: dict
+) -> Optional[RollFormula]:
+    """Build an athletics-attack or athletics-parry formula.
+
+    Per rules/05-school_knacks.md §Athletics: "You may also use this knack to
+    attack or parry. If you use it to attack, your TN is increased by 5 times
+    the defender's parry skill. If you use it to parry, then your TN is raised
+    by 5 times the attack skill of the attacker."
+
+    The base roll is the athletics formula locked to the combat ring
+    (Fire for attack, Air for parry). In addition to athletics-specific school
+    bonuses (inherited from build_athletics_formula), attack/parry school
+    bonuses also apply - e.g. Kitsuki +2*Water on attack, Shinjo's 1st Dan
+    extra die on parry.
+
+    Returns None if the character has no athletics knack (rank 0).
+    """
+    if which not in ("attack", "parry"):
+        return None
+    knacks = character_data.get("knacks", {}) or {}
+    if knacks.get("athletics", 0) <= 0:
+        return None
+    ring_name = "Fire" if which == "attack" else "Air"
+
+    formula = build_athletics_formula(ring_name, character_data)
+    if formula is None:  # pragma: no cover — ring_name is always Fire/Air (valid), so build_athletics_formula cannot return None here; guard is defensive against future refactors.
+        return None
+    formula.label = f"Athletics ({'Attack' if which == 'attack' else 'Parry'})"
+
+    school_id = character_data.get("school", "")
+    tech_choices = character_data.get("technique_choices") or {}
+    _apply_school_technique_bonus(formula, which, school_id, knacks, tech_choices)
+
+    dan = compute_dan(knacks) if knacks else 0
+    rings = character_data.get("rings", {})
+
+    if school_id == "kitsuki_magistrate" and which == "attack":
+        water_val = rings.get("Water", 2)
+        _add_flat_bonus(formula, "Kitsuki Magistrate (2x Water)", 2 * water_val)
+
+    if school_id == "shosuro_actor":
+        skills = character_data.get("skills", {}) or {}
+        acting_rank = skills.get("acting", 0)
+        if acting_rank > 0:
+            formula.rolled += acting_rank
+
+    if school_id == "shosuro_actor" and dan >= 5:
+        formula.shosuro_5th_dan = True
+
+    if school_id == "courtier" and dan >= 5:
+        air_val = rings.get("Air", 2)
+        _add_flat_bonus(formula, "Courtier 5th Dan", air_val)
+
+    if school_id == "doji_artisan" and dan >= 5:
+        formula.doji_5th_dan_always = True
+
+    _finalize_caps(formula)
+    return formula
+
+
 def build_wound_check_formula(character_data: dict) -> dict:
     """Build the wound check roll formula.
 
@@ -958,6 +1019,22 @@ def build_all_roll_formulas(
         formula = build_athletics_formula(ring_name, character_data)
         if formula is not None:
             out[f"athletics:{ring_name}"] = formula.to_dict()
+
+    # Athletics used as attack/parry (rules p05 §Athletics). Only offered when
+    # the character has athletics rank 1+. Attack opens the attack modal with
+    # a doubled TN (5 + 10*parry); parry goes through the normal roll menu.
+    for which in ("attack", "parry"):
+        ath = build_athletics_combat_formula(which, character_data)
+        if ath is not None:
+            key = f"athletics:{which}"
+            d = _annotate_third_dan(key, ath.to_dict())
+            if which == "attack":
+                d = _annotate_attack_type(key, d)
+                d["attack_variant"] = "athletics_attack"
+                d["is_athletics_attack"] = True
+            else:
+                d["is_athletics_parry"] = True
+            out[key] = d
 
     # Initiative
     init_formula = build_initiative_formula(character_data)
