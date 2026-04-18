@@ -163,8 +163,16 @@ def _get_attack_result_rolled(page):
 
 
 def _open_attack_modal_and_roll(page, roll_key):
-    """Open attack modal for an attack-type key and roll with default TN."""
+    """Open attack modal for an attack-type key and roll with default TN.
+
+    Schools with an ``athletics`` knack (Togashi, Shosuro Actor, etc.) render
+    a regular-vs-athletics chooser before the attack modal; pick regular.
+    """
     page.locator(f'[data-roll-key="{roll_key}"]').click()
+    page.wait_for_timeout(200)
+    choice_menu = page.locator('[data-attack-choice-menu]')
+    if choice_menu.count() > 0 and choice_menu.is_visible():
+        choice_menu.locator('[data-attack-choice="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('button:has-text("Roll")').first.click()
@@ -1509,8 +1517,7 @@ def test_shosuro_5th_dan_attack_lowest_3_dice(page, live_server_url):
     f = _get_formula(page, "attack")
     assert f.get("shosuro_5th_dan") is True
     # Pre-roll note appears on the attack modal
-    page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    _open_attack_modal(page, "attack")
     pre_text = page.locator('[data-modal="attack"]').text_content()
     assert "Shosuro 5th Dan" in pre_text
     # Roll the attack; bonus row should appear in result
@@ -3134,8 +3141,16 @@ def test_togashi_4th_dan_reroll_hidden_on_heraldry(page, live_server_url):
 
 
 def _open_attack_modal(page, roll_key):
-    """Open the attack modal for a roll key without rolling."""
+    """Open the attack modal for a roll key without rolling.
+
+    Schools with an ``athletics`` knack render a regular-vs-athletics chooser
+    before the attack modal; pick regular.
+    """
     page.locator(f'[data-roll-key="{roll_key}"]').click()
+    page.wait_for_timeout(200)
+    choice_menu = page.locator('[data-attack-choice-menu]')
+    if choice_menu.count() > 0 and choice_menu.is_visible():
+        choice_menu.locator('[data-attack-choice="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
 
 
