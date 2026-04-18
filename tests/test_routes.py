@@ -310,6 +310,33 @@ class TestViewCharacter:
         resp = client.get("/characters/999")
         assert resp.status_code == 404
 
+    def test_view_renders_freeform_roll_button(self, client):
+        """The sheet's Rings section has a Freeform Roll button and modal."""
+        cid = _seed_character(client, name="Freeform Roll Char")
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-action="open-freeform-roll"' in resp.text
+        assert 'Freeform roll' in resp.text
+        assert 'data-modal="freeform-roll"' in resp.text
+
+    def test_view_freeform_default_reroll_true_when_healthy(self, client):
+        """A healthy character's Freeform modal defaults Reroll 10s to true."""
+        cid = _seed_character(client, name="Healthy FF", ring_earth=2)
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # The default expression on ffRerollTens should evaluate to true
+        assert "ffRerollTens: true" in resp.text
+
+    def test_view_freeform_default_reroll_false_when_impaired(self, client):
+        """An impaired character's Freeform modal defaults Reroll 10s to false."""
+        cid = _seed_character(
+            client, name="Impaired FF", ring_earth=2,
+            current_serious_wounds=2,
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert "ffRerollTens: false" in resp.text
+
     def test_view_shosuro_5th_dan_bakes_probabilities(self, client):
         """Shosuro 5th Dan sheet should embed shosuro_flats in attack/WC probs."""
         cid = _seed_character(
@@ -476,6 +503,186 @@ class TestInitiativePerRoundResetFlags:
         )
         flags = self._school_abilities(client, cid)
         assert flags.get("priest_round_conviction_refresh") is False
+
+
+class TestPriestBlessRituals:
+    """The ``priest_bless_rituals`` flag gates the Bless conversation topic and
+    Bless research buttons on the sheet. The rituals come with the Priest
+    school at any Dan, so any priest gets the flag; non-priests never do.
+    """
+
+    def _school_abilities(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(
+            r'id="school-abilities">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        return json.loads(m.group(1))
+
+    def test_priest_1st_dan_has_bless_rituals(self, client):
+        cid = _seed_character(
+            client, name="Priest1D", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("priest_bless_rituals") is True
+
+    def test_priest_5th_dan_has_bless_rituals(self, client):
+        cid = _seed_character(
+            client, name="Priest5D", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 5, "otherworldliness": 5, "pontificate": 5},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("priest_bless_rituals") is True
+
+    def test_non_priest_does_not_have_bless_rituals(self, client):
+        cid = _seed_character(
+            client, name="Akodo", school="akodo_bushi",
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("priest_bless_rituals") is False
+
+    def test_bless_buttons_render_on_priest_sheet(self, client):
+        cid = _seed_character(
+            client, name="Priest2D", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert "data-bless-conversation" in resp.text
+        assert "data-bless-research" in resp.text
+        assert "Bless conversation topic" in resp.text
+        assert "Bless research" in resp.text
+        # Rules text lives in the tooltip for each button.
+        assert "bless a target and pick a topic of conversation" in resp.text
+        assert "target makes a roll to perform research" in resp.text
+
+    def test_bless_buttons_absent_on_non_priest_sheet(self, client):
+        cid = _seed_character(
+            client, name="Kakita", school="kakita_duelist",
+            school_ring_choice="Fire",
+            knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # The button markup carries data-bless-* markers that only appear when
+        # the priest_bless_rituals block renders. (The rollBless JS method
+        # itself is always in the diceRoller component, so we can't key on the
+        # literal button label.)
+        assert "data-bless-conversation" not in resp.text
+        assert "data-bless-research" not in resp.text
+        # The rules-text tooltip strings are also template-only.
+        assert "bless a target and pick a topic of conversation" not in resp.text
+        assert "target makes a roll to perform research" not in resp.text
+
+
+class TestPartyPriestsContext:
+    """The ``party_priests`` list feeds the "<priest> priest blessed for 10
+    rerolls" button on the sheet's roll modal. It includes every priest in the
+    character's gaming group (any Dan) and excludes the character themselves.
+    """
+
+    def _party_priests(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(
+            r'id="party-priests">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        return json.loads(m.group(1))
+
+    def test_no_gaming_group_means_no_priests(self, client):
+        cid = _seed_character(
+            client, name="Solo", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        assert self._party_priests(client, cid) == []
+
+    def test_group_without_priests_is_empty(self, client):
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="No Priests Here")
+        session.add(group); session.commit()
+        cid = _seed_character(
+            client, name="Bushi", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            gaming_group_id=group.id, is_published=True,
+        )
+        _seed_character(
+            client, name="Other Bushi", school="mirumoto_bushi",
+            knacks={"counterattack": 1, "double_attack": 1, "iaijutsu": 1},
+            gaming_group_id=group.id, is_published=True,
+        )
+        assert self._party_priests(client, cid) == []
+
+    def test_any_dan_priest_in_party_appears(self, client):
+        """Priest at 1st Dan still provides the ritual — Dan doesn't gate it."""
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="Priest Party")
+        session.add(group); session.commit()
+        cid = _seed_character(
+            client, name="Bushi", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            gaming_group_id=group.id, is_published=True,
+        )
+        pid = _seed_character(
+            client, name="Isawa Priest", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1},
+            gaming_group_id=group.id, is_published=True,
+        )
+        priests = self._party_priests(client, cid)
+        assert priests == [{"priest_id": pid, "name": "Isawa Priest"}]
+
+    def test_multiple_priests_all_appear(self, client):
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="Temple")
+        session.add(group); session.commit()
+        cid = _seed_character(
+            client, name="Target", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            gaming_group_id=group.id, is_published=True,
+        )
+        p1 = _seed_character(
+            client, name="Priest One", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1},
+            gaming_group_id=group.id, is_published=True,
+        )
+        p2 = _seed_character(
+            client, name="Priest Two", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 3, "otherworldliness": 3, "pontificate": 3},
+            gaming_group_id=group.id, is_published=True,
+        )
+        priests = self._party_priests(client, cid)
+        ids = sorted(p["priest_id"] for p in priests)
+        assert ids == sorted([p1, p2])
+
+    def test_priest_does_not_appear_in_their_own_party_priests(self, client):
+        """A priest cannot rely on themselves — party_priests excludes self."""
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="Lonely Priest")
+        session.add(group); session.commit()
+        pid = _seed_character(
+            client, name="Only Priest", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+            gaming_group_id=group.id, is_published=True,
+        )
+        assert self._party_priests(client, pid) == []
 
 
 class TestEditCharacter:
@@ -883,6 +1090,112 @@ class TestTrackState:
             headers={"X-Test-User": "test_user_1:Test User 1"},
         )
         assert resp.status_code == 403
+
+    def test_track_action_dice_set(self, client):
+        cid = _seed_character(client, name="Action Dice Test")
+        dice = [
+            {"value": 3, "spent": False},
+            {"value": 5, "spent": False},
+            {"value": 7, "spent": True},
+        ]
+        resp = client.post(f"/characters/{cid}/track", json={"action_dice": dice})
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.action_dice == dice
+
+    def test_track_action_dice_clear(self, client):
+        cid = _seed_character(client, name="Action Dice Clear")
+        client.post(
+            f"/characters/{cid}/track",
+            json={"action_dice": [{"value": 4, "spent": False}]},
+        )
+        resp = client.post(f"/characters/{cid}/track", json={"action_dice": []})
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.action_dice == []
+
+    def test_track_action_dice_clamped_and_sanitized(self, client):
+        cid = _seed_character(client, name="Action Dice Sanitize")
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={
+                "action_dice": [
+                    {"value": 15, "spent": True},
+                    {"value": -3, "spent": False},
+                    {"value": 4},
+                    {"value": "not a number"},
+                    "not a dict",
+                    {"spent": True},
+                ]
+            },
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.action_dice == [
+            {"value": 10, "spent": True},
+            {"value": 0, "spent": False},
+            {"value": 4, "spent": False},
+            {"value": 0, "spent": True},
+        ]
+
+    def test_track_action_dice_rejects_non_list(self, client):
+        cid = _seed_character(client, name="Action Dice Non-list")
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"action_dice": "nope"},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.action_dice == []
+
+    def test_track_action_dice_preserves_spent_by_string(self, client):
+        cid = _seed_character(client, name="Action Dice SpentBy")
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={
+                "action_dice": [
+                    {"value": 3, "spent": True, "spent_by": "Attack: rolled 25 vs TN 20 - hit, damage 18"},
+                    {"value": 5, "spent": False},
+                ]
+            },
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.action_dice == [
+            {"value": 3, "spent": True,
+             "spent_by": "Attack: rolled 25 vs TN 20 - hit, damage 18"},
+            {"value": 5, "spent": False},
+        ]
+
+    def test_track_action_dice_spent_by_caps_long_strings(self, client):
+        cid = _seed_character(client, name="Action Dice Long SpentBy")
+        long_text = "x" * 1000
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"action_dice": [{"value": 2, "spent": True, "spent_by": long_text}]},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert len(char.action_dice[0]["spent_by"]) == 500
+
+    def test_track_action_dice_spent_by_non_string_dropped(self, client):
+        cid = _seed_character(client, name="Action Dice Bad SpentBy")
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={
+                "action_dice": [
+                    {"value": 2, "spent": True, "spent_by": 42},      # non-string
+                    {"value": 3, "spent": True, "spent_by": ""},       # empty string
+                    {"value": 4, "spent": True, "spent_by": "real"},
+                ]
+            },
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        # First two entries have no spent_by (dropped); third is preserved.
+        assert "spent_by" not in char.action_dice[0]
+        assert "spent_by" not in char.action_dice[1]
+        assert char.action_dice[2]["spent_by"] == "real"
 
 
 class TestPublish:

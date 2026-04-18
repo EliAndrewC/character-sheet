@@ -39,15 +39,15 @@
     {% endif %}
 
     <!-- HEADER -->
-    <div class="flex items-start justify-between">
-        <div>
-            <h1 class="text-3xl font-bold">{{ character.name }}</h1>
+    <div class="flex flex-wrap items-start justify-between gap-2">
+        <div class="min-w-0">
+            <h1 class="text-3xl font-bold break-words">{{ character.name }}</h1>
             {% if owner_display_name %}
             <p class="text-ink/60">Player: {{ owner_display_name }}</p>
             {% endif %}
         </div>
         {% if viewer_can_edit %}
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-wrap">
             <a href="/characters/{{ character.id }}/edit"
                class="bg-ink hover:bg-ink/80 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
                 Edit
@@ -95,8 +95,17 @@
 
     <!-- RINGS -->
     {% set ring_map = character.rings %}
-    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
-        <h2 class="text-xl font-bold mb-4 text-accent">Rings</h2>
+    <section x-data="freeformRoller()" x-init="init()"
+             class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <div class="flex items-center justify-between mb-4 gap-2 flex-wrap">
+            <h2 class="text-xl font-bold text-accent">Rings</h2>
+            <button type="button"
+                    @click="openModal()"
+                    data-action="open-freeform-roll"
+                    class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium transition-colors">
+                Freeform roll
+            </button>
+        </div>
 
         {# ── Side-by-side on lg+: diamond left, info right. Stacked below lg. ── #}
         <div class="lg:grid lg:grid-cols-[300px_1fr] lg:gap-6">
@@ -196,6 +205,102 @@
             </div>
         </div>
         </div>{# end lg:grid side-by-side wrapper #}
+
+        {# ── Freeform Roll Modal ── #}
+        <div x-show="ffOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="freeform-roll"
+             @click.self="close()">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent">Freeform Roll</h3>
+                    <button type="button" @click="close()"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+
+                {# PRE-ROLL phase #}
+                <div x-show="ffPhase === 'pre'" x-cloak class="space-y-4">
+                    <p class="text-sm text-ink/70">
+                        Roll dice directly, with no bonuses, rerolls, or abilities applied.
+                    </p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <label class="block">
+                            <span class="text-sm font-medium">Dice rolled</span>
+                            <select x-model.number="ffRolled" @change="clampKept()"
+                                    data-freeform="rolled"
+                                    class="mt-1 block w-full border border-ink/30 rounded px-3 py-1.5 text-sm">
+                                <template x-for="n in 10" :key="n">
+                                    <option :value="n" x-text="n"></option>
+                                </template>
+                            </select>
+                        </label>
+                        <label class="block">
+                            <span class="text-sm font-medium">Dice kept</span>
+                            <select x-model.number="ffKept"
+                                    data-freeform="kept"
+                                    class="mt-1 block w-full border border-ink/30 rounded px-3 py-1.5 text-sm">
+                                <template x-for="n in ffRolled" :key="n">
+                                    <option :value="n" x-text="n"></option>
+                                </template>
+                            </select>
+                        </label>
+                    </div>
+
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" x-model="ffRerollTens"
+                               data-freeform="reroll-tens"
+                               class="rounded text-accent">
+                        <span>Reroll 10s</span>
+                    </label>
+
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" @click="close()"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
+                            Cancel
+                        </button>
+                        <button type="button" @click="doRoll()"
+                                data-action="freeform-roll"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                            Roll
+                        </button>
+                    </div>
+                </div>
+
+                {# ROLLING phase: dice animation #}
+                <div x-show="ffPhase === 'rolling'" x-cloak
+                     id="dice-animation-ff"
+                     class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+
+                {# RESULT phase #}
+                <div x-show="ffPhase === 'done'" x-cloak class="space-y-3">
+                    <div class="text-base font-mono font-bold text-ink/80" x-text="ffFormulaText"></div>
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in ffFinalDice" :key="i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="font-bold text-lg">
+                            Total: <span class="text-accent" data-freeform="total" x-text="ffTotal"></span>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" @click="reset()"
+                                data-action="freeform-roll-again"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
+                            Roll Again
+                        </button>
+                        <button type="button" @click="close()"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </section>
 
     <!-- LIVE TRACKING -->
@@ -231,6 +336,8 @@
                     if (typeof v === 'number' && v > 0) return [{amount: v, spent: false}];
                     return [];
                 })(),
+                actionDice: {{ (action_dice or [])|tojson }},
+                actionMenuOpen: null,
                 _charId: {{ character.id }},
                 _saving: false,
                 showResetModal: false,
@@ -251,9 +358,63 @@
                             current_void_points: this.voidPoints,
                             current_temp_void_points: this.tempVoidPoints,
                             adventure_state: this.adventureState,
+                            action_dice: this.actionDice,
                         }),
                     });
                     this._saving = false;
+                },
+
+                setActionDice(values) {
+                    this.actionDice = (values || []).map(v => ({value: v, spent: false}));
+                    this.actionMenuOpen = null;
+                    this.save();
+                },
+                clearActionDice() {
+                    this.actionDice = [];
+                    this.actionMenuOpen = null;
+                    this.save();
+                },
+                toggleActionMenu(i) {
+                    this.actionMenuOpen = this.actionMenuOpen === i ? null : i;
+                },
+                spendActionDie(i) {
+                    if (this.actionDice[i]) {
+                        this.actionDice[i].spent = true;
+                        // Manual spend has no known action context.
+                        delete this.actionDice[i].spent_by;
+                        this.actionMenuOpen = null;
+                        this.save();
+                    }
+                },
+                unspendActionDie(i) {
+                    if (this.actionDice[i]) {
+                        this.actionDice[i].spent = false;
+                        delete this.actionDice[i].spent_by;
+                        this.actionMenuOpen = null;
+                        this.save();
+                    }
+                },
+                // Returns the index of the die that was spent, or -1 if none
+                // were available. An optional spentBy label is attached.
+                spendLowestUnspentActionDie(spentBy) {
+                    for (let i = 0; i < this.actionDice.length; i++) {
+                        if (!this.actionDice[i].spent) {
+                            this.actionDice[i].spent = true;
+                            if (spentBy) this.actionDice[i].spent_by = spentBy;
+                            this.save();
+                            return i;
+                        }
+                    }
+                    return -1;
+                },
+                annotateActionDie(i, spentBy) {
+                    if (i < 0 || !this.actionDice[i]) return;
+                    if (spentBy) {
+                        this.actionDice[i].spent_by = spentBy;
+                    } else {
+                        delete this.actionDice[i].spent_by;
+                    }
+                    this.save();
                 },
 
                 saveBankedBonuses() {
@@ -738,6 +899,35 @@
                 </div>
             </div>
             {% endif %}
+            {% if school_abilities.get('priest_bless_rituals') %}
+            <div class="mt-2 pt-2 border-t border-ink/10">
+                <div class="text-sm text-ink/60 mb-1">Priest Rituals</div>
+                <div class="flex flex-col gap-2">
+                    <div class="tooltip-trigger relative inline-block self-start" data-bless-conversation>
+                        <button type="button"
+                                @click="window._diceRoller?.rollBless('Bless conversation topic')"
+                                data-action="bless-conversation"
+                                class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
+                            Bless conversation topic
+                        </button>
+                        <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">
+                            Before a conversation, bless a target and pick a topic of conversation. When the target makes their first contested roll on that topic, roll 2k1 and add it to their roll. Each blessing replaces the previous one. Time: 5 minutes.
+                        </span>
+                    </div>
+                    <div class="tooltip-trigger relative inline-block self-start" data-bless-research>
+                        <button type="button"
+                                @click="window._diceRoller?.rollBless('Bless research')"
+                                data-action="bless-research"
+                                class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
+                            Bless research
+                        </button>
+                        <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">
+                            When a target makes a roll to perform research, roll 2k1 and add it to their roll. Time: 5 minutes.
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             {% if school_abilities.get('kuni_reflect_damage') %}
             <div class="mt-2 pt-2 border-t border-ink/10" x-data="{ kuniLW: 0, reflected: false }">
                 <div class="text-sm text-ink/60 mb-1">Kuni 5th Dan - Reflect Damage</div>
@@ -760,9 +950,65 @@
             {% endif %}
         </div>
 
-        <!-- Per-Adventure Abilities (right column) -->
-        {% if per_adventure %}
+        <!-- Actions + Per-Adventure Abilities (right column) -->
+        {% if per_adventure or viewer_can_edit or action_dice %}
         <div class="flex-1 min-w-0">
+            <!-- Action dice (shown after initiative is rolled, hidden after Clear) -->
+            <div x-show="actionDice.length > 0" x-cloak class="mb-6"
+                 data-testid="action-dice-section">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide">Actions</h3>
+                    {% if viewer_can_edit %}
+                    <button type="button" @click="clearActionDice()"
+                            data-action="clear-action-dice"
+                            class="text-xs text-ink/50 hover:text-accent">Clear</button>
+                    {% endif %}
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="(die, i) in actionDice" :key="i">
+                        <div class="relative">
+                            <button type="button"
+                                    {% if viewer_can_edit %}@click="toggleActionMenu(i)"{% endif %}
+                                    data-action="action-die"
+                                    :data-die-index="i"
+                                    :data-die-spent="die.spent ? 'true' : 'false'"
+                                    :data-die-value="die.value"
+                                    class="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 font-mono font-bold text-lg transition-colors"
+                                    :class="die.spent
+                                        ? 'border-ink/30 bg-ink/5 text-ink/40 line-through'
+                                        : die.value === 0
+                                            ? 'border-gold bg-gold/10 text-gold hover:bg-gold/20'
+                                            : die.value <= 3
+                                                ? 'border-accent bg-accent/10 text-accent hover:bg-accent/20'
+                                                : 'border-ink/30 bg-parchment text-ink hover:bg-ink/10'"
+                                    :title="die.spent_by
+                                        ? die.spent_by
+                                        : (die.spent ? 'Spent - click to mark as unspent' : 'Click to mark as spent')"
+                                    :data-die-spent-by="die.spent_by || ''"
+                                    x-text="die.value"></button>
+                            {% if viewer_can_edit %}
+                            <div x-show="actionMenuOpen === i" x-cloak
+                                 @click.outside="if (actionMenuOpen === i) actionMenuOpen = null"
+                                 class="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm whitespace-nowrap">
+                                <button type="button" x-show="!die.spent"
+                                        @click="spendActionDie(i)"
+                                        data-action="action-die-spent"
+                                        class="block w-full text-left px-3 py-2 hover:bg-parchment">Action was spent</button>
+                                <button type="button" x-show="die.spent"
+                                        @click="unspendActionDie(i)"
+                                        data-action="action-die-unspent"
+                                        class="block w-full text-left px-3 py-2 hover:bg-parchment">Mark as unspent</button>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </template>
+                </div>
+                <div class="text-xs text-ink/60 mt-2">
+                    Lowest unspent die is auto-spent when you attack or parry.
+                </div>
+            </div>
+
+            {% if per_adventure %}
             <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-3">Per-Adventure Abilities</h3>
             <div class="space-y-3">
                 {% for ability in per_adventure %}
@@ -845,6 +1091,7 @@
                 </div>
             </div>
             {% endif %}
+            {% endif %} {# end: if per_adventure #}
         </div>
         {% endif %}
         </div> {# close flex flex-col md:flex-row #}
@@ -1412,10 +1659,12 @@
         "daily_max": 2 * _conv_rank,
     } | tojson }}</script>
     <script type="application/json" id="priest-conviction-allies">{{ priest_conviction_allies | tojson }}</script>
+    <script type="application/json" id="party-priests">{{ party_priests | tojson }}</script>
     <script src="/static/js/dice.js?v={{ static_v('js/dice.js') }}"></script>
     <div x-data="diceRoller()" x-init="init()">
         {# ── Roll menu (void spending + iaijutsu strike) ── #}
         <div x-show="rollMenuOpen" x-cloak @click.outside="rollMenuOpen = false"
+             data-roll-menu="root"
              class="fixed z-50 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[240px]"
              :style="'top:' + rollMenuPos.top + 'px; left:' + rollMenuPos.left + 'px'">
             <template x-if="rollMenuHasAthleticsPicker">
@@ -3452,6 +3701,31 @@
                         </span>
                     </div>
 
+                    {# Priest "sick or impaired" ritual: offer a reroll of the
+                       Impaired 10s, one button per priest in the party. The
+                       button only appears when the roll was Impaired AND a 10
+                       is still present in the pool. #}
+                    <div x-show="formula && formula.no_reroll_reason === 'impaired' && finalDice.some(d => d.value === 10) && (partyPriests || []).length > 0"
+                         x-cloak class="mt-2 flex flex-col gap-2" data-priest-bless-reroll-block>
+                        <template x-for="priest in (partyPriests || [])" :key="'bless-10-' + priest.priest_id">
+                            <div class="tooltip-trigger relative inline-block self-start"
+                                 :data-priest-bless-reroll="priest.priest_id">
+                                <button type="button"
+                                        @click="rerollImpairedTens(priest)"
+                                        :data-action="'priest-bless-reroll-10-' + priest.priest_id"
+                                        class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
+                                    <span x-text="priest.name"></span> priest blessed for 10 rerolls
+                                </button>
+                                <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">
+                                    Only click this button if <span x-text="priest.name"></span> specifically blessed you in advance with the following ritual:
+                                    <br><br>
+                                    <em>If the target was already suffering penalties from being sick or impaired at the time this ritual was performed, they ignore those penalties in the next conversation or fight.</em>
+                                    <br><em>Time: 5 minutes</em>
+                                </span>
+                            </div>
+                        </template>
+                    </div>
+
                     {# Akodo Special: feint grants temp VP (4 on success, 1 on failure) #}
                     <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.akodo_temp_vp_on_feint" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
@@ -3764,6 +4038,90 @@
     </div>
 
     <script>
+    function freeformRoller() {
+        return {
+            ffOpen: false,
+            ffPhase: 'pre',  // 'pre' | 'rolling' | 'done'
+            ffRolled: 1,
+            ffKept: 1,
+            ffRerollTens: {{ 'false' if is_impaired_now else 'true' }},
+            ffFinalDice: [],
+            ffTotal: 0,
+            ffFormulaText: '',
+            ffPrefs: { dice_animation_enabled: true, dice_sound_enabled: true },
+            _ffEarthRing: {{ ring_map['Earth'] }},
+
+            init() {
+                if (this._ffInited) return;
+                this._ffInited = true;
+                try {
+                    const p = JSON.parse(document.getElementById('user-prefs').textContent || '{}');
+                    this.ffPrefs.dice_animation_enabled = p.dice_animation_enabled !== false;
+                    this.ffPrefs.dice_sound_enabled = p.dice_sound_enabled !== false;
+                } catch (e) { /* keep defaults */ }
+            },
+
+            _impairedNow() {
+                const t = window._trackingBridge;
+                const sw = (t && typeof t.seriousWounds === 'number')
+                    ? t.seriousWounds : {{ character.current_serious_wounds or 0 }};
+                return sw >= this._ffEarthRing;
+            },
+
+            openModal() {
+                this.ffPhase = 'pre';
+                this.ffRolled = 1;
+                this.ffKept = 1;
+                this.ffRerollTens = !this._impairedNow();
+                this.ffFinalDice = [];
+                this.ffTotal = 0;
+                this.ffFormulaText = '';
+                this.ffOpen = true;
+            },
+
+            close() {
+                this.ffOpen = false;
+            },
+
+            reset() {
+                this.ffPhase = 'pre';
+                this.ffFinalDice = [];
+                this.ffTotal = 0;
+                this.ffFormulaText = '';
+            },
+
+            clampKept() {
+                if (this.ffKept > this.ffRolled) this.ffKept = this.ffRolled;
+            },
+
+            async doRoll() {
+                this.clampKept();
+                const rolled = this.ffRolled;
+                const kept = this.ffKept;
+                const rerollTens = !!this.ffRerollTens;
+                this.ffFormulaText = `${rolled}k${kept}` + (rerollTens ? '' : ' (no reroll)');
+                this.ffFinalDice = [];
+                this.ffTotal = 0;
+                this.ffPhase = 'rolling';
+                const playSound = this.ffPrefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                const dice = await window.L7RDice.rollAndAnimate(
+                    rolled, rerollTens, this.ffPrefs.dice_animation_enabled,
+                    playSound, 'dice-animation-ff'
+                );
+                const sorted = [...dice].sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(kept, sorted.length);
+                this.ffFinalDice = sorted.map((d, i) => ({
+                    value: d.value,
+                    kept: i >= sorted.length - keptCount,
+                }));
+                const keptDice = sorted.slice(sorted.length - keptCount);
+                this.ffTotal = keptDice.reduce((s, d) => s + d.value, 0);
+                this.ffPhase = 'done';
+            },
+        };
+    }
+
     function diceRoller() {
         return {
             open: false,
@@ -3789,6 +4147,7 @@
             convictionSpentThisRoll: 0,
             togashiRaisesSpentThisRoll: 0,
             priestAllies: [],  // [{priest_id, name, rank, max_per_roll, pool_max, used}]
+            partyPriests: [],  // [{priest_id, name}] — any priest in the gaming group
             priestAllySpentThisRoll: {},  // {priest_id: N spent on the current roll}
             raisesSpentThisRoll: 0,
             // Courtier 5th Dan optional TN/contested bonus
@@ -3960,6 +4319,8 @@
                 this._atkUpdateHitState();
                 this.atkPhase = 'result';
                 this.luckyOriginalWasHigher = this.luckyPrevBaseTotal > newDiceOnly;
+                // Lucky reroll changes the attack total/hit state - refresh annotation.
+                this._annotateSpentActionDie(this._describeAttackForDie(false));
             },
 
             async useLuckyDamage() {
@@ -3989,6 +4350,7 @@
                 this.atkDamageTotal = this.keptSum + (f.flat || 0) + this.atkDamageShosuroBonus + this.convictionSpentThisRoll + this.totalPriestAllySpentThisRoll();
                 this.atkPhase = 'damage-result';
                 this.luckyOriginalWasHigher = prevTotal > this.atkDamageTotal;
+                this._annotateSpentActionDie(this._describeAttackForDie(true));
             },
 
             async useLuckyDuelContested() {
@@ -4179,6 +4541,7 @@
             hidaRerollSelections: [],
             hidaRerollMax: 0,
             mirumotoPointsSpentThisRoll: 0,
+            _actionDieSpentIndex: -1,
 
             init() {
                 // Alpine auto-calls init() on an x-data object that defines
@@ -4209,6 +4572,11 @@
                         document.getElementById('priest-conviction-allies').textContent || '[]'
                     );
                 } catch (e) { this.priestAllies = []; }
+                try {
+                    this.partyPriests = JSON.parse(
+                        document.getElementById('party-priests').textContent || '[]'
+                    );
+                } catch (e) { this.partyPriests = []; }
                 try {
                     this.voidSpendConfig = JSON.parse(
                         document.getElementById('void-spend-config').textContent || '{}'
@@ -4658,9 +5026,76 @@
                 return options;
             },
 
+            _keyAutoSpendsAction(key) {
+                // Parry and feint go through executeRoll; all attack-type rolls
+                // (attack/double_attack/counterattack/lunge and athletics:attack)
+                // are handled in rollAttack. Returns true when a non-attack
+                // roll should auto-spend the lowest unspent action die.
+                if (!key) return false;
+                if (key === 'parry' || key === 'athletics:parry') return true;
+                if (key === 'knack:feint' || key.startsWith('knack:feint:')) return true;
+                return false;
+            },
+
+            _initialSpendLabel(key) {
+                if (key === 'parry' || key === 'athletics:parry') return 'Parry (rolling...)';
+                if (key === 'knack:feint' || (key && key.startsWith('knack:feint:'))) return 'Feint (rolling...)';
+                return null;
+            },
+
+            _autoSpendActionDie(initialLabel) {
+                const t = window._trackingBridge;
+                if (t && typeof t.spendLowestUnspentActionDie === 'function') {
+                    this._actionDieSpentIndex = t.spendLowestUnspentActionDie(initialLabel || null);
+                } else {
+                    this._actionDieSpentIndex = -1;
+                }
+            },
+
+            _annotateSpentActionDie(text) {
+                if (this._actionDieSpentIndex == null || this._actionDieSpentIndex < 0) return;
+                const t = window._trackingBridge;
+                if (t && typeof t.annotateActionDie === 'function') {
+                    t.annotateActionDie(this._actionDieSpentIndex, text);
+                }
+            },
+
+            _describeParryForDie(key) {
+                const label = key === 'athletics:parry' ? 'Athletics Parry' : 'Parry';
+                return `${label}: total ${this.baseTotal}`;
+            },
+
+            _describeFeintForDie(key) {
+                // key is "knack:feint" or "knack:feint:<ring>" - strip the ring.
+                return `Feint: total ${this.baseTotal}`;
+            },
+
+            _describeAttackForDie(includeDamage) {
+                const f = this.atkFormula || this.formula || {};
+                const variant = f.attack_variant || 'attack';
+                const labelMap = {
+                    attack: 'Attack',
+                    double_attack: 'Double Attack',
+                    counterattack: 'Counterattack',
+                    lunge: 'Lunge',
+                    athletics_attack: 'Athletics Attack',
+                };
+                const label = labelMap[variant] || 'Attack';
+                const effTN = this.atkEffectiveTN ? this.atkEffectiveTN() : this.atkTN;
+                const outcome = this.atkNearMiss
+                    ? 'near miss (hit, no extra damage)'
+                    : (this.atkHit ? 'hit' : 'miss');
+                let text = `${label}: rolled ${this.atkRollTotal} vs TN ${effTN} - ${outcome}`;
+                if (includeDamage && this.atkDamageTotal > 0) {
+                    text += `, damage ${this.atkDamageTotal}`;
+                }
+                return text;
+            },
+
             executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason) {
                 this.rollMenuOpen = false;
                 this.parryHoverRow = null;
+                if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key));
                 this.luckyUsedThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.convictionSpentThisRoll = 0;
@@ -4712,6 +5147,7 @@
                 this.rollMenuOpen = false;
                 this.owHoverRow = null;
                 this.parryHoverRow = null;
+                if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key));
                 this.luckyUsedThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.convictionSpentThisRoll = 0;
@@ -4894,6 +5330,12 @@
                         actions = actions.map(v => v === 10 ? 0 : v);
                     }
                     this.actionDice = actions.sort((a, b) => a - b);
+                    // Persist the rolled action dice to the Tracking section
+                    // so they're visible (and spendable) until Clear is clicked
+                    // or the next initiative roll replaces them.
+                    if (window._trackingBridge) {
+                        window._trackingBridge.setActionDice(this.actionDice);
+                    }
 
                     // Togashi Ise Zumi normal variant: roll one additional
                     // standalone athletics-only action die alongside the
@@ -4943,6 +5385,18 @@
                         this.bayushiBankedFeintRaise += 5;
                         if (window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = this.bayushiBankedFeintRaise;
                         window._trackingBridge?.saveBankedBonuses();
+                    }
+
+                    // If this roll auto-spent an action die (parry/feint),
+                    // annotate it with the result so the die's tooltip shows
+                    // what action was taken and what happened.
+                    if (this._actionDieSpentIndex != null && this._actionDieSpentIndex >= 0) {
+                        if (key === 'parry' || key === 'athletics:parry') {
+                            this._annotateSpentActionDie(this._describeParryForDie(key));
+                        } else if (key === 'knack:feint' || (key && key.startsWith('knack:feint:'))) {
+                            this._annotateSpentActionDie(this._describeFeintForDie(key));
+                        }
+                        this._actionDieSpentIndex = -1;
                     }
                 }
 
@@ -5560,6 +6014,11 @@
             },
 
             async rollAttack() {
+                // Every attack variant (attack, double_attack, counterattack,
+                // lunge, athletics:attack) consumes an action die. The initial
+                // label is a placeholder - it will be replaced with the full
+                // attack result once the roll completes.
+                this._autoSpendActionDie('Attack (rolling...)');
                 const voidCount = this.atkVoidSelected;
                 const formula = { ...this.formulas[this.atkKey] };
                 this.convictionSpentThisRoll = 0;
@@ -5713,6 +6172,8 @@
                 }
 
                 this.atkPhase = 'result';
+                // Annotate the auto-spent action die with this attack's result.
+                this._annotateSpentActionDie(this._describeAttackForDie(false));
             },
 
             atkSpendRaise() {
@@ -5810,6 +6271,9 @@
                 this.atkDamageParts = dmg.parts || [];
                 this.atkDamageConvictionSpent = 0;
                 this.atkPhase = 'damage-result';
+                // Now that damage is rolled, refresh the action die's tooltip
+                // so it includes the damage total.
+                this._annotateSpentActionDie(this._describeAttackForDie(true));
             },
 
             // --- Wound Check ---
@@ -6184,6 +6648,114 @@
                     this.applyWoundCheckFailure();
                 }
                 this.wcModalOpen = false;
+            },
+
+            async rerollImpairedTens(priest) {
+                // Priest "sick or impaired" ritual: reroll the impaired 10s on
+                // the CURRENT result. Visible only when the character rolled an
+                // Impaired roll (``no_reroll_reason === 'impaired'``) AND at
+                // least one 10 is sitting in the final pool. Discretionary
+                // spends (raises, Conviction, Mirumoto round points, etc.)
+                // made before clicking the button carry through unchanged.
+                if (!this.formula || this.formula.no_reroll_reason !== 'impaired') return;
+                // Rebuild the parts-preserving pool from kept + unkept
+                // (finalDice drops the exploded-parts array).
+                const pool = [...(this.unkeptDice || []), ...(this.keptDice || [])]
+                    .map(d => ({ value: d.value, parts: d.parts ? [...d.parts] : [d.value] }));
+                const tenIndices = pool
+                    .map((d, i) => d.value === 10 ? i : -1)
+                    .filter(i => i >= 0);
+                if (tenIndices.length === 0) return;
+
+                const disc = this._genericDiscretionaryTotal();
+                const convictionCarry = this.convictionSpentThisRoll || 0;
+                const priestAllyCarry = this.totalPriestAllySpentThisRoll();
+
+                this.phase = 'rolling';
+                // New dice explode on 10 (the whole point of the ritual is
+                // that the character ignores their impaired penalty).
+                const newDice = await this._rerollDice(
+                    tenIndices.length, true, 'dice-animation'
+                );
+                tenIndices.forEach((idx, j) => {
+                    pool[idx] = { value: newDice[j].value, parts: newDice[j].parts };
+                });
+
+                const sortedAsc = pool.slice().sort((a, b) => a.value - b.value);
+                const keptCount = Math.min(this.formula.kept, sortedAsc.length);
+                const isInit = this.formula.is_initiative;
+                const keptSet = new Set();
+                if (isInit) {
+                    for (let i = 0; i < keptCount; i++) keptSet.add(i);
+                } else {
+                    for (let i = sortedAsc.length - keptCount; i < sortedAsc.length; i++) {
+                        keptSet.add(i);
+                    }
+                }
+                this.finalDice = sortedAsc.map((d, i) => ({ value: d.value, kept: keptSet.has(i) }));
+                this.keptDice = sortedAsc.filter((_, i) => keptSet.has(i));
+                this.unkeptDice = sortedAsc.filter((_, i) => !keptSet.has(i));
+                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+
+                // Shosuro 5th Dan "lowest 3" bonus depends on the full pool
+                // and must be recomputed against the new dice.
+                this.shosuroLowest3Bonus = 0;
+                if (this.schoolAbilities.shosuro_add_lowest_3 && !isInit) {
+                    const lowest3 = sortedAsc
+                        .slice(0, Math.min(3, sortedAsc.length))
+                        .map(d => d.value);
+                    this.shosuroLowest3Bonus = lowest3.reduce((s, v) => s + v, 0);
+                }
+
+                this.baseTotal = this.keptSum
+                    + (this.formula.flat || 0)
+                    + (this.shosuroLowest3Bonus || 0)
+                    + convictionCarry
+                    + priestAllyCarry
+                    + disc;
+
+                this.phase = 'done';
+            },
+
+            async rollBless(title) {
+                // Priest bless ritual 2k1 roll. Conviction may be spent via
+                // the standard in-modal block; void is never offered because
+                // the roll menu that exposes VP options is bypassed.
+                this.rollMenuOpen = false;
+                this.owHoverRow = null;
+                this.parryHoverRow = null;
+                this.luckyUsedThisRoll = false;
+                this.togashiRerollUsed = false;
+                this.convictionSpentThisRoll = 0;
+                this.togashiRaisesSpentThisRoll = 0;
+                this.priestAllySpentThisRoll = {};
+                this.courtier5thApplied = false;
+                this.dojiOpponentResult = 0;
+                this.dojiTnRollApplied = false;
+                // Bless is a ritual, not a skill/combat roll — suppress all
+                // post-roll school hooks (feint temp VP, Mirumoto parry VP, etc).
+                this._postRollHooksFired = true;
+                this.luckyOriginalWasHigher = false;
+                this.mirumotoPointsSpentThisRoll = 0;
+                this.currentRollKey = 'bless';
+                this.shosuroLowest3Bonus = 0;
+                this.perRoundResetMessages = [];
+                this.raisesSpentThisRoll = 0;
+
+                this.formula = {
+                    label: title,
+                    rolled: 2,
+                    kept: 1,
+                    flat: 0,
+                    reroll_tens: true,
+                    is_initiative: false,
+                    bonuses: [],
+                    adventure_raises_max_per_roll: 0,
+                };
+                this.title = title;
+                this.formulaText = '2k1';
+                this.open = true;
+                await this.runRoll();
             },
 
             async rollSpendVPForXk1({ x, title }) {

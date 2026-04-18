@@ -162,6 +162,16 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                     "bonus": p_attack * 5,
                 })
 
+    # Party priests (any Dan): surfaced on the roll modal so an Impaired
+    # character whose 10s would not have rerolled can click a "<priest> priest
+    # blessed for 10 rerolls" button if a priest performed the sick-or-impaired
+    # ritual on them beforehand.
+    party_priests = []
+    if character.gaming_group_id:
+        for p in party_chars:
+            if p.school == "priest":
+                party_priests.append({"priest_id": p.id, "name": p.name})
+
     # Party-priest 5th Dan conviction: each Priest ally at dan >= 5 with a
     # conviction knack lets this character spend from the priest's pool.
     priest_conviction_allies = []
@@ -414,6 +424,9 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Priest 5th Dan: conviction pool refreshes after each combat round
         # (drives the per-round reset fired by initiative rolls).
         "priest_round_conviction_refresh": character.school == "priest" and dan >= 5,
+        # Priest Special: the 10 rituals include "Bless conversation topic" and
+        # "Bless research", each a 2k1 roll added to someone else's roll.
+        "priest_bless_rituals": character.school == "priest",
         # Ide Diplomat 3rd Dan: spend VP to subtract Xk1 from someone's roll
         "ide_subtract_roll": character.school == "ide_diplomat" and dan >= 3,
         "ide_subtract_x": (char_dict.get("skills") or {}).get("tact", 0) if character.school == "ide_diplomat" and dan >= 3 else 0,
@@ -558,6 +571,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "per_adventure": per_adventure,
             "void_max": void_max,
             "adventure_state": character.adventure_state or {},
+            "action_dice": character.action_dice or [],
             "all_groups": all_groups,
             "roll_formulas": roll_formulas,
             "is_impaired_now": is_impaired_now,
@@ -570,6 +584,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "school_abilities": school_abilities,
             "daidoji_counterattack_party": daidoji_counterattack_party,
             "priest_conviction_allies": priest_conviction_allies,
+            "party_priests": party_priests,
         },
     )
 

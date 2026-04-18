@@ -486,7 +486,7 @@ def test_hida_3rd_dan_reroll_appears(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     assert page.locator('text="Hida 3rd Dan: select up to"').is_visible()
@@ -672,7 +672,7 @@ def test_mirumoto_5th_dan_prob_charts_include_bonus(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("15")
+    modal.locator('select:visible').select_option("15")
     page.wait_for_timeout(300)
 
     # Get attack avg roll with 0 VP and 1 VP
@@ -737,7 +737,7 @@ def test_mirumoto_4th_dan_prob_charts_no_bonus(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("15")
+    modal.locator('select:visible').select_option("15")
     page.wait_for_timeout(300)
 
     # Get attack avg roll with 0 VP and 1 VP
@@ -979,7 +979,7 @@ def test_hida_reroll_selection_appears(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     assert page.locator('text="Hida 3rd Dan: select up to"').is_visible()
@@ -2226,7 +2226,7 @@ def test_brotherhood_unarmed_damage_behavioral(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     dmg_text = _get_attack_result_text(page)
@@ -2265,7 +2265,7 @@ def test_isawa_duelist_water_damage_behavioral(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     # Roll damage
@@ -2394,7 +2394,7 @@ def test_daidoji_3rd_dan_raises_note_behavioral(page, live_server_url):
     page.locator('[data-roll-key="knack:counterattack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     result = _get_attack_result_text(page)
@@ -2575,7 +2575,7 @@ def test_matsu_5th_dan_lw_reset_note_behavioral(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")  # low TN for guaranteed hit
+    modal.locator('select:visible').select_option("5")  # low TN for guaranteed hit
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     # Roll damage
@@ -3521,7 +3521,7 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     # The Apply button should be visible (wait for Alpine to render the banked bonuses UI)
@@ -3680,7 +3680,7 @@ def test_bayushi_vp_damage_behavioral(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     # Select 1 VP
     vp_btn = modal.locator('button:has-text("+")').first
     if vp_btn.is_visible():
@@ -3709,7 +3709,7 @@ def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     _restore_dice(page)
@@ -3898,7 +3898,7 @@ def test_matsu_4th_dan_near_miss_behavioral(page, live_server_url):
     page.locator('[data-roll-key="knack:double_attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("15")
+    modal.locator('select:visible').select_option("15")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     # Check Alpine state for near-miss
@@ -3924,7 +3924,7 @@ def test_mirumoto_4th_dan_parry_reduction_behavioral(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     # Check the failed parry checkbox using x-model attribute
@@ -3943,7 +3943,7 @@ def test_otaku_4th_dan_lunge_parry_behavioral(page, live_server_url):
     page.locator('[data-roll-key="knack:lunge"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     # Check failed parry
@@ -3963,7 +3963,7 @@ def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     # Boost extra dice so total damage dice > 10 (base damage is ~7, need 11+)
@@ -4068,7 +4068,7 @@ def test_hida_5th_dan_counterattack_wc_bonus(page, live_server_url):
     page.locator('[data-roll-key="knack:counterattack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
 
@@ -4139,7 +4139,7 @@ def test_hida_below_5th_dan_no_counterattack_wc_bonus(page, live_server_url):
     page.locator('[data-roll-key="knack:counterattack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('select').select_option("5")
+    modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
 
@@ -4316,3 +4316,254 @@ def test_non_initiative_roll_does_not_trigger_reset(page, live_server_url):
     current = page.evaluate("() => window._trackingBridge.mirumotoRoundPoints")
     assert current == 0
     _restore_dice(page)
+
+
+# --- Priest bless rituals (2k1 rolls available to any Priest) ---
+
+def test_priest_bless_conversation_topic_rolls_2k1(page, live_server_url):
+    """Priest any-Dan: the Bless conversation topic button rolls 2k1 and
+    shows the dice modal titled for that ritual."""
+    _create_char(page, live_server_url, "PriestBlessC", "priest",
+                 knack_overrides={"conviction": 1, "otherworldliness": 1, "pontificate": 1})
+    page.locator('[data-action="bless-conversation"]').click()
+    _wait_roll_done(page)
+    formula = page.evaluate("() => window._diceRoller.formula")
+    assert formula["rolled"] == 2
+    assert formula["kept"] == 1
+    assert formula["flat"] == 0
+    assert formula["is_initiative"] is False
+    # Title drives the modal heading — make sure the ritual name is surfaced.
+    title = page.evaluate("() => window._diceRoller.title")
+    assert title == "Bless conversation topic"
+
+
+def test_priest_bless_research_rolls_2k1(page, live_server_url):
+    """Priest any-Dan: the Bless research button rolls 2k1 with its own title."""
+    _create_char(page, live_server_url, "PriestBlessR", "priest",
+                 knack_overrides={"conviction": 1, "otherworldliness": 1, "pontificate": 1})
+    page.locator('[data-action="bless-research"]').click()
+    _wait_roll_done(page)
+    formula = page.evaluate("() => window._diceRoller.formula")
+    assert formula["rolled"] == 2
+    assert formula["kept"] == 1
+    title = page.evaluate("() => window._diceRoller.title")
+    assert title == "Bless research"
+
+
+def test_priest_bless_buttons_have_rules_tooltips(page, live_server_url):
+    """The full rules text for each ritual lives in a hover tooltip beside
+    the button, so the player can confirm what it does before clicking."""
+    _create_char(page, live_server_url, "PriestBlessT", "priest",
+                 knack_overrides={"conviction": 1, "otherworldliness": 1, "pontificate": 1})
+    conv = page.locator('[data-bless-conversation] .tooltip-content')
+    research = page.locator('[data-bless-research] .tooltip-content')
+    assert "bless a target and pick a topic of conversation" in conv.text_content()
+    assert "Each blessing replaces the previous one" in conv.text_content()
+    assert "target makes a roll to perform research" in research.text_content()
+
+
+def test_priest_bless_roll_allows_conviction_spending(page, live_server_url):
+    """Conviction may be spent on a bless roll (the standard in-modal block
+    is visible and the button increments baseTotal by 1)."""
+    _create_char(page, live_server_url, "PriestBlessConv", "priest",
+                 knack_overrides={"conviction": 3, "otherworldliness": 3, "pontificate": 3})
+    page.locator('[data-action="bless-conversation"]').click()
+    _wait_roll_done(page)
+    conv_block = page.locator('[data-conviction-block]')
+    assert conv_block.is_visible()
+    base_before = page.evaluate("() => window._diceRoller.baseTotal")
+    conv_block.locator('[data-action="spend-conviction"]').click()
+    base_after = page.evaluate("() => window._diceRoller.baseTotal")
+    assert base_after == base_before + 1
+    spent = page.evaluate("() => window._diceRoller.convictionSpentThisRoll")
+    assert spent == 1
+
+
+def test_priest_bless_roll_offers_no_void_spending(page, live_server_url):
+    """Bless is not a skill roll, so it must NOT go through the roll menu
+    that exposes Spend-1-VP / Spend-2-VP options."""
+    _create_char(page, live_server_url, "PriestBlessNoVP", "priest",
+                 knack_overrides={"conviction": 1, "otherworldliness": 1, "pontificate": 1})
+    page.locator('[data-action="bless-conversation"]').click()
+    _wait_roll_done(page)
+    # The pre-roll VP menu flyout must not have appeared.
+    menu_open = page.evaluate("() => window._diceRoller.rollMenuOpen")
+    assert menu_open is False
+    # formula.void_spent should be falsy (the bless path never writes it).
+    void_spent = page.evaluate("() => window._diceRoller.formula?.void_spent || 0")
+    assert void_spent == 0
+
+
+def test_priest_bless_buttons_absent_on_non_priest(page, live_server_url):
+    """The Bless ritual buttons are only rendered for Priest characters."""
+    _create_char(page, live_server_url, "AkodoNoBless", "akodo_bushi",
+                 knack_overrides={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+    assert page.locator('[data-action="bless-conversation"]').count() == 0
+    assert page.locator('[data-action="bless-research"]').count() == 0
+
+
+# --- Priest "sick or impaired" ritual: reroll Impaired 10s on a blessed roll ---
+
+def _become_impaired(page):
+    """Set the character to Impaired (SW == Earth) so 10s do not auto-reroll.
+
+    Also zeroes out void points so clicking a roll key doesn't open the
+    pre-roll void-spending menu (which would block the roll from completing).
+    """
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.seriousWounds = 2;  // default Earth ring is 2 -> SW 2 is Impaired
+        t.voidPoints = 0;
+        t.tempVoidPoints = 0;
+        t.save();
+        window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: 2 } }));
+    }""")
+    page.wait_for_timeout(150)
+
+
+def _setup_impaired_target_with_party_priest(page, live_server_url, priest_name):
+    """Seed a Priest and an Akodo ally in the same group. Navigate to the
+    ally's sheet and make them Impaired. Returns the ally's sheet URL."""
+    from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
+
+    # Priest: rank 1 knacks is enough (any Dan provides the ritual).
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', priest_name)
+    select_school(page, "priest")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(400)
+    apply_changes(page, "Priest setup")
+
+    # Ally: Akodo Bushi with bragging 1 (any rollable skill works).
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "ImpairedAlly")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_bragging", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(400)
+    apply_changes(page, "Ally setup")
+    ally_url = page.url
+
+    page.goto(ally_url)
+    page.wait_for_selector('[data-roll-key="skill:bragging"]')
+    _become_impaired(page)
+    return ally_url
+
+
+def test_priest_bless_reroll_button_shows_on_impaired_10(page, live_server_url):
+    """When an Impaired character rolls a 10 and there is a priest in the
+    party, a 'X priest blessed for 10 rerolls' button appears beside the
+    no-reroll note."""
+    _setup_impaired_target_with_party_priest(page, live_server_url, "Isawa Blesser")
+    _mock_dice_ten(page)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+
+    btn = page.locator('[data-priest-bless-reroll-block] button').first
+    assert btn.is_visible()
+    assert "Isawa Blesser" in btn.text_content()
+    assert "priest blessed for 10 rerolls" in btn.text_content()
+
+
+def test_priest_bless_reroll_button_tooltip_has_rules_text(page, live_server_url):
+    """The button's tooltip names the priest and quotes the sick-or-impaired ritual."""
+    _setup_impaired_target_with_party_priest(page, live_server_url, "Kuni Blesser")
+    _mock_dice_ten(page)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+
+    tooltip = page.locator('[data-priest-bless-reroll-block] .tooltip-content').first
+    text = tooltip.text_content()
+    assert "Kuni Blesser" in text
+    assert "already suffering penalties from being sick or impaired" in text
+    assert "ignore those penalties in the next conversation or fight" in text
+
+
+def test_priest_bless_reroll_replaces_10s_and_updates_total(page, live_server_url):
+    """Clicking the button rerolls the 10s, updates finalDice/keptSum, and
+    the baseTotal reflects the new keptSum (discretionary bonuses unchanged)."""
+    _setup_impaired_target_with_party_priest(page, live_server_url, "Kitsuki Blesser")
+    _mock_dice_ten(page)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_roll_done(page)
+
+    before = page.evaluate("""() => ({
+        base: window._diceRoller.baseTotal,
+        keptSum: window._diceRoller.keptSum,
+        tens: window._diceRoller.finalDice.filter(d => d.value === 10).length,
+    })""")
+    assert before["tens"] > 0
+
+    # Reroll produces 1s (guaranteed non-10, no further explosion).
+    _mock_dice_low(page)
+    page.locator('[data-priest-bless-reroll-block] button').first.click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+
+    after = page.evaluate("""() => ({
+        base: window._diceRoller.baseTotal,
+        keptSum: window._diceRoller.keptSum,
+        tens: window._diceRoller.finalDice.filter(d => d.value === 10).length,
+        phase: window._diceRoller.phase,
+    })""")
+    assert after["phase"] == "done"
+    # No 10 remains, so the kept sum is smaller and the baseTotal drops with it.
+    assert after["tens"] == 0
+    assert after["keptSum"] < before["keptSum"]
+    assert after["base"] < before["base"]
+
+
+def test_priest_bless_reroll_button_hides_after_click(page, live_server_url):
+    """After the reroll clears the 10s, the button auto-hides (its x-show
+    gates on `finalDice.some(d => d.value === 10)`)."""
+    _setup_impaired_target_with_party_priest(page, live_server_url, "Asahina Blesser")
+    _mock_dice_ten(page)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_roll_done(page)
+    _mock_dice_low(page)
+    page.locator('[data-priest-bless-reroll-block] button').first.click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    block = page.locator('[data-priest-bless-reroll-block]')
+    assert not block.is_visible()
+
+
+def test_priest_bless_reroll_button_hidden_without_party_priest(page, live_server_url):
+    """Impaired roll + 10 but no priest in party -> no button."""
+    _create_char(page, live_server_url, "SoloImpaired", "akodo_bushi",
+                 knack_overrides={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+                 skill_overrides={"bragging": 1})
+    _become_impaired(page)
+    _mock_dice_ten(page)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    assert page.locator('[data-priest-bless-reroll-block]').count() == 0 or \
+        not page.locator('[data-priest-bless-reroll-block]').is_visible()
+
+
+def test_priest_bless_reroll_button_hidden_when_not_impaired(page, live_server_url):
+    """Priest in party but not Impaired -> 10s auto-reroll, button never shows."""
+    _setup_impaired_target_with_party_priest(page, live_server_url, "Togashi Blesser")
+    # Heal back to 0 SW.
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.seriousWounds = 0;
+        t.save();
+        window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: 0 } }));
+    }""")
+    page.wait_for_timeout(150)
+    _mock_dice_high(page)  # roll 7s so no 10 anyway
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    block = page.locator('[data-priest-bless-reroll-block]')
+    assert not block.is_visible()

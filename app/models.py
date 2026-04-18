@@ -159,6 +159,10 @@ class Character(Base):
     # Per-adventure state: {"lucky_used": false, "unlucky_used": false,
     #   "adventure_raises_used": 0, "conviction_used": 0, ...}
     adventure_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
+    # Current combat round action dice. Populated when the player rolls
+    # initiative and cleared by the Clear button. Each entry is
+    # {"value": int (0-10), "spent": bool}.
+    action_dice: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list)
 
     # Metadata
     notes: Mapped[str] = mapped_column(String, default="")
@@ -218,6 +222,7 @@ class Character(Base):
                     "attack": 1, "parry": 1, "rank_locked": False,
                     "current_light_wounds": 0, "current_serious_wounds": 0,
                     "current_void_points": 0, "current_temp_void_points": 0,
+                    "action_dice": [],
                     "notes": "", "sections": [],
                     "rank_recognition_awards": []}
         for key in current:
@@ -299,6 +304,7 @@ class Character(Base):
             "current_serious_wounds": self.current_serious_wounds,
             "current_void_points": self.current_void_points,
             "current_temp_void_points": self.current_temp_void_points,
+            "action_dice": self.action_dice or [],
             "notes": self.notes,
             "sections": self.sections or [],
             "google_sheet_id": self.google_sheet_id,

@@ -293,6 +293,18 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 5th Dan Conviction pool refreshes on initiative roll -> `test_school_abilities.py::test_priest_5th_dan_initiative_refreshes_conviction`
 - [x] 5th Dan no refresh message when Conviction pool full -> `test_school_abilities.py::test_priest_5th_dan_initiative_no_message_when_conviction_unspent`
 - [x] 4th Dan Conviction is NOT refreshed by initiative (per-day, not per-round) -> `test_school_abilities.py::test_priest_4th_dan_initiative_does_not_reset_conviction`
+- [ ] Bless conversation topic button rolls 2k1 with correct title -> `test_school_abilities.py::test_priest_bless_conversation_topic_rolls_2k1`
+- [ ] Bless research button rolls 2k1 with correct title -> `test_school_abilities.py::test_priest_bless_research_rolls_2k1`
+- [ ] Bless buttons expose full rules text in a hover tooltip -> `test_school_abilities.py::test_priest_bless_buttons_have_rules_tooltips`
+- [ ] Bless roll allows Conviction to be spent (+1 per point) -> `test_school_abilities.py::test_priest_bless_roll_allows_conviction_spending`
+- [ ] Bless roll skips the pre-roll VP menu (no void spending) -> `test_school_abilities.py::test_priest_bless_roll_offers_no_void_spending`
+- [ ] Bless buttons do not render for non-Priest characters -> `test_school_abilities.py::test_priest_bless_buttons_absent_on_non_priest`
+- [ ] Impaired 10 with a party priest shows "<priest> priest blessed for 10 rerolls" button -> `test_school_abilities.py::test_priest_bless_reroll_button_shows_on_impaired_10`
+- [ ] Priest-bless-reroll button tooltip quotes the sick-or-impaired ritual -> `test_school_abilities.py::test_priest_bless_reroll_button_tooltip_has_rules_text`
+- [ ] Clicking the button rerolls the 10s and updates keptSum + baseTotal -> `test_school_abilities.py::test_priest_bless_reroll_replaces_10s_and_updates_total`
+- [ ] After the reroll clears the 10s, the button auto-hides -> `test_school_abilities.py::test_priest_bless_reroll_button_hides_after_click`
+- [ ] Button never shows when there is no priest in the party -> `test_school_abilities.py::test_priest_bless_reroll_button_hidden_without_party_priest`
+- [ ] Button never shows when the character is not Impaired -> `test_school_abilities.py::test_priest_bless_reroll_button_hidden_when_not_impaired`
 
 ### Shiba
 
@@ -427,6 +439,21 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Die top angle is approximately 70 degrees → `test_rolls.py::test_die_top_angle_is_about_70_degrees`
 - [x] Initiative roll shows action dice → `test_rolls.py::test_initiative_roll_shows_action_dice`
 - [x] Initiative shows action dice (not Total) → `test_rolls.py::test_initiative_no_total_shown`
+
+### Action-Dice Tracking (Actions section)
+
+- [ ] Initiative roll populates the Actions section → `test_rolls.py::test_initiative_populates_action_dice_section`
+- [ ] Clicking unspent die + 'Action was spent' marks spent → `test_rolls.py::test_action_die_dropdown_marks_spent`
+- [ ] Clicking spent die + 'Mark as unspent' flips back → `test_rolls.py::test_spent_action_die_dropdown_marks_unspent`
+- [ ] Clear button empties action dice and hides the section → `test_rolls.py::test_clear_action_dice_hides_section`
+- [ ] Parry roll auto-spends the lowest unspent action die → `test_rolls.py::test_parry_auto_spends_lowest_action_die`
+- [ ] Attack roll auto-spends the lowest unspent action die → `test_rolls.py::test_attack_auto_spends_lowest_action_die`
+- [ ] Attack with no unspent dice still rolls without error → `test_rolls.py::test_attack_with_all_dice_spent_still_rolls`
+- [ ] Rerolling initiative replaces previous action dice → `test_rolls.py::test_initiative_reroll_replaces_previous_action_dice`
+- [ ] Parry annotates the spent die with the parry total → `test_rolls.py::test_parry_annotates_spent_die_with_result`
+- [ ] Attack annotates the spent die with roll total + hit/miss → `test_rolls.py::test_attack_annotates_spent_die_with_result`
+- [ ] Die's title attribute exposes the spent_by text → `test_rolls.py::test_action_die_tooltip_uses_spent_by_text`
+- [ ] Manual 'Action was spent' click leaves spent_by empty → `test_rolls.py::test_manual_spend_does_not_set_spent_by`
 - [x] 3rd Dan spend raise button visible for applicable skill → `test_rolls.py::test_spend_raise_button_visible_for_applicable_skill`
 - [x] 3rd Dan spend raise adds +5 to total → `test_rolls.py::test_spend_raise_adds_5_to_total`
 - [x] 3rd Dan undo raise reverses spend → `test_rolls.py::test_undo_raise_reverses_spend`
@@ -434,6 +461,21 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 3rd Dan undo disabled when none spent → `test_rolls.py::test_undo_disabled_when_none_spent`
 - [x] No spend button for non-applicable skill → `test_rolls.py::test_no_spend_button_for_non_applicable_skill`
 - [x] Athletics roll modal title includes the ring name → `test_rolls.py::test_athletics_label_in_modal`
+
+### Freeform Roll (generic fallback dice roller)
+
+- [ ] Freeform Roll button visible in Rings section header → `test_rolls.py::test_freeform_button_visible_on_sheet`
+- [ ] Clicking Freeform Roll opens the modal with rolled/kept dropdowns and reroll checkbox → `test_rolls.py::test_freeform_button_opens_modal`
+- [ ] Dice rolled and kept both default to 1 (1k1) → `test_rolls.py::test_freeform_defaults_to_1k1`
+- [ ] Kept dropdown options never exceed the rolled value → `test_rolls.py::test_freeform_kept_cannot_exceed_rolled`
+- [ ] Lowering rolled below kept clamps kept down → `test_rolls.py::test_freeform_lowering_rolled_clamps_kept`
+- [ ] Reroll 10s checkbox checked by default for healthy character → `test_rolls.py::test_freeform_reroll_default_true_when_healthy`
+- [ ] Reroll 10s checkbox unchecked by default for impaired character → `test_rolls.py::test_freeform_reroll_default_false_when_impaired`
+- [ ] Reroll 10s checkbox can be toggled by the player either direction → `test_rolls.py::test_freeform_reroll_checkbox_togglable`
+- [ ] Clicking Roll produces a result with a Total → `test_rolls.py::test_freeform_roll_shows_result_with_total`
+- [ ] Roll Again button returns to the pre-roll phase → `test_rolls.py::test_freeform_roll_again_returns_to_pre_phase`
+- [ ] × close button hides the freeform modal → `test_rolls.py::test_freeform_modal_close_button`
+- [ ] Freeform 1k1 with reroll off keeps total in [1,10] with no bonuses applied → `test_rolls.py::test_freeform_roll_applies_no_bonuses`
 
 ## Sections (rich-text panels)
 

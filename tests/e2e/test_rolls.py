@@ -679,3 +679,365 @@ def test_no_spend_button_for_non_applicable_skill(page, live_server_url):
     page.locator('[data-roll-key="skill:bragging"]').click()
     _wait_for_roll_result(page)
     assert not page.locator('[data-action="spend-raise"]').is_visible()
+
+
+# ---------------------------------------------------------------------------
+# Freeform Roll (generic escape hatch for rules we don't model)
+# ---------------------------------------------------------------------------
+
+
+def test_freeform_button_visible_on_sheet(page, live_server_url):
+    """The Freeform Roll button is visible in the Rings section header."""
+    _create_roller(page, live_server_url, "FFButton")
+    assert page.locator('[data-action="open-freeform-roll"]').is_visible()
+
+
+def test_freeform_button_opens_modal(page, live_server_url):
+    """Clicking Freeform Roll opens the modal in its pre-roll phase."""
+    _create_roller(page, live_server_url, "FFOpen")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="freeform-roll"]')
+    assert modal.locator('[data-freeform="rolled"]').is_visible()
+    assert modal.locator('[data-freeform="kept"]').is_visible()
+    assert modal.locator('[data-freeform="reroll-tens"]').is_visible()
+
+
+def test_freeform_defaults_to_1k1(page, live_server_url):
+    """Both dropdowns start at 1 by default (1k1)."""
+    _create_roller(page, live_server_url, "FF1k1")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    rolled = page.locator('[data-freeform="rolled"]').input_value()
+    kept = page.locator('[data-freeform="kept"]').input_value()
+    assert rolled == "1"
+    assert kept == "1"
+
+
+def test_freeform_kept_cannot_exceed_rolled(page, live_server_url):
+    """The 'kept' dropdown only exposes options up to 'rolled'."""
+    _create_roller(page, live_server_url, "FFKeptCap")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    # With rolled=1, kept dropdown has only one option
+    options = page.locator('[data-freeform="kept"] option').all_text_contents()
+    assert options == ["1"]
+    # Set rolled to 5 and kept options should expand
+    page.locator('[data-freeform="rolled"]').select_option("5")
+    options = page.locator('[data-freeform="kept"] option').all_text_contents()
+    assert options == ["1", "2", "3", "4", "5"]
+
+
+def test_freeform_lowering_rolled_clamps_kept(page, live_server_url):
+    """If kept is higher than rolled after lowering rolled, kept clamps down."""
+    _create_roller(page, live_server_url, "FFClamp")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    page.locator('[data-freeform="rolled"]').select_option("7")
+    page.locator('[data-freeform="kept"]').select_option("5")
+    # Lower rolled below kept
+    page.locator('[data-freeform="rolled"]').select_option("3")
+    page.wait_for_timeout(150)
+    kept = page.locator('[data-freeform="kept"]').input_value()
+    assert kept == "3"
+
+
+def test_freeform_reroll_default_true_when_healthy(page, live_server_url):
+    """Healthy character: Reroll 10s checkbox is checked by default."""
+    _create_roller(page, live_server_url, "FFHealthy")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    assert page.locator('[data-freeform="reroll-tens"]').is_checked()
+
+
+def test_freeform_reroll_default_false_when_impaired(page, live_server_url):
+    """Impaired character: Reroll 10s checkbox is unchecked by default."""
+    _create_roller(page, live_server_url, "FFImpaired")
+    # Default Earth ring is 2; add 2 serious wounds to become impaired
+    sw_section = page.locator('text="Serious Wounds"').locator('..')
+    plus_btn = sw_section.locator('button', has_text="+").first
+    plus_btn.click()
+    page.wait_for_timeout(120)
+    plus_btn.click()
+    page.wait_for_timeout(300)
+    # Open the modal - freeform reads impaired state live via tracking bridge
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    assert not page.locator('[data-freeform="reroll-tens"]').is_checked()
+
+
+def test_freeform_reroll_checkbox_togglable(page, live_server_url):
+    """The player can override the Reroll 10s default either way."""
+    _create_roller(page, live_server_url, "FFToggle")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    cb = page.locator('[data-freeform="reroll-tens"]')
+    assert cb.is_checked()
+    cb.uncheck()
+    assert not cb.is_checked()
+    cb.check()
+    assert cb.is_checked()
+
+
+def test_freeform_roll_shows_result_with_total(page, live_server_url):
+    """Clicking Roll produces a result with a Total."""
+    _create_roller(page, live_server_url, "FFResult")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    page.locator('[data-freeform="rolled"]').select_option("4")
+    page.locator('[data-freeform="kept"]').select_option("2")
+    page.locator('[data-action="freeform-roll"]').click()
+    # Wait for the result phase (dice-animation tray disappears, Total: appears)
+    page.wait_for_selector('[data-modal="freeform-roll"] [data-freeform="total"]',
+                           state='visible', timeout=10000)
+    total = int(page.locator('[data-modal="freeform-roll"] [data-freeform="total"]').text_content())
+    # 2 kept dice, each 1-10 (10s re-roll and explode), so total >= 2.
+    assert total >= 2
+
+
+def test_freeform_roll_again_returns_to_pre_phase(page, live_server_url):
+    """Roll Again resets the modal to the pre-roll phase."""
+    _create_roller(page, live_server_url, "FFAgain")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    page.locator('[data-action="freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"] [data-freeform="total"]',
+                           state='visible', timeout=10000)
+    page.locator('[data-action="freeform-roll-again"]').click()
+    page.wait_for_timeout(150)
+    # Pre-phase controls are visible again
+    assert page.locator('[data-freeform="rolled"]').is_visible()
+    assert page.locator('[data-action="freeform-roll"]').is_visible()
+
+
+def test_freeform_modal_close_button(page, live_server_url):
+    """The modal's × close button hides the modal."""
+    _create_roller(page, live_server_url, "FFClose")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    page.locator('[data-modal="freeform-roll"] button', has_text="×").click()
+    page.wait_for_timeout(200)
+    assert not page.locator('[data-modal="freeform-roll"]').is_visible()
+
+
+def test_freeform_roll_applies_no_bonuses(page, live_server_url):
+    """Rolling 1k1 caps total at 10 (ignoring 10s-reroll chain bonus), with no
+    flat bonuses ever added from advantages, techniques, or skills."""
+    _create_roller(page, live_server_url, "FFNoBonus")
+    # Even Akodo's Charming +1k0 on bragging doesn't affect a freeform roll.
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    # Uncheck reroll so the result is strictly 1 d10 in [1,10]
+    page.locator('[data-freeform="reroll-tens"]').uncheck()
+    page.locator('[data-action="freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"] [data-freeform="total"]',
+                           state='visible', timeout=10000)
+    total = int(page.locator('[data-modal="freeform-roll"] [data-freeform="total"]').text_content())
+    # 1k1 with no reroll: total must be in [1, 10] with NO +flat bonuses.
+    assert 1 <= total <= 10
+
+
+# --- Action-dice tracking (initiative persistence + auto-spend) ---
+
+
+def _close_dice_modal(page):
+    """Close the dice roller modal to expose the sheet underneath."""
+    page.locator('[data-modal="dice-roller"] button:has-text("×")').click()
+    page.wait_for_timeout(150)
+
+
+def test_initiative_populates_action_dice_section(page, live_server_url):
+    """Rolling initiative persists the resulting dice to the Tracking section."""
+    _create_roller(page, live_server_url, "ActionDiceInit")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    _close_dice_modal(page)
+    section = page.locator('[data-testid="action-dice-section"]')
+    assert section.is_visible()
+    # Count of rendered dice matches the trackingBridge state
+    count = page.evaluate("window._trackingBridge.actionDice.length")
+    assert count > 0
+    assert section.locator('[data-action="action-die"]').count() == count
+
+
+def test_action_die_dropdown_marks_spent(page, live_server_url):
+    """Clicking an unspent action die + 'Action was spent' marks it spent."""
+    _create_roller(page, live_server_url, "ActionDieSpend")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    _close_dice_modal(page)
+    first_die = page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first
+    first_die.click()
+    page.locator('[data-action="action-die-spent"]').first.click()
+    page.wait_for_timeout(100)
+    spent = page.evaluate("window._trackingBridge.actionDice[0].spent")
+    assert spent is True
+
+
+def test_spent_action_die_dropdown_marks_unspent(page, live_server_url):
+    """A spent die's dropdown has 'Mark as unspent' which flips it back."""
+    _create_roller(page, live_server_url, "ActionDieUnspend")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    _close_dice_modal(page)
+    # Pre-spend the first die programmatically, then flip it back via the UI
+    page.evaluate(
+        "window._trackingBridge.actionDice[0].spent = true;"
+        " window._trackingBridge.save();"
+    )
+    page.wait_for_timeout(100)
+    first_die = page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first
+    first_die.click()
+    page.locator('[data-action="action-die-unspent"]').first.click()
+    page.wait_for_timeout(100)
+    spent = page.evaluate("window._trackingBridge.actionDice[0].spent")
+    assert spent is False
+
+
+def test_clear_action_dice_hides_section(page, live_server_url):
+    """Clear button removes every action die and hides the section."""
+    _create_roller(page, live_server_url, "ActionDieClear")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    _close_dice_modal(page)
+    page.locator('[data-action="clear-action-dice"]').click()
+    page.wait_for_timeout(100)
+    remaining = page.evaluate("window._trackingBridge.actionDice.length")
+    assert remaining == 0
+    section = page.locator('[data-testid="action-dice-section"]')
+    assert not section.is_visible()
+
+
+def test_parry_auto_spends_lowest_action_die(page, live_server_url):
+    """Rolling a parry marks the lowest unspent action die as spent."""
+    _create_roller(page, live_server_url, "ActionDieParry")
+    # Seed deterministic action dice so we can check "lowest" behavior
+    page.evaluate(
+        "window._trackingBridge.setActionDice([3, 5, 7]);"
+    )
+    page.wait_for_timeout(100)
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.click()
+    _wait_for_roll_result(page)
+    dice = page.evaluate("window._trackingBridge.actionDice")
+    # Lowest (value 3) should be spent, others untouched.
+    assert dice[0]["spent"] is True
+    assert dice[1]["spent"] is False
+    assert dice[2]["spent"] is False
+
+
+def test_attack_auto_spends_lowest_action_die(page, live_server_url):
+    """Rolling an attack from the attack modal spends the lowest unspent die."""
+    _create_roller(page, live_server_url, "ActionDieAttack")
+    page.evaluate("window._trackingBridge.setActionDice([2, 4, 6]);")
+    page.wait_for_timeout(100)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    # Click the Roll button inside the attack modal
+    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.wait_for_timeout(500)
+    dice = page.evaluate("window._trackingBridge.actionDice")
+    assert dice[0]["spent"] is True
+    assert dice[1]["spent"] is False
+    assert dice[2]["spent"] is False
+
+
+def test_attack_with_all_dice_spent_still_rolls(page, live_server_url):
+    """An attack with no unspent action dice proceeds (no die marked; no error)."""
+    _create_roller(page, live_server_url, "ActionDieAllSpent")
+    page.evaluate(
+        "window._trackingBridge.actionDice = "
+        "[{value: 3, spent: true}, {value: 5, spent: true}];"
+        " window._trackingBridge.save();"
+    )
+    page.wait_for_timeout(100)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.wait_for_timeout(500)
+    dice = page.evaluate("window._trackingBridge.actionDice")
+    # Both were already spent; remain spent, nothing else to spend.
+    assert dice[0]["spent"] is True
+    assert dice[1]["spent"] is True
+
+
+def test_initiative_reroll_replaces_previous_action_dice(page, live_server_url):
+    """Rolling initiative again replaces the stored action dice (new round)."""
+    _create_roller(page, live_server_url, "ActionDieReroll")
+    page.evaluate(
+        "window._trackingBridge.actionDice = "
+        "[{value: 9, spent: true}, {value: 9, spent: true}];"
+        " window._trackingBridge.save();"
+    )
+    page.wait_for_timeout(100)
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    dice = page.evaluate("window._trackingBridge.actionDice")
+    # Freshly rolled dice: all unspent and not necessarily both 9.
+    assert all(not d["spent"] for d in dice)
+
+
+def test_parry_annotates_spent_die_with_result(page, live_server_url):
+    """Parry auto-spends a die and annotates it with the parry total."""
+    _create_roller(page, live_server_url, "ActionDieParryTooltip")
+    page.evaluate("window._trackingBridge.setActionDice([3, 5, 7]);")
+    page.wait_for_timeout(100)
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.click()
+    _wait_for_roll_result(page)
+    # Close the dice modal, then inspect the annotated die.
+    page.locator('[data-modal="dice-roller"] button:has-text("×")').click()
+    page.wait_for_timeout(100)
+    spent_by = page.evaluate("window._trackingBridge.actionDice[0].spent_by")
+    assert spent_by is not None
+    assert spent_by.startswith("Parry: total ")
+
+
+def test_attack_annotates_spent_die_with_result(page, live_server_url):
+    """Attack auto-spends a die and annotates it with roll total + hit/miss."""
+    _create_roller(page, live_server_url, "ActionDieAttackTooltip")
+    page.evaluate("window._trackingBridge.setActionDice([2, 4, 6]);")
+    page.wait_for_timeout(100)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.wait_for_timeout(500)
+    spent_by = page.evaluate("window._trackingBridge.actionDice[0].spent_by")
+    assert spent_by is not None
+    assert "Attack" in spent_by
+    assert "vs TN" in spent_by
+    # Outcome must be recorded even if we don't know hit/miss in advance.
+    assert "hit" in spent_by or "miss" in spent_by
+
+
+def test_action_die_tooltip_uses_spent_by_text(page, live_server_url):
+    """The die's title attribute reflects the stored spent_by text."""
+    _create_roller(page, live_server_url, "ActionDieTooltipAttr")
+    page.evaluate(
+        "window._trackingBridge.actionDice = ["
+        "{value: 4, spent: true, spent_by: 'Parry: total 22'}];"
+        " window._trackingBridge.save();"
+    )
+    page.wait_for_timeout(100)
+    die = page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first
+    assert die.get_attribute('title') == 'Parry: total 22'
+    assert die.get_attribute('data-die-spent-by') == 'Parry: total 22'
+
+
+def test_manual_spend_does_not_set_spent_by(page, live_server_url):
+    """Clicking 'Action was spent' manually leaves spent_by empty (no action context)."""
+    _create_roller(page, live_server_url, "ActionDieManual")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    page.locator('[data-modal="dice-roller"] button:has-text("×")').click()
+    page.wait_for_timeout(100)
+    first_die = page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first
+    first_die.click()
+    page.locator('[data-action="action-die-spent"]').first.click()
+    page.wait_for_timeout(100)
+    spent_by = page.evaluate(
+        "window._trackingBridge.actionDice[0].spent_by || null"
+    )
+    assert spent_by is None
