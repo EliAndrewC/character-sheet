@@ -67,7 +67,6 @@ def _collect_js_errors(page) -> List[str]:
 
 def test_new_character_dropdown_opens_on_click(page, live_server_url):
     page.goto(live_server_url)
-    menu = page.locator('[data-testid="new-character-menu"]')
     # The two options live inside the menu but are hidden until the button
     # toggle opens it.
     create_option = page.locator('[data-testid="new-character-option-create"]')
@@ -76,7 +75,8 @@ def test_new_character_dropdown_opens_on_click(page, live_server_url):
     assert not import_option.is_visible()
 
     page.locator('[data-testid="new-character-button"]').click()
-    assert create_option.is_visible()
+    # Wait for Alpine to flip x-show and render the options.
+    create_option.wait_for(state='visible', timeout=2000)
     assert import_option.is_visible()
 
 
