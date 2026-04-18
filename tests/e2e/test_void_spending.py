@@ -206,6 +206,13 @@ def test_ow_spend_increases_rolled_and_decrements_pool(page, live_server_url):
         return null;
     }""")
     assert ow_spent == 2
+    # Breakdown should phrase the effect as a skill raise, not a flat bonus
+    modal_text = " ".join(
+        page.locator('[data-modal="dice-roller"]').text_content().split()
+    )
+    assert "Skill raised by 2 by Otherworldliness" in modal_text
+    assert "+2 from 2 spent Otherworldliness" not in modal_text
+    assert "Rolled +2 from 2 spent Otherworldliness" not in modal_text
 
 
 def test_ow_submenu_hidden_on_advanced_skill(page, live_server_url):
