@@ -2005,7 +2005,7 @@
                         </div>
                         <template x-for="b in (formula?.bonuses || [])" :key="b.label">
                             <div class="text-xs text-ink/70 mt-0.5">
-                                &bull; +<span x-text="b.amount"></span> from <span x-text="b.label"></span>
+                                &bull; <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span> from <span x-text="b.label"></span>
                             </div>
                         </template>
                         <div x-show="formula?.isawa_tn_trade" x-cloak class="text-xs text-ink/70 mt-0.5">
@@ -2462,7 +2462,7 @@
                         </div>
                         <template x-for="b in (formula?.bonuses || [])" :key="b.label">
                             <div class="text-xs text-ink/70 mt-0.5">
-                                &bull; +<span x-text="b.amount"></span> from <span x-text="b.label"></span>
+                                &bull; <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span> from <span x-text="b.label"></span>
                             </div>
                         </template>
                     </div>
@@ -2535,7 +2535,7 @@
                         </div>
                         <template x-for="b in (formula?.bonuses || [])" :key="b.label">
                             <div class="text-xs text-ink/70 mt-0.5">
-                                &bull; +<span x-text="b.amount"></span> from <span x-text="b.label"></span>
+                                &bull; <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span> from <span x-text="b.label"></span>
                             </div>
                         </template>
                         <div x-show="finalDice.some(d => d.value === 10)" x-cloak class="text-xs italic text-red-700 mt-1">
@@ -2789,7 +2789,7 @@
                                 {# Single bonus: render directly without sub-bullets #}
                                 <template x-if="formula?.bonuses?.length === 1">
                                     <li>
-                                        +<span x-text="formula?.bonuses?.[0]?.amount"></span>
+                                        <span x-text="((formula?.bonuses?.[0]?.amount || 0) >= 0 ? '+' : '') + formula?.bonuses?.[0]?.amount"></span>
                                         from <span x-text="formula?.bonuses?.[0]?.label"></span>
                                     </li>
                                 </template>
@@ -2797,11 +2797,11 @@
                                 {# Multiple bonuses: total line + indented sub-bullets #}
                                 <template x-if="formula?.bonuses?.length > 1">
                                     <li>
-                                        +<span x-text="formula?.flat"></span> total flat bonus
+                                        <span x-text="((formula?.flat || 0) >= 0 ? '+' : '') + (formula?.flat || 0)"></span> total flat bonus
                                         <ul class="ml-5 mt-0.5 list-disc list-inside space-y-0.5">
                                             <template x-for="b in (formula?.bonuses || [])" :key="b.label">
                                                 <li>
-                                                    +<span x-text="b.amount"></span>
+                                                    <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span>
                                                     from <span x-text="b.label"></span>
                                                 </li>
                                             </template>
@@ -2953,7 +2953,7 @@
                         <div class="text-xs text-ink/50 mt-1" x-text="'Daily pool: ' + (schoolAbilities.togashi_daily_raises_max || 0) + ' total'"></div>
                     </div>
 
-                    {# No-reroll note (impaired or iaijutsu strike) - only when a 10 was actually rolled #}
+                    {# No-reroll note (impaired, iaijutsu strike, or unskilled) - only when a 10 was actually rolled #}
                     <div x-show="formula && !formula.reroll_tens && finalDice.some(d => d.value === 10)"
                          x-cloak class="text-xs italic text-red-700 font-medium">
                         <span x-show="formula?.no_reroll_reason === 'iaijutsu_strike'">
@@ -2962,7 +2962,10 @@
                         <span x-show="formula?.no_reroll_reason === 'impaired'">
                             10s not rerolled due to being Impaired
                         </span>
-                        <span x-show="formula?.no_reroll_reason !== 'iaijutsu_strike' && formula?.no_reroll_reason !== 'impaired' && !formula?.reroll_tens">
+                        <span x-show="formula?.no_reroll_reason === 'unskilled'">
+                            10s not rerolled due to <span x-text="formula?.unskilled_skill_name"></span> being 0
+                        </span>
+                        <span x-show="formula?.no_reroll_reason !== 'iaijutsu_strike' && formula?.no_reroll_reason !== 'impaired' && formula?.no_reroll_reason !== 'unskilled' && !formula?.reroll_tens">
                             10s not rerolled
                         </span>
                     </div>
@@ -3865,6 +3868,18 @@
                     const t = window._trackingBridge;
                     if (t && applied > 0) {
                         t.setCount('otherworldliness', (t.getCount('otherworldliness') || 0) + applied);
+                    }
+                    // Spending OW on an unskilled roll grants the skill for this roll,
+                    // so 10s reroll - unless the character is also Impaired.
+                    if (applied > 0 && f.no_reroll_reason === 'unskilled') {
+                        const sw = (t && typeof t.seriousWounds === 'number') ? t.seriousWounds : 0;
+                        const impaired = sw >= (this._earthRing || 0);
+                        if (impaired) {
+                            f.no_reroll_reason = 'impaired';
+                        } else {
+                            f.reroll_tens = true;
+                            f.no_reroll_reason = '';
+                        }
                     }
                 }
 

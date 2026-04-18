@@ -110,6 +110,19 @@ def test_impaired_character_modal_shows_no_reroll_note(page, live_server_url):
     assert "10s not rerolled due to being Impaired" in body
 
 
+def test_unskilled_character_modal_names_skill_in_no_reroll_note(page, live_server_url):
+    """Clicking an unranked basic skill opens the modal; the no-reroll note
+    must identify the zero-ranked skill by name so the player knows why 10s
+    aren't rerolled."""
+    _create_roller(page, live_server_url, "UnskilledChar")
+    # The roller has bragging at 1 but not intimidation. Intimidation is a
+    # basic skill (unskilled = no reroll, no penalty).
+    page.locator('[data-roll-key="skill:intimidation"]').click()
+    _wait_for_roll_result(page)
+    body = page.text_content("body")
+    assert "10s not rerolled due to Intimidation being 0" in body
+
+
 def test_impaired_indicator_visible_on_sheet(page, live_server_url):
     _create_roller(page, live_server_url, "ImpairedBadgeChar")
     sw_section = page.locator('text="Serious Wounds"').locator('..')
@@ -322,6 +335,25 @@ def _wait_for_roll_result(page):
         }
         return false;
     }""", timeout=10000)
+
+
+def test_unskilled_advanced_skill_shows_minus_10_in_breakdown(page, live_server_url):
+    """Rolling an advanced skill at rank 0 lists the -10 penalty in the result breakdown."""
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "UnskilledAdv")
+    select_school(page, "akodo_bushi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Setup")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    # Manipulation is an advanced skill; character has no rank -> unskilled formula with -10
+    page.locator('[data-roll-key="skill:manipulation"]').click()
+    _wait_for_roll_result(page)
+    modal_text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "-10" in modal_text
+    assert "unskilled advanced penalty" in modal_text
 
 
 def test_spend_raise_button_visible_for_applicable_skill(page, live_server_url):

@@ -343,17 +343,21 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Otherworldliness spend increases rolled dice and decrements pool → `test_void_spending.py::test_ow_spend_increases_rolled_and_decrements_pool`
 - [x] Otherworldliness submenu hidden on advanced skill → `test_void_spending.py::test_ow_submenu_hidden_on_advanced_skill`
 - [x] Otherworldliness submenu appears for unskilled basic skill → `test_void_spending.py::test_ow_submenu_appears_for_unskilled_basic_skill`
+- [x] Otherworldliness spend on unskilled roll enables 10s reroll → `test_void_spending.py::test_ow_spend_on_unskilled_roll_enables_reroll_tens`
+- [x] Otherworldliness spend on unskilled roll while Impaired keeps no-reroll → `test_void_spending.py::test_ow_spend_on_unskilled_roll_while_impaired_keeps_no_reroll`
 - [x] Otherworldliness submenu hidden when pool exhausted → `test_void_spending.py::test_ow_submenu_hidden_when_pool_exhausted`
 
 ## Dice Rolling
 
 - [x] Click a skill row opens the modal with the skill name → `test_rolls.py::test_click_skill_opens_modal_with_skill_name`
+- [x] Unskilled advanced skill rolls show the -10 penalty in the breakdown → `test_rolls.py::test_unskilled_advanced_skill_shows_minus_10_in_breakdown`
 - [x] Click Attack opens attack modal → `test_rolls.py::test_click_attack_opens_attack_modal`
 - [x] Click Parry opens modal with "Parry" title → `test_rolls.py::test_click_parry_opens_modal`
 - [x] Click a Ring opens an Athletics roll modal → `test_rolls.py::test_click_ring_opens_athletics_modal`
 - [x] Modal shows Total and dice after the animation phase → `test_rolls.py::test_modal_shows_total_and_dice_after_animation`
 - [x] Modal close button hides the modal → `test_rolls.py::test_modal_close_button`
 - [x] Impaired character's roll modal shows "10s not rerolled" note → `test_rolls.py::test_impaired_character_modal_shows_no_reroll_note`
+- [x] Unskilled roll modal names the zero-ranked skill in the no-reroll note → `test_rolls.py::test_unskilled_character_modal_names_skill_in_no_reroll_note`
 - [x] Impaired indicator visible on the sheet when wounds ≥ Earth → `test_rolls.py::test_impaired_indicator_visible_on_sheet`
 - [x] Impaired indicator absent when healthy → `test_rolls.py::test_impaired_indicator_absent_when_healthy`
 - [x] Disabling animation in profile shows result panel immediately → `test_rolls.py::test_disable_animation_preference`
