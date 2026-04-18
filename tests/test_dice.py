@@ -435,6 +435,49 @@ class TestKnackFormula:
         assert f.rolled == 5
         assert f.kept == 3
 
+    def test_dragon_tattoo_is_2x_k1_damage_roll(self):
+        """Dragon Tattoo rolls (2 * rank)k1, not rank+Earth based."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 1, "conviction": 1, "dragon_tattoo": 3},
+        )
+        f = build_knack_formula("dragon_tattoo", char)
+        assert f.rolled == 6
+        assert f.kept == 1
+        assert "Damage" in f.label
+        assert f.is_damage_roll is True
+
+    def test_non_damage_knacks_dont_have_damage_flag(self):
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 2, "conviction": 2, "dragon_tattoo": 2},
+        )
+        f = build_knack_formula("athletics", char)
+        assert f.is_damage_roll is False
+
+    def test_dragon_tattoo_impaired_disables_reroll_tens(self):
+        """Dragon Tattoo damage should stop rerolling 10s when impaired."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 1, "conviction": 1, "dragon_tattoo": 2},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+            current_serious_wounds=2,
+        )
+        f = build_knack_formula("dragon_tattoo", char)
+        assert f.reroll_tens is False
+        assert f.no_reroll_reason == "impaired"
+
+    def test_dragon_tattoo_healthy_rerolls_tens(self):
+        """Dragon Tattoo rerolls 10s when not impaired."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 1, "conviction": 1, "dragon_tattoo": 2},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+            current_serious_wounds=0,
+        )
+        f = build_knack_formula("dragon_tattoo", char)
+        assert f.reroll_tens is True
+
     def test_school_technique_first_dan_extra_die(self):
         # Mirumoto Bushi 1st Dan extra die includes 'attack', 'double_attack', 'parry'.
         char = make_character_data(
@@ -874,6 +917,146 @@ class TestSchoolAbilities:
         # No acting skill, so no acting bonus. Base: 2(attack) + 2(Fire) + 1(1st Dan) = 5
         assert f.rolled == 5
 
+    # --- Shosuro Actor 5th Dan: flag set on non-initiative formulas ---
+    def test_shosuro_5th_dan_flag_on_attack(self):
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 5, "discern_honor": 5, "pontificate": 5},
+            attack=3,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.shosuro_5th_dan is True
+
+    def test_shosuro_5th_dan_flag_on_parry(self):
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 5, "discern_honor": 5, "pontificate": 5},
+            parry=3,
+        )
+        f = build_combat_formula("parry", char)
+        assert f.shosuro_5th_dan is True
+
+    def test_shosuro_5th_dan_flag_on_wound_check(self):
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 5, "discern_honor": 5, "pontificate": 5},
+        )
+        wc = build_all_roll_formulas(char)["wound_check"]
+        assert wc["shosuro_5th_dan"] is True
+
+    def test_shosuro_5th_dan_flag_on_attack_in_all_roll_formulas(self):
+        """The 'attack' key carries the flag after _annotate_attack_type."""
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 5, "discern_honor": 5, "pontificate": 5},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        assert formulas["attack"]["shosuro_5th_dan"] is True
+
+    # --- Attack formula bonus_sources (pre-roll modal display) ---
+    def test_attack_bonus_sources_first_dan_extra_die(self):
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            attack=2,
+        )
+        atk = build_all_roll_formulas(char)["attack"]
+        assert any("1st Dan" in s for s in atk["bonus_sources"])
+
+    def test_attack_bonus_sources_second_dan_free_raise_ikoma(self):
+        """Ikoma 2nd Dan gives +5 free raise on attack; appears in bonus_sources."""
+        char = make_character_data(
+            school="ikoma_bard",
+            knacks={"discern_honor": 2, "oppose_knowledge": 2, "oppose_social": 2},
+            attack=2,
+        )
+        atk = build_all_roll_formulas(char)["attack"]
+        sources = " | ".join(atk["bonus_sources"])
+        assert "2nd Dan" in sources
+        assert "+5" in sources
+
+    def test_attack_bonus_sources_kitsuki_water(self):
+        char = make_character_data(
+            school="kitsuki_magistrate",
+            knacks={"discern_honor": 1, "iaijutsu": 1, "presence": 1},
+            attack=2,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        atk = build_all_roll_formulas(char)["attack"]
+        sources = " | ".join(atk["bonus_sources"])
+        assert "Kitsuki" in sources
+        assert "+6" in sources  # 2 * Water(3)
+
+    def test_attack_bonus_sources_courtier_special(self):
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 1, "oppose_social": 1, "worldliness": 1},
+            attack=2,
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        atk = build_all_roll_formulas(char)["attack"]
+        sources = " | ".join(atk["bonus_sources"])
+        assert "Courtier Special" in sources
+        assert "+3" in sources  # Air = 3
+
+    def test_attack_bonus_sources_courtier_5th_dan(self):
+        char = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 5, "oppose_social": 5, "worldliness": 5},
+            attack=3,
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        atk = build_all_roll_formulas(char)["attack"]
+        sources = " | ".join(atk["bonus_sources"])
+        # Both the Special (+Air) and the 5th Dan (+Air) should be listed.
+        assert "Courtier Special" in sources
+        assert "Courtier 5th Dan" in sources
+
+    def test_attack_bonus_sources_shosuro_acting_dice(self):
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 1, "discern_honor": 1, "pontificate": 1},
+            skills={"acting": 3},
+            attack=2,
+        )
+        atk = build_all_roll_formulas(char)["attack"]
+        sources = " | ".join(atk["bonus_sources"])
+        assert "Acting" in sources
+        assert "+3" in sources
+
+    def test_attack_bonus_sources_empty_for_plain_character(self):
+        """Non-technique character should have no bonus_sources entries."""
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 0, "feint": 0, "iaijutsu": 0},
+            attack=2,
+        )
+        atk = build_all_roll_formulas(char)["attack"]
+        # dan is 0 so no 1st Dan bonus; no other flats.
+        assert atk["bonus_sources"] == []
+
+    def test_shosuro_5th_dan_flag_not_set_below_5th_dan(self):
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 4, "discern_honor": 4, "pontificate": 4},
+            attack=2,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.shosuro_5th_dan is False
+        wc = build_all_roll_formulas(char)["wound_check"]
+        assert wc["shosuro_5th_dan"] is False
+
+    def test_shosuro_5th_dan_flag_not_set_other_schools(self):
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 5, "feint": 5, "iaijutsu": 5},
+        )
+        f = build_combat_formula("attack", char)
+        assert f.shosuro_5th_dan is False
+        wc = build_all_roll_formulas(char)["wound_check"]
+        assert wc["shosuro_5th_dan"] is False
+
     # --- Courtier 5th Dan: +Air to all TN and contested rolls ---
     def test_courtier_5th_dan_skill_air_bonus_always(self):
         """Courtier 5th Dan: always-TN skills get automatic bonus."""
@@ -1150,6 +1333,93 @@ class TestSchoolAbilities:
         f = build_skill_formula("bragging", char)
         assert not any("Priest" in b.get("label", "") for b in f.bonuses)
 
+    def test_priest_2nd_dan_ally_grants_bragging_bonus(self):
+        """A party member Priest at dan 2+ grants +5 on my bragging rolls."""
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            skills={"bragging": 2},
+        )
+        party = [{
+            "name": "Kuni Shouzo",
+            "school": "priest",
+            "dan": 2,
+            "advantages": [], "disadvantages": [],
+            "campaign_advantages": [], "campaign_disadvantages": [],
+        }]
+        f = build_skill_formula("bragging", char, party_members=party)
+        assert any("Priest 2nd Dan" in b["label"] and b["amount"] == 5 for b in f.bonuses)
+        assert any("Kuni Shouzo" in b["label"] for b in f.bonuses)
+
+    def test_priest_2nd_dan_ally_conditional_on_sincerity(self):
+        """Ally priest adds +5 on sincerity open rolls only (alternatives, not flat)."""
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            skills={"sincerity": 2},
+        )
+        party = [{"name": "P", "school": "priest", "dan": 3,
+                  "advantages": [], "disadvantages": [],
+                  "campaign_advantages": [], "campaign_disadvantages": []}]
+        f = build_skill_formula("sincerity", char, party_members=party)
+        assert not any("Priest 2nd Dan" in b.get("label", "") for b in f.bonuses)
+        assert any("Priest 2nd Dan" in alt["label"] for alt in f.alternatives)
+
+    def test_priest_ally_below_2nd_dan_no_bonus(self):
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            skills={"bragging": 2},
+        )
+        party = [{"name": "P", "school": "priest", "dan": 1,
+                  "advantages": [], "disadvantages": [],
+                  "campaign_advantages": [], "campaign_disadvantages": []}]
+        f = build_skill_formula("bragging", char, party_members=party)
+        assert not any("Priest 2nd Dan" in b.get("label", "") for b in f.bonuses)
+
+    def test_priest_self_and_ally_do_not_stack(self):
+        """If the character is already a Priest at dan 2+, an ally Priest does not add another bonus."""
+        char = make_character_data(
+            school="priest",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+            skills={"bragging": 2},
+        )
+        party = [{"name": "P2", "school": "priest", "dan": 3,
+                  "advantages": [], "disadvantages": [],
+                  "campaign_advantages": [], "campaign_disadvantages": []}]
+        f = build_skill_formula("bragging", char, party_members=party)
+        priest_bonuses = [b for b in f.bonuses if "Priest 2nd Dan" in b.get("label", "")]
+        assert len(priest_bonuses) == 1
+
+    def test_priest_ally_bonus_on_unskilled_bragging(self):
+        """An unskilled (rank 0) character still benefits if an ally Priest is in the party."""
+        from app.services.dice import build_unskilled_formula
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            skills={},  # bragging at rank 0
+        )
+        party = [{"name": "P", "school": "priest", "dan": 2,
+                  "advantages": [], "disadvantages": [],
+                  "campaign_advantages": [], "campaign_disadvantages": []}]
+        f = build_unskilled_formula("bragging", char, party_members=party)
+        assert any("Priest 2nd Dan" in b["label"] and b["amount"] == 5 for b in f.bonuses)
+
+    def test_priest_ally_bonus_on_unskilled_sincerity_is_conditional(self):
+        """Unskilled sincerity with an ally Priest shows the open-rolls alternative, not a flat."""
+        from app.services.dice import build_unskilled_formula
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            skills={},
+        )
+        party = [{"name": "P", "school": "priest", "dan": 2,
+                  "advantages": [], "disadvantages": [],
+                  "campaign_advantages": [], "campaign_disadvantages": []}]
+        f = build_unskilled_formula("sincerity", char, party_members=party)
+        assert not any("Priest 2nd Dan" in b.get("label", "") for b in f.bonuses)
+        assert any("Priest 2nd Dan" in alt["label"] for alt in f.alternatives)
+
     # --- Flexible 1st/2nd Dan technique choices ---
     def test_flexible_first_dan_extra_die(self):
         char = make_character_data(
@@ -1366,6 +1636,112 @@ class TestInitiativeAndFlags:
         )
         init = build_initiative_formula(char)
         assert init["kakita_phase_zero"] is True
+
+    def test_togashi_initiative_default_variant(self):
+        """Togashi default initiative formula is a normal (V+1)kV roll;
+        the separate athletics die is rolled client-side via the
+        togashi_athletics_extra_die flag."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 0, "conviction": 0, "dragon_tattoo": 0},
+        )
+        init = build_initiative_formula(char)
+        # Void=2 -> base 3k2 normal roll
+        assert init["rolled"] == 3
+        assert init["kept"] == 2
+        assert init["togashi_ise_zumi"] is True
+        assert init["togashi_athletics_extra_die"] is True
+        assert init["togashi_base_rolled"] == 3
+        assert init["togashi_base_kept"] == 2
+
+    def test_togashi_initiative_1st_dan_extra_die(self):
+        """Togashi 1st Dan adds +1 rolled die on the main initiative roll."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 1, "conviction": 1, "dragon_tattoo": 1},
+        )
+        init = build_initiative_formula(char)
+        # Void=2 -> base (V+1+1dan)=4 rolled, V=2 kept. Standalone athletics
+        # die is added by the client via togashi_athletics_extra_die.
+        assert init["rolled"] == 4
+        assert init["kept"] == 2
+        assert init["togashi_athletics_extra_die"] is True
+        assert init["togashi_base_rolled"] == 4
+        assert init["togashi_base_kept"] == 2
+
+    def test_togashi_athletics_initiative_variant(self):
+        """Togashi athletics init variant: +3 rolled +3 kept over the base."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 0, "conviction": 0, "dragon_tattoo": 0},
+        )
+        formulas = build_all_roll_formulas(char)
+        ath = formulas["initiative:athletics"]
+        # Void=2 -> base 3k2 + 3 athletics dice = 6k5
+        assert ath["rolled"] == 6
+        assert ath["kept"] == 5
+        assert ath["togashi_athletics_only"] is True
+        assert ath["is_initiative"] is True
+
+    def test_togashi_athletics_initiative_with_1st_dan(self):
+        """Togashi athletics init at 1st Dan: base+1 (dan) +3 (athletics)."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 1, "conviction": 1, "dragon_tattoo": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        ath = formulas["initiative:athletics"]
+        # Void=2 -> base (V+1+1)=4 rolled + 3 = 7 rolled; V+3=5 kept
+        assert ath["rolled"] == 7
+        assert ath["kept"] == 5
+
+    def test_non_togashi_has_no_athletics_initiative(self):
+        """Non-Togashi characters do not get the athletics init variant."""
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        assert "initiative:athletics" not in formulas
+        assert formulas["initiative"]["togashi_ise_zumi"] is False
+
+    def test_togashi_1st_dan_athletics_extra_die(self):
+        """Togashi 1st Dan grants +1 rolled die on athletics rolls."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 1, "conviction": 1, "dragon_tattoo": 1},
+        )
+        f = build_athletics_formula("Earth", char)
+        # Athletics: 2*Ring + athletics_rank rolled, Ring kept.
+        # Earth=2, athletics=1 -> 5k2, +1 rolled from 1st Dan -> 6k2
+        assert f.rolled == 6
+        assert f.kept == 2
+
+    def test_togashi_1st_dan_wound_check_extra_die(self):
+        """Togashi 1st Dan grants +1 rolled die on wound check."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 1, "conviction": 1, "dragon_tattoo": 1},
+        )
+        wc = build_all_roll_formulas(char)["wound_check"]
+        # Water=3 -> base 4k3, +1 rolled from 1st Dan -> 5k3
+        assert wc["rolled"] == 5
+        assert wc["kept"] == 3
+
+    def test_togashi_1st_dan_no_longer_boosts_attack(self):
+        """Old 1st Dan gave extra die on attack/parry; new one does not."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 1, "conviction": 1, "dragon_tattoo": 1},
+            attack=2,
+            parry=2,
+        )
+        attack = build_combat_formula("attack", char)
+        parry = build_combat_formula("parry", char)
+        # Attack: 2+Fire(2) = 4k2, no extra die
+        assert attack.rolled == 4
+        # Parry: 2+Air(2) = 4k2, no extra die
+        assert parry.rolled == 4
 
     def test_isawa_duelist_damage_uses_water(self):
         char = make_character_data(

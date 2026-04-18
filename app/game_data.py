@@ -1343,7 +1343,7 @@ _SCHOOLS_LIST: List[School] = [
         ),
         school_knacks=["athletics", "conviction", "dragon_tattoo"],
         techniques={
-            1: "Roll one extra die on attack, parry, and athletics rolls.",
+            1: "Roll one extra die on athletics, wound check, and initiative rolls.",
             2: "You get a free raise on athletics rolls.",
             3: (
                 "Each day you get 4X free raises which may be applied to "
@@ -1632,7 +1632,7 @@ _SCHOOLS_LIST: List[School] = [
                 "calculating your stipend."
             ),
             5: (
-                "After making any TN or contested roll, add your lowest three "
+                "After making any non-initiative roll, add your lowest three "
                 "dice to the result. (Some dice may be counted twice.)"
             ),
         },
@@ -2226,7 +2226,7 @@ SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
         },
     },
     "togashi_ise_zumi": {
-        "first_dan_extra_die": ["attack", "parry", "athletics"],
+        "first_dan_extra_die": ["athletics", "wound_check", "initiative"],
         "second_dan_free_raise": "athletics",
         # 3rd Dan: non-standard (4X free raises daily for athletics only)
     },

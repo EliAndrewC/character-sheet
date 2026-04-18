@@ -3,7 +3,7 @@
 **School ID:** `togashi_ise_zumi`
 **Category:** Monk
 **School Ring:** Void - Confirmed correct.
-**School Knacks:** athletics, conviction, dragon_tattoo - Athletics is rollable (varies by ring used). Conviction is rollable (Water). Dragon_tattoo has special rules.
+**School Knacks:** athletics, conviction, dragon_tattoo - Athletics is rollable (varies by ring used; the knack icon opens a 4-ring picker with void submenus). Conviction is rollable (Water). Dragon Tattoo rolls (2X)k1 damage, where X is the knack rank; implemented as a special case in `build_knack_formula` that returns a fixed (2 * rank)k1 formula and honors impaired reroll-10s suppression.
 
 ---
 
@@ -11,26 +11,42 @@
 
 > Roll either 1 or 3 extra action dice at the beginning of each combat round. If you roll 1 die, it may only be spent on athletics actions; if you roll 3 dice, all of your action dice may only be spent on athletics actions.
 
-**Status:** Out of scope - requires combat-round tracking and action die restriction mechanics.
+**Status:** Implemented at the initiative roll level. The player chooses which variant each round; action-die athletics-only restrictions are tracked at the table (not by the app).
 
-**Implementation:** `app/game_data.py:1254-1255` (definition only).
+**Implementation:**
+- `app/services/dice.py::build_initiative_formula` exposes the default variant (base + 1 athletics die) as `initiative`, flags it with `togashi_ise_zumi: True`, and stores the pre-variant base as `togashi_base_rolled` / `togashi_base_kept`.
+- `app/services/dice.py::build_all_roll_formulas` emits the second variant as `initiative:athletics` (base + 3 dice, `togashi_athletics_only: True`).
+- `app/templates/character/sheet.html` renders the initiative box as "{base} plus 1 athletics action or {athletics} athletics actions" for Togashi characters, and opens a two-option dropdown (`data-togashi-init-menu`) on click.
 
-**Unit tests:** None.
-**Clicktests:** None.
+**Unit tests:**
+- `test_dice.py::test_togashi_initiative_default_variant`
+- `test_dice.py::test_togashi_athletics_initiative_variant`
+- `test_dice.py::test_non_togashi_has_no_athletics_initiative`
+
+**Clicktests:**
+- `test_school_abilities.py::test_togashi_initiative_dropdown_shows_both_variants`
+- `test_school_abilities.py::test_togashi_initiative_normal_variant_rolls_correct_dice`
+- `test_school_abilities.py::test_togashi_initiative_athletics_variant_rolls_correct_dice`
 
 ---
 
 ## 1st Dan
 
-> Roll one extra die on attack, parry, and athletics rolls.
+> Roll one extra die on athletics, wound check, and initiative rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
-- `first_dan_extra_die: ["attack", "parry", "athletics"]`
-- Applied in `app/services/dice.py:_apply_school_technique_bonus()`.
+- `first_dan_extra_die: ["athletics", "wound_check", "initiative"]`
+- Applied in `app/services/dice.py:_apply_school_technique_bonus()` for athletics; `build_wound_check_formula` and `build_initiative_formula` also honor the flag.
 
-**Unit tests:** None specific to Togashi 1st Dan.
+**Unit tests:**
+- `test_dice.py::test_togashi_1st_dan_athletics_extra_die`
+- `test_dice.py::test_togashi_1st_dan_wound_check_extra_die`
+- `test_dice.py::test_togashi_initiative_1st_dan_extra_die`
+- `test_dice.py::test_togashi_1st_dan_no_longer_boosts_attack`
+
 **Clicktests:**
-- `test_school_abilities.py::test_togashi_1st_dan_formula_extra_die`
+- `test_school_abilities.py::test_togashi_1st_dan_behavioral`
+- `test_school_abilities.py::test_togashi_initiative_dan_advancement_bonus`
 
 ---
 

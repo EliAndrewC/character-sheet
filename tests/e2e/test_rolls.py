@@ -63,9 +63,89 @@ def test_click_parry_shows_predeclare_option(page, live_server_url):
 def test_click_ring_opens_athletics_modal(page, live_server_url):
     _create_roller(page, live_server_url, "ClickRing")
     page.locator('[data-roll-key="athletics:Earth"]').click()
+    # Athletics ring clicks always show the roll menu; click "Roll" to proceed
+    page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=5000)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    menu.locator('button.font-medium:has-text("Roll")').first.click()
     page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
     title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Athletics" in title and "Earth" in title
+
+
+def test_click_ring_always_shows_menu_even_with_zero_vp(page, live_server_url):
+    """Athletics ring click opens the roll menu (with void options) even at 0 VP."""
+    _create_roller(page, live_server_url, "ClickRingZeroVP")
+    # _create_roller already zeroes out VP
+    vp = page.evaluate("window._trackingBridge?.voidPoints")
+    assert vp == 0, "precondition: test char has 0 VP"
+    page.locator('[data-roll-key="athletics:Air"]').click()
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=3000)
+    assert menu.is_visible(), "roll menu should appear for athletics ring click"
+    assert menu.text_content() and "Air" in menu.text_content()
+
+
+def test_click_ring_shows_void_options_when_vp_available(page, live_server_url):
+    """Athletics ring click shows the 'Spend N void points' dropdown when VP is available."""
+    _create_roller(page, live_server_url, "ClickRingVP")
+    # Restore VP for this test
+    page.evaluate("window._trackingBridge.voidPoints = 2; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="athletics:Earth"]').click()
+    page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=3000)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    text = menu.text_content()
+    assert "Spend 1 void point" in text
+    assert "Spend 2 void points" in text
+
+
+def _create_athletics_knack_char(page, live_server_url, name="AthKnack"):
+    """Make a character whose school has athletics as a school knack (Togashi)."""
+    from tests.e2e.helpers import select_school, apply_changes
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, "togashi_ise_zumi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Athletics knack setup")
+
+
+def test_athletics_knack_icon_opens_ring_picker(page, live_server_url):
+    """Athletics knack die icon opens a ring picker with all four non-Void rings."""
+    _create_athletics_knack_char(page, live_server_url, "AthPick")
+    page.locator('[data-roll-key="knack:athletics"]').click()
+    page.wait_for_selector('[data-athletics-picker-menu]', state='visible', timeout=3000)
+    for ring in ["Air", "Fire", "Water", "Earth"]:
+        btn = page.locator(f'button[data-athletics-ring="{ring}"]')
+        assert btn.is_visible(), f"ring option {ring} should be visible"
+
+
+def test_athletics_knack_picker_rolls_selected_ring(page, live_server_url):
+    """Selecting a ring in the athletics picker rolls Athletics (Ring)."""
+    _create_athletics_knack_char(page, live_server_url, "AthPickFire")
+    page.locator('[data-roll-key="knack:athletics"]').click()
+    page.wait_for_selector('[data-athletics-picker-menu]', state='visible', timeout=3000)
+    page.locator('button[data-athletics-ring="Fire"]').click()
+    page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
+    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
+    assert "Athletics" in title and "Fire" in title
+
+
+def test_athletics_knack_picker_void_submenu(page, live_server_url):
+    """Hovering a ring in the athletics picker shows the void-points submenu."""
+    _create_athletics_knack_char(page, live_server_url, "AthPickVoid")
+    # Togashi starts with Void 3 -> 3 VP available by default
+    vp = page.evaluate("window._trackingBridge?.voidPoints")
+    assert vp > 0, "precondition: VP available"
+    page.locator('[data-roll-key="knack:athletics"]').click()
+    page.wait_for_selector('[data-athletics-picker-menu]', state='visible', timeout=3000)
+    # Hover over the Air ring option and expect the void submenu to appear
+    page.locator('button[data-athletics-ring="Air"]').hover()
+    page.wait_for_selector('[data-athletics-void-submenu="Air"]', state='visible', timeout=3000)
+    submenu = page.locator('[data-athletics-void-submenu="Air"]')
+    text = submenu.text_content()
+    assert "Spend 1 void point" in text
 
 
 def test_modal_shows_total_and_dice_after_animation(page, live_server_url):
@@ -164,6 +244,10 @@ def test_disable_animation_preference(page, live_server_url):
 def test_athletics_label_in_modal(page, live_server_url):
     _create_roller(page, live_server_url, "AthleticsChar")
     page.locator('[data-roll-key="athletics:Water"]').click()
+    # Athletics ring clicks always show the roll menu; click "Roll" to proceed
+    page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=5000)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    menu.locator('button.font-medium:has-text("Roll")').first.click()
     page.wait_for_selector('text="Total:"', state='visible', timeout=5000)
     title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Athletics" in title and "Water" in title

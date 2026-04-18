@@ -148,6 +148,125 @@ def test_party_thoughtless_inline_on_other_tact(page, live_server_url):
     assert "+10 to opponents' Manipulation" in body
 
 
+def test_party_priest_5th_dan_ally_conviction_button(page, live_server_url):
+    """A party Priest at 5th Dan exposes a 'Spend [Priest]'s Conviction (+1)'
+    button on ally roll modals. Spending it raises the ally's roll by 1."""
+    # Character A: Priest at 5th Dan (all school knacks at rank 5)
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "High Priest")
+    select_school(page, "priest")
+    for knack in ("conviction", "otherworldliness", "pontificate"):
+        click_plus(page, f"knack_{knack}", 4)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Priest 5th Dan")
+    a_url = page.url
+    _set_group(page, a_url, "Tuesday Group")
+
+    # Character B: same group, takes Bragging 1
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "RegularAlly")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_bragging", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Bragging ally")
+    b_url = page.url
+    _set_group(page, b_url, "Tuesday Group")
+
+    # Visit B's sheet and roll bragging; the ally-conviction button should appear
+    page.goto(b_url)
+    # Find a conviction button that mentions the priest's name
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(600)
+    # If menu opens, click the main Roll button to get to the result modal
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    if menu.is_visible():
+        menu.locator('button.font-medium:has-text("Roll")').first.click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+
+    # The priest ally spend button should be visible in the dice-roller modal
+    # (the specific data-action is on the one inside the regular roll modal).
+    spend = page.locator('[data-modal="dice-roller"] button[data-action^="spend-priest-ally-"]').first
+    assert spend.is_visible()
+    # Its text should include the priest's name
+    assert "High Priest" in spend.text_content()
+
+    # Clicking it should raise baseTotal by 1
+    before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.baseTotal === 'number') return d.baseTotal;
+        }
+        return 0;
+    }""")
+    spend.click()
+    page.wait_for_timeout(200)
+    after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.baseTotal === 'number') return d.baseTotal;
+        }
+        return 0;
+    }""")
+    assert after == before + 1
+
+
+def test_party_priest_2nd_dan_grants_bragging_free_raise(page, live_server_url):
+    """A party member Priest at dan>=2 grants every ally a free raise on
+    bragging/precepts/open-sincerity. The bonus shows in the skill tooltip
+    line and the dice-roll formula."""
+    # Character A: Priest at 2nd Dan (conviction/otherworldliness/pontificate rank 2)
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PriestAlly")
+    select_school(page, "priest")
+    for knack in ("conviction", "otherworldliness", "pontificate"):
+        click_plus(page, f"knack_{knack}", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Priest at 2nd Dan")
+    a_url = page.url
+    _set_group(page, a_url, "Tuesday Group")
+
+    # Character B: same group, takes Bragging 1
+    page.goto(live_server_url)
+    page.locator('button:text("New Character")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "BraggingPartner")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_bragging", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Bragging partner")
+    b_url = page.url
+    _set_group(page, b_url, "Tuesday Group")
+
+    # Visit B's sheet — the bragging skill row should mention PriestAlly's Priest 2nd Dan
+    page.goto(b_url)
+    body = page.text_content("body")
+    assert "PriestAlly" in body
+    assert "Priest 2nd Dan" in body
+    # And the skill:bragging formula should carry the +5 flat bonus.
+    formula = page.evaluate("""() => {
+        const el = document.getElementById('roll-formulas');
+        return JSON.parse(el.textContent || '{}')['skill:bragging'];
+    }""")
+    assert formula is not None
+    assert formula["flat"] >= 5
+    assert any("Priest 2nd Dan" in b.get("label", "") for b in formula.get("bonuses", []))
+
+
 def test_self_thoughtless_inline_on_own_tact(page, live_server_url):
     """A character with Thoughtless sees the +20 note on their own Tact row,
     NOT on Sincerity."""

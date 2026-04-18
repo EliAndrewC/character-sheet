@@ -96,6 +96,8 @@ class RollFormula:
     courtier_5th_dan_optional: int = 0
     doji_5th_dan_always: bool = False
     doji_5th_dan_optional: bool = False
+    shosuro_5th_dan: bool = False
+    is_damage_roll: bool = False
     otherworldliness_capacity: int = 0
 
     def to_dict(self) -> dict:
@@ -201,7 +203,9 @@ def _apply_school_technique_bonus(
 
 
 def build_unskilled_formula(
-    skill_id: str, character_data: dict
+    skill_id: str,
+    character_data: dict,
+    party_members: Optional[List[dict]] = None,
 ) -> Optional[RollFormula]:
     """Build a roll formula for an unskilled roll (rank 0).
 
@@ -215,7 +219,7 @@ def build_unskilled_formula(
     ring_val = rings.get(skill_def.ring.value, 2)
     flat = -10 if skill_def.is_advanced else 0
     bonuses = [{"label": "unskilled advanced penalty", "amount": -10}] if skill_def.is_advanced else []
-    return RollFormula(
+    formula = RollFormula(
         label=f"{skill_def.name} ({skill_def.ring.value})",
         rolled=ring_val,
         kept=ring_val,
@@ -226,6 +230,24 @@ def build_unskilled_formula(
         unskilled_skill_name=skill_def.name,
         otherworldliness_capacity=5 if not skill_def.is_advanced else 0,
     )
+    # Priest 2nd Dan ally bonus: same skills as the skilled version.
+    if skill_id in ("bragging", "precepts", "sincerity") and party_members:
+        ally_priest = next(
+            (p for p in party_members
+             if p.get("school") == "priest" and (p.get("dan") or 0) >= 2),
+            None,
+        )
+        if ally_priest is not None:
+            ally_name = ally_priest.get("name", "an ally")
+            label = f"Priest 2nd Dan ({ally_name} in party)"
+            if skill_id == "sincerity":
+                formula.alternatives.append({
+                    "label": f"on open rolls ({label})",
+                    "extra_flat": FREE_RAISE_VALUE,
+                })
+            else:
+                _add_flat_bonus(formula, label, FREE_RAISE_VALUE)
+    return formula
 
 
 def build_skill_formula(
@@ -336,6 +358,25 @@ def build_skill_formula(
         else:
             _add_flat_bonus(formula, "Priest 2nd Dan", FREE_RAISE_VALUE)
 
+    # --- Priest 2nd Dan (ally): same free raise if any party member is a
+    # Priest at dan 2+. Does not stack with the self-Priest bonus.
+    elif skill_id in ("bragging", "precepts", "sincerity") and party_members:
+        ally_priest = next(
+            (p for p in party_members
+             if p.get("school") == "priest" and (p.get("dan") or 0) >= 2),
+            None,
+        )
+        if ally_priest is not None:
+            ally_name = ally_priest.get("name", "an ally")
+            label = f"Priest 2nd Dan ({ally_name} in party)"
+            if skill_id == "sincerity":
+                formula.alternatives.append({
+                    "label": f"on open rolls ({label})",
+                    "extra_flat": FREE_RAISE_VALUE,
+                })
+            else:
+                _add_flat_bonus(formula, label, FREE_RAISE_VALUE)
+
     # --- Honor bonus (Bragging, Precepts: unconditional. Sincerity: conditional) ---
     honor = character_data.get("honor", 1.0)
     if skill_id in _HONOR_BONUS_SKILLS:
@@ -396,6 +437,19 @@ def build_knack_formula(
     rank = knacks.get(knack_id, 0)
     if rank <= 0:
         return None
+
+    # Dragon Tattoo: fixed (2X)k1 damage roll (X = knack rank). Not ring-based;
+    # respects impaired reroll rules like any other personal roll. Damage rolls
+    # don't accept void spending.
+    if knack_id == "dragon_tattoo":
+        return RollFormula(
+            label=f"{knack_def.name} Damage",
+            rolled=2 * rank,
+            kept=1,
+            flat=0,
+            is_damage_roll=True,
+            **_reroll_fields(character_data),
+        )
 
     rings = character_data.get("rings", {})
     # Knacks may have a fixed ring, "varies" (use Earth as a sane default), or None
@@ -478,6 +532,10 @@ def build_combat_formula(
         acting_rank = skills.get("acting", 0)
         if acting_rank > 0:
             formula.rolled += acting_rank
+
+    # Shosuro Actor 5th Dan: add sum of lowest 3 dice to roll (post-roll)
+    if school_id == "shosuro_actor" and dan >= 5:
+        formula.shosuro_5th_dan = True
 
     # Courtier 5th Dan: +Air to all TN and contested rolls
     if school_id == "courtier" and dan >= 5:
@@ -597,6 +655,9 @@ def build_wound_check_formula(character_data: dict) -> dict:
     # Doji Artisan 5th Dan: flag for client-side bonus (TN = light wounds)
     doji_5th_dan_wc = school_id == "doji_artisan" and dan >= 5
 
+    # Shosuro Actor 5th Dan: add sum of lowest 3 dice to roll (post-roll)
+    shosuro_5th_dan = school_id == "shosuro_actor" and dan >= 5
+
     return {
         "label": "Wound Check",
         "rolled": rolled,
@@ -611,6 +672,7 @@ def build_wound_check_formula(character_data: dict) -> dict:
         "adventure_raises_max_per_roll": 0,
         "bayushi_5th_dan_half_lw": bayushi_5th_dan_half_lw,
         "doji_5th_dan_wc": doji_5th_dan_wc,
+        "shosuro_5th_dan": shosuro_5th_dan,
     }
 
 
@@ -623,11 +685,17 @@ def build_initiative_formula(character_data: dict) -> Optional[dict]:
 
     School-specific modifications are encoded as boolean flags so the
     client can apply them after rolling.
+
+    Togashi Ise Zumi special ability: "Roll either 1 or 3 extra action
+    dice at the beginning of each combat round." The default ``rolled`` /
+    ``kept`` reflect the "+1 extra die, athletics-only" variant; the
+    "+3 extra dice, all athletics" variant is exposed as the separate
+    ``initiative:athletics`` key via :func:`build_all_roll_formulas`.
     """
     rings = character_data.get("rings", {})
     void_val = rings.get("Void", 2)
-    rolled = void_val + 1
-    kept = void_val
+    base_rolled = void_val + 1
+    base_kept = void_val
 
     school_id = character_data.get("school", "")
     knacks = character_data.get("knacks", {}) or {}
@@ -635,14 +703,12 @@ def build_initiative_formula(character_data: dict) -> Optional[dict]:
     bonuses = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
 
     # Matsu Bushi: always roll 10 dice
-    matsu_override = school_id == "matsu_bushi"
-    if matsu_override:
-        rolled = 10
+    if school_id == "matsu_bushi":
+        base_rolled = 10
 
-    # 1st Dan extra die on initiative (Shinjo, Kakita, Hiruma)
-    if dan >= 1 and bonuses.get("first_dan_extra_die"):
-        if "initiative" in (bonuses["first_dan_extra_die"] or []):
-            rolled += 1
+    # 1st Dan extra die on initiative (Shinjo, Kakita, Hiruma, Togashi)
+    if dan >= 1 and "initiative" in (bonuses.get("first_dan_extra_die") or []):
+        base_rolled += 1
 
     # Kakita Duelist: 10s on initiative are Phase 0
     kakita_phase_zero = school_id == "kakita_duelist"
@@ -652,6 +718,14 @@ def build_initiative_formula(character_data: dict) -> Optional[dict]:
 
     # Hiruma Scout 4th Dan: lower action dice by 2 (min 1)
     hiruma_4th_dan = school_id == "hiruma_scout" and dan >= 4
+
+    # Togashi Ise Zumi: default variant is normal initiative (rolled/kept
+    # unchanged) PLUS one separate athletics-only action die rolled
+    # alongside. The client handles the extra die as an independent 1k1
+    # roll so it can be visually distinguished from the normal action dice.
+    is_togashi = school_id == "togashi_ise_zumi"
+    rolled = base_rolled
+    kept = base_kept
 
     return {
         "label": "Initiative",
@@ -663,6 +737,12 @@ def build_initiative_formula(character_data: dict) -> Optional[dict]:
         "kakita_phase_zero": kakita_phase_zero,
         "shinjo_4th_dan": shinjo_4th_dan,
         "hiruma_4th_dan": hiruma_4th_dan,
+        "togashi_ise_zumi": is_togashi,
+        # Togashi default variant rolls 1 extra athletics-only die alongside
+        # the normal initiative roll (client handles as a separate d10).
+        "togashi_athletics_extra_die": is_togashi,
+        "togashi_base_rolled": base_rolled if is_togashi else 0,
+        "togashi_base_kept": base_kept if is_togashi else 0,
         "alternatives": [],
         "bonuses": [],
         "adventure_raises_max_per_roll": 0,
@@ -671,6 +751,7 @@ def build_initiative_formula(character_data: dict) -> Optional[dict]:
 
 def build_all_roll_formulas(
     character_data: dict,
+    party_members: Optional[List[dict]] = None,
 ) -> Dict[str, dict]:
     """Pre-compute every roll formula needed by the sheet.
 
@@ -678,6 +759,11 @@ def build_all_roll_formulas(
     ``"attack"``, ``"parry"``, ``"athletics:Air"``, etc. Each value is a
     plain dict (the dataclass serialised via ``to_dict``) so it serialises
     cleanly into JSON for embedding in the page.
+
+    ``party_members`` is an optional list of fellow gaming-group characters
+    (each dict including ``school`` + ``dan``). Used for shared-bonus
+    mechanics like Priest 2nd Dan, which grants a free raise to the whole
+    party on bragging / precepts / open sincerity.
     """
     out: Dict[str, dict] = {}
 
@@ -767,6 +853,35 @@ def build_all_roll_formulas(
                 formula_dict.setdefault("bonuses", []).append(
                     {"label": "Courtier Special (Air)", "amount": air_val}
                 )
+            # Shosuro Actor 5th Dan: sum of lowest 3 dice added to roll (post-roll)
+            if school_id == "shosuro_actor" and dan >= 5:
+                formula_dict["shosuro_5th_dan"] = True
+
+            # Derive bonus_sources for the attack modal's pre-roll panel.
+            # Mirrors build_wound_check_formula's bonus_sources list. Picks up
+            # every structured flat bonus in bonuses[] (Kitsuki +2xWater,
+            # Courtier Special/5th Dan, 2nd Dan free raises, etc.), plus
+            # rolled-die bonuses that don't live in bonuses[] (1st Dan extra
+            # die, Shosuro acting dice).
+            bonus_sources: list = []
+            tech_bonuses_here = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
+            first_dan_list = tech_bonuses_here.get("first_dan_extra_die") or []
+            if dan >= 1 and bare in first_dan_list:
+                bonus_sources.append("+1 rolled die from 1st Dan")
+            if school_id == "shosuro_actor":
+                char_skills = character_data.get("skills", {}) or {}
+                acting_rank = char_skills.get("acting", 0)
+                if acting_rank > 0:
+                    bonus_sources.append(
+                        f"+{acting_rank} rolled dice from Acting (Shosuro Special)"
+                    )
+            for b in formula_dict.get("bonuses", []) or []:
+                amount = b.get("amount", 0)
+                label = b.get("label") or ""
+                if amount and label:
+                    sign = "+" if amount >= 0 else ""
+                    bonus_sources.append(f"{sign}{amount} from {label}")
+            formula_dict["bonus_sources"] = bonus_sources
         return formula_dict
 
     # Skills with rank > 0
@@ -774,7 +889,7 @@ def build_all_roll_formulas(
     for skill_id, rank in skills.items():
         if rank <= 0:
             continue
-        formula = build_skill_formula(skill_id, character_data)
+        formula = build_skill_formula(skill_id, character_data, party_members=party_members)
         if formula is not None:
             out[f"skill:{skill_id}"] = _annotate_third_dan(
                 f"skill:{skill_id}", formula.to_dict()
@@ -785,7 +900,7 @@ def build_all_roll_formulas(
     for skill_id, skill_def in SKILLS.items():
         if skills.get(skill_id, 0) > 0:
             continue  # already handled above
-        formula = build_unskilled_formula(skill_id, character_data)
+        formula = build_unskilled_formula(skill_id, character_data, party_members=party_members)
         if formula is not None:
             d = formula.to_dict()
             d["is_unskilled"] = True
@@ -848,6 +963,20 @@ def build_all_roll_formulas(
     init_formula = build_initiative_formula(character_data)
     if init_formula is not None:
         out["initiative"] = init_formula
+        # Togashi Ise Zumi: expose the "3 extra dice, all athletics" variant
+        # as a second roll key so the client can offer both choices.
+        if init_formula.get("togashi_ise_zumi"):
+            base_rolled = init_formula["togashi_base_rolled"]
+            base_kept = init_formula["togashi_base_kept"]
+            out["initiative:athletics"] = {
+                **init_formula,
+                "label": "Athletics Initiative",
+                "rolled": base_rolled + 3,
+                "kept": base_kept + 3,
+                "togashi_athletics_only": True,
+                # Athletics variant has no separate standalone die.
+                "togashi_athletics_extra_die": False,
+            }
 
     # Wound check
     wc_formula = build_wound_check_formula(character_data)
