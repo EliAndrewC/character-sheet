@@ -355,7 +355,8 @@ def test_impaired_character_modal_shows_no_reroll_note(page, live_server_url):
     page.wait_for_selector('[data-roll-key="skill:bragging"]')
     # Click bragging
     page.locator('[data-roll-key="skill:bragging"]').click()
-    page.wait_for_selector('text="Total:"', state='visible', timeout=5000)
+    page.wait_for_selector('[data-modal="dice-roller"] >> text="Total:"',
+                           state='visible', timeout=5000)
     body = page.text_content("body")
     assert "10s not rerolled due to being Impaired" in body
 
@@ -406,7 +407,8 @@ def test_disable_animation_preference(page, live_server_url):
     page.wait_for_selector('[data-roll-key="skill:bragging"]')
     page.locator('[data-roll-key="skill:bragging"]').click()
     # Result panel should be immediately visible (no animation phase)
-    page.wait_for_selector('text="Total:"', state='visible', timeout=2000)
+    page.wait_for_selector('[data-modal="dice-roller"] >> text="Total:"',
+                           state='visible', timeout=2000)
     body = page.text_content("body")
     assert "Total:" in body
 
@@ -418,7 +420,8 @@ def test_athletics_label_in_modal(page, live_server_url):
     page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=5000)
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
     menu.locator('button.font-medium:has-text("Roll")').first.click()
-    page.wait_for_selector('text="Total:"', state='visible', timeout=5000)
+    page.wait_for_selector('[data-modal="dice-roller"] >> text="Total:"',
+                           state='visible', timeout=5000)
     title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Athletics" in title and "Water" in title
 
@@ -447,7 +450,7 @@ def test_die_top_angle_is_about_70_degrees(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     # Attack now opens the attack modal - click "Roll Attack" to start the roll
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
-    page.locator('[data-modal="attack"] select').select_option("5")
+    page.locator('[data-modal="attack"] select:visible').select_option("5")
     page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
     # Wait until the rolling phase has rendered the dice tray AND the dice
     # have stopped tumbling (otherwise the rotation transform skews
