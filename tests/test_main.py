@@ -169,11 +169,68 @@ class TestCheckAndBackup:
             "app.services.backup.run_backup",
             lambda *a, **kw: {"success": True, "error": None, "key": "backups/k.db"},
         )
+        # Art orphan sweep runs after a successful backup. Stub it so a
+        # missing boto3 credential chain doesn't poison this test case.
+        monkeypatch.setattr(
+            "app.services.art_backup.cleanup_orphans",
+            lambda *a, **kw: {"known": 0, "deleted": 0, "errors": 0},
+        )
 
         main_module._check_and_backup()
         assert main_module.backup_status["last_success"] is not None
         assert main_module.backup_status["last_error"] is None
         assert main_module.backup_status["in_progress"] is False
+
+    def test_successful_backup_triggers_art_orphan_sweep(self, monkeypatch):
+        """After a successful DB snapshot, the orphan-cleanup sweep fires
+        in the same startup thread (Phase 9 wiring)."""
+        monkeypatch.setenv("S3_BACKUP_BUCKET", "mybucket")
+        monkeypatch.setenv("S3_BACKUP_REGION", "us-east-1")
+        monkeypatch.setattr(
+            "app.services.backup.get_last_backup_time", lambda b, r: None
+        )
+        monkeypatch.setattr(
+            "app.services.backup.run_backup",
+            lambda *a, **kw: {"success": True, "error": None, "key": "backups/k.db"},
+        )
+        called = {"n": 0, "bucket": None, "region": None}
+
+        def fake_cleanup(db, *, bucket, region):
+            called["n"] += 1
+            called["bucket"] = bucket
+            called["region"] = region
+            return {"known": 0, "deleted": 0, "errors": 0}
+
+        monkeypatch.setattr(
+            "app.services.art_backup.cleanup_orphans", fake_cleanup,
+        )
+        main_module._check_and_backup()
+        assert called["n"] == 1
+        assert called["bucket"] == "mybucket"
+        assert called["region"] == "us-east-1"
+
+    def test_failed_backup_does_not_trigger_art_sweep(self, monkeypatch):
+        """A failed backup must NOT run the sweep - that would overwrite
+        the admin-banner error with a misleading downstream symptom."""
+        monkeypatch.setenv("S3_BACKUP_BUCKET", "mybucket")
+        monkeypatch.setattr(
+            "app.services.backup.get_last_backup_time", lambda b, r: None
+        )
+        monkeypatch.setattr(
+            "app.services.backup.run_backup",
+            lambda *a, **kw: {"success": False, "error": "upload failed", "key": None},
+        )
+        called = {"n": 0}
+
+        def fake_cleanup(*a, **kw):
+            called["n"] += 1
+            return {"known": 0, "deleted": 0, "errors": 0}
+
+        monkeypatch.setattr(
+            "app.services.art_backup.cleanup_orphans", fake_cleanup,
+        )
+        main_module._check_and_backup()
+        assert called["n"] == 0
 
     def test_run_backup_failure_records_error(self, monkeypatch):
         monkeypatch.setenv("S3_BACKUP_BUCKET", "mybucket")
