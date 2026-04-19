@@ -725,6 +725,78 @@ class TestMantisPostureTracking:
         assert resp.status_code == 200
         assert 'data-testid="tn-display"' in resp.text
 
+    def test_mantis_5th_dan_has_posture_accumulation_flag(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 5, "iaijutsu": 5, "worldliness": 5},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_posture_accumulation") is True
+
+    def test_mantis_4th_dan_does_not_have_posture_accumulation_flag(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 4, "iaijutsu": 4, "worldliness": 4},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_posture_accumulation") is False
+
+    def test_non_mantis_does_not_have_posture_accumulation_flag(self, client):
+        cid = _seed_character(
+            client, school="akodo_bushi",
+            knacks={"double_attack": 5, "feint": 5, "iaijutsu": 5},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_posture_accumulation") is False
+
+    def test_mantis_5th_dan_accumulator_block_renders(self, client):
+        """Phase 6: the accumulator sub-block is present on Dan 5 Mantis sheets
+        with the stable testid and summary text the clicktests look for."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 5, "iaijutsu": 5, "worldliness": 5},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-testid="mantis-5th-dan-accumulator"' in resp.text
+        assert 'data-testid="mantis-5th-dan-offensive"' in resp.text
+        assert 'data-testid="mantis-5th-dan-defensive"' in resp.text
+        assert "Accumulated 5th Dan bonuses" in resp.text
+
+    def test_mantis_4th_dan_accumulator_block_absent(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 4, "iaijutsu": 4, "worldliness": 4},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-testid="mantis-5th-dan-accumulator"' not in resp.text
+
+    def test_tn_display_5th_dan_accumulator_wiring_present(self, client):
+        """Phase 6: the TN x-data scope on Dan 5 Mantis sheets carries the
+        accum flag so the defensive-posture-count bump can be added to the
+        displayed TN at runtime."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 5, "iaijutsu": 5, "worldliness": 5},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-testid="tn-5th-dan-accumulator"' in resp.text
+        # The inline accum: true boolean is the Dan 5+ discriminator.
+        assert "accum: true" in resp.text
+
+    def test_tn_display_dan_4_mantis_accum_false(self, client):
+        """Dan 4 Mantis still has the tn-display x-data but accum is false so
+        no accumulator contribution is added at runtime."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 4, "iaijutsu": 4, "worldliness": 4},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert "accum: false" in resp.text
+
 
 class TestPartyPriestsContext:
     """The ``party_priests`` list feeds the "<priest> priest blessed for 10
