@@ -279,6 +279,54 @@ def test_per_adventure_reset_also_clears_per_day_pools(page, live_server_url):
     assert page.evaluate("window._trackingBridge.getCount('conviction')") == 0
 
 
+def test_per_adventure_reset_also_clears_action_dice(page, live_server_url):
+    """Action dice from a prior combat round are stale state; the global
+    per-adventure reset wipes them along with the per-adventure counters."""
+    _create_togashi_3rd_dan(page, live_server_url, precepts=1)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    # Seed action dice directly via the tracking bridge and consume one
+    # counter so the Reset button becomes enabled.
+    page.evaluate("""
+        window._trackingBridge.actionDice = [
+            {value: 4, spent: false},
+            {value: 7, spent: true, spent_by: 'Attack'}
+        ];
+        window._trackingBridge.setCount('conviction', 1);
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    assert page.evaluate("window._trackingBridge.actionDice.length") == 2
+    page.locator('[data-action="open-reset-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+    # Summary mentions the action dice being cleared.
+    body = page.text_content('body')
+    assert "2 action dice" in body
+    page.locator('[data-action="confirm-reset"]').click()
+    page.wait_for_timeout(400)
+    assert page.evaluate("window._trackingBridge.actionDice.length") == 0
+    assert page.evaluate("window._trackingBridge.getCount('conviction')") == 0
+
+
+def test_reset_button_enabled_with_only_action_dice(page, live_server_url):
+    """If the only stale state is action dice (no counters spent, no
+    toggles set), the global Reset button must still be clickable so the
+    user can wipe the dice through the usual confirm modal."""
+    _create_togashi_3rd_dan(page, live_server_url, precepts=1)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    page.evaluate("""
+        window._trackingBridge.actionDice = [{value: 3, spent: false}];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    btn = page.locator('[data-action="open-reset-modal"]')
+    assert not btn.is_disabled()
+    btn.click()
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+    page.locator('[data-action="confirm-reset"]').click()
+    page.wait_for_timeout(400)
+    assert page.evaluate("window._trackingBridge.actionDice.length") == 0
+
+
 def test_non_per_day_counter_has_no_reset_button(page, live_server_url):
     """Otherworldliness (not per_day) should not render a per-ability reset button."""
     # Brotherhood of Shinsei Monk has otherworldliness as a school knack

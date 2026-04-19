@@ -2235,36 +2235,76 @@ class TestAthleticsPredeclaredParryRow:
         ) in resp.text
 
 
-class TestAthleticsAttackVoidSubmenu:
-    """The athletics picker menu shows a void-spend flyout on the
-    Athletics (Parry) row; the Athletics (Attack) row should mirror it so
-    the menu isn't lopsided. Clicking an option must open the attack
-    modal with the void count preselected."""
+class TestResetAdventureClearsActionDice:
+    """The 'Reset Per-Adventure Abilities' modal's confirm button must also
+    clear any action dice left over from a previous combat round, since
+    those are stale state tied to the adventure. We can't exercise the
+    Alpine function server-side, so we structurally assert the wiring in
+    the rendered template: resetAdventure clears actionDice, and the
+    summary enumerates the action dice that will be cleared."""
 
-    def test_sheet_has_athletics_attack_void_submenu(self, client):
+    def _reset_adventure_body(self, resp_text):
+        start = resp_text.find("resetAdventure() {")
+        assert start != -1, "resetAdventure not found in sheet template"
+        end = resp_text.find("\n                },", start)
+        assert end != -1
+        return resp_text[start:end]
+
+    def _reset_summary_body(self, resp_text):
+        start = resp_text.find("resetSummary() {")
+        assert start != -1
+        end = resp_text.find("\n                },", start)
+        assert end != -1
+        return resp_text[start:end]
+
+    def test_resetAdventure_clears_action_dice(self, client):
+        cid = _seed_character(client, name="ResetClearsAD")
+        resp = client.get(f"/characters/{cid}")
+        body = self._reset_adventure_body(resp.text)
+        assert "this.actionDice = []" in body
+
+    def test_hasAnythingSpent_considers_action_dice(self, client):
+        """If only action dice are present (no other per-adventure state),
+        the Reset button should still be enabled so the user can clear
+        them via the same button."""
+        cid = _seed_character(client, name="HasADPanel")
+        resp = client.get(f"/characters/{cid}")
+        start = resp.text.find("hasAnythingSpent() {")
+        assert start != -1
+        end = resp.text.find("\n                },", start)
+        has_body = resp.text[start:end]
+        assert "this.actionDice" in has_body
+
+    def test_resetSummary_mentions_action_dice_cleared(self, client):
+        """The summary shown in the confirm modal enumerates what will be
+        cleared. When action dice are present the list includes a line
+        about them so the user isn't surprised."""
+        cid = _seed_character(client, name="SummaryAD")
+        resp = client.get(f"/characters/{cid}")
+        body = self._reset_summary_body(resp.text)
+        assert "actionDice" in body
+
+
+class TestAthleticsAttackNoVoidSubmenu:
+    """The Athletics (Attack) row must not offer a void-spend flyout: void
+    for attack rolls is chosen inside the attack modal, next to the
+    probability chart, so the player can see the odds before committing.
+    Parry rolls have no modal, so their flyout stays."""
+
+    def test_no_void_submenu_on_athletics_attack(self, client):
         cid = _seed_character(
-            client, name="AthAttackVoid", school="togashi_ise_zumi",
+            client, name="AthAtkNoSub", school="togashi_ise_zumi",
             school_ring_choice="Void",
             knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
             skills={"athletics": 2},
         )
         resp = client.get(f"/characters/{cid}")
         assert resp.status_code == 200
-        # The submenu lives inside a data-athletics-void-submenu="attack"
-        # block mirroring the existing =parry block.
-        assert 'data-athletics-void-submenu="attack"' in resp.text
-        # Both the row gate and the flyout click handler reference the
-        # athletics:attack roll key.
-        assert "openAttackModal('athletics:attack', opt.count)" in resp.text
-
-    def test_open_attack_modal_accepts_preselected_void(self, client):
-        """The Alpine method must accept an optional preselect argument so
-        the submenu can hand off a chosen void count to the modal."""
-        cid = _seed_character(client, name="Akodo")
-        resp = client.get(f"/characters/{cid}")
-        # The signature must include an argument; the body assigns it to
-        # this.atkVoidSelected on open.
-        assert "openAttackModal(key, preselectedVoid" in resp.text
+        # The athletics picker still exists for this character
+        assert 'data-athletics-combat="attack"' in resp.text
+        # ...but it must NOT have a void submenu or preselect-void call.
+        assert 'data-athletics-void-submenu="attack"' not in resp.text
+        assert "openAttackModal('athletics:attack', opt.count)" not in resp.text
 
 
 class TestTogashiRerollGate:
@@ -2272,7 +2312,9 @@ class TestTogashiRerollGate:
     can never be contested. Damage rolls (e.g. Dragon Tattoo) are never
     contested, so the button's x-show condition gates on the formula's
     is_damage_roll flag - not just a single hard-coded roll key - so any
-    future damage roll surfacing in the regular modal is also excluded."""
+    future damage roll surfacing in the regular modal is also excluded.
+    Parry rolls are likewise uncontested (parry raises the attacker's TN
+    rather than being rolled against an opponent) and must be excluded."""
 
     def test_reroll_condition_excludes_damage_rolls(self, client):
         cid = _seed_character(
@@ -2286,6 +2328,20 @@ class TestTogashiRerollGate:
         # damage-roll flag on the formula. Without this, Dragon Tattoo
         # (a damage roll) would offer the "reroll if contested" button.
         assert "!formula?.is_damage_roll" in resp.text
+
+    def test_reroll_condition_excludes_parry_rolls(self, client):
+        """Both the regular parry and athletics:parry keys must be listed
+        in the gate so Togashi's 4th Dan reroll button never appears on a
+        parry result."""
+        cid = _seed_character(
+            client, name="Togashi 4D Parry", school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            knacks={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert "currentRollKey !== 'parry'" in resp.text
+        assert "currentRollKey !== 'athletics:parry'" in resp.text
 
     def test_dragon_tattoo_formula_flagged_as_damage_roll(self, client):
         """Prove the flag is actually set on the Dragon Tattoo formula in

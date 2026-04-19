@@ -368,7 +368,6 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [ ] 3rd Dan athletics raise spendable on athletics:attack (attack modal HIT block adds +5 to atkRollTotal and decrements pool) -> `test_school_abilities.py::test_togashi_athletics_raise_on_athletics_attack_hit`
 - [ ] 3rd Dan athletics raise undo from attack modal restores atkRollTotal and pool -> `test_school_abilities.py::test_togashi_athletics_raise_atk_undo_restores_total_and_pool`
 - [ ] 3rd Dan athletics raise button absent on regular (non-athletics) attack even for togashi 3D -> `test_school_abilities.py::test_togashi_athletics_raise_button_absent_on_regular_attack`
-- [ ] Athletics (Attack) row exposes a void-spend flyout; clicking an option opens the attack modal with preselected void -> `test_rolls.py::test_athletics_picker_attack_has_void_submenu`
 - [ ] Athletics picker has 5th row "Athletics (Predeclared parry)" that rolls athletics:parry with +5 flat -> `test_rolls.py::test_athletics_picker_has_predeclared_parry_row`
 - [x] 4th Dan reroll button on contested rolls -> `test_school_abilities.py::test_togashi_4th_dan_reroll_behavioral`
 - [x] 4th Dan reroll limited to once per roll (button hidden after use, reappears on next roll; post-reroll banner notes original is discarded) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_only_once_per_roll`
@@ -376,6 +375,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 4th Dan reroll hidden on Etiquette (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_etiquette`
 - [x] 4th Dan reroll hidden on Heraldry (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_heraldry`
 - [ ] 4th Dan reroll hidden on Dragon Tattoo (damage rolls are never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_dragon_tattoo`
+- [ ] 4th Dan reroll hidden on parry (parry is never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_parry`
+- [ ] 4th Dan reroll hidden on athletics:parry -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_athletics_parry`
 - [x] Dragon Tattoo does not offer void spending (damage roll, not skill roll) -> `test_school_abilities.py::test_togashi_dragon_tattoo_no_void_spend`
 - [x] Conviction spend button appears on skill roll results -> `test_school_abilities.py::test_conviction_button_appears_on_skill_roll`
 - [x] Conviction spend button does NOT appear on initiative rolls -> `test_school_abilities.py::test_conviction_not_on_initiative`
@@ -776,6 +777,8 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Per-day reset button restores just that pool → `test_tracking_advanced.py::test_per_day_reset_button_restores_pool`
 - [x] Per-day reset leaves other counters alone → `test_tracking_advanced.py::test_per_day_reset_leaves_other_counters_alone`
 - [x] Per-adventure reset still clears per-day pools → `test_tracking_advanced.py::test_per_adventure_reset_also_clears_per_day_pools`
+- [ ] Per-adventure reset also clears leftover action dice; summary mentions them → `test_tracking_advanced.py::test_per_adventure_reset_also_clears_action_dice`
+- [ ] Per-adventure Reset button stays enabled when the only stale state is action dice → `test_tracking_advanced.py::test_reset_button_enabled_with_only_action_dice`
 - [x] Non-per-day counter has no per-ability reset button → `test_tracking_advanced.py::test_non_per_day_counter_has_no_reset_button`
 - [x] Tracking buttons hidden for non-editors → `test_permissions.py::test_tracking_buttons_hidden_for_nonadmin`
 

@@ -3277,6 +3277,29 @@ def test_togashi_4th_dan_reroll_hidden_on_dragon_tattoo(page, live_server_url):
     assert not reroll_btn.is_visible(), "Reroll must not appear on Dragon Tattoo (damage roll)"
 
 
+def test_togashi_4th_dan_reroll_hidden_on_parry(page, live_server_url):
+    """Togashi 4th Dan: reroll button not shown on parry rolls - parry is
+    never contested (it raises the attacker's TN instead of being rolled
+    against an opponent)."""
+    _create_char(page, live_server_url, "Togashi4Parry", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4})
+    _roll_via_menu_or_direct(page, "parry")
+    reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
+    assert not reroll_btn.is_visible(), "Reroll must not appear on parry rolls"
+
+
+def test_togashi_4th_dan_reroll_hidden_on_athletics_parry(page, live_server_url):
+    """Same exclusion applies to the athletics:parry roll key."""
+    _create_char(page, live_server_url, "Togashi4AthParry", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
+                 skill_overrides={"athletics": 2})
+    _roll_via_menu_or_direct(page, "athletics:parry")
+    reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
+    assert not reroll_btn.is_visible(), (
+        "Reroll must not appear on athletics:parry rolls"
+    )
+
+
 def _open_attack_modal(page, roll_key):
     """Open the attack modal for a roll key without rolling.
 
