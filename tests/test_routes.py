@@ -758,6 +758,60 @@ class TestAutoSave:
         assert char.name == "Original"  # unchanged
 
 
+    def test_autosave_rejects_initiative_for_mantis_2nd_dan(self, client):
+        """Server-side validation: mantis_2nd_dan_free_raise cannot be
+        'initiative' (rules exclude it - no meaning on init rolls)."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+        )
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"technique_choices": {"mantis_2nd_dan_free_raise": "initiative"}},
+        )
+        assert resp.status_code == 400
+        assert "mantis_2nd_dan_free_raise" in resp.json()["error"]
+
+    def test_autosave_rejects_worldliness_for_mantis_2nd_dan(self, client):
+        """Server-side validation: non-rollable knacks (worldliness etc.)
+        cannot be the Mantis 2nd Dan pick."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+        )
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"technique_choices": {"mantis_2nd_dan_free_raise": "worldliness"}},
+        )
+        assert resp.status_code == 400
+
+    def test_autosave_accepts_valid_mantis_2nd_dan_choice(self, client):
+        """Server-side validation accepts any eligible choice (e.g. damage)."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+        )
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"technique_choices": {"mantis_2nd_dan_free_raise": "damage"}},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.technique_choices == {"mantis_2nd_dan_free_raise": "damage"}
+
+    def test_autosave_allows_clearing_mantis_2nd_dan_choice(self, client):
+        """Empty/None value clears the choice - validation does not reject it."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+            technique_choices={"mantis_2nd_dan_free_raise": "attack"},
+        )
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"technique_choices": {"mantis_2nd_dan_free_raise": ""}},
+        )
+        assert resp.status_code == 200
+
     def test_autosave_owner_reassignment_by_admin(self, client):
         """Admin can reassign character ownership via autosave."""
         from app.models import User

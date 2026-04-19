@@ -336,6 +336,21 @@ async def autosave_character(
     if "advantage_details" in body:
         character.advantage_details = body["advantage_details"]
     if "technique_choices" in body:
+        # Validate the Mantis 2nd Dan free-raise choice so a crafted POST
+        # cannot persist initiative or a non-rollable knack. An empty/None
+        # value clears the choice and is allowed.
+        choices = body["technique_choices"] or {}
+        if isinstance(choices, dict) and "mantis_2nd_dan_free_raise" in choices:
+            from app.services.dice import mantis_2nd_dan_eligible_choices
+            val = choices.get("mantis_2nd_dan_free_raise")
+            if val not in (None, ""):
+                school_id = body.get("school") or character.school
+                eligible = mantis_2nd_dan_eligible_choices(school_id)
+                if val not in eligible:
+                    return JSONResponse(
+                        {"error": f"Invalid mantis_2nd_dan_free_raise choice: {val!r}"},
+                        status_code=400,
+                    )
         character.technique_choices = body["technique_choices"]
     if "honor" in body:
         character.honor = body["honor"]

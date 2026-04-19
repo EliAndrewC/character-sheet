@@ -2232,6 +2232,11 @@ SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
         "second_dan_free_raise": "wound_check",
         # 3rd Dan: non-standard (spend void to reduce light wounds)
     },
+    "mantis_wave_treader": {
+        "first_dan_extra_die": ["initiative", "athletics", "wound_check"],
+        "second_dan_free_raise": None,  # flexible, player picks at Dan 2 (Phase 3)
+        # 3rd Dan: non-standard (spend action die for per-round attack/damage or wc/TN bonus)
+    },
 
     # =================== COUNTERATTACK SCHOOLS ====================
     "daidoji_yojimbo": {
