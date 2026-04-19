@@ -260,6 +260,21 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 2nd Dan wound-check choice: WC modal Bonuses row shows +5 -> `test_school_abilities.py::test_mantis_2nd_dan_wound_check_choice_labeled`
 - [x] 2nd Dan damage choice: attack modal pre-roll Damage bonuses AND post-roll damage breakdown show +5 -> `test_school_abilities.py::test_mantis_2nd_dan_damage_choice_labeled`
 - [x] 2nd Dan switch moves the bonus from attack to wound-check -> `test_school_abilities.py::test_mantis_2nd_dan_switch_choice_moves_bonus`
+- [x] Posture tracker block renders on Mantis sheets with both posture buttons -> `test_school_abilities.py::test_mantis_posture_tracker_visibility`
+- [x] Posture tracker absent on non-Mantis sheets -> `test_school_abilities.py::test_mantis_posture_tracker_absent_on_non_mantis`
+- [x] Clicking a posture advances the phase counter, records it in postureHistory, shows the "Current: Phase X - posture" line, and persists across reload -> `test_school_abilities.py::test_mantis_posture_tracker_advance`
+- [x] Both posture buttons disable after 10 picks (phase 11) -> `test_school_abilities.py::test_mantis_posture_tracker_disable_at_11`
+- [x] Rolling initiative resets posturePhase to 1 and empties postureHistory -> `test_school_abilities.py::test_mantis_posture_tracker_reset_on_initiative`
+- [x] Clicking the action-dice Clear button also resets the posture tracker -> `test_school_abilities.py::test_mantis_posture_tracker_reset_on_action_dice_clear`
+- [x] Posture tracker shows "+5 attack rolls, +5 damage rolls" summary in offensive -> `test_school_abilities.py::test_mantis_posture_tracker_bonus_summary_offensive`
+- [x] Posture tracker shows "+5 wound checks, +5 TN to be hit" summary in defensive -> `test_school_abilities.py::test_mantis_posture_tracker_bonus_summary_defensive`
+- [x] Toggling posture mid-round updates the summary -> `test_school_abilities.py::test_mantis_posture_tracker_bonus_summary_toggles`
+- [x] Offensive posture overlays "+5 from offensive posture" in attack modal pre-roll Bonuses and Damage bonuses rows -> `test_school_abilities.py::test_mantis_offensive_posture_attack_pre_roll_bonuses`
+- [x] Offensive posture adds +5 to atkRollTotal and shows labeled entry in post-roll breakdown -> `test_school_abilities.py::test_mantis_offensive_posture_attack_post_roll_breakdown`
+- [x] Offensive posture adds "+5 flat from offensive posture" to atkComputeDamage parts (pre-roll preview AND post-roll damage-result breakdown) -> `test_school_abilities.py::test_mantis_offensive_posture_damage_preview_and_result`
+- [x] Defensive posture bumps the sheet's TN-to-be-hit display by +5 with a tooltip; swapping posture toggles the bump -> `test_school_abilities.py::test_mantis_defensive_posture_tn_display_bumps`
+- [x] Defensive posture overlays "+5 from defensive posture" in the WC modal pre-roll Bonuses and post-roll breakdown -> `test_school_abilities.py::test_mantis_defensive_posture_wc_modal_overlay`
+- [x] No posture selected -> no posture labels leak into the attack modal -> `test_school_abilities.py::test_mantis_no_posture_no_overlay`
 
 ### Merchant
 

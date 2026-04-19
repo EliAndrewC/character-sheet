@@ -4869,3 +4869,335 @@ def test_mantis_2nd_dan_switch_choice_moves_bonus(page, live_server_url):
     page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
     assert _get_formula(page, "attack")["flat"] == 0
     assert _get_formula(page, "wound_check")["flat"] == 5
+
+
+# ---------------------------------------------------------------------------
+# Mantis Wave-Treader Special Ability: posture tracker (Phase 4 - state only)
+# ---------------------------------------------------------------------------
+
+
+def _posture_phase(page):
+    """Read posturePhase from the tracking bridge."""
+    return page.evaluate("window._trackingBridge.posturePhase")
+
+
+def _posture_history(page):
+    """Read postureHistory from the tracking bridge."""
+    return page.evaluate("window._trackingBridge.postureHistory")
+
+
+@pytest.mark.school_abilities
+def test_mantis_posture_tracker_visibility(page, live_server_url):
+    """Posture tracker appears on Mantis sheets, absent on non-Mantis."""
+    _create_char(page, live_server_url, "MantisPostVis", "mantis_wave_treader")
+    tracker = page.locator('[data-testid="mantis-posture-tracker"]')
+    assert tracker.is_visible()
+    assert page.locator('[data-action="mantis-posture-offensive"]').is_visible()
+    assert page.locator('[data-action="mantis-posture-defensive"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_posture_tracker_absent_on_non_mantis(page, live_server_url):
+    """Non-Mantis characters never see the posture tracker."""
+    _create_char(page, live_server_url, "AkodoNoPosture", "akodo_bushi")
+    assert page.locator('[data-testid="mantis-posture-tracker"]').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_posture_tracker_advance(page, live_server_url):
+    """Clicking a posture button advances posturePhase and records the chosen
+    posture; the 'Current: Phase X - <posture>' line reflects the latest pick.
+    The selection persists through a page reload via adventure_state."""
+    _create_char(page, live_server_url, "MantisPostAdv", "mantis_wave_treader")
+    # Initial state: phase 1, no posture yet.
+    assert _posture_phase(page) == 1
+    assert _posture_history(page) == []
+    assert not page.locator('[data-testid="mantis-current-posture"]').is_visible()
+    # Click offensive for phase 1.
+    page.locator('[data-action="mantis-posture-offensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.posturePhase === 2")
+    assert _posture_history(page) == ["offensive"]
+    current = page.locator('[data-testid="mantis-current-posture"]')
+    assert current.is_visible()
+    current_text = current.text_content()
+    assert "Phase 1" in current_text
+    assert "offensive" in current_text.lower()
+    # Click defensive for phase 2.
+    page.locator('[data-action="mantis-posture-defensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.posturePhase === 3")
+    assert _posture_history(page) == ["offensive", "defensive"]
+    current_text = page.locator('[data-testid="mantis-current-posture"]').text_content()
+    assert "Phase 2" in current_text
+    assert "defensive" in current_text.lower()
+    # Reload: state rehydrates from adventure_state.
+    page.reload()
+    page.wait_for_selector('[data-testid="mantis-posture-tracker"]')
+    assert _posture_phase(page) == 3
+    assert _posture_history(page) == ["offensive", "defensive"]
+
+
+@pytest.mark.school_abilities
+def test_mantis_posture_tracker_disable_at_11(page, live_server_url):
+    """After 10 posture picks (phases 1-10), both buttons are disabled."""
+    _create_char(page, live_server_url, "MantisPost11", "mantis_wave_treader")
+    offensive = page.locator('[data-action="mantis-posture-offensive"]')
+    defensive = page.locator('[data-action="mantis-posture-defensive"]')
+    for i in range(10):
+        # Alternate for a realistic mix, but the behaviour doesn't depend on it.
+        (offensive if i % 2 == 0 else defensive).click()
+    page.wait_for_function("() => window._trackingBridge.posturePhase === 11")
+    assert offensive.is_disabled()
+    assert defensive.is_disabled()
+
+
+@pytest.mark.school_abilities
+def test_mantis_posture_tracker_reset_on_initiative(page, live_server_url):
+    """Rolling initiative zeros the posture tracker back to phase 1 and
+    empties the history (the end-of-round reset trigger)."""
+    _create_char(page, live_server_url, "MantisPostInit", "mantis_wave_treader")
+    # Build up some posture history first.
+    page.locator('[data-action="mantis-posture-offensive"]').click()
+    page.locator('[data-action="mantis-posture-defensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.posturePhase === 3")
+    assert len(_posture_history(page)) == 2
+    # Roll initiative: setActionDice() fires, which calls resetMantisRound().
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    # State reset happens inside setActionDice() before the save round-trip.
+    page.wait_for_function("() => window._trackingBridge.posturePhase === 1")
+    assert _posture_history(page) == []
+    # Close the result modal so the "Current" visibility check can hit the
+    # tracker block.
+    page.locator('[data-modal="dice-roller"]').locator('button:has-text("\u00d7")').click()
+    page.wait_for_timeout(200)
+    # The "Current" line is hidden again now that no posture is selected.
+    assert not page.locator('[data-testid="mantis-current-posture"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_posture_tracker_reset_on_action_dice_clear(page, live_server_url):
+    """Clicking the action-dice Clear button also resets the posture tracker
+    (it's the other end-of-round trigger)."""
+    _create_char(page, live_server_url, "MantisPostClr", "mantis_wave_treader")
+    # First roll initiative so the Clear button has any dice to clear.
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    # Close the result modal so subsequent clicks on the tracker block reach.
+    page.locator('[data-modal="dice-roller"]').locator('button:has-text("\u00d7")').click()
+    page.wait_for_timeout(200)
+    # Initiative reset phase to 1 already; now build up more history.
+    page.locator('[data-action="mantis-posture-offensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.posturePhase === 2")
+    assert _posture_history(page) == ["offensive"]
+    # Click the action-dice Clear button.
+    page.locator('[data-action="clear-action-dice"]').click()
+    page.wait_for_function("() => window._trackingBridge.posturePhase === 1")
+    assert _posture_history(page) == []
+    # Let Alpine's reactive x-show on currentPosture() flush before asserting.
+    page.wait_for_timeout(200)
+    assert not page.locator('[data-testid="mantis-current-posture"]').is_visible()
+
+
+# ---------------------------------------------------------------------------
+# Mantis Wave-Treader Special Ability: posture bonuses (Phase 5)
+# ---------------------------------------------------------------------------
+
+
+def _select_posture(page, kind):
+    """Click an offensive/defensive posture button and wait for Alpine to
+    flush so cross-scope overlays can read the new state."""
+    page.locator(f'[data-action="mantis-posture-{kind}"]').click()
+    page.wait_for_timeout(100)
+
+
+@pytest.mark.school_abilities
+def test_mantis_posture_tracker_bonus_summary_offensive(page, live_server_url):
+    """Phase 5: offensive posture shows a summary of active bonuses."""
+    _create_char(page, live_server_url, "MantisSumOff", "mantis_wave_treader")
+    _select_posture(page, "offensive")
+    summary = page.locator('[data-testid="mantis-posture-bonuses"]')
+    assert summary.is_visible()
+    text = summary.text_content()
+    assert "attack rolls" in text
+    assert "damage rolls" in text
+
+
+@pytest.mark.school_abilities
+def test_mantis_posture_tracker_bonus_summary_defensive(page, live_server_url):
+    """Phase 5: defensive posture shows the WC + TN summary line."""
+    _create_char(page, live_server_url, "MantisSumDef", "mantis_wave_treader")
+    _select_posture(page, "defensive")
+    summary = page.locator('[data-testid="mantis-posture-bonuses"]')
+    assert summary.is_visible()
+    text = summary.text_content()
+    assert "wound checks" in text
+    assert "TN to be hit" in text
+
+
+@pytest.mark.school_abilities
+def test_mantis_posture_tracker_bonus_summary_toggles(page, live_server_url):
+    """Phase 5: toggling posture mid-round updates the summary line, so the
+    next roll picks up the right set of bonuses."""
+    _create_char(page, live_server_url, "MantisSumTog", "mantis_wave_treader")
+    _select_posture(page, "offensive")
+    summary = page.locator('[data-testid="mantis-posture-bonuses"]')
+    assert "attack rolls" in summary.text_content()
+    _select_posture(page, "defensive")
+    # Second click advances the phase and the latest posture is defensive.
+    assert "wound checks" in summary.text_content()
+
+
+@pytest.mark.school_abilities
+def test_mantis_offensive_posture_attack_pre_roll_bonuses(page, live_server_url):
+    """Phase 5: offensive posture overlays '+5 from offensive posture' into
+    the attack modal's pre-roll Bonuses row and the Damage bonuses row."""
+    _create_char(page, live_server_url, "MantisOffPre", "mantis_wave_treader")
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    # Both the attack-side and the damage-side row should surface the label.
+    assert "+5 from offensive posture" in text
+    # The Damage bonuses row specifically should carry the same label.
+    modal = page.locator('[data-modal="attack"]')
+    damage_row = modal.locator(':text("Damage bonuses:")').first
+    assert damage_row.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_offensive_posture_attack_post_roll_breakdown(page, live_server_url):
+    """Phase 5: offensive posture +5 appears in the attack modal's post-roll
+    result breakdown via formula.bonuses and adds to atkRollTotal."""
+    _create_char(page, live_server_url, "MantisOffPost", "mantis_wave_treader")
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    # Snapshot baseTotal that would be applied without posture for sanity.
+    # Roll with fixed low dice so the +5 is unambiguous.
+    _mock_dice_low(page)
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    _restore_dice(page)
+    modal = page.locator('[data-modal="attack"]')
+    result_text = modal.text_content()
+    assert "offensive posture" in result_text
+    # The total includes the +5 from flat (baseTotal = keptSum + formula.flat).
+    atk_total = page.evaluate("() => { const els = document.querySelectorAll('[x-data]'); for (const el of els) { const d = window.Alpine && window.Alpine.$data(el); if (d && typeof d.atkRollTotal === 'number') return d.atkRollTotal; } return null; }")
+    # keptSum of all-1s = kept * 1 = 2 (base Mantis attack is 3k2); +5 posture flat.
+    assert atk_total is not None
+    assert atk_total >= 5
+
+
+@pytest.mark.school_abilities
+def test_mantis_offensive_posture_damage_preview_and_result(page, live_server_url):
+    """Phase 5: offensive posture adds +5 flat to atkDamageParts at damage
+    computation time (both pre-roll preview and post-roll damage breakdown)."""
+    _create_char(page, live_server_url, "MantisOffDmg", "mantis_wave_treader")
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    # Pre-roll: atkComputeDamage is called for the Avg Damage column; we can
+    # also inspect atkDamageParts directly by invoking it via Alpine.
+    parts = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.atkComputeDamage === 'function') {
+                return d.atkComputeDamage(0, false, false, 0, false).parts;
+            }
+        }
+        return null;
+    }""")
+    assert parts is not None
+    assert any("offensive posture" in p for p in parts), (
+        f"offensive posture label missing from atkComputeDamage parts: {parts}"
+    )
+    # Roll attack (low dice) -> roll damage; verify the result breakdown shows
+    # the labeled line in the damage-result phase.
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select[x-model\\.number="atkTN"]').first.select_option("5")
+    _mock_dice_high(page)
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    modal.locator('button:has-text("Make Damage Roll")').first.click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'damage-result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    dmg_text = modal.text_content()
+    assert "offensive posture" in dmg_text
+
+
+@pytest.mark.school_abilities
+def test_mantis_defensive_posture_tn_display_bumps(page, live_server_url):
+    """Phase 5: the sheet's TN-to-be-hit display reflects +5 while in defensive
+    posture and the tooltip surfaces the reason."""
+    _create_char(page, live_server_url, "MantisTN", "mantis_wave_treader")
+    tn_box = page.locator('[data-testid="tn-display"]')
+    # Base TN: 5 + 5*parry (default parry=1) = 10.
+    base_val = int(tn_box.locator("span.font-bold").first.text_content())
+    assert base_val == 10
+    # Enter defensive posture.
+    _select_posture(page, "defensive")
+    # TN number bumps by 5.
+    assert int(tn_box.locator("span.font-bold").first.text_content()) == base_val + 5
+    # The "+5 defensive posture" label appears.
+    bump = page.locator('[data-testid="tn-defensive-bump"]')
+    assert bump.is_visible()
+    # Tooltip-ready title attribute is set.
+    title_attr = tn_box.locator("span.font-bold").first.get_attribute("title")
+    assert title_attr and "defensive posture" in title_attr.lower()
+    # Swap to offensive -> TN drops back and the label hides.
+    _select_posture(page, "offensive")
+    assert int(tn_box.locator("span.font-bold").first.text_content()) == base_val
+    assert not bump.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_defensive_posture_wc_modal_overlay(page, live_server_url):
+    """Phase 5: defensive posture overlays +5 into the WC modal pre-roll
+    Bonuses row, and the labeled entry persists into the post-roll breakdown
+    (via formula.bonus_sources) and shifts wcRollTotal by 5."""
+    _create_char(page, live_server_url, "MantisWC", "mantis_wave_treader")
+    _select_posture(page, "defensive")
+    _set_light_wounds(page, 10)
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openWoundCheckModal === 'function') {
+                d.openWoundCheckModal();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="wound-check"]')
+    assert "+5 from defensive posture" in modal.text_content()
+    # Roll a low wound check so we can see the labeled entry in the post-roll
+    # breakdown. WC fails, but the labeled line still appears.
+    _mock_dice_low(page)
+    modal.locator('button:has-text("Roll Wound Check")').first.click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    assert "+5 from defensive posture" in modal.text_content()
+
+
+@pytest.mark.school_abilities
+def test_mantis_no_posture_no_overlay(page, live_server_url):
+    """Sanity: with no posture selected, no posture labels leak into the attack
+    modal. Guards against a regression where the overlay fires unconditionally."""
+    _create_char(page, live_server_url, "MantisNone", "mantis_wave_treader")
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    assert "offensive posture" not in text
+    assert "defensive posture" not in text

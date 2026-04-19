@@ -478,6 +478,9 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "kuni_reflect_damage": character.school == "kuni_witch_hunter" and dan >= 5,
         # Hida 5th Dan: bank counterattack excess for wound check bonus
         "hida_counterattack_wc_bonus": character.school == "hida_bushi" and dan >= 5,
+        # Mantis Wave-Treader Special: per-phase posture tracker (buttons + current-posture line).
+        # Mechanical effects (attack/damage/wound-check/TN bonuses) land in later phases.
+        "mantis_posture_tracking": character.school == "mantis_wave_treader",
     }
 
     # Compute wound check probability slice for client-side display.
