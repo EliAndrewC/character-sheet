@@ -84,7 +84,12 @@ def _art_url_for_key(char, key_attr: str) -> str | None:
     url = public_url(key, bucket=bucket, region=region)
     updated = getattr(char, "art_updated_at", None)
     if updated is not None:
-        url = f"{url}?v={int(updated.timestamp())}"
+        # ``public_url`` now returns a presigned URL with its own query
+        # string, so the cache-bust has to be appended with ``&`` rather
+        # than ``?``. In stub mode (disk-backed test server) there is no
+        # existing query string, so fall back to ``?``.
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}v={int(updated.timestamp())}"
     return url
 
 

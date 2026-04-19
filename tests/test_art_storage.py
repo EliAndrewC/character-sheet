@@ -100,13 +100,16 @@ class TestUploadArt:
         assert full_kwargs["Bucket"] == "bucket"
         assert full_kwargs["Key"] == full_key
         assert full_kwargs["Body"] == b"FULL_BYTES"
-        assert full_kwargs["ACL"] == "public-read"
         assert full_kwargs["ContentType"] == "image/webp"
+        # No ACL - AWS disabled bucket ACLs by default after 2023 and
+        # we use presigned URLs for public access instead (see
+        # ``public_url``). Explicitly assert the ACL key is NOT passed.
+        assert "ACL" not in full_kwargs
         # Second call: headshot
         head_kwargs = calls[1].kwargs
         assert head_kwargs["Key"] == head_key
         assert head_kwargs["Body"] == b"HEAD_BYTES"
-        assert head_kwargs["ACL"] == "public-read"
+        assert "ACL" not in head_kwargs
 
     @patch("app.services.art_storage._get_s3_client")
     def test_returns_keys_that_match_make_art_keys(self, mock_get_client):
@@ -174,18 +177,30 @@ class TestDeleteArt:
 
 
 class TestPublicUrl:
-    def test_us_east_1_uses_region_free_host(self):
-        url = art_storage.public_url("character_art/1/full-x.webp",
-                                      bucket="my-bucket", region="us-east-1")
-        assert url == "https://my-bucket.s3.amazonaws.com/character_art/1/full-x.webp"
-
-    def test_other_region_includes_region(self):
-        url = art_storage.public_url("character_art/1/full-x.webp",
-                                      bucket="my-bucket", region="eu-west-1")
-        assert url == (
-            "https://my-bucket.s3.eu-west-1.amazonaws.com/"
-            "character_art/1/full-x.webp"
+    @patch("app.services.art_storage._get_s3_client")
+    def test_delegates_to_boto3_presigned_url(self, mock_get_client):
+        client = MagicMock()
+        client.generate_presigned_url.return_value = (
+            "https://my-bucket.s3.amazonaws.com/character_art/1/full-x.webp"
+            "?X-Amz-Signature=abc"
         )
+        mock_get_client.return_value = client
+        url = art_storage.public_url(
+            "character_art/1/full-x.webp",
+            bucket="my-bucket", region="us-east-1",
+        )
+        assert "X-Amz-Signature" in url
+        client.generate_presigned_url.assert_called_once_with(
+            "get_object",
+            Params={"Bucket": "my-bucket", "Key": "character_art/1/full-x.webp"},
+            ExpiresIn=art_storage.PRESIGN_TTL_SECONDS,
+        )
+
+    @patch("app.services.art_storage._get_s3_client")
+    def test_presign_ttl_is_7_days(self, mock_get_client):
+        mock_get_client.return_value = MagicMock()
+        art_storage.public_url("k", bucket="b", region="us-east-1")
+        assert art_storage.PRESIGN_TTL_SECONDS == 7 * 24 * 3600
 
 
 # ---------------------------------------------------------------------------

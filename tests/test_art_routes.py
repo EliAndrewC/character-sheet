@@ -91,13 +91,32 @@ def _s3_env(monkeypatch):
     monkeypatch.setenv("S3_BACKUP_REGION", "us-east-1")
 
 
-@pytest.fixture()
-def s3_client():
-    """Patch the S3 client used by ``art_storage`` and yield the mock."""
-    with patch("app.services.art_storage._get_s3_client") as get_client:
+@pytest.fixture(autouse=True)
+def _mock_presigner():
+    """``public_url`` now asks boto3 to sign a URL; without AWS creds
+    that raises ``NoCredentialsError``. Replace with a stub that returns
+    a deterministic URL embedding the key so template assertions can
+    substring-match."""
+    with patch("app.services.art_storage._get_s3_client") as factory:
         client = MagicMock()
-        get_client.return_value = client
+
+        def _presign(_op, *, Params, ExpiresIn):
+            return (
+                f"https://{Params['Bucket']}.s3.amazonaws.com/"
+                f"{Params['Key']}?X-Amz-Expires={ExpiresIn}"
+            )
+
+        client.generate_presigned_url.side_effect = _presign
+        factory.return_value = client
         yield client
+
+
+@pytest.fixture()
+def s3_client(_mock_presigner):
+    """The autouse ``_mock_presigner`` fixture already patched
+    ``_get_s3_client``; return that same MagicMock so tests can assert
+    on ``.put_object`` / ``.delete_object`` calls."""
+    return _mock_presigner
 
 
 # ---------------------------------------------------------------------------
@@ -119,8 +138,8 @@ class TestLandingPage:
         resp = client.get(f"/characters/{char.id}/art")
         assert resp.status_code == 200
         assert b"current-art-panel" in resp.content
-        # Public URL rendered into the page
-        assert b"test-bucket.s3.amazonaws.com" in resp.content
+        # Presigned URL for the headshot is rendered into the page
+        assert b"character_art/1/head-x.webp" in resp.content
 
     def test_hides_current_art_panel_when_bucket_unset(self, client, monkeypatch):
         monkeypatch.delenv("S3_BACKUP_BUCKET", raising=False)
@@ -266,7 +285,8 @@ class TestUploadEndpoint:
         )
         assert resp.status_code == 422
         assert b"current-art-panel" in resp.content
-        assert b"test-bucket.s3.amazonaws.com" in resp.content
+        # Presigned URL for the existing headshot is still rendered
+        assert b"character_art/3/head-old.webp" in resp.content
 
 
 # ---------------------------------------------------------------------------
@@ -413,10 +433,12 @@ class TestCropSave:
         )
         assert resp.status_code == 303
         assert resp.headers["location"] == f"/characters/{char.id}/edit?art_saved=1"
-        # S3 saw two put_objects (full + headshot)
+        # S3 saw two put_objects (full + headshot). No ACL - bucket
+        # ACLs are disabled by default in post-2023 AWS; public access
+        # is granted via presigned URLs instead.
         assert s3_client.put_object.call_count == 2
         calls = s3_client.put_object.call_args_list
-        assert all(c.kwargs["ACL"] == "public-read" for c in calls)
+        assert all("ACL" not in c.kwargs for c in calls)
         # Character row updated
         refreshed = _refresh(client, char.id)
         assert refreshed.art_s3_key is not None
