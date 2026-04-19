@@ -6425,9 +6425,16 @@ def test_mantis_wc_probability_all_three_stack(page, live_server_url):
     stacked = _wc_prob_row(page)
     # Stacked flat bonus: +5 (posture) + +2 (5th Dan) + +1 (3rd Dan) = +8.
     assert stacked["passChance"] > baseline["passChance"]
-    # The modal's Bonuses row should list all three labeled entries.
-    modal_text = page.locator('[data-modal="wound-check"]').text_content()
-    assert "+5 from defensive posture" in modal_text
-    assert "+2 from Mantis 5th Dan (defensive posture count)" in modal_text
-    assert "+1 from Mantis 3rd Dan (defensive)" in modal_text
+    # The modal's Bonuses row should list all three labeled entries. Wait for
+    # Alpine to flush _mantisLiveWcLabels into the DOM before snapshotting -
+    # the reactive x-text runs on a microtask after the modal opens, so a
+    # snapshot text_content() can race the re-render under load.
+    page.wait_for_function("""() => {
+        const modal = document.querySelector('[data-modal="wound-check"]');
+        if (!modal) return false;
+        const txt = modal.textContent || '';
+        return txt.includes('+5 from defensive posture')
+            && txt.includes('+2 from Mantis 5th Dan (defensive posture count)')
+            && txt.includes('+1 from Mantis 3rd Dan (defensive)');
+    }""", timeout=3000)
 
