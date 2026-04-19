@@ -53,6 +53,57 @@ class TestRingXP:
         assert calculate_ring_xp({}, school_ring="Water") == 0
 
 
+class TestMantisFourthDanRingRaise:
+    """Mantis Wave-Treader picks its school ring from the "Any" option.
+    The 4th Dan technique raises the chosen ring's floor to 4 (free +1) and
+    discounts every subsequent raise of that ring by 5 XP. These tests pin
+    the behaviour across all five possible school-ring choices.
+    """
+
+    @pytest.mark.parametrize("school_ring", ["Air", "Fire", "Earth", "Water", "Void"])
+    def test_dan_4_auto_raises_school_ring_to_4_for_free(self, school_ring):
+        """The auto-raise at Dan 4 is free, so sitting at rank 4 costs 0."""
+        rings = {"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2}
+        # School ring starts at 3 (free), auto-raises to 4 at Dan 4 (free).
+        rings[school_ring] = 4
+        assert calculate_ring_xp(rings, school_ring=school_ring, dan=4) == 0
+
+    @pytest.mark.parametrize("school_ring", ["Air", "Fire", "Earth", "Water", "Void"])
+    def test_dan_4_discounts_school_ring_above_4(self, school_ring):
+        """Raising the school ring from 4 -> 5 at Dan 4 costs 5 less (20 -> 15)."""
+        rings = {"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2}
+        rings[school_ring] = 5
+        # Free 3->4, then 4->5 normally 25 - 5 discount = 20.
+        assert calculate_ring_xp(rings, school_ring=school_ring, dan=4) == 20
+
+    @pytest.mark.parametrize("school_ring", ["Air", "Fire", "Earth", "Water", "Void"])
+    def test_dan_4_school_ring_to_5_from_6(self, school_ring):
+        """Going up to 6 (4th Dan's expanded cap) stacks the per-raise discount."""
+        rings = {"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2}
+        rings[school_ring] = 6
+        # Free 3->4, then 4->5 (25-5=20), then 5->6 (30-5=25) = 45 total.
+        assert calculate_ring_xp(rings, school_ring=school_ring, dan=4) == 45
+
+    @pytest.mark.parametrize("school_ring", ["Air", "Fire", "Earth", "Water", "Void"])
+    def test_dan_3_does_not_discount(self, school_ring):
+        """At Dan 3 the school ring still starts at 3 but there's no discount."""
+        rings = {"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2}
+        rings[school_ring] = 4
+        # Dan 3 -> 3->4 costs 20 (no discount).
+        assert calculate_ring_xp(rings, school_ring=school_ring, dan=3) == 20
+
+    @pytest.mark.parametrize("school_ring", ["Air", "Fire", "Earth", "Water", "Void"])
+    def test_dan_4_does_not_discount_non_school_rings(self, school_ring):
+        """The Dan 4 discount applies ONLY to the school ring - any other ring
+        costs the normal 5 * (new_rank) per raise."""
+        # Raise a non-school ring from 2 -> 3.
+        non_school = next(r for r in ["Air", "Fire", "Earth", "Water", "Void"] if r != school_ring)
+        rings = {"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2}
+        rings[school_ring] = 4  # school ring auto-raised (free).
+        rings[non_school] = 3   # non-school ring 2->3 = 15 XP.
+        assert calculate_ring_xp(rings, school_ring=school_ring, dan=4) == 15
+
+
 class TestSkillXP:
     def test_no_skills(self):
         assert calculate_skill_xp({}) == 0

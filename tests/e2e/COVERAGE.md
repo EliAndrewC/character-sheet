@@ -310,6 +310,13 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Spending 3rd Dan defensive button raises WC probability-table passChance further -> `test_school_abilities.py::test_mantis_wc_probability_shifts_with_3rd_dan_defensive`
 - [x] 5th Dan defensive-posture-count accumulator shifts WC probability table -> `test_school_abilities.py::test_mantis_wc_probability_shifts_with_5th_dan_defensive_count`
 - [x] Posture +5, 5th Dan accum, 3rd Dan accum all stack in the probability table; Bonuses row lists all three labeled entries -> `test_school_abilities.py::test_mantis_wc_probability_all_three_stack`
+- [x] 4th Dan: rolling initiative appends a deterministic value-1 die flagged mantis_4th_dan + athletics_only -> `test_school_abilities.py::test_mantis_4th_dan_athletics_die_appended_after_initiative`
+- [x] 4th Dan die renders with data-die-mantis-4th-dan + movement/athletics/3rd-Dan restriction tooltip -> `test_school_abilities.py::test_mantis_4th_dan_die_renders_with_testable_markup`
+- [x] 4th Dan die is spendable via spendActionDie -> `test_school_abilities.py::test_mantis_4th_dan_die_spendable`
+- [x] 4th Dan die regenerated on next initiative roll -> `test_school_abilities.py::test_mantis_4th_dan_die_regenerated_on_next_initiative`
+- [x] 4th Dan die cleared by Clear bonuses button -> `test_school_abilities.py::test_mantis_4th_dan_die_cleared_by_clear_bonuses`
+- [x] Dan 3 Mantis does not get the 4th Dan bonus die -> `test_school_abilities.py::test_mantis_dan_3_no_4th_dan_die`
+- [x] Non-Mantis Dan 4 does not get the 4th Dan bonus die -> `test_school_abilities.py::test_non_mantis_dan_4_no_4th_dan_die`
 
 ### Merchant
 

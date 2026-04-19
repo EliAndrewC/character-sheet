@@ -106,12 +106,16 @@
 
 > Raise the current and maximum rank of your School Ring by 1. Raising that Ring now costs 5 fewer XP. Begin each combat round with an athletics action die set to 1, which may only be spent on movement, athletics actions, or your 3rd Dan technique.
 
-**Status:** Not yet implemented.
-- **Ring raise** - The Dan 4 raise applies to the player's chosen school ring (picked from the "Any" option at character creation - per Phase 1, Mantis defaults to Void). The player may not redirect this raise to a different ring. This is the standard behaviour enforced by `enforceFourthDanRing()` / `calculate_ring_xp()`, so it should work for Mantis once those functions read `school_ring_choice` rather than the static `school_ring` value.
-- **Bonus athletics action die** - After rolling initiative, render a blue "1" die (always value 1, never rolled) alongside the standard action dice. This is analogous to the Togashi Ise Zumi's "1 athletics action" die, but it is always a literal 1 and is always present regardless of which initiative variant the player picks. The die is restricted in spending to movement, athletics rolls, or the Mantis 3rd Dan technique (offensive or defensive branch). The app tracks the restriction as a label/tooltip; action-die spending enforcement is lightweight (display-only, same approach as Togashi's athletics-only dice today).
+**Status:** Implemented (Phase 10).
 
-**Unit tests:** TBD.
-**Clicktests:** TBD.
+- **Ring raise:** Works out of the box. `calculate_ring_xp()` and the editor's `enforceFourthDanRing()`, `schoolRingMin()`, `ringMax()`, `getSchoolRing()` all read `school_ring_choice`, so whichever ring the Mantis picked from the "Any" option at creation (per Phase 1 - Void by default) gets the 4th Dan free +1, the ceiling bump to 7, and the 5-XP-per-raise discount above 4. No code changes were needed for the ring raise itself.
+- **Bonus athletics action die:** `build_initiative_formula()` exposes a new boolean flag `mantis_4th_dan_athletics_die` (true when Mantis + Dan >= 4). The initiative-roll post-processing on the client pushes `{value: 1, athletics_only: true, mantis_4th_dan: true}` into the dice array after all other school effects fire. `setActionDice` preserves both `athletics_only` and `mantis_4th_dan` flags through the tracker round-trip. The action-die rendering picks up a `data-die-mantis-4th-dan` attribute and a dedicated tooltip ("Mantis 4th Dan athletics die. May only be spent on movement, athletics, or the Mantis 3rd Dan technique."). Reuses the existing `athletics_only` CSS class (blue variant) for visual distinction and the existing auto-spend skip so non-athletics auto-spends won't pick this die. Regenerated on every initiative roll; cleared by Clear bonuses or the action-dice Clear button.
+
+**Unit tests:**
+- `tests/test_xp.py::TestMantisFourthDanRingRaise` - parametrized across all five ring choices (Air/Fire/Earth/Water/Void): auto-raise to 4 is free, 5-XP discount per raise above 4, no discount at Dan 3, and non-school rings are unaffected.
+- `tests/test_dice.py::TestMantisWaveTreader4thDanAthleticsDie` - flag true at Dan 4/5, false at Dan 3/1, false for non-Mantis, and the formula's rolled/kept counts are unchanged (bonus die is appended post-roll, not part of the rolled set).
+
+**Clicktests:** `tests/e2e/test_school_abilities.py` - `test_mantis_4th_dan_athletics_die_appended_after_initiative`, `test_mantis_4th_dan_die_renders_with_testable_markup`, `test_mantis_4th_dan_die_spendable`, `test_mantis_4th_dan_die_regenerated_on_next_initiative`, `test_mantis_4th_dan_die_cleared_by_clear_bonuses`, `test_mantis_dan_3_no_4th_dan_die`, `test_non_mantis_dan_4_no_4th_dan_die`.
 
 ---
 

@@ -443,13 +443,15 @@
                     // Initiative rolls are the end-of-round trigger: replace
                     // action dice and reset Mantis round state in one shot.
                     // Accepts either a list of numeric values (legacy) or
-                    // a list of dice objects ``{value, athletics_only?}``
-                    // so callers can persist the Togashi athletics-only die.
+                    // a list of dice objects ``{value, athletics_only?, mantis_4th_dan?}``
+                    // so callers can persist the Togashi athletics-only die
+                    // and the Mantis 4th Dan bonus die.
                     this.resetMantisRound();
                     this.actionDice = (dice || []).map(d => {
                         if (typeof d === 'number') return {value: d, spent: false};
                         const entry = {value: d.value, spent: false};
                         if (d.athletics_only) entry.athletics_only = true;
+                        if (d.mantis_4th_dan) entry.mantis_4th_dan = true;
                         return entry;
                     });
                     this.actionMenuOpen = null;
@@ -511,32 +513,6 @@
                     delete this.adventureState.mantis_defensive_3rd_dan_accum;
                     this._dispatchMantisPostureChanged(null);
                 },
-                incrementMantis3rdDanOffensive(amount) {
-                    // Called from the attack-result-modal button. Spends the
-                    // lowest unspent action die (labeled) and accumulates +X
-                    // on subsequent attack and damage rolls this round.
-                    if (!amount) return false;
-                    const idx = this.spendLowestUnspentActionDie('Mantis 3rd Dan (offensive)');
-                    if (idx < 0) return false;
-                    this.offensive3rdDanAccum = (this.offensive3rdDanAccum || 0) + amount;
-                    this.adventureState.mantis_offensive_3rd_dan_accum = this.offensive3rdDanAccum;
-                    this._dispatchMantisPostureChanged(this.currentPosture());
-                    this.save();
-                    return true;
-                },
-                incrementMantis3rdDanDefensive(amount) {
-                    // Called from the Tracking-section button. Spends the
-                    // lowest unspent action die (labeled) and accumulates +X
-                    // on subsequent wound checks and on the displayed TN.
-                    if (!amount) return false;
-                    const idx = this.spendLowestUnspentActionDie('Mantis 3rd Dan (defensive)');
-                    if (idx < 0) return false;
-                    this.defensive3rdDanAccum = (this.defensive3rdDanAccum || 0) + amount;
-                    this.adventureState.mantis_defensive_3rd_dan_accum = this.defensive3rdDanAccum;
-                    this._dispatchMantisPostureChanged(this.currentPosture());
-                    this.save();
-                    return true;
-                },
                 toggleActionMenu(i) {
                     this.actionMenuOpen = this.actionMenuOpen === i ? null : i;
                 },
@@ -595,6 +571,32 @@
                         delete this.actionDice[i].spent_by;
                     }
                     this.save();
+                },
+                incrementMantis3rdDanOffensive(amount) {
+                    // Called from the attack-result-modal button. Spends the
+                    // lowest unspent action die (labeled) and accumulates +X
+                    // on subsequent attack and damage rolls this round.
+                    if (!amount) return false;
+                    const idx = this.spendLowestUnspentActionDie('Mantis 3rd Dan (offensive)');
+                    if (idx < 0) return false;
+                    this.offensive3rdDanAccum = (this.offensive3rdDanAccum || 0) + amount;
+                    this.adventureState.mantis_offensive_3rd_dan_accum = this.offensive3rdDanAccum;
+                    this._dispatchMantisPostureChanged(this.currentPosture());
+                    this.save();
+                    return true;
+                },
+                incrementMantis3rdDanDefensive(amount) {
+                    // Called from the Tracking-section button. Spends the
+                    // lowest unspent action die (labeled) and accumulates +X
+                    // on subsequent wound checks and on the displayed TN.
+                    if (!amount) return false;
+                    const idx = this.spendLowestUnspentActionDie('Mantis 3rd Dan (defensive)');
+                    if (idx < 0) return false;
+                    this.defensive3rdDanAccum = (this.defensive3rdDanAccum || 0) + amount;
+                    this.adventureState.mantis_defensive_3rd_dan_accum = this.defensive3rdDanAccum;
+                    this._dispatchMantisPostureChanged(this.currentPosture());
+                    this.save();
+                    return true;
                 },
 
                 saveBankedBonuses() {
@@ -1252,12 +1254,15 @@
                                     :data-die-spent="die.spent ? 'true' : 'false'"
                                     :data-die-value="die.value"
                                     :data-die-athletics-only="die.athletics_only ? 'true' : 'false'"
+                                    :data-die-mantis-4th-dan="die.mantis_4th_dan ? 'true' : 'false'"
                                     class="block"
                                     :title="die.spent_by
                                         ? die.spent_by
-                                        : (die.athletics_only
-                                            ? 'Athletics-only action die (Togashi special ability)'
-                                            : (die.spent ? 'Spent - click to mark as unspent' : 'Click to mark as spent'))"
+                                        : (die.mantis_4th_dan
+                                            ? 'Mantis 4th Dan athletics die. May only be spent on movement, athletics, or the Mantis 3rd Dan technique.'
+                                            : (die.athletics_only
+                                                ? 'Athletics-only action die (Togashi special ability)'
+                                                : (die.spent ? 'Spent - click to mark as unspent' : 'Click to mark as spent')))"
                                     :data-die-spent-by="die.spent_by || ''">
                                 {# Same SVG kite shape as the roll-animation
                                    dice (see app/static/js/dice.js). Color
@@ -5977,6 +5982,19 @@
                         );
                         const athV = athDice[0]?.value || 0;
                         if (athV > 0) dice.push({value: athV, athletics_only: true});
+                    }
+
+                    // Mantis Wave-Treader 4th Dan: append a deterministic
+                    // value-1 die restricted to movement / athletics / the
+                    // Mantis 3rd Dan technique. Not rolled - always 1.
+                    // Reuses the `athletics_only` auto-spend skip; the
+                    // `mantis_4th_dan` flag picks the right tooltip.
+                    if (this.formula.mantis_4th_dan_athletics_die) {
+                        dice.push({
+                            value: 1,
+                            athletics_only: true,
+                            mantis_4th_dan: true,
+                        });
                     }
 
                     this.actionDice = dice;

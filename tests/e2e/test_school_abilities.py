@@ -6255,6 +6255,156 @@ def test_mantis_wc_probability_shifts_with_5th_dan_defensive_count(page, live_se
     assert two_phases["expectedSW"] < one_phase["expectedSW"]
 
 
+def _make_mantis_dan_4(page, live_server_url, name):
+    """Create a Mantis character with school knacks at 4 (Dan 4)."""
+    _create_char(
+        page, live_server_url, name, "mantis_wave_treader",
+        knack_overrides={"athletics": 4, "iaijutsu": 4, "worldliness": 4},
+    )
+
+
+def _roll_initiative(page):
+    """Click the initiative action and wait for the roll result modal."""
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    # Close the result modal so subsequent posture clicks reach the tracker.
+    page.locator('[data-modal="dice-roller"]').locator('button:has-text("\u00d7")').click()
+    page.wait_for_timeout(100)
+
+
+@pytest.mark.school_abilities
+def test_mantis_4th_dan_athletics_die_appended_after_initiative(page, live_server_url):
+    """Dan 4 Mantis: rolling initiative appends a deterministic value-1 die
+    flagged with athletics_only + mantis_4th_dan metadata."""
+    _make_mantis_dan_4(page, live_server_url, "Mantis4Die")
+    _roll_initiative(page)
+    # The appended die is always at the end of the list. Value == 1 and the
+    # mantis_4th_dan flag is set so the render+auto-spend logic treats it as
+    # a restricted athletics-only die.
+    state = page.evaluate("""() => {
+        const dice = window._trackingBridge?.actionDice || [];
+        return dice.map(d => ({
+            value: d.value,
+            mantis_4th_dan: !!d.mantis_4th_dan,
+            athletics_only: !!d.athletics_only,
+            spent: !!d.spent,
+        }));
+    }""")
+    mantis_dice = [d for d in state if d["mantis_4th_dan"]]
+    assert len(mantis_dice) == 1, f"expected exactly one Mantis 4th Dan die, got {state}"
+    assert mantis_dice[0]["value"] == 1
+    assert mantis_dice[0]["athletics_only"] is True
+    assert mantis_dice[0]["spent"] is False
+
+
+@pytest.mark.school_abilities
+def test_mantis_4th_dan_die_renders_with_testable_markup(page, live_server_url):
+    """The appended die gets the mantis-4th-dan data attribute and a tooltip
+    explaining the movement / athletics / 3rd Dan restriction."""
+    _make_mantis_dan_4(page, live_server_url, "Mantis4Markup")
+    _roll_initiative(page)
+    buttons = page.locator('[data-action="action-die"][data-die-mantis-4th-dan="true"]')
+    assert buttons.count() == 1
+    btn = buttons.first
+    assert btn.get_attribute("data-die-value") == "1"
+    assert btn.get_attribute("data-die-athletics-only") == "true"
+    title = btn.get_attribute("title")
+    assert title and "Mantis 4th Dan" in title
+    # The restriction is enumerated in the tooltip.
+    assert "movement" in title.lower()
+    assert "athletics" in title.lower()
+    assert "3rd dan" in title.lower()
+
+
+@pytest.mark.school_abilities
+def test_mantis_4th_dan_die_spendable(page, live_server_url):
+    """The Mantis 4th Dan die can be manually marked spent via the action-die
+    menu (display-only restriction, same as Togashi's athletics-only die)."""
+    _make_mantis_dan_4(page, live_server_url, "Mantis4Spend")
+    _roll_initiative(page)
+    # Mark spent via Alpine directly (driving the per-die menu click-path
+    # requires a Mantis-tailored UI that isn't in scope for Phase 10).
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        const i = t.actionDice.findIndex(d => d.mantis_4th_dan);
+        t.spendActionDie(i);
+    }""")
+    state = page.evaluate("""() => {
+        const d = (window._trackingBridge?.actionDice || [])
+            .find(x => x.mantis_4th_dan);
+        return d ? {spent: d.spent, value: d.value} : null;
+    }""")
+    assert state is not None
+    assert state["spent"] is True
+    assert state["value"] == 1
+
+
+@pytest.mark.school_abilities
+def test_mantis_4th_dan_die_regenerated_on_next_initiative(page, live_server_url):
+    """Rolling initiative a second time clears the old bonus die and appends
+    a fresh one (setActionDice resets and the mantis_4th_dan_athletics_die
+    formula flag fires deterministically)."""
+    _make_mantis_dan_4(page, live_server_url, "Mantis4Regen")
+    _roll_initiative(page)
+    # Mark the bonus die spent, then re-roll initiative.
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        const i = t.actionDice.findIndex(d => d.mantis_4th_dan);
+        t.spendActionDie(i);
+    }""")
+    _roll_initiative(page)
+    # Exactly one fresh (unspent) bonus die after re-roll.
+    state = page.evaluate("""() => {
+        const dice = window._trackingBridge?.actionDice || [];
+        return dice.filter(d => d.mantis_4th_dan).map(d => ({
+            value: d.value, spent: !!d.spent,
+        }));
+    }""")
+    assert len(state) == 1
+    assert state[0]["value"] == 1
+    assert state[0]["spent"] is False
+
+
+@pytest.mark.school_abilities
+def test_mantis_4th_dan_die_cleared_by_clear_bonuses(page, live_server_url):
+    """Clear bonuses wipes the bonus die along with all other action dice."""
+    _make_mantis_dan_4(page, live_server_url, "Mantis4Clear")
+    _roll_initiative(page)
+    clear = page.locator('[data-action="mantis-clear-bonuses"]')
+    clear.wait_for(state='visible', timeout=2000)
+    clear.click()
+    page.wait_for_function(
+        "() => (window._trackingBridge?.actionDice || []).length === 0"
+    )
+
+
+@pytest.mark.school_abilities
+def test_mantis_dan_3_no_4th_dan_die(page, live_server_url):
+    """Dan 3 Mantis does not get the bonus athletics die (flag is false)."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3NoDie4")
+    _roll_initiative(page)
+    mantis_count = page.evaluate("""() =>
+        (window._trackingBridge?.actionDice || [])
+            .filter(d => d.mantis_4th_dan).length
+    """)
+    assert mantis_count == 0
+
+
+@pytest.mark.school_abilities
+def test_non_mantis_dan_4_no_4th_dan_die(page, live_server_url):
+    """Non-Mantis Dan 4 characters never get the Mantis 4th Dan die."""
+    _create_char(
+        page, live_server_url, "Akodo4NoMantis", "akodo_bushi",
+        knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+    )
+    _roll_initiative(page)
+    mantis_count = page.evaluate("""() =>
+        (window._trackingBridge?.actionDice || [])
+            .filter(d => d.mantis_4th_dan).length
+    """)
+    assert mantis_count == 0
+
+
 @pytest.mark.school_abilities
 def test_mantis_wc_probability_all_three_stack(page, live_server_url):
     """All three defensive-side overlays (posture +5, 5th Dan defensivePhaseCount,

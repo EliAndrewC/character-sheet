@@ -2435,3 +2435,53 @@ class TestMantis2ndDanEligibleChoices:
         choices = mantis_2nd_dan_eligible_choices("mantis_wave_treader")
         for sid in SKILLS:
             assert sid in choices
+
+
+class TestMantisWaveTreader4thDanAthleticsDie:
+    """Mantis Wave-Treader 4th Dan: after rolling initiative, the character
+    gains a deterministic value-1 athletics action die that is never rolled
+    (always value 1) and is restricted to movement / athletics / the Mantis
+    3rd Dan technique. The server exposes this as the boolean formula flag
+    ``mantis_4th_dan_athletics_die``; the client appends the die to the
+    tracked actionDice list after processing the initiative roll."""
+
+    def _char(self, dan: int, school="mantis_wave_treader"):
+        return make_character_data(
+            school=school,
+            school_ring_choice="Void",
+            knacks={"athletics": dan, "iaijutsu": dan, "worldliness": dan}
+                if school == "mantis_wave_treader"
+                else {"double_attack": dan, "feint": dan, "iaijutsu": dan},
+        )
+
+    def test_flag_true_at_dan_4(self):
+        init = build_initiative_formula(self._char(4))
+        assert init["mantis_4th_dan_athletics_die"] is True
+
+    def test_flag_true_at_dan_5(self):
+        init = build_initiative_formula(self._char(5))
+        assert init["mantis_4th_dan_athletics_die"] is True
+
+    def test_flag_false_at_dan_3(self):
+        init = build_initiative_formula(self._char(3))
+        assert init["mantis_4th_dan_athletics_die"] is False
+
+    def test_flag_false_at_dan_1(self):
+        init = build_initiative_formula(self._char(1))
+        assert init["mantis_4th_dan_athletics_die"] is False
+
+    def test_flag_false_for_non_mantis(self):
+        init = build_initiative_formula(self._char(5, school="akodo_bushi"))
+        assert init["mantis_4th_dan_athletics_die"] is False
+
+    def test_initiative_rolled_dice_count_unchanged(self):
+        """The bonus die is appended post-roll, so the rolled/kept counts
+        from build_initiative_formula stay at (V+1)kV (plus the 1st Dan
+        extra die from Phase 2). The bonus die is NOT part of the rolled set."""
+        init = build_initiative_formula(self._char(4))
+        # Void default = 2 (school knacks push Void to 3 at creation for Mantis
+        # but make_character_data does not apply that UI default). Raw rings =
+        # 2 across the board -> base rolled = V+1 = 3 + 1st Dan +1 = 4 rolled,
+        # 2 kept. The 4th Dan bonus die is NOT reflected here.
+        assert init["rolled"] == 4
+        assert init["kept"] == 2

@@ -831,6 +831,16 @@ def build_initiative_formula(character_data: dict) -> Optional[dict]:
     rolled = base_rolled
     kept = base_kept
 
+    # Mantis Wave-Treader 4th Dan: after rolling initiative, the character
+    # gains a deterministic value-1 "athletics action die" in addition to
+    # the normal action dice. It is never rolled (always value 1), its
+    # spending is restricted to movement / athletics / the Mantis 3rd Dan
+    # technique, and the restriction is display-only (same approach as the
+    # Togashi athletics-only die today).
+    mantis_4th_dan_athletics_die = (
+        school_id == "mantis_wave_treader" and dan >= 4
+    )
+
     return {
         "label": "Initiative",
         "rolled": rolled,
@@ -847,6 +857,7 @@ def build_initiative_formula(character_data: dict) -> Optional[dict]:
         "togashi_athletics_extra_die": is_togashi,
         "togashi_base_rolled": base_rolled if is_togashi else 0,
         "togashi_base_kept": base_kept if is_togashi else 0,
+        "mantis_4th_dan_athletics_die": mantis_4th_dan_athletics_die,
         "alternatives": [],
         "bonuses": [],
         "adventure_raises_max_per_roll": 0,
