@@ -1,6 +1,6 @@
 """E2E: Editor field controls — min/max, disabled states, recognition halving, rank lock."""
 
-from tests.e2e.helpers import select_school, click_plus, click_minus, start_new_character
+from tests.e2e.helpers import select_school, click_plus, click_minus, start_new_character, apply_changes
 import pytest
 
 pytestmark = [pytest.mark.rings, pytest.mark.knacks, pytest.mark.combat_skills, pytest.mark.skills, pytest.mark.honor_rank_recognition, pytest.mark.advantages]
@@ -462,3 +462,50 @@ def test_advanced_skill_costs_more(page, live_server_url):
     click_plus(page, "skill_precepts", 1)
     spent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
     assert spent_after - spent_before > 1  # Advanced cost 2 at rank 1
+
+
+# --- Mantis Wave-Treader school selection (Phase 1) ---
+
+def test_mantis_defaults_ring_to_void(page, live_server_url):
+    """Selecting Mantis Wave-Treader defaults the school-ring picker to Void
+    and bumps the Void ring to at least 3."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    select_school(page, "mantis_wave_treader")
+    page.wait_for_timeout(300)
+    # School-ring picker is visible (the "Any" list has length > 1) and set to Void.
+    ring_dropdown = page.locator('select[x-model="schoolRingChoice"]')
+    assert ring_dropdown.is_visible()
+    assert ring_dropdown.input_value() == "Void"
+    # Void ring is raised to 3 (school-ring floor).
+    assert page.locator('input[name="ring_void"]').input_value() == "3"
+    # The hidden field posts Void on save.
+    assert page.locator('input[name="school_ring_choice"]').input_value() == "Void"
+
+
+def test_priest_still_defaults_ring_to_water(page, live_server_url):
+    """Variable-ring schools other than Mantis still default to Water."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    select_school(page, "priest")
+    page.wait_for_timeout(300)
+    ring_dropdown = page.locator('select[x-model="schoolRingChoice"]')
+    assert ring_dropdown.is_visible()
+    assert ring_dropdown.input_value() == "Water"
+    assert page.locator('input[name="ring_water"]').input_value() == "3"
+
+
+def test_mantis_school_is_selectable_and_saves(page, live_server_url):
+    """Mantis Wave-Treader can be selected, the draft saves, and Apply Changes
+    creates the first version."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Wave Runner")
+    select_school(page, "mantis_wave_treader")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Initial Mantis draft")
+    # Landed on the sheet view for the new character.
+    assert "/characters/" in page.url

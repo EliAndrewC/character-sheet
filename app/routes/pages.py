@@ -56,26 +56,40 @@ def index(request: Request, db: Session = Depends(get_db)):
     all_characters = db.query(Character).order_by(Character.updated_at.desc()).all()
     all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
 
-    # Cluster characters by gaming group; omit empty groups; trailing "not assigned"
-    grouped: list = []
-    for group in all_groups:
-        chars_in_group = [c for c in all_characters if c.gaming_group_id == group.id]
-        if chars_in_group:
-            grouped.append((group.name, chars_in_group))
-    unassigned = [c for c in all_characters if c.gaming_group_id is None]
-    if unassigned:
-        grouped.append(("Not assigned to a group", unassigned))
-
-    # Build owner display name lookup
+    # Build owner display name lookup AND collect grants in one pass so we
+    # can filter hidden characters per-viewer.
     owner_ids = {c.owner_discord_id for c in all_characters if c.owner_discord_id}
     owners = db.query(UserModel).filter(UserModel.discord_id.in_(owner_ids)).all() if owner_ids else []
     owner_names = {u.discord_id: u.display_name or u.discord_name for u in owners}
+    owner_grants = {u.discord_id: (u.granted_account_ids or []) for u in owners}
+
+    admin_ids = get_admin_ids()
+    visible_characters = [
+        c for c in all_characters
+        if not c.is_hidden
+        or can_view_drafts(
+            user_id,
+            c.owner_discord_id,
+            owner_grants.get(c.owner_discord_id, []),
+            admin_ids,
+        )
+    ]
+
+    # Cluster characters by gaming group; omit empty groups; trailing "not assigned"
+    grouped: list = []
+    for group in all_groups:
+        chars_in_group = [c for c in visible_characters if c.gaming_group_id == group.id]
+        if chars_in_group:
+            grouped.append((group.name, chars_in_group))
+    unassigned = [c for c in visible_characters if c.gaming_group_id is None]
+    if unassigned:
+        grouped.append(("Not assigned to a group", unassigned))
 
     return _templates().TemplateResponse(
         request=request,
         name="index.html",
         context={
-            "characters": all_characters,
+            "characters": visible_characters,
             "grouped": grouped,
             "owner_names": owner_names,
         },
@@ -103,6 +117,11 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     owner = db.query(UserModel).filter(UserModel.discord_id == character.owner_discord_id).first()
     owner_granted = owner.granted_account_ids or [] if owner else []
     viewer_can_edit = can_view_drafts(user_id, character.owner_discord_id, owner_granted)
+
+    # Hidden characters are invisible by URL too - non-editors get a 404
+    # rather than a "you don't have access" leak.
+    if character.is_hidden and not viewer_can_edit:
+        return HTMLResponse("Character not found", status_code=404)
 
     # Everyone sees the current draft state
     char_dict = character.to_dict()
@@ -135,6 +154,28 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             )
             .all()
         )
+        # Hidden party members must not surface to viewers without edit
+        # access to them - their existence would otherwise leak through
+        # the priest/Daidoji ally lists below.
+        if any(p.is_hidden for p in party_chars):
+            party_owner_ids = {p.owner_discord_id for p in party_chars
+                               if p.is_hidden and p.owner_discord_id}
+            party_owners = (
+                db.query(UserModel)
+                .filter(UserModel.discord_id.in_(party_owner_ids))
+                .all()
+            ) if party_owner_ids else []
+            party_grants = {u.discord_id: (u.granted_account_ids or [])
+                            for u in party_owners}
+            admin_ids = get_admin_ids()
+            party_chars = [
+                p for p in party_chars
+                if not p.is_hidden
+                or can_view_drafts(
+                    user_id, p.owner_discord_id,
+                    party_grants.get(p.owner_discord_id, []), admin_ids,
+                )
+            ]
         for p in party_chars:
             # Compute party member's Dan (lowest school knack rank).
             p_dan = 0

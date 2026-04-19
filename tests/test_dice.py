@@ -2171,3 +2171,267 @@ class TestKakitaDuelist4thDanIaijutsuDamage:
         formulas = build_all_roll_formulas(char)
         iai = formulas["knack:iaijutsu"]
         assert iai["damage_flat_bonus"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Mantis Wave-Treader 1st Dan: extra die on initiative, athletics, wound check
+# ---------------------------------------------------------------------------
+
+
+class TestMantisWaveTreader1stDan:
+    """Mantis Wave-Treader 1st Dan: roll one extra die on initiative,
+    athletics, and wound checks."""
+
+    def _char_dan(self, dan: int, **extra) -> dict:
+        """Mantis character with school knacks at *dan* rank."""
+        data = make_character_data(
+            school="mantis_wave_treader",
+            school_ring_choice="Void",
+            knacks={"athletics": dan, "iaijutsu": dan, "worldliness": dan},
+        )
+        data.update(extra)
+        return data
+
+    # --- Initiative ---
+
+    def test_initiative_extra_die_at_dan_1(self):
+        char = self._char_dan(1)
+        init = build_initiative_formula(char)
+        # Void=2 -> base (V+1)=3. 1st Dan: +1 for initiative -> 4 rolled.
+        assert init["rolled"] == 4
+        assert init["kept"] == 2
+
+    def test_initiative_no_extra_die_at_dan_0(self):
+        # Dan 0 = at least one school knack is 0. Use rank=0 across the board.
+        char = self._char_dan(0)
+        init = build_initiative_formula(char)
+        assert init["rolled"] == 3  # Void(2)+1, no 1st Dan bonus
+        assert init["kept"] == 2
+
+    # --- Athletics (all four rollable rings) ---
+
+    @pytest.mark.parametrize("ring", ["Air", "Fire", "Earth", "Water"])
+    def test_athletics_extra_die_at_dan_1(self, ring):
+        char = self._char_dan(
+            1,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        f = build_athletics_formula(ring, char)
+        # Base: 2*Ring(2) + athletics(1) = 5 rolled, 2 kept.
+        # 1st Dan: +1 rolled -> 6k2.
+        assert f.rolled == 6
+        assert f.kept == 2
+
+    def test_athletics_no_extra_die_at_dan_0(self):
+        # To get Dan 0, drop one school knack to 0. Athletics itself remains
+        # rank 1 so the formula is still defined.
+        char = make_character_data(
+            school="mantis_wave_treader",
+            school_ring_choice="Void",
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+            knacks={"athletics": 1, "iaijutsu": 1, "worldliness": 0},
+        )
+        f = build_athletics_formula("Earth", char)
+        # Base: 2*2 + 1 = 5 rolled, 2 kept. No 1st Dan bonus at Dan 0.
+        assert f.rolled == 5
+        assert f.kept == 2
+
+    # --- Wound check ---
+
+    def test_wound_check_extra_die_at_dan_1(self):
+        char = self._char_dan(1)
+        wc = build_wound_check_formula(char)
+        # Water=3 -> base 4k3. 1st Dan: +1 rolled -> 5k3.
+        assert wc["rolled"] == 5
+        assert wc["kept"] == 3
+
+    def test_wound_check_no_extra_die_at_dan_0(self):
+        char = self._char_dan(0)
+        wc = build_wound_check_formula(char)
+        assert wc["rolled"] == 4  # Water(3)+1, no 1st Dan bonus
+        assert wc["kept"] == 3
+
+    # --- Confirm no bleed onto non-bonus rolls ---
+
+    def test_no_bonus_on_attack_at_dan_1(self):
+        """Mantis 1st Dan covers initiative/athletics/wound_check only -
+        attack rolls get no extra die."""
+        char = self._char_dan(1, attack=3, rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2})
+        f = build_combat_formula("attack", char)
+        # Base: 3(attack) + 2(Fire) = 5k2, no school bonus.
+        assert f.rolled == 5
+        assert f.kept == 2
+
+
+# ---------------------------------------------------------------------------
+# Mantis Wave-Treader 2nd Dan: flexible free raise (+5) on chosen roll type
+# ---------------------------------------------------------------------------
+
+
+class TestMantisWaveTreader2ndDan:
+    """Mantis Wave-Treader 2nd Dan: player picks any one roll type (skills,
+    rollable knacks, attack, damage, parry, wound_check) and gets a +5 free
+    raise on matching rolls. Initiative is never eligible."""
+
+    def _char(self, choice, dan: int = 2, **extra) -> dict:
+        """Mantis character at *dan* (default 2) with the given 2nd Dan choice."""
+        data = make_character_data(
+            school="mantis_wave_treader",
+            school_ring_choice="Void",
+            knacks={"athletics": dan, "iaijutsu": dan, "worldliness": dan},
+            technique_choices={"mantis_2nd_dan_free_raise": choice} if choice else {},
+        )
+        data.update(extra)
+        return data
+
+    # --- Combat: attack / parry ---
+
+    def test_attack_gets_plus_5_when_chosen(self):
+        char = self._char("attack", attack=3)
+        f = build_combat_formula("attack", char)
+        assert f.flat == 5
+        assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
+                   for b in f.bonuses)
+
+    def test_attack_no_bonus_when_not_chosen(self):
+        char = self._char("parry", attack=3)
+        f = build_combat_formula("attack", char)
+        assert f.flat == 0
+
+    def test_parry_gets_plus_5_when_chosen(self):
+        char = self._char("parry", parry=2)
+        f = build_combat_formula("parry", char)
+        assert f.flat == 5
+
+    # --- Wound check ---
+
+    def test_wound_check_gets_plus_5_when_chosen(self):
+        char = self._char("wound_check")
+        wc = build_wound_check_formula(char)
+        assert wc["flat"] == 5
+        assert any("2nd Dan" in s for s in wc.get("bonus_sources", []))
+
+    def test_wound_check_no_bonus_when_not_chosen(self):
+        char = self._char("attack")
+        wc = build_wound_check_formula(char)
+        assert wc["flat"] == 0
+
+    # --- Skills ---
+
+    def test_skill_gets_plus_5_when_chosen(self):
+        # etiquette has no Honor / Recognition bonus so flat==5 cleanly reflects
+        # only the Mantis 2nd Dan choice.
+        char = self._char("etiquette", skills={"etiquette": 2})
+        f = build_skill_formula("etiquette", char)
+        assert f.flat == 5
+        assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
+                   for b in f.bonuses)
+
+    def test_skill_no_bonus_when_not_chosen(self):
+        char = self._char("attack", skills={"etiquette": 2})
+        f = build_skill_formula("etiquette", char)
+        assert f.flat == 0
+
+    # --- Knacks ---
+
+    def test_knack_gets_plus_5_when_chosen(self):
+        # Iaijutsu is a rollable Mantis school knack.
+        char = self._char("iaijutsu")
+        f = build_knack_formula("iaijutsu", char)
+        assert f.flat == 5
+
+    def test_athletics_knack_gets_plus_5_when_chosen(self):
+        char = self._char("athletics")
+        f = build_athletics_formula("Earth", char)
+        assert f.flat == 5
+
+    # --- Damage (via _annotate_attack_type) ---
+
+    def test_damage_flat_bonus_when_chosen(self):
+        char = self._char("damage", attack=3)
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["attack"]
+        assert atk["damage_flat_bonus"] == 5
+        assert any("2nd Dan" in s for s in atk.get("damage_bonus_sources", []))
+        # The attack roll itself does NOT get +5 when damage is chosen.
+        assert atk["flat"] == 0
+
+    def test_damage_no_bonus_when_not_chosen(self):
+        char = self._char("attack", attack=3)
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["attack"]
+        assert atk["damage_flat_bonus"] == 0
+
+    # --- Dan gating ---
+
+    def test_no_bonus_below_dan_2(self):
+        char = self._char("attack", dan=1, attack=3)
+        f = build_combat_formula("attack", char)
+        assert f.flat == 0
+
+    def test_no_damage_bonus_below_dan_2(self):
+        char = self._char("damage", dan=1, attack=3)
+        formulas = build_all_roll_formulas(char)
+        assert formulas["attack"]["damage_flat_bonus"] == 0
+
+    def test_no_wound_check_bonus_below_dan_2(self):
+        char = self._char("wound_check", dan=1)
+        wc = build_wound_check_formula(char)
+        assert wc["flat"] == 0
+
+    # --- No bleed to non-Mantis schools ---
+
+    def test_non_mantis_school_ignores_mantis_key(self):
+        """A non-Mantis character with mantis_2nd_dan_free_raise in
+        technique_choices must not get the bonus."""
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 2, "feint": 2, "iaijutsu": 2},
+            attack=3,
+            technique_choices={"mantis_2nd_dan_free_raise": "attack"},
+        )
+        f = build_combat_formula("attack", char)
+        # Akodo's own 2nd Dan is wound_check, so attack flat stays 0.
+        assert f.flat == 0
+
+
+class TestMantis2ndDanEligibleChoices:
+    """The mantis_2nd_dan_eligible_choices() helper used by server-side
+    validation on save."""
+
+    def test_non_mantis_returns_empty(self):
+        from app.services.dice import mantis_2nd_dan_eligible_choices
+        assert mantis_2nd_dan_eligible_choices("akodo_bushi") == frozenset()
+        assert mantis_2nd_dan_eligible_choices("") == frozenset()
+
+    def test_mantis_includes_combat_rolls(self):
+        from app.services.dice import mantis_2nd_dan_eligible_choices
+        choices = mantis_2nd_dan_eligible_choices("mantis_wave_treader")
+        assert "attack" in choices
+        assert "damage" in choices
+        assert "parry" in choices
+        assert "wound_check" in choices
+
+    def test_mantis_excludes_initiative(self):
+        from app.services.dice import mantis_2nd_dan_eligible_choices
+        choices = mantis_2nd_dan_eligible_choices("mantis_wave_treader")
+        assert "initiative" not in choices
+
+    def test_mantis_includes_rollable_knacks(self):
+        from app.services.dice import mantis_2nd_dan_eligible_choices
+        choices = mantis_2nd_dan_eligible_choices("mantis_wave_treader")
+        assert "athletics" in choices
+        assert "iaijutsu" in choices
+
+    def test_mantis_excludes_worldliness(self):
+        """worldliness is a non-rollable knack."""
+        from app.services.dice import mantis_2nd_dan_eligible_choices
+        choices = mantis_2nd_dan_eligible_choices("mantis_wave_treader")
+        assert "worldliness" not in choices
+
+    def test_mantis_includes_all_skills(self):
+        from app.services.dice import mantis_2nd_dan_eligible_choices
+        from app.game_data import SKILLS
+        choices = mantis_2nd_dan_eligible_choices("mantis_wave_treader")
+        for sid in SKILLS:
+            assert sid in choices

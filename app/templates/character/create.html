@@ -663,8 +663,12 @@ function characterForm() {
                     this.schoolRingChoice = info.ring;
                     // Auto-set school ring to at least 3
                     this.rings[info.ring] = Math.max(this.rings[info.ring], 3);
+                } else if (schoolId === 'mantis_wave_treader') {
+                    // Mantis Wave-Treader ("Any" ring) defaults to Void.
+                    this.schoolRingChoice = 'Void';
+                    this.rings['Void'] = Math.max(this.rings['Void'], 3);
                 } else {
-                    // "any non-Void" or "Air or Water" - user must pick
+                    // Other variable-ring schools: user must pick.
                     this.schoolRingChoice = '';
                 }
 

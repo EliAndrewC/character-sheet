@@ -92,6 +92,9 @@ async def create_character(request: Request, db: Session = Depends(get_db)):
         owner_discord_id=user["discord_id"],
         player_name=user.get("display_name", ""),
         current_void_points=2,  # start with full VP (all rings default to 2)
+        # New drafts start hidden so the creator can iterate before sharing.
+        # Cleared one-way by Apply Changes or the Make Draft Visible button.
+        is_hidden=True,
     )
     db.add(character)
     db.commit()
@@ -336,6 +339,21 @@ async def autosave_character(
     if "advantage_details" in body:
         character.advantage_details = body["advantage_details"]
     if "technique_choices" in body:
+        # Validate the Mantis 2nd Dan free-raise choice so a crafted POST
+        # cannot persist initiative or a non-rollable knack. An empty/None
+        # value clears the choice and is allowed.
+        choices = body["technique_choices"] or {}
+        if isinstance(choices, dict) and "mantis_2nd_dan_free_raise" in choices:
+            from app.services.dice import mantis_2nd_dan_eligible_choices
+            val = choices.get("mantis_2nd_dan_free_raise")
+            if val not in (None, ""):
+                school_id = body.get("school") or character.school
+                eligible = mantis_2nd_dan_eligible_choices(school_id)
+                if val not in eligible:
+                    return JSONResponse(
+                        {"error": f"Invalid mantis_2nd_dan_free_raise choice: {val!r}"},
+                        status_code=400,
+                    )
         character.technique_choices = body["technique_choices"]
     if "honor" in body:
         character.honor = body["honor"]
@@ -503,6 +521,37 @@ async def set_award_source(
     character.rank_recognition_awards = new_awards
     db.commit()
     return JSONResponse({"ok": True})
+
+
+@router.post("/{char_id}/show")
+async def show_character_route(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Mark a hidden draft as visible without publishing. One-way: once
+    cleared the character can never be re-hidden. Editors only."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"],
+        character.owner_discord_id,
+        all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    character.is_hidden = False
+    db.commit()
+    return JSONResponse({"status": "visible"})
 
 
 @router.post("/{char_id}/publish")

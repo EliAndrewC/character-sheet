@@ -249,6 +249,18 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 5th Dan LW reset note after dealing serious wounds -> `test_school_abilities.py::test_matsu_5th_dan_lw_reset_note_behavioral`
 - [x] Initiative always rolls 10 dice -> `test_school_abilities.py::test_matsu_10_dice_initiative_behavioral`
 
+### Mantis Wave-Treader
+
+- [x] 1st Dan grants +1 rolled die on initiative, athletics (all four rings), and wound check -> `test_school_abilities.py::test_mantis_1st_dan_formula_extra_die`
+- [x] 2nd Dan editor picker appears at Dan>=2, lists eligible options (no initiative/worldliness), saves via autosave -> `test_school_abilities.py::test_mantis_2nd_dan_editor_picker_visible_and_saves`
+- [x] 2nd Dan attack choice: labeled in attack modal pre-roll Bonuses and post-roll breakdown -> `test_school_abilities.py::test_mantis_2nd_dan_attack_choice_labeled`
+- [x] 2nd Dan parry choice: labeled in post-roll breakdown -> `test_school_abilities.py::test_mantis_2nd_dan_parry_choice_labeled`
+- [x] 2nd Dan skill choice: +5 applied and labeled -> `test_school_abilities.py::test_mantis_2nd_dan_skill_choice_labeled`
+- [x] 2nd Dan knack choice (iaijutsu): +5 applied and labeled -> `test_school_abilities.py::test_mantis_2nd_dan_knack_choice_labeled`
+- [x] 2nd Dan wound-check choice: WC modal Bonuses row shows +5 -> `test_school_abilities.py::test_mantis_2nd_dan_wound_check_choice_labeled`
+- [x] 2nd Dan damage choice: attack modal pre-roll Damage bonuses AND post-roll damage breakdown show +5 -> `test_school_abilities.py::test_mantis_2nd_dan_damage_choice_labeled`
+- [x] 2nd Dan switch moves the bonus from attack to wound-check -> `test_school_abilities.py::test_mantis_2nd_dan_switch_choice_moves_bonus`
+
 ### Merchant
 
 - [x] Post-roll VP buttons visible -> `test_school_abilities.py::test_merchant_post_roll_vp_buttons`
@@ -289,6 +301,9 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 ### Priest
 
 - [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_priest_1st_dan_skill_selection`
+- [ ] Special ability "all 10 rituals" link on character sheet -> `test_school_abilities.py::test_priest_sheet_links_to_rituals`
+- [ ] Special ability "all 10 rituals" link in school selection editor -> `test_school_selection.py::test_priest_special_ability_links_to_rituals`
+- [ ] Non-Priest school's special ability has no rituals link in editor -> `test_school_selection.py::test_non_priest_special_ability_has_no_external_link`
 - [x] 2nd Dan Honor bonus roll free raise -> `test_school_abilities.py::test_priest_2nd_dan_behavioral`
 - [x] 5th Dan Conviction pool refreshes on initiative roll -> `test_school_abilities.py::test_priest_5th_dan_initiative_refreshes_conviction`
 - [x] 5th Dan no refresh message when Conviction pool full -> `test_school_abilities.py::test_priest_5th_dan_initiative_no_message_when_conviction_unspent`
@@ -388,7 +403,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 ## JS Error Checks
 
-- [x] No JS errors on sheet page (parametrized across 6 schools) → `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors`
+- [x] No JS errors on sheet page (parametrized across 7 schools, including Mantis Wave-Treader) → `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors`
 
 ## Void Point Spending
 
@@ -557,6 +572,9 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Non-school ring max 5 → `test_editor_controls.py::test_nonschool_ring_max_5`
 - [x] Changing school resets knacks → `test_school_rings.py::test_changing_school_resets_knacks`
 - [x] Multi-ring to fixed-ring hides dropdown → `test_school_rings.py::test_changing_multi_to_fixed_hides_dropdown`
+- [x] Mantis Wave-Treader defaults school ring to Void and bumps Void to 3 → `test_editor_controls.py::test_mantis_defaults_ring_to_void`
+- [x] Priest (variable-ring school) still defaults ring to Water → `test_editor_controls.py::test_priest_still_defaults_ring_to_water`
+- [x] Mantis Wave-Treader is selectable and saves as a first version → `test_editor_controls.py::test_mantis_school_is_selectable_and_saves`
 
 ## Character Editor — Rings
 
@@ -688,6 +706,13 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Apply redirects to sheet → `test_publish_revert.py::test_apply_redirects_to_view_sheet`
 - [x] No draft banner after apply → `test_publish_revert.py::test_apply_then_no_draft_banner`
 
+## Character Editor — Hidden Draft Visibility
+
+- [ ] New character starts hidden, banner above Basics + Make Draft Visible button render → `test_create_character.py::test_new_character_starts_hidden_with_banner_and_button`
+- [ ] Make Draft Visible button hides banner+button without reload, also persisted across reload → `test_create_character.py::test_make_draft_visible_button_hides_banner_and_button`
+- [ ] Apply Changes also unhides the draft (banner/button absent on later edits) → `test_create_character.py::test_apply_changes_also_unhides_the_draft`
+- [ ] Hidden character is not listed on the homepage for non-editors; appears once revealed → `test_create_character.py::test_hidden_draft_not_listed_on_homepage_for_non_editor`
+
 ## Character Sheet — Header & Permissions
 
 - [x] Edit button visible for editor → `test_permissions.py::test_edit_delete_visible_for_editor`
@@ -739,6 +764,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Reset modal lists abilities to restore → `test_tracking_advanced.py::test_reset_modal_lists_abilities_to_restore`
 - [x] Togashi 3rd Dan sheet shows Daily Athletics Raises tracker → `test_tracking_advanced.py::test_togashi_3rd_dan_daily_raises_tracker_row`
 - [x] Per-day abilities have a dedicated Reset button with tooltip → `test_tracking_advanced.py::test_per_day_ability_has_its_own_reset_button_with_tooltip`
+- [ ] Per-day Reset button renders to the LEFT of the +/- counter → `test_tracking_advanced.py::test_per_day_reset_button_renders_left_of_counter`
 - [x] Per-day reset button is disabled until spent → `test_tracking_advanced.py::test_per_day_reset_button_disabled_until_spent`
 - [x] Per-day reset button restores just that pool → `test_tracking_advanced.py::test_per_day_reset_button_restores_pool`
 - [x] Per-day reset leaves other counters alone → `test_tracking_advanced.py::test_per_day_reset_leaves_other_counters_alone`
@@ -924,6 +950,12 @@ Kill switch & rate limit (covered by unit suite only):
       (unit: `test_import_routes.py::test_get_import_kill_switch_shows_503`;
       clicktest would need to restart the shared live server with
       a different env var, which the current harness doesn't support)
+- [ ] Navbar "New Character" collapses to a single submit button when
+      `IMPORT_ENABLED=false` (no dropdown, no /import link)
+      (unit: `test_routes.py::TestImportKillSwitchNavBar`; same env-var
+      restart limitation prevents a clicktest)
+- [x] Navbar "New Character" shows dropdown with Import option when
+      `IMPORT_ENABLED` is unset/true -> `test_create_character.py::test_new_character_dropdown_shows_import_option_when_enabled`
 - [ ] Rate-limit hit shows the banner
       (unit: `test_import_routes.py::test_post_rate_limit_blocks_before_job_creation`)
 

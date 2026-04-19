@@ -94,6 +94,28 @@
 
     <h1 class="text-3xl font-bold mb-6">Edit: {{ character.name }}</h1>
 
+    {# Hidden-draft banner: only editors (you and the GM, plus any account
+       grantees) can see the draft until it's revealed. Wrapped in a Jinja
+       `is_hidden` guard so non-hidden chars don't ship the markup at all,
+       AND in `x-show="isHidden"` so the banner can disappear instantly
+       after Apply Changes or Make Draft Visible flips the in-memory flag. #}
+    {% if character.is_hidden %}
+    <div x-show="isHidden" x-cloak data-testid="hidden-draft-banner"
+         class="rounded bg-amber-50 border-l-4 border-amber-400 text-amber-900 px-4 py-3 mb-6 flex items-start gap-3">
+        <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+            <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+        </svg>
+        <div class="text-sm">
+            <strong>This draft is hidden.</strong>
+            Only editors ({{ editor_list_text }}) can see it. Share it
+            with everyone by clicking the <strong>Make Draft Visible</strong>
+            button at the bottom of this page, or by clicking
+            <strong>Apply Changes</strong> to snapshot your first revision.
+        </div>
+    </div>
+    {% endif %}
+
     <form class="space-y-8">
 
         <!-- BASICS -->
@@ -191,6 +213,37 @@
                 {% include "character/partials/school_info.html" %}
                 {% endif %}
             </div>
+
+            <!-- Mantis Wave-Treader 2nd Dan flexible free raise picker. -->
+            <div x-show="school === 'mantis_wave_treader' && currentDan() >= 2"
+                 x-cloak class="mt-3 p-3 bg-white/60 border border-accent/20 rounded"
+                 data-testid="mantis-2nd-dan-picker">
+                <label class="block text-sm font-medium mb-1">
+                    2nd Dan free raise - pick one roll type
+                </label>
+                <select x-model="techniqueChoices.mantis_2nd_dan_free_raise"
+                        @change="markDirty()"
+                        data-testid="mantis-2nd-dan-select"
+                        class="border rounded px-3 py-2 text-sm w-full sm:w-auto">
+                    <option value="">(none selected)</option>
+                    <optgroup label="Combat rolls">
+                        <template x-for="id in MANTIS_2ND_DAN_COMBAT_ROLLS" :key="'mc'+id">
+                            <option :value="id" x-text="MANTIS_2ND_DAN_LABELS[id]"></option>
+                        </template>
+                    </optgroup>
+                    <optgroup label="School knacks">
+                        <template x-for="kid in mantisEligibleKnacks()" :key="'mk'+kid">
+                            <option :value="kid" x-text="KNACK_NAMES[kid] || kid"></option>
+                        </template>
+                    </optgroup>
+                    <optgroup label="Skills">
+                        <template x-for="sid in MANTIS_2ND_DAN_SKILL_IDS" :key="'ms'+sid">
+                            <option :value="sid" x-text="SKILL_NAMES[sid] || sid"></option>
+                        </template>
+                    </optgroup>
+                </select>
+            </div>
+
             <!-- Hidden field for resolved school ring choice (updated by Alpine when school has fixed ring) -->
             <input type="hidden" name="school_ring_choice" x-model="schoolRingChoice">
         </section>
@@ -957,6 +1010,27 @@
                             class="bg-accent hover:bg-red-900 text-parchment px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base disabled:opacity-40 disabled:cursor-not-allowed">
                         Apply Changes
                     </button>
+                    {# Hidden-draft only: explicit reveal that doesn't
+                       snapshot a version. Same combined Jinja+x-show gate
+                       as the banner above so the markup ships only when
+                       relevant AND can hide instantly after click. #}
+                    {% if character.is_hidden %}
+                    <div x-show="isHidden" x-cloak class="relative tooltip-trigger">
+                        <button type="button" @click="makeDraftVisible()"
+                                data-action="make-draft-visible"
+                                :disabled="makingVisible"
+                                class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base disabled:opacity-40 disabled:cursor-not-allowed">
+                            Make Draft Visible
+                        </button>
+                        <div class="tooltip-content absolute right-0 bottom-full mb-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-64 text-left">
+                            Only editors ({{ editor_list_text }}) can see this
+                            draft right now. Click to make this draft visible
+                            to everyone without snapshotting a version. This
+                            is permanent - you cannot re-hide it. Apply Changes
+                            also reveals the draft.
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -992,6 +1066,32 @@ const KNACK_NAMES = {
     '{{ kid }}': '{{ k.name }}',
     {% endfor %}
 };
+
+// Skill display names (used by the Mantis 2nd Dan picker, etc.)
+const SKILL_NAMES = {
+    {% for sid, skill in skills.items() %}
+    '{{ sid }}': '{{ skill.name }}',
+    {% endfor %}
+};
+
+// Mantis Wave-Treader 2nd Dan picker: eligible combat rolls and labels.
+// Initiative is NOT eligible (free raise has no meaning on an initiative roll).
+const MANTIS_2ND_DAN_COMBAT_ROLLS = ['attack', 'damage', 'parry', 'wound_check'];
+const MANTIS_2ND_DAN_LABELS = {
+    'attack': 'Attack',
+    'damage': 'Damage',
+    'parry': 'Parry',
+    'wound_check': 'Wound Check',
+};
+// All skill ids, sorted by display name. The picker exposes every rollable
+// skill; non-rollable knacks (worldliness etc.) are filtered by the Alpine
+// helper mantisEligibleKnacks() against the character's school knacks.
+const MANTIS_2ND_DAN_SKILL_IDS = Object.keys(SKILL_NAMES).sort(
+    (a, b) => SKILL_NAMES[a].localeCompare(SKILL_NAMES[b])
+);
+const MANTIS_NON_ROLLABLE_KNACKS = new Set([
+    'discern_honor', 'worldliness', 'otherworldliness', 'conviction',
+]);
 
 // Skill -> Ring mapping
 const SKILL_RINGS = {
@@ -1085,6 +1185,7 @@ function characterForm() {
             {% endfor %}
         },
         advantageDetails: {{ (character.advantage_details or {})|tojson }},
+        techniqueChoices: {{ (character.technique_choices or {})|tojson }},
         attack: {{ character.attack }},
         parry: {{ character.parry }},
         honor: {{ character.honor }},
@@ -1242,6 +1343,7 @@ function characterForm() {
                     campaign_advantages: Object.keys(this.campaignAdvantages).filter(k => this.campaignAdvantages[k]),
                     campaign_disadvantages: Object.keys(this.campaignDisadvantages).filter(k => this.campaignDisadvantages[k]),
                     advantage_details: this.advantageDetails,
+                    technique_choices: this.techniqueChoices,
                     honor: this.honor,
                     rank: this.rank,
                     rank_locked: this.rankLocked,
@@ -1305,6 +1407,27 @@ function characterForm() {
         showApplyModal: false,
         applySummary: '',
 
+        // Hidden-draft visibility. Mirror the server-side flag so the banner
+        // and the "Make Draft Visible" button can disappear instantly after
+        // either Apply Changes or makeDraftVisible() succeeds.
+        isHidden: {{ 'true' if character.is_hidden else 'false' }},
+        makingVisible: false,
+
+        async makeDraftVisible() {
+            if (this.makingVisible || !this.isHidden) return;
+            this.makingVisible = true;
+            try {
+                const resp = await fetch('/characters/' + this._charId + '/show', {
+                    method: 'POST',
+                });
+                if (resp.ok) {
+                    this.isHidden = false;
+                }
+            } finally {
+                this.makingVisible = false;
+            }
+        },
+
         openApplyModal() {
             this.applySummary = {{ 'true' if is_first_version else 'false' }} ? 'Initial character creation' : '';
             this.showApplyModal = true;
@@ -1353,9 +1476,11 @@ function characterForm() {
                     // Auto-set school ring to at least 3
                     this.rings[info.ring] = Math.max(this.rings[info.ring], 3);
                 } else {
-                    // "any non-Void" or "Air or Water" - user must pick
-                    this.schoolRingChoice = 'Water'; // default
-                    this.rings['Water'] = Math.max(this.rings['Water'], 3);
+                    // Variable-ring school: Mantis Wave-Treader defaults to
+                    // Void; every other variable-ring school defaults to Water.
+                    const defaultRing = schoolId === 'mantis_wave_treader' ? 'Void' : 'Water';
+                    this.schoolRingChoice = defaultRing;
+                    this.rings[defaultRing] = Math.max(this.rings[defaultRing], 3);
                 }
 
                 // Initialize knacks from school data
@@ -1553,6 +1678,15 @@ function characterForm() {
             const vals = Object.values(this.knacks);
             if (vals.length === 0) return 0;
             return Math.min(...vals);
+        },
+
+        // Rollable school-knack ids for the Mantis 2nd Dan picker. Filters
+        // out passive knacks (worldliness etc.) so the player cannot pick
+        // a knack that is never rolled.
+        mantisEligibleKnacks() {
+            return Object.keys(this.knacks || {}).filter(
+                kid => !MANTIS_NON_ROLLABLE_KNACKS.has(kid)
+            );
         },
 
         totalKnackCostSingle(rank) {
