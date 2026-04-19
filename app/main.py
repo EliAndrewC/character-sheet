@@ -99,6 +99,12 @@ def full_art_url(char) -> str | None:
 templates.env.globals["headshot_url"] = headshot_url
 templates.env.globals["full_art_url"] = full_art_url
 
+# Kill-switch check for the "Generate with AI" dropdown entry on the
+# edit page. Read at request time so toggling the env var doesn't need
+# a restart (mirrors how ``import_enabled`` is wired above).
+from app.services.art_rate_limit import art_gen_enabled as _art_gen_enabled
+templates.env.globals["art_gen_enabled"] = _art_gen_enabled
+
 
 # Per-school rules-link substitutions for the "Special Ability" text. When a
 # school's ability quotes a rules section that lives in the upstream L7R

@@ -1223,12 +1223,29 @@ class TestReviewTemplateHasCropper:
 
 
 class TestEditPageGenerateLink:
-    def test_generate_with_ai_appears_in_art_dropdown(self, client):
+    def test_generate_with_ai_enabled_link_appears_when_switch_on(
+        self, client, monkeypatch,
+    ):
+        monkeypatch.setenv("ART_GEN_ENABLED", "true")
         char = _make_character(client)
         resp = client.get(f"/characters/{char.id}/edit")
         assert resp.status_code == 200
         assert b'data-action="generate-with-ai"' in resp.content
         assert f"/characters/{char.id}/art/generate".encode() in resp.content
+        # Disabled variant is NOT rendered
+        assert b'data-action="generate-with-ai-disabled"' not in resp.content
+
+    def test_generate_with_ai_shows_disabled_when_switch_off(
+        self, client, monkeypatch,
+    ):
+        monkeypatch.delenv("ART_GEN_ENABLED", raising=False)
+        char = _make_character(client)
+        resp = client.get(f"/characters/{char.id}/edit")
+        assert resp.status_code == 200
+        # Live link is NOT rendered; disabled placeholder is
+        assert b'data-action="generate-with-ai"' not in resp.content
+        assert b'data-action="generate-with-ai-disabled"' in resp.content
+        assert b"AI art generation is temporarily disabled." in resp.content
 
 
 class TestUpdateStagedBytes:
