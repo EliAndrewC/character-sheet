@@ -364,11 +364,18 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 3rd Dan athletics raise undo restores pool -> `test_school_abilities.py::test_togashi_athletics_raise_undo_restores_pool`
 - [x] 3rd Dan athletics raise per-roll capped by pool remaining -> `test_school_abilities.py::test_togashi_athletics_raise_capped_by_pool_remaining`
 - [x] 3rd Dan athletics raise button hidden when pool empty -> `test_school_abilities.py::test_togashi_athletics_raise_button_hidden_when_pool_empty`
+- [ ] 3rd Dan athletics raise spendable on athletics:parry (existing regular modal path) -> `test_school_abilities.py::test_togashi_athletics_raise_on_athletics_parry`
+- [ ] 3rd Dan athletics raise spendable on athletics:attack (attack modal HIT block adds +5 to atkRollTotal and decrements pool) -> `test_school_abilities.py::test_togashi_athletics_raise_on_athletics_attack_hit`
+- [ ] 3rd Dan athletics raise undo from attack modal restores atkRollTotal and pool -> `test_school_abilities.py::test_togashi_athletics_raise_atk_undo_restores_total_and_pool`
+- [ ] 3rd Dan athletics raise button absent on regular (non-athletics) attack even for togashi 3D -> `test_school_abilities.py::test_togashi_athletics_raise_button_absent_on_regular_attack`
+- [ ] Athletics (Attack) row exposes a void-spend flyout; clicking an option opens the attack modal with preselected void -> `test_rolls.py::test_athletics_picker_attack_has_void_submenu`
+- [ ] Athletics picker has 5th row "Athletics (Predeclared parry)" that rolls athletics:parry with +5 flat -> `test_rolls.py::test_athletics_picker_has_predeclared_parry_row`
 - [x] 4th Dan reroll button on contested rolls -> `test_school_abilities.py::test_togashi_4th_dan_reroll_behavioral`
 - [x] 4th Dan reroll limited to once per roll (button hidden after use, reappears on next roll; post-reroll banner notes original is discarded) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_only_once_per_roll`
 - [x] 4th Dan reroll hidden on initiative (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_initiative`
 - [x] 4th Dan reroll hidden on Etiquette (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_etiquette`
 - [x] 4th Dan reroll hidden on Heraldry (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_heraldry`
+- [ ] 4th Dan reroll hidden on Dragon Tattoo (damage rolls are never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_dragon_tattoo`
 - [x] Dragon Tattoo does not offer void spending (damage roll, not skill roll) -> `test_school_abilities.py::test_togashi_dragon_tattoo_no_void_spend`
 - [x] Conviction spend button appears on skill roll results -> `test_school_abilities.py::test_conviction_button_appears_on_skill_roll`
 - [x] Conviction spend button does NOT appear on initiative rolls -> `test_school_abilities.py::test_conviction_not_on_initiative`
@@ -951,11 +958,12 @@ Kill switch & rate limit (covered by unit suite only):
       clicktest would need to restart the shared live server with
       a different env var, which the current harness doesn't support)
 - [ ] Navbar "New Character" collapses to a single submit button when
-      `IMPORT_ENABLED=false` (no dropdown, no /import link)
+      `IMPORT_ENABLED=false` OR unset (fail-closed default)
       (unit: `test_routes.py::TestImportKillSwitchNavBar`; same env-var
       restart limitation prevents a clicktest)
 - [x] Navbar "New Character" shows dropdown with Import option when
-      `IMPORT_ENABLED` is unset/true -> `test_create_character.py::test_new_character_dropdown_shows_import_option_when_enabled`
+      `IMPORT_ENABLED=true` -> `test_create_character.py::test_new_character_dropdown_shows_import_option_when_enabled`
+      (the clicktest harness sets `IMPORT_ENABLED=true` on the live server)
 - [ ] Rate-limit hit shows the banner
       (unit: `test_import_routes.py::test_post_rate_limit_blocks_before_job_creation`)
 

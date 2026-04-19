@@ -32,6 +32,15 @@ USER_ID = "183026066498125825"
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
+def _enable_import(monkeypatch):
+    """The global default for IMPORT_ENABLED is False (fail-closed) so a
+    missing env var cannot silently re-enable the feature. Tests in this
+    file exercise the enabled path; we opt in explicitly. The two
+    kill-switch tests override this with their own ``setenv``."""
+    monkeypatch.setenv("IMPORT_ENABLED", "true")
+
+
+@pytest.fixture(autouse=True)
 def _sync_runner():
     import_jobs.set_runner(lambda fn: fn())
     with import_jobs._LOCK:
