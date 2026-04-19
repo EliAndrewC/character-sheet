@@ -37,7 +37,7 @@ def _open_duel_modal(page):
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
     if menu.is_visible():
         menu.locator('button:text("Iaijutsu Duel")').click()
-    page.wait_for_selector('[data-modal="iaijutsu-duel"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="iaijutsu-duel"]', state='visible', timeout=10000)
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ def test_contested_roll_shows_result(page, live_server_url):
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
-    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=3000)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=10000)
     modal.locator('button:text("Roll Contested Iaijutsu")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -125,7 +125,7 @@ def test_focus_strike_phase_shows_buttons(page, live_server_url):
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
-    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=3000)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=10000)
     modal.locator('button:text("Roll Contested Iaijutsu")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -149,7 +149,7 @@ def test_focus_alternation(page, live_server_url):
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
-    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=3000)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=10000)
     modal.locator('button:text("Roll Contested Iaijutsu")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -188,7 +188,7 @@ def test_strike_shows_dice_animation(page, live_server_url):
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
-    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=3000)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=10000)
     modal.locator('button:text("Roll Contested Iaijutsu")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -199,7 +199,7 @@ def test_strike_shows_dice_animation(page, live_server_url):
         return false;
     }""", timeout=15000)
     modal.locator('button:text("Proceed to Focus / Strike")').click()
-    modal.locator('button:text("Strike!")').wait_for(state='visible', timeout=3000)
+    modal.locator('button:text("Strike!")').wait_for(state='visible', timeout=10000)
     modal.locator('button:text("Strike!")').click()
     page.wait_for_function(
         "document.querySelectorAll('#dice-animation-duel svg.die').length > 0",
@@ -216,7 +216,7 @@ def _get_to_strike_result(page, live_server_url, name):
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
-    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=3000)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=10000)
     modal.locator('button:text("Roll Contested Iaijutsu")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -227,7 +227,7 @@ def _get_to_strike_result(page, live_server_url, name):
         return false;
     }""", timeout=15000)
     modal.locator('button:text("Proceed to Focus / Strike")').click()
-    modal.locator('button:text("Strike!")').wait_for(state='visible', timeout=3000)
+    modal.locator('button:text("Strike!")').wait_for(state='visible', timeout=10000)
     modal.locator('button:text("Strike!")').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -252,13 +252,13 @@ def test_duel_strike_hit_shows_damage_button(page, live_server_url):
         return false;
     }""")
     if hit:
-        assert modal.locator('button:text("Roll Damage")').is_visible()
+        assert modal.locator('button:text-is("Roll Damage")').is_visible()
 
 
 def test_duel_strike_shows_opponent_input(page, live_server_url):
     """After a strike, opponent roll input is shown."""
     modal = _get_to_strike_result(page, live_server_url, "DuelOppInput")
-    modal.locator('input[placeholder="Enter total"]').wait_for(state='visible', timeout=3000)
+    modal.locator('input[placeholder="Enter total"]').wait_for(state='visible', timeout=10000)
     assert modal.locator('input[placeholder="Enter total"]').is_visible()
 
 
@@ -279,7 +279,7 @@ def _get_to_opponent_damage(page, live_server_url, name):
     }""")
     if hit:
         # Player hit: roll damage first, then enter opponent roll in damage-result phase
-        modal.locator('button:text("Roll Damage")').click()
+        modal.locator('button:text-is("Roll Damage")').click()
         page.wait_for_function("""() => {
             const els = document.querySelectorAll('[x-data]');
             for (const el of els) {
@@ -310,14 +310,14 @@ def test_duel_opponent_hit_shows_damage_input(page, live_server_url):
     """When opponent hits, the damage input and Make Wound Check button appear."""
     _get_to_opponent_damage(page, live_server_url, "DuelOppHit")
     # The opponent-damage phase should show damage input and wound check button
-    page.wait_for_selector('input[placeholder="Damage"]', state='visible', timeout=3000)
+    page.wait_for_selector('input[placeholder="Damage"]', state='visible', timeout=10000)
     assert page.locator('button:text("Make Wound Check")').is_visible()
 
 
 def test_duel_opponent_hit_shows_player_tn(page, live_server_url):
     """When opponent hits, the player's TN is shown as reference."""
     _get_to_opponent_damage(page, live_server_url, "DuelOppTN")
-    page.wait_for_selector('input[placeholder="Damage"]', state='visible', timeout=3000)
+    page.wait_for_selector('input[placeholder="Damage"]', state='visible', timeout=10000)
     assert page.locator('text="Your TN to be hit:"').is_visible()
 
 

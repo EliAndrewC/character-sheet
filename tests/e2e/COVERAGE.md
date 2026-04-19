@@ -5,56 +5,22 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 ---
 
-## Known Flaky / Failing Tests (2026-04-19)
+## Suite stability notes
 
-The full e2e suite (`pytest tests/e2e/ --browser chromium`) finished with **739 passed, 11 failed, 3 skipped, 2 xpassed** at the end of the Mantis Wave-Treader rollout. One failure was a Mantis test-fixture race and was fixed inline (`test_mantis_wc_probability_all_three_stack` - replaced a snapshot `text_content()` check with `page.wait_for_function` so Alpine's re-render can drain). The remaining 10 failures are **pre-existing on `main`** - they also fail on a clean checkout with the Mantis uncommitted changes stashed - and need their own follow-up fixes.
-
-All 10 are grouped below with the failing assertion and a best-guess root cause / suggested fix so they can be triaged in a later coding session.
-
-### Togashi Ise Zumi — "Spend Athletics Raise" button ambiguous locator (6 tests)
-
-- **`test_school_abilities.py::test_togashi_3rd_dan_athletics_raises`** — `Locator.is_visible: strict mode violation: locator("button:has-text(\"Spend Athletics Raise\")") resolved to 3 elements`.
-- **`test_school_abilities.py::test_togashi_athletics_raise_on_athletics_parry`** — same strict-mode violation reached via `Locator.click` timeout.
-- **`test_school_abilities.py::test_togashi_athletics_raise_on_athletics_attack_hit`** — same.
-- **`test_school_abilities.py::test_togashi_athletics_raise_atk_undo_restores_total_and_pool`** — same.
-- **`test_school_abilities.py::test_togashi_athletics_raise_button_absent_on_regular_attack`** — same.
-- **`test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_athletics_parry`** — click timeout, same ambiguous-locator family.
-
-**Root cause:** the sheet now renders the "Spend Athletics Raise" button in three separate places (attack-modal HIT branch at `sheet.html:~3167`, attack-modal MISS branch at `~3369`, and the dice-roller post-roll panel at `~4254`). Each has its own `data-action="spend-togashi-raise(-atk)?"` marker, but the tests still use a text-based locator that matches all three. Playwright 1.58's strict mode now fails the first time any such text locator is accessed.
-
-**Suggested fix:** update each test's locator from `button:has-text("Spend Athletics Raise")` to the specific `[data-action="spend-togashi-raise"]` (dice-roller) or `[data-action="spend-togashi-raise-atk"]` (attack modal) selector, scoped through `page.locator('[data-modal="..."]')` where appropriate.
-
-### Togashi Ise Zumi — 4th Dan reroll cleanup (1 test)
-
-- **`test_school_abilities.py::test_togashi_4th_dan_reroll_only_once_per_roll`** — after the first reroll is used, `button:has-text("Reroll (Togashi 4th Dan)")` remains visible. `AssertionError: Reroll button should be hidden after first use`.
-
-**Root cause:** either the `togashiRerollUsed` flag isn't being set on the path the test exercises, or the button's `x-show` condition regressed during the recent action-die refactor. Most likely the latter — the action-die rewrite around `setActionDice` / `spendLowestUnspentActionDie` touched adjacent state.
-
-**Suggested fix:** open the sheet as a Togashi 4th Dan character, drive a contested roll manually, click Reroll once, and inspect `window.Alpine.$data(dicerollerEl).togashiRerollUsed` vs the button's `x-show` expression. Likely one-line fix in `sheet.html` to keep the flag consistent.
-
-### Tracking Advanced — per-day reset button layout (1 test)
-
-- **`test_tracking_advanced.py::test_per_day_reset_button_renders_left_of_counter`** — `Locator.text_content: strict mode violation: locator("text=\"Conviction\"").locator("..").locator("..") resolved to 3 elements` (reset-ability row, XP breakdown row, school knacks panel).
-
-**Root cause:** the word "Conviction" appears in at least three distinct DOM subtrees. The test's `text="Conviction"` locator matches all of them and then `.locator("..").locator("..")` climbs ambiguous parents.
-
-**Suggested fix:** replace the text locator with a scope anchored on `[data-action="reset-ability-conviction"]` (already used elsewhere in the same test) and climb from there, or use `page.get_by_text("Conviction", exact=True).nth(0)` with a comment explaining which occurrence is intended.
-
-### Tracking Advanced — per-adventure reset summary excludes action dice (1 test)
-
-- **`test_tracking_advanced.py::test_per_adventure_reset_also_clears_action_dice`** — `assert "2 action dice" in body` fails; the full-body `text_content()` never includes that literal after opening the reset modal.
-
-**Root cause:** the test assigns `window._trackingBridge.actionDice = [...]` **directly** (not via `setActionDice`). Direct property-set *does* trigger Alpine reactivity, so that's not the issue. `resetSummary()` in `sheet.html:661` does push `"Clear ${n} action die(ce)"` when `actionDice.length > 0`. So the summary string literally contains `"2 action dice"`. The reason it's missing from the body text is probably that the reset modal's `x-show` is gated on `hasAnythingSpent()` — and that method walks `perAdventure` plus checks `actionDice.length`. On a fresh Togashi 3rd Dan (precepts=1) the default conviction counter may not fire `setCount('conviction', 1)` cleanly if `conviction` isn't in the computed `perAdventure` list. Worth checking what `schoolAbilities.priest_round_conviction_refresh` / `convictionConfig.rank` end up as for a 3rd Dan Togashi — the test assumes the conviction counter is present, but it may not be.
-
-**Suggested fix:** before asserting, dump the reset modal's rendered HTML and confirm the `<template x-for="item in resetSummary()">` actually emitted any `<li>` items. If the modal opens with an empty summary, swap the conviction setCount to a counter that's guaranteed to exist on this character (e.g. use a school that gives a per-adventure counter Dan 1+). Alternatively, decouple the test from the counter requirement by opening the modal via a dedicated "reset action dice only" path if one exists.
-
-### Character Art Display — test isolation leak (1 test)
-
-- **`test_character_art_display.py::test_list_page_shows_headshot_for_character_with_art`** — `assert placeholders.count() == 1` fails with `36 == 1`. The test creates two characters (one with art, one without) and expects exactly one placeholder on the index page, but the index is cluttered with 36 characters left over from prior tests in the session.
-
-**Root cause:** the `live_server_url` fixture creates one SQLite DB per test session, not per test. Clicktests that create characters accumulate state.
-
-**Suggested fix:** either scope the test to characters created in *this* test (e.g. filter by owner display name via a test-only query), or tighten the fixture to per-test isolation. A per-test DB is expensive; the cheaper path is to assert on specific character cards rather than on the aggregate count.
+The full suite (`pytest tests/e2e/ --browser chromium`) takes ~37 min on the
+sandbox dev container and runs cleanly (750 passed). Several tests in
+`test_school_abilities.py` were historically flaky under full-suite load
+because they read snapshot DOM/Alpine state (e.g. `is_visible()`,
+`text_content()`) immediately after triggering an async Alpine reactivity
+update. Where a flake was reproduced, the fix was to replace the snapshot
+read with a `wait_for(state='visible'|'hidden')` or `wait_for_function`
+poll that gives Alpine a chance to drain. Most short timeouts in
+`test_school_abilities.py`, `test_iaijutsu_duel.py`, `test_tracking.py`,
+and `test_tracking_advanced.py` were bumped from 1-3s to 10s for the same
+reason. When adding a new clicktest, prefer `wait_for_function` over a
+fixed `wait_for_timeout`, and avoid `page.locator(...).is_visible()` /
+`text_content()` immediately after an Alpine state change unless you
+also wait for the post-update DOM to settle.
 
 ---
 

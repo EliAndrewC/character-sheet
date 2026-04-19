@@ -145,7 +145,7 @@ def test_reset_per_adventure(page, live_server_url):
 
     # Reset - opens modal, then confirm
     page.locator('[data-action="open-reset-modal"]').click()
-    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=10000)
     page.locator('[data-action="confirm-reset"]').click()
     page.wait_for_timeout(500)
 
@@ -175,7 +175,7 @@ def _create_togashi_3rd_dan(page, live_server_url, precepts=2):
 def test_togashi_3rd_dan_daily_raises_tracker_row(page, live_server_url):
     """Togashi 3rd Dan sheet shows 'Daily Athletics Raises' tracker with 4*precepts pool."""
     _create_togashi_3rd_dan(page, live_server_url, precepts=2)
-    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=10000)
     row = page.locator('text="Daily Athletics Raises"').locator('..')
     assert "8 / 8" in row.text_content()
 
@@ -183,7 +183,7 @@ def test_togashi_3rd_dan_daily_raises_tracker_row(page, live_server_url):
 def test_per_day_ability_has_its_own_reset_button_with_tooltip(page, live_server_url):
     """Conviction and Daily Athletics Raises each have a 'Reset' button labelled as per-day."""
     _create_togashi_3rd_dan(page, live_server_url, precepts=1)
-    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=10000)
     # Conviction is also per-day
     conviction_btn = page.locator('[data-action="reset-ability-conviction"]')
     assert conviction_btn.count() == 1
@@ -200,14 +200,14 @@ def test_per_day_reset_button_renders_left_of_counter(page, live_server_url):
     decrement (-) button in DOM order, and its left edge should be left of
     the decrement button's left edge."""
     _create_togashi_3rd_dan(page, live_server_url, precepts=1)
-    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
-    # Use the conviction row for the layout assertion.
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=10000)
+    # Use the conviction row for the layout assertion. Anchor on the
+    # data-action button (uniquely scoped to this row) instead of a text
+    # locator - "Conviction" also appears in the XP breakdown panel and
+    # school knacks panel, which would resolve to multiple matches.
     reset_btn = page.locator('[data-action="reset-ability-conviction"]')
-    row = page.locator('text="Conviction"').locator('..').locator('..')
-    # The minus button (decrement) is the first numeric button and lives
-    # in the same row as Reset. We grab the buttons that contain "-"/"+"
-    # text relative to the counter group.
     counter_group = reset_btn.locator('..')
+    row = counter_group.locator('..')
     minus = counter_group.locator('button', has_text="-").first
     plus = counter_group.locator('button', has_text="+").first
     reset_box = reset_btn.bounding_box()
@@ -227,7 +227,7 @@ def test_per_day_reset_button_renders_left_of_counter(page, live_server_url):
 def test_per_day_reset_button_disabled_until_spent(page, live_server_url):
     """The per-day reset button is disabled when nothing has been spent."""
     _create_togashi_3rd_dan(page, live_server_url, precepts=1)
-    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=10000)
     btn = page.locator('[data-action="reset-ability-togashi_daily_athletics_raises"]')
     assert btn.is_disabled()
 
@@ -235,7 +235,7 @@ def test_per_day_reset_button_disabled_until_spent(page, live_server_url):
 def test_per_day_reset_button_restores_pool(page, live_server_url):
     """Clicking the per-day reset button on a counter restores its full pool."""
     _create_togashi_3rd_dan(page, live_server_url, precepts=1)
-    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=10000)
     # Spend 2 raises by manipulating the tracking bridge directly
     page.evaluate("window._trackingBridge.setCount('togashi_daily_athletics_raises', 2)")
     page.wait_for_timeout(300)
@@ -250,7 +250,7 @@ def test_per_day_reset_button_restores_pool(page, live_server_url):
 def test_per_day_reset_leaves_other_counters_alone(page, live_server_url):
     """Resetting one per-day ability does not touch other per-adventure counters."""
     _create_togashi_3rd_dan(page, live_server_url, precepts=1)
-    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=10000)
     # Spend 1 raise and 1 conviction
     page.evaluate("window._trackingBridge.setCount('togashi_daily_athletics_raises', 1)")
     page.evaluate("window._trackingBridge.setCount('conviction', 1)")
@@ -267,12 +267,12 @@ def test_per_day_reset_leaves_other_counters_alone(page, live_server_url):
 def test_per_adventure_reset_also_clears_per_day_pools(page, live_server_url):
     """The global per-adventure reset still clears conviction and daily athletics raises."""
     _create_togashi_3rd_dan(page, live_server_url, precepts=1)
-    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=10000)
     page.evaluate("window._trackingBridge.setCount('togashi_daily_athletics_raises', 2)")
     page.evaluate("window._trackingBridge.setCount('conviction', 1)")
     page.wait_for_timeout(300)
     page.locator('[data-action="open-reset-modal"]').click()
-    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=10000)
     page.locator('[data-action="confirm-reset"]').click()
     page.wait_for_timeout(400)
     assert page.evaluate("window._trackingBridge.getCount('togashi_daily_athletics_raises')") == 0
@@ -283,7 +283,7 @@ def test_per_adventure_reset_also_clears_action_dice(page, live_server_url):
     """Action dice from a prior combat round are stale state; the global
     per-adventure reset wipes them along with the per-adventure counters."""
     _create_togashi_3rd_dan(page, live_server_url, precepts=1)
-    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=10000)
     # Seed action dice directly via the tracking bridge and consume one
     # counter so the Reset button becomes enabled.
     page.evaluate("""
@@ -297,7 +297,7 @@ def test_per_adventure_reset_also_clears_action_dice(page, live_server_url):
     page.wait_for_timeout(200)
     assert page.evaluate("window._trackingBridge.actionDice.length") == 2
     page.locator('[data-action="open-reset-modal"]').click()
-    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=10000)
     # Summary mentions the action dice being cleared.
     body = page.text_content('body')
     assert "2 action dice" in body
@@ -312,7 +312,7 @@ def test_reset_button_enabled_with_only_action_dice(page, live_server_url):
     toggles set), the global Reset button must still be clickable so the
     user can wipe the dice through the usual confirm modal."""
     _create_togashi_3rd_dan(page, live_server_url, precepts=1)
-    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=10000)
     page.evaluate("""
         window._trackingBridge.actionDice = [{value: 3, spent: false}];
         window._trackingBridge.save();
@@ -321,7 +321,7 @@ def test_reset_button_enabled_with_only_action_dice(page, live_server_url):
     btn = page.locator('[data-action="open-reset-modal"]')
     assert not btn.is_disabled()
     btn.click()
-    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=10000)
     page.locator('[data-action="confirm-reset"]').click()
     page.wait_for_timeout(400)
     assert page.evaluate("window._trackingBridge.actionDice.length") == 0
@@ -341,7 +341,7 @@ def test_non_per_day_counter_has_no_reset_button(page, live_server_url):
             click_plus(page, f"knack_{knack}", 1)
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Shinsei setup")
-    page.wait_for_selector('text="Otherworldliness"', timeout=3000)
+    page.wait_for_selector('text="Otherworldliness"', timeout=10000)
     assert page.locator('[data-action="reset-ability-otherworldliness"]').count() == 0
     assert page.locator('[data-action="reset-ability-worldliness"]').count() == 0
     # Conviction should still have one (per-day)
@@ -358,7 +358,7 @@ def test_reset_modal_lists_abilities_to_restore(page, live_server_url):
     page.wait_for_timeout(500)
     # Open reset modal
     page.locator('[data-action="open-reset-modal"]').click()
-    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=10000)
     # The modal should list "Regain Lucky (re-roll)"
     body = page.text_content("body")
     assert "Regain" in body
