@@ -185,18 +185,47 @@
                 {% endif %}
             </div>
             <div class="bg-parchment rounded p-2 flex items-center flex-wrap"
-                 x-data="{ posture: (window._trackingBridge?.currentPosture?.() || null) }"
-                 @mantis-posture-changed.window="posture = $event.detail.posture"
+                 x-data="{
+                     posture: null,
+                     defensiveCount: 0,
+                     accum: {{ 'true' if school_abilities.get('mantis_posture_accumulation') else 'false' }},
+                     base: {{ 5 + 5 * character.parry }},
+                     total() {
+                         return this.base
+                             + (this.posture === 'defensive' ? 5 : 0)
+                             + (this.accum ? this.defensiveCount : 0);
+                     },
+                     tooltip() {
+                         const parts = [];
+                         if (this.posture === 'defensive') parts.push('+5 Mantis Wave-Treader defensive posture');
+                         if (this.accum && this.defensiveCount > 0) {
+                             parts.push('+' + this.defensiveCount
+                                 + ' Mantis 5th Dan (' + this.defensiveCount
+                                 + ' defensive phase' + (this.defensiveCount > 1 ? 's' : '') + ')');
+                         }
+                         return parts.length > 0 ? parts.join('; ') : null;
+                     }
+                 }"
+                 x-init="$nextTick(() => {
+                     const t = window._trackingBridge;
+                     posture = t?.currentPosture?.() || null;
+                     defensiveCount = t?.defensivePhaseCount?.() || 0;
+                 })"
+                 @mantis-posture-changed.window="posture = $event.detail.posture; defensiveCount = $event.detail.defensiveCount || 0"
                  data-testid="tn-display">
                 <span class="text-ink/60">TN to be hit:</span>&nbsp;
                 <span class="font-bold"
-                      :class="posture === 'defensive' ? 'text-gold' : ''"
-                      :title="posture === 'defensive' ? 'Mantis Wave-Treader defensive posture (+5)' : null"
-                      x-text="{{ 5 + 5 * character.parry }} + (posture === 'defensive' ? 5 : 0)"></span>&nbsp;
+                      :class="total() > base ? 'text-gold' : ''"
+                      :title="tooltip()"
+                      x-text="total()"></span>&nbsp;
                 <span class="text-xs text-ink/50">(parry {{ character.parry }})</span>
                 <span x-show="posture === 'defensive'" x-cloak
                       class="text-xs text-gold ml-1"
                       data-testid="tn-defensive-bump">+5 defensive posture</span>
+                <span x-show="accum && defensiveCount > 0" x-cloak
+                      class="text-xs text-gold ml-1"
+                      data-testid="tn-5th-dan-accumulator"
+                      x-text="`+${defensiveCount} 5th Dan`"></span>
             </div>
             <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
                 <span class="text-ink/60">Wound Check:</span>&nbsp;
@@ -417,6 +446,21 @@
                         ? this.postureHistory[this.postureHistory.length - 1]
                         : null;
                 },
+                offensivePhaseCount() {
+                    return this.postureHistory.filter(p => p === 'offensive').length;
+                },
+                defensivePhaseCount() {
+                    return this.postureHistory.filter(p => p === 'defensive').length;
+                },
+                _dispatchMantisPostureChanged(posture) {
+                    window.dispatchEvent(new CustomEvent('mantis-posture-changed', {
+                        detail: {
+                            posture: posture,
+                            offensiveCount: this.offensivePhaseCount(),
+                            defensiveCount: this.defensivePhaseCount(),
+                        },
+                    }));
+                },
                 selectPosture(type) {
                     if (this.posturePhase > 10) return;
                     if (type !== 'offensive' && type !== 'defensive') return;
@@ -424,8 +468,7 @@
                     this.posturePhase += 1;
                     this.adventureState.mantis_posture_phase = this.posturePhase;
                     this.adventureState.mantis_posture_history = this.postureHistory;
-                    window.dispatchEvent(new CustomEvent('mantis-posture-changed',
-                        { detail: { posture: type } }));
+                    this._dispatchMantisPostureChanged(type);
                     this.save();
                 },
                 resetMantisRound() {
@@ -436,8 +479,7 @@
                     this.postureHistory = [];
                     delete this.adventureState.mantis_posture_phase;
                     delete this.adventureState.mantis_posture_history;
-                    window.dispatchEvent(new CustomEvent('mantis-posture-changed',
-                        { detail: { posture: null } }));
+                    this._dispatchMantisPostureChanged(null);
                 },
                 toggleActionMenu(i) {
                     this.actionMenuOpen = this.actionMenuOpen === i ? null : i;
@@ -1072,6 +1114,21 @@
                      x-text="currentPosture() === 'offensive'
                         ? 'Active bonuses: +5 attack rolls, +5 damage rolls'
                         : 'Active bonuses: +5 wound checks, +5 TN to be hit'"></div>
+                {% if school_abilities.get('mantis_posture_accumulation') %}
+                {# 5th Dan: per-round accumulator (+1 per declared posture). #}
+                <div x-show="offensivePhaseCount() > 0 || defensivePhaseCount() > 0" x-cloak
+                     class="text-xs text-ink/50 mt-0.5"
+                     data-testid="mantis-5th-dan-accumulator">
+                    <span class="font-medium">Accumulated 5th Dan bonuses:</span>
+                    <span x-show="offensivePhaseCount() > 0"
+                          data-testid="mantis-5th-dan-offensive"
+                          x-text="`+${offensivePhaseCount()} to attack and damage rolls`"></span>
+                    <span x-show="offensivePhaseCount() > 0 && defensivePhaseCount() > 0"> | </span>
+                    <span x-show="defensivePhaseCount() > 0"
+                          data-testid="mantis-5th-dan-defensive"
+                          x-text="`+${defensivePhaseCount()} to wound checks and TN`"></span>
+                </div>
+                {% endif %}
             </div>
             {% endif %}
         </div>
@@ -2273,9 +2330,10 @@
                               x-text="'(+' + wcProbs.flat + ' flat bonus)'"></span>
                     </div>
 
-                    {# Bonus sources. Mantis defensive posture overlays a live +5. #}
-                    <div x-show="formulas.wound_check?.bonus_sources?.length > 0 || (window._trackingBridge?.currentPosture?.() === 'defensive')" x-cloak class="text-xs text-ink/60">
-                        Bonuses: <span x-text="[...(formulas.wound_check?.bonus_sources || []), ...(window._trackingBridge?.currentPosture?.() === 'defensive' ? ['+5 from defensive posture'] : [])].join(', ')"></span>
+                    {# Bonus sources. Mantis defensive posture (+5) plus 5th Dan
+                       defensive-posture-count accumulator (+N) overlay live. #}
+                    <div x-show="formulas.wound_check?.bonus_sources?.length > 0 || _mantisLiveWcLabels().length > 0" x-cloak class="text-xs text-ink/60">
+                        Bonuses: <span x-text="[...(formulas.wound_check?.bonus_sources || []), ..._mantisLiveWcLabels()].join(', ')"></span>
                     </div>
 
                     {# Doji Artisan 5th Dan: auto-bonus from light wounds #}
@@ -2724,20 +2782,21 @@
                         </div>
                     </div>
 
-                    {# Formula bonuses (e.g. Kitsuki +2*Water, Courtier +Air) #}
-                    {# Mantis offensive posture overlays a live +5 attack bonus into this list. #}
-                    <div x-show="(atkFormula?.bonus_sources?.length > 0) || (window._trackingBridge?.currentPosture?.() === 'offensive')" x-cloak
+                    {# Formula bonuses (e.g. Kitsuki +2*Water, Courtier +Air).
+                       Mantis posture overlays (live): +5 offensive, plus 5th Dan
+                       offensive-posture-count accumulator. #}
+                    <div x-show="(atkFormula?.bonus_sources?.length > 0) || _mantisLiveAttackLabels().length > 0" x-cloak
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
                         <span class="font-medium">Bonuses:</span>
-                        <span x-text="[...(atkFormula?.bonus_sources || []), ...(window._trackingBridge?.currentPosture?.() === 'offensive' ? ['+5 from offensive posture'] : [])].join(', ')"></span>
+                        <span x-text="[...(atkFormula?.bonus_sources || []), ..._mantisLiveAttackLabels()].join(', ')"></span>
                     </div>
 
-                    {# Damage-side bonuses (Courtier +Air, Mantis 2nd Dan +5, etc.) #}
-                    {# Mantis offensive posture also overlays +5 on damage. #}
-                    <div x-show="(atkFormula?.damage_bonus_sources?.length > 0) || (window._trackingBridge?.currentPosture?.() === 'offensive')" x-cloak
+                    {# Damage-side bonuses (Courtier +Air, Mantis 2nd Dan +5, etc.).
+                       Mantis posture overlays (live): +5 offensive + 5th Dan accumulator. #}
+                    <div x-show="(atkFormula?.damage_bonus_sources?.length > 0) || _mantisLiveDamageLabels().length > 0" x-cloak
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
                         <span class="font-medium">Damage bonuses:</span>
-                        <span x-text="[...(atkFormula?.damage_bonus_sources || []), ...(window._trackingBridge?.currentPosture?.() === 'offensive' ? ['+5 from offensive posture'] : [])].join(', ')"></span>
+                        <span x-text="[...(atkFormula?.damage_bonus_sources || []), ..._mantisLiveDamageLabels()].join(', ')"></span>
                     </div>
 
                     {# Isawa Duelist 3rd Dan: note that TN trade is assumed in probabilities #}
@@ -6325,6 +6384,61 @@
                 return this.atkIsDoubleAttack() ? this.atkTN + 20 : this.atkTN;
             },
 
+            // Mantis Wave-Treader posture overlay helpers. Read live state
+            // from the tracking bridge so pre-roll Alpine expressions react to
+            // posture selections without re-opening the modal. Returns a list
+            // of labeled strings to display; also expose the numeric total for
+            // probability / damage math.
+            _mantisLiveAttackLabels() {
+                const t = window._trackingBridge;
+                if (!t) return [];
+                const out = [];
+                if (t.currentPosture?.() === 'offensive') {
+                    out.push('+5 from offensive posture');
+                }
+                if (this.schoolAbilities.mantis_posture_accumulation) {
+                    const c = t.offensivePhaseCount?.() || 0;
+                    if (c > 0) out.push(`+${c} from Mantis 5th Dan (offensive posture count)`);
+                }
+                return out;
+            },
+            _mantisLiveDamageLabels() {
+                // Attack and damage share the same offensive-posture overlays,
+                // so this is structurally identical to the attack-side list.
+                return this._mantisLiveAttackLabels();
+            },
+            _mantisLiveAttackFlat() {
+                const t = window._trackingBridge;
+                if (!t) return 0;
+                let flat = t.currentPosture?.() === 'offensive' ? 5 : 0;
+                if (this.schoolAbilities.mantis_posture_accumulation) {
+                    flat += t.offensivePhaseCount?.() || 0;
+                }
+                return flat;
+            },
+            _mantisLiveWcLabels() {
+                const t = window._trackingBridge;
+                if (!t) return [];
+                const out = [];
+                if (t.currentPosture?.() === 'defensive') {
+                    out.push('+5 from defensive posture');
+                }
+                if (this.schoolAbilities.mantis_posture_accumulation) {
+                    const c = t.defensivePhaseCount?.() || 0;
+                    if (c > 0) out.push(`+${c} from Mantis 5th Dan (defensive posture count)`);
+                }
+                return out;
+            },
+            _mantisLiveWcFlat() {
+                const t = window._trackingBridge;
+                if (!t) return 0;
+                let flat = t.currentPosture?.() === 'defensive' ? 5 : 0;
+                if (this.schoolAbilities.mantis_posture_accumulation) {
+                    flat += t.defensivePhaseCount?.() || 0;
+                }
+                return flat;
+            },
+
             _dojiAtkBonus() {
                 return this.atkFormula?.doji_5th_dan_always
                     ? Math.max(0, Math.floor((this.atkTN - 10) / 5)) : 0;
@@ -6339,8 +6453,9 @@
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const dojiBonus = this._dojiAtkBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
-                // Mantis Wave-Treader: offensive posture adds +5 to attack rolls.
-                const postureFlat = window._trackingBridge?.currentPosture?.() === 'offensive' ? 5 : 0;
+                // Mantis Wave-Treader: offensive posture (+5) plus 5th Dan
+                // offensive-posture-count accumulator (+N) feed into the target.
+                const postureFlat = this._mantisLiveAttackFlat();
                 const target = Math.max(0,
                     this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - shosuroFlat - postureFlat);
                 return target < arr.length ? arr[target] : 0;
@@ -6353,7 +6468,7 @@
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const dojiBonus = this._dojiAtkBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
-                const postureFlat = window._trackingBridge?.currentPosture?.() === 'offensive' ? 5 : 0;
+                const postureFlat = this._mantisLiveAttackFlat();
                 return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + shosuroFlat + postureFlat;
             },
 
@@ -6453,6 +6568,15 @@
                     parts.push('+5 flat from offensive posture');
                     flat += 5;
                 }
+                // Mantis Wave-Treader 5th Dan: per-round accumulator of +N
+                // damage where N = count of offensive postures declared.
+                if (this.schoolAbilities.mantis_posture_accumulation) {
+                    const _mantisDmgAcc = window._trackingBridge?.offensivePhaseCount?.() || 0;
+                    if (_mantisDmgAcc > 0) {
+                        parts.push(`+${_mantisDmgAcc} flat from Mantis 5th Dan (offensive posture count)`);
+                        flat += _mantisDmgAcc;
+                    }
+                }
                 if (residualFlat > 0) {
                     parts.push(`+${residualFlat} flat bonus`);
                 }
@@ -6520,6 +6644,20 @@
                     formula.flat = (formula.flat || 0) + 5;
                     formula.bonus_sources = [...(formula.bonus_sources || []), '+5 from offensive posture'];
                     formula.bonuses = [...(formula.bonuses || []), { label: 'offensive posture', amount: 5 }];
+                }
+                // Mantis Wave-Treader 5th Dan: per-round accumulator of +N to
+                // attack where N is the count of offensive postures declared.
+                if (this.schoolAbilities.mantis_posture_accumulation) {
+                    const _mantisAtkAcc = window._trackingBridge?.offensivePhaseCount?.() || 0;
+                    if (_mantisAtkAcc > 0) {
+                        formula.flat = (formula.flat || 0) + _mantisAtkAcc;
+                        const _lbl = `+${_mantisAtkAcc} from Mantis 5th Dan (offensive posture count)`;
+                        formula.bonus_sources = [...(formula.bonus_sources || []), _lbl];
+                        formula.bonuses = [...(formula.bonuses || []), {
+                            label: 'Mantis 5th Dan (offensive posture count)',
+                            amount: _mantisAtkAcc,
+                        }];
+                    }
                 }
 
                 // Isawa Duelist 3rd Dan: auto-apply TN trade bonus (user can undo post-roll)
@@ -6852,8 +6990,9 @@
                 const shosuroFlat = this.wcIsStrike
                     ? (p.shosuro_flats_no_reroll?.[key] || 0)
                     : (p.shosuro_flats?.[key] || 0);
-                // Mantis Wave-Treader: defensive posture adds +5 to wound checks.
-                const postureFlat = window._trackingBridge?.currentPosture?.() === 'defensive' ? 5 : 0;
+                // Mantis Wave-Treader: defensive posture (+5) plus 5th Dan
+                // defensive-posture-count accumulator (+N) feed the WC flat.
+                const postureFlat = this._mantisLiveWcFlat();
                 const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise + dojiBonus + shosuroFlat + postureFlat;
                 const lw = this.wcLightWounds;
                 const target = Math.max(0, lw - flat);
@@ -6906,6 +7045,17 @@
                     formula.flat = (formula.flat || 0) + 5;
                     if (!formula.bonus_sources) formula.bonus_sources = [];
                     formula.bonus_sources = [...formula.bonus_sources, '+5 from defensive posture'];
+                }
+                // Mantis Wave-Treader 5th Dan: per-round accumulator of +N to
+                // wound checks where N is the count of defensive postures.
+                if (this.schoolAbilities.mantis_posture_accumulation) {
+                    const _mantisWcAcc = window._trackingBridge?.defensivePhaseCount?.() || 0;
+                    if (_mantisWcAcc > 0) {
+                        formula.flat = (formula.flat || 0) + _mantisWcAcc;
+                        if (!formula.bonus_sources) formula.bonus_sources = [];
+                        formula.bonus_sources = [...formula.bonus_sources,
+                            `+${_mantisWcAcc} from Mantis 5th Dan (defensive posture count)`];
+                    }
                 }
 
                 // Iaijutsu strike: no reroll

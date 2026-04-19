@@ -481,6 +481,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Mantis Wave-Treader Special: per-phase posture tracker (buttons + current-posture line).
         # Mechanical effects (attack/damage/wound-check/TN bonuses) land in later phases.
         "mantis_posture_tracking": character.school == "mantis_wave_treader",
+        # Mantis Wave-Treader 5th Dan: per-round accumulator (+1 per declared
+        # offensive posture to attack/damage; +1 per declared defensive posture
+        # to wound checks and TN). Derived client-side from postureHistory.
+        "mantis_posture_accumulation": character.school == "mantis_wave_treader" and dan >= 5,
     }
 
     # Compute wound check probability slice for client-side display.
