@@ -260,6 +260,21 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 2nd Dan wound-check choice: WC modal Bonuses row shows +5 -> `test_school_abilities.py::test_mantis_2nd_dan_wound_check_choice_labeled`
 - [x] 2nd Dan damage choice: attack modal pre-roll Damage bonuses AND post-roll damage breakdown show +5 -> `test_school_abilities.py::test_mantis_2nd_dan_damage_choice_labeled`
 - [x] 2nd Dan switch moves the bonus from attack to wound-check -> `test_school_abilities.py::test_mantis_2nd_dan_switch_choice_moves_bonus`
+- [x] Posture tracker block renders on Mantis sheets with both posture buttons -> `test_school_abilities.py::test_mantis_posture_tracker_visibility`
+- [x] Posture tracker absent on non-Mantis sheets -> `test_school_abilities.py::test_mantis_posture_tracker_absent_on_non_mantis`
+- [x] Clicking a posture advances the phase counter, records it in postureHistory, shows the "Current: Phase X - posture" line, and persists across reload -> `test_school_abilities.py::test_mantis_posture_tracker_advance`
+- [x] Both posture buttons disable after 10 picks (phase 11) -> `test_school_abilities.py::test_mantis_posture_tracker_disable_at_11`
+- [x] Rolling initiative resets posturePhase to 1 and empties postureHistory -> `test_school_abilities.py::test_mantis_posture_tracker_reset_on_initiative`
+- [x] Clicking the action-dice Clear button also resets the posture tracker -> `test_school_abilities.py::test_mantis_posture_tracker_reset_on_action_dice_clear`
+- [x] Posture tracker shows "+5 attack rolls, +5 damage rolls" summary in offensive -> `test_school_abilities.py::test_mantis_posture_tracker_bonus_summary_offensive`
+- [x] Posture tracker shows "+5 wound checks, +5 TN to be hit" summary in defensive -> `test_school_abilities.py::test_mantis_posture_tracker_bonus_summary_defensive`
+- [x] Toggling posture mid-round updates the summary -> `test_school_abilities.py::test_mantis_posture_tracker_bonus_summary_toggles`
+- [x] Offensive posture overlays "+5 from offensive posture" in attack modal pre-roll Bonuses and Damage bonuses rows -> `test_school_abilities.py::test_mantis_offensive_posture_attack_pre_roll_bonuses`
+- [x] Offensive posture adds +5 to atkRollTotal and shows labeled entry in post-roll breakdown -> `test_school_abilities.py::test_mantis_offensive_posture_attack_post_roll_breakdown`
+- [x] Offensive posture adds "+5 flat from offensive posture" to atkComputeDamage parts (pre-roll preview AND post-roll damage-result breakdown) -> `test_school_abilities.py::test_mantis_offensive_posture_damage_preview_and_result`
+- [x] Defensive posture bumps the sheet's TN-to-be-hit display by +5 with a tooltip; swapping posture toggles the bump -> `test_school_abilities.py::test_mantis_defensive_posture_tn_display_bumps`
+- [x] Defensive posture overlays "+5 from defensive posture" in the WC modal pre-roll Bonuses and post-roll breakdown -> `test_school_abilities.py::test_mantis_defensive_posture_wc_modal_overlay`
+- [x] No posture selected -> no posture labels leak into the attack modal -> `test_school_abilities.py::test_mantis_no_posture_no_overlay`
 
 ### Merchant
 
@@ -1040,14 +1055,39 @@ JS-error sanity:
       `test_responsive.py::test_homepage_headshot_placeholder_fits_card_at_phone_width`
       + `test_homepage_no_horizontal_overflow`
 - [ ] View Sheet floats full art to the right of the school section at >= lg breakpoint
-- [ ] View Sheet stacks full art and school section below lg breakpoint
+      (unit: `test_headshot_url.py::TestSheetPageRendering::test_sheet_shows_art_grid_when_character_has_art`
+      proves the `lg:grid lg:grid-cols-2` wrapper + `lg:order-last` on the art div
+      are emitted; clicktest to add in Phase 10)
+- [x] View Sheet stacks full art and school section below lg breakpoint ->
+      `test_responsive.py::test_sheet_no_horizontal_overflow_across_widths`
+      (covers 375 / 768 / 1280 px)
 - [ ] View Sheet omits art block for characters without art (no empty column)
+      (unit: `test_headshot_url.py::TestSheetPageRendering::test_sheet_omits_grid_when_character_has_no_art` +
+      `test_sheet_omits_grid_when_bucket_unconfigured`; clicktest to add in Phase 10)
 - [ ] "Generate with AI" button opens step 1 (gender)
+      (unit: `test_art_routes.py::TestEditPageGenerateLink::test_generate_with_ai_appears_in_art_dropdown`
+      + `TestGenerateGenderPage::test_renders_for_owner`;
+      clicktest to add in Phase 10)
 - [ ] Step 1 -> step 2 carries gender forward; pronouns are correct
+      (unit: `test_art_routes.py::TestGenerateOptionsPage::test_renders_with_wasp_selected_by_default`
+      asserts the hidden `name="gender" value="male"` field;
+      `test_art_prompt.py::TestMaleMinimalPrompt::test_uses_he_pronoun` +
+      `TestFemaleMinimalPrompt::test_uses_she_pronoun` prove the pronoun branch;
+      clicktest to add in Phase 10)
 - [ ] Step 2 age checkbox cannot be unchecked
+      (unit: `test_art_routes.py::TestGenerateOptionsPage::test_renders_with_wasp_selected_by_default`
+      asserts `age-checkbox` + `disabled`;
+      clicktest to add in Phase 10)
 - [ ] Step 2 optional rows disable their text input until the checkbox is checked
+      (no unit equivalent - pure Alpine; clicktest to add in Phase 10)
 - [ ] Step 2 "Create Prompt" assembles the prompt and advances to step 3
+      (unit: `test_art_routes.py::TestGenerateAssemble::test_happy_path_stages_prompt_and_redirects`;
+      `test_art_prompt.py::TestEveryFieldCombined::test_full_prompt_contains_every_part`
+      proves assembly order; clicktest to add in Phase 10)
 - [ ] Step 3 textarea is editable before "Generate Art" is clicked
+      (unit: `test_art_routes.py::TestGenerateReviewPage::test_renders_textarea_with_staged_prompt`
+      confirms the textarea is rendered with the staged prompt;
+      the `disabled` binding is Alpine-driven - clicktest to add in Phase 10)
 - [ ] Step 3 textarea locks while generation is in flight; unlocks on success or failure
 - [ ] Successful generation redirects to the crop page with the generated art
 - [ ] Failed generation shows a retry link that preserves the prompt

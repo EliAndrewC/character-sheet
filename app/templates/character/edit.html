@@ -1043,6 +1043,11 @@
                                 Upload new art
                             </a>
                             {% endif %}
+                            <a href="/characters/{{ character.id }}/art/generate"
+                               class="block w-full text-left px-3 py-2 hover:bg-parchment text-ink border-t border-ink/10"
+                               data-action="generate-with-ai">
+                                Generate with AI
+                            </a>
                             {% if character.headshot_s3_key %}
                             <form method="POST"
                                   action="/characters/{{ character.id }}/art/delete"
