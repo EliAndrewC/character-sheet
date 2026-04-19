@@ -77,6 +77,11 @@ def _migrate_add_columns():
         ("technique_choices", "TEXT", "'{}'"),
         ("google_sheet_id", "TEXT", "NULL"),
         ("google_sheet_exported_state", "TEXT", "NULL"),
+        ("art_s3_key", "TEXT", "NULL"),
+        ("headshot_s3_key", "TEXT", "NULL"),
+        ("art_updated_at", "DATETIME", "NULL"),
+        ("art_source", "TEXT", "NULL"),
+        ("art_prompt", "TEXT", "NULL"),
     ]
 
     # Migration bodies below are defensive first-run-on-old-schema branches.

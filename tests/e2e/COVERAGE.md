@@ -939,6 +939,44 @@ JS-error sanity:
 
 ---
 
+## Character Art
+
+- [ ] "Upload new art" button visible on edit page for users with edit access
+- [ ] "Upload new art" button hidden for users without edit access
+- [ ] Upload rejects non-image file with clear error banner
+- [ ] Upload rejects oversized file (> 5 MB) with clear error banner
+- [ ] Upload rejects image outside allowed aspect ratio with clear error banner
+- [ ] Upload of valid PNG redirects to crop page
+- [ ] Upload of valid JPG redirects to crop page
+- [ ] Upload of valid WEBP redirects to crop page
+- [ ] Crop page seeds the crop box from detected face bbox
+- [ ] Crop page falls back to centered-square when no face detected
+- [ ] Crop page enforces locked aspect ratio during drag
+- [ ] Save-crop writes full + headshot, redirects back to edit page with success banner
+- [ ] Overwrite confirm modal appears when replacing existing art
+- [ ] Delete-art confirm modal removes art and reverts to placeholder
+- [ ] Character list page shows headshot for characters that have art
+- [ ] Character list page shows placeholder for characters without art
+- [ ] Character list page does not overflow horizontally at 375 px viewport
+- [ ] View Sheet floats full art to the right of the school section at >= lg breakpoint
+- [ ] View Sheet stacks full art and school section below lg breakpoint
+- [ ] View Sheet omits art block for characters without art (no empty column)
+- [ ] "Generate with AI" button opens step 1 (gender)
+- [ ] Step 1 -> step 2 carries gender forward; pronouns are correct
+- [ ] Step 2 age checkbox cannot be unchecked
+- [ ] Step 2 optional rows disable their text input until the checkbox is checked
+- [ ] Step 2 "Create Prompt" assembles the prompt and advances to step 3
+- [ ] Step 3 textarea is editable before "Generate Art" is clicked
+- [ ] Step 3 textarea locks while generation is in flight; unlocks on success or failure
+- [ ] Successful generation redirects to the crop page with the generated art
+- [ ] Failed generation shows a retry link that preserves the prompt
+- [ ] Generation stub returns the expected canned image based on prompt keyword (smoke check)
+- [ ] Per-user rate limit blocks the 26th generation in 24 h with a clear banner
+- [ ] ART_GEN_ENABLED=false disables the "Generate with AI" button with a disabled-state tooltip
+- [ ] Deleting the character also removes its S3 art keys (checked via orphan cleanup)
+
+---
+
 ## Coverage Summary
 
 **Covered:** ~280 test functions across 32 test files
