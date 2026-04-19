@@ -28,12 +28,12 @@ The "Clear bonuses" button clears all posture-accumulated bonuses AND clears the
 
 > Roll one extra die on initiative, athletics, and wound checks.
 
-**Status:** Will be implemented via the existing `SCHOOL_TECHNIQUE_BONUSES` mechanism.
-- `first_dan_extra_die: ["initiative", "athletics", "wound_check"]`
-- Applied by `app/services/dice.py:_apply_school_technique_bonus()` for athletics, `build_wound_check_formula()` for wound checks, and `build_initiative_formula()` for initiative. No new code required beyond the `game_data.py` entry.
+**Status:** Implemented (Phase 2). Data-only via the existing `SCHOOL_TECHNIQUE_BONUSES` mechanism.
+- `app/game_data.py`: `SCHOOL_TECHNIQUE_BONUSES["mantis_wave_treader"]["first_dan_extra_die"] = ["initiative", "athletics", "wound_check"]`.
+- Applied by `app/services/dice.py:_apply_school_technique_bonus()` for athletics, `build_wound_check_formula()` for wound checks, and `build_initiative_formula()` for initiative. No new code was required beyond the `game_data.py` entry.
 
-**Unit tests:** TBD.
-**Clicktests:** TBD.
+**Unit tests:** `tests/test_dice.py::TestMantisWaveTreader1stDan` (initiative / athletics / wound-check extra die at Dan 1+, no bonus at Dan 0, no bleed onto attack).
+**Clicktests:** `tests/e2e/test_school_abilities.py::test_mantis_1st_dan_formula_extra_die` (verifies the sheet-embedded roll formulas include the extra die for initiative, athletics across all four rollable rings, and wound check, plus a labeled `1st Dan` entry in `wound_check.bonus_sources`).
 
 ---
 
@@ -41,18 +41,23 @@ The "Clear bonuses" button clears all posture-accumulated bonuses AND clears the
 
 > You get a free raise on a type of roll of your choice.
 
-**Status:** Not yet implemented. Needs the same player-chosen-skill pattern used by Priest's 1st Dan:
-- `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES` (flexible - player picks at Dan 2 advancement).
-- The chosen roll is stored in the existing `technique_choices` JSON column and applied as a +5 flat bonus in `_apply_school_technique_bonus()` / `build_*_formula()`.
-- Editor UI adds a picker under the 2nd Dan technique when the character is Mantis Wave-Treader.
-- **Choice set:** any roll type for which a free raise is mechanically meaningful. This means:
-  - All rollable skills.
-  - Rollable school knacks (for Mantis Wave-Treader: `athletics` and `iaijutsu` are eligible; `worldliness` is NOT, since it's passive and never rolled).
-  - Combat rolls: attack, damage, parry, wound check.
-  - Excluded: `initiative` (a free raise has no meaning on an initiative roll) and any other non-rollable knack.
+**Status:** Implemented (Phase 3). Player picks one roll type; +5 flat bonus applies to matching rolls at Dan >= 2.
 
-**Unit tests:** TBD.
-**Clicktests:** TBD.
+- `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES` (flexible - player picks at Dan 2 advancement).
+- The chosen value is stored in the `technique_choices` JSON column under the `mantis_2nd_dan_free_raise` key.
+- Applied as a +5 flat bonus:
+  - `app/services/dice.py:_apply_school_technique_bonus()` covers skills, rollable knacks, attack, and parry.
+  - `app/services/dice.py:build_wound_check_formula()` covers the wound-check choice (labeled in `bonus_sources`).
+  - `app/services/dice.py:_annotate_attack_type()` covers the damage choice (adds to `damage_flat_bonus` and `damage_bonus_sources`).
+- Editor UI: `app/templates/character/edit.html` renders a `data-testid="mantis-2nd-dan-picker"` dropdown when `school == 'mantis_wave_treader' && currentDan() >= 2`. Options: all rollable skills, the school's rollable knacks (via `mantisEligibleKnacks()`), and the combat rolls (attack, damage, parry, wound_check). Initiative and non-rollable knacks are excluded.
+- Server-side validation: `app/routes/characters.py` autosave rejects any value not in `mantis_2nd_dan_eligible_choices(school_id)` (in `app/services/dice.py`), so a crafted POST can't persist `initiative` or `worldliness`.
+- **Sheet display:**
+  - The attack modal's pre-roll panel gets a new "Damage bonuses:" row fed by `damage_bonus_sources` (`app/templates/character/sheet.html`).
+  - `atkComputeDamage()` pushes an explicit `"+5 flat from 2nd Dan"` line into `atkDamageParts` when the damage source is present, so the post-roll damage breakdown shows the label.
+
+**Unit tests:** `tests/test_dice.py::TestMantisWaveTreader2ndDan` (+5 per eligible choice, none when not chosen, no bonus below Dan 2, damage-side via `_annotate_attack_type`, no bleed to non-Mantis schools). `tests/test_dice.py::TestMantis2ndDanEligibleChoices` (helper returns the right set). `tests/test_routes.py` covers the autosave validation (rejects initiative / worldliness, accepts valid picks, allows clearing).
+
+**Clicktests:** `tests/e2e/test_school_abilities.py::test_mantis_2nd_dan_editor_picker_visible_and_saves`, `test_mantis_2nd_dan_attack_choice_labeled`, `test_mantis_2nd_dan_parry_choice_labeled`, `test_mantis_2nd_dan_skill_choice_labeled`, `test_mantis_2nd_dan_knack_choice_labeled`, `test_mantis_2nd_dan_wound_check_choice_labeled`, `test_mantis_2nd_dan_damage_choice_labeled`, `test_mantis_2nd_dan_switch_choice_moves_bonus`.
 
 ---
 

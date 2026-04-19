@@ -68,6 +68,33 @@ NON_ROLLABLE_KNACKS = frozenset({
 })
 
 
+# Combat rolls eligible for the Mantis Wave-Treader 2nd Dan free raise.
+# Initiative is excluded per the rules text - a free raise has no meaning on
+# an initiative roll.
+_MANTIS_2ND_DAN_COMBAT_ROLLS = frozenset({"attack", "damage", "parry", "wound_check"})
+
+
+def mantis_2nd_dan_eligible_choices(school_id: str) -> frozenset:
+    """Return the set of valid roll-type ids the Mantis 2nd Dan free raise
+    may target for a character of the given school.
+
+    Includes: all SKILLS ids, the school's rollable knacks (NON_ROLLABLE_KNACKS
+    filtered out - so no worldliness), and the combat rolls in
+    _MANTIS_2ND_DAN_COMBAT_ROLLS. Initiative is never eligible.
+
+    Returns an empty frozenset for non-Mantis schools.
+    """
+    if school_id != "mantis_wave_treader":
+        return frozenset()
+    school = SCHOOLS.get(school_id)
+    knack_ids: set = set()
+    if school is not None:
+        for kid in school.school_knacks:
+            if kid not in NON_ROLLABLE_KNACKS:
+                knack_ids.add(kid)
+    return frozenset(set(SKILLS.keys()) | knack_ids | set(_MANTIS_2ND_DAN_COMBAT_ROLLS))
+
+
 @dataclass
 class RollFormula:
     """A roll formula for one clickable item on the sheet.
@@ -199,6 +226,15 @@ def _apply_school_technique_bonus(
     if dan >= 2 and bonuses_def.get("second_dan_free_raise") is None and technique_choices:
         chosen_2nd = technique_choices.get("second_dan_choice")
         if chosen_2nd and skill_or_knack_id == chosen_2nd:
+            _add_flat_bonus(formula, "2nd Dan technique", FREE_RAISE_VALUE)
+
+    # Mantis Wave-Treader 2nd Dan: player-chosen roll type (skills, rollable
+    # knacks, attack, parry, wound_check, damage). Wound-check and damage are
+    # applied elsewhere (build_wound_check_formula / _annotate_attack_type);
+    # this branch covers skills, knacks, attack, and parry.
+    if dan >= 2 and school_id == "mantis_wave_treader" and technique_choices:
+        mantis_2nd = technique_choices.get("mantis_2nd_dan_free_raise")
+        if mantis_2nd and skill_or_knack_id == mantis_2nd:
             _add_flat_bonus(formula, "2nd Dan technique", FREE_RAISE_VALUE)
 
 
@@ -678,6 +714,13 @@ def build_wound_check_formula(character_data: dict) -> dict:
             flat += FREE_RAISE_VALUE
             bonus_sources.append("+5 from 2nd Dan")
 
+    # Mantis Wave-Treader 2nd Dan: flexible free raise can target wound_check.
+    if dan >= 2 and school_id == "mantis_wave_treader":
+        tech_choices_wc = character_data.get("technique_choices") or {}
+        if tech_choices_wc.get("mantis_2nd_dan_free_raise") == "wound_check":
+            flat += FREE_RAISE_VALUE
+            bonus_sources.append("+5 from 2nd Dan")
+
     # Shosuro Actor: +acting_rank rolled dice on wound checks
     if school_id == "shosuro_actor":
         skills = character_data.get("skills", {}) or {}
@@ -885,6 +928,17 @@ def build_all_roll_formulas(
         damage_extra_rolled += 1
         damage_extra_kept += 1
         damage_bonus_sources.append("+1k1 from 1st Dan (unarmed)")
+
+    # Mantis Wave-Treader 2nd Dan: flexible free raise can target damage.
+    if (
+        school_id == "mantis_wave_treader"
+        and dan >= 2
+        and (character_data.get("technique_choices") or {}).get(
+            "mantis_2nd_dan_free_raise"
+        ) == "damage"
+    ):
+        damage_flat_bonus += FREE_RAISE_VALUE
+        damage_bonus_sources.append("+5 from 2nd Dan (damage)")
 
     # Detect bushi vs non-bushi for default weapon
     _school_obj = SCHOOLS.get(school_id)

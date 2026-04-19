@@ -1148,6 +1148,51 @@ _SCHOOLS_LIST: List[School] = [
         },
     ),
 
+    School(
+        id="mantis_wave_treader",
+        name="Mantis Wave-Treader",
+        school_ring="Any",
+        category="bushi",
+        special_ability=(
+            "Each phase you select an \"offensive\" or \"defensive\" posture. "
+            "While fighting with an offensive posture, you get a free raise "
+            "to all attack and damage rolls, and while fighting in a "
+            "defensive posture you get a free raise to wound checks and "
+            "your TN to be hit is increased by 5."
+        ),
+        school_knacks=["athletics", "iaijutsu", "worldliness"],
+        techniques={
+            1: "Roll one extra die on initiative, athletics, and wound checks.",
+            2: "You get a free raise on a type of roll of your choice.",
+            3: (
+                "After making an attack roll during a phase in which you have "
+                "chosen an offensive posture, you may spend one action die "
+                "from any phase to give yourself +X to all attack and damage "
+                "rolls for the rest of the round, where X is your attack "
+                "skill.\n"
+                "After seeing the result of an attack roll made against you "
+                "while fighting with a defensive posture, you may spend one "
+                "action die from any phase to increase your wound checks and "
+                "TN to be hit by X for the remainder of the round, where X "
+                "is your attack skill."
+            ),
+            4: (
+                "Raise the current and maximum rank of your School Ring by 1. "
+                "Raising that Ring now costs 5 fewer XP.\n"
+                "Begin each combat round with an athletics action die set to "
+                "1, which may only be spent on movement, athletics actions, "
+                "or your 3rd Dan technique."
+            ),
+            5: (
+                "For each phase in which you declare an offensive posture, "
+                "you gain +1 to all attack and damage rolls for the remainder "
+                "of the round. For each phase in which you choose a "
+                "defensive posture, you gain +1 to your wound checks and "
+                "your TN to be hit for the remainder of the round."
+            ),
+        },
+    ),
+
     # =================== COUNTERATTACK SCHOOLS ====================
 
     School(
@@ -2187,6 +2232,11 @@ SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
         "second_dan_free_raise": "wound_check",
         # 3rd Dan: non-standard (spend void to reduce light wounds)
     },
+    "mantis_wave_treader": {
+        "first_dan_extra_die": ["initiative", "athletics", "wound_check"],
+        "second_dan_free_raise": None,  # flexible, player picks at Dan 2 (Phase 3)
+        # 3rd Dan: non-standard (spend action die for per-round attack/damage or wc/TN bonus)
+    },
 
     # =================== COUNTERATTACK SCHOOLS ====================
     "daidoji_yojimbo": {
@@ -2377,10 +2427,13 @@ for _sid, _school in SCHOOLS.items():
         SCHOOL_RING_OPTIONS[_sid] = ["Air", "Fire", "Earth", "Water"]
     elif _school.school_ring == "Air or Water":
         SCHOOL_RING_OPTIONS[_sid] = ["Air", "Water"]
+    elif _school.school_ring == "Any":
+        SCHOOL_RING_OPTIONS[_sid] = ["Air", "Fire", "Earth", "Water", "Void"]
     else:  # pragma: no cover
         # Import-time guard: fires only if someone adds a school with a
-        # school_ring format this loop doesn't recognize. Can't test without
-        # monkey-patching SCHOOLS mid-import.
+        # school_ring format this loop doesn't recognize. Recognized values
+        # are: a specific ring name, "any non-Void", "Air or Water", and
+        # "Any". Can't test without monkey-patching SCHOOLS mid-import.
         raise ValueError(
             f"School {_sid!r} has unrecognized school_ring {_school.school_ring!r}; "
             "add it to SCHOOL_RING_OPTIONS handling in game_data.py."
