@@ -206,6 +206,9 @@ def publish_character(
     # Update character's published state
     character.is_published = True
     character.published_state = current_state
+    # Apply Changes implicitly reveals a hidden draft. Once cleared, hidden
+    # cannot return - revealing is permanent.
+    character.is_hidden = False
 
     db.flush()
     return version

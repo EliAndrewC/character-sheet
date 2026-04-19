@@ -8,12 +8,14 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
 from app.routes import auth, characters, google_sheets, import_char, pages
 from app.services.auth import is_admin
+from app.services.import_rate_limit import import_enabled
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +28,9 @@ templates = Jinja2Templates(
 # Make is_admin available to all templates so the admin nav link can be gated
 # without every route having to pass it in the context.
 templates.env.globals["is_admin"] = is_admin
+# Read at request time so toggling the kill switch doesn't require a
+# template reload - matches how the /import route itself reads it.
+templates.env.globals["import_enabled"] = import_enabled
 
 
 def get_backup_error():
@@ -60,6 +65,38 @@ def static_v(path: str) -> str:
 
 
 templates.env.globals["static_v"] = static_v
+
+
+# Per-school rules-link substitutions for the "Special Ability" text. When a
+# school's ability quotes a rules section that lives in the upstream L7R
+# repo, we wrap the named phrase in an anchor tag so players can jump to it.
+_SPECIAL_ABILITY_LINKS: dict[str, tuple[str, str]] = {
+    "priest": (
+        "all 10 rituals",
+        "https://github.com/EliAndrewC/l7r/blob/master/rules/09-professions.md#priest-rituals",
+    ),
+}
+
+
+def school_special_ability_html(school) -> Markup:
+    """Render a school's special ability as HTML, linkifying any phrase that
+    points at a rules section (currently just the Priest's "all 10 rituals")."""
+    text = school.special_ability or ""
+    link = _SPECIAL_ABILITY_LINKS.get(school.id) if school else None
+    if link:
+        phrase, url = link
+        before, sep, after = text.partition(phrase)
+        if sep:
+            return Markup(
+                f'{escape(before)}'
+                f'<a href="{escape(url)}" target="_blank" rel="noopener" '
+                f'class="text-accent hover:underline">{escape(sep)}</a>'
+                f'{escape(after)}'
+            )
+    return Markup(escape(text))
+
+
+templates.env.globals["school_special_ability_html"] = school_special_ability_html
 
 
 # ---------------------------------------------------------------------------

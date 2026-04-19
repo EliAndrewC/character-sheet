@@ -65,6 +65,7 @@ def _migrate_add_columns():
         ("editor_discord_ids", "TEXT", "'[]'"),
         ("is_published", "BOOLEAN", "0"),
         ("published_state", "TEXT", "NULL"),
+        ("is_hidden", "BOOLEAN", "0"),
         ("campaign_advantages", "TEXT", "'[]'"),
         ("campaign_disadvantages", "TEXT", "'[]'"),
         ("advantage_details", "TEXT", "'{}'"),

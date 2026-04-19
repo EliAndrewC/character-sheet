@@ -1314,6 +1314,126 @@ class TestSchoolInfoPartial:
         assert resp.status_code == 200
         assert resp.text == ""
 
+    def test_priest_special_ability_links_rituals_phrase(self, client):
+        """Priest's special ability text wraps "all 10 rituals" in an anchor
+        tag pointing at the upstream rules section, opened in a new tab."""
+        resp = client.get("/characters/api/school-info/priest")
+        assert resp.status_code == 200
+        # The phrase must be a link, not plain text
+        assert (
+            '<a href="https://github.com/EliAndrewC/l7r/blob/master/'
+            'rules/09-professions.md#priest-rituals"'
+        ) in resp.text
+        assert 'target="_blank"' in resp.text
+        assert ">all 10 rituals</a>" in resp.text
+        # The surrounding text should still be present
+        assert "You have " in resp.text
+        assert "listed under the Priest profession." in resp.text
+
+    def test_non_priest_special_ability_has_no_rituals_link(self, client):
+        """Only Priest gets the rituals link - other schools' ability text
+        renders as plain text inside the italic <p>."""
+        resp = client.get("/characters/api/school-info/akodo_bushi")
+        assert "priest-rituals" not in resp.text
+
+
+class TestPriestRitualsLinkOnSheet:
+    """The priest's special ability link must also appear on the read-only
+    character sheet, not just in the editor's school-info partial."""
+
+    def test_priest_sheet_renders_rituals_link(self, client):
+        cid = _seed_character(
+            client, name="Linked Priest", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert (
+            '<a href="https://github.com/EliAndrewC/l7r/blob/master/'
+            'rules/09-professions.md#priest-rituals"'
+        ) in resp.text
+        assert ">all 10 rituals</a>" in resp.text
+
+    def test_non_priest_sheet_has_no_rituals_link(self, client):
+        cid = _seed_character(client, name="Akodo", school="akodo_bushi")
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert "priest-rituals" not in resp.text
+
+
+class TestImportKillSwitchNavBar:
+    """When IMPORT_ENABLED=false, the navbar's "New Character" control is a
+    single submit button posting to /characters - no dropdown, no link to
+    /import. When IMPORT_ENABLED=true (default), the dropdown shows both
+    options."""
+
+    def test_dropdown_visible_when_import_enabled(self, client, monkeypatch):
+        monkeypatch.delenv("IMPORT_ENABLED", raising=False)
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert 'data-testid="new-character-menu"' in resp.text
+        assert 'data-testid="new-character-option-create"' in resp.text
+        assert 'data-testid="new-character-option-import"' in resp.text
+        assert 'href="/import"' in resp.text
+
+    def test_dropdown_hidden_when_import_disabled(self, client, monkeypatch):
+        monkeypatch.setenv("IMPORT_ENABLED", "false")
+        resp = client.get("/")
+        assert resp.status_code == 200
+        # The dropdown wrapper, the import option, and any /import link
+        # must all be gone.
+        assert 'data-testid="new-character-menu"' not in resp.text
+        assert 'data-testid="new-character-option-import"' not in resp.text
+        assert 'href="/import"' not in resp.text
+        # The button itself stays - now as a direct submit (no submenu).
+        assert 'data-testid="new-character-button"' in resp.text
+        assert 'action="/characters"' in resp.text
+
+    def test_disabled_button_submits_directly_to_characters(self, client, monkeypatch):
+        """The visible 'New Character' button when import is off must POST to
+        /characters - i.e., it lives inside a form whose action is /characters."""
+        import re
+        monkeypatch.setenv("IMPORT_ENABLED", "false")
+        resp = client.get("/")
+        assert resp.status_code == 200
+        # Find the form that contains the new-character-button. Form attribute
+        # order is template-defined, so accept either ordering of method/action.
+        forms = re.findall(
+            r'<form\b[^>]*>(?:(?!</form>).)*?data-testid="new-character-button"',
+            resp.text, re.DOTALL,
+        )
+        assert any(
+            'method="POST"' in f and 'action="/characters"' in f for f in forms
+        ), f"New Character button must sit inside POST /characters form; saw: {forms!r}"
+
+
+class TestConvictionResetButtonPosition:
+    """The Reset button on the per-day Conviction counter sits to the LEFT
+    of the +/- counter widget (immediately after the label), not the right."""
+
+    def test_reset_button_appears_before_decrement_button(self, client):
+        cid = _seed_character(
+            client, name="Brother", school="brotherhood_of_shinsei_monk",
+            school_ring_choice="Water",
+            knacks={"conviction": 3, "otherworldliness": 3, "worldliness": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        text = resp.text
+        reset_idx = text.find('data-action="reset-ability-conviction"')
+        # The increment button uses `setCount('conviction', Math.min(...`
+        # and the decrement button uses `setCount('conviction', Math.max(...`.
+        inc_idx = text.find("setCount('conviction', Math.min")
+        dec_idx = text.find("setCount('conviction', Math.max")
+        assert reset_idx != -1, "Conviction reset button should be rendered"
+        assert inc_idx != -1
+        assert dec_idx != -1
+        assert reset_idx < inc_idx, (
+            "Reset button must appear BEFORE the +/- counter buttons in markup"
+        )
+        assert reset_idx < dec_idx
+
 
 class TestXPCalcPartial:
     def test_xp_calc_returns_breakdown(self, client):
@@ -1948,3 +2068,306 @@ class TestFormCheckboxParsing:
         char = query_db(client).filter(Character.id == cid).first()
         assert "proud" in char.disadvantages
         assert "unkempt" in char.disadvantages
+
+
+# ---------------------------------------------------------------------------
+# Hidden character feature
+# ---------------------------------------------------------------------------
+
+OWNER_ID = "183026066498125825"
+OTHER_USER_ID = "test_user_1"
+
+
+class TestHiddenDefault:
+    """A brand-new POST /characters creates a character with is_hidden=True;
+    legacy seeded characters default to is_hidden=False so existing fixtures
+    continue to behave as before."""
+
+    def test_create_endpoint_starts_hidden(self, client):
+        client.post("/characters")
+        char = query_db(client).first()
+        assert char.is_hidden is True
+
+    def test_seeded_character_default_is_visible(self, client):
+        cid = _seed_character(client, name="Seeded")
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is False
+
+
+class TestHiddenAppliesUnhides:
+    """Once a character is published via Apply Changes the hidden flag is
+    cleared - it can never be re-hidden."""
+
+    def test_publish_clears_is_hidden(self, client):
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        assert char.is_hidden is True
+        # Apply changes
+        resp = client.post(f"/characters/{cid}/publish", json={"summary": "First"})
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is False
+        assert char.is_published is True
+
+
+class TestMakeDraftVisibleEndpoint:
+    """POST /characters/{id}/show flips is_hidden to False without publishing."""
+
+    def test_show_unhides_without_publishing(self, client):
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        resp = client.post(f"/characters/{cid}/show")
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "visible"}
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is False
+        # Did NOT publish - still a draft
+        assert char.is_published is False
+
+    def test_show_is_idempotent_for_already_visible(self, client):
+        cid = _seed_character(client, name="Already visible")
+        # is_hidden defaults False on seeded chars
+        resp = client.post(f"/characters/{cid}/show")
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is False
+
+    def test_show_unauthenticated_401(self, client):
+        cid = _seed_character(client, name="Unauth show")
+        resp = client.post(f"/characters/{cid}/show", headers={"X-Test-User": ""})
+        assert resp.status_code == 401
+
+    def test_show_404_for_missing(self, client):
+        resp = client.post("/characters/9999/show")
+        assert resp.status_code == 404
+
+    def test_show_403_for_non_editor(self, client):
+        from app.models import User
+        session = client._test_session_factory()
+        session.add(User(discord_id="other_owner", discord_name="o", display_name="Owner"))
+        session.commit()
+        cid = _seed_character(client, name="Foreign", owner_discord_id="other_owner")
+        # Non-admin, non-owner, not granted: forbidden
+        resp = client.post(
+            f"/characters/{cid}/show",
+            headers={"X-Test-User": "test_user_1:Test User 1"},
+        )
+        assert resp.status_code == 403
+
+
+class TestHiddenIndexFiltering:
+    """The homepage hides characters whose is_hidden=True from non-editors;
+    owners, admins, and account-grantees still see them."""
+
+    def _seed_hidden_for_other(self, client):
+        from app.models import User
+        session = client._test_session_factory()
+        session.add(User(discord_id="other_owner", discord_name="other",
+                         display_name="Other Owner"))
+        session.commit()
+        return _seed_character(
+            client, name="Secret WIP", owner_discord_id="other_owner",
+            is_hidden=True, is_published=False,
+        )
+
+    def test_owner_sees_their_own_hidden_character(self, client):
+        _seed_character(client, name="Own Hidden", is_hidden=True)
+        resp = client.get("/", headers={"X-Test-User": f"{OWNER_ID}:owner"})
+        assert resp.status_code == 200
+        assert "Own Hidden" in resp.text
+
+    def test_admin_sees_other_users_hidden_character(self, client):
+        self._seed_hidden_for_other(client)
+        # Default test client uses admin (OWNER_ID is in ADMIN_DISCORD_IDS)
+        resp = client.get("/")
+        assert "Secret WIP" in resp.text
+
+    def test_non_editor_does_not_see_hidden_character(self, client):
+        self._seed_hidden_for_other(client)
+        resp = client.get("/", headers={"X-Test-User": "test_user_1:Test 1"})
+        assert "Secret WIP" not in resp.text
+
+    def test_unauthenticated_does_not_see_hidden_character(self, client):
+        self._seed_hidden_for_other(client)
+        resp = client.get("/", headers={"X-Test-User": ""})
+        assert "Secret WIP" not in resp.text
+
+    def test_granted_account_sees_hidden_character(self, client):
+        from app.models import User
+        session = client._test_session_factory()
+        # other_owner has granted test_user_1 account-level access
+        session.add(User(discord_id="other_owner", discord_name="other",
+                         display_name="Other",
+                         granted_account_ids=["test_user_1"]))
+        session.add(User(discord_id="test_user_1", discord_name="t1",
+                         display_name="T1"))
+        session.commit()
+        _seed_character(
+            client, name="Shared Hidden", owner_discord_id="other_owner",
+            is_hidden=True,
+        )
+        resp = client.get("/", headers={"X-Test-User": "test_user_1:T1"})
+        assert "Shared Hidden" in resp.text
+
+    def test_visible_characters_still_show_to_everyone(self, client):
+        from app.models import User
+        session = client._test_session_factory()
+        session.add(User(discord_id="other_owner", discord_name="other",
+                         display_name="Other"))
+        session.commit()
+        _seed_character(
+            client, name="Public Char", owner_discord_id="other_owner",
+            is_hidden=False,
+        )
+        resp = client.get("/", headers={"X-Test-User": "test_user_1:T1"})
+        assert "Public Char" in resp.text
+
+
+class TestHiddenViewCharacter:
+    """GET /characters/{id} returns 404 for non-editors when the character
+    is hidden, so a hidden character cannot be probed by URL."""
+
+    def _seed_hidden_for_other(self, client):
+        from app.models import User
+        session = client._test_session_factory()
+        session.add(User(discord_id="other_owner", discord_name="other",
+                         display_name="Other"))
+        session.commit()
+        return _seed_character(
+            client, name="Hidden View", owner_discord_id="other_owner",
+            is_hidden=True,
+        )
+
+    def test_owner_can_view_hidden(self, client):
+        cid = _seed_character(client, name="Own Hidden View", is_hidden=True)
+        resp = client.get(f"/characters/{cid}",
+                          headers={"X-Test-User": f"{OWNER_ID}:owner"})
+        assert resp.status_code == 200
+        assert "Own Hidden View" in resp.text
+
+    def test_admin_can_view_other_users_hidden(self, client):
+        cid = self._seed_hidden_for_other(client)
+        resp = client.get(f"/characters/{cid}")  # default = admin
+        assert resp.status_code == 200
+
+    def test_non_editor_gets_404(self, client):
+        cid = self._seed_hidden_for_other(client)
+        resp = client.get(f"/characters/{cid}",
+                          headers={"X-Test-User": "test_user_1:T1"})
+        assert resp.status_code == 404
+
+    def test_unauthenticated_gets_404(self, client):
+        cid = self._seed_hidden_for_other(client)
+        resp = client.get(f"/characters/{cid}", headers={"X-Test-User": ""})
+        assert resp.status_code == 404
+
+
+class TestHiddenPartyMemberFiltering:
+    """Hidden characters do not contribute to other characters' party-effect
+    data unless the viewer has edit access to them."""
+
+    def _setup(self, client, hidden_priest_owner: str):
+        """Seed a Priest 5th Dan (hidden, owned by hidden_priest_owner) and an
+        ally in the same gaming group. Returns (priest_id, ally_id)."""
+        from app.models import GamingGroup, User
+        session = client._test_session_factory()
+        if not session.query(User).filter(User.discord_id == hidden_priest_owner).first():
+            session.add(User(discord_id=hidden_priest_owner,
+                             discord_name="hp", display_name="HP"))
+        group = GamingGroup(name="Group X")
+        session.add(group)
+        session.commit()
+        priest_id = _seed_character(
+            client, name="Hidden Priest 5D", school="priest",
+            knacks={"conviction": 5, "otherworldliness": 5, "pontificate": 5},
+            gaming_group_id=group.id, owner_discord_id=hidden_priest_owner,
+            is_hidden=True,
+        )
+        ally_id = _seed_character(
+            client, name="Bushi Ally", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            gaming_group_id=group.id, owner_discord_id=OWNER_ID,
+        )
+        return priest_id, ally_id
+
+    def test_hidden_party_priest_excluded_for_non_editor_viewer(self, client):
+        """A different non-editor viewing the ally's sheet should not see
+        the hidden priest in any of the priest-context JSON blocks."""
+        priest_id, ally_id = self._setup(client, "other_owner")
+        # Make the bushi ally owned by test_user_1 so they can view it
+        from app.models import User
+        session = client._test_session_factory()
+        bushi = session.query(Character).filter(Character.id == ally_id).first()
+        bushi.owner_discord_id = "test_user_1"
+        session.commit()
+        resp = client.get(f"/characters/{ally_id}",
+                          headers={"X-Test-User": "test_user_1:T1"})
+        assert resp.status_code == 200
+        assert "Hidden Priest 5D" not in resp.text
+
+    def test_hidden_party_priest_visible_to_admin_viewer(self, client):
+        priest_id, ally_id = self._setup(client, "other_owner")
+        # Default admin viewer
+        resp = client.get(f"/characters/{ally_id}")
+        assert resp.status_code == 200
+        assert "Hidden Priest 5D" in resp.text
+
+
+class TestHiddenEditPageBanner:
+    """The edit page renders a 'hidden draft' banner above the Basics section
+    only while the character is hidden, with the editor list and a hint about
+    Apply Changes / Make Draft Visible."""
+
+    def test_banner_present_when_hidden(self, client):
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        resp = client.get(f"/characters/{cid}/edit")
+        assert resp.status_code == 200
+        assert 'data-testid="hidden-draft-banner"' in resp.text
+        # Basics heading appears AFTER the banner
+        banner_idx = resp.text.find('data-testid="hidden-draft-banner"')
+        basics_idx = resp.text.find(">Basics<")
+        assert banner_idx != -1 and basics_idx != -1
+        assert banner_idx < basics_idx, "Banner must be above the Basics section"
+
+    def test_banner_lists_editors(self, client):
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        resp = client.get(f"/characters/{cid}/edit")
+        # The viewer is owner+admin, so the editor list collapses to "you and the GM"
+        assert "you and the GM" in resp.text
+
+    def test_banner_hidden_when_visible(self, client):
+        cid = _seed_character(client, name="Visible char", is_hidden=False)
+        resp = client.get(f"/characters/{cid}/edit")
+        assert resp.status_code == 200
+        assert 'data-testid="hidden-draft-banner"' not in resp.text
+
+
+class TestMakeDraftVisibleButton:
+    """The 'Make Draft Visible' button sits next to Apply Changes only while
+    the character is hidden, with an explanatory tooltip."""
+
+    def test_button_present_when_hidden(self, client):
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        resp = client.get(f"/characters/{cid}/edit")
+        assert 'data-action="make-draft-visible"' in resp.text
+
+    def test_button_absent_when_visible(self, client):
+        cid = _seed_character(client, name="Already visible", is_hidden=False)
+        resp = client.get(f"/characters/{cid}/edit")
+        assert 'data-action="make-draft-visible"' not in resp.text
+
+    def test_button_has_tooltip_explaining_share(self, client):
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        resp = client.text if False else client.get(f"/characters/{cid}/edit").text
+        # Tooltip mentions both editors-only and how to share
+        assert "Make this draft visible" in resp or "make this draft visible" in resp.lower()
