@@ -400,6 +400,9 @@
                 })(),
                 actionDice: {{ (action_dice or [])|tojson }},
                 actionMenuOpen: null,
+                // Identifies the currently-hovered row in the per-die action
+                // menu when that row has a void-spend flyout ("<dieIndex>-<row>").
+                actionMenuHoverRow: null,
                 // Mantis Wave-Treader per-phase posture tracker state. Lives in
                 // adventure_state so it survives reloads but resets per round.
                 posturePhase: ({{ (adventure_state or {})|tojson }}).mantis_posture_phase || 1,
@@ -436,11 +439,19 @@
                     this._saving = false;
                 },
 
-                setActionDice(values) {
+                setActionDice(dice) {
                     // Initiative rolls are the end-of-round trigger: replace
                     // action dice and reset Mantis round state in one shot.
+                    // Accepts either a list of numeric values (legacy) or
+                    // a list of dice objects ``{value, athletics_only?}``
+                    // so callers can persist the Togashi athletics-only die.
                     this.resetMantisRound();
-                    this.actionDice = (values || []).map(v => ({value: v, spent: false}));
+                    this.actionDice = (dice || []).map(d => {
+                        if (typeof d === 'number') return {value: d, spent: false};
+                        const entry = {value: d.value, spent: false};
+                        if (d.athletics_only) entry.athletics_only = true;
+                        return entry;
+                    });
                     this.actionMenuOpen = null;
                     this.save();
                 },
@@ -548,16 +559,33 @@
                 },
                 // Returns the index of the die that was spent, or -1 if none
                 // were available. An optional spentBy label is attached.
-                spendLowestUnspentActionDie(spentBy) {
+                // When ``isAthletics`` is falsy (default), any die flagged
+                // ``athletics_only`` is skipped - those dice may only be
+                // spent on athletics actions (Togashi special ability).
+                spendLowestUnspentActionDie(spentBy, isAthletics = false) {
                     for (let i = 0; i < this.actionDice.length; i++) {
-                        if (!this.actionDice[i].spent) {
-                            this.actionDice[i].spent = true;
-                            if (spentBy) this.actionDice[i].spent_by = spentBy;
-                            this.save();
-                            return i;
-                        }
+                        const d = this.actionDice[i];
+                        if (d.spent) continue;
+                        if (!isAthletics && d.athletics_only) continue;
+                        d.spent = true;
+                        if (spentBy) d.spent_by = spentBy;
+                        this.save();
+                        return i;
                     }
                     return -1;
+                },
+                // Mark a specific die (by index) spent with an initial label.
+                // Used by the per-die action menu so the user can pick which
+                // die pays for an action instead of auto-spending the lowest.
+                // Returns true on success.
+                spendSpecificActionDie(i, spentBy) {
+                    const d = this.actionDice[i];
+                    if (!d || d.spent) return false;
+                    d.spent = true;
+                    if (spentBy) d.spent_by = spentBy;
+                    this.actionMenuOpen = null;
+                    this.save();
+                    return true;
                 },
                 annotateActionDie(i, spentBy) {
                     if (i < 0 || !this.actionDice[i]) return;
@@ -1223,35 +1251,214 @@
                                     :data-die-index="i"
                                     :data-die-spent="die.spent ? 'true' : 'false'"
                                     :data-die-value="die.value"
+                                    :data-die-athletics-only="die.athletics_only ? 'true' : 'false'"
                                     class="block"
                                     :title="die.spent_by
                                         ? die.spent_by
-                                        : (die.spent ? 'Spent - click to mark as unspent' : 'Click to mark as spent')"
+                                        : (die.athletics_only
+                                            ? 'Athletics-only action die (Togashi special ability)'
+                                            : (die.spent ? 'Spent - click to mark as unspent' : 'Click to mark as spent'))"
                                     :data-die-spent-by="die.spent_by || ''">
                                 {# Same SVG kite shape as the roll-animation
                                    dice (see app/static/js/dice.js). Color
                                    variants are categorical only: spent,
-                                   Kakita Phase 0 interrupt, or default. #}
+                                   Kakita Phase 0 interrupt, Togashi athletics-
+                                   only (blue), or default. #}
                                 <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
                                      class="die action-die"
-                                     :class="(die.spent ? 'spent ' : '') + (die.value === 0 ? 'phase-zero ' : '') + (die.value === 10 ? 'two-digit' : '')">
+                                     :class="(die.spent ? 'spent ' : '') + (die.athletics_only ? 'athletics-only ' : '') + (die.value === 0 ? 'phase-zero ' : '') + (die.value === 10 ? 'two-digit' : '')">
                                     <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
                                     <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
                                           x-text="die.value"></text>
                                 </svg>
                             </button>
                             {% if viewer_can_edit %}
+                            {# Per-die action menu. Unspent dice can pay
+                               for any action they're eligible to pay for;
+                               athletics-only dice (Togashi special) are
+                               restricted to athletics variants. Each
+                               parry/feint row carries a void-spend flyout
+                               because those rolls are executed directly
+                               rather than through the attack modal. #}
                             <div x-show="actionMenuOpen === i" x-cloak
-                                 @click.outside="if (actionMenuOpen === i) actionMenuOpen = null"
-                                 class="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm whitespace-nowrap">
-                                <button type="button" x-show="!die.spent"
-                                        @click="spendActionDie(i)"
-                                        data-action="action-die-spent"
-                                        class="block w-full text-left px-3 py-2 hover:bg-parchment">Action was spent</button>
-                                <button type="button" x-show="die.spent"
-                                        @click="unspendActionDie(i)"
-                                        data-action="action-die-unspent"
-                                        class="block w-full text-left px-3 py-2 hover:bg-parchment">Mark as unspent</button>
+                                 @click.outside="if (actionMenuOpen === i) { actionMenuOpen = null; actionMenuHoverRow = null; }"
+                                 class="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm whitespace-nowrap min-w-[200px]">
+                                <template x-if="die.spent">
+                                    <button type="button"
+                                            @click="unspendActionDie(i)"
+                                            data-action="action-die-unspent"
+                                            class="block w-full text-left px-3 py-2 hover:bg-parchment">Mark as unspent</button>
+                                </template>
+                                <template x-if="!die.spent">
+                                    <div>
+                                        {# ── ATTACK-MODAL ACTIONS (no void submenu) ── #}
+                                        <template x-if="!die.athletics_only">
+                                            <button type="button"
+                                                    data-action-die-menu-item="attack"
+                                                    @click="window._diceRoller?.rollForActionDie('attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Roll Attack</button>
+                                        </template>
+                                        <template x-if="window._diceRoller?.formulas?.['athletics:attack']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="athletics-attack"
+                                                    @click="window._diceRoller?.rollForActionDie('athletics:attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Athletics Attack</button>
+                                        </template>
+                                        <template x-if="!die.athletics_only && window._diceRoller?.formulas?.['knack:double_attack']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="double-attack"
+                                                    @click="window._diceRoller?.rollForActionDie('knack:double_attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Double Attack</button>
+                                        </template>
+                                        <template x-if="!die.athletics_only && window._diceRoller?.formulas?.['knack:counterattack']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="counterattack"
+                                                    @click="window._diceRoller?.rollForActionDie('knack:counterattack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Counterattack</button>
+                                        </template>
+                                        <template x-if="!die.athletics_only && window._diceRoller?.formulas?.['knack:lunge']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="lunge"
+                                                    @click="window._diceRoller?.rollForActionDie('knack:lunge', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Lunge</button>
+                                        </template>
+                                        {# ── FEINT (roll modal, with void flyout) ── #}
+                                        <template x-if="!die.athletics_only && window._diceRoller?.formulas?.['knack:feint']">
+                                            <div class="relative"
+                                                 @mouseenter="actionMenuHoverRow = i + '-feint'"
+                                                 @mouseleave="actionMenuHoverRow = null">
+                                                <button type="button"
+                                                        data-action-die-menu-item="feint"
+                                                        @click="window._diceRoller?.rollForActionDie('knack:feint', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                        class="w-full text-left px-3 py-2 hover:bg-parchment flex items-center justify-between gap-2">
+                                                    <span>Feint</span>
+                                                    <span x-show="(window._diceRoller?.computeVoidOptions?.() || []).length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                                </button>
+                                                <div x-show="actionMenuHoverRow === i + '-feint' && (window._diceRoller?.computeVoidOptions?.() || []).length > 0"
+                                                     x-cloak
+                                                     data-action-die-void-submenu="feint"
+                                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[220px] z-50">
+                                                    <template x-for="opt in (window._diceRoller?.computeVoidOptions?.() || [])" :key="'fv'+opt.count">
+                                                        <button type="button"
+                                                                @click="window._diceRoller?.rollForActionDie('knack:feint', i, opt.count, opt); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                                class="block w-full text-left px-3 py-2 text-accent hover:bg-parchment">
+                                                            <span x-text="opt.label"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        {# ── PARRY (roll modal, with void flyout) ── #}
+                                        <template x-if="!die.athletics_only">
+                                            <div class="relative"
+                                                 @mouseenter="actionMenuHoverRow = i + '-parry'"
+                                                 @mouseleave="actionMenuHoverRow = null">
+                                                <button type="button"
+                                                        data-action-die-menu-item="parry"
+                                                        @click="window._diceRoller?.rollForActionDie('parry', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                        class="w-full text-left px-3 py-2 hover:bg-parchment flex items-center justify-between gap-2">
+                                                    <span>Roll Parry</span>
+                                                    <span x-show="(window._diceRoller?.computeVoidOptions?.() || []).length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                                </button>
+                                                <div x-show="actionMenuHoverRow === i + '-parry' && (window._diceRoller?.computeVoidOptions?.() || []).length > 0"
+                                                     x-cloak
+                                                     data-action-die-void-submenu="parry"
+                                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[220px] z-50">
+                                                    <template x-for="opt in (window._diceRoller?.computeVoidOptions?.() || [])" :key="'pv'+opt.count">
+                                                        <button type="button"
+                                                                @click="window._diceRoller?.rollForActionDie('parry', i, opt.count, opt); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                                class="block w-full text-left px-3 py-2 text-accent hover:bg-parchment">
+                                                            <span x-text="opt.label"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        {# ── PREDECLARED PARRY (+5 flat, roll modal, with void flyout) ── #}
+                                        <template x-if="!die.athletics_only">
+                                            <div class="relative"
+                                                 @mouseenter="actionMenuHoverRow = i + '-predeclared'"
+                                                 @mouseleave="actionMenuHoverRow = null">
+                                                <button type="button"
+                                                        data-action-die-menu-item="predeclared-parry"
+                                                        @click="window._diceRoller?.rollForActionDie('parry', i, 0, null, 5, 'predeclared parry'); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                        class="w-full text-left px-3 py-2 hover:bg-parchment flex items-center justify-between gap-2">
+                                                    <span>Predeclared Parry <span class="text-xs text-ink/50">(+5)</span></span>
+                                                    <span x-show="(window._diceRoller?.computeVoidOptions?.() || []).length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                                </button>
+                                                <div x-show="actionMenuHoverRow === i + '-predeclared' && (window._diceRoller?.computeVoidOptions?.() || []).length > 0"
+                                                     x-cloak
+                                                     data-action-die-void-submenu="predeclared-parry"
+                                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                                    <template x-for="opt in (window._diceRoller?.computeVoidOptions?.() || [])" :key="'ppv'+opt.count">
+                                                        <button type="button"
+                                                                @click="window._diceRoller?.rollForActionDie('parry', i, opt.count, opt, 5, 'predeclared parry'); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                                class="block w-full text-left px-3 py-2 text-accent hover:bg-parchment">
+                                                            <span x-text="opt.label + ' + predeclared (+5)'"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        {# ── ATHLETICS PARRY (roll modal, with void flyout) ── #}
+                                        <template x-if="window._diceRoller?.formulas?.['athletics:parry']">
+                                            <div class="relative"
+                                                 @mouseenter="actionMenuHoverRow = i + '-ath-parry'"
+                                                 @mouseleave="actionMenuHoverRow = null">
+                                                <button type="button"
+                                                        data-action-die-menu-item="athletics-parry"
+                                                        @click="window._diceRoller?.rollForActionDie('athletics:parry', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                        class="w-full text-left px-3 py-2 hover:bg-parchment flex items-center justify-between gap-2">
+                                                    <span>Athletics Parry</span>
+                                                    <span x-show="(window._diceRoller?.computeVoidOptions?.() || []).length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                                </button>
+                                                <div x-show="actionMenuHoverRow === i + '-ath-parry' && (window._diceRoller?.computeVoidOptions?.() || []).length > 0"
+                                                     x-cloak
+                                                     data-action-die-void-submenu="athletics-parry"
+                                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[220px] z-50">
+                                                    <template x-for="opt in (window._diceRoller?.computeVoidOptions?.() || [])" :key="'apv'+opt.count">
+                                                        <button type="button"
+                                                                @click="window._diceRoller?.rollForActionDie('athletics:parry', i, opt.count, opt); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                                class="block w-full text-left px-3 py-2 text-accent hover:bg-parchment">
+                                                            <span x-text="opt.label"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        {# ── ATHLETICS PREDECLARED PARRY (roll modal, with void flyout) ── #}
+                                        <template x-if="window._diceRoller?.formulas?.['athletics:parry']">
+                                            <div class="relative"
+                                                 @mouseenter="actionMenuHoverRow = i + '-ath-predeclared'"
+                                                 @mouseleave="actionMenuHoverRow = null">
+                                                <button type="button"
+                                                        data-action-die-menu-item="athletics-predeclared-parry"
+                                                        @click="window._diceRoller?.rollForActionDie('athletics:parry', i, 0, null, 5, 'predeclared parry'); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                        class="w-full text-left px-3 py-2 hover:bg-parchment flex items-center justify-between gap-2">
+                                                    <span>Athletics Predeclared Parry <span class="text-xs text-ink/50">(+5)</span></span>
+                                                    <span x-show="(window._diceRoller?.computeVoidOptions?.() || []).length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                                </button>
+                                                <div x-show="actionMenuHoverRow === i + '-ath-predeclared' && (window._diceRoller?.computeVoidOptions?.() || []).length > 0"
+                                                     x-cloak
+                                                     data-action-die-void-submenu="athletics-predeclared-parry"
+                                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                                    <template x-for="opt in (window._diceRoller?.computeVoidOptions?.() || [])" :key="'appv'+opt.count">
+                                                        <button type="button"
+                                                                @click="window._diceRoller?.rollForActionDie('athletics:parry', i, opt.count, opt, 5, 'predeclared parry'); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                                class="block w-full text-left px-3 py-2 text-accent hover:bg-parchment">
+                                                            <span x-text="opt.label + ' + predeclared (+5)'"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        {# ── MANUAL ── #}
+                                        <button type="button"
+                                                @click="spendActionDie(i)"
+                                                data-action="action-die-spent"
+                                                class="block w-full text-left px-3 py-2 hover:bg-parchment border-t border-ink/10 text-ink/60">Mark as spent</button>
+                                    </div>
+                                </template>
                             </div>
                             {% endif %}
                         </div>
@@ -3725,27 +3932,17 @@
                         <div class="bg-ink/5 rounded p-3 text-sm">
                             <div class="font-bold text-lg mb-2">Action Dice</div>
                             <div class="flex flex-wrap items-center gap-2 mb-2">
-                                <template x-for="(phase, i) in actionDice" :key="i">
+                                <template x-for="(die, i) in actionDice" :key="i">
                                     <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
                                          class="die action-die"
-                                         :class="(phase === 0 ? 'phase-zero ' : '') + (phase === 10 ? 'two-digit' : '')">
+                                         :class="(die.athletics_only ? 'athletics-only ' : '') + (die.value === 0 ? 'phase-zero ' : '') + (die.value === 10 ? 'two-digit' : '')">
+                                        <template x-if="die.athletics_only">
+                                            <title>Athletics-only action die (Togashi special ability)</title>
+                                        </template>
                                         <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
                                         <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
-                                              x-text="phase"></text>
+                                              x-text="die.value"></text>
                                     </svg>
-                                </template>
-                                <template x-if="togashiAthleticsDie > 0">
-                                    <div class="flex items-center gap-2 pl-2 ml-1 border-l border-ink/20">
-                                        <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
-                                             class="die action-die athletics-only"
-                                             :class="togashiAthleticsDie === 10 ? 'two-digit' : ''">
-                                            <title>Athletics-only action die (Togashi special ability)</title>
-                                            <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
-                                            <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
-                                                  x-text="togashiAthleticsDie"></text>
-                                        </svg>
-                                        <span class="text-xs text-sky-800 italic">athletics only</span>
-                                    </div>
                                 </template>
                             </div>
                             <div class="text-xs text-ink/60">
@@ -3754,7 +3951,7 @@
                         </div>
                         {# School-specific notes #}
                         <div class="space-y-1 mt-2 text-xs">
-                            <template x-if="formula && formula.kakita_phase_zero && actionDice.includes(0)">
+                            <template x-if="formula && formula.kakita_phase_zero && actionDice.some(d => d.value === 0)">
                                 <div class="text-gold font-medium">Phase 0: Kakita interrupt attack (10s on initiative become Phase 0).</div>
                             </template>
                             <template x-if="formula && formula.shinjo_4th_dan">
@@ -3763,7 +3960,7 @@
                             <template x-if="formula && formula.hiruma_4th_dan">
                                 <div class="text-ink/70 italic">Hiruma 4th Dan: all action dice lowered by 2 (min 1).</div>
                             </template>
-                            <template x-if="togashiAthleticsDie > 0">
+                            <template x-if="actionDice.some(d => d.athletics_only)">
                                 <div class="text-sky-700 italic">Togashi Special: the blue action die is a bonus die that may only be spent on athletics actions.</div>
                             </template>
                         </div>
@@ -4516,7 +4713,6 @@
             baseTotal: 0,
             keptSum: 0,
             actionDice: [],
-            togashiAthleticsDie: 0,  // standalone die from Togashi normal init (0 = not rolled)
             subDamageDice: [],
             subDamageTotal: 0,
             subDamageLabel: '',
@@ -5418,18 +5614,75 @@
                 return false;
             },
 
+            _isAthleticsActionKey(key) {
+                // True when the roll counts as an athletics action for
+                // action-die spending. An athletics-only die (Togashi
+                // special) may only be consumed by these keys.
+                return key === 'athletics:attack' || key === 'athletics:parry';
+            },
+
             _initialSpendLabel(key) {
                 if (key === 'parry' || key === 'athletics:parry') return 'Parry (rolling...)';
                 if (key === 'knack:feint' || (key && key.startsWith('knack:feint:'))) return 'Feint (rolling...)';
                 return null;
             },
 
-            _autoSpendActionDie(initialLabel) {
+            // When the user picks an action from the per-die menu the
+            // caller stashes that die's index here so the downstream roll
+            // entrypoint spends *that* die instead of auto-picking the
+            // lowest. Consumed once the roll actually fires; dangling
+            // state is cleared if the attack modal is cancelled.
+            _preSpentDieIndex: null,
+
+            _autoSpendActionDie(initialLabel, isAthletics = false) {
                 const t = window._trackingBridge;
+                if (this._preSpentDieIndex != null && this._preSpentDieIndex >= 0) {
+                    const i = this._preSpentDieIndex;
+                    this._preSpentDieIndex = null;
+                    if (t && typeof t.spendSpecificActionDie === 'function') {
+                        const ok = t.spendSpecificActionDie(i, initialLabel || null);
+                        this._actionDieSpentIndex = ok ? i : -1;
+                    } else {
+                        this._actionDieSpentIndex = -1;
+                    }
+                    return;
+                }
                 if (t && typeof t.spendLowestUnspentActionDie === 'function') {
-                    this._actionDieSpentIndex = t.spendLowestUnspentActionDie(initialLabel || null);
+                    this._actionDieSpentIndex = t.spendLowestUnspentActionDie(
+                        initialLabel || null, !!isAthletics
+                    );
                 } else {
                     this._actionDieSpentIndex = -1;
+                }
+            },
+
+            // Route an action from the per-die menu. Stashes the chosen
+            // die index so the actual spend fires at the usual auto-spend
+            // site (inside executeRoll / rollAttack). That way cancelling
+            // the attack modal doesn't leave a die stuck-spent with no
+            // action recorded. Attack-type formulas open the attack modal
+            // (void/TN picked there); parry/feint/athletics-parry use
+            // executeRoll (with optional void opt + predeclared-parry +5).
+            rollForActionDie(key, dieIndex, voidCount = 0, voidOption = null,
+                             extraFlat = 0, extraReason = null) {
+                const f = this.formulas[key];
+                if (!f) return;
+                this.rollMenuOpen = false;
+                if (f.is_attack_type) {
+                    // Pass the dieIndex through openAttackModal so it can
+                    // install it after clearing any stale index from a
+                    // previously-cancelled modal.
+                    this.openAttackModal(key, dieIndex);
+                    return;
+                }
+                // For non-modal rolls the spend fires immediately inside
+                // executeRoll / executeRollWithExtraFlat, so lingering
+                // state isn't possible.
+                this._preSpentDieIndex = dieIndex;
+                if (extraFlat > 0) {
+                    this.executeRollWithExtraFlat(key, voidCount, voidOption, extraFlat, extraReason);
+                } else {
+                    this.executeRoll(key, voidCount, voidOption);
                 }
             },
 
@@ -5476,7 +5729,7 @@
             executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason) {
                 this.rollMenuOpen = false;
                 this.parryHoverRow = null;
-                if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key));
+                if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
                 this.luckyUsedThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.convictionSpentThisRoll = 0;
@@ -5528,7 +5781,7 @@
                 this.rollMenuOpen = false;
                 this.owHoverRow = null;
                 this.parryHoverRow = null;
-                if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key));
+                if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
                 this.luckyUsedThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.convictionSpentThisRoll = 0;
@@ -5695,7 +5948,6 @@
 
                 // Initiative: compute action dice with school effects
                 this.actionDice = [];
-                this.togashiAthleticsDie = 0;
                 if (isInit) {
                     let actions = this.keptDice.map(d => d.value).sort((a, b) => a - b);
                     // Hiruma 4th Dan: lower all action dice by 2 (min 1)
@@ -5710,23 +5962,29 @@
                     if (this.formula.kakita_phase_zero) {
                         actions = actions.map(v => v === 10 ? 0 : v);
                     }
-                    this.actionDice = actions.sort((a, b) => a - b);
+                    actions.sort((a, b) => a - b);
+                    const dice = actions.map(v => ({value: v}));
+
+                    // Togashi Ise Zumi normal variant: roll one additional
+                    // standalone athletics-only action die alongside the
+                    // main initiative roll (same animation area so players
+                    // see it appear after the main dice settle). The extra
+                    // die is flagged so it renders distinctly in the Actions
+                    // tracker and is skipped by the non-athletics auto-spend.
+                    if (this.formula.togashi_athletics_extra_die) {
+                        const athDice = await window.L7RDice.rollAndAnimate(
+                            1, false, this.prefs.dice_animation_enabled, playSound
+                        );
+                        const athV = athDice[0]?.value || 0;
+                        if (athV > 0) dice.push({value: athV, athletics_only: true});
+                    }
+
+                    this.actionDice = dice;
                     // Persist the rolled action dice to the Tracking section
                     // so they're visible (and spendable) until Clear is clicked
                     // or the next initiative roll replaces them.
                     if (window._trackingBridge) {
                         window._trackingBridge.setActionDice(this.actionDice);
-                    }
-
-                    // Togashi Ise Zumi normal variant: roll one additional
-                    // standalone athletics-only action die alongside the
-                    // main initiative roll (same animation area so players
-                    // see it appear after the main dice settle).
-                    if (this.formula.togashi_athletics_extra_die) {
-                        const athDice = await window.L7RDice.rollAndAnimate(
-                            1, false, this.prefs.dice_animation_enabled, playSound
-                        );
-                        this.togashiAthleticsDie = athDice[0]?.value || 0;
                     }
                 }
 
@@ -6200,9 +6458,13 @@
 
             // --- Attack Modal ---
 
-            openAttackModal(key) {
+            openAttackModal(key, preSpentDieIndex = null) {
                 const f = this.formulas[key];
                 if (!f) return;
+                // Always overwrite _preSpentDieIndex on modal open so a
+                // previously-cancelled modal's index can't leak into this
+                // roll. Non-null when called from rollForActionDie.
+                this._preSpentDieIndex = preSpentDieIndex;
                 this.atkKey = key;
                 this.atkFormula = f;
                 this.atkPhase = 'pre';
@@ -6509,8 +6771,9 @@
                 // Every attack variant (attack, double_attack, counterattack,
                 // lunge, athletics:attack) consumes an action die. The initial
                 // label is a placeholder - it will be replaced with the full
-                // attack result once the roll completes.
-                this._autoSpendActionDie('Attack (rolling...)');
+                // attack result once the roll completes. Only athletics:attack
+                // counts as an athletics action for athletics-only die spending.
+                this._autoSpendActionDie('Attack (rolling...)', this._isAthleticsActionKey(this.atkKey));
                 const voidCount = this.atkVoidSelected;
                 const formula = { ...this.formulas[this.atkKey] };
                 this.convictionSpentThisRoll = 0;

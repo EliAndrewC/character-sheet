@@ -2632,6 +2632,190 @@ class TestAthleticsPredeclaredParryRow:
         ) in resp.text
 
 
+class TestAthleticsOnlyActionDie:
+    """The Togashi Ise Zumi special grants one athletics-only action die on
+    initiative. It must:
+      - persist on the tracker alongside regular action dice (not as a
+        separate togashiAthleticsDie field), carrying an ``athletics_only``
+        flag on the entry
+      - render with the ``athletics-only`` SVG variant + a tooltip both in
+        the Actions side panel and in the initiative-result panel
+      - be skipped by the auto-spend for a non-athletics attack/parry, but
+        eligible for athletics:attack / athletics:parry rolls
+    """
+
+    def _side_panel(self, resp_text):
+        start = resp_text.find('data-testid="action-dice-section"')
+        assert start != -1
+        return resp_text[start:start + 4000]
+
+    def _init_result(self, resp_text):
+        idx = resp_text.find(">Action Dice<")
+        assert idx != -1
+        return resp_text[idx:idx + 4000]
+
+    def test_side_panel_applies_athletics_only_class(self, client):
+        cid = _seed_character(client, name="AthOnlySide")
+        section = self._side_panel(client.get(f"/characters/{cid}").text)
+        # Class binding must switch on per-die athletics_only flag (rather
+        # than a separate togashiAthleticsDie variable).
+        assert "die.athletics_only" in section
+
+    def test_initiative_result_iterates_dice_as_objects(self, client):
+        cid = _seed_character(client, name="AthOnlyInit")
+        panel = self._init_result(client.get(f"/characters/{cid}").text)
+        # The x-for in the initiative-result panel uses die.value / die.athletics_only
+        # rather than looping raw numbers + a separate togashiAthleticsDie block.
+        assert "die.athletics_only" in panel
+        # The separate togashiAthleticsDie state variable is gone from the panel.
+        assert "togashiAthleticsDie" not in panel
+
+    def test_side_panel_has_athletics_only_tooltip(self, client):
+        cid = _seed_character(client, name="AthOnlyTip")
+        section = self._side_panel(client.get(f"/characters/{cid}").text)
+        assert "Athletics-only action die" in section
+
+    def test_spend_lowest_skips_athletics_only_for_non_athletics(self, client):
+        """The tracker method that auto-spends the lowest unspent die must
+        take an isAthletics flag and filter out athletics_only dice when
+        that flag is false."""
+        cid = _seed_character(client, name="AthOnlySpend")
+        resp = client.get(f"/characters/{cid}").text
+        start = resp.find("spendLowestUnspentActionDie(")
+        assert start != -1
+        # Body is short - grab a window of ~900 chars.
+        body = resp[start:start + 900]
+        # Signature accepts an isAthletics argument.
+        assert "isAthletics" in body
+        # The non-athletics branch must filter out athletics_only entries.
+        assert "athletics_only" in body
+
+    def test_roll_key_is_athletics_helper_exists(self, client):
+        """A helper classifies a roll key as athletics (athletics:attack /
+        athletics:parry) so the auto-spend can be told whether to allow
+        athletics-only dice."""
+        cid = _seed_character(client, name="AthOnlyKey")
+        resp = client.get(f"/characters/{cid}").text
+        assert "_isAthleticsActionKey" in resp
+
+
+class TestActionDieActionMenu:
+    """Clicking an action die surfaces a menu with every action the die
+    can pay for. Parry and feint options carry a void-spend flyout; attack
+    variants open the attack modal (void is chosen inside). Athletics-
+    only dice (Togashi special) are limited to athletics actions plus
+    the manual mark-spent/unspent item.
+
+    Tests here are structural - they pin the wiring in the rendered
+    sheet so the action menu can't silently regress."""
+
+    def _action_menu_block(self, resp_text):
+        """Slice from the Actions section header to Per-Adventure / footer."""
+        start = resp_text.find('data-testid="action-dice-section"')
+        assert start != -1
+        # The menu markup is large (hundreds of KB of x-if templates)
+        # because each die renders the full menu. Grab a broad window.
+        end_markers = ['Per-Adventure Abilities', 'Lowest unspent die']
+        end = len(resp_text)
+        for m in end_markers:
+            idx = resp_text.find(m, start)
+            if idx != -1 and idx < end:
+                end = idx
+        return resp_text[start:end]
+
+    def test_tracker_exposes_spend_specific_action_die(self, client):
+        cid = _seed_character(client, name="ADMenuBase")
+        resp = client.get(f"/characters/{cid}").text
+        assert "spendSpecificActionDie(" in resp
+
+    def test_dice_roller_honors_pre_spent_die_index(self, client):
+        cid = _seed_character(client, name="ADMenuPreSpent")
+        resp = client.get(f"/characters/{cid}").text
+        # The auto-spend helper short-circuits when a caller has pre-
+        # spent a specific die via the action menu.
+        assert "_preSpentDieIndex" in resp
+
+    def test_dice_roller_exposes_rollForActionDie(self, client):
+        """The convenience method handles attack/attack-variant (opens
+        modal) and parry/feint (executeRoll with void)."""
+        cid = _seed_character(client, name="ADMenuRouter")
+        resp = client.get(f"/characters/{cid}").text
+        assert "rollForActionDie(" in resp
+
+    def test_menu_lists_core_actions_for_regular_die(self, client):
+        cid = _seed_character(client, name="ADMenuRegular")
+        block = self._action_menu_block(client.get(f"/characters/{cid}").text)
+        # Every regular die offers at least these three actions.
+        assert 'data-action-die-menu-item="attack"' in block
+        assert 'data-action-die-menu-item="parry"' in block
+        assert 'data-action-die-menu-item="predeclared-parry"' in block
+
+    def test_menu_includes_school_specific_actions_when_formulas_exist(self, client):
+        """Akodo's school knacks include double_attack, feint, iaijutsu.
+        Double attack + feint rows must render (iaijutsu isn't a listed
+        action for this feature)."""
+        cid = _seed_character(client, name="ADMenuAkodo", school="akodo_bushi")
+        block = self._action_menu_block(client.get(f"/characters/{cid}").text)
+        assert 'data-action-die-menu-item="double-attack"' in block
+        assert 'data-action-die-menu-item="feint"' in block
+
+    def test_menu_includes_counterattack_for_schools_with_knack(self, client):
+        cid = _seed_character(
+            client, name="ADMenuMirumoto", school="mirumoto_bushi",
+            school_ring_choice="Void",
+            knacks={"counterattack": 1, "double_attack": 1, "iaijutsu": 1},
+        )
+        block = self._action_menu_block(client.get(f"/characters/{cid}").text)
+        assert 'data-action-die-menu-item="counterattack"' in block
+
+    def test_menu_includes_lunge_for_schools_with_knack(self, client):
+        cid = _seed_character(
+            client, name="ADMenuIsawa", school="isawa_duelist",
+            school_ring_choice="Water",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+        )
+        block = self._action_menu_block(client.get(f"/characters/{cid}").text)
+        assert 'data-action-die-menu-item="lunge"' in block
+
+    def test_menu_includes_athletics_rows_when_formula_exists(self, client):
+        cid = _seed_character(
+            client, name="ADMenuAth", school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+            skills={"athletics": 2},
+        )
+        block = self._action_menu_block(client.get(f"/characters/{cid}").text)
+        assert 'data-action-die-menu-item="athletics-attack"' in block
+        assert 'data-action-die-menu-item="athletics-parry"' in block
+        assert 'data-action-die-menu-item="athletics-predeclared-parry"' in block
+
+    def test_athletics_only_die_gate_excludes_non_athletics_items(self, client):
+        """Each action row is gated by ``!die.athletics_only`` unless the
+        action is an athletics variant. Check a representative pair:
+        'attack' (regular) is gated out, 'athletics-attack' is allowed."""
+        cid = _seed_character(
+            client, name="ADMenuAthOnly", school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+            skills={"athletics": 2},
+        )
+        block = self._action_menu_block(client.get(f"/characters/{cid}").text)
+        # The regular-attack row carries an x-show that excludes athletics-only.
+        # Extract the attack row snippet.
+        atk_start = block.find('data-action-die-menu-item="attack"')
+        # Look backward in the surrounding <button>/<div> wrapper
+        wrapper_start = block.rfind('<div', 0, atk_start)
+        wrapper_slice = block[wrapper_start:atk_start]
+        assert "!die.athletics_only" in wrapper_slice
+
+    def test_parry_option_offers_void_submenu(self, client):
+        """Parry and predeclared-parry carry void flyouts."""
+        cid = _seed_character(client, name="ADMenuParryVoid")
+        block = self._action_menu_block(client.get(f"/characters/{cid}").text)
+        assert 'data-action-die-void-submenu="parry"' in block
+        assert 'data-action-die-void-submenu="predeclared-parry"' in block
+
+
 class TestResetAdventureClearsActionDice:
     """The 'Reset Per-Adventure Abilities' modal's confirm button must also
     clear any action dice left over from a previous combat round, since

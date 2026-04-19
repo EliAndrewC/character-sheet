@@ -100,13 +100,16 @@ class TestUploadArt:
         assert full_kwargs["Bucket"] == "bucket"
         assert full_kwargs["Key"] == full_key
         assert full_kwargs["Body"] == b"FULL_BYTES"
-        assert full_kwargs["ACL"] == "public-read"
         assert full_kwargs["ContentType"] == "image/webp"
+        # No ACL - AWS disabled bucket ACLs by default after 2023 and
+        # we use presigned URLs for public access instead (see
+        # ``public_url``). Explicitly assert the ACL key is NOT passed.
+        assert "ACL" not in full_kwargs
         # Second call: headshot
         head_kwargs = calls[1].kwargs
         assert head_kwargs["Key"] == head_key
         assert head_kwargs["Body"] == b"HEAD_BYTES"
-        assert head_kwargs["ACL"] == "public-read"
+        assert "ACL" not in head_kwargs
 
     @patch("app.services.art_storage._get_s3_client")
     def test_returns_keys_that_match_make_art_keys(self, mock_get_client):
@@ -174,18 +177,30 @@ class TestDeleteArt:
 
 
 class TestPublicUrl:
-    def test_us_east_1_uses_region_free_host(self):
-        url = art_storage.public_url("character_art/1/full-x.webp",
-                                      bucket="my-bucket", region="us-east-1")
-        assert url == "https://my-bucket.s3.amazonaws.com/character_art/1/full-x.webp"
-
-    def test_other_region_includes_region(self):
-        url = art_storage.public_url("character_art/1/full-x.webp",
-                                      bucket="my-bucket", region="eu-west-1")
-        assert url == (
-            "https://my-bucket.s3.eu-west-1.amazonaws.com/"
-            "character_art/1/full-x.webp"
+    @patch("app.services.art_storage._get_s3_client")
+    def test_delegates_to_boto3_presigned_url(self, mock_get_client):
+        client = MagicMock()
+        client.generate_presigned_url.return_value = (
+            "https://my-bucket.s3.amazonaws.com/character_art/1/full-x.webp"
+            "?X-Amz-Signature=abc"
         )
+        mock_get_client.return_value = client
+        url = art_storage.public_url(
+            "character_art/1/full-x.webp",
+            bucket="my-bucket", region="us-east-1",
+        )
+        assert "X-Amz-Signature" in url
+        client.generate_presigned_url.assert_called_once_with(
+            "get_object",
+            Params={"Bucket": "my-bucket", "Key": "character_art/1/full-x.webp"},
+            ExpiresIn=art_storage.PRESIGN_TTL_SECONDS,
+        )
+
+    @patch("app.services.art_storage._get_s3_client")
+    def test_presign_ttl_is_7_days(self, mock_get_client):
+        mock_get_client.return_value = MagicMock()
+        art_storage.public_url("k", bucket="b", region="us-east-1")
+        assert art_storage.PRESIGN_TTL_SECONDS == 7 * 24 * 3600
 
 
 # ---------------------------------------------------------------------------
@@ -272,3 +287,124 @@ class TestGetS3Client:
         assert client is not None
         assert client.meta.region_name == "us-east-1"
         assert client.meta.service_model.service_name == "s3"
+
+
+# ---------------------------------------------------------------------------
+# Disk-backed stub (used only by the clicktest subprocess)
+# ---------------------------------------------------------------------------
+
+
+class TestDiskStub:
+    @pytest.fixture(autouse=True)
+    def _enable_stub(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("ART_STORAGE_USE_TEST_STUB", "1")
+        monkeypatch.setenv("ART_STORAGE_STUB_DIR", str(tmp_path))
+        yield
+
+    def test_use_disk_stub_env_var(self, monkeypatch):
+        monkeypatch.delenv("ART_STORAGE_USE_TEST_STUB", raising=False)
+        assert art_storage.use_disk_stub() is False
+        monkeypatch.setenv("ART_STORAGE_USE_TEST_STUB", "true")
+        assert art_storage.use_disk_stub() is True
+        monkeypatch.setenv("ART_STORAGE_USE_TEST_STUB", "off")
+        assert art_storage.use_disk_stub() is False
+
+    def test_upload_writes_to_disk_instead_of_s3(self, tmp_path, monkeypatch):
+        # _get_s3_client must NOT be touched in stub mode
+        with patch("app.services.art_storage._get_s3_client") as client_factory:
+            full_key, head_key = art_storage.upload_art(
+                42, b"FULL", b"HEAD", bucket="b", region="us-east-1",
+                now=datetime(2026, 4, 19, 0, 0, 0, tzinfo=timezone.utc),
+            )
+            client_factory.assert_not_called()
+        # Both bytes appear at the expected flattened paths
+        flat_full = tmp_path / full_key.replace("/", "__")
+        flat_head = tmp_path / head_key.replace("/", "__")
+        assert flat_full.read_bytes() == b"FULL"
+        assert flat_head.read_bytes() == b"HEAD"
+
+    def test_delete_removes_files(self, tmp_path):
+        full = tmp_path / "character_art__1__full-x.webp"
+        head = tmp_path / "character_art__1__head-x.webp"
+        full.write_bytes(b"A")
+        head.write_bytes(b"B")
+        with patch("app.services.art_storage._get_s3_client") as client_factory:
+            art_storage.delete_art(
+                "b", "us-east-1",
+                "character_art/1/full-x.webp",
+                "character_art/1/head-x.webp",
+            )
+            client_factory.assert_not_called()
+        assert not full.exists()
+        assert not head.exists()
+
+    def test_delete_silently_ignores_missing_files(self, tmp_path):
+        with patch("app.services.art_storage._get_s3_client") as client_factory:
+            # Must not raise even though the file never existed
+            art_storage.delete_art(
+                "b", "us-east-1", "character_art/1/never-there.webp",
+            )
+            client_factory.assert_not_called()
+
+    def test_public_url_in_stub_mode_is_local_path(self):
+        url = art_storage.public_url(
+            "character_art/1/full-x.webp", bucket="b", region="us-east-1",
+        )
+        assert url == "/test-art-stub/character_art__1__full-x.webp"
+
+    def test_list_art_keys_reads_directory(self, tmp_path):
+        (tmp_path / "character_art__1__full-a.webp").write_bytes(b"x")
+        (tmp_path / "character_art__2__head-b.webp").write_bytes(b"y")
+        with patch("app.services.art_storage._get_s3_client") as client_factory:
+            keys = art_storage.list_art_keys("b", "us-east-1")
+            client_factory.assert_not_called()
+        assert set(keys) == {
+            "character_art/1/full-a.webp",
+            "character_art/2/head-b.webp",
+        }
+
+    def test_list_art_keys_empty_when_no_stub_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("ART_STORAGE_STUB_DIR", str(tmp_path / "missing"))
+        assert art_storage.list_art_keys("b", "us-east-1") == []
+
+    def test_stub_read_bytes_returns_none_for_unknown(self, tmp_path):
+        assert art_storage.stub_read_bytes("never-there__file.webp") is None
+
+    def test_stub_read_bytes_returns_bytes_for_known(self, tmp_path):
+        (tmp_path / "character_art__1__full-x.webp").write_bytes(b"payload")
+        data = art_storage.stub_read_bytes("character_art__1__full-x.webp")
+        assert data == b"payload"
+
+    def test_stub_key_encode_decode_roundtrip(self):
+        original = "character_art/9/full-2026-04-19T00-00-00Z.webp"
+        encoded = art_storage.stub_key_encoded(original)
+        assert "/" not in encoded
+        assert art_storage.stub_key_decoded(encoded) == original
+
+
+class TestTestArtStubRoute:
+    """The ``/test-art-stub/{key}`` route serves bytes from the disk stub."""
+
+    def test_route_returns_bytes_when_stub_on(
+        self, client, monkeypatch, tmp_path,
+    ):
+        monkeypatch.setenv("ART_STORAGE_USE_TEST_STUB", "1")
+        monkeypatch.setenv("ART_STORAGE_STUB_DIR", str(tmp_path))
+        (tmp_path / "character_art__1__full-x.webp").write_bytes(b"webp-data")
+        resp = client.get("/test-art-stub/character_art__1__full-x.webp")
+        assert resp.status_code == 200
+        assert resp.content == b"webp-data"
+        assert resp.headers["content-type"] == "image/webp"
+
+    def test_route_404_for_missing_key(
+        self, client, monkeypatch, tmp_path,
+    ):
+        monkeypatch.setenv("ART_STORAGE_USE_TEST_STUB", "1")
+        monkeypatch.setenv("ART_STORAGE_STUB_DIR", str(tmp_path))
+        resp = client.get("/test-art-stub/nope.webp")
+        assert resp.status_code == 404
+
+    def test_route_404_when_stub_off(self, client, monkeypatch):
+        monkeypatch.delenv("ART_STORAGE_USE_TEST_STUB", raising=False)
+        resp = client.get("/test-art-stub/anything")
+        assert resp.status_code == 404
