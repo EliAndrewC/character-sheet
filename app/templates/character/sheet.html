@@ -188,12 +188,15 @@
                  x-data="{
                      posture: null,
                      defensiveCount: 0,
+                     defensive3rdDan: 0,
                      accum: {{ 'true' if school_abilities.get('mantis_posture_accumulation') else 'false' }},
+                     has3rdDan: {{ 'true' if school_abilities.get('mantis_3rd_dan_defensive') else 'false' }},
                      base: {{ 5 + 5 * character.parry }},
                      total() {
                          return this.base
                              + (this.posture === 'defensive' ? 5 : 0)
-                             + (this.accum ? this.defensiveCount : 0);
+                             + (this.accum ? this.defensiveCount : 0)
+                             + (this.has3rdDan ? this.defensive3rdDan : 0);
                      },
                      tooltip() {
                          const parts = [];
@@ -203,6 +206,9 @@
                                  + ' Mantis 5th Dan (' + this.defensiveCount
                                  + ' defensive phase' + (this.defensiveCount > 1 ? 's' : '') + ')');
                          }
+                         if (this.has3rdDan && this.defensive3rdDan > 0) {
+                             parts.push('+' + this.defensive3rdDan + ' Mantis 3rd Dan (defensive)');
+                         }
                          return parts.length > 0 ? parts.join('; ') : null;
                      }
                  }"
@@ -210,8 +216,13 @@
                      const t = window._trackingBridge;
                      posture = t?.currentPosture?.() || null;
                      defensiveCount = t?.defensivePhaseCount?.() || 0;
+                     defensive3rdDan = t?.defensive3rdDanAccum || 0;
                  })"
-                 @mantis-posture-changed.window="posture = $event.detail.posture; defensiveCount = $event.detail.defensiveCount || 0"
+                 @mantis-posture-changed.window="
+                     posture = $event.detail.posture;
+                     defensiveCount = $event.detail.defensiveCount || 0;
+                     defensive3rdDan = $event.detail.defensive3rdDan || 0;
+                 "
                  data-testid="tn-display">
                 <span class="text-ink/60">TN to be hit:</span>&nbsp;
                 <span class="font-bold"
@@ -226,6 +237,10 @@
                       class="text-xs text-gold ml-1"
                       data-testid="tn-5th-dan-accumulator"
                       x-text="`+${defensiveCount} 5th Dan`"></span>
+                <span x-show="has3rdDan && defensive3rdDan > 0" x-cloak
+                      class="text-xs text-gold ml-1"
+                      data-testid="tn-3rd-dan-accumulator"
+                      x-text="`+${defensive3rdDan} 3rd Dan`"></span>
             </div>
             <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
                 <span class="text-ink/60">Wound Check:</span>&nbsp;
@@ -389,6 +404,12 @@
                 // adventure_state so it survives reloads but resets per round.
                 posturePhase: ({{ (adventure_state or {})|tojson }}).mantis_posture_phase || 1,
                 postureHistory: ({{ (adventure_state or {})|tojson }}).mantis_posture_history || [],
+                // Mantis 3rd Dan offensive: per-round accumulator set by the
+                // attack-result-modal button.
+                offensive3rdDanAccum: ({{ (adventure_state or {})|tojson }}).mantis_offensive_3rd_dan_accum || 0,
+                // Mantis 3rd Dan defensive: per-round accumulator set by the
+                // Tracking-section button; feeds WC + TN overlays.
+                defensive3rdDanAccum: ({{ (adventure_state or {})|tojson }}).mantis_defensive_3rd_dan_accum || 0,
                 _charId: {{ character.id }},
                 _saving: false,
                 showResetModal: false,
@@ -442,11 +463,16 @@
                     return this.postureHistory.filter(p => p === 'defensive').length;
                 },
                 _dispatchMantisPostureChanged(posture) {
+                    // Single event surface for every Mantis round-state change.
+                    // Cross-scope listeners (currently the TN display) read the
+                    // enriched detail to derive their displayed values.
                     window.dispatchEvent(new CustomEvent('mantis-posture-changed', {
                         detail: {
                             posture: posture,
                             offensiveCount: this.offensivePhaseCount(),
                             defensiveCount: this.defensivePhaseCount(),
+                            offensive3rdDan: this.offensive3rdDanAccum || 0,
+                            defensive3rdDan: this.defensive3rdDanAccum || 0,
                         },
                     }));
                 },
@@ -461,14 +487,44 @@
                     this.save();
                 },
                 resetMantisRound() {
-                    // Zeros the Mantis per-round posture tracker. Later phases
-                    // hang more state off this helper (3rd Dan accumulators,
-                    // etc.). The caller is responsible for calling save().
+                    // Zeros the Mantis per-round posture tracker and any
+                    // per-round accumulators set by Mantis abilities. The
+                    // caller is responsible for calling save().
                     this.posturePhase = 1;
                     this.postureHistory = [];
+                    this.offensive3rdDanAccum = 0;
+                    this.defensive3rdDanAccum = 0;
                     delete this.adventureState.mantis_posture_phase;
                     delete this.adventureState.mantis_posture_history;
+                    delete this.adventureState.mantis_offensive_3rd_dan_accum;
+                    delete this.adventureState.mantis_defensive_3rd_dan_accum;
                     this._dispatchMantisPostureChanged(null);
+                },
+                incrementMantis3rdDanOffensive(amount) {
+                    // Called from the attack-result-modal button. Spends the
+                    // lowest unspent action die (labeled) and accumulates +X
+                    // on subsequent attack and damage rolls this round.
+                    if (!amount) return false;
+                    const idx = this.spendLowestUnspentActionDie('Mantis 3rd Dan (offensive)');
+                    if (idx < 0) return false;
+                    this.offensive3rdDanAccum = (this.offensive3rdDanAccum || 0) + amount;
+                    this.adventureState.mantis_offensive_3rd_dan_accum = this.offensive3rdDanAccum;
+                    this._dispatchMantisPostureChanged(this.currentPosture());
+                    this.save();
+                    return true;
+                },
+                incrementMantis3rdDanDefensive(amount) {
+                    // Called from the Tracking-section button. Spends the
+                    // lowest unspent action die (labeled) and accumulates +X
+                    // on subsequent wound checks and on the displayed TN.
+                    if (!amount) return false;
+                    const idx = this.spendLowestUnspentActionDie('Mantis 3rd Dan (defensive)');
+                    if (idx < 0) return false;
+                    this.defensive3rdDanAccum = (this.defensive3rdDanAccum || 0) + amount;
+                    this.adventureState.mantis_defensive_3rd_dan_accum = this.defensive3rdDanAccum;
+                    this._dispatchMantisPostureChanged(this.currentPosture());
+                    this.save();
+                    return true;
                 },
                 toggleActionMenu(i) {
                     this.actionMenuOpen = this.actionMenuOpen === i ? null : i;
@@ -1099,6 +1155,45 @@
                     <span x-show="defensivePhaseCount() > 0"
                           data-testid="mantis-5th-dan-defensive"
                           x-text="`+${defensivePhaseCount()} to wound checks and TN`"></span>
+                </div>
+                {% endif %}
+                {% if viewer_can_edit and school_abilities.get('mantis_3rd_dan_defensive') %}
+                {# 3rd Dan defensive: spend action die for +X to WC and TN.
+                   Visible only in defensive posture AND when at least one
+                   action die is unspent. Tooltip carries the rules text. #}
+                <div x-show="currentPosture() === 'defensive' && (actionDice || []).some(d => !d.spent)"
+                     x-cloak class="mt-1 flex flex-wrap items-center gap-2">
+                    <button type="button"
+                            @click="incrementMantis3rdDanDefensive({{ school_abilities.get('mantis_3rd_dan_x', 0) }})"
+                            data-action="mantis-3rd-dan-defensive"
+                            title="After seeing the result of an attack roll made against you while fighting with a defensive posture, you may spend one action die from any phase to increase your wound checks and TN to be hit by X for the remainder of the round, where X is your attack skill."
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
+                        Spend action to increase TN and wound checks by
+                        <span>{{ school_abilities.get('mantis_3rd_dan_x', 0) }}</span>
+                    </button>
+                    <span x-show="defensive3rdDanAccum > 0" x-cloak
+                          class="text-xs text-ink/60"
+                          data-testid="mantis-3rd-dan-defensive-accum"
+                          x-text="'Accumulated: +' + defensive3rdDanAccum"></span>
+                </div>
+                {% endif %}
+                {% if viewer_can_edit %}
+                {# End-of-round "Clear bonuses" button. Semantically equivalent
+                   to the action-dice "Clear" button - it wipes posture history,
+                   accumulators, and action dice via clearActionDice(). Shown
+                   whenever any per-round Mantis state is non-zero. #}
+                <div x-show="actionDice.length > 0
+                             || postureHistory.length > 0
+                             || offensive3rdDanAccum > 0
+                             || defensive3rdDanAccum > 0"
+                     x-cloak class="mt-1">
+                    <button type="button"
+                            @click="clearActionDice()"
+                            data-action="mantis-clear-bonuses"
+                            title="End the combat round: clears posture history, all Mantis accumulators, and all action dice."
+                            class="text-xs text-ink/50 hover:text-accent underline">
+                        Clear bonuses
+                    </button>
                 </div>
                 {% endif %}
             </div>
@@ -3142,6 +3237,32 @@
                             Close
                         </button>
                     </div>
+
+                    {# Mantis Wave-Treader 3rd Dan offensive: spend action die
+                       to add +X to attack and damage for the rest of the round.
+                       Visible on hit or miss (rule is phrased "after making an
+                       attack roll") when posture is offensive and at least one
+                       unspent action die remains. #}
+                    {% if school_abilities.get('mantis_3rd_dan_offensive') %}
+                    <div x-show="window._trackingBridge?.currentPosture?.() === 'offensive'
+                                 && (window._trackingBridge?.actionDice || []).some(d => !d.spent)"
+                         x-cloak class="mt-2 flex flex-wrap items-center gap-2">
+                        <button type="button"
+                                @click="window._trackingBridge?.incrementMantis3rdDanOffensive({{ school_abilities.get('mantis_3rd_dan_x', 0) }})"
+                                data-action="mantis-3rd-dan-offensive"
+                                title="After making an attack roll during a phase in which you have chosen an offensive posture, you may spend one action die from any phase to give yourself +X to all attack and damage rolls for the rest of the round, where X is your attack skill."
+                                class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm">
+                            Spend another action to increase attack and damage by
+                            <span>{{ school_abilities.get('mantis_3rd_dan_x', 0) }}</span>
+                            for the round
+                        </button>
+                        <span x-show="(window._trackingBridge?.offensive3rdDanAccum || 0) > 0"
+                              x-cloak
+                              class="text-xs text-ink/60"
+                              data-testid="mantis-3rd-dan-offensive-accum"
+                              x-text="'Accumulated: +' + (window._trackingBridge?.offensive3rdDanAccum || 0)"></span>
+                    </div>
+                    {% endif %}
 
                     {# Lucky reroll for attack #}
                     <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyAttack()"
@@ -6138,6 +6259,10 @@
                     const c = t.offensivePhaseCount?.() || 0;
                     if (c > 0) out.push(`+${c} from Mantis 5th Dan (offensive posture count)`);
                 }
+                if (this.schoolAbilities.mantis_3rd_dan_offensive) {
+                    const a = t.offensive3rdDanAccum || 0;
+                    if (a > 0) out.push(`+${a} from Mantis 3rd Dan (offensive)`);
+                }
                 return out;
             },
             _mantisLiveDamageLabels() {
@@ -6152,6 +6277,9 @@
                 if (this.schoolAbilities.mantis_posture_accumulation) {
                     flat += t.offensivePhaseCount?.() || 0;
                 }
+                if (this.schoolAbilities.mantis_3rd_dan_offensive) {
+                    flat += t.offensive3rdDanAccum || 0;
+                }
                 return flat;
             },
             _mantisLiveWcLabels() {
@@ -6165,6 +6293,10 @@
                     const c = t.defensivePhaseCount?.() || 0;
                     if (c > 0) out.push(`+${c} from Mantis 5th Dan (defensive posture count)`);
                 }
+                if (this.schoolAbilities.mantis_3rd_dan_defensive) {
+                    const a = t.defensive3rdDanAccum || 0;
+                    if (a > 0) out.push(`+${a} from Mantis 3rd Dan (defensive)`);
+                }
                 return out;
             },
             _mantisLiveWcFlat() {
@@ -6173,6 +6305,9 @@
                 let flat = t.currentPosture?.() === 'defensive' ? 5 : 0;
                 if (this.schoolAbilities.mantis_posture_accumulation) {
                     flat += t.defensivePhaseCount?.() || 0;
+                }
+                if (this.schoolAbilities.mantis_3rd_dan_defensive) {
+                    flat += t.defensive3rdDanAccum || 0;
                 }
                 return flat;
             },
@@ -6315,6 +6450,15 @@
                         flat += _mantisDmgAcc;
                     }
                 }
+                // Mantis Wave-Treader 3rd Dan offensive: per-round accumulator
+                // (+X damage) set via the attack-result-modal button.
+                if (this.schoolAbilities.mantis_3rd_dan_offensive) {
+                    const _mantis3rdDmg = window._trackingBridge?.offensive3rdDanAccum || 0;
+                    if (_mantis3rdDmg > 0) {
+                        parts.push(`+${_mantis3rdDmg} flat from Mantis 3rd Dan (offensive)`);
+                        flat += _mantis3rdDmg;
+                    }
+                }
                 if (residualFlat > 0) {
                     parts.push(`+${residualFlat} flat bonus`);
                 }
@@ -6393,6 +6537,21 @@
                         formula.bonuses = [...(formula.bonuses || []), {
                             label: 'Mantis 5th Dan (offensive posture count)',
                             amount: _mantisAtkAcc,
+                        }];
+                    }
+                }
+                // Mantis Wave-Treader 3rd Dan offensive: per-round accumulator
+                // set via the attack-result-modal button (spend one action
+                // die for +X). Applies to all subsequent attack and damage.
+                if (this.schoolAbilities.mantis_3rd_dan_offensive) {
+                    const _mantis3rd = window._trackingBridge?.offensive3rdDanAccum || 0;
+                    if (_mantis3rd > 0) {
+                        formula.flat = (formula.flat || 0) + _mantis3rd;
+                        const _lbl = `+${_mantis3rd} from Mantis 3rd Dan (offensive)`;
+                        formula.bonus_sources = [...(formula.bonus_sources || []), _lbl];
+                        formula.bonuses = [...(formula.bonuses || []), {
+                            label: 'Mantis 3rd Dan (offensive)',
+                            amount: _mantis3rd,
                         }];
                     }
                 }
@@ -6792,6 +6951,17 @@
                         if (!formula.bonus_sources) formula.bonus_sources = [];
                         formula.bonus_sources = [...formula.bonus_sources,
                             `+${_mantisWcAcc} from Mantis 5th Dan (defensive posture count)`];
+                    }
+                }
+                // Mantis Wave-Treader 3rd Dan defensive: per-round accumulator
+                // set via the Tracking-section button. Applies to wound checks.
+                if (this.schoolAbilities.mantis_3rd_dan_defensive) {
+                    const _mantis3rdWc = window._trackingBridge?.defensive3rdDanAccum || 0;
+                    if (_mantis3rdWc > 0) {
+                        formula.flat = (formula.flat || 0) + _mantis3rdWc;
+                        if (!formula.bonus_sources) formula.bonus_sources = [];
+                        formula.bonus_sources = [...formula.bonus_sources,
+                            `+${_mantis3rdWc} from Mantis 3rd Dan (defensive)`];
                     }
                 }
 

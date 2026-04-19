@@ -286,6 +286,30 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] WC modal pre-roll Bonuses row and post-roll breakdown show labeled 5th Dan defensive accumulator (independent of current posture) -> `test_school_abilities.py::test_mantis_5th_dan_wc_modal_defensive_accumulator`
 - [x] TN display reflects base + defensive-posture +5 + 5th Dan accumulator; enumerated tooltip lists both; switching to offensive keeps only the accumulator -> `test_school_abilities.py::test_mantis_5th_dan_tn_display_bumps_with_accumulator`
 - [x] Dan 4 Mantis: current-posture +5 lands but no 5th Dan accumulator label -> `test_school_abilities.py::test_mantis_dan_4_no_accumulator_on_attack`
+- [x] 3rd Dan offensive button hidden when no posture selected -> `test_school_abilities.py::test_mantis_3rd_dan_button_hidden_without_posture`
+- [x] 3rd Dan offensive button hidden in defensive posture -> `test_school_abilities.py::test_mantis_3rd_dan_button_hidden_in_defensive_posture`
+- [x] 3rd Dan offensive button hidden when no unspent action dice remain -> `test_school_abilities.py::test_mantis_3rd_dan_button_hidden_with_no_unspent_action_dice`
+- [x] 3rd Dan offensive button absent on Dan 2 Mantis -> `test_school_abilities.py::test_mantis_3rd_dan_button_hidden_on_dan_2`
+- [x] Clicking 3rd Dan offensive button spends the lowest unspent action die (labeled) and bumps offensive3rdDanAccum by X -> `test_school_abilities.py::test_mantis_3rd_dan_click_spends_die_and_accumulates`
+- [x] Two clicks stack the accumulator at 2X and spend two dice -> `test_school_abilities.py::test_mantis_3rd_dan_two_spends_stack_accumulator`
+- [x] Next attack modal pre-roll Bonuses + post-roll breakdown include +X from Mantis 3rd Dan (offensive) -> `test_school_abilities.py::test_mantis_3rd_dan_next_attack_includes_accumulator`
+- [x] atkComputeDamage parts include labeled +X flat from Mantis 3rd Dan (offensive) -> `test_school_abilities.py::test_mantis_3rd_dan_damage_includes_accumulator`
+- [x] Rolling initiative zeros offensive3rdDanAccum (via resetMantisRound) -> `test_school_abilities.py::test_mantis_3rd_dan_resets_on_initiative`
+- [x] 3rd Dan defensive button hidden without posture selected -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_button_hidden_without_posture`
+- [x] 3rd Dan defensive button hidden in offensive posture -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_button_hidden_in_offensive_posture`
+- [x] 3rd Dan defensive button hidden when no unspent action dice -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_button_hidden_no_action_dice`
+- [x] 3rd Dan defensive button absent on Dan 2 Mantis -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_button_absent_on_dan_2`
+- [x] Clicking 3rd Dan defensive button spends lowest unspent action die (labeled) and bumps defensive3rdDanAccum by X -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_click_spends_die_and_accumulates`
+- [x] Two defensive spends stack at 2X -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_two_spends_stack`
+- [x] WC modal pre-roll Bonuses + post-roll breakdown include +X from Mantis 3rd Dan (defensive) -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_wc_overlay`
+- [x] TN display includes +5 current posture + +X 3rd Dan accumulator; enumerated tooltip lists each contribution; inline "+X 3rd Dan" label visible -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_tn_display`
+- [x] Clear bonuses button zeros postureHistory, both 3rd Dan accumulators, and action dice -> `test_school_abilities.py::test_mantis_clear_bonuses_zeros_everything`
+- [x] Clear bonuses button hidden on a fresh sheet with no round state -> `test_school_abilities.py::test_mantis_clear_bonuses_button_hidden_when_empty`
+- [x] Action-dice "Clear" button is equivalent to Clear bonuses (wipes everything) -> `test_school_abilities.py::test_mantis_action_dice_clear_equivalent_to_clear_bonuses`
+- [x] Defensive posture raises WC probability-table passChance / lowers expectedSW -> `test_school_abilities.py::test_mantis_wc_probability_shifts_with_defensive_posture`
+- [x] Spending 3rd Dan defensive button raises WC probability-table passChance further -> `test_school_abilities.py::test_mantis_wc_probability_shifts_with_3rd_dan_defensive`
+- [x] 5th Dan defensive-posture-count accumulator shifts WC probability table -> `test_school_abilities.py::test_mantis_wc_probability_shifts_with_5th_dan_defensive_count`
+- [x] Posture +5, 5th Dan accum, 3rd Dan accum all stack in the probability table; Bonuses row lists all three labeled entries -> `test_school_abilities.py::test_mantis_wc_probability_all_three_stack`
 
 ### Merchant
 

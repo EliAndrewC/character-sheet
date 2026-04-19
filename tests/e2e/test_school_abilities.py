@@ -5412,7 +5412,7 @@ def test_mantis_5th_dan_accumulator_counts_offensive(page, live_server_url):
     for _ in range(3):
         _select_posture(page, "offensive")
     off_line = page.locator('[data-testid="mantis-5th-dan-offensive"]')
-    assert off_line.is_visible()
+    off_line.wait_for(state='visible', timeout=2000)
     assert "+3" in off_line.text_content()
     # Defensive line stays hidden (zero defensive phases).
     assert not page.locator('[data-testid="mantis-5th-dan-defensive"]').is_visible()
@@ -5427,6 +5427,8 @@ def test_mantis_5th_dan_accumulator_counts_mixed(page, live_server_url):
     _select_posture(page, "offensive")  # phase 3
     off_line = page.locator('[data-testid="mantis-5th-dan-offensive"]')
     def_line = page.locator('[data-testid="mantis-5th-dan-defensive"]')
+    off_line.wait_for(state='visible', timeout=2000)
+    def_line.wait_for(state='visible', timeout=2000)
     assert "+2" in off_line.text_content()
     assert "+1" in def_line.text_content()
 
@@ -5438,14 +5440,18 @@ def test_mantis_5th_dan_accumulator_resets_on_initiative(page, live_server_url):
     _make_mantis_dan_5(page, live_server_url, "Mantis5Reset")
     _select_posture(page, "offensive")
     _select_posture(page, "offensive")
-    assert page.locator('[data-testid="mantis-5th-dan-offensive"]').is_visible()
+    # wait_for(state='visible') absorbs Alpine's x-show microtask flush.
+    page.locator('[data-testid="mantis-5th-dan-offensive"]').wait_for(
+        state='visible', timeout=2000
+    )
     # Roll initiative (any variant) - setActionDice triggers resetMantisRound.
     page.locator('[data-roll-key="initiative"]').click()
     _wait_roll_done(page)
     page.wait_for_function("() => window._trackingBridge.offensivePhaseCount() === 0")
     page.locator('[data-modal="dice-roller"]').locator('button:has-text("\u00d7")').click()
-    page.wait_for_timeout(150)
-    assert not page.locator('[data-testid="mantis-5th-dan-accumulator"]').is_visible()
+    page.locator('[data-testid="mantis-5th-dan-accumulator"]').wait_for(
+        state='hidden', timeout=2000
+    )
 
 
 @pytest.mark.school_abilities
@@ -5605,4 +5611,582 @@ def test_mantis_dan_4_no_accumulator_on_attack(page, live_server_url):
     assert "+5 from offensive posture" in text
     # The 5th Dan accumulator label MUST NOT appear.
     assert "Mantis 5th Dan" not in text
+
+
+# ---------------------------------------------------------------------------
+# Mantis Wave-Treader 3rd Dan offensive: spend-action-die button (Phase 7)
+# ---------------------------------------------------------------------------
+
+
+def _make_mantis_dan_3(page, live_server_url, name, attack=1):
+    """Create a Mantis character with school knacks at 3 (Dan 3) and an
+    optional override for the attack skill (drives 3rd Dan X). Attack skill
+    lives in its own editor field (not the skills block), so we can't reuse
+    `_create_char`'s skill_overrides path - use the autosave endpoint."""
+    _create_char(
+        page, live_server_url, name, "mantis_wave_treader",
+        knack_overrides={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+    )
+    if attack and attack > 1:
+        cid = _extract_char_id(page)
+        page.evaluate(f"""async () => {{
+            await fetch('/characters/{cid}/autosave', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{attack: {attack}}})
+            }});
+        }}""")
+        page.reload()
+        page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+
+
+def _seed_action_dice(page, values):
+    """Populate the Mantis character's action dice from JS. Uses setActionDice
+    so the tracking-bridge save round-trip fires (but the Mantis resetRound is
+    harmless - it clears posture, which tests set afterwards)."""
+    page.evaluate(f"""() => {{
+        window._trackingBridge.setActionDice({list(values)!r});
+    }}""")
+    page.wait_for_function(
+        f"() => (window._trackingBridge.actionDice || []).length === {len(values)}"
+    )
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_button_hidden_without_posture(page, live_server_url):
+    """No posture selected => button hidden even with action dice present."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3BtnHidden")
+    _seed_action_dice(page, [3, 5])
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    assert not page.locator('[data-action="mantis-3rd-dan-offensive"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_button_hidden_in_defensive_posture(page, live_server_url):
+    """Defensive posture => button hidden."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3BtnDef")
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "defensive")
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    assert not page.locator('[data-action="mantis-3rd-dan-offensive"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_button_hidden_with_no_unspent_action_dice(page, live_server_url):
+    """Offensive posture but all action dice spent => button hidden."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3BtnNoDice")
+    _seed_action_dice(page, [3])
+    # Mark the only die as spent.
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 3, spent: true}];
+        t.save();
+    }""")
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    assert not page.locator('[data-action="mantis-3rd-dan-offensive"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_button_hidden_on_dan_2(page, live_server_url):
+    """Dan 2 Mantis never sees the button (flag is false server-side)."""
+    _create_char(
+        page, live_server_url, "Mantis2NoBtn", "mantis_wave_treader",
+        knack_overrides={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+    )
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    assert page.locator('[data-action="mantis-3rd-dan-offensive"]').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_click_spends_die_and_accumulates(page, live_server_url):
+    """Clicking the button spends the lowest unspent action die (labeled) and
+    bumps offensive3rdDanAccum by X (= attack skill rank)."""
+    # Attack skill set to 3 so the accumulator reliably reflects that X > 1.
+    _make_mantis_dan_3(page, live_server_url, "Mantis3Click", attack=3)
+    _seed_action_dice(page, [4, 7])
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    btn = page.locator('[data-action="mantis-3rd-dan-offensive"]')
+    assert btn.is_visible()
+    btn.click()
+    page.wait_for_function(
+        "() => (window._trackingBridge.offensive3rdDanAccum || 0) === 3"
+    )
+    # The attack roll itself spent index 0 (value 4); the Mantis 3rd Dan
+    # click then spent the next unspent die (index 1, value 7) with the
+    # labeled reason.
+    state = page.evaluate("""() => {
+        return window._trackingBridge.actionDice.map(d => ({
+            value: d.value, spent: d.spent, spent_by: d.spent_by || null,
+        }));
+    }""")
+    assert state[0]["spent"] is True  # spent by the attack roll itself
+    assert state[1]["spent"] is True  # spent by Mantis 3rd Dan button
+    assert state[1]["spent_by"] == "Mantis 3rd Dan (offensive)"
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_two_spends_stack_accumulator(page, live_server_url):
+    """Two clicks stack the accumulator at 2X and spend two action dice."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3Stack", attack=2)
+    _seed_action_dice(page, [3, 5, 7])
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    btn = page.locator('[data-action="mantis-3rd-dan-offensive"]')
+    btn.click()
+    page.wait_for_function(
+        "() => (window._trackingBridge.offensive3rdDanAccum || 0) === 2"
+    )
+    btn.click()
+    page.wait_for_function(
+        "() => (window._trackingBridge.offensive3rdDanAccum || 0) === 4"
+    )
+    # After: attack roll spent index 0, first Mantis click spent index 1,
+    # second Mantis click spent index 2. All three dice are spent; the
+    # latter two carry the Mantis label.
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        spent: d.spent, spent_by: d.spent_by || null
+    }))""")
+    assert all(d["spent"] for d in state)
+    mantis_spends = [d for d in state if d["spent_by"] == "Mantis 3rd Dan (offensive)"]
+    assert len(mantis_spends) == 2
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_next_attack_includes_accumulator(page, live_server_url):
+    """After the accumulator is set, the next attack roll's pre-roll Bonuses
+    row, post-roll breakdown, and formula.flat all include the labeled +X."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3NextAtk", attack=3)
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "offensive")
+    # First attack: roll, click the 3rd Dan button.
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.offensive3rdDanAccum === 3")
+    # Close the modal.
+    page.locator('[data-modal="attack"]').locator('button:has-text("\u00d7")').click()
+    # Second attack: pre-roll Bonuses row should now include the labeled +3.
+    _open_attack_modal(page, "attack")
+    pre_text = _attack_modal_bonus_text(page)
+    assert "+3 from Mantis 3rd Dan (offensive)" in pre_text
+    # Roll and verify post-roll breakdown carries the same label (via
+    # formula.bonuses snapshot in rollAttack).
+    _mock_dice_low(page)
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    _restore_dice(page)
+    post_text = page.locator('[data-modal="attack"]').text_content()
+    assert "Mantis 3rd Dan (offensive)" in post_text
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_damage_includes_accumulator(page, live_server_url):
+    """After the accumulator is set, atkComputeDamage adds a labeled +X flat
+    line to the damage parts (both pre-roll preview and post-roll damage)."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3Dmg", attack=3)
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.offensive3rdDanAccum === 3")
+    # Query atkComputeDamage's parts directly (pre-roll preview surface).
+    parts = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.atkComputeDamage === 'function') {
+                return d.atkComputeDamage(0, false, false, 0, false).parts;
+            }
+        }
+        return null;
+    }""")
+    assert parts is not None
+    assert any("Mantis 3rd Dan (offensive)" in p and "+3" in p for p in parts)
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_resets_on_initiative(page, live_server_url):
+    """Rolling initiative zeros the accumulator (resetMantisRound)."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3Reset", attack=2)
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.offensive3rdDanAccum === 2")
+    # Close the attack modal so we can roll initiative.
+    page.locator('[data-modal="attack"]').locator('button:has-text("\u00d7")').click()
+    # Roll initiative - setActionDice calls resetMantisRound which zeros the
+    # offensive3rdDanAccum alongside postureHistory.
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    page.wait_for_function("() => window._trackingBridge.offensive3rdDanAccum === 0")
+
+
+# ---------------------------------------------------------------------------
+# Mantis Wave-Treader 3rd Dan defensive + Clear bonuses (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_defensive_button_hidden_without_posture(page, live_server_url):
+    """No posture selected => defensive button hidden even with action dice."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DefNo")
+    _seed_action_dice(page, [3, 5])
+    assert not page.locator('[data-action="mantis-3rd-dan-defensive"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_defensive_button_hidden_in_offensive_posture(page, live_server_url):
+    """Offensive posture => defensive button hidden."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DefOff")
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "offensive")
+    assert not page.locator('[data-action="mantis-3rd-dan-defensive"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_defensive_button_hidden_no_action_dice(page, live_server_url):
+    """Defensive posture but no unspent dice => button hidden."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DefNoDie")
+    _select_posture(page, "defensive")
+    assert not page.locator('[data-action="mantis-3rd-dan-defensive"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_defensive_button_absent_on_dan_2(page, live_server_url):
+    """Dan 2 Mantis never sees the defensive button."""
+    _create_char(
+        page, live_server_url, "Mantis2NoDef", "mantis_wave_treader",
+        knack_overrides={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+    )
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "defensive")
+    assert page.locator('[data-action="mantis-3rd-dan-defensive"]').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_defensive_click_spends_die_and_accumulates(page, live_server_url):
+    """Click spends lowest unspent action die (labeled) and bumps
+    defensive3rdDanAccum by X (= attack skill)."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DefClick", attack=3)
+    _seed_action_dice(page, [4, 7])
+    _select_posture(page, "defensive")
+    btn = page.locator('[data-action="mantis-3rd-dan-defensive"]')
+    btn.wait_for(state='visible', timeout=2000)
+    btn.click()
+    page.wait_for_function(
+        "() => (window._trackingBridge.defensive3rdDanAccum || 0) === 3"
+    )
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        spent: d.spent, spent_by: d.spent_by || null
+    }))""")
+    # Lowest unspent (index 0, value 4) is now spent with the labeled reason.
+    assert state[0]["spent"] is True
+    assert state[0]["spent_by"] == "Mantis 3rd Dan (defensive)"
+    assert state[1]["spent"] is False
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_defensive_two_spends_stack(page, live_server_url):
+    """Two defensive spends stack the accumulator at 2X."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DefStack", attack=2)
+    _seed_action_dice(page, [3, 5, 7])
+    _select_posture(page, "defensive")
+    btn = page.locator('[data-action="mantis-3rd-dan-defensive"]')
+    btn.wait_for(state='visible', timeout=2000)
+    btn.click()
+    page.wait_for_function("() => window._trackingBridge.defensive3rdDanAccum === 2")
+    btn.click()
+    page.wait_for_function("() => window._trackingBridge.defensive3rdDanAccum === 4")
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_defensive_wc_overlay(page, live_server_url):
+    """After spending, wound check modal pre-roll + post-roll show labeled +X."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DefWC", attack=3)
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "defensive")
+    page.locator('[data-action="mantis-3rd-dan-defensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.defensive3rdDanAccum === 3")
+    # Open WC modal; pre-roll Bonuses row should show both +5 (current posture)
+    # and +3 (3rd Dan accumulator).
+    _set_light_wounds(page, 10)
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openWoundCheckModal === 'function') {
+                d.openWoundCheckModal();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="wound-check"]')
+    pre_text = modal.text_content()
+    assert "+5 from defensive posture" in pre_text
+    assert "+3 from Mantis 3rd Dan (defensive)" in pre_text
+    # Roll and verify post-roll breakdown still contains the label.
+    _mock_dice_low(page)
+    modal.locator('button:has-text("Roll Wound Check")').first.click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    assert "+3 from Mantis 3rd Dan (defensive)" in modal.text_content()
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_defensive_tn_display(page, live_server_url):
+    """TN display reflects base + defensive +5 + 3rd Dan accum; tooltip
+    enumerates each contribution. Defensive-posture bump still visible."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DefTN", attack=3)
+    _seed_action_dice(page, [3, 5])
+    tn_box = page.locator('[data-testid="tn-display"]')
+    base = int(tn_box.locator("span.font-bold").first.text_content())
+    assert base == 10  # 5 + 5*parry (parry=1)
+    _select_posture(page, "defensive")
+    page.locator('[data-action="mantis-3rd-dan-defensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.defensive3rdDanAccum === 3")
+    # Wait for the TN display to reflect the new accumulator (we can't use
+    # _select_posture's helper because the accumulator isn't posture state).
+    page.wait_for_function("""() => {
+        const el = document.querySelector('[data-testid="tn-display"]');
+        const d = window.Alpine && window.Alpine.$data(el);
+        return d && d.defensive3rdDan === 3;
+    }""")
+    total = int(tn_box.locator("span.font-bold").first.text_content())
+    assert total == base + 5 + 3  # base + defensive posture + 3rd Dan accum
+    # 3rd Dan inline label visible alongside the defensive-bump label.
+    page.locator('[data-testid="tn-defensive-bump"]').wait_for(state='visible', timeout=2000)
+    page.locator('[data-testid="tn-3rd-dan-accumulator"]').wait_for(state='visible', timeout=2000)
+    title = tn_box.locator("span.font-bold").first.get_attribute("title")
+    assert title
+    assert "+5" in title and "defensive posture" in title
+    assert "+3 Mantis 3rd Dan (defensive)" in title
+
+
+@pytest.mark.school_abilities
+def test_mantis_clear_bonuses_zeros_everything(page, live_server_url):
+    """Clicking the posture tracker's Clear bonuses button wipes posture
+    history, both 3rd Dan accumulators, AND the action dice (equivalent to
+    the action-dice Clear button)."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3ClearAll", attack=3)
+    _seed_action_dice(page, [3, 5, 7])
+    _select_posture(page, "defensive")
+    _select_posture(page, "defensive")
+    page.locator('[data-action="mantis-3rd-dan-defensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.defensive3rdDanAccum === 3")
+    # Also stage an offensive accumulator so we can prove Clear zeros it too.
+    # Switch to offensive and roll an attack to enable the offensive button.
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.offensive3rdDanAccum === 3")
+    # Close the attack modal so Clear bonuses is reachable.
+    page.locator('[data-modal="attack"]').locator('button:has-text("\u00d7")').click()
+    clear = page.locator('[data-action="mantis-clear-bonuses"]')
+    clear.wait_for(state='visible', timeout=2000)
+    clear.click()
+    page.wait_for_function("""() => {
+        const t = window._trackingBridge;
+        return t.postureHistory.length === 0
+            && t.offensive3rdDanAccum === 0
+            && t.defensive3rdDanAccum === 0
+            && t.actionDice.length === 0
+            && t.posturePhase === 1;
+    }""")
+
+
+@pytest.mark.school_abilities
+def test_mantis_clear_bonuses_button_hidden_when_empty(page, live_server_url):
+    """Clear bonuses hidden on a fresh Mantis sheet with no round state."""
+    _create_char(page, live_server_url, "Mantis3ClearHidden", "mantis_wave_treader")
+    assert not page.locator('[data-action="mantis-clear-bonuses"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_action_dice_clear_equivalent_to_clear_bonuses(page, live_server_url):
+    """The action-dice Clear button has the same effect as Clear bonuses:
+    both wipe accumulators, posture history, and action dice."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3ClearEquiv", attack=2)
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "defensive")
+    page.locator('[data-action="mantis-3rd-dan-defensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.defensive3rdDanAccum === 2")
+    # Click the action-dice section's Clear button.
+    page.locator('[data-action="clear-action-dice"]').click()
+    page.wait_for_function("""() => {
+        const t = window._trackingBridge;
+        return t.postureHistory.length === 0
+            && t.defensive3rdDanAccum === 0
+            && t.actionDice.length === 0;
+    }""")
+
+
+# ---------------------------------------------------------------------------
+# Mantis Wave-Treader WC probability-table integration (Phase 9)
+# ---------------------------------------------------------------------------
+
+
+def _open_wc_modal_for_prob(page, lw):
+    """Open the wound-check modal with a known LW so the probability table
+    has a fixed baseline. wcProbRow() uses `wcLightWounds` and `wcProbs`,
+    both populated at openWoundCheckModal() time."""
+    _set_light_wounds(page, lw)
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openWoundCheckModal === 'function') {
+                d.openWoundCheckModal();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+
+
+def _close_wc_modal(page):
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && 'wcModalOpen' in d) { d.wcModalOpen = false; return; }
+        }
+    }""")
+    page.wait_for_selector('[data-modal="wound-check"]', state='hidden', timeout=3000)
+
+
+def _wc_prob_row(page, void_count=0):
+    """Read wcProbRow(voidCount) directly from the diceRoller Alpine scope.
+    Returns {passChance, expectedSW, rows} or None if probs aren't loaded."""
+    return page.evaluate(f"""() => {{
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {{
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.wcProbRow === 'function') {{
+                const r = d.wcProbRow({void_count});
+                return r ? {{
+                    passChance: r.passChance,
+                    expectedSW: r.expectedSW,
+                }} : null;
+            }}
+        }}
+        return null;
+    }}""")
+
+
+@pytest.mark.school_abilities
+def test_mantis_wc_probability_shifts_with_defensive_posture(page, live_server_url):
+    """Selecting defensive posture adds +5 to the WC probability table's flat
+    bonus, which strictly raises passChance and lowers expectedSW."""
+    _make_mantis_dan_3(page, live_server_url, "MantisWCProbPos")
+    _open_wc_modal_for_prob(page, lw=20)
+    baseline = _wc_prob_row(page)
+    assert baseline is not None
+    _close_wc_modal(page)
+    _select_posture(page, "defensive")
+    _open_wc_modal_for_prob(page, lw=20)
+    with_posture = _wc_prob_row(page)
+    assert with_posture is not None
+    assert with_posture["passChance"] > baseline["passChance"], (
+        f"expected pass% to rise; baseline={baseline['passChance']} "
+        f"with posture={with_posture['passChance']}"
+    )
+    assert with_posture["expectedSW"] < baseline["expectedSW"]
+
+
+@pytest.mark.school_abilities
+def test_mantis_wc_probability_shifts_with_3rd_dan_defensive(page, live_server_url):
+    """Spending the 3rd Dan defensive button adds +X to the WC probability
+    table's flat, raising passChance further."""
+    _make_mantis_dan_3(page, live_server_url, "MantisWCProb3rd", attack=3)
+    _seed_action_dice(page, [3, 5])
+    # Baseline with defensive posture only.
+    _select_posture(page, "defensive")
+    _open_wc_modal_for_prob(page, lw=20)
+    posture_only = _wc_prob_row(page)
+    _close_wc_modal(page)
+    # Spend the 3rd Dan defensive button - accumulator = 3.
+    page.locator('[data-action="mantis-3rd-dan-defensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.defensive3rdDanAccum === 3")
+    _open_wc_modal_for_prob(page, lw=20)
+    with_3rd_dan = _wc_prob_row(page)
+    assert with_3rd_dan["passChance"] > posture_only["passChance"]
+    assert with_3rd_dan["expectedSW"] < posture_only["expectedSW"]
+
+
+@pytest.mark.school_abilities
+def test_mantis_wc_probability_shifts_with_5th_dan_defensive_count(page, live_server_url):
+    """Two defensive phase declarations on a Dan 5 Mantis add +2 to the WC
+    probability table's flat (the 5th Dan accumulator)."""
+    _make_mantis_dan_5(page, live_server_url, "MantisWCProb5th")
+    # One defensive declaration -> current posture defensive + 1 accum count.
+    _select_posture(page, "defensive")
+    _open_wc_modal_for_prob(page, lw=20)
+    one_phase = _wc_prob_row(page)
+    _close_wc_modal(page)
+    # Second defensive declaration: still current posture defensive, but now
+    # defensivePhaseCount = 2 so the 5th Dan accumulator contributes +2.
+    _select_posture(page, "defensive")
+    _open_wc_modal_for_prob(page, lw=20)
+    two_phases = _wc_prob_row(page)
+    assert two_phases["passChance"] > one_phase["passChance"]
+    assert two_phases["expectedSW"] < one_phase["expectedSW"]
+
+
+@pytest.mark.school_abilities
+def test_mantis_wc_probability_all_three_stack(page, live_server_url):
+    """All three defensive-side overlays (posture +5, 5th Dan defensivePhaseCount,
+    3rd Dan defensive accumulator) stack additively in the probability table."""
+    _make_mantis_dan_5(page, live_server_url, "MantisWCProbAll")
+    _seed_action_dice(page, [3, 5])
+    # Baseline: no postures, no accumulators.
+    _open_wc_modal_for_prob(page, lw=20)
+    baseline = _wc_prob_row(page)
+    _close_wc_modal(page)
+    # Select two defensive postures (current + 5th Dan accum 2).
+    _select_posture(page, "defensive")
+    _select_posture(page, "defensive")
+    # Spend 3rd Dan defensive button (accum +1; attack=1 default).
+    page.locator('[data-action="mantis-3rd-dan-defensive"]').click()
+    page.wait_for_function("() => window._trackingBridge.defensive3rdDanAccum === 1")
+    _open_wc_modal_for_prob(page, lw=20)
+    stacked = _wc_prob_row(page)
+    # Stacked flat bonus: +5 (posture) + +2 (5th Dan) + +1 (3rd Dan) = +8.
+    assert stacked["passChance"] > baseline["passChance"]
+    # The modal's Bonuses row should list all three labeled entries.
+    modal_text = page.locator('[data-modal="wound-check"]').text_content()
+    assert "+5 from defensive posture" in modal_text
+    assert "+2 from Mantis 5th Dan (defensive posture count)" in modal_text
+    assert "+1 from Mantis 3rd Dan (defensive)" in modal_text
 
