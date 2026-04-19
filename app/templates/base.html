@@ -94,6 +94,46 @@
         }
         .die-cell { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
 
+        /* Action-dice variant: same kite shape as the roll-animation die,
+           but with color variants keyed to the die's *category* (spent,
+           Kakita Phase 0 interrupt, Togashi athletics-only) rather than
+           its numeric value - a 2 renders identically to an 8. */
+        svg.die.action-die {
+            width: 40px; height: 46px;
+            cursor: pointer;
+        }
+        svg.die.action-die.spent {
+            opacity: 0.4;
+        }
+        svg.die.action-die.spent .die-shape {
+            fill: rgba(44,24,16,0.05);
+            stroke: rgba(44,24,16,0.3);
+        }
+        svg.die.action-die.spent .die-text {
+            fill: rgba(44,24,16,0.4);
+            text-decoration: line-through;
+        }
+        svg.die.action-die.phase-zero .die-shape {
+            fill: #fff7e0;
+            stroke: #d4a017;
+        }
+        svg.die.action-die.phase-zero .die-text {
+            fill: #8b0000;
+        }
+        svg.die.action-die.athletics-only .die-shape {
+            fill: #e0f2fe;
+            stroke: #0369a1;
+        }
+        svg.die.action-die.athletics-only .die-text {
+            fill: #0c4a6e;
+        }
+        /* Two-digit value ("10") - shrink the face text so both digits fit
+           inside the narrow kite. Single-digit values keep the default 70px
+           from svg.die .die-text. */
+        svg.die.action-die.two-digit .die-text {
+            font-size: 55px;
+        }
+
         /* ── Status tooltip: aligned value:description grid ── */
         .status-tooltip-grid {
             display: grid;
@@ -197,6 +237,7 @@
             }
         }
     </script>
+    {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-parchment text-ink min-h-screen">
     <nav class="bg-ink text-parchment px-6 py-3 shadow-lg" x-data="{ navOpen: false }">

@@ -37,6 +37,10 @@ def live_server_url():
     # Don't leak a real Gemini key into the subprocess - the stub short-
     # circuits before the key check, but belt-and-braces.
     env.pop("GEMINI_API_KEY", None)
+    # Import is fail-closed by default in production (an unset env var
+    # keeps the feature disabled). The clicktest suite exercises the
+    # import flow, so opt in explicitly for the live server.
+    env["IMPORT_ENABLED"] = "true"
 
     proc = subprocess.Popen(
         [
