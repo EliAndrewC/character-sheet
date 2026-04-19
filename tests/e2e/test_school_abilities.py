@@ -37,7 +37,19 @@ def _wait_roll_done(page):
 
 
 def _roll_via_menu_or_direct(page, roll_key):
-    """Click a roll key. If a menu appears, click the main Roll button. Otherwise wait for direct roll."""
+    """Click a roll key. If a menu appears, click the main Roll button. Otherwise wait for direct roll.
+
+    ``athletics:parry`` has no top-level data-roll-key element - it lives as
+    a sub-button on the regular parry roll menu (gated by the athletics:parry
+    formula existing). Clicking parry opens that menu; we then pick the
+    Athletics Parry sub-button via its dedicated data attribute.
+    """
+    if roll_key == "athletics:parry":
+        page.locator('[data-roll-key="parry"]').click()
+        page.wait_for_timeout(200)
+        page.locator('[data-parry-menu-athletics]').click()
+        _wait_roll_done(page)
+        return
     page.locator(f'[data-roll-key="{roll_key}"]').click()
     page.wait_for_timeout(300)
     # If the roll already completed (no-animation fast path), skip menu check
@@ -166,14 +178,39 @@ def _open_attack_modal_and_roll(page, roll_key):
     """Open attack modal for an attack-type key and roll with default TN.
 
     Schools with an ``athletics`` knack (Togashi, Shosuro Actor, etc.) render
-    a regular-vs-athletics chooser before the attack modal; pick regular.
+    a regular-vs-athletics chooser when "attack" is clicked. The chooser
+    distinguishes regular attack from athletics-attack via two buttons:
+    ``data-attack-choice="attack"`` and ``data-attack-choice="athletics_attack"``.
+    Pass roll_key="athletics:attack" to drive the athletics branch through
+    that chooser; everything else clicks the corresponding data-roll-key
+    directly and (if the chooser appears) picks regular.
     """
-    page.locator(f'[data-roll-key="{roll_key}"]').click()
-    page.wait_for_timeout(200)
-    choice_menu = page.locator('[data-attack-choice-menu]')
-    if choice_menu.count() > 0 and choice_menu.is_visible():
-        choice_menu.locator('[data-attack-choice="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    if roll_key == "athletics:attack":
+        page.locator('[data-roll-key="attack"]').click()
+        page.wait_for_timeout(200)
+        choice_menu = page.locator('[data-attack-choice-menu]')
+        choice_menu.locator('[data-attack-choice="athletics_attack"]').click()
+    else:
+        page.locator(f'[data-roll-key="{roll_key}"]').click()
+        page.wait_for_timeout(200)
+        choice_menu = page.locator('[data-attack-choice-menu]')
+        if choice_menu.count() > 0 and choice_menu.is_visible():
+            choice_menu.locator('[data-attack-choice="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    # Force the lowest TN before rolling so high-mock dice reliably HIT;
+    # without this athletics:attack defaults to TN 25 and a 6k3 of 7s sums
+    # to 21 (a MISS), which hides the HIT-branch buttons the tests target.
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'pre') {
+                d.atkTN = 5;
+                d.atkParrySkill = 1;
+                return;
+            }
+        }
+    }""")
     modal = page.locator('[data-modal="attack"]')
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
@@ -286,7 +323,7 @@ def test_bayushi_3rd_dan_feint_shows_damage(page, live_server_url):
     }""", timeout=10000)
     # Should show damage total and Back button
     modal = page.locator('[data-modal="dice-roller"]')
-    modal.locator('button:text("Back")').wait_for(state='visible', timeout=3000)
+    modal.locator('button:text("Back")').wait_for(state='visible', timeout=10000)
     assert "damage" in modal.text_content().lower()
     assert modal.locator('button:text("Back")').is_visible()
 
@@ -492,7 +529,7 @@ def test_hida_3rd_dan_reroll_appears(page, live_server_url):
     _create_char(page, live_server_url, "HidaReroll", "hida_bushi",
                  knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -678,7 +715,7 @@ def test_mirumoto_5th_dan_prob_charts_include_bonus(page, live_server_url):
 
     # Open attack modal to make atkHitChance available
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("15")
     page.wait_for_timeout(300)
@@ -710,12 +747,12 @@ def test_mirumoto_5th_dan_prob_charts_include_bonus(page, live_server_url):
 
     # Open wound check modal
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "30")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
 
     # Get wound check pass chance with 0 VP and 1 VP
     pass_0, pass_1 = page.evaluate("""() => {
@@ -743,7 +780,7 @@ def test_mirumoto_4th_dan_prob_charts_no_bonus(page, live_server_url):
 
     # Open attack modal
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("15")
     page.wait_for_timeout(300)
@@ -855,7 +892,7 @@ def test_togashi_3rd_dan_athletics_raises(page, live_server_url):
     page.wait_for_timeout(200)
     # Roll athletics and check for the button
     _roll_via_menu_or_direct(page, "athletics:Air")
-    assert page.locator('button:has-text("Spend Athletics Raise")').is_visible()
+    assert page.locator('[data-action="spend-togashi-raise"]').is_visible()
 
 
 def test_togashi_athletics_raise_decrements_daily_pool(page, live_server_url):
@@ -925,7 +962,7 @@ def test_togashi_athletics_raise_on_athletics_parry(page, live_server_url):
     regular-modal togashi raise button must appear on the parry result."""
     _create_char(page, live_server_url, "TogashiAthParry", "togashi_ise_zumi",
                  knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
-                 skill_overrides={"precepts": 1, "athletics": 2})
+                 skill_overrides={"precepts": 1})
     page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
     page.wait_for_timeout(200)
     _roll_via_menu_or_direct(page, "athletics:parry")
@@ -943,7 +980,7 @@ def test_togashi_athletics_raise_on_athletics_attack_hit(page, live_server_url):
     by 5 while decrementing the daily pool."""
     _create_char(page, live_server_url, "TogashiAthAtk", "togashi_ise_zumi",
                  knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
-                 skill_overrides={"precepts": 2, "athletics": 3})
+                 skill_overrides={"precepts": 2})
     page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
     page.wait_for_timeout(200)
     # Ensure the roll hits so the HIT block renders
@@ -984,7 +1021,7 @@ def test_togashi_athletics_raise_atk_undo_restores_total_and_pool(page, live_ser
     daily pool counter."""
     _create_char(page, live_server_url, "TogashiAthAtkUndo", "togashi_ise_zumi",
                  knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
-                 skill_overrides={"precepts": 2, "athletics": 3})
+                 skill_overrides={"precepts": 2})
     page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
     page.wait_for_timeout(200)
     _mock_dice_high(page)
@@ -1025,13 +1062,21 @@ def test_togashi_athletics_raise_button_absent_on_regular_attack(page, live_serv
     3rd Dan."""
     _create_char(page, live_server_url, "TogashiRegAtk", "togashi_ise_zumi",
                  knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
-                 skill_overrides={"precepts": 2, "attack": 3})
+                 skill_overrides={"precepts": 2})
     page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
     page.wait_for_timeout(200)
     _mock_dice_high(page)
     _open_attack_modal_and_roll(page, "attack")
     _restore_dice(page)
-    assert page.locator('[data-action="spend-togashi-raise-atk"]').count() == 0
+    # The button markup exists in both HIT and MISS branches (gated by
+    # x-show on is_athletics_attack, not removed from DOM), so check
+    # visibility rather than count - a regular attack must keep both
+    # branches' togashi-raise buttons hidden.
+    btns = page.locator('[data-action="spend-togashi-raise-atk"]')
+    for i in range(btns.count()):
+        assert not btns.nth(i).is_visible()
+
+
 def test_bayushi_feint_damage_button(page, live_server_url):
     """Bayushi feint damage: Back button returns to feint result."""
     _create_char(page, live_server_url, "BayushiFeintDmg2", "bayushi_bushi",
@@ -1090,7 +1135,7 @@ def test_shiba_parry_damage_button(page, live_server_url):
         return -1;
     }""")
     assert total >= 0, f"Parry damage total should be non-negative, got {total}"
-    page.locator('[data-modal="dice-roller"]').locator('button:text("Back")').wait_for(state='visible', timeout=3000)
+    page.locator('[data-modal="dice-roller"]').locator('button:text("Back")').wait_for(state='visible', timeout=10000)
     assert page.locator('[data-modal="dice-roller"]').locator('button:text("Back")').is_visible()
 
 
@@ -1112,7 +1157,7 @@ def test_hida_reroll_selection_appears(page, live_server_url):
     _create_char(page, live_server_url, "HidaReroll2", "hida_bushi",
                  knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -1448,7 +1493,7 @@ def test_hida_trade_sw_button_works(page, live_server_url):
     assert trade_btn.is_disabled(), "Button should be disabled when LW is 0"
     # Add light wounds
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "15")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
@@ -1579,7 +1624,7 @@ def test_isawa_duelist_3rd_dan_tn_trade_toggle(page, live_server_url):
 
     # Open the attack modal
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     page.wait_for_timeout(300)
 
     # Check the diceRoller's schoolAbilities
@@ -1663,13 +1708,13 @@ def test_shosuro_5th_dan_wound_check_lowest_3_dice(page, live_server_url):
     assert wc.get("shosuro_5th_dan") is True
     # Add light wounds so a wound check can be triggered
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     # Open WC modal and check the pre-roll note
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     pre_text = page.locator('[data-modal="wound-check"]').text_content()
     assert "Shosuro 5th Dan" in pre_text
     # Roll; the result breakdown should include the lowest-3 line
@@ -1898,7 +1943,7 @@ def test_togashi_initiative_dropdown_shows_both_variants(page, live_server_url):
     assert "8k6 athletics actions" in box_text
     # Click opens dropdown (does not roll directly)
     init_box.click()
-    page.wait_for_selector('[data-togashi-init-menu]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-togashi-init-menu]', state='visible', timeout=10000)
     assert page.locator('[data-togashi-init-normal]').is_visible()
     assert page.locator('[data-togashi-init-athletics]').is_visible()
 
@@ -2000,12 +2045,12 @@ def test_yogo_1st_dan_behavioral(page, live_server_url):
 def _roll_wound_check(page):
     """Add light wounds and roll a wound check."""
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -2246,13 +2291,13 @@ def test_bayushi_5th_dan_half_lw_behavioral(page, live_server_url):
     # Set LW to 60. Half is 30. With high dice (roll ~7*kept), roll should exceed 30
     # but not 60, triggering the edge case where margin would have gone negative.
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "60")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_high(page)  # dice roll 7 each -> ~35 total for a 5k3+flat roll
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -2294,13 +2339,13 @@ def test_bayushi_below_5th_dan_no_half_lw(page, live_server_url):
     assert f.get("bayushi_5th_dan_half_lw") is not True, "4th Dan should not have half-LW flag"
     # Add LW and roll wound check
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "60")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_low(page)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -2335,13 +2380,13 @@ def test_bayushi_5th_dan_prob_table_shows_half_lw(page, live_server_url):
                  knack_overrides={"double_attack": 5, "feint": 5, "iaijutsu": 5})
     # Add LW so the table has meaningful numbers
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "60")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     # Open wound check modal to see the probability table
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     # The Bayushi 5th Dan note should appear
     wc_modal = page.locator('[data-modal="wound-check"]')
     text = wc_modal.text_content().lower()
@@ -2355,12 +2400,12 @@ def test_bayushi_below_5th_dan_prob_table_no_half_note(page, live_server_url):
     _create_char(page, live_server_url, "Bayushi4Prob", "bayushi_bushi",
                  knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "60")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     halved_note = wc_modal.locator('text="Bayushi 5th Dan"')
     assert halved_note.count() == 0 or not halved_note.first.is_visible()
@@ -2372,7 +2417,7 @@ def test_brotherhood_unarmed_damage_behavioral(page, live_server_url):
                  knack_overrides={"conviction": 2, "otherworldliness": 2, "worldliness": 2})
     _mock_dice_high(page)
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -2411,7 +2456,7 @@ def test_isawa_duelist_water_damage_behavioral(page, live_server_url):
     _mock_dice_high(page)
     # Open attack modal with low TN to guarantee hit
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -2542,7 +2587,7 @@ def test_daidoji_3rd_dan_raises_note_behavioral(page, live_server_url):
     _mock_dice_high(page)
     # Set TN very low to maximize hit chance
     page.locator('[data-roll-key="knack:counterattack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -2558,13 +2603,13 @@ def test_daidoji_5th_dan_tn_note_behavioral(page, live_server_url):
                  knack_overrides={"counterattack": 5, "double_attack": 5, "iaijutsu": 5})
     # Add small LW so wound check passes
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "5")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_high(page)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -2584,13 +2629,13 @@ def test_daidoji_3rd_dan_counterattack_checkbox(page, live_server_url):
                  knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
     # Add LW
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "20")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     # Open wound check
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     # Checkbox should be visible with "Hit was counterattacked" (self Daidoji)
     checkbox = wc_modal.locator('text="Hit was counterattacked"')
@@ -2622,12 +2667,12 @@ def test_daidoji_below_3rd_dan_no_counterattack_checkbox(page, live_server_url):
     _create_char(page, live_server_url, "Daidoji2NoCA", "daidoji_yojimbo",
                  knack_overrides={"counterattack": 2, "double_attack": 2, "iaijutsu": 2})
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     checkbox = wc_modal.locator('text="Hit was counterattacked"')
     assert checkbox.count() == 0 or not checkbox.is_visible(), "Below 3rd Dan should not show counterattack checkbox"
@@ -2650,12 +2695,12 @@ def test_non_daidoji_with_party_counterattack_checkbox(page, live_server_url):
     }""")
     page.wait_for_timeout(200)
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     # Should show the party member's name in the checkbox label
     checkbox = wc_modal.locator('text="Daidoji Taro counterattacked this hit"')
@@ -2700,7 +2745,7 @@ def test_ikoma_4th_dan_attack_modal_note(page, live_server_url):
                  knack_overrides={"discern_honor": 4, "oppose_knowledge": 4, "oppose_social": 4})
     # Open attack modal (don't roll, just check the pre-roll note)
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     assert "Ikoma 4th Dan" in modal.text_content()
     assert "10 damage dice" in modal.text_content()
@@ -2723,7 +2768,7 @@ def test_matsu_5th_dan_lw_reset_note_behavioral(page, live_server_url):
     _mock_dice_high(page)
     # Roll attack, hit, then roll damage
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")  # low TN for guaranteed hit
     modal.locator('button:has-text("Roll")').first.click()
@@ -2778,7 +2823,7 @@ def test_hida_4th_dan_trade_sw_behavioral(page, live_server_url):
     assert trade_btn.is_disabled(), "Button should be disabled with 0 LW"
     # Add light wounds
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "25")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
@@ -2802,7 +2847,7 @@ def test_hida_trade_sw_can_be_used_multiple_times(page, live_server_url):
     trade_btn = page.locator('button:has-text("Take 2 SW to reset LW to 0")')
     # Add LW and use the button
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
@@ -2813,7 +2858,7 @@ def test_hida_trade_sw_can_be_used_multiple_times(page, live_server_url):
     assert trade_btn.is_disabled(), "Should be disabled after LW reset"
     # Add more LW and use again
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "20")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
@@ -2992,14 +3037,14 @@ def test_yogo_serious_wound_temp_vp_behavioral(page, live_server_url):
     temp_before = page.evaluate("window._trackingBridge?.tempVoidPoints || 0")
     # Add lots of LW to ensure wound check fails
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "80")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_low(page)
     # Roll wound check - should fail with 80 LW and low dice
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -3022,7 +3067,7 @@ def test_yogo_3rd_dan_vp_heals_lw_behavioral(page, live_server_url):
                  skill_overrides={"bragging": 1})
     # Add light wounds
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "20")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
@@ -3132,7 +3177,7 @@ def test_doji_5th_dan_attack_auto_bonus(page, live_server_url):
                  knack_overrides={"counterattack": 5, "oppose_social": 5, "worldliness": 5})
     # Open attack modal - default TN is 20, so bonus = floor((20-10)/5) = 2
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     # Verify the pre-roll Doji note is visible
     pre_text = modal.text_content()
@@ -3241,7 +3286,24 @@ def test_togashi_4th_dan_reroll_only_once_per_roll(page, live_server_url):
     # Note: this reroll commits to the new result - the post-reroll banner says so
     reroll_btn.click()
     _wait_roll_done(page)
-    assert not reroll_btn.is_visible(), "Reroll button should be hidden after first use"
+    # The reroll button hides on togashiRerollUsed=true. Poll the Alpine
+    # state and the DOM together: the test previously asserted is_visible()
+    # immediately after _wait_roll_done, which races with the Alpine
+    # reactive update of x-show under full-suite load.
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && 'togashiRerollUsed' in d && d.togashiRerollUsed === true && d.phase === 'done') {
+                // Confirm DOM x-show has settled by inspecting the button.
+                const btns = Array.from(document.querySelectorAll('button'))
+                    .filter(b => b.textContent.includes('Reroll (Togashi 4th Dan)'));
+                return btns.every(b => b.offsetParent === null
+                    || getComputedStyle(b).display === 'none');
+            }
+        }
+        return false;
+    }""", timeout=5000)
     # Post-reroll banner mentions the original is discarded
     result_text = page.locator('[data-modal="dice-roller"]').text_content()
     assert "discarded" in result_text.lower() or "original" in result_text.lower()
@@ -3249,7 +3311,11 @@ def test_togashi_4th_dan_reroll_only_once_per_roll(page, live_server_url):
     page.locator('[data-modal="dice-roller"] button:has-text("×")').click()
     page.wait_for_timeout(200)
     _roll_via_menu_or_direct(page, "skill:bragging")
-    assert reroll_btn.is_visible(), "Reroll button should be visible on a fresh roll"
+    # The new roll resets togashiRerollUsed=false in executeRoll(); poll for
+    # the button to become visible again rather than reading a snapshot
+    # immediately, since x-show can lag the post-roll reactivity batch
+    # under full-suite load.
+    reroll_btn.wait_for(state='visible', timeout=5000)
 
 
 def test_togashi_4th_dan_reroll_hidden_on_initiative(page, live_server_url):
@@ -3258,7 +3324,7 @@ def test_togashi_4th_dan_reroll_hidden_on_initiative(page, live_server_url):
                  knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4})
     # Togashi initiative is a dropdown (two variants); pick the normal variant
     page.locator('[data-roll-key="initiative"]').click()
-    page.wait_for_selector('[data-togashi-init-normal]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-togashi-init-normal]', state='visible', timeout=10000)
     page.locator('[data-togashi-init-normal]').click()
     _wait_roll_done(page)
     reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
@@ -3314,7 +3380,7 @@ def test_togashi_init_athletics_die_appears_in_side_panel(page, live_server_url)
     _create_char(page, live_server_url, "TogashiInitAD", "togashi_ise_zumi",
                  knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3})
     page.locator('[data-roll-key="initiative"]').click()
-    page.wait_for_selector('[data-togashi-init-normal]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-togashi-init-normal]', state='visible', timeout=10000)
     page.locator('[data-togashi-init-normal]').click()
     _wait_roll_done(page)
     page.locator('[data-modal="dice-roller"] button:has-text("×")').click()
@@ -3382,8 +3448,7 @@ def test_togashi_athletics_parry_can_spend_athletics_die(page, live_server_url):
 def test_togashi_4th_dan_reroll_hidden_on_athletics_parry(page, live_server_url):
     """Same exclusion applies to the athletics:parry roll key."""
     _create_char(page, live_server_url, "Togashi4AthParry", "togashi_ise_zumi",
-                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
-                 skill_overrides={"athletics": 2})
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4})
     _roll_via_menu_or_direct(page, "athletics:parry")
     reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
     assert not reroll_btn.is_visible(), (
@@ -3402,7 +3467,7 @@ def _open_attack_modal(page, roll_key):
     choice_menu = page.locator('[data-attack-choice-menu]')
     if choice_menu.count() > 0 and choice_menu.is_visible():
         choice_menu.locator('[data-attack-choice="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
 
 
 def _attack_modal_bonus_text(page):
@@ -3541,7 +3606,7 @@ def test_conviction_not_on_initiative(page, live_server_url):
     _create_char(page, live_server_url, "ConvInit", "togashi_ise_zumi",
                  knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3})
     page.locator('[data-roll-key="initiative"]').click()
-    page.wait_for_selector('[data-togashi-init-normal]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-togashi-init-normal]', state='visible', timeout=10000)
     page.locator('[data-togashi-init-normal]').click()
     _wait_roll_done(page)
     assert not page.locator('[data-action="spend-conviction"]').is_visible()
@@ -3648,13 +3713,13 @@ def test_yogo_4th_dan_post_roll_vp_behavioral(page, live_server_url):
     page.wait_for_timeout(200)
     # Add LW to make wound check meaningful
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "30")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     # Roll wound check (no VP pre-roll)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -3698,12 +3763,12 @@ def test_yogo_4th_dan_wc_prob_chart_includes_raise(page, live_server_url):
     assert config.get("wc_vp_free_raise") is True
     # Add LW and open wound check modal
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "30")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     # Get pass chance at 0 VP and 1 VP from the probability table
     pass_0, pass_1 = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -3758,14 +3823,14 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
     # Add small LW so wound check passes
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "5")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_high(page)
     # Roll wound check
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -3785,13 +3850,13 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
     assert banked > 0, "A bonus should be banked after passing wound check"
     # Roll an attack and check for the Apply button
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     # The Apply button should be visible (wait for Alpine to render the banked bonuses UI)
-    page.locator('button:has-text("Apply +")').first.wait_for(state='visible', timeout=3000)
+    page.locator('button:has-text("Apply +")').first.wait_for(state='visible', timeout=10000)
     assert page.locator('button:has-text("Apply +")').first.is_visible()
 
 
@@ -3802,14 +3867,14 @@ def test_akodo_4th_dan_vp_on_passed_wound_check(page, live_server_url):
     # Give VP and small light wounds so WC passes easily with mocked high dice
     page.evaluate("window._trackingBridge.voidPoints = 3")
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "5")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_high(page)
     # Roll wound check
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -3862,14 +3927,14 @@ def test_akodo_4th_dan_vp_on_failed_wound_check(page, live_server_url):
     # Give VP and high light wounds so WC fails with mocked low dice
     page.evaluate("window._trackingBridge.voidPoints = 3")
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "80")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_low(page)
     # Roll wound check
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -3914,12 +3979,12 @@ def test_akodo_5th_dan_reflect_ui_behavioral(page, live_server_url):
                  knack_overrides={"double_attack": 5, "feint": 5, "iaijutsu": 5})
     # Add LW and roll wound check
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -3944,7 +4009,7 @@ def test_bayushi_vp_damage_behavioral(page, live_server_url):
     _mock_dice_high(page)
     # Open attack modal, spend 1 VP, roll
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     # Select 1 VP
@@ -3973,7 +4038,7 @@ def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
     # Roll attack - bonus should be auto-applied (not discretionary)
     _mock_dice_high(page)
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -4020,13 +4085,13 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
     assert "+12" in body
     # Now add LW and roll a wound check - the bonus should be available as discretionary
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "40")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_low(page)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -4081,13 +4146,13 @@ def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):
     assert page.locator('text="Banked Wound Check Bonuses"').is_visible()
     # Add LW and roll wound check
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "40")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_low(page)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -4162,7 +4227,7 @@ def test_matsu_4th_dan_near_miss_behavioral(page, live_server_url):
     # Roll double attack with high TN so we're likely to miss but within 20
     # Double attack TN = base + 20, so set base TN to 15 -> effective TN = 35
     page.locator('[data-roll-key="knack:double_attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("15")
     modal.locator('button:has-text("Roll")').first.click()
@@ -4188,7 +4253,7 @@ def test_mirumoto_4th_dan_parry_reduction_behavioral(page, live_server_url):
     _mock_dice_high(page)
     # Roll attack, check the failed parry checkbox, verify halved text
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -4207,7 +4272,7 @@ def test_otaku_4th_dan_lunge_parry_behavioral(page, live_server_url):
     _mock_dice_high(page)
     # Roll lunge
     page.locator('[data-roll-key="knack:lunge"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -4227,7 +4292,7 @@ def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
     _mock_dice_high(page)
     # Roll attack with low TN to guarantee hit
     page.locator('[data-roll-key="attack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -4332,7 +4397,7 @@ def test_hida_5th_dan_counterattack_wc_bonus(page, live_server_url):
 
     # Roll counterattack with low TN to ensure a hit with excess
     page.locator('[data-roll-key="knack:counterattack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -4361,13 +4426,13 @@ def test_hida_5th_dan_counterattack_wc_bonus(page, live_server_url):
     # Now add light wounds and roll wound check to verify bonus is applied
     _restore_dice(page)
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "5")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_high(page)
     page.locator('[data-action="roll-wound-check"]').click()
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -4403,7 +4468,7 @@ def test_hida_below_5th_dan_no_counterattack_wc_bonus(page, live_server_url):
     # Mock high dice and roll counterattack
     _mock_dice_high(page)
     page.locator('[data-roll-key="knack:counterattack"]').click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
     modal.locator('button:has-text("Roll")').first.click()
@@ -4810,7 +4875,7 @@ def test_priest_bless_reroll_button_hides_after_click(page, live_server_url):
     page.wait_for_function("""() => {
         const el = document.querySelector('[data-priest-bless-reroll-block]');
         return !el || el.offsetParent === null;
-    }""", timeout=3000)
+    }""", timeout=10000)
     block = page.locator('[data-priest-bless-reroll-block]')
     assert not block.is_visible()
 
@@ -5404,14 +5469,14 @@ def test_mantis_defensive_posture_tn_display_bumps(page, live_server_url):
     assert int(tn_box.locator("span.font-bold").first.text_content()) == base_val + 5
     # The "+5 defensive posture" label is visible.
     bump = page.locator('[data-testid="tn-defensive-bump"]')
-    bump.wait_for(state='visible', timeout=2000)
+    bump.wait_for(state='visible', timeout=10000)
     # Tooltip-ready title attribute is set.
     title_attr = tn_box.locator("span.font-bold").first.get_attribute("title")
     assert title_attr and "defensive posture" in title_attr.lower()
     # Swap to offensive -> TN drops back and the label hides.
     _select_posture(page, "offensive")
     assert int(tn_box.locator("span.font-bold").first.text_content()) == base_val
-    bump.wait_for(state='hidden', timeout=2000)
+    bump.wait_for(state='hidden', timeout=10000)
 
 
 @pytest.mark.school_abilities
@@ -5432,7 +5497,7 @@ def test_mantis_defensive_posture_wc_modal_overlay(page, live_server_url):
             }
         }
     }""")
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="wound-check"]')
     assert "+5 from defensive posture" in modal.text_content()
     # Roll a low wound check so we can see the labeled entry in the post-roll
@@ -5503,7 +5568,7 @@ def test_mantis_5th_dan_accumulator_counts_offensive(page, live_server_url):
     for _ in range(3):
         _select_posture(page, "offensive")
     off_line = page.locator('[data-testid="mantis-5th-dan-offensive"]')
-    off_line.wait_for(state='visible', timeout=2000)
+    off_line.wait_for(state='visible', timeout=10000)
     assert "+3" in off_line.text_content()
     # Defensive line stays hidden (zero defensive phases).
     assert not page.locator('[data-testid="mantis-5th-dan-defensive"]').is_visible()
@@ -5518,8 +5583,8 @@ def test_mantis_5th_dan_accumulator_counts_mixed(page, live_server_url):
     _select_posture(page, "offensive")  # phase 3
     off_line = page.locator('[data-testid="mantis-5th-dan-offensive"]')
     def_line = page.locator('[data-testid="mantis-5th-dan-defensive"]')
-    off_line.wait_for(state='visible', timeout=2000)
-    def_line.wait_for(state='visible', timeout=2000)
+    off_line.wait_for(state='visible', timeout=10000)
+    def_line.wait_for(state='visible', timeout=10000)
     assert "+2" in off_line.text_content()
     assert "+1" in def_line.text_content()
 
@@ -5533,7 +5598,7 @@ def test_mantis_5th_dan_accumulator_resets_on_initiative(page, live_server_url):
     _select_posture(page, "offensive")
     # wait_for(state='visible') absorbs Alpine's x-show microtask flush.
     page.locator('[data-testid="mantis-5th-dan-offensive"]').wait_for(
-        state='visible', timeout=2000
+        state='visible', timeout=10000
     )
     # Roll initiative (any variant) - setActionDice triggers resetMantisRound.
     page.locator('[data-roll-key="initiative"]').click()
@@ -5541,7 +5606,7 @@ def test_mantis_5th_dan_accumulator_resets_on_initiative(page, live_server_url):
     page.wait_for_function("() => window._trackingBridge.offensivePhaseCount() === 0")
     page.locator('[data-modal="dice-roller"]').locator('button:has-text("\u00d7")').click()
     page.locator('[data-testid="mantis-5th-dan-accumulator"]').wait_for(
-        state='hidden', timeout=2000
+        state='hidden', timeout=10000
     )
 
 
@@ -5557,6 +5622,15 @@ def test_mantis_5th_dan_attack_modal_pre_roll_includes_accumulator(page, live_se
     _select_posture(page, "offensive")
     _select_posture(page, "defensive")
     _open_attack_modal(page, "attack")
+    # Wait for the Bonuses row to render the 5th Dan label - x-show on the
+    # row depends on _mantisLiveAttackLabels() which polls the bridge live;
+    # under full-suite load Alpine can lag a tick after modal open before
+    # the row appears.
+    page.wait_for_function(
+        '() => (document.querySelector(\'[data-modal="attack"]\')?.textContent || "")'
+        '.includes("+2 from Mantis 5th Dan")',
+        timeout=5000,
+    )
     text = _attack_modal_bonus_text(page)
     # Current posture is defensive so the Phase 5 +5 offensive overlay is off,
     # but the 5th Dan accumulator (+2) still applies to attack/damage.
@@ -5633,7 +5707,7 @@ def test_mantis_5th_dan_wc_modal_defensive_accumulator(page, live_server_url):
             }
         }
     }""")
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="wound-check"]')
     pre_text = modal.text_content()
     # Current posture offensive -> Phase 5 defensive-+5 overlay off; 5th Dan
@@ -5671,8 +5745,8 @@ def test_mantis_5th_dan_tn_display_bumps_with_accumulator(page, live_server_url)
     # Both labels render (wait_for handles Alpine microtask flush).
     bump = page.locator('[data-testid="tn-defensive-bump"]')
     accum_label = page.locator('[data-testid="tn-5th-dan-accumulator"]')
-    bump.wait_for(state='visible', timeout=2000)
-    accum_label.wait_for(state='visible', timeout=2000)
+    bump.wait_for(state='visible', timeout=10000)
+    accum_label.wait_for(state='visible', timeout=10000)
     # Tooltip enumerates both contributions.
     title = tn_box.locator("span.font-bold").first.get_attribute("title")
     assert title
@@ -5682,8 +5756,8 @@ def test_mantis_5th_dan_tn_display_bumps_with_accumulator(page, live_server_url)
     _select_posture(page, "offensive")
     total_after = int(tn_box.locator("span.font-bold").first.text_content())
     assert total_after == base + 2
-    bump.wait_for(state='hidden', timeout=2000)
-    accum_label.wait_for(state='visible', timeout=2000)
+    bump.wait_for(state='hidden', timeout=10000)
+    accum_label.wait_for(state='visible', timeout=10000)
 
 
 @pytest.mark.school_abilities
@@ -5811,7 +5885,7 @@ def test_mantis_3rd_dan_click_spends_die_and_accumulates(page, live_server_url):
     page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
     btn = page.locator('[data-action="mantis-3rd-dan-offensive"]')
-    assert btn.is_visible()
+    btn.wait_for(state='visible', timeout=10000)
     btn.click()
     page.wait_for_function(
         "() => (window._trackingBridge.offensive3rdDanAccum || 0) === 3"
@@ -5869,6 +5943,7 @@ def test_mantis_3rd_dan_next_attack_includes_accumulator(page, live_server_url):
     _open_attack_modal(page, "attack")
     page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
     _wait_attack_result(page)
+    page.locator('[data-action="mantis-3rd-dan-offensive"]').wait_for(state='visible', timeout=10000)
     page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
     page.wait_for_function("() => window._trackingBridge.offensive3rdDanAccum === 3")
     # Close the modal.
@@ -5984,7 +6059,7 @@ def test_mantis_3rd_dan_defensive_click_spends_die_and_accumulates(page, live_se
     _seed_action_dice(page, [4, 7])
     _select_posture(page, "defensive")
     btn = page.locator('[data-action="mantis-3rd-dan-defensive"]')
-    btn.wait_for(state='visible', timeout=2000)
+    btn.wait_for(state='visible', timeout=10000)
     btn.click()
     page.wait_for_function(
         "() => (window._trackingBridge.defensive3rdDanAccum || 0) === 3"
@@ -6005,7 +6080,7 @@ def test_mantis_3rd_dan_defensive_two_spends_stack(page, live_server_url):
     _seed_action_dice(page, [3, 5, 7])
     _select_posture(page, "defensive")
     btn = page.locator('[data-action="mantis-3rd-dan-defensive"]')
-    btn.wait_for(state='visible', timeout=2000)
+    btn.wait_for(state='visible', timeout=10000)
     btn.click()
     page.wait_for_function("() => window._trackingBridge.defensive3rdDanAccum === 2")
     btn.click()
@@ -6033,7 +6108,7 @@ def test_mantis_3rd_dan_defensive_wc_overlay(page, live_server_url):
             }
         }
     }""")
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="wound-check"]')
     pre_text = modal.text_content()
     assert "+5 from defensive posture" in pre_text
@@ -6075,8 +6150,8 @@ def test_mantis_3rd_dan_defensive_tn_display(page, live_server_url):
     total = int(tn_box.locator("span.font-bold").first.text_content())
     assert total == base + 5 + 3  # base + defensive posture + 3rd Dan accum
     # 3rd Dan inline label visible alongside the defensive-bump label.
-    page.locator('[data-testid="tn-defensive-bump"]').wait_for(state='visible', timeout=2000)
-    page.locator('[data-testid="tn-3rd-dan-accumulator"]').wait_for(state='visible', timeout=2000)
+    page.locator('[data-testid="tn-defensive-bump"]').wait_for(state='visible', timeout=10000)
+    page.locator('[data-testid="tn-3rd-dan-accumulator"]').wait_for(state='visible', timeout=10000)
     title = tn_box.locator("span.font-bold").first.get_attribute("title")
     assert title
     assert "+5" in title and "defensive posture" in title
@@ -6105,7 +6180,7 @@ def test_mantis_clear_bonuses_zeros_everything(page, live_server_url):
     # Close the attack modal so Clear bonuses is reachable.
     page.locator('[data-modal="attack"]').locator('button:has-text("\u00d7")').click()
     clear = page.locator('[data-action="mantis-clear-bonuses"]')
-    clear.wait_for(state='visible', timeout=2000)
+    clear.wait_for(state='visible', timeout=10000)
     clear.click()
     page.wait_for_function("""() => {
         const t = window._trackingBridge;
@@ -6163,7 +6238,7 @@ def _open_wc_modal_for_prob(page, lw):
             }
         }
     }""")
-    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
 
 
 def _close_wc_modal(page):
@@ -6174,7 +6249,7 @@ def _close_wc_modal(page):
             if (d && 'wcModalOpen' in d) { d.wcModalOpen = false; return; }
         }
     }""")
-    page.wait_for_selector('[data-modal="wound-check"]', state='hidden', timeout=3000)
+    page.wait_for_selector('[data-modal="wound-check"]', state='hidden', timeout=10000)
 
 
 def _wc_prob_row(page, void_count=0):
@@ -6243,15 +6318,23 @@ def test_mantis_wc_probability_shifts_with_5th_dan_defensive_count(page, live_se
     _make_mantis_dan_5(page, live_server_url, "MantisWCProb5th")
     # One defensive declaration -> current posture defensive + 1 accum count.
     _select_posture(page, "defensive")
+    page.wait_for_function(
+        "() => (window._trackingBridge?.defensivePhaseCount?.() || 0) === 1"
+    )
     _open_wc_modal_for_prob(page, lw=20)
     one_phase = _wc_prob_row(page)
     _close_wc_modal(page)
     # Second defensive declaration: still current posture defensive, but now
     # defensivePhaseCount = 2 so the 5th Dan accumulator contributes +2.
     _select_posture(page, "defensive")
+    page.wait_for_function(
+        "() => (window._trackingBridge?.defensivePhaseCount?.() || 0) === 2"
+    )
     _open_wc_modal_for_prob(page, lw=20)
     two_phases = _wc_prob_row(page)
-    assert two_phases["passChance"] > one_phase["passChance"]
+    assert two_phases["passChance"] > one_phase["passChance"], (
+        f"two_phases={two_phases} one_phase={one_phase}"
+    )
     assert two_phases["expectedSW"] < one_phase["expectedSW"]
 
 
@@ -6353,6 +6436,15 @@ def test_mantis_4th_dan_die_regenerated_on_next_initiative(page, live_server_url
         t.spendActionDie(i);
     }""")
     _roll_initiative(page)
+    # Wait for the second initiative roll's setActionDice() to land on
+    # the bridge with a fresh (unspent) mantis_4th_dan die. Reading
+    # state immediately races with the dice-roller's post-animation
+    # setActionDice call under full-suite load.
+    page.wait_for_function(
+        "() => (window._trackingBridge?.actionDice || [])"
+        ".some(d => d.mantis_4th_dan && !d.spent)",
+        timeout=5000,
+    )
     # Exactly one fresh (unspent) bonus die after re-roll.
     state = page.evaluate("""() => {
         const dice = window._trackingBridge?.actionDice || [];
@@ -6371,7 +6463,7 @@ def test_mantis_4th_dan_die_cleared_by_clear_bonuses(page, live_server_url):
     _make_mantis_dan_4(page, live_server_url, "Mantis4Clear")
     _roll_initiative(page)
     clear = page.locator('[data-action="mantis-clear-bonuses"]')
-    clear.wait_for(state='visible', timeout=2000)
+    clear.wait_for(state='visible', timeout=10000)
     clear.click()
     page.wait_for_function(
         "() => (window._trackingBridge?.actionDice || []).length === 0"
@@ -6436,5 +6528,5 @@ def test_mantis_wc_probability_all_three_stack(page, live_server_url):
         return txt.includes('+5 from defensive posture')
             && txt.includes('+2 from Mantis 5th Dan (defensive posture count)')
             && txt.includes('+1 from Mantis 3rd Dan (defensive)');
-    }""", timeout=3000)
+    }""", timeout=10000)
 

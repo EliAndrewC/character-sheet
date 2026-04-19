@@ -51,20 +51,30 @@ def _upload_and_save_art(page, sheet_url: str) -> None:
 def test_list_page_shows_headshot_for_character_with_art(page, live_server_url):
     """The index page's character card uses the real headshot img once
     art is saved; the placeholder silhouette disappears for that card."""
-    sheet_with = _create_character(page, live_server_url, "HasArt")
+    # Use unique names so this test's assertions can scope to its own
+    # cards even when the index has leftover characters from earlier
+    # tests in the same session (the live server uses one DB per session).
+    name_with = "HasArtList"
+    name_without = "NoArtList"
+    sheet_with = _create_character(page, live_server_url, name_with)
     _upload_and_save_art(page, sheet_with)
-    # Second character with no art
-    _create_character(page, live_server_url, "NoArt")
+    _create_character(page, live_server_url, name_without)
 
     page.goto(live_server_url)
-    # Exactly one card has the real img and one has the placeholder
-    imgs = page.locator('[data-testid="character-headshot"]')
-    placeholders = page.locator('[data-testid="character-headshot-placeholder"]')
-    assert imgs.count() == 1
-    assert placeholders.count() == 1
+    # Locate the two specific cards by character name (h2 inside the card).
+    card_with = page.locator(f'a:has(h2:text-is("{name_with}"))')
+    card_without = page.locator(f'a:has(h2:text-is("{name_without}"))')
+    assert card_with.count() == 1
+    assert card_without.count() == 1
+    # The "with art" card has the real img and no placeholder.
+    assert card_with.locator('[data-testid="character-headshot"]').count() == 1
+    assert card_with.locator('[data-testid="character-headshot-placeholder"]').count() == 0
+    # The "no art" card has the placeholder and no real img.
+    assert card_without.locator('[data-testid="character-headshot-placeholder"]').count() == 1
+    assert card_without.locator('[data-testid="character-headshot"]').count() == 0
 
     # The rendered img has a non-zero natural size once loaded
-    headshot = imgs.first
+    headshot = card_with.locator('[data-testid="character-headshot"]')
     headshot.wait_for()
     page.wait_for_function(
         "el => el.complete && el.naturalWidth > 0",

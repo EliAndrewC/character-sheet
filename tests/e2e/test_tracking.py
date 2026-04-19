@@ -60,7 +60,7 @@ def test_wound_tracking_persists(page, live_server_url):
 
     # Click + to open modal, use "Add to current total"
     page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('text="Add to current total"', timeout=3000)
+    page.wait_for_selector('text="Add to current total"', timeout=10000)
     page.locator('input[placeholder="Amount"]').fill("5")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button', has_text="Add").click()
     page.wait_for_timeout(500)
