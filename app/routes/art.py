@@ -477,12 +477,14 @@ def art_generate_options(
         context={
             "character": character,
             "gender": gender,
+            "subject_pronoun": "She" if gender == "female" else "He",
             "clan_colors": art_prompt.CLAN_COLORS,
             "default_clan": art_prompt.DEFAULT_CLAN,
             "default_age": art_prompt.DEFAULT_AGE,
             "age_min": art_prompt.AGE_MIN,
             "age_max": art_prompt.AGE_MAX,
-            "armor_options": art_prompt.ARMOR_OPTIONS,
+            "armor_choices": art_prompt.ARMOR_CHOICES,
+            "prompt_suffix": art_prompt.PROMPT_SUFFIX,
         },
     )
 
@@ -496,7 +498,7 @@ def art_generate_assemble(
     age: int = Form(...),
     holding: str = Form(""),
     expression: str = Form(""),
-    armor: str = Form(""),
+    armor_choice: str = Form(""),
     armor_modifier: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -509,7 +511,7 @@ def art_generate_assemble(
         prompt = art_prompt.assemble_prompt(
             gender=gender, clan=clan, age=age,
             holding=holding, expression=expression,
-            armor=armor, armor_modifier=armor_modifier,
+            armor_choice=armor_choice, armor_modifier=armor_modifier,
         )
     except ValueError:
         # Any out-of-range input bounces back to step 1. We don't try

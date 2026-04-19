@@ -8,12 +8,15 @@ from app.game_data import CLAN_COLORS
 from app.services.art_prompt import (
     AGE_MAX,
     AGE_MIN,
-    ARMOR_OPTIONS,
+    ARMOR_CHOICE_KIMONO,
+    ARMOR_CHOICE_SAMURAI,
+    ARMOR_CHOICES,
     DEFAULT_AGE,
     DEFAULT_CLAN,
     FEMALE_SUFFIX_APPEND,
     PROMPT_SUFFIX,
     assemble_prompt,
+    build_prefix,
 )
 
 
@@ -39,37 +42,52 @@ def test_age_range_is_15_to_55():
     assert AGE_MAX == 55
 
 
-def test_armor_options_first_is_empty_for_none():
-    """The (none) / no-armor option is the empty string so an unselected
-    dropdown submits nothing via Alpine's `:disabled` binding."""
-    assert ARMOR_OPTIONS[0] == ""
+def test_armor_choices_are_exactly_the_two_specified():
+    """Per Eli's spec: exactly two dropdown options for the armor row."""
+    assert ARMOR_CHOICES == [ARMOR_CHOICE_KIMONO, ARMOR_CHOICE_SAMURAI]
+    assert ARMOR_CHOICE_KIMONO == "is not wearing armor and has on a kimono"
+    assert ARMOR_CHOICE_SAMURAI == "is wearing samurai armor"
 
 
 # ---------------------------------------------------------------------------
-# Happy-path assembly
+# build_prefix
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPrefix:
+    def test_wasp_prefix(self):
+        assert build_prefix("Wasp") == (
+            "A portrait of a Wasp clan noble wearing black and gold."
+        )
+
+    def test_scorpion_prefix(self):
+        assert build_prefix("Scorpion") == (
+            "A portrait of a Scorpion clan noble wearing black and dark red."
+        )
+
+    def test_unknown_clan_raises(self):
+        with pytest.raises(ValueError, match="Unknown clan"):
+            build_prefix("Goblin")
+
+
+# ---------------------------------------------------------------------------
+# Happy-path assembly - mandatory rows only
 # ---------------------------------------------------------------------------
 
 
 class TestMaleMinimalPrompt:
-    """Mandatory fields only, male pronouns."""
-
     def test_includes_clan_prefix(self):
         out = assemble_prompt(gender="male", clan="Wasp", age=20)
-        assert "A portrait of a Wasp clan noble." in out
+        assert "A portrait of a Wasp clan noble wearing black and gold." in out
 
-    def test_uses_he_pronoun(self):
-        out = assemble_prompt(gender="male", clan="Wasp", age=20)
-        assert " He " in out
-        assert " She " not in out
-
-    def test_includes_age(self):
+    def test_age_sentence_uses_approximately_and_he(self):
+        """Exact wording from Eli's spec: 'He is approximately N years old.'"""
         out = assemble_prompt(gender="male", clan="Wasp", age=27)
-        assert "27 years old" in out
+        assert "He is approximately 27 years old." in out
 
-    def test_includes_clan_colors_from_map(self):
-        # Scorpion colors must be pulled from CLAN_COLORS, not hardcoded.
-        out = assemble_prompt(gender="male", clan="Scorpion", age=20)
-        assert CLAN_COLORS["Scorpion"] in out
+    def test_no_she_for_male(self):
+        out = assemble_prompt(gender="male", clan="Wasp", age=20)
+        assert "She " not in out
 
     def test_no_female_append_for_male(self):
         out = assemble_prompt(gender="male", clan="Wasp", age=20)
@@ -81,96 +99,140 @@ class TestMaleMinimalPrompt:
 
 
 class TestFemaleMinimalPrompt:
-    """Mandatory fields only, female pronouns - also verifies the
-    always-on 'unstyled hair, no makeup' append."""
-
-    def test_uses_she_pronoun(self):
+    def test_age_sentence_uses_approximately_and_she(self):
         out = assemble_prompt(gender="female", clan="Crane", age=24)
-        assert " She " in out
-        assert " He " not in out
+        assert "She is approximately 24 years old." in out
+
+    def test_no_he_for_female(self):
+        out = assemble_prompt(gender="female", clan="Crane", age=24)
+        assert "He " not in out
+        assert "He is " not in out
 
     def test_appends_female_suffix_for_female(self):
         out = assemble_prompt(gender="female", clan="Crane", age=24)
         assert FEMALE_SUFFIX_APPEND in out
-        # The append comes AFTER the base suffix so model ordering is
-        # consistent - base style, then the override.
+        # After the base suffix, not before.
         assert out.rfind(FEMALE_SUFFIX_APPEND) > out.rfind(PROMPT_SUFFIX)
 
 
 # ---------------------------------------------------------------------------
-# Optional fields
+# Optional rows
 # ---------------------------------------------------------------------------
 
 
-class TestOptionalFields:
-    def test_holding_appears_when_set(self):
+class TestHoldingRow:
+    def test_appears_when_set(self):
         out = assemble_prompt(
             gender="male", clan="Wasp", age=20, holding="a katana",
         )
-        assert "is holding a katana" in out
+        assert "He is holding a katana." in out
 
-    def test_holding_omitted_when_empty_string(self):
+    def test_omitted_when_empty(self):
         out = assemble_prompt(
             gender="male", clan="Wasp", age=20, holding="",
         )
         assert "holding" not in out
 
-    def test_holding_omitted_when_whitespace_only(self):
+    def test_omitted_when_whitespace(self):
         out = assemble_prompt(
             gender="male", clan="Wasp", age=20, holding="   ",
         )
         assert "holding" not in out
 
-    def test_expression_appears_when_set(self):
-        out = assemble_prompt(
-            gender="female", clan="Wasp", age=20,
-            expression="a serene expression",
-        )
-        assert "has a serene expression" in out
 
-    def test_armor_without_modifier(self):
+class TestExpressionRow:
+    def test_uses_has_a_X_expression_wording(self):
+        """Exact wording from Eli's spec: 'He has a <X> expression.'"""
         out = assemble_prompt(
-            gender="male", clan="Wasp", age=20, armor="samurai armor",
+            gender="female", clan="Wasp", age=20, expression="serene",
         )
-        assert "is wearing samurai armor" in out
+        assert "She has a serene expression." in out
 
-    def test_armor_with_modifier(self):
+    def test_omitted_when_empty(self):
         out = assemble_prompt(
-            gender="female", clan="Wasp", age=20,
-            armor="formal kimono", armor_modifier="ornate",
+            gender="male", clan="Wasp", age=20, expression="",
         )
-        assert "is wearing ornate formal kimono" in out
+        assert "expression" not in out
 
-    def test_armor_modifier_alone_does_nothing(self):
-        """A modifier without an armor choice should be silently ignored,
-        not pasted into the prompt on its own."""
+
+class TestArmorRow:
+    def test_samurai_armor_no_modifier(self):
         out = assemble_prompt(
             gender="male", clan="Wasp", age=20,
-            armor="", armor_modifier="ornate",
+            armor_choice=ARMOR_CHOICE_SAMURAI,
+        )
+        assert "He is wearing samurai armor." in out
+
+    def test_kimono_no_modifier(self):
+        out = assemble_prompt(
+            gender="female", clan="Wasp", age=20,
+            armor_choice=ARMOR_CHOICE_KIMONO,
+        )
+        assert "She is not wearing armor and has on a kimono." in out
+
+    def test_samurai_armor_with_modifier(self):
+        out = assemble_prompt(
+            gender="male", clan="Wasp", age=20,
+            armor_choice=ARMOR_CHOICE_SAMURAI, armor_modifier="ornate",
+        )
+        assert "He is wearing samurai armor ornate." in out
+
+    def test_kimono_with_modifier(self):
+        out = assemble_prompt(
+            gender="female", clan="Wasp", age=20,
+            armor_choice=ARMOR_CHOICE_KIMONO, armor_modifier="with a red obi",
+        )
+        assert "She is not wearing armor and has on a kimono with a red obi." in out
+
+    def test_modifier_alone_is_ignored(self):
+        """A modifier without an armor_choice should be silently omitted,
+        not spliced into a half-sentence."""
+        out = assemble_prompt(
+            gender="male", clan="Wasp", age=20,
+            armor_choice="", armor_modifier="ornate",
         )
         assert "ornate" not in out
 
+    def test_unknown_armor_choice_raises(self):
+        with pytest.raises(ValueError, match="Unknown armor_choice"):
+            assemble_prompt(
+                gender="male", clan="Wasp", age=20,
+                armor_choice="leather jerkin",
+            )
+
+
+# ---------------------------------------------------------------------------
+# Combined
+# ---------------------------------------------------------------------------
+
 
 class TestEveryFieldCombined:
-    def test_full_prompt_contains_every_part(self):
+    def test_order_prefix_age_holding_expression_armor_suffix_female(self):
+        """Row order must be: prefix -> age -> holding -> expression ->
+        armor -> base suffix -> female append."""
         out = assemble_prompt(
             gender="female", clan="Scorpion", age=32,
-            holding="a fan", expression="a cold smile",
-            armor="formal kimono", armor_modifier="muted",
+            holding="a fan", expression="cold",
+            armor_choice=ARMOR_CHOICE_KIMONO, armor_modifier="dark",
         )
-        # Order: prefix -> age -> holding -> expression -> armor ->
-        # base suffix -> female append.
         positions = [
-            out.find("A portrait of a Scorpion clan noble."),
-            out.find("32 years old"),
-            out.find("is holding a fan."),
-            out.find("has a cold smile."),
-            out.find("is wearing muted formal kimono."),
+            out.find("A portrait of a Scorpion clan noble wearing"),
+            out.find("She is approximately 32 years old."),
+            out.find("She is holding a fan."),
+            out.find("She has a cold expression."),
+            out.find("She is not wearing armor and has on a kimono dark."),
             out.find(PROMPT_SUFFIX),
             out.find(FEMALE_SUFFIX_APPEND),
         ]
         assert all(p >= 0 for p in positions), f"missing piece: {positions}"
         assert positions == sorted(positions), f"wrong order: {positions}"
+
+    def test_clan_colors_come_from_game_data_map(self):
+        """Changing CLAN_COLORS should flow through to the prompt without
+        a second edit."""
+        for clan, color in CLAN_COLORS.items():
+            out = assemble_prompt(gender="male", clan=clan, age=20)
+            assert f"{clan} clan noble wearing {color}." in out
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +251,6 @@ class TestValidation:
             assemble_prompt(gender="male", clan="Wasp", age=bad_age)
 
     def test_boundary_ages_accepted(self):
-        # AGE_MIN and AGE_MAX must both be valid (inclusive).
         assemble_prompt(gender="male", clan="Wasp", age=AGE_MIN)
         assemble_prompt(gender="female", clan="Wasp", age=AGE_MAX)
 

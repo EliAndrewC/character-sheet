@@ -728,11 +728,8 @@ class TestGenerateOptionsPage:
         )
         assert resp.status_code == 200
         assert b"art-gen-options-page" in resp.content
-        # Wasp is the <option selected>; no other clan should be
-        assert b'value="Wasp"\n                        selected' in resp.content \
-            or b'value="Wasp" selected' in resp.content \
-            or b'value="Wasp"' in resp.content  # Fallback: Wasp appears
-        # Verify Wasp is the one flagged as selected
+        # Wasp is pre-selected in the dropdown
+        assert b'value="Wasp"' in resp.content
         assert b"selected" in resp.content
         # Age defaults to 20
         assert b'value="20"' in resp.content
@@ -753,6 +750,40 @@ class TestGenerateOptionsPage:
             assert f'value="{clan_name}"'.encode() in resp.content, (
                 f"missing clan option: {clan_name}"
             )
+
+    def test_both_armor_choices_in_select(self, client):
+        """Exactly the two dropdown options from Eli's spec."""
+        char = _make_character(client)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=male"
+        )
+        assert resp.status_code == 200
+        assert b"is not wearing armor and has on a kimono" in resp.content
+        assert b"is wearing samurai armor" in resp.content
+
+    def test_fixed_suffix_text_rendered(self, client):
+        """The suffix sits at the bottom as non-editable display text."""
+        char = _make_character(client)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=male"
+        )
+        assert b"prompt-suffix" in resp.content
+        assert b"Make a colored, photo-realistic" in resp.content
+
+    def test_pronoun_baked_into_template_context(self, client):
+        """The subject pronoun is computed server-side from gender and
+        threaded into the Alpine state as ``subject`` so the rows read
+        'He is approximately...' / 'She is approximately...'."""
+        char = _make_character(client)
+        male = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=male"
+        )
+        female = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=female"
+        )
+        # Look for the JSON-encoded subject passed to the Alpine factory
+        assert b'"He"' in male.content
+        assert b'"She"' in female.content
 
     def test_missing_gender_redirects_to_step_1(self, client):
         char = _make_character(client)
@@ -793,7 +824,7 @@ class TestGenerateAssemble:
                 "age": "30",
                 "holding": "a katana",
                 "expression": "",
-                "armor": "",
+                "armor_choice": "",
                 "armor_modifier": "",
             },
             follow_redirects=False,
@@ -807,8 +838,25 @@ class TestGenerateAssemble:
         assert staged.source == "generated"
         assert staged.char_id == char.id
         assert "Wasp clan noble" in staged.prompt
-        assert "30 years old" in staged.prompt
-        assert "holding a katana" in staged.prompt
+        assert "He is approximately 30 years old." in staged.prompt
+        assert "He is holding a katana." in staged.prompt
+
+    def test_armor_choice_passes_through_to_staged_prompt(self, client):
+        char = _make_character(client)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/assemble",
+            data={
+                "gender": "female", "clan": "Wasp", "age": "25",
+                "holding": "", "expression": "",
+                "armor_choice": "is wearing samurai armor",
+                "armor_modifier": "ornate",
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        sid = resp.headers["location"].rsplit("/", 1)[-1]
+        staged = art_jobs.get_staged(sid)
+        assert "She is wearing samurai armor ornate." in staged.prompt
 
     def test_invalid_age_bounces_back_to_step_1(self, client):
         char = _make_character(client)
@@ -816,7 +864,7 @@ class TestGenerateAssemble:
             f"/characters/{char.id}/art/generate/assemble",
             data={
                 "gender": "male", "clan": "Wasp", "age": "999",
-                "holding": "", "expression": "", "armor": "",
+                "holding": "", "expression": "", "armor_choice": "",
                 "armor_modifier": "",
             },
             follow_redirects=False,
@@ -830,7 +878,22 @@ class TestGenerateAssemble:
             f"/characters/{char.id}/art/generate/assemble",
             data={
                 "gender": "male", "clan": "Goblin", "age": "20",
-                "holding": "", "expression": "", "armor": "",
+                "holding": "", "expression": "", "armor_choice": "",
+                "armor_modifier": "",
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert resp.headers["location"].endswith("/art/generate")
+
+    def test_invalid_armor_choice_bounces_back_to_step_1(self, client):
+        char = _make_character(client)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/assemble",
+            data={
+                "gender": "male", "clan": "Wasp", "age": "20",
+                "holding": "", "expression": "",
+                "armor_choice": "leather jerkin",
                 "armor_modifier": "",
             },
             follow_redirects=False,
@@ -844,7 +907,7 @@ class TestGenerateAssemble:
             f"/characters/{char.id}/art/generate/assemble",
             data={
                 "gender": "male", "clan": "Wasp", "age": "20",
-                "holding": "", "expression": "", "armor": "",
+                "holding": "", "expression": "", "armor_choice": "",
                 "armor_modifier": "",
             },
             headers={"X-Test-User": "plainuser:Nobody"},
