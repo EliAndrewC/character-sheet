@@ -184,6 +184,15 @@
                 </div>
                 {% endif %}
             </div>
+            <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
+                <span class="text-ink/60">TN to be hit:</span>&nbsp;
+                <span class="font-bold">{{ 5 + 5 * character.parry }}</span>&nbsp;
+                <span class="text-xs text-ink/50">(parry {{ character.parry }})</span>
+            </div>
+            <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
+                <span class="text-ink/60">Wound Check:</span>&nbsp;
+                <span class="font-bold">{{ ring_map['Water'] + 1 }}k{{ ring_map['Water'] }}</span>
+            </div>
             {% if character.school == 'togashi_ise_zumi' %}
                 {% set _togashi_base_rolled = ring_map['Void'] + 1 + (1 if dan >= 1 else 0) %}
                 {% set _togashi_base_kept = ring_map['Void'] %}
@@ -203,15 +212,6 @@
                     <span class="font-bold">{{ ring_map['Void'] + 1 }} dice, keep {{ ring_map['Void'] }}</span>
                 </div>
             {% endif %}
-            <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
-                <span class="text-ink/60">TN to be hit:</span>&nbsp;
-                <span class="font-bold">{{ 5 + 5 * character.parry }}</span>&nbsp;
-                <span class="text-xs text-ink/50">(parry {{ character.parry }})</span>
-            </div>
-            <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
-                <span class="text-ink/60">Wound Check:</span>&nbsp;
-                <span class="font-bold">{{ ring_map['Water'] + 1 }}k{{ ring_map['Water'] }}</span>
-            </div>
         </div>
         </div>{# end lg:grid side-by-side wrapper #}
 
@@ -982,19 +982,23 @@
                                     :data-die-index="i"
                                     :data-die-spent="die.spent ? 'true' : 'false'"
                                     :data-die-value="die.value"
-                                    class="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 font-mono font-bold text-lg transition-colors"
-                                    :class="die.spent
-                                        ? 'border-ink/30 bg-ink/5 text-ink/40 line-through'
-                                        : die.value === 0
-                                            ? 'border-gold bg-gold/10 text-gold hover:bg-gold/20'
-                                            : die.value <= 3
-                                                ? 'border-accent bg-accent/10 text-accent hover:bg-accent/20'
-                                                : 'border-ink/30 bg-parchment text-ink hover:bg-ink/10'"
+                                    class="block"
                                     :title="die.spent_by
                                         ? die.spent_by
                                         : (die.spent ? 'Spent - click to mark as unspent' : 'Click to mark as spent')"
-                                    :data-die-spent-by="die.spent_by || ''"
-                                    x-text="die.value"></button>
+                                    :data-die-spent-by="die.spent_by || ''">
+                                {# Same SVG kite shape as the roll-animation
+                                   dice (see app/static/js/dice.js). Color
+                                   variants are categorical only: spent,
+                                   Kakita Phase 0 interrupt, or default. #}
+                                <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
+                                     class="die action-die"
+                                     :class="(die.spent ? 'spent ' : '') + (die.value === 0 ? 'phase-zero ' : '') + (die.value === 10 ? 'two-digit' : '')">
+                                    <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+                                    <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
+                                          x-text="die.value"></text>
+                                </svg>
+                            </button>
                             {% if viewer_can_edit %}
                             <div x-show="actionMenuOpen === i" x-cloak
                                  @click.outside="if (actionMenuOpen === i) actionMenuOpen = null"
@@ -1713,10 +1717,28 @@
                             <button type="button"
                                     data-athletics-combat="attack"
                                     @click="rollMenuOpen = false; openAttackModal('athletics:attack')"
-                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
-                                Athletics (Attack)
-                                <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:attack']?.rolled || 0) + 'k' + (formulas['athletics:attack']?.kept || 0) + ')'"></span>
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                                <span>Athletics (Attack)
+                                    <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:attack']?.rolled || 0) + 'k' + (formulas['athletics:attack']?.kept || 0) + ')'"></span>
+                                </span>
+                                <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
                             </button>
+                            {# Void-spend flyout mirroring the parry row below.
+                               Clicking an option opens the attack modal with the
+                               chosen void count preselected; the user can still
+                               adjust it (or the TN) before rolling. #}
+                            <div x-show="athHoverRow === 'attack' && rollMenuOptions.length > 0"
+                                 x-cloak
+                                 data-athletics-void-submenu="attack"
+                                 class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                <template x-for="opt in rollMenuOptions" :key="'athatk'+opt.count">
+                                    <button type="button"
+                                            @click="rollMenuOpen = false; openAttackModal('athletics:attack', opt.count)"
+                                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                        <span x-text="opt.label"></span>
+                                    </button>
+                                </template>
+                            </div>
                         </div>
                     </template>
                     <template x-if="formulas['athletics:parry']">
@@ -1741,6 +1763,34 @@
                                             @click="executeRoll('athletics:parry', opt.count, opt)"
                                             class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
                                         <span x-text="opt.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                    {# Athletics (Predeclared parry): same +5 free raise as the
+                       regular Predeclared Parry on the parry menu, applied to
+                       the athletics:parry formula. #}
+                    <template x-if="formulas['athletics:parry']">
+                        <div class="relative"
+                             @mouseenter="athHoverRow = 'predeclared-parry'"
+                             @mouseleave="athHoverRow = null">
+                            <button type="button"
+                                    data-athletics-combat="predeclared-parry"
+                                    @click="executeRollWithExtraFlat('athletics:parry', 0, null, 5, 'predeclared parry')"
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                                <span>Athletics (Predeclared parry) <span class="text-xs text-ink/50">(+5)</span></span>
+                                <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                            </button>
+                            <div x-show="athHoverRow === 'predeclared-parry' && rollMenuOptions.length > 0"
+                                 x-cloak
+                                 data-athletics-void-submenu="predeclared-parry"
+                                 class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                <template x-for="opt in rollMenuOptions" :key="'athpp'+opt.count">
+                                    <button type="button"
+                                            @click="executeRollWithExtraFlat('athletics:parry', opt.count, opt, 5, 'predeclared parry')"
+                                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                        <span x-text="opt.label + ' + predeclared (+5)'"></span>
                                     </button>
                                 </template>
                             </div>
@@ -2660,6 +2710,35 @@
                             </div>
                         </div>
 
+                        {# Togashi 3rd Dan daily athletics raises. An athletics-
+                           attack is simultaneously an athletics roll, so the
+                           daily pool may be spent here just like on any other
+                           athletics roll. Gated on the athletics-attack flag
+                           so regular attacks don't show it. #}
+                        <div x-show="atkFormula?.is_athletics_attack
+                                     && schoolAbilities.togashi_daily_athletics_raises
+                                     && (togashiRaisesPoolAvail() > 0 || togashiRaisesSpentThisRoll > 0)"
+                             x-cloak class="mt-2 pt-2 border-t border-green-200">
+                            <div class="flex items-center gap-2 flex-wrap text-sm">
+                                <button type="button" @click="atkSpendTogashiRaise()"
+                                        :disabled="!canSpendTogashiRaise()"
+                                        data-action="spend-togashi-raise-atk"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Athletics Raise (+5)
+                                </button>
+                                <button type="button" @click="atkUndoTogashiRaise()"
+                                        x-show="togashiRaisesSpentThisRoll > 0"
+                                        data-action="undo-togashi-raise-atk"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60"
+                                      x-text="togashiRaisesSpentThisRoll + ' / ' + togashiRaisesPerRollCap() + ' this roll'"></span>
+                            </div>
+                            <div class="text-xs text-ink/50 mt-1"
+                                 x-text="'Daily pool: ' + togashiRaisesPoolAvail() + ' / ' + (schoolAbilities.togashi_daily_raises_max || 0) + ' remaining'"></div>
+                        </div>
+
                         {# Conviction: +1 per point spent (attack) #}
                         <div x-show="convictionConfig.rank > 0 && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
                              x-cloak class="mt-2 pt-2 border-t border-green-200" data-conviction-block-atk>
@@ -2833,6 +2912,30 @@
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
                                     Undo
                                 </button>
+                            </div>
+                        </div>
+                        {# Togashi 3rd Dan athletics raises: spending one may
+                           turn a narrow miss into a hit on an athletics
+                           attack. Same gate as the HIT block above. #}
+                        <div x-show="atkFormula?.is_athletics_attack
+                                     && schoolAbilities.togashi_daily_athletics_raises
+                                     && (togashiRaisesPoolAvail() > 0 || togashiRaisesSpentThisRoll > 0)"
+                             x-cloak class="mt-2">
+                            <div class="flex items-center gap-2 flex-wrap text-sm">
+                                <button type="button" @click="atkSpendTogashiRaise()"
+                                        :disabled="!canSpendTogashiRaise()"
+                                        data-action="spend-togashi-raise-atk"
+                                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Athletics Raise (+5)
+                                </button>
+                                <button type="button" @click="atkUndoTogashiRaise()"
+                                        x-show="togashiRaisesSpentThisRoll > 0"
+                                        data-action="undo-togashi-raise-atk"
+                                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60"
+                                      x-text="togashiRaisesSpentThisRoll + ' / ' + togashiRaisesPerRollCap() + ' this roll'"></span>
                             </div>
                         </div>
                         {# Akodo 3rd Dan: spend banked bonuses to turn miss into hit #}
@@ -3369,19 +3472,24 @@
                             <div class="font-bold text-lg mb-2">Action Dice</div>
                             <div class="flex flex-wrap items-center gap-2 mb-2">
                                 <template x-for="(phase, i) in actionDice" :key="i">
-                                    <span class="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 font-mono font-bold text-lg"
-                                          :class="phase === 0
-                                              ? 'border-gold bg-gold/10 text-gold'
-                                              : phase <= 3
-                                                  ? 'border-accent bg-accent/10 text-accent'
-                                                  : 'border-ink/30 bg-parchment text-ink'"
-                                          x-text="phase === 0 ? '0' : phase"></span>
+                                    <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
+                                         class="die action-die"
+                                         :class="(phase === 0 ? 'phase-zero ' : '') + (phase === 10 ? 'two-digit' : '')">
+                                        <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+                                        <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
+                                              x-text="phase"></text>
+                                    </svg>
                                 </template>
                                 <template x-if="togashiAthleticsDie > 0">
                                     <div class="flex items-center gap-2 pl-2 ml-1 border-l border-ink/20">
-                                        <span class="inline-flex items-center justify-center w-10 h-10 rounded-full border-2 font-mono font-bold text-lg border-sky-600 bg-sky-100 text-sky-700"
-                                              title="Athletics-only action die (Togashi special ability)"
-                                              x-text="togashiAthleticsDie"></span>
+                                        <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
+                                             class="die action-die athletics-only"
+                                             :class="togashiAthleticsDie === 10 ? 'two-digit' : ''">
+                                            <title>Athletics-only action die (Togashi special ability)</title>
+                                            <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+                                            <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
+                                                  x-text="togashiAthleticsDie"></text>
+                                        </svg>
                                         <span class="text-xs text-sky-800 italic">athletics only</span>
                                     </div>
                                 </template>
@@ -3811,8 +3919,9 @@
                     </div>
 
                     {# Togashi 4th Dan: reroll contested roll (once per roll, commits).
-                       Hidden on rolls that are never contested (initiative, etiquette, heraldry). #}
-                    <div x-show="phase === 'done' && schoolAbilities.togashi_reroll_contested && !luckyUsedThisRoll && !togashiRerollUsed && !formula?.is_initiative && currentRollKey !== 'skill:etiquette' && currentRollKey !== 'skill:heraldry'" x-cloak
+                       Hidden on rolls that are never contested (initiative,
+                       etiquette, heraldry, and damage rolls like Dragon Tattoo). #}
+                    <div x-show="phase === 'done' && schoolAbilities.togashi_reroll_contested && !luckyUsedThisRoll && !togashiRerollUsed && !formula?.is_initiative && !formula?.is_damage_roll && currentRollKey !== 'skill:etiquette' && currentRollKey !== 'skill:heraldry'" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <button type="button"
                                 @click="togashiOrigTotal = baseTotal; togashiRerollUsed = true; runRoll()"
@@ -5835,15 +5944,25 @@
 
             // --- Attack Modal ---
 
-            openAttackModal(key) {
+            openAttackModal(key, preselectedVoid = 0) {
                 const f = this.formulas[key];
                 if (!f) return;
                 this.atkKey = key;
                 this.atkFormula = f;
                 this.atkPhase = 'pre';
-                this.atkVoidSelected = 0;
+                // Callers (e.g. the athletics picker's void-spend submenu)
+                // may preselect a void count so the modal opens with that
+                // count already chosen; the user can still adjust inside.
+                const cap = this.voidSpendConfig.cap || 0;
+                const options = this.computeVoidOptions();
+                const maxSelectable = Math.min(options.length, cap);
+                this.atkVoidSelected = Math.max(0, Math.min(preselectedVoid, maxSelectable));
                 this.atkRaisesSpent = 0;
                 this.atkConvictionSpent = 0;
+                // The togashi daily-athletics-raise pool is spendable on
+                // athletics:attack too; reset the per-roll counter so the
+                // cap tracks spends within this attack only.
+                this.togashiRaisesSpentThisRoll = 0;
                 this.atkFailedParry = false;
                 this.atkIsawaTnTrade = false;
                 this.atkOtakuTradeDice = false;
@@ -6225,6 +6344,36 @@
                 this.baseTotal -= 5;
                 this.atkRollTotal -= 5;
                 if (t?.setCount) t.setCount('adventure_raises', Math.max(0, used - 1));
+                this._atkUpdateHitState();
+            },
+
+            // Togashi 3rd Dan daily-athletics-raise spend from the attack
+            // modal. Mirrors spendTogashiRaise() but also updates atkRollTotal
+            // and re-evaluates hit/miss state so the HIT block can switch
+            // from MISS to HIT when the added +5 closes the gap.
+            atkSpendTogashiRaise() {
+                if (!this.canSpendTogashiRaise()) return;
+                this.togashiRaisesSpentThisRoll++;
+                this.baseTotal += 5;
+                this.atkRollTotal += 5;
+                const t = window._trackingBridge;
+                if (t) {
+                    t.setCount('togashi_daily_athletics_raises',
+                        (t.getCount('togashi_daily_athletics_raises') || 0) + 1);
+                }
+                this._atkUpdateHitState();
+            },
+
+            atkUndoTogashiRaise() {
+                if (this.togashiRaisesSpentThisRoll <= 0) return;
+                this.togashiRaisesSpentThisRoll--;
+                this.baseTotal -= 5;
+                this.atkRollTotal -= 5;
+                const t = window._trackingBridge;
+                if (t) {
+                    t.setCount('togashi_daily_athletics_raises',
+                        Math.max(0, (t.getCount('togashi_daily_athletics_raises') || 0) - 1));
+                }
                 this._atkUpdateHitState();
             },
 

@@ -219,7 +219,7 @@ Per-field re-extraction (`extract_single_field`) is available as a primitive for
 ### Rate limit + kill switch
 
 - **Rate limit:** per-user, 10 successful imports per 24 hours. Counted by looking for characters owned by the user whose sections include the Import Notes label and whose `created_at` falls in the last 24 hours. No extra schema.
-- **Kill switch:** `IMPORT_ENABLED=false` disables the route with a 503 "temporarily unavailable" banner AND collapses the navbar's "New Character" dropdown to a single submit button (no Import option, no /import link rendered). Useful when quota spikes or for cost control without redeploying. The flag is read at request time by both the route and the template, so toggling it doesn't require a restart.
+- **Kill switch:** `IMPORT_ENABLED` gates both the `/import` route (503 "temporarily unavailable" banner when off) AND the navbar's "New Character" dropdown (collapses to a single submit button with no Import option or `/import` link when off). **The default is `false` (fail-closed)** - a missing env var keeps the feature disabled so an incomplete .env or unset Fly secret can't silently re-enable it. Set `IMPORT_ENABLED=true` explicitly to turn it on. The flag is read at request time by both the route and the template, so toggling it doesn't require a restart. Test fixtures opt in: `tests/test_import_routes.py` has an autouse fixture that sets it true, and the clicktest live server in `tests/e2e/conftest.py` also sets it true.
 
 ### Env vars and Fly secrets
 

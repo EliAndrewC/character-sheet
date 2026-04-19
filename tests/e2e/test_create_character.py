@@ -139,10 +139,12 @@ def test_apply_changes_also_unhides_the_draft(page, live_server_url):
 
 
 def test_new_character_dropdown_shows_import_option_when_enabled(page, live_server_url):
-    """When IMPORT_ENABLED is unset/true (the default), clicking 'New Character'
-    opens a dropdown with both 'Create a character' and 'Import a character'
-    options. The disabled-state UI is covered by unit tests because the env
-    var is read at startup and can't be flipped per-clicktest."""
+    """The live-server harness sets IMPORT_ENABLED=true so the import flow
+    can be exercised. Under that setup, clicking 'New Character' opens a
+    dropdown with both 'Create a character' and 'Import a character'
+    options. Production defaults to fail-closed (IMPORT_ENABLED unset =
+    feature OFF); that path is covered by unit tests because the env var
+    is read at startup and can't be flipped per-clicktest."""
     page.goto(live_server_url)
     page.locator('button:text("New Character")').click()
     create_option = page.locator('[data-testid="new-character-option-create"]')

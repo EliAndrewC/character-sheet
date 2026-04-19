@@ -43,9 +43,13 @@ def _add_char_without_import_notes(db, **overrides) -> Character:
 # Env-driven settings
 # ---------------------------------------------------------------------------
 
-def test_import_enabled_defaults_to_true(monkeypatch) -> None:
+def test_import_enabled_defaults_to_false(monkeypatch) -> None:
+    """Fail-closed default: if the env var is unset the feature is OFF.
+    A future .env that forgets the flag entirely leaves import disabled
+    rather than silently re-enabling a feature we've intentionally
+    gated behind config."""
     monkeypatch.delenv("IMPORT_ENABLED", raising=False)
-    assert rl.import_enabled() is True
+    assert rl.import_enabled() is False
 
 
 @pytest.mark.parametrize("value,expected", [
