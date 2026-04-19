@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}L7R - Crop Headshot - {{ character.name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet"
+      href="/static/vendor/cropperjs/cropper.min.css?v={{ static_v('vendor/cropperjs/cropper.min.css') }}">
+<style>
+  .cropper-container { max-width: 100%; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto" data-testid="art-crop-page">
+    <h1 class="text-3xl font-bold mb-2">Pick the headshot: {{ character.name }}</h1>
+    <p class="text-ink/70 mb-6">
+        Drag the crop box over the subject's face. The aspect ratio is
+        locked to 3:4 portrait. This becomes the thumbnail shown on the
+        character list page.
+    </p>
+
+    <form method="POST"
+          action="/characters/{{ character.id }}/art/crop/{{ staging_id }}"
+          class="space-y-4"
+          data-testid="art-crop-form"
+          x-data="artCrop()"
+          x-init="init()">
+        <div class="bg-white rounded-lg shadow p-4 border border-ink/10">
+            <img id="art-crop-target"
+                 src="{{ image_url }}"
+                 alt="Uploaded art"
+                 style="max-width: 100%; display: block;">
+        </div>
+
+        <input type="hidden" name="x" :value="Math.round(box.x)">
+        <input type="hidden" name="y" :value="Math.round(box.y)">
+        <input type="hidden" name="w" :value="Math.round(box.w)">
+        <input type="hidden" name="h" :value="Math.round(box.h)">
+
+        <div class="flex gap-3">
+            <a href="/characters/{{ character.id }}/art"
+               class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-2 rounded font-medium"
+               data-action="cancel-crop">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded font-medium"
+                    data-action="save-crop">
+                Save Headshot
+            </button>
+        </div>
+    </form>
+</div>
+
+<script src="/static/vendor/cropperjs/cropper.min.js?v={{ static_v('vendor/cropperjs/cropper.min.js') }}"></script>
+<script>
+function artCrop() {
+  return {
+    box: {
+      x: {{ default_bbox[0] }},
+      y: {{ default_bbox[1] }},
+      w: {{ default_bbox[2] }},
+      h: {{ default_bbox[3] }}
+    },
+    cropper: null,
+    init() {
+      const img = document.getElementById('art-crop-target');
+      const self = this;
+      const onImageReady = () => {
+        self.cropper = new Cropper(img, {
+          aspectRatio: {{ aspect_ratio }},
+          viewMode: 1,
+          autoCropArea: 1,
+          background: true,
+          movable: false,
+          zoomable: false,
+          scalable: false,
+          rotatable: false,
+          data: {
+            x: self.box.x,
+            y: self.box.y,
+            width: self.box.w,
+            height: self.box.h
+          },
+          crop(event) {
+            self.box.x = event.detail.x;
+            self.box.y = event.detail.y;
+            self.box.w = event.detail.width;
+            self.box.h = event.detail.height;
+          }
+        });
+      };
+      if (img.complete && img.naturalWidth > 0) {
+        onImageReady();
+      } else {
+        img.addEventListener('load', onImageReady);
+      }
+    }
+  };
+}
+</script>
+{% endblock %}
