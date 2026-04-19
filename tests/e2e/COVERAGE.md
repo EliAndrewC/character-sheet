@@ -1029,14 +1029,39 @@ JS-error sanity:
       `test_responsive.py::test_homepage_headshot_placeholder_fits_card_at_phone_width`
       + `test_homepage_no_horizontal_overflow`
 - [ ] View Sheet floats full art to the right of the school section at >= lg breakpoint
-- [ ] View Sheet stacks full art and school section below lg breakpoint
+      (unit: `test_headshot_url.py::TestSheetPageRendering::test_sheet_shows_art_grid_when_character_has_art`
+      proves the `lg:grid lg:grid-cols-2` wrapper + `lg:order-last` on the art div
+      are emitted; clicktest to add in Phase 10)
+- [x] View Sheet stacks full art and school section below lg breakpoint ->
+      `test_responsive.py::test_sheet_no_horizontal_overflow_across_widths`
+      (covers 375 / 768 / 1280 px)
 - [ ] View Sheet omits art block for characters without art (no empty column)
+      (unit: `test_headshot_url.py::TestSheetPageRendering::test_sheet_omits_grid_when_character_has_no_art` +
+      `test_sheet_omits_grid_when_bucket_unconfigured`; clicktest to add in Phase 10)
 - [ ] "Generate with AI" button opens step 1 (gender)
+      (unit: `test_art_routes.py::TestEditPageGenerateLink::test_generate_with_ai_appears_in_art_dropdown`
+      + `TestGenerateGenderPage::test_renders_for_owner`;
+      clicktest to add in Phase 10)
 - [ ] Step 1 -> step 2 carries gender forward; pronouns are correct
+      (unit: `test_art_routes.py::TestGenerateOptionsPage::test_renders_with_wasp_selected_by_default`
+      asserts the hidden `name="gender" value="male"` field;
+      `test_art_prompt.py::TestMaleMinimalPrompt::test_uses_he_pronoun` +
+      `TestFemaleMinimalPrompt::test_uses_she_pronoun` prove the pronoun branch;
+      clicktest to add in Phase 10)
 - [ ] Step 2 age checkbox cannot be unchecked
+      (unit: `test_art_routes.py::TestGenerateOptionsPage::test_renders_with_wasp_selected_by_default`
+      asserts `age-checkbox` + `disabled`;
+      clicktest to add in Phase 10)
 - [ ] Step 2 optional rows disable their text input until the checkbox is checked
+      (no unit equivalent - pure Alpine; clicktest to add in Phase 10)
 - [ ] Step 2 "Create Prompt" assembles the prompt and advances to step 3
+      (unit: `test_art_routes.py::TestGenerateAssemble::test_happy_path_stages_prompt_and_redirects`;
+      `test_art_prompt.py::TestEveryFieldCombined::test_full_prompt_contains_every_part`
+      proves assembly order; clicktest to add in Phase 10)
 - [ ] Step 3 textarea is editable before "Generate Art" is clicked
+      (unit: `test_art_routes.py::TestGenerateReviewPage::test_renders_textarea_with_staged_prompt`
+      confirms the textarea is rendered with the staged prompt;
+      the `disabled` binding is Alpine-driven - clicktest to add in Phase 10)
 - [ ] Step 3 textarea locks while generation is in flight; unlocks on success or failure
 - [ ] Successful generation redirects to the crop page with the generated art
 - [ ] Failed generation shows a retry link that preserves the prompt

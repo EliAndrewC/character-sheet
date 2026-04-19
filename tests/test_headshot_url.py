@@ -1,4 +1,5 @@
-"""Tests for the ``headshot_url`` Jinja global + index-page rendering."""
+"""Tests for the ``headshot_url`` / ``full_art_url`` Jinja globals
+plus the index-page and character-sheet rendering paths that use them."""
 
 from __future__ import annotations
 
@@ -7,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.main import headshot_url
+from app.main import full_art_url, headshot_url
 from app.models import Character
 
 
@@ -182,3 +183,97 @@ class TestIndexPageRendering:
         # placeholder path was taken.
         assert b"character-headshot-placeholder" in resp.content
         assert b"character_art/1/head.webp" not in resp.content
+
+
+# ---------------------------------------------------------------------------
+# full_art_url helper + sheet-page rendering (Phase 6)
+# ---------------------------------------------------------------------------
+
+
+class TestFullArtUrlHelper:
+    def test_returns_none_when_no_key(self):
+        char = SimpleNamespace(art_s3_key=None, art_updated_at=None)
+        assert full_art_url(char) is None
+
+    def test_returns_public_url_with_cache_bust(self, monkeypatch):
+        monkeypatch.setenv("S3_BACKUP_BUCKET", "b")
+        monkeypatch.setenv("S3_BACKUP_REGION", "us-east-1")
+        ts = datetime(2026, 4, 19, 0, 0, 0, tzinfo=timezone.utc)
+        char = SimpleNamespace(
+            art_s3_key="character_art/1/full-x.webp",
+            art_updated_at=ts,
+        )
+        url = full_art_url(char)
+        assert url == (
+            f"https://b.s3.amazonaws.com/character_art/1/full-x.webp"
+            f"?v={int(ts.timestamp())}"
+        )
+
+    def test_returns_none_when_bucket_not_configured(self, monkeypatch):
+        monkeypatch.delenv("S3_BACKUP_BUCKET", raising=False)
+        char = SimpleNamespace(
+            art_s3_key="character_art/1/full-x.webp",
+            art_updated_at=None,
+        )
+        assert full_art_url(char) is None
+
+
+class TestSheetPageRendering:
+    """Verify the View Sheet page emits the art grid when a character has
+    art and falls back to the ungridded school section otherwise."""
+
+    def _seed(self, client, **fields):
+        session = client._test_session_factory()
+        char = Character(
+            name="Sheet Art Test",
+            owner_discord_id="183026066498125825",
+            school="akodo_bushi",
+            school_ring_choice="Water",
+            is_published=True,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            **fields,
+        )
+        session.add(char)
+        session.commit()
+        session.refresh(char)
+        session.close()
+        return char
+
+    def test_sheet_shows_art_grid_when_character_has_art(self, client, monkeypatch):
+        monkeypatch.setenv("S3_BACKUP_BUCKET", "b")
+        ts = datetime(2026, 4, 19, tzinfo=timezone.utc)
+        char = self._seed(
+            client,
+            art_s3_key="character_art/7/full-x.webp",
+            headshot_s3_key="character_art/7/head-x.webp",
+            art_updated_at=ts,
+        )
+        resp = client.get(f"/characters/{char.id}")
+        assert resp.status_code == 200
+        assert b"sheet-art-grid" in resp.content
+        assert b"character-full-art" in resp.content
+        # Full-art URL rendered
+        assert b"character_art/7/full-x.webp" in resp.content
+        # Cache-bust query string present
+        assert f"v={int(ts.timestamp())}".encode() in resp.content
+
+    def test_sheet_omits_grid_when_character_has_no_art(self, client):
+        char = self._seed(client)
+        resp = client.get(f"/characters/{char.id}")
+        assert resp.status_code == 200
+        # No grid wrapper, no img
+        assert b"sheet-art-grid" not in resp.content
+        assert b"character-full-art" not in resp.content
+
+    def test_sheet_omits_grid_when_bucket_unconfigured(self, client, monkeypatch):
+        """art_s3_key set but no bucket configured -> full_art_url() is None,
+        grid is skipped, sheet still renders."""
+        monkeypatch.delenv("S3_BACKUP_BUCKET", raising=False)
+        char = self._seed(
+            client,
+            art_s3_key="character_art/7/full-x.webp",
+        )
+        resp = client.get(f"/characters/{char.id}")
+        assert resp.status_code == 200
+        assert b"sheet-art-grid" not in resp.content
+        assert b"character_art/7/full-x.webp" not in resp.content

@@ -72,8 +72,8 @@ templates.env.globals["static_v"] = static_v
 # The art bucket objects are public-read so no signing is needed; we
 # append ``art_updated_at`` as a cache-buster so replacing a character's
 # art invalidates any in-flight CDN / browser cache entries.
-def headshot_url(char) -> str | None:
-    key = getattr(char, "headshot_s3_key", None)
+def _art_url_for_key(char, key_attr: str) -> str | None:
+    key = getattr(char, key_attr, None)
     if not key:
         return None
     bucket = os.environ.get("S3_BACKUP_BUCKET")
@@ -88,7 +88,16 @@ def headshot_url(char) -> str | None:
     return url
 
 
+def headshot_url(char) -> str | None:
+    return _art_url_for_key(char, "headshot_s3_key")
+
+
+def full_art_url(char) -> str | None:
+    return _art_url_for_key(char, "art_s3_key")
+
+
 templates.env.globals["headshot_url"] = headshot_url
+templates.env.globals["full_art_url"] = full_art_url
 
 
 # Per-school rules-link substitutions for the "Special Ability" text. When a
