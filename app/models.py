@@ -198,6 +198,15 @@ class Character(Base):
         default=None,
     )
 
+    # Character art. Metadata only - NOT versioned. Deliberately excluded
+    # from to_dict() so changing art never flips the character into Draft
+    # status. Writes go directly to this row via the dedicated art endpoints.
+    art_s3_key: Mapped[Optional[str]] = mapped_column(String, default=None)
+    headshot_s3_key: Mapped[Optional[str]] = mapped_column(String, default=None)
+    art_updated_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+    art_source: Mapped[Optional[str]] = mapped_column(String, default=None)
+    art_prompt: Mapped[Optional[str]] = mapped_column(String, default=None)
+
     # ------------------------------------------------------------------
     # Convenience helpers
     # ------------------------------------------------------------------
