@@ -7,8 +7,10 @@ from app.game_data import (
     DISADVANTAGES,
     KNACK_COSTS,
     SCHOOLS,
+    SCHOOLS_BUSHI_NONBUSHI,
     SCHOOLS_BY_CATEGORY,
     SCHOOL_KNACKS,
+    SCHOOL_RING_OPTIONS,
     SKILLS,
     SPELLS,
     SPELLS_BY_ELEMENT,
@@ -116,7 +118,7 @@ class TestSkills:
 
 class TestSchools:
     def test_school_count(self):
-        assert len(SCHOOLS) == 26
+        assert len(SCHOOLS) == 27
 
     def test_all_schools_have_three_knacks(self):
         for sid, school in SCHOOLS.items():
@@ -151,6 +153,30 @@ class TestSchools:
             assert school.school_ring
             assert school.category
             assert school.special_ability
+
+
+class TestMantisWaveTreader:
+    def test_school_registered(self):
+        assert "mantis_wave_treader" in SCHOOLS
+        school = SCHOOLS["mantis_wave_treader"]
+        assert school.name == "Mantis Wave-Treader"
+        assert school.category == "bushi"
+        assert school.school_ring == "Any"
+
+    def test_ring_options_contains_all_five(self):
+        options = SCHOOL_RING_OPTIONS["mantis_wave_treader"]
+        assert set(options) == {"Air", "Fire", "Earth", "Water", "Void"}
+
+    def test_in_bushi_half_of_bushi_nonbushi(self):
+        bushi_label, bushi_schools = SCHOOLS_BUSHI_NONBUSHI[0]
+        assert bushi_label == "Bushi Schools"
+        assert "mantis_wave_treader" in {s.id for s in bushi_schools}
+
+    def test_school_knacks_resolve(self):
+        school = SCHOOLS["mantis_wave_treader"]
+        assert school.school_knacks == ["athletics", "iaijutsu", "worldliness"]
+        for kid in school.school_knacks:
+            assert kid in SCHOOL_KNACKS
 
 
 class TestSchoolKnacks:

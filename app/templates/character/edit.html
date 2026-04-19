@@ -1353,9 +1353,11 @@ function characterForm() {
                     // Auto-set school ring to at least 3
                     this.rings[info.ring] = Math.max(this.rings[info.ring], 3);
                 } else {
-                    // "any non-Void" or "Air or Water" - user must pick
-                    this.schoolRingChoice = 'Water'; // default
-                    this.rings['Water'] = Math.max(this.rings['Water'], 3);
+                    // Variable-ring school: Mantis Wave-Treader defaults to
+                    // Void; every other variable-ring school defaults to Water.
+                    const defaultRing = schoolId === 'mantis_wave_treader' ? 'Void' : 'Water';
+                    this.schoolRingChoice = defaultRing;
+                    this.rings[defaultRing] = Math.max(this.rings[defaultRing], 3);
                 }
 
                 // Initialize knacks from school data
