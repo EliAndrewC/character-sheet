@@ -13,7 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
-from app.routes import auth, characters, google_sheets, import_char, pages
+from app.routes import art, auth, characters, google_sheets, import_char, pages
 from app.services.auth import is_admin
 from app.services.import_rate_limit import import_enabled
 
@@ -65,6 +65,30 @@ def static_v(path: str) -> str:
 
 
 templates.env.globals["static_v"] = static_v
+
+
+# Character art URL helper. Returns the public S3 URL for a character's
+# headshot (or None if the character has no art or S3 isn't configured).
+# The art bucket objects are public-read so no signing is needed; we
+# append ``art_updated_at`` as a cache-buster so replacing a character's
+# art invalidates any in-flight CDN / browser cache entries.
+def headshot_url(char) -> str | None:
+    key = getattr(char, "headshot_s3_key", None)
+    if not key:
+        return None
+    bucket = os.environ.get("S3_BACKUP_BUCKET")
+    if not bucket:
+        return None
+    region = os.environ.get("S3_BACKUP_REGION", "us-east-1")
+    from app.services.art_storage import public_url
+    url = public_url(key, bucket=bucket, region=region)
+    updated = getattr(char, "art_updated_at", None)
+    if updated is not None:
+        url = f"{url}?v={int(updated.timestamp())}"
+    return url
+
+
+templates.env.globals["headshot_url"] = headshot_url
 
 
 # Per-school rules-link substitutions for the "Special Ability" text. When a
@@ -151,6 +175,7 @@ app.include_router(characters.router)
 app.include_router(auth.router)
 app.include_router(google_sheets.router)
 app.include_router(import_char.router)
+app.include_router(art.router)
 
 
 # Global backup status (read by routes for admin banner)

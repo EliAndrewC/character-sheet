@@ -979,6 +979,82 @@ JS-error sanity:
 
 ---
 
+## Character Art
+
+- [ ] "Upload new art" button visible on edit page for users with edit access
+      (unit: `test_art_routes.py::TestEditPageIntegration::test_character_art_menu_appears_on_edit_page`;
+      clicktest to add in Phase 10)
+- [ ] "Upload new art" button hidden for users without edit access
+      (unit: `test_art_routes.py::TestLandingPage::test_403_when_not_editor` - permission gate
+      enforced at the route level; non-editors cannot load the edit page either)
+- [ ] Upload rejects non-image file with clear error banner
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_wrong_format_rejected_422`;
+      clicktest to add in Phase 10)
+- [ ] Upload rejects oversized file (> 5 MB) with clear error banner
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_oversized_upload_rejected_413`;
+      clicktest to add in Phase 10)
+- [ ] Upload rejects image outside allowed aspect ratio with clear error banner
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_wrong_aspect_ratio_rejected_422`;
+      clicktest to add in Phase 10)
+- [ ] Upload of valid PNG redirects to crop page
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_valid_upload_redirects_to_crop[png-_png_bytes]`;
+      clicktest to add in Phase 10)
+- [ ] Upload of valid JPG redirects to crop page
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_valid_upload_redirects_to_crop[jpg-_jpeg_bytes]`;
+      clicktest to add in Phase 10)
+- [ ] Upload of valid WEBP redirects to crop page
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_valid_upload_redirects_to_crop[webp-_webp_bytes]`;
+      clicktest to add in Phase 10)
+- [ ] Crop page seeds the crop box from detected face bbox
+      (unit: `test_art_routes.py::TestCropPage::test_renders_cropper_for_valid_staging_id` +
+      `test_art_face_detect.py::TestEndToEndRealPortrait`;
+      clicktest to add in Phase 10)
+- [ ] Crop page falls back to centered-square when no face detected
+      (unit: `test_art_face_detect.py::TestEndToEndNoFaceFixture`;
+      clicktest to add in Phase 10)
+- [ ] Crop page enforces locked aspect ratio during drag
+      (pure Cropper.js - no unit equivalent; clicktest to add in Phase 10)
+- [ ] Save-crop writes full + headshot, redirects back to edit page with success banner
+      (unit: `test_art_routes.py::TestCropSave::test_happy_path_uploads_to_s3_and_updates_character` +
+      `test_art_routes.py::TestEditPageIntegration::test_art_saved_banner_renders`;
+      clicktest to add in Phase 10)
+- [ ] Overwrite confirm modal appears when replacing existing art
+      (unit: `test_art_routes.py::TestEditPageIntegration::test_overwrite_modal_only_shows_when_art_exists`;
+      clicktest to add in Phase 10)
+- [ ] Delete-art confirm modal removes art and reverts to placeholder
+      (unit: `test_art_routes.py::TestDeleteEndpoint::test_happy_path_deletes_s3_and_clears_columns` +
+      `test_art_routes.py::TestEditPageIntegration::test_delete_option_only_shows_when_art_exists`;
+      clicktest to add in Phase 10)
+- [ ] Character list page shows headshot for characters that have art
+      (unit: `test_headshot_url.py::TestIndexPageRendering::test_shows_headshot_img_when_character_has_art` +
+      `test_mixed_cards_render_correct_element_per_character`;
+      clicktest to add in Phase 10)
+- [ ] Character list page shows placeholder for characters without art
+      (unit: `test_headshot_url.py::TestIndexPageRendering::test_shows_placeholder_when_character_has_no_art` +
+      `test_mixed_cards_render_correct_element_per_character`;
+      clicktest to add in Phase 10)
+- [x] Character list page does not overflow horizontally at 375 px viewport ->
+      `test_responsive.py::test_homepage_headshot_placeholder_fits_card_at_phone_width`
+      + `test_homepage_no_horizontal_overflow`
+- [ ] View Sheet floats full art to the right of the school section at >= lg breakpoint
+- [ ] View Sheet stacks full art and school section below lg breakpoint
+- [ ] View Sheet omits art block for characters without art (no empty column)
+- [ ] "Generate with AI" button opens step 1 (gender)
+- [ ] Step 1 -> step 2 carries gender forward; pronouns are correct
+- [ ] Step 2 age checkbox cannot be unchecked
+- [ ] Step 2 optional rows disable their text input until the checkbox is checked
+- [ ] Step 2 "Create Prompt" assembles the prompt and advances to step 3
+- [ ] Step 3 textarea is editable before "Generate Art" is clicked
+- [ ] Step 3 textarea locks while generation is in flight; unlocks on success or failure
+- [ ] Successful generation redirects to the crop page with the generated art
+- [ ] Failed generation shows a retry link that preserves the prompt
+- [ ] Generation stub returns the expected canned image based on prompt keyword (smoke check)
+- [ ] Per-user rate limit blocks the 26th generation in 24 h with a clear banner
+- [ ] ART_GEN_ENABLED=false disables the "Generate with AI" button with a disabled-state tooltip
+- [ ] Deleting the character also removes its S3 art keys (checked via orphan cleanup)
+
+---
+
 ## Coverage Summary
 
 **Covered:** ~280 test functions across 32 test files
