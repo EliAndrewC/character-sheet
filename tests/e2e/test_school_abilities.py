@@ -4595,3 +4595,264 @@ def test_priest_bless_reroll_button_hidden_when_not_impaired(page, live_server_u
     _restore_dice(page)
     block = page.locator('[data-priest-bless-reroll-block]')
     assert not block.is_visible()
+
+
+# ---------------------------------------------------------------------------
+# Mantis Wave-Treader 1st Dan: extra die on initiative, athletics, wound check
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.school_abilities
+def test_mantis_1st_dan_formula_extra_die(page, live_server_url):
+    """Mantis Wave-Treader 1st Dan gives +1 rolled die on initiative,
+    athletics (every rollable ring variant), and wound checks.
+
+    Reads the embedded roll formulas from the sheet page and verifies the
+    rolled counts against the Phase 2 rules. Default character has school
+    knacks at rank 1 -> dan=1 (bonus active). Rings default to 2 each; Mantis
+    defaults to Void as school ring so Void auto-raises to 3 (Water stays 2).
+    """
+    _create_char(page, live_server_url, "Mantis1Dan", "mantis_wave_treader")
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+
+    # Initiative: base (Void+1) = 4 rolled, Void=3 kept. 1st Dan +1 -> 5k3.
+    init = _get_formula(page, "initiative")
+    assert init is not None, "initiative formula missing"
+    assert init["rolled"] == 5, f"initiative rolled expected 5, got {init['rolled']}"
+    assert init["kept"] == 3
+
+    # Wound check: Water=2 -> base 3k2. 1st Dan +1 -> 4k2 with a labeled
+    # bonus-source entry for the extra die.
+    wc = _get_formula(page, "wound_check")
+    assert wc is not None, "wound_check formula missing"
+    assert wc["rolled"] == 4, f"wound_check rolled expected 4, got {wc['rolled']}"
+    assert wc["kept"] == 2
+    assert any("1st Dan" in src for src in wc.get("bonus_sources", [])), (
+        f"wound_check should label the 1st Dan extra die, got: {wc.get('bonus_sources')}"
+    )
+
+    # Athletics: 2*Ring + athletics_rank rolled, Ring kept. athletics=1 (free
+    # rank from school knacks). All four rollable rings are at 2 -> 5k2 base,
+    # +1 Dan -> 6k2.
+    for ring in ("Air", "Fire", "Earth", "Water"):
+        ath = _get_formula(page, f"athletics:{ring}")
+        assert ath is not None, f"athletics:{ring} formula missing"
+        assert ath["rolled"] == 6, (
+            f"athletics:{ring} rolled expected 6, got {ath['rolled']}"
+        )
+        assert ath["kept"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Mantis Wave-Treader 2nd Dan: flexible +5 free raise on chosen roll type
+# ---------------------------------------------------------------------------
+
+
+def _make_mantis_dan_2(page, live_server_url, name):
+    """Create a Mantis character and raise school knacks to 2 (Dan 2)."""
+    _create_char(
+        page, live_server_url, name, "mantis_wave_treader",
+        knack_overrides={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+    )
+
+
+def _set_mantis_2nd_dan(page, char_id, choice):
+    """Persist the Mantis 2nd Dan pick via the autosave endpoint."""
+    _set_technique_choices(page, char_id, {"mantis_2nd_dan_free_raise": choice})
+
+
+@pytest.mark.school_abilities
+def test_mantis_2nd_dan_editor_picker_visible_and_saves(page, live_server_url):
+    """Editor UI: the Mantis 2nd Dan picker appears when Dan>=2, and choosing
+    a value persists it into technique_choices on save."""
+    # Create the character but DON'T apply yet - we want to interact with the editor.
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Mantis2Picker")
+    select_school(page, "mantis_wave_treader")
+    # The picker should be hidden at Dan 1.
+    picker = page.locator('[data-testid="mantis-2nd-dan-picker"]')
+    assert not picker.is_visible()
+    # Raise all three school knacks to 2 to reach Dan 2.
+    click_plus(page, "knack_athletics", 1)
+    click_plus(page, "knack_iaijutsu", 1)
+    click_plus(page, "knack_worldliness", 1)
+    page.wait_for_timeout(200)
+    # The picker is now visible and options include the eligible set.
+    assert picker.is_visible()
+    select = page.locator('[data-testid="mantis-2nd-dan-select"]')
+    option_values = select.evaluate("el => Array.from(el.querySelectorAll('option')).map(o => o.value)")
+    # Combat rolls present, initiative excluded, worldliness excluded.
+    for needed in ("attack", "damage", "parry", "wound_check", "athletics", "iaijutsu", "bragging"):
+        assert needed in option_values, f"option {needed!r} missing from picker"
+    assert "initiative" not in option_values
+    assert "worldliness" not in option_values
+    # Pick "attack", wait for autosave, then verify via the autosave endpoint state.
+    select.select_option("attack")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Mantis 2nd Dan picker")
+    # After Apply Changes, the sheet's attack formula carries the +5 bonus.
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    f = _get_formula(page, "attack")
+    assert f["flat"] == 5
+
+
+@pytest.mark.school_abilities
+def test_mantis_2nd_dan_attack_choice_labeled(page, live_server_url):
+    """Attack choice: the pre-roll Bonuses row and the post-roll breakdown
+    both show the labeled +5."""
+    _make_mantis_dan_2(page, live_server_url, "Mantis2Atk")
+    cid = _extract_char_id(page)
+    _set_mantis_2nd_dan(page, cid, "attack")
+    page.reload()
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    # Pre-roll: open the attack modal and verify the Bonuses row mentions "2nd Dan".
+    _open_attack_modal(page, "attack")
+    modal_text = _attack_modal_bonus_text(page)
+    assert "2nd Dan" in modal_text
+    # Post-roll: roll and verify the breakdown includes "2nd Dan technique".
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    result_text = page.locator('[data-modal="attack"]').text_content()
+    assert "2nd Dan technique" in result_text
+
+
+@pytest.mark.school_abilities
+def test_mantis_2nd_dan_parry_choice_labeled(page, live_server_url):
+    """Parry choice: the post-roll roll-result modal shows the labeled +5."""
+    _make_mantis_dan_2(page, live_server_url, "Mantis2Parry")
+    cid = _extract_char_id(page)
+    _set_mantis_2nd_dan(page, cid, "parry")
+    page.reload()
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    _roll_via_menu_or_direct(page, "parry")
+    text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "2nd Dan technique" in text
+
+
+@pytest.mark.school_abilities
+def test_mantis_2nd_dan_skill_choice_labeled(page, live_server_url):
+    """Skill choice: the post-roll breakdown shows the +5 from 2nd Dan.
+
+    Uses etiquette (no Honor/Recognition bonus, so flat=5 cleanly reflects
+    only the Mantis choice)."""
+    _create_char(
+        page, live_server_url, "Mantis2Skill", "mantis_wave_treader",
+        knack_overrides={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+        skill_overrides={"etiquette": 2},
+    )
+    cid = _extract_char_id(page)
+    _set_mantis_2nd_dan(page, cid, "etiquette")
+    page.reload()
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    f = _get_formula(page, "skill:etiquette")
+    assert f["flat"] == 5
+    _roll_via_menu_or_direct(page, "skill:etiquette")
+    text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "2nd Dan technique" in text
+
+
+@pytest.mark.school_abilities
+def test_mantis_2nd_dan_knack_choice_labeled(page, live_server_url):
+    """Knack choice (iaijutsu): the post-roll breakdown shows the +5."""
+    _make_mantis_dan_2(page, live_server_url, "Mantis2Knack")
+    cid = _extract_char_id(page)
+    _set_mantis_2nd_dan(page, cid, "iaijutsu")
+    page.reload()
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    f = _get_formula(page, "knack:iaijutsu")
+    assert f["flat"] == 5
+    _roll_via_menu_or_direct(page, "knack:iaijutsu")
+    text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "2nd Dan technique" in text
+
+
+@pytest.mark.school_abilities
+def test_mantis_2nd_dan_wound_check_choice_labeled(page, live_server_url):
+    """Wound check choice: the WC modal's bonus_sources row shows the +5."""
+    _make_mantis_dan_2(page, live_server_url, "Mantis2WC")
+    cid = _extract_char_id(page)
+    _set_mantis_2nd_dan(page, cid, "wound_check")
+    page.reload()
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    wc = _get_formula(page, "wound_check")
+    assert wc["flat"] == 5
+    assert any("2nd Dan" in s for s in wc.get("bonus_sources", []))
+    # Open the WC modal and verify the Bonuses line is visible.
+    _set_light_wounds(page, 10)
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openWoundCheckModal === 'function') {
+                d.openWoundCheckModal();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_timeout(300)
+    modal = page.locator('[data-modal="wound-check"]')
+    assert "2nd Dan" in modal.text_content()
+
+
+@pytest.mark.school_abilities
+def test_mantis_2nd_dan_damage_choice_labeled(page, live_server_url):
+    """Damage choice: the attack modal's pre-roll Damage bonuses row AND the
+    post-roll damage result breakdown both show the labeled +5."""
+    _make_mantis_dan_2(page, live_server_url, "Mantis2Dmg")
+    cid = _extract_char_id(page)
+    _set_mantis_2nd_dan(page, cid, "damage")
+    page.reload()
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    atk = _get_formula(page, "attack")
+    assert atk["damage_flat_bonus"] == 5
+    assert any("2nd Dan" in s for s in atk.get("damage_bonus_sources", []))
+    # Pre-roll: the attack modal should show a "Damage bonuses" row.
+    _open_attack_modal(page, "attack")
+    pre_text = _attack_modal_bonus_text(page)
+    assert "Damage bonuses" in pre_text
+    assert "2nd Dan" in pre_text
+    # Set TN to 5 so the attack is guaranteed to hit, then roll attack and damage.
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select[x-model\\.number="atkTN"]').first.select_option("5")
+    _mock_dice_high(page)
+    modal.locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    # Click Make Damage Roll (button inside the attack modal once the attack hits).
+    roll_dmg_btn = modal.locator('button:has-text("Make Damage Roll")')
+    roll_dmg_btn.first.wait_for(state='visible', timeout=5000)
+    roll_dmg_btn.first.click()
+    # Wait for damage result phase.
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'damage-result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    dmg_text = page.locator('[data-modal="attack"]').text_content()
+    assert "2nd Dan" in dmg_text, f"Damage breakdown should show 2nd Dan label, got: {dmg_text[:400]}"
+
+
+@pytest.mark.school_abilities
+def test_mantis_2nd_dan_switch_choice_moves_bonus(page, live_server_url):
+    """Switching the choice moves the bonus: pick attack, verify flat=5 on
+    attack and flat=0 on wound check; then switch to wound_check and verify
+    flat=0 on attack and flat=5 on wound check."""
+    _make_mantis_dan_2(page, live_server_url, "Mantis2Switch")
+    cid = _extract_char_id(page)
+    # First: attack.
+    _set_mantis_2nd_dan(page, cid, "attack")
+    page.reload()
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    assert _get_formula(page, "attack")["flat"] == 5
+    assert _get_formula(page, "wound_check")["flat"] == 0
+    # Switch: wound_check.
+    _set_mantis_2nd_dan(page, cid, "wound_check")
+    page.reload()
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    assert _get_formula(page, "attack")["flat"] == 0
+    assert _get_formula(page, "wound_check")["flat"] == 5

@@ -191,6 +191,37 @@
                 {% include "character/partials/school_info.html" %}
                 {% endif %}
             </div>
+
+            <!-- Mantis Wave-Treader 2nd Dan flexible free raise picker. -->
+            <div x-show="school === 'mantis_wave_treader' && currentDan() >= 2"
+                 x-cloak class="mt-3 p-3 bg-white/60 border border-accent/20 rounded"
+                 data-testid="mantis-2nd-dan-picker">
+                <label class="block text-sm font-medium mb-1">
+                    2nd Dan free raise - pick one roll type
+                </label>
+                <select x-model="techniqueChoices.mantis_2nd_dan_free_raise"
+                        @change="markDirty()"
+                        data-testid="mantis-2nd-dan-select"
+                        class="border rounded px-3 py-2 text-sm w-full sm:w-auto">
+                    <option value="">(none selected)</option>
+                    <optgroup label="Combat rolls">
+                        <template x-for="id in MANTIS_2ND_DAN_COMBAT_ROLLS" :key="'mc'+id">
+                            <option :value="id" x-text="MANTIS_2ND_DAN_LABELS[id]"></option>
+                        </template>
+                    </optgroup>
+                    <optgroup label="School knacks">
+                        <template x-for="kid in mantisEligibleKnacks()" :key="'mk'+kid">
+                            <option :value="kid" x-text="KNACK_NAMES[kid] || kid"></option>
+                        </template>
+                    </optgroup>
+                    <optgroup label="Skills">
+                        <template x-for="sid in MANTIS_2ND_DAN_SKILL_IDS" :key="'ms'+sid">
+                            <option :value="sid" x-text="SKILL_NAMES[sid] || sid"></option>
+                        </template>
+                    </optgroup>
+                </select>
+            </div>
+
             <!-- Hidden field for resolved school ring choice (updated by Alpine when school has fixed ring) -->
             <input type="hidden" name="school_ring_choice" x-model="schoolRingChoice">
         </section>
@@ -993,6 +1024,32 @@ const KNACK_NAMES = {
     {% endfor %}
 };
 
+// Skill display names (used by the Mantis 2nd Dan picker, etc.)
+const SKILL_NAMES = {
+    {% for sid, skill in skills.items() %}
+    '{{ sid }}': '{{ skill.name }}',
+    {% endfor %}
+};
+
+// Mantis Wave-Treader 2nd Dan picker: eligible combat rolls and labels.
+// Initiative is NOT eligible (free raise has no meaning on an initiative roll).
+const MANTIS_2ND_DAN_COMBAT_ROLLS = ['attack', 'damage', 'parry', 'wound_check'];
+const MANTIS_2ND_DAN_LABELS = {
+    'attack': 'Attack',
+    'damage': 'Damage',
+    'parry': 'Parry',
+    'wound_check': 'Wound Check',
+};
+// All skill ids, sorted by display name. The picker exposes every rollable
+// skill; non-rollable knacks (worldliness etc.) are filtered by the Alpine
+// helper mantisEligibleKnacks() against the character's school knacks.
+const MANTIS_2ND_DAN_SKILL_IDS = Object.keys(SKILL_NAMES).sort(
+    (a, b) => SKILL_NAMES[a].localeCompare(SKILL_NAMES[b])
+);
+const MANTIS_NON_ROLLABLE_KNACKS = new Set([
+    'discern_honor', 'worldliness', 'otherworldliness', 'conviction',
+]);
+
 // Skill -> Ring mapping
 const SKILL_RINGS = {
     {% for sid, skill in skills.items() %}
@@ -1085,6 +1142,7 @@ function characterForm() {
             {% endfor %}
         },
         advantageDetails: {{ (character.advantage_details or {})|tojson }},
+        techniqueChoices: {{ (character.technique_choices or {})|tojson }},
         attack: {{ character.attack }},
         parry: {{ character.parry }},
         honor: {{ character.honor }},
@@ -1242,6 +1300,7 @@ function characterForm() {
                     campaign_advantages: Object.keys(this.campaignAdvantages).filter(k => this.campaignAdvantages[k]),
                     campaign_disadvantages: Object.keys(this.campaignDisadvantages).filter(k => this.campaignDisadvantages[k]),
                     advantage_details: this.advantageDetails,
+                    technique_choices: this.techniqueChoices,
                     honor: this.honor,
                     rank: this.rank,
                     rank_locked: this.rankLocked,
@@ -1555,6 +1614,15 @@ function characterForm() {
             const vals = Object.values(this.knacks);
             if (vals.length === 0) return 0;
             return Math.min(...vals);
+        },
+
+        // Rollable school-knack ids for the Mantis 2nd Dan picker. Filters
+        // out passive knacks (worldliness etc.) so the player cannot pick
+        // a knack that is never rolled.
+        mantisEligibleKnacks() {
+            return Object.keys(this.knacks || {}).filter(
+                kid => !MANTIS_NON_ROLLABLE_KNACKS.has(kid)
+            );
         },
 
         totalKnackCostSingle(rank) {
