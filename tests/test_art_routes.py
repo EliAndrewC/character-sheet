@@ -694,6 +694,371 @@ class TestEditPageIntegration:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Phase 7: Generate-with-AI wizard
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateGenderPage:
+    def test_renders_for_owner(self, client):
+        char = _make_character(client)
+        resp = client.get(f"/characters/{char.id}/art/generate")
+        assert resp.status_code == 200
+        assert b"art-gen-gender-page" in resp.content
+        assert b"gender-male" in resp.content
+        assert b"gender-female" in resp.content
+
+    def test_403_for_non_editor(self, client):
+        char = _make_character(client, owner_id=OTHER_ID)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate",
+            headers={"X-Test-User": "plainuser:Nobody"},
+        )
+        assert resp.status_code == 403
+
+    def test_404_for_missing_character(self, client):
+        assert client.get("/characters/9999/art/generate").status_code == 404
+
+
+class TestGenerateOptionsPage:
+    def test_renders_with_wasp_selected_by_default(self, client):
+        char = _make_character(client)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=male"
+        )
+        assert resp.status_code == 200
+        assert b"art-gen-options-page" in resp.content
+        # Wasp is pre-selected in the dropdown
+        assert b'value="Wasp"' in resp.content
+        assert b"selected" in resp.content
+        # Age defaults to 20
+        assert b'value="20"' in resp.content
+        # Age checkbox is disabled (mandatory)
+        assert b"age-checkbox" in resp.content
+        assert b"disabled" in resp.content
+        # Gender carried forward via hidden input
+        assert b'name="gender" value="male"' in resp.content
+
+    def test_all_clan_options_present_in_dropdown(self, client):
+        char = _make_character(client)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=female"
+        )
+        assert resp.status_code == 200
+        from app.game_data import CLAN_COLORS
+        for clan_name in CLAN_COLORS:
+            assert f'value="{clan_name}"'.encode() in resp.content, (
+                f"missing clan option: {clan_name}"
+            )
+
+    def test_both_armor_choices_in_select(self, client):
+        """Exactly the two dropdown options from Eli's spec."""
+        char = _make_character(client)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=male"
+        )
+        assert resp.status_code == 200
+        assert b"is not wearing armor and has on a kimono" in resp.content
+        assert b"is wearing samurai armor" in resp.content
+
+    def test_fixed_suffix_text_rendered(self, client):
+        """The suffix sits at the bottom as non-editable display text."""
+        char = _make_character(client)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=male"
+        )
+        assert b"prompt-suffix" in resp.content
+        assert b"Make a colored, photo-realistic" in resp.content
+
+    def test_pronoun_baked_into_template_context(self, client):
+        """The subject pronoun is computed server-side from gender and
+        threaded into the Alpine state as ``subject`` so the rows read
+        'He is approximately...' / 'She is approximately...'."""
+        char = _make_character(client)
+        male = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=male"
+        )
+        female = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=female"
+        )
+        # Look for the JSON-encoded subject passed to the Alpine factory
+        assert b'"He"' in male.content
+        assert b'"She"' in female.content
+
+    def test_missing_gender_redirects_to_step_1(self, client):
+        char = _make_character(client)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert resp.headers["location"] == (
+            f"/characters/{char.id}/art/generate"
+        )
+
+    def test_invalid_gender_redirects_to_step_1(self, client):
+        char = _make_character(client)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=banana",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+
+    def test_403_for_non_editor(self, client):
+        char = _make_character(client, owner_id=OTHER_ID)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=male",
+            headers={"X-Test-User": "plainuser:Nobody"},
+        )
+        assert resp.status_code == 403
+
+
+class TestGenerateAssemble:
+    def test_happy_path_stages_prompt_and_redirects(self, client):
+        char = _make_character(client)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/assemble",
+            data={
+                "gender": "male",
+                "clan": "Wasp",
+                "age": "30",
+                "holding": "a katana",
+                "expression": "",
+                "armor_choice": "",
+                "armor_modifier": "",
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert "/art/generate/review/" in resp.headers["location"]
+        # The staged record has the assembled prompt
+        sid = resp.headers["location"].rsplit("/", 1)[-1]
+        staged = art_jobs.get_staged(sid)
+        assert staged is not None
+        assert staged.source == "generated"
+        assert staged.char_id == char.id
+        assert "Wasp clan noble" in staged.prompt
+        assert "He is approximately 30 years old." in staged.prompt
+        assert "He is holding a katana." in staged.prompt
+
+    def test_armor_choice_passes_through_to_staged_prompt(self, client):
+        char = _make_character(client)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/assemble",
+            data={
+                "gender": "female", "clan": "Wasp", "age": "25",
+                "holding": "", "expression": "",
+                "armor_choice": "is wearing samurai armor",
+                "armor_modifier": "ornate",
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        sid = resp.headers["location"].rsplit("/", 1)[-1]
+        staged = art_jobs.get_staged(sid)
+        assert "She is wearing samurai armor ornate." in staged.prompt
+
+    def test_invalid_age_bounces_back_to_step_1(self, client):
+        char = _make_character(client)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/assemble",
+            data={
+                "gender": "male", "clan": "Wasp", "age": "999",
+                "holding": "", "expression": "", "armor_choice": "",
+                "armor_modifier": "",
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert resp.headers["location"].endswith("/art/generate")
+
+    def test_invalid_clan_bounces_back_to_step_1(self, client):
+        char = _make_character(client)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/assemble",
+            data={
+                "gender": "male", "clan": "Goblin", "age": "20",
+                "holding": "", "expression": "", "armor_choice": "",
+                "armor_modifier": "",
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert resp.headers["location"].endswith("/art/generate")
+
+    def test_invalid_armor_choice_bounces_back_to_step_1(self, client):
+        char = _make_character(client)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/assemble",
+            data={
+                "gender": "male", "clan": "Wasp", "age": "20",
+                "holding": "", "expression": "",
+                "armor_choice": "leather jerkin",
+                "armor_modifier": "",
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert resp.headers["location"].endswith("/art/generate")
+
+    def test_403_for_non_editor(self, client):
+        char = _make_character(client, owner_id=OTHER_ID)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/assemble",
+            data={
+                "gender": "male", "clan": "Wasp", "age": "20",
+                "holding": "", "expression": "", "armor_choice": "",
+                "armor_modifier": "",
+            },
+            headers={"X-Test-User": "plainuser:Nobody"},
+        )
+        assert resp.status_code == 403
+
+
+class TestGenerateReviewPage:
+    def _stage_prompt(self, char_id: int, prompt: str) -> str:
+        return art_jobs.stage_art(
+            user_id=USER_ID, char_id=char_id,
+            source="generated", prompt=prompt,
+        )
+
+    def test_renders_textarea_with_staged_prompt(self, client):
+        char = _make_character(client)
+        sid = self._stage_prompt(char.id, "A portrait of a Wasp clan noble.")
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/review/{sid}"
+        )
+        assert resp.status_code == 200
+        assert b"art-gen-review-page" in resp.content
+        assert b"prompt-textarea" in resp.content
+        assert b"A portrait of a Wasp clan noble." in resp.content
+
+    def test_404_for_unknown_staging_id(self, client):
+        char = _make_character(client)
+        resp = client.get(f"/characters/{char.id}/art/generate/review/nope")
+        assert resp.status_code == 404
+
+    def test_404_when_staging_id_belongs_to_different_user(self, client):
+        char = _make_character(client)
+        # Stage a prompt under a different user
+        sid = art_jobs.stage_art(
+            user_id=OTHER_ID, char_id=char.id,
+            source="generated", prompt="secret",
+        )
+        resp = client.get(f"/characters/{char.id}/art/generate/review/{sid}")
+        assert resp.status_code == 404
+
+    def test_404_when_staging_id_belongs_to_different_character(self, client):
+        char_a = _make_character(client)
+        char_b = _make_character(client)
+        sid = self._stage_prompt(char_a.id, "prompt")
+        resp = client.get(
+            f"/characters/{char_b.id}/art/generate/review/{sid}"
+        )
+        assert resp.status_code == 404
+
+    def test_404_when_staging_slot_is_upload_not_generated(self, client):
+        """Don't leak upload bytes to the generate-review endpoint - a
+        staging slot that came from Phase 4's upload flow must not be
+        readable as a generate-review prompt."""
+        char = _make_character(client)
+        sid = art_jobs.stage_art(
+            user_id=USER_ID, char_id=char.id,
+            full_bytes=b"fake-bytes", width=256, height=256,
+            source="upload",
+        )
+        resp = client.get(f"/characters/{char.id}/art/generate/review/{sid}")
+        assert resp.status_code == 404
+
+    def test_403_for_non_editor(self, client):
+        char = _make_character(client, owner_id=OTHER_ID)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/review/any",
+            headers={"X-Test-User": "plainuser:Nobody"},
+        )
+        assert resp.status_code == 403
+
+
+class TestGenerateSubmit:
+    def test_returns_501_stub_until_phase_8_wires_gemini(self, client):
+        """Phase 7 leaves submit as a 501 stub. Phase 8 replaces this
+        with a redirect to the generation progress page."""
+        char = _make_character(client)
+        sid = art_jobs.stage_art(
+            user_id=USER_ID, char_id=char.id,
+            source="generated", prompt="stub prompt",
+        )
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/submit/{sid}",
+            data={"prompt": "edited prompt text"},
+        )
+        assert resp.status_code == 501
+        # User's edited text was saved to the staging slot so Phase 8
+        # picks up the final version.
+        staged = art_jobs.get_staged(sid)
+        assert staged is not None
+        assert staged.prompt == "edited prompt text"
+
+    def test_404_for_unknown_staging_id(self, client):
+        char = _make_character(client)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/submit/unknown",
+            data={"prompt": "x"},
+        )
+        assert resp.status_code == 404
+
+    def test_404_when_staging_slot_is_not_generated(self, client):
+        char = _make_character(client)
+        sid = art_jobs.stage_art(
+            user_id=USER_ID, char_id=char.id,
+            full_bytes=b"fake", width=256, height=256, source="upload",
+        )
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/submit/{sid}",
+            data={"prompt": "x"},
+        )
+        assert resp.status_code == 404
+
+    def test_403_for_non_editor(self, client):
+        char = _make_character(client, owner_id=OTHER_ID)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/submit/any",
+            data={"prompt": "x"},
+            headers={"X-Test-User": "plainuser:Nobody"},
+        )
+        assert resp.status_code == 403
+
+
+class TestEditPageGenerateLink:
+    def test_generate_with_ai_appears_in_art_dropdown(self, client):
+        char = _make_character(client)
+        resp = client.get(f"/characters/{char.id}/edit")
+        assert resp.status_code == 200
+        assert b'data-action="generate-with-ai"' in resp.content
+        assert f"/characters/{char.id}/art/generate".encode() in resp.content
+
+
+class TestUpdateStagedBytes:
+    def test_fills_in_bytes_on_existing_slot(self):
+        sid = art_jobs.stage_art(
+            user_id="u1", char_id=1, source="generated", prompt="test",
+        )
+        staged = art_jobs.get_staged(sid)
+        assert staged.full_bytes == b""
+        assert staged.width == 0
+        assert staged.height == 0
+        art_jobs.update_staged_bytes(
+            sid, full_bytes=b"generated-image-bytes", width=512, height=768,
+        )
+        updated = art_jobs.get_staged(sid)
+        assert updated.full_bytes == b"generated-image-bytes"
+        assert updated.width == 512
+        assert updated.height == 768
+        # Metadata untouched
+        assert updated.prompt == "test"
+        assert updated.source == "generated"
+
+
 class TestStagingRegistryTTL:
     def test_reaper_drops_expired_entries(self):
         from datetime import datetime, timedelta, timezone

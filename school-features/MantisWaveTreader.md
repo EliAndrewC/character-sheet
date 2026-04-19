@@ -11,16 +11,25 @@
 
 > Each phase you select an "offensive" or "defensive" posture. While fighting with an offensive posture, you get a free raise to all attack and damage rolls, and while fighting in a defensive posture you get a free raise to wound checks and your TN to be hit is increased by 5.
 
-**Status:** Not yet implemented. Requires a new per-phase posture tracker in the Tracking section (where discretionary bonuses currently live) with two buttons - "Offensive Posture for Phase X" and "Defensive Posture for Phase X" - that increment X from 1 through 10 and then disable. Making an initiative roll resets X back to 1 and clears the phase/posture history. The current phase's posture drives:
-- Offensive: +5 free raise on attack rolls and damage rolls.
-- Defensive: +5 free raise on wound checks, +5 to TN to be hit.
+**Status:** Implemented (Phases 4 + 5). The per-phase posture tracker renders in the Tracking section with two buttons - "Offensive Posture for Phase X" and "Defensive Posture for Phase X" - that advance X from 1 through 10 and then disable. Rolling initiative or clicking the action-dice "Clear" button resets X back to 1 and empties the posture history. Selections persist across page reloads via `adventure_state`. The current posture drives live mechanical overlays:
+- **Offensive:** +5 flat to attack rolls (labeled in pre-roll Bonuses row, post-roll breakdown, and `formula.bonuses`) and +5 flat to damage rolls (labeled in pre-roll Damage bonuses row and post-roll damage-result breakdown via `atkComputeDamage` / `atkDamageParts`).
+- **Defensive:** +5 flat to wound checks (labeled in WC modal pre-roll Bonuses row and post-roll breakdown via `formula.bonus_sources`) and +5 to the sheet's TN-to-be-hit display (with a tooltip explaining the bump).
+- The posture tracker itself shows an "Active bonuses:" summary line beneath the current-posture line.
 
-The "Clear bonuses" button clears all posture-accumulated bonuses AND clears the action dice (equivalent to clicking the action-dice "Clear" button). The action-dice "Clear" button is wired to also clear posture bonuses.
+**Implementation (Phase 4 + 5):**
+- `app/routes/pages.py`: `school_abilities["mantis_posture_tracking"]` flag gates the tracker block when school is `mantis_wave_treader`.
+- `app/templates/character/sheet.html`:
+  - `trackingData()` Alpine component gains `posturePhase`, `postureHistory`, `currentPosture()`, `selectPosture(type)`, and `resetMantisRound()`. `setActionDice()` and `clearActionDice()` both call `resetMantisRound()` - those are the two end-of-round triggers per the spec. `selectPosture` / `resetMantisRound` dispatch a `mantis-posture-changed` window event so out-of-scope listeners (the TN display) stay reactive.
+  - Attack modal: `atkHitChance` / `atkAvgAttackRoll` read live posture and add +5 to the probability flat. `rollAttack` snapshots the posture at attack-roll time into `formula.flat`, `formula.bonus_sources`, and `formula.bonuses`. `atkComputeDamage` reads live posture and pushes `"+5 flat from offensive posture"` into `parts` + adds 5 to `flat`. Pre-roll Bonuses / Damage bonuses rows overlay the label live.
+  - WC modal: `wcProbRow` reads live posture and adds +5 to the probability flat. `rollWoundCheck` snapshots the posture into `formula.flat` and appends `"+5 from defensive posture"` to `formula.bonus_sources`. Pre-roll Bonuses row overlays the label live.
+  - TN display (top derived stats): now has its own `x-data` with a `mantis-posture-changed.window` listener; bumps the displayed value by 5 and shows a "+5 defensive posture" label with a tooltip when defensive.
+- Storage: `adventure_state.mantis_posture_phase` and `adventure_state.mantis_posture_history`. No schema change.
 
-**Implementation:** TBD - see MantisWaveTreaderImplementationPlan.md.
+**Unit tests:** `tests/test_routes.py::TestMantisPostureTracking` (flag present on Mantis / absent on non-Mantis, tracker markup renders / does not render, state roundtrips through `POST /track`, state rehydrates from `adventure_state` on reload, posture bonus summary block is present, TN display has the Alpine overlay wiring).
 
-**Unit tests:** TBD.
-**Clicktests:** TBD.
+**Clicktests:** `tests/e2e/test_school_abilities.py` -
+- Phase 4 (tracker UI): `test_mantis_posture_tracker_visibility`, `test_mantis_posture_tracker_absent_on_non_mantis`, `test_mantis_posture_tracker_advance`, `test_mantis_posture_tracker_disable_at_11`, `test_mantis_posture_tracker_reset_on_initiative`, `test_mantis_posture_tracker_reset_on_action_dice_clear`.
+- Phase 5 (posture bonuses): `test_mantis_posture_tracker_bonus_summary_offensive`, `test_mantis_posture_tracker_bonus_summary_defensive`, `test_mantis_posture_tracker_bonus_summary_toggles`, `test_mantis_offensive_posture_attack_pre_roll_bonuses`, `test_mantis_offensive_posture_attack_post_roll_breakdown`, `test_mantis_offensive_posture_damage_preview_and_result`, `test_mantis_defensive_posture_tn_display_bumps`, `test_mantis_defensive_posture_wc_modal_overlay`, `test_mantis_no_posture_no_overlay`.
 
 ---
 

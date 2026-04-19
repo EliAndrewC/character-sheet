@@ -108,6 +108,23 @@ def test_homepage_headshot_placeholder_fits_card_at_phone_width(page, live_serve
     _assert_no_horizontal_overflow(page)
 
 
+def test_sheet_no_horizontal_overflow_across_widths(page, live_server_url):
+    """View Sheet must not overflow horizontally at phone, tablet, or
+    desktop widths. The Phase 6 art/school grid was the trigger for
+    adding this test - it ensures the lg:grid doesn't blow past the
+    viewport on narrow screens."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "SheetWidths")
+    for viewport in (
+        {"width": 375, "height": 667},     # phone
+        {"width": 768, "height": 1024},    # tablet
+        {"width": 1280, "height": 720},    # desktop
+    ):
+        page.set_viewport_size(viewport)
+        page.goto(sheet_url)
+        page.wait_for_load_state("networkidle")
+        _assert_no_horizontal_overflow(page)
+
+
 # ---------------------------------------------------------------------------
 # Nav hamburger toggle
 # ---------------------------------------------------------------------------

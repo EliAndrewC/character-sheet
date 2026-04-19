@@ -158,22 +158,43 @@ Approach: **OpenCV Haar cascades** running locally on CPU.
 
 **Goal:** the multi-step wizard that produces a Gemini prompt. No real Gemini call yet - the final step just shows the assembled prompt.
 
-1. Route: `GET /characters/{id}/art/generate` - step 1, gender selection (radio: Male / Female; controls the pronoun).
-2. Route: `GET /characters/{id}/art/generate/options` - step 2, mad-libs form (Alpine-driven, no HTMX):
-   - Clan selector (dropdown) listing every key of `CLAN_COLORS`. **Defaults to Wasp regardless of the character's school.** Reason: this is the Wasp campaign, and a Wasp-clan character often trained at a school belonging to another clan (they started elsewhere and became Wasp). Auto-selecting clan from the character's school would be wrong more often than right, so the default is always Wasp and the user can change it. Selecting a clan fills the color clause in the prefix from the `CLAN_COLORS` map.
-   - Mandatory age checkbox (pre-checked, cannot be unchecked), numeric input min=15 max=55, **default 20**.
-   - Optional "is holding" text input.
-   - Optional "expression" text input.
-   - Optional "armor/kimono" dropdown + free-text modifier.
-   - Fixed prefix: `"A portrait of a {clan} clan noble. {He/She} is wearing {clan_colors}."` - `{clan}` and `{clan_colors}` are driven by the clan selector above via the `CLAN_COLORS` map.
-   - Fixed suffix: the "Make a colored, photo-realistic..." block from the user's instructions.
-   - For female characters we always append "completely unstyled hair and no makeup" to the suffix. This is not user-editable to avoid regenerating the geisha problem by accident.
-3. Route: `POST /characters/{id}/art/generate/assemble` - takes the form, produces the final prompt, stores it in the staging slot, redirects to step 3.
-4. Route: `GET /characters/{id}/art/generate/review` - step 3, textarea pre-filled with the assembled prompt + "Generate Art" button + a "Back" button. Textarea editable.
-5. Route: `POST /characters/{id}/art/generate/submit` - kicks off the generation job (Phase 8) and redirects to the generation-progress page.
-6. Clicktests: Appendix A items 19-27. The test stub (Phase 8) must be in place to exercise step 4+, but step 1-3 can be tested without any real API.
+### UI flow (per Eli's spec)
 
-**Clan colors map.** Add a `CLAN_COLORS` dict to `app/game_data.py`:
+**Step 1: gender.** Radio buttons Male / Female. "Continue" navigates to step 2. The gender choice drives all the `He` / `She` substitutions on the next page.
+
+**Step 2: mad-libs layout.** The whole prompt is *laid out* on the page. The top and bottom are **fixed, non-editable text blocks**; the middle is a stack of checkbox rows where ticking a checkbox adds that sentence to the prompt.
+
+Clan selector: a dropdown of every `CLAN_COLORS` key sits above the fixed prefix. Defaults to **Wasp** (this is the Wasp campaign, and a Wasp-clan character often trained at another clan's school, so auto-detecting from the character's school would be wrong more often than right). The prefix text reflects the current selection live via Alpine.
+
+Fixed prefix (non-editable display text):
+> **A portrait of a {clan} clan noble wearing {clan_colors}.**
+
+Middle rows (each is a checkbox + template sentence):
+- **`[x]` {He/She} is approximately `<age>` years old.** Mandatory. The checkbox is pre-checked and disabled so it can't be unchecked. The age input is a number field, **min 15, max 55, default 20**.
+- **`[ ]` {He/She} is holding `<text>`.** Optional. The text input is disabled when the checkbox is unchecked; when checked, the input is enabled and **required** (the form won't submit with an empty holding text).
+- **`[ ]` {He/She} has a `<text>` expression.** Same required-when-checked rule as above.
+- **`[ ]` {He/She} `<dropdown>` `<optional text>`.** The dropdown has exactly **two** choices: `"is not wearing armor and has on a kimono"` and `"is wearing samurai armor"`. The trailing text is a free-form modifier that may be left blank (e.g. "ornate", "muted").
+
+Fixed suffix (non-editable display text):
+> **Make a colored, photo-realistic portrait painting in the style of a traditional Japanese period portrait. Natural lighting, neutral background, full face visible. No text, no watermark, no signature.**
+
+For **female** characters, the assembled prompt always appends the fixed sentence **"Completely unstyled hair and no makeup."** after the suffix. This is not surfaced in the UI - it's enforced server-side - because exposing it as a toggle invites the "geisha problem" where the model over-stylises female faces with heavy makeup and styled hair.
+
+"Create Prompt" button at the bottom of the page submits the form.
+
+**Step 3: review + generate.** Single view with the assembled prompt in an editable `<textarea>` plus a "Generate Art" button. Clicking Generate Art locks the textarea (`:disabled` via Alpine) while Phase 8's job runs; on success the generated image appears **in the same view** alongside a Cropper.js widget and a "Save" button. On failure the textarea unlocks so the user can tweak the prompt and retry. (See Phase 8 for the generation + in-place crop wiring.)
+
+### Routes
+
+1. `GET  /characters/{id}/art/generate`                            - step 1 (gender radio)
+2. `GET  /characters/{id}/art/generate/options?gender=…`           - step 2 (mad-libs)
+3. `POST /characters/{id}/art/generate/assemble`                   - step 2 → step 3; builds prompt, stages it, redirects
+4. `GET  /characters/{id}/art/generate/review/{staging_id}`        - step 3 (textarea + generate)
+5. `POST /characters/{id}/art/generate/submit/{staging_id}`        - kicks off the Phase 8 job (501 stub in Phase 7)
+
+### Clan colors map
+
+Add a `CLAN_COLORS` dict to `app/game_data.py`:
 
 ```python
 CLAN_COLORS = {
@@ -195,7 +216,11 @@ CLAN_COLORS = {
 
 Order in the dropdown matches the order of this dict. The selector default is `'Wasp'`.
 
-**Access:** any user with edit access on a character can open the "Generate with AI" flow for that character. There is no admin-only gate (the rate limit in Phase 8 is the cost-control mechanism).
+### Access + tests
+
+**Access:** any user with edit access on a character can open the "Generate with AI" flow. There is no admin-only gate (the rate limit in Phase 8 is the cost-control mechanism).
+
+**Clicktests:** Appendix A items 19-27. The test stub (Phase 8) must be in place to exercise step 4+, but steps 1-3 can be tested without any real API.
 
 ---
 
@@ -208,9 +233,11 @@ Order in the dropdown matches the order of this dict. The selector default is `'
    - Timeout, retry-once on 5xx/429, typed exceptions `ImageGenerationError` / `ImageRateLimitError` / `ImageTransportError`.
    - Returns raw PNG bytes; we pipe them through `validate_upload` (same validator as uploads) so generated images inherit the same ratio/size checks.
 2. Add an async job registry similar to `import_jobs.py` (can be a trimmed-down copy, or extract a small shared helper - my lean is to copy rather than abstract, since jobs-for-art and jobs-for-import have different payloads).
-3. Kickoff route from Phase 7 step 5 creates a job, returns the job ID, redirects to `GET /characters/{id}/art/generate/progress/{job_id}`.
-4. Progress page polls `/characters/{id}/art/generate/status/{job_id}` every 1.5 s. On success it redirects to the crop page (reusing Phase 4's Cropper.js view, with a bit of adjusted copy because the user may also want to re-generate rather than save).
-5. On failure the progress page shows the error and a "Try again" link that goes back to step 3 with the prompt preserved.
+3. **Same-page generation + crop flow** (per Eli's spec): the review page stays on screen during generation. The "Generate Art" submit locks the `<textarea>` via Alpine, kicks off the job, and begins polling `/art/generate/status/{job_id}` every ~1.5 s.
+   - While the job is running: textarea is disabled, a "Generating..." indicator is shown next to the button, the Generate button is disabled.
+   - On success: the page loads the generated image into a Cropper.js widget **in the same view**. A "Save Headshot" button (reusing Phase 4's crop-save endpoint semantics) commits the crop and writes to the Character row.
+   - On failure: the textarea unlocks, an error banner appears with the error code (rate-limit / transport / API / invalid), and the Generate button re-enables so the user can tweak and retry. The staged prompt is preserved across retries.
+4. The crop endpoint that the "Save Headshot" button hits is `POST /characters/{id}/art/crop/{staging_id}` (the same one Phase 4 already has). The Phase 8 worker fills the bytes into the same staging slot via `update_staged_bytes`, so the crop flow never sees whether the bytes came from an upload or a generation.
 6. Test stub: `ART_GEN_USE_TEST_STUB=1` env var. When set, `art_generate.py` skips the HTTP call and returns one of three canned images from `tests/import_fixtures/art/stub_outputs/` based on keywords in the prompt ("wasp" -> black-and-gold, "scorpion" -> red-and-black, fallback -> neutral portrait). E2E conftest sets this env var in the uvicorn subprocess the same way it sets `IMPORT_USE_TEST_STUB`.
 7. Rate limit: **25 generations per user per 24 hours** (same counting method as the importer's rate limiter, tuned higher per Eli's direction). Implemented in a thin wrapper that counts recent `art_source="generated"` updates per user. Kill switch: `ART_GEN_ENABLED` env var.
 8. Unit tests:
