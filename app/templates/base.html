@@ -219,6 +219,7 @@
                         absolute sm:static top-full right-0 bg-ink sm:bg-transparent
                         p-4 sm:p-0 rounded-b-lg sm:rounded-none shadow-lg sm:shadow-none z-50 min-w-[160px]">
                 {% if request.state.user %}
+                {% if import_enabled() %}
                 <div class="relative w-full sm:w-auto"
                      x-data="{ newCharOpen: false }"
                      @click.outside="newCharOpen = false"
@@ -254,6 +255,15 @@
                         </a>
                     </div>
                 </div>
+                {% else %}
+                <form method="POST" action="/characters" class="w-full sm:w-auto">
+                    <button type="submit"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors w-full sm:w-auto"
+                            data-testid="new-character-button">
+                        New Character
+                    </button>
+                </form>
+                {% endif %}
                 <a href="/profile"
                    class="text-sm text-parchment/70 hover:text-parchment transition-colors">
                     {{ request.state.user.display_name }}

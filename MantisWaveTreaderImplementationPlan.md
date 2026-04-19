@@ -4,6 +4,8 @@ This is the phased implementation plan for the new Mantis Wave-Treader bushi sch
 
 The school is unusually UI-heavy because it centres on per-phase posture selection. To keep reviewable diffs small, the work is broken into the phases below. The phases exist to make the work easier to review and validate incrementally - they are not a commit plan. The user handles all git operations (commits, pushes, deploys) and decides when those happen. Claude should not commit or push between phases unless explicitly asked. A likely flow is that the user commits and pushes between phases, but that's the user's call. Each phase should still land with unit tests, a `COVERAGE.md` entry, and clicktests for any frontend changes, per the workflow in `CLAUDE.md`.
 
+**Clicktest scope during this effort:** run only the targeted clicktests for the phase being worked on - the specific new tests added in that phase plus any directly related existing tests (e.g. the school-selection suite for Phase 1, the `school_abilities` mark for later phases). Do NOT run the full e2e suite between phases. The full suite is deferred until Phase 11 (post-deploy), per `CLAUDE.md` step 8.
+
 ---
 
 ## Phase 1 - School definition, "Any" ring, and listing

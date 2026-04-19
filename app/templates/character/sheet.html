@@ -80,7 +80,7 @@
         {% if school %}
         <div class="mb-4">
             <p class="text-sm font-medium">Special Ability:</p>
-            <p class="text-sm bg-parchment rounded p-2 italic mt-1">{{ school.special_ability }}</p>
+            <p class="text-sm bg-parchment rounded p-2 italic mt-1">{{ school_special_ability_html(school) }}</p>
         </div>
 
         <!-- Techniques - bold if attained, grayed if not -->
@@ -1017,6 +1017,13 @@
                     <span class="text-sm font-medium">{{ ability.name }}</span>
                     <div class="flex items-center gap-2">
                         {% if viewer_can_edit %}
+                        {% if ability.per_day %}
+                        <button @click="resetAbility('{{ ability.id }}')"
+                                :disabled="getCount('{{ ability.id }}') <= 0"
+                                data-action="reset-ability-{{ ability.id }}"
+                                title="This pool resets each day"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded disabled:opacity-30">Reset</button>
+                        {% endif %}
                         <button @click="setCount('{{ ability.id }}', Math.min({{ ability.max }}, getCount('{{ ability.id }}') + 1))"
                                 :disabled="getCount('{{ ability.id }}') >= {{ ability.max }}"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
@@ -1027,13 +1034,6 @@
                         <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
                                 :disabled="getCount('{{ ability.id }}') <= 0"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
-                        {% if ability.per_day %}
-                        <button @click="resetAbility('{{ ability.id }}')"
-                                :disabled="getCount('{{ ability.id }}') <= 0"
-                                data-action="reset-ability-{{ ability.id }}"
-                                title="This pool resets each day"
-                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded disabled:opacity-30">Reset</button>
-                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -2391,6 +2391,13 @@
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
                         <span class="font-medium">Bonuses:</span>
                         <span x-text="atkFormula?.bonus_sources?.join(', ')"></span>
+                    </div>
+
+                    {# Damage-side bonuses (Courtier +Air, Mantis 2nd Dan +5, etc.) #}
+                    <div x-show="atkFormula?.damage_bonus_sources?.length > 0" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        <span class="font-medium">Damage bonuses:</span>
+                        <span x-text="atkFormula?.damage_bonus_sources?.join(', ')"></span>
                     </div>
 
                     {# Isawa Duelist 3rd Dan: note that TN trade is assumed in probabilities #}
@@ -5963,12 +5970,22 @@
                 } else if (failedParry) {
                     parts.push(`-${parrySkill}k0 from failed parry`);
                 }
+                let residualFlat = flat;
                 if (f.hiruma_parry_bonus) {
                     parts.push(`+${f.hiruma_parry_bonus} from Hiruma post-parry bonus`);
-                    const otherFlat = flat - f.hiruma_parry_bonus;
-                    if (otherFlat > 0) parts.push(`+${otherFlat} flat bonus`);
-                } else if (flat > 0) {
-                    parts.push(`+${flat} flat bonus`);
+                    residualFlat -= f.hiruma_parry_bonus;
+                }
+                // Mantis Wave-Treader 2nd Dan free raise on damage shows as an
+                // explicit labeled line; damage_bonus_sources carries the label
+                // as "+5 from 2nd Dan (damage)".
+                const has2ndDanDamage = (f.damage_bonus_sources || [])
+                    .some(s => typeof s === 'string' && s.includes('2nd Dan'));
+                if (has2ndDanDamage) {
+                    parts.push('+5 flat from 2nd Dan');
+                    residualFlat -= 5;
+                }
+                if (residualFlat > 0) {
+                    parts.push(`+${residualFlat} flat bonus`);
                 }
 
                 // Ikoma 4th Dan: 10-dice floor on unparried damage without extra kept dice
