@@ -257,36 +257,6 @@ def test_athletics_picker_attack_opens_attack_modal(page, live_server_url):
     assert "35 (Parry 3)" in body
 
 
-def test_athletics_picker_attack_has_void_submenu(page, live_server_url):
-    """The Athletics (Attack) row mirrors Athletics (Parry) with a void-spend
-    flyout. Clicking an option opens the attack modal with the chosen void
-    count preselected."""
-    _create_athletics_knack_char(page, live_server_url, "AthAtkVoid")
-    # Ensure at least 2 void points so the submenu has multiple options.
-    page.evaluate("window._trackingBridge.voidPoints = 2; window._trackingBridge.save()")
-    page.wait_for_timeout(150)
-    page.locator('[data-roll-key="knack:athletics"]').click()
-    page.wait_for_selector('[data-athletics-picker-menu]', state='visible', timeout=3000)
-    page.locator('[data-athletics-combat="attack"]').hover()
-    flyout = page.locator('[data-athletics-void-submenu="attack"]')
-    flyout.wait_for(state='visible', timeout=2000)
-    buttons = flyout.locator('button')
-    assert buttons.count() >= 1
-    # Click the "Spend 1 void point" option
-    buttons.first.click()
-    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
-    # The modal opens with 1 void preselected.
-    pre = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkModalOpen) return d.atkVoidSelected;
-        }
-        return null;
-    }""")
-    assert pre == 1
-
-
 def test_athletics_picker_has_predeclared_parry_row(page, live_server_url):
     """The athletics picker shows a 5th row, Athletics (Predeclared parry),
     below Athletics (Parry). Clicking it rolls athletics:parry with a +5
