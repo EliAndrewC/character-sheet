@@ -4,24 +4,45 @@
 
 {% macro character_card(char) %}
     {% set status = char.publish_status %}
+    {% set hs_url = headshot_url(char) %}
     <a href="/characters/{{ char.id }}"
        class="block rounded-lg shadow hover:shadow-md transition-shadow p-5
               {% if status == 'unpublished' %}bg-amber-50 border-2 border-amber-300 border-dashed
               {% elif status == 'modified' %}bg-white border-2 border-blue-300
               {% else %}bg-white border border-ink/10{% endif %}">
-        <div class="flex items-center justify-between">
-            <h2 class="text-lg font-bold text-accent">{{ char.name }}</h2>
-            {% if status == 'unpublished' %}
-            <span class="text-xs font-medium bg-amber-200 text-amber-800 px-2 py-0.5 rounded">Draft</span>
-            {% elif status == 'modified' %}
-            <span class="text-xs font-medium bg-blue-200 text-blue-800 px-2 py-0.5 rounded">Draft changes</span>
+        <div class="flex gap-3">
+            {% if hs_url %}
+            <img src="{{ hs_url }}" alt="" aria-hidden="true"
+                 class="rounded-md object-cover flex-shrink-0 bg-ink/5"
+                 style="width: 60px; height: 80px;"
+                 data-testid="character-headshot">
+            {% else %}
+            <div class="rounded-md flex-shrink-0 bg-ink/10 flex items-center justify-center text-ink/30"
+                 style="width: 60px; height: 80px;"
+                 data-testid="character-headshot-placeholder"
+                 aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 9a3 3 0 100-6 3 3 0 000 6z"/>
+                    <path d="M3.5 17a6.5 6.5 0 0113 0H3.5z"/>
+                </svg>
+            </div>
             {% endif %}
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="text-lg font-bold text-accent truncate">{{ char.name }}</h2>
+                    {% if status == 'unpublished' %}
+                    <span class="text-xs font-medium bg-amber-200 text-amber-800 px-2 py-0.5 rounded flex-shrink-0">Draft</span>
+                    {% elif status == 'modified' %}
+                    <span class="text-xs font-medium bg-blue-200 text-blue-800 px-2 py-0.5 rounded flex-shrink-0">Draft changes</span>
+                    {% endif %}
+                </div>
+                {% set owner_display = owner_names.get(char.owner_discord_id, char.player_name) %}
+                {% if owner_display %}
+                <p class="text-sm text-ink/60 truncate">Player: {{ owner_display }}</p>
+                {% endif %}
+                <p class="text-sm mt-1 truncate">{{ char.school.replace('_', ' ').title() }}</p>
+            </div>
         </div>
-        {% set owner_display = owner_names.get(char.owner_discord_id, char.player_name) %}
-        {% if owner_display %}
-        <p class="text-sm text-ink/60">Player: {{ owner_display }}</p>
-        {% endif %}
-        <p class="text-sm mt-1">{{ char.school.replace('_', ' ').title() }}</p>
     </a>
 {% endmacro %}
 

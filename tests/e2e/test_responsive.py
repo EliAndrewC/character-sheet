@@ -83,6 +83,31 @@ def test_homepage_no_horizontal_overflow(page, live_server_url):
     _assert_no_horizontal_overflow(page)
 
 
+def test_homepage_headshot_placeholder_fits_card_at_phone_width(page, live_server_url):
+    """The headshot placeholder next to each character name must be the
+    documented 60x80 px and must not push the card text off-screen on a
+    375 px phone."""
+    # Need at least one character for the list to render any card.
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Placeholder Card")
+    select_school(page, "akodo_bushi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.goto(live_server_url)
+    page.set_viewport_size(PHONE)
+
+    placeholder = page.locator('[data-testid="character-headshot-placeholder"]').first
+    placeholder.wait_for()
+    box = placeholder.bounding_box()
+    assert box is not None
+    # Documented 60x80 (3:4 portrait) - allow a couple of px for Tailwind
+    # rounding, never a zero-width collapse.
+    assert 58 <= box["width"] <= 62, f"headshot width {box['width']} px"
+    assert 78 <= box["height"] <= 82, f"headshot height {box['height']} px"
+    _assert_no_horizontal_overflow(page)
+
+
 # ---------------------------------------------------------------------------
 # Nav hamburger toggle
 # ---------------------------------------------------------------------------
