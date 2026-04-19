@@ -139,4 +139,17 @@
 
 ## Test References
 
-To be populated as the phases land.
+Each section above lists its concrete unit + clicktest references inline. A bird's-eye summary:
+
+- **Unit tests:**
+  - `tests/test_game_data.py` - school registration, `SCHOOL_RING_OPTIONS["mantis_wave_treader"]`, bushi categorization, school knack validation (Phase 1).
+  - `tests/test_dice.py::TestMantisWaveTreader1stDan` - 1st Dan extra die on initiative / athletics / wound check (Phase 2).
+  - `tests/test_dice.py::TestMantisWaveTreader2ndDan`, `TestMantis2ndDanEligibleChoices` - 2nd Dan flexible free raise (Phase 3).
+  - `tests/test_dice.py::TestMantisWaveTreader4thDanAthleticsDie` - 4th Dan deterministic bonus-die flag in `build_initiative_formula` (Phase 10).
+  - `tests/test_xp.py::TestMantisFourthDanRingRaise` - 4th Dan ring-raise discount + auto-raise across all five ring choices (Phase 10).
+  - `tests/test_routes.py::TestMantisPostureTracking` - server-side flag gating and markup wiring for `mantis_posture_tracking`, `mantis_posture_accumulation`, `mantis_3rd_dan_offensive`, `mantis_3rd_dan_defensive`, plus adventure_state roundtrips (Phases 4-8).
+  - `tests/test_editor_controls.py` - editor-side Mantis defaults (Void auto-raise, school-ring Any picker) (Phase 1).
+
+- **Clicktests:** everything under `@pytest.mark.school_abilities` in `tests/e2e/test_school_abilities.py` named `test_mantis_*` covers Phases 1-10 end-to-end. The companion `tests/e2e/COVERAGE.md` has one checkbox per interactive behaviour with the test-function reference.
+
+- **Pytest marks:** the Mantis suite is consolidated under the `school_abilities` mark. Run `pytest tests/e2e/ -m school_abilities --browser chromium` to exercise just the Mantis clicktests (~4 minutes at the time of Phase 10 completion).
