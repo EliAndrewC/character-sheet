@@ -524,6 +524,9 @@
                         if (a.type === 'counter' && this.getCount(a.id) > 0) return true;
                         if (a.type === 'toggle' && this.getToggle(a.id)) return true;
                     }
+                    // Leftover action dice from a prior combat round also
+                    // count as clearable state.
+                    if ((this.actionDice || []).length > 0) return true;
                     return false;
                 },
 
@@ -537,6 +540,10 @@
                             if (this.getToggle(a.id)) items.push('Regain ' + a.name);
                         }
                     }
+                    const nAD = (this.actionDice || []).length;
+                    if (nAD > 0) {
+                        items.push('Clear ' + nAD + ' action die' + (nAD > 1 ? 'ce' : ''));
+                    }
                     return items;
                 },
 
@@ -545,6 +552,9 @@
                         if (a.type === 'counter') this.adventureState[a.id + '_used'] = 0;
                         if (a.type === 'toggle') this.adventureState[a.id] = false;
                     }
+                    // Wipe any leftover action dice from a prior combat round.
+                    this.actionDice = [];
+                    this.actionMenuOpen = null;
                     // Clear all combat-session bonuses
                     this.akodoBankedBonuses = [];
                     this.bayushiBankedFeintRaise = 0;
@@ -1788,36 +1798,19 @@
                             </div>
                         </div>
                     </template>
-                    {# Athletics (Attack/Parry): rules p05 §Athletics — may be used to attack or parry. #}
+                    {# Athletics (Attack/Parry): rules p05 §Athletics — may be used to attack or parry.
+                       The attack modal has its own void selector shown next
+                       to the probability chart, so this row skips the void
+                       flyout - the player picks void after seeing the odds. #}
                     <template x-if="formulas['athletics:attack']">
-                        <div class="relative border-t border-ink/10"
-                             @mouseenter="athHoverRow = 'attack'"
-                             @mouseleave="athHoverRow = null">
+                        <div class="relative border-t border-ink/10">
                             <button type="button"
                                     data-athletics-combat="attack"
                                     @click="rollMenuOpen = false; openAttackModal('athletics:attack')"
-                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
-                                <span>Athletics (Attack)
-                                    <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:attack']?.rolled || 0) + 'k' + (formulas['athletics:attack']?.kept || 0) + ')'"></span>
-                                </span>
-                                <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
+                                Athletics (Attack)
+                                <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:attack']?.rolled || 0) + 'k' + (formulas['athletics:attack']?.kept || 0) + ')'"></span>
                             </button>
-                            {# Void-spend flyout mirroring the parry row below.
-                               Clicking an option opens the attack modal with the
-                               chosen void count preselected; the user can still
-                               adjust it (or the TN) before rolling. #}
-                            <div x-show="athHoverRow === 'attack' && rollMenuOptions.length > 0"
-                                 x-cloak
-                                 data-athletics-void-submenu="attack"
-                                 class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
-                                <template x-for="opt in rollMenuOptions" :key="'athatk'+opt.count">
-                                    <button type="button"
-                                            @click="rollMenuOpen = false; openAttackModal('athletics:attack', opt.count)"
-                                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
-                                        <span x-text="opt.label"></span>
-                                    </button>
-                                </template>
-                            </div>
                         </div>
                     </template>
                     <template x-if="formulas['athletics:parry']">
@@ -4000,9 +3993,11 @@
                     </div>
 
                     {# Togashi 4th Dan: reroll contested roll (once per roll, commits).
-                       Hidden on rolls that are never contested (initiative,
-                       etiquette, heraldry, and damage rolls like Dragon Tattoo). #}
-                    <div x-show="phase === 'done' && schoolAbilities.togashi_reroll_contested && !luckyUsedThisRoll && !togashiRerollUsed && !formula?.is_initiative && !formula?.is_damage_roll && currentRollKey !== 'skill:etiquette' && currentRollKey !== 'skill:heraldry'" x-cloak
+                       Hidden on rolls that are never contested: initiative,
+                       etiquette, heraldry, damage rolls (e.g. Dragon Tattoo),
+                       and parry rolls (parry raises the attacker's TN rather
+                       than being contested against an opponent's roll). #}
+                    <div x-show="phase === 'done' && schoolAbilities.togashi_reroll_contested && !luckyUsedThisRoll && !togashiRerollUsed && !formula?.is_initiative && !formula?.is_damage_roll && currentRollKey !== 'skill:etiquette' && currentRollKey !== 'skill:heraldry' && currentRollKey !== 'parry' && currentRollKey !== 'athletics:parry'" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <button type="button"
                                 @click="togashiOrigTotal = baseTotal; togashiRerollUsed = true; runRoll()"
@@ -6025,19 +6020,13 @@
 
             // --- Attack Modal ---
 
-            openAttackModal(key, preselectedVoid = 0) {
+            openAttackModal(key) {
                 const f = this.formulas[key];
                 if (!f) return;
                 this.atkKey = key;
                 this.atkFormula = f;
                 this.atkPhase = 'pre';
-                // Callers (e.g. the athletics picker's void-spend submenu)
-                // may preselect a void count so the modal opens with that
-                // count already chosen; the user can still adjust inside.
-                const cap = this.voidSpendConfig.cap || 0;
-                const options = this.computeVoidOptions();
-                const maxSelectable = Math.min(options.length, cap);
-                this.atkVoidSelected = Math.max(0, Math.min(preselectedVoid, maxSelectable));
+                this.atkVoidSelected = 0;
                 this.atkRaisesSpent = 0;
                 this.atkConvictionSpent = 0;
                 // The togashi daily-athletics-raise pool is spendable on
