@@ -2,49 +2,227 @@
 
 {% block title %}L7R - Review Prompt - {{ character.name }}{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet"
+      href="/static/vendor/cropperjs/cropper.min.css?v={{ static_v('vendor/cropperjs/cropper.min.css') }}">
+<style>
+  .cropper-container { max-width: 100%; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-2xl mx-auto"
-     x-data="{ generating: false }"
+     x-data="artReview('{{ character.id }}', '{{ staging_id }}')"
+     x-init="init()"
      data-testid="art-gen-review-page">
     <div class="flex items-center gap-3 mb-6">
         <a href="/characters/{{ character.id }}/art/generate"
-           class="text-ink/60 hover:text-ink text-sm">&larr; Start over</a>
+           class="text-ink/60 hover:text-ink text-sm"
+           :class="{ 'opacity-40 pointer-events-none': state === 'generating' }">
+            &larr; Start over
+        </a>
     </div>
     <h1 class="text-3xl font-bold mb-2">Review the Prompt</h1>
     <p class="text-ink/70 mb-6">
         Step 3 of 3. Edit the prompt below if you'd like to tweak the
-        wording, then click Generate Art.
+        wording, then click Generate Art. Once the image appears, drag
+        the crop box over the subject's face and click Save.
     </p>
 
-    <form method="POST"
-          action="/characters/{{ character.id }}/art/generate/submit/{{ staging_id }}"
-          class="space-y-4 bg-white rounded-lg shadow p-6 border border-ink/10"
-          @submit="generating = true"
-          data-testid="art-gen-review-form">
-        <label for="prompt" class="block text-sm font-medium">
-            Final prompt
-        </label>
-        <textarea id="prompt" name="prompt"
+    {# Error banner (shown when state == 'failed') #}
+    <template x-if="state === 'failed'">
+        <div class="bg-red-50 border border-red-300 text-red-900 rounded px-4 py-3 mb-4"
+             data-testid="art-gen-error">
+            <strong>Generation failed:</strong>
+            <span x-text="errorMessage"></span>
+        </div>
+    </template>
+
+    <form class="space-y-4 bg-white rounded-lg shadow p-6 border border-ink/10"
+          data-testid="art-gen-review-form"
+          @submit.prevent="generate">
+        <label for="prompt" class="block text-sm font-medium">Final prompt</label>
+        <textarea id="prompt"
                   rows="10"
                   required
-                  :disabled="generating"
+                  :disabled="state === 'generating'"
+                  x-model="prompt"
                   class="w-full border border-ink/20 rounded p-3 bg-parchment font-mono text-sm disabled:bg-ink/5 disabled:text-ink/40"
                   data-testid="prompt-textarea">{{ prompt_text }}</textarea>
 
-        <div class="flex gap-3">
-            <a href="/characters/{{ character.id }}/art/generate"
-               class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-2 rounded font-medium"
-               :class="{ 'opacity-40 pointer-events-none': generating }">
-                Back
-            </a>
+        <div class="flex gap-3 items-center">
             <button type="submit"
-                    :disabled="generating"
+                    :disabled="state === 'generating'"
                     class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded font-medium disabled:opacity-40"
                     data-action="generate-art">
-                <span x-show="!generating">Generate Art</span>
-                <span x-show="generating" x-cloak>Generating&hellip;</span>
+                <span x-show="state !== 'failed'"
+                      x-text="state === 'generating' ? 'Generating…' : 'Generate Art'"></span>
+                <span x-show="state === 'failed'">Try Again</span>
             </button>
+            <span x-show="state === 'generating'" x-cloak
+                  class="text-sm text-ink/60"
+                  data-testid="art-gen-status"
+                  x-text="stage"></span>
         </div>
     </form>
+
+    {# Crop + save widget, shown only after a successful generation. #}
+    <div x-show="state === 'succeeded'"
+         x-cloak
+         class="mt-6 space-y-4"
+         data-testid="art-gen-crop-section">
+        <div class="bg-white rounded-lg shadow p-4 border border-ink/10">
+            <p class="text-sm text-ink/70 mb-3">
+                Drag the crop box to pick the headshot. The aspect
+                ratio is locked to 3:4 portrait.
+            </p>
+            <img id="art-gen-crop-target"
+                 x-bind:src="imageUrl"
+                 alt="Generated art"
+                 style="max-width: 100%; display: block;">
+        </div>
+
+        <form method="POST"
+              :action="saveUrl"
+              class="flex gap-3"
+              data-testid="art-gen-save-form">
+            <input type="hidden" name="x" :value="Math.round(box.x)">
+            <input type="hidden" name="y" :value="Math.round(box.y)">
+            <input type="hidden" name="w" :value="Math.round(box.w)">
+            <input type="hidden" name="h" :value="Math.round(box.h)">
+            <button type="submit"
+                    class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded font-medium"
+                    data-action="save-headshot">
+                Save Headshot
+            </button>
+        </form>
+    </div>
 </div>
+
+<script src="/static/vendor/cropperjs/cropper.min.js?v={{ static_v('vendor/cropperjs/cropper.min.js') }}"></script>
+<script>
+function artReview(charId, stagingId) {
+  return {
+    charId: charId,
+    stagingId: stagingId,
+    prompt: '',           // Populated from textarea via x-model
+    state: 'idle',        // 'idle' | 'generating' | 'succeeded' | 'failed'
+    stage: '',
+    errorMessage: '',
+    imageUrl: '',
+    saveUrl: '',
+    aspectRatio: 0.75,
+    box: { x: 0, y: 0, w: 0, h: 0 },
+    cropper: null,
+    _pollTimer: null,
+
+    init() {
+      // x-model doesn't seed from the textarea's initial text content;
+      // pick it up manually so the prompt is submittable as-is.
+      this.prompt = document.getElementById('prompt').value;
+    },
+
+    async generate() {
+      this.state = 'generating';
+      this.stage = 'Submitting…';
+      this.errorMessage = '';
+      try {
+        const fd = new FormData();
+        fd.append('prompt', this.prompt);
+        const url = `/characters/${this.charId}/art/generate/submit/${this.stagingId}`;
+        const resp = await fetch(url, { method: 'POST', body: fd });
+        if (!resp.ok) {
+          let body = {};
+          try { body = await resp.json(); } catch (e) {}
+          this.state = 'failed';
+          this.errorMessage = body.error_message ||
+            `Server returned ${resp.status}.`;
+          return;
+        }
+        this.stage = 'Calling Imagen…';
+        this._startPolling();
+      } catch (err) {
+        this.state = 'failed';
+        this.errorMessage = `Network error: ${err}`;
+      }
+    },
+
+    _startPolling() {
+      const tick = async () => {
+        try {
+          const url =
+            `/characters/${this.charId}/art/generate/status/${this.stagingId}`;
+          const resp = await fetch(url);
+          if (!resp.ok) {
+            this.state = 'failed';
+            this.errorMessage = `Status check failed (${resp.status}).`;
+            return;
+          }
+          const body = await resp.json();
+          this.stage = body.stage || this.stage;
+          if (body.state === 'succeeded') {
+            this._onSucceeded(body);
+          } else if (body.state === 'failed') {
+            this.state = 'failed';
+            this.errorMessage =
+              body.error_message || 'Generation failed.';
+          } else {
+            this._pollTimer = setTimeout(tick, 1500);
+          }
+        } catch (err) {
+          this.state = 'failed';
+          this.errorMessage = `Network error: ${err}`;
+        }
+      };
+      tick();
+    },
+
+    _onSucceeded(body) {
+      this.imageUrl = body.image_url;
+      this.saveUrl = body.save_url;
+      this.aspectRatio = body.aspect_ratio || 0.75;
+      if (body.default_bbox && body.default_bbox.length === 4) {
+        this.box = {
+          x: body.default_bbox[0],
+          y: body.default_bbox[1],
+          w: body.default_bbox[2],
+          h: body.default_bbox[3],
+        };
+      }
+      this.state = 'succeeded';
+      // Wait for <img> to exist in the DOM under x-show, then init Cropper.
+      this.$nextTick(() => this._initCropper());
+    },
+
+    _initCropper() {
+      const img = document.getElementById('art-gen-crop-target');
+      const self = this;
+      const ready = () => {
+        self.cropper = new Cropper(img, {
+          aspectRatio: self.aspectRatio,
+          viewMode: 1,
+          autoCropArea: 1,
+          background: true,
+          movable: false,
+          zoomable: false,
+          scalable: false,
+          rotatable: false,
+          data: {
+            x: self.box.x, y: self.box.y,
+            width: self.box.w, height: self.box.h,
+          },
+          crop(event) {
+            self.box.x = event.detail.x;
+            self.box.y = event.detail.y;
+            self.box.w = event.detail.width;
+            self.box.h = event.detail.height;
+          },
+        });
+      };
+      if (img.complete && img.naturalWidth > 0) ready();
+      else img.addEventListener('load', ready);
+    },
+  };
+}
+</script>
 {% endblock %}

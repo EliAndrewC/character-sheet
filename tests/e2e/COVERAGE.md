@@ -1100,12 +1100,29 @@ JS-error sanity:
       confirms the textarea is rendered with the staged prompt;
       the `disabled` binding is Alpine-driven - clicktest to add in Phase 10)
 - [ ] Step 3 textarea locks while generation is in flight; unlocks on success or failure
-- [ ] Successful generation redirects to the crop page with the generated art
-- [ ] Failed generation shows a retry link that preserves the prompt
+      (pure Alpine state machine - no unit equivalent; clicktest to add in Phase 10)
+- [ ] Successful generation shows the generated art + Cropper on the SAME review page
+      (unit: `test_art_routes.py::TestGenerateStatusEndpoint::test_succeeded_payload_includes_crop_urls_and_bbox`
+      proves the status JSON carries the image_url/save_url/default_bbox the page uses;
+      `TestReviewTemplateHasCropper::test_cropperjs_assets_linked_on_review_page` proves
+      the template loads Cropper.js + CSS; clicktest to add in Phase 10)
+- [ ] Failed generation shows the error + re-enables textarea for retry
+      (unit: `test_art_routes.py::TestGenerateStatusEndpoint::test_failed_payload_includes_error_code_and_message`;
+      clicktest to add in Phase 10)
 - [ ] Generation stub returns the expected canned image based on prompt keyword (smoke check)
+      (unit: `test_art_generate.py::TestStubMode` 5 cases (wasp / scorpion / fallback /
+      no-http-in-stub-mode / distinct-per-keyword); clicktest to add in Phase 10)
 - [ ] Per-user rate limit blocks the 26th generation in 24 h with a clear banner
+      (unit: `test_art_rate_limit.py::TestRateLimit::test_default_twenty_sixth_call_blocked` +
+      `test_art_routes.py::TestGenerateSubmit::test_429_when_rate_limit_hit`;
+      clicktest to add in Phase 10)
 - [ ] ART_GEN_ENABLED=false disables the "Generate with AI" button with a disabled-state tooltip
+      (unit: `test_art_routes.py::TestGenerateSubmit::test_503_when_kill_switch_off`
+      covers the server-side gate; the disabled-button UX bit is clicktest-only in Phase 10)
 - [ ] Deleting the character also removes its S3 art keys (checked via orphan cleanup)
+      (unit: `test_art_backup.py::TestCharacterDeleteRemovesArt::test_delete_character_deletes_art_s3_keys`
+      + `test_cleanup_orphans` cases covering match / stale / empty-DB / per-key-failure;
+      no clicktest equivalent - S3 key lifecycle isn't browser-visible)
 
 ---
 

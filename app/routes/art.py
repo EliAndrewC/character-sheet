@@ -24,13 +24,20 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 from PIL import Image
 
 from app.database import get_db
 from app.models import Character, User as UserModel
-from app.services import art_image, art_jobs, art_prompt, art_storage
+from app.services import (
+    art_generate_jobs,
+    art_image,
+    art_jobs,
+    art_prompt,
+    art_rate_limit,
+    art_storage,
+)
 from app.services.art_face_detect import detect_face
 from app.services.art_image import HEADSHOT_ASPECT_RATIO
 from app.services.auth import can_edit_character, get_all_editors
@@ -571,9 +578,7 @@ def art_generate_review(
     )
 
 
-@router.post(
-    "/characters/{char_id}/art/generate/submit/{staging_id}"
-)
+@router.post("/characters/{char_id}/art/generate/submit/{staging_id}")
 def art_generate_submit(
     request: Request,
     char_id: int,
@@ -581,35 +586,109 @@ def art_generate_submit(
     prompt: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    """Step 3 -> Phase 8 kickoff. Stub until Phase 8 wires in Gemini.
+    """Kick off an async Imagen job for the staged prompt.
 
-    The user may have edited the prompt in the textarea, so we overwrite
-    the staged prompt before handing off.
+    The review page posts here via fetch, so this returns JSON. The
+    browser then polls ``GET /art/generate/status/{staging_id}`` for
+    the outcome and flips the in-page UI to the cropper on success.
+
+    The user may have edited the prompt in the textarea, so we
+    overwrite the staged prompt before kicking off the job.
     """
     _character, err = _load_character_for_edit(request, db, char_id)
     if err is not None:
         return err
 
+    if not art_rate_limit.art_gen_enabled():
+        return JSONResponse(
+            {
+                "error_code": "gen_disabled",
+                "error_message": (
+                    "Art generation is temporarily disabled. "
+                    "Please try again later."
+                ),
+            },
+            status_code=503,
+        )
+
+    user_id = request.state.user["discord_id"]
+    rate_error = art_rate_limit.check_rate_limit(user_id)
+    if rate_error is not None:
+        return JSONResponse(
+            {"error_code": "gen_rate_limited", "error_message": rate_error},
+            status_code=429,
+        )
+
     staged = art_jobs.get_staged(staging_id)
     if (
         staged is None
         or staged.char_id != char_id
-        or staged.user_id != request.state.user["discord_id"]
+        or staged.user_id != user_id
         or staged.source != "generated"
     ):
-        return HTMLResponse(
-            "That prompt is no longer available. Please start over.",
+        return JSONResponse(
+            {
+                "error_code": "staging_not_found",
+                "error_message": (
+                    "That prompt is no longer available. Please start over."
+                ),
+            },
             status_code=404,
         )
-    # Save the (possibly edited) prompt before Phase 8 reads it.
+    # Save the (possibly edited) prompt before the worker reads it.
     staged.prompt = prompt
-    # Phase 8 will replace this with a real redirect to the generation
-    # progress page. Keep the 501 so any accidental production hit is
-    # loud rather than silent.
-    return HTMLResponse(
-        "Art generation is not yet implemented. This wires up in Phase 8.",
-        status_code=501,
+
+    art_generate_jobs.submit_job(
+        user_id=user_id, char_id=char_id,
+        staging_id=staging_id, prompt=prompt,
     )
+    return JSONResponse({"ok": True})
+
+
+@router.get("/characters/{char_id}/art/generate/status/{staging_id}")
+def art_generate_status(
+    request: Request,
+    char_id: int,
+    staging_id: str,
+    db: Session = Depends(get_db),
+):
+    """JSON status endpoint polled by the review page while the job runs."""
+    _character, err = _load_character_for_edit(request, db, char_id)
+    if err is not None:
+        return err
+
+    job = art_generate_jobs.get_job(staging_id)
+    if job is None or job.char_id != char_id or job.user_id != request.state.user["discord_id"]:
+        return JSONResponse(
+            {"error_code": "not_found", "error_message": "Unknown job."},
+            status_code=404,
+        )
+
+    payload = {"state": job.state, "stage": job.stage}
+    if job.state == art_generate_jobs.STATE_SUCCEEDED:
+        # Tell the browser where to load the generated image from and
+        # where to POST the crop save to. Both reuse the existing
+        # Phase 4 endpoints keyed by the same staging_id.
+        payload["image_url"] = (
+            f"/characters/{char_id}/art/staged/{staging_id}"
+        )
+        payload["save_url"] = (
+            f"/characters/{char_id}/art/crop/{staging_id}"
+        )
+        staged = art_jobs.get_staged(staging_id)
+        if staged is not None:
+            payload["image_width"] = staged.width
+            payload["image_height"] = staged.height
+            bbox = detect_face(
+                Image.open(io.BytesIO(staged.full_bytes)).convert("RGB"),
+                aspect_ratio=HEADSHOT_ASPECT_RATIO,
+            )
+            payload["default_bbox"] = list(bbox)
+            payload["aspect_ratio"] = HEADSHOT_ASPECT_RATIO
+    elif job.state == art_generate_jobs.STATE_FAILED:
+        payload["error_code"] = job.error_code
+        payload["error_message"] = job.error_message
+    return JSONResponse(payload)
 
 
 __all__ = ["router"]

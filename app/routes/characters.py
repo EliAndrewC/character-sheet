@@ -188,6 +188,29 @@ def delete_character(request: Request, char_id: int, db: Session = Depends(get_d
             all_editors,
         ):
             return HTMLResponse("You don't have permission to delete this character.", status_code=403)
+
+        # Clean up S3 art keys before the row is gone. Capture the keys
+        # first because ``db.delete`` will null them on the in-memory
+        # object. A failure here (S3 down, bad IAM) is non-fatal: the
+        # orphan-cleanup sweep in ``art_backup`` will catch the leftover
+        # on the next startup.
+        art_key = character.art_s3_key
+        head_key = character.headshot_s3_key
+        if art_key or head_key:
+            import os
+            import logging
+            bucket = os.environ.get("S3_BACKUP_BUCKET")
+            if bucket:
+                region = os.environ.get("S3_BACKUP_REGION", "us-east-1")
+                try:
+                    from app.services.art_storage import delete_art
+                    delete_art(bucket, region, art_key, head_key)
+                except Exception as exc:
+                    logging.getLogger(__name__).exception(
+                        "Failed to clean art for deleted character %s: %s",
+                        char_id, exc,
+                    )
+
         db.delete(character)
         db.commit()
     return RedirectResponse("/", status_code=303)
