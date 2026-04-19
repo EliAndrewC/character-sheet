@@ -109,7 +109,8 @@ New features follow this cycle:
 The key distinction: unit tests use TDD (tests first), clicktests are written after the feature works. Clicktests are run selectively, not as part of every iteration loop. **Do not skip clicktests** - if a feature changes frontend behavior, it needs a clicktest. The coverage checklist in `tests/e2e/COVERAGE.md` is the source of truth for what's tested. **After writing clicktests, always update `tests/e2e/COVERAGE.md`** with entries for every new test function. This is required, not optional - every test must appear in COVERAGE.md.
 
 7. **Deploy after UI changes.** Any change that touches the frontend (templates, CSS, client-side JS) should be deployed to Fly.io after tests pass so the live site stays current.
-8. **Background full clicktest suite.** Immediately after deploying, kick off the full e2e suite in the background (`run_in_background`). Report "done" to the user without waiting. If the background run fails, investigate and notify the user immediately.
+
+**Do NOT auto-run the full e2e suite.** The full suite takes ~37 minutes on the dev container and is not part of the per-feature loop. Targeted clicktests by `pytest.mark` (step 6) are the only e2e gate before declaring a feature done. Only run the full suite when the user explicitly asks for it.
 
 ## Project Structure
 
