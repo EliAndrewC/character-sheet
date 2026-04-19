@@ -18,6 +18,7 @@ SCHOOLS_TO_TEST = [
     "brotherhood_of_shinsei_monk",  # monk, multi-ring school
     "isawa_ishi",            # spellcaster, absorb_void/kharmic_spin knacks
     "kakita_duelist",        # duelist, initiative Phase 0 ability
+    "mantis_wave_treader",   # bushi, "Any" ring (all five), worldliness knack
 ]
 
 

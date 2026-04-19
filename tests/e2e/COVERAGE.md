@@ -249,6 +249,18 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 5th Dan LW reset note after dealing serious wounds -> `test_school_abilities.py::test_matsu_5th_dan_lw_reset_note_behavioral`
 - [x] Initiative always rolls 10 dice -> `test_school_abilities.py::test_matsu_10_dice_initiative_behavioral`
 
+### Mantis Wave-Treader
+
+- [x] 1st Dan grants +1 rolled die on initiative, athletics (all four rings), and wound check -> `test_school_abilities.py::test_mantis_1st_dan_formula_extra_die`
+- [x] 2nd Dan editor picker appears at Dan>=2, lists eligible options (no initiative/worldliness), saves via autosave -> `test_school_abilities.py::test_mantis_2nd_dan_editor_picker_visible_and_saves`
+- [x] 2nd Dan attack choice: labeled in attack modal pre-roll Bonuses and post-roll breakdown -> `test_school_abilities.py::test_mantis_2nd_dan_attack_choice_labeled`
+- [x] 2nd Dan parry choice: labeled in post-roll breakdown -> `test_school_abilities.py::test_mantis_2nd_dan_parry_choice_labeled`
+- [x] 2nd Dan skill choice: +5 applied and labeled -> `test_school_abilities.py::test_mantis_2nd_dan_skill_choice_labeled`
+- [x] 2nd Dan knack choice (iaijutsu): +5 applied and labeled -> `test_school_abilities.py::test_mantis_2nd_dan_knack_choice_labeled`
+- [x] 2nd Dan wound-check choice: WC modal Bonuses row shows +5 -> `test_school_abilities.py::test_mantis_2nd_dan_wound_check_choice_labeled`
+- [x] 2nd Dan damage choice: attack modal pre-roll Damage bonuses AND post-roll damage breakdown show +5 -> `test_school_abilities.py::test_mantis_2nd_dan_damage_choice_labeled`
+- [x] 2nd Dan switch moves the bonus from attack to wound-check -> `test_school_abilities.py::test_mantis_2nd_dan_switch_choice_moves_bonus`
+
 ### Merchant
 
 - [x] Post-roll VP buttons visible -> `test_school_abilities.py::test_merchant_post_roll_vp_buttons`
@@ -391,7 +403,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 ## JS Error Checks
 
-- [x] No JS errors on sheet page (parametrized across 6 schools) → `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors`
+- [x] No JS errors on sheet page (parametrized across 7 schools, including Mantis Wave-Treader) → `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors`
 
 ## Void Point Spending
 
@@ -560,6 +572,9 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Non-school ring max 5 → `test_editor_controls.py::test_nonschool_ring_max_5`
 - [x] Changing school resets knacks → `test_school_rings.py::test_changing_school_resets_knacks`
 - [x] Multi-ring to fixed-ring hides dropdown → `test_school_rings.py::test_changing_multi_to_fixed_hides_dropdown`
+- [x] Mantis Wave-Treader defaults school ring to Void and bumps Void to 3 → `test_editor_controls.py::test_mantis_defaults_ring_to_void`
+- [x] Priest (variable-ring school) still defaults ring to Water → `test_editor_controls.py::test_priest_still_defaults_ring_to_water`
+- [x] Mantis Wave-Treader is selectable and saves as a first version → `test_editor_controls.py::test_mantis_school_is_selectable_and_saves`
 
 ## Character Editor — Rings
 
