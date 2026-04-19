@@ -154,12 +154,15 @@ def upload_art(
         log.info("Art stubbed to disk: %s + %s", full_key, head_key)
         return full_key, head_key
     client = _get_s3_client(region)
+    # No ACL: AWS disabled bucket ACLs by default after April 2023, and
+    # our backup bucket uses the modern "ObjectWriter"/bucket-owner-only
+    # ownership model. Public access is granted via presigned URLs in
+    # ``public_url`` below instead.
     client.put_object(
         Bucket=bucket,
         Key=full_key,
         Body=full_bytes,
         ContentType="image/webp",
-        ACL="public-read",
         CacheControl="public, max-age=604800",
     )
     client.put_object(
@@ -167,7 +170,6 @@ def upload_art(
         Key=head_key,
         Body=headshot_bytes,
         ContentType="image/webp",
-        ACL="public-read",
         CacheControl="public, max-age=604800",
     )
     log.info("Art uploaded: s3://%s/%s + %s", bucket, full_key, head_key)
@@ -197,21 +199,31 @@ def delete_art(bucket: str, region: str, *keys: Optional[str]) -> None:
         log.info("Art deleted: s3://%s/%s", bucket, key)
 
 
-def public_url(key: str, bucket: str, region: str) -> str:
-    """Return the public HTTPS URL for an S3 object.
+PRESIGN_TTL_SECONDS = 7 * 24 * 3600  # 7 days - max for anonymous access
 
-    Objects are uploaded with ``ACL=public-read`` so signing is not
-    required. ``us-east-1`` uses the virtual-hosted path without a
-    region component; every other region includes the region.
+
+def public_url(key: str, bucket: str, region: str) -> str:
+    """Return a presigned HTTPS URL for an S3 object.
+
+    AWS disabled bucket ACLs by default after 2023, so we can't rely
+    on ``ACL=public-read`` for anonymous access. Presigned URLs give
+    us the same effect (browser loads the image without credentials)
+    with no bucket-policy configuration required. TTL is 7 days (the
+    maximum for anonymous presigned URLs); the caller cache-busts via
+    ``?v={art_updated_at_epoch}`` so a replaced image still invalidates
+    any upstream cache.
 
     In stub mode the URL is a local ``/test-art-stub/{encoded_key}``
     path so the browser loads bytes straight off the clicktest server.
     """
     if use_disk_stub():
         return f"/test-art-stub/{stub_key_encoded(key)}"
-    if region == "us-east-1":
-        return f"https://{bucket}.s3.amazonaws.com/{key}"
-    return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
+    client = _get_s3_client(region)
+    return client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": key},
+        ExpiresIn=PRESIGN_TTL_SECONDS,
+    )
 
 
 def list_art_keys(bucket: str, region: str) -> list[str]:
