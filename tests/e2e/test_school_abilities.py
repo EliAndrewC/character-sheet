@@ -802,6 +802,19 @@ def test_priest_1st_dan_skill_selection(page, live_server_url):
     assert f is not None
     # precepts (Water) rank 1 + Water 3 (default school ring) + 1 (1st Dan) = 5
     assert f["rolled"] == 5
+
+
+def test_priest_sheet_links_to_rituals(page, live_server_url):
+    """The Priest's special-ability section on the read-only sheet contains
+    an 'all 10 rituals' anchor pointing at the upstream rules section."""
+    _create_char(page, live_server_url, "PriestSheetLink", "priest")
+    link = page.locator(
+        'a[href="https://github.com/EliAndrewC/l7r/blob/master/'
+        'rules/09-professions.md#priest-rituals"]'
+    )
+    assert link.count() == 1
+    assert link.get_attribute("target") == "_blank"
+    assert link.text_content().strip() == "all 10 rituals"
 def test_shosuro_stipend_display(page, live_server_url):
     """Shosuro Actor: stipend display on character sheet."""
     _create_char(page, live_server_url, "ShosuroStipend", "shosuro_actor")

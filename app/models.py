@@ -101,6 +101,11 @@ class Character(Base):
     # Draft/publish state
     is_published: Mapped[bool] = mapped_column(default=False)
     published_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=None)
+    # Visibility gate for in-progress drafts. When True, only editors (owner,
+    # admins, account-grantees) can see the character anywhere. Set to True
+    # when a character is created via POST /characters; cleared one-way by
+    # the first Apply Changes or by the explicit "Make Draft Visible" button.
+    is_hidden: Mapped[bool] = mapped_column(default=False)
     school: Mapped[str] = mapped_column(String, default="")
     school_ring_choice: Mapped[str] = mapped_column(String, default="")
 

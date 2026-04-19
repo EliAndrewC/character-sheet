@@ -194,6 +194,36 @@ def test_per_day_ability_has_its_own_reset_button_with_tooltip(page, live_server
     assert raises_btn.get_attribute("title") == "This pool resets each day"
 
 
+def test_per_day_reset_button_renders_left_of_counter(page, live_server_url):
+    """The Reset button on a per-day counter is rendered to the LEFT of the
+    +/- counter widget, not the right - it should appear before the
+    decrement (-) button in DOM order, and its left edge should be left of
+    the decrement button's left edge."""
+    _create_togashi_3rd_dan(page, live_server_url, precepts=1)
+    page.wait_for_selector('text="Daily Athletics Raises"', timeout=3000)
+    # Use the conviction row for the layout assertion.
+    reset_btn = page.locator('[data-action="reset-ability-conviction"]')
+    row = page.locator('text="Conviction"').locator('..').locator('..')
+    # The minus button (decrement) is the first numeric button and lives
+    # in the same row as Reset. We grab the buttons that contain "-"/"+"
+    # text relative to the counter group.
+    counter_group = reset_btn.locator('..')
+    minus = counter_group.locator('button', has_text="-").first
+    plus = counter_group.locator('button', has_text="+").first
+    reset_box = reset_btn.bounding_box()
+    minus_box = minus.bounding_box()
+    plus_box = plus.bounding_box()
+    assert reset_box and minus_box and plus_box
+    # The reset button must sit to the left of BOTH +/- buttons.
+    assert reset_box["x"] < minus_box["x"], (
+        f"Reset button at x={reset_box['x']} should be left of "
+        f"decrement button at x={minus_box['x']}"
+    )
+    assert reset_box["x"] < plus_box["x"]
+    # Sanity: row context still contains the counter
+    assert "Conviction" in row.text_content()
+
+
 def test_per_day_reset_button_disabled_until_spent(page, live_server_url):
     """The per-day reset button is disabled when nothing has been spent."""
     _create_togashi_3rd_dan(page, live_server_url, precepts=1)

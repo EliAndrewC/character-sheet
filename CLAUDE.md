@@ -144,6 +144,7 @@ The canonical rules live at: https://github.com/EliAndrewC/l7r/tree/master/rules
 - **Knacks start at rank 1 for free** (given by the school). XP cost for knacks only applies for ranks above 1.
 - **Dan = minimum school knack rank.** A character's Dan level equals the lowest rank among their three school knacks.
 - **New model columns require a migration entry.** When adding a column to any SQLAlchemy model, you MUST also add it to `_migrate_add_columns()` in `database.py`. The production SQLite database on Fly.io persists across deploys - `create_all` only creates new tables, it does not add columns to existing ones. Tests won't catch this because they use a fresh in-memory database each run.
+- **Hidden drafts (`Character.is_hidden`).** New characters created via POST /characters start with `is_hidden=True` so the creator can iterate before sharing. Hidden characters are filtered out of the index page list, return 404 from `GET /characters/{id}` for non-editors, and are stripped from party-effect data on other players' sheets - all gated by `can_view_drafts(viewer, owner, owner_grants)`. The flag is one-way: it clears on the first Apply Changes (`publish_character()` in `services/versions.py`) or via the explicit `POST /characters/{id}/show` endpoint behind the "Make Draft Visible" button. The edit page renders both a hidden-draft banner above the Basics section AND that button only while the flag is set; both are gated by Jinja `{% if character.is_hidden %}` AND Alpine `x-show="isHidden"` so they ship only when relevant and disappear instantly on click.
 
 ## Google Sheets Export
 
@@ -218,7 +219,7 @@ Per-field re-extraction (`extract_single_field`) is available as a primitive for
 ### Rate limit + kill switch
 
 - **Rate limit:** per-user, 10 successful imports per 24 hours. Counted by looking for characters owned by the user whose sections include the Import Notes label and whose `created_at` falls in the last 24 hours. No extra schema.
-- **Kill switch:** `IMPORT_ENABLED=false` disables the route with a 503 "temporarily unavailable" banner. Useful when quota spikes or for cost control without redeploying.
+- **Kill switch:** `IMPORT_ENABLED=false` disables the route with a 503 "temporarily unavailable" banner AND collapses the navbar's "New Character" dropdown to a single submit button (no Import option, no /import link rendered). Useful when quota spikes or for cost control without redeploying. The flag is read at request time by both the route and the template, so toggling it doesn't require a restart.
 
 ### Env vars and Fly secrets
 

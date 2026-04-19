@@ -63,3 +63,27 @@ def test_school_techniques_shown(page, live_server_url):
     assert "3rd Dan" in details
     assert "4th Dan" in details
     assert "5th Dan" in details
+
+
+def test_priest_special_ability_links_to_rituals(page, live_server_url):
+    """Selecting Priest renders the special ability with 'all 10 rituals'
+    as an anchor that opens the upstream rules section in a new tab."""
+    _go_to_editor(page, live_server_url)
+    select_school(page, "priest")
+    page.wait_for_selector("#school-details :text('Special Ability')", timeout=10000)
+    link = page.locator(
+        '#school-details a[href="https://github.com/EliAndrewC/l7r/blob/'
+        'master/rules/09-professions.md#priest-rituals"]'
+    )
+    assert link.count() == 1
+    assert link.get_attribute("target") == "_blank"
+    assert link.text_content().strip() == "all 10 rituals"
+
+
+def test_non_priest_special_ability_has_no_external_link(page, live_server_url):
+    """A non-Priest school's special ability text contains no anchor pointing
+    to the upstream rules repo."""
+    _go_to_editor(page, live_server_url)
+    select_school(page, "akodo_bushi")
+    page.wait_for_selector("#school-details :text('Special Ability')", timeout=10000)
+    assert page.locator('#school-details a[href*="priest-rituals"]').count() == 0
