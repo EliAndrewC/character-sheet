@@ -38,7 +38,11 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 def import_enabled() -> bool:
-    return _env_bool("IMPORT_ENABLED", True)
+    """Fail-closed: the default is False. A missing env var keeps the
+    feature disabled so an incomplete .env or unset Fly secret cannot
+    silently re-enable a feature we've gated behind config. Set
+    ``IMPORT_ENABLED=true`` explicitly to turn it on."""
+    return _env_bool("IMPORT_ENABLED", False)
 
 
 def rate_limit_per_day() -> int:
