@@ -1087,3 +1087,132 @@ def test_manual_spend_does_not_set_spent_by(page, live_server_url):
         "window._trackingBridge.actionDice[0].spent_by || null"
     )
     assert spent_by is None
+
+
+# ---------------------------------------------------------------------------
+# Per-die action menu (pick which die pays for an action)
+# ---------------------------------------------------------------------------
+
+
+def test_action_die_menu_shows_action_options(page, live_server_url):
+    """Clicking an unspent action die opens a menu listing Roll Attack,
+    Roll Parry, Predeclared Parry (+5), and Mark as spent at minimum."""
+    _create_roller(page, live_server_url, "ADMenuOptions")
+    page.evaluate("""
+        window._trackingBridge.actionDice = [{value: 5, spent: false}];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(150)
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    menu = page.locator('[data-action-die-menu-item="attack"]')
+    menu.wait_for(state='visible', timeout=2000)
+    assert page.locator('[data-action-die-menu-item="attack"]').is_visible()
+    assert page.locator('[data-action-die-menu-item="parry"]').is_visible()
+    assert page.locator('[data-action-die-menu-item="predeclared-parry"]').is_visible()
+    assert page.locator('[data-action="action-die-spent"]').is_visible()
+
+
+def test_action_die_menu_parry_spends_that_die(page, live_server_url):
+    """Picking Parry from the per-die menu must spend *that* specific die,
+    not the lowest unspent die."""
+    _create_roller(page, live_server_url, "ADMenuParry")
+    page.evaluate("""
+        window._trackingBridge.actionDice = [
+            {value: 3, spent: false},
+            {value: 7, spent: false}
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(150)
+    # Click the SECOND die (value 7 - not the lowest).
+    dice = page.locator('[data-testid="action-dice-section"] [data-action="action-die"]')
+    dice.nth(1).click()
+    # Each die renders its own (hidden) menu, so scope to the open one.
+    page.locator('[data-action-die-menu-item="parry"]:visible').click()
+    # Wait for parry roll to complete.
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done' && d.currentRollKey === 'parry') return true;
+        }
+        return false;
+    }""", timeout=5000)
+    state = page.evaluate("window._trackingBridge.actionDice")
+    # The 3 stays unspent; the 7 is spent and annotated as a parry.
+    assert state[0]["spent"] is False
+    assert state[1]["spent"] is True
+    assert "Parry" in state[1].get("spent_by", "")
+
+
+def test_action_die_menu_attack_opens_modal_spends_on_roll(page, live_server_url):
+    """Picking Roll Attack opens the attack modal; clicking Roll in the
+    modal spends the selected die (not the lowest)."""
+    _create_roller(page, live_server_url, "ADMenuAttack")
+    page.evaluate("""
+        window._trackingBridge.actionDice = [
+            {value: 2, spent: false},
+            {value: 8, spent: false}
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(150)
+    # Click the second die.
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').nth(1).click()
+    # Each die renders its own (hidden) menu, so scope to the open one.
+    page.locator('[data-action-die-menu-item="attack"]:visible').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    state = page.evaluate("window._trackingBridge.actionDice")
+    assert state[0]["spent"] is False
+    assert state[1]["spent"] is True
+
+
+def test_action_die_menu_attack_cancel_does_not_spend(page, live_server_url):
+    """Opening the attack modal from the per-die menu and then cancelling
+    leaves the die unspent - the spend fires only when Roll commits."""
+    _create_roller(page, live_server_url, "ADMenuAttackCancel")
+    page.evaluate("""
+        window._trackingBridge.actionDice = [{value: 5, spent: false}];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(150)
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.locator('[data-action-die-menu-item="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    # Cancel via X button
+    page.locator('[data-modal="attack"] button:has-text("×")').first.click()
+    page.wait_for_timeout(200)
+    state = page.evaluate("window._trackingBridge.actionDice")
+    assert state[0]["spent"] is False
+
+
+def test_athletics_only_die_menu_restricts_to_athletics(page, live_server_url):
+    """An athletics-only die's menu must omit regular attack/parry/feint
+    rows (only athletics attack/parry options + Mark as spent are shown)."""
+    _create_roller(page, live_server_url, "ADMenuAthOnly")
+    # Create a Togashi scenario so athletics:attack and athletics:parry
+    # formulas exist, then seed an athletics-only die directly.
+    page.evaluate("""
+        window._trackingBridge.actionDice = [
+            {value: 6, spent: false, athletics_only: true}
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(150)
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.wait_for_timeout(200)
+    # Regular rows are gated behind !die.athletics_only and must not render.
+    assert page.locator('[data-action-die-menu-item="attack"]').count() == 0
+    assert page.locator('[data-action-die-menu-item="parry"]').count() == 0
+    assert page.locator('[data-action-die-menu-item="predeclared-parry"]').count() == 0
+    # Manual mark-spent is always available.
+    assert page.locator('[data-action="action-die-spent"]').count() == 1

@@ -392,6 +392,14 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [ ] 4th Dan reroll hidden on Dragon Tattoo (damage rolls are never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_dragon_tattoo`
 - [ ] 4th Dan reroll hidden on parry (parry is never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_parry`
 - [ ] 4th Dan reroll hidden on athletics:parry -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_athletics_parry`
+- [x] Togashi initiative: athletics-only bonus die persists to the Actions side panel with blue variant + tooltip -> `test_school_abilities.py::test_togashi_init_athletics_die_appears_in_side_panel`
+- [x] Non-athletics parry auto-spend skips the athletics-only die even when it has the lowest value -> `test_school_abilities.py::test_togashi_non_athletics_parry_skips_athletics_die`
+- [x] Athletics-only die's per-die menu offers Athletics Parry and selecting it spends that die -> `test_school_abilities.py::test_togashi_athletics_parry_can_spend_athletics_die`
+- [x] Per-die action menu lists core options (attack/parry/predeclared-parry) -> `test_rolls.py::test_action_die_menu_shows_action_options`
+- [x] Per-die Parry spends that specific die (not the lowest) -> `test_rolls.py::test_action_die_menu_parry_spends_that_die`
+- [x] Per-die Attack opens the attack modal and commits the die on Roll -> `test_rolls.py::test_action_die_menu_attack_opens_modal_spends_on_roll`
+- [x] Cancelling the attack modal opened from a per-die menu leaves the die unspent -> `test_rolls.py::test_action_die_menu_attack_cancel_does_not_spend`
+- [x] Athletics-only die's menu omits regular attack/parry/predeclared rows -> `test_rolls.py::test_athletics_only_die_menu_restricts_to_athletics`
 - [x] Dragon Tattoo does not offer void spending (damage roll, not skill roll) -> `test_school_abilities.py::test_togashi_dragon_tattoo_no_void_spend`
 - [x] Conviction spend button appears on skill roll results -> `test_school_abilities.py::test_conviction_button_appears_on_skill_roll`
 - [x] Conviction spend button does NOT appear on initiative rolls -> `test_school_abilities.py::test_conviction_not_on_initiative`
