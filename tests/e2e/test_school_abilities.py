@@ -918,6 +918,120 @@ def test_togashi_athletics_raise_button_hidden_when_pool_empty(page, live_server
     page.wait_for_timeout(200)
     _roll_via_menu_or_direct(page, "athletics:Air")
     assert not page.locator('[data-action="spend-togashi-raise"]').is_visible()
+
+
+def test_togashi_athletics_raise_on_athletics_parry(page, live_server_url):
+    """Athletics used as parry is still an athletics roll - the existing
+    regular-modal togashi raise button must appear on the parry result."""
+    _create_char(page, live_server_url, "TogashiAthParry", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+                 skill_overrides={"precepts": 1, "athletics": 2})
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    _roll_via_menu_or_direct(page, "athletics:parry")
+    spend_btn = page.locator('[data-action="spend-togashi-raise"]')
+    assert spend_btn.is_visible()
+    spend_btn.click()
+    page.wait_for_timeout(200)
+    used = page.evaluate("window._trackingBridge.getCount('togashi_daily_athletics_raises')")
+    assert used == 1
+
+
+def test_togashi_athletics_raise_on_athletics_attack_hit(page, live_server_url):
+    """Athletics used as an attack goes through the attack modal. The togashi
+    raise spend button must appear in the HIT block and increment atkRollTotal
+    by 5 while decrementing the daily pool."""
+    _create_char(page, live_server_url, "TogashiAthAtk", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+                 skill_overrides={"precepts": 2, "athletics": 3})
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    # Ensure the roll hits so the HIT block renders
+    _mock_dice_high(page)
+    _open_attack_modal_and_roll(page, "athletics:attack")
+    _restore_dice(page)
+    before_total = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return d.atkRollTotal;
+        }
+        return null;
+    }""")
+    spend_btn = page.locator('[data-action="spend-togashi-raise-atk"]').first
+    assert spend_btn.is_visible()
+    spend_btn.click()
+    page.wait_for_timeout(200)
+    after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return {
+                total: d.atkRollTotal,
+                spent: d.togashiRaisesSpentThisRoll,
+                pool: window._trackingBridge.getCount('togashi_daily_athletics_raises'),
+            };
+        }
+        return null;
+    }""")
+    assert after["total"] == before_total + 5
+    assert after["spent"] == 1
+    assert after["pool"] == 1
+
+
+def test_togashi_athletics_raise_atk_undo_restores_total_and_pool(page, live_server_url):
+    """Undo inside the attack modal rolls back both atkRollTotal and the
+    daily pool counter."""
+    _create_char(page, live_server_url, "TogashiAthAtkUndo", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+                 skill_overrides={"precepts": 2, "athletics": 3})
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    _mock_dice_high(page)
+    _open_attack_modal_and_roll(page, "athletics:attack")
+    _restore_dice(page)
+    before_total = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return d.atkRollTotal;
+        }
+        return null;
+    }""")
+    page.locator('[data-action="spend-togashi-raise-atk"]').first.click()
+    page.wait_for_timeout(200)
+    page.locator('[data-action="undo-togashi-raise-atk"]').first.click()
+    page.wait_for_timeout(200)
+    after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return {
+                total: d.atkRollTotal,
+                spent: d.togashiRaisesSpentThisRoll,
+                pool: window._trackingBridge.getCount('togashi_daily_athletics_raises'),
+            };
+        }
+        return null;
+    }""")
+    assert after["total"] == before_total
+    assert after["spent"] == 0
+    assert after["pool"] == 0
+
+
+def test_togashi_athletics_raise_button_absent_on_regular_attack(page, live_server_url):
+    """The atk-modal togashi raise button is gated on is_athletics_attack, so
+    a plain 'attack' roll (not athletics) must not offer it even for a togashi
+    3rd Dan."""
+    _create_char(page, live_server_url, "TogashiRegAtk", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+                 skill_overrides={"precepts": 2, "attack": 3})
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    _mock_dice_high(page)
+    _open_attack_modal_and_roll(page, "attack")
+    _restore_dice(page)
+    assert page.locator('[data-action="spend-togashi-raise-atk"]').count() == 0
 def test_bayushi_feint_damage_button(page, live_server_url):
     """Bayushi feint damage: Back button returns to feint result."""
     _create_char(page, live_server_url, "BayushiFeintDmg2", "bayushi_bushi",
@@ -3151,6 +3265,16 @@ def test_togashi_4th_dan_reroll_hidden_on_heraldry(page, live_server_url):
     _roll_via_menu_or_direct(page, "skill:heraldry")
     reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
     assert not reroll_btn.is_visible(), "Reroll must not appear on heraldry"
+
+
+def test_togashi_4th_dan_reroll_hidden_on_dragon_tattoo(page, live_server_url):
+    """Togashi 4th Dan: reroll button not shown on Dragon Tattoo damage
+    rolls - damage rolls are never contested."""
+    _create_char(page, live_server_url, "Togashi4DT", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4})
+    _roll_via_menu_or_direct(page, "knack:dragon_tattoo")
+    reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
+    assert not reroll_btn.is_visible(), "Reroll must not appear on Dragon Tattoo (damage roll)"
 
 
 def _open_attack_modal(page, roll_key):
