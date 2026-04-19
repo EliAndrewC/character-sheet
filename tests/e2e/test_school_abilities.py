@@ -5151,10 +5151,30 @@ def test_mantis_posture_tracker_reset_on_action_dice_clear(page, live_server_url
 
 
 def _select_posture(page, kind):
-    """Click an offensive/defensive posture button and wait for Alpine to
-    flush so cross-scope overlays can read the new state."""
+    """Click an offensive/defensive posture button and wait deterministically
+    for the tracking bridge state AND the TN display's event-driven x-data
+    scope to reflect the new posture before returning."""
+    prev_len = page.evaluate(
+        "() => (window._trackingBridge?.postureHistory?.length) || 0"
+    )
     page.locator(f'[data-action="mantis-posture-{kind}"]').click()
-    page.wait_for_timeout(100)
+    page.wait_for_function(
+        f"() => (window._trackingBridge?.postureHistory?.length || 0) === {prev_len + 1}"
+    )
+    # The TN display's local x-data listens for `mantis-posture-changed`
+    # and updates `posture` + `defensiveCount`. Wait for its state to match
+    # the bridge AND for its x-text to re-render (span text == total()).
+    page.wait_for_function(f"""() => {{
+        const el = document.querySelector('[data-testid="tn-display"]');
+        if (!el) return true;
+        const d = window.Alpine && window.Alpine.$data(el);
+        if (!d) return true;
+        if (d.posture !== {kind!r}) return false;
+        const bridgeDef = window._trackingBridge?.defensivePhaseCount?.() || 0;
+        if ((d.defensiveCount || 0) !== bridgeDef) return false;
+        const span = el.querySelector('span.font-bold');
+        return !!(span && parseInt(span.textContent) === d.total());
+    }}""")
 
 
 @pytest.mark.school_abilities
@@ -5288,18 +5308,19 @@ def test_mantis_defensive_posture_tn_display_bumps(page, live_server_url):
     assert base_val == 10
     # Enter defensive posture.
     _select_posture(page, "defensive")
-    # TN number bumps by 5.
+    # TN number bumps by 5. `_select_posture` already waited for Alpine to
+    # flush, so the DOM read is guaranteed to be up to date.
     assert int(tn_box.locator("span.font-bold").first.text_content()) == base_val + 5
-    # The "+5 defensive posture" label appears.
+    # The "+5 defensive posture" label is visible.
     bump = page.locator('[data-testid="tn-defensive-bump"]')
-    assert bump.is_visible()
+    bump.wait_for(state='visible', timeout=2000)
     # Tooltip-ready title attribute is set.
     title_attr = tn_box.locator("span.font-bold").first.get_attribute("title")
     assert title_attr and "defensive posture" in title_attr.lower()
     # Swap to offensive -> TN drops back and the label hides.
     _select_posture(page, "offensive")
     assert int(tn_box.locator("span.font-bold").first.text_content()) == base_val
-    assert not bump.is_visible()
+    bump.wait_for(state='hidden', timeout=2000)
 
 
 @pytest.mark.school_abilities
@@ -5348,3 +5369,240 @@ def test_mantis_no_posture_no_overlay(page, live_server_url):
     text = _attack_modal_bonus_text(page)
     assert "offensive posture" not in text
     assert "defensive posture" not in text
+
+
+# ---------------------------------------------------------------------------
+# Mantis Wave-Treader 5th Dan: accumulated posture counters (Phase 6)
+# ---------------------------------------------------------------------------
+
+
+def _make_mantis_dan_5(page, live_server_url, name):
+    """Create a Mantis character and raise school knacks to 5 (Dan 5)."""
+    _create_char(
+        page, live_server_url, name, "mantis_wave_treader",
+        knack_overrides={"athletics": 5, "iaijutsu": 5, "worldliness": 5},
+    )
+
+
+@pytest.mark.school_abilities
+def test_mantis_5th_dan_accumulator_block_hidden_with_no_history(page, live_server_url):
+    """Phase 6: Dan 5 Mantis with no posture declarations - the accumulator
+    sub-block is in the DOM but x-show hides it until a count > 0."""
+    _make_mantis_dan_5(page, live_server_url, "Mantis5Empty")
+    block = page.locator('[data-testid="mantis-5th-dan-accumulator"]')
+    # Block is present in DOM (server rendered it) but hidden.
+    assert block.count() == 1
+    assert not block.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_5th_dan_accumulator_block_absent_at_dan_4(page, live_server_url):
+    """Phase 6: Dan 4 Mantis does NOT get the accumulator block at all."""
+    _create_char(
+        page, live_server_url, "Mantis4Acc", "mantis_wave_treader",
+        knack_overrides={"athletics": 4, "iaijutsu": 4, "worldliness": 4},
+    )
+    assert page.locator('[data-testid="mantis-5th-dan-accumulator"]').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_5th_dan_accumulator_counts_offensive(page, live_server_url):
+    """Phase 6: three offensive posture clicks -> +3 accumulator shown."""
+    _make_mantis_dan_5(page, live_server_url, "Mantis5Off3")
+    for _ in range(3):
+        _select_posture(page, "offensive")
+    off_line = page.locator('[data-testid="mantis-5th-dan-offensive"]')
+    assert off_line.is_visible()
+    assert "+3" in off_line.text_content()
+    # Defensive line stays hidden (zero defensive phases).
+    assert not page.locator('[data-testid="mantis-5th-dan-defensive"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_5th_dan_accumulator_counts_mixed(page, live_server_url):
+    """Phase 6: alternating postures -> both accumulator lines show their counts."""
+    _make_mantis_dan_5(page, live_server_url, "Mantis5Mix")
+    _select_posture(page, "offensive")  # phase 1
+    _select_posture(page, "defensive")  # phase 2
+    _select_posture(page, "offensive")  # phase 3
+    off_line = page.locator('[data-testid="mantis-5th-dan-offensive"]')
+    def_line = page.locator('[data-testid="mantis-5th-dan-defensive"]')
+    assert "+2" in off_line.text_content()
+    assert "+1" in def_line.text_content()
+
+
+@pytest.mark.school_abilities
+def test_mantis_5th_dan_accumulator_resets_on_initiative(page, live_server_url):
+    """Phase 6: rolling initiative clears postureHistory -> the derived
+    offensive/defensive counts drop to zero and the sub-block hides."""
+    _make_mantis_dan_5(page, live_server_url, "Mantis5Reset")
+    _select_posture(page, "offensive")
+    _select_posture(page, "offensive")
+    assert page.locator('[data-testid="mantis-5th-dan-offensive"]').is_visible()
+    # Roll initiative (any variant) - setActionDice triggers resetMantisRound.
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    page.wait_for_function("() => window._trackingBridge.offensivePhaseCount() === 0")
+    page.locator('[data-modal="dice-roller"]').locator('button:has-text("\u00d7")').click()
+    page.wait_for_timeout(150)
+    assert not page.locator('[data-testid="mantis-5th-dan-accumulator"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_5th_dan_attack_modal_pre_roll_includes_accumulator(page, live_server_url):
+    """Phase 6: pre-roll Bonuses row surfaces the 5th Dan offensive-count
+    label when accumulator > 0."""
+    _make_mantis_dan_5(page, live_server_url, "Mantis5AtkPre")
+    # Two offensive declarations + one defensive (so current is defensive but
+    # accumulator is still 2 offensive). Tests that the accumulator is applied
+    # independently of current posture.
+    _select_posture(page, "offensive")
+    _select_posture(page, "offensive")
+    _select_posture(page, "defensive")
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    # Current posture is defensive so the Phase 5 +5 offensive overlay is off,
+    # but the 5th Dan accumulator (+2) still applies to attack/damage.
+    assert "+5 from offensive posture" not in text
+    assert "+2 from Mantis 5th Dan" in text
+    # Damage bonuses row also shows the 5th Dan label.
+    damage_row = page.locator('[data-modal="attack"]').locator(':text("Damage bonuses:")').first
+    assert damage_row.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_mantis_5th_dan_attack_post_roll_snapshot(page, live_server_url):
+    """Phase 6: rollAttack snapshots the offensive accumulator into
+    formula.bonuses; the post-roll breakdown shows the labeled +N entry."""
+    _make_mantis_dan_5(page, live_server_url, "Mantis5AtkPost")
+    _select_posture(page, "offensive")
+    _select_posture(page, "offensive")
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    _mock_dice_low(page)
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    _restore_dice(page)
+    result_text = page.locator('[data-modal="attack"]').text_content()
+    # Current posture is offensive -> Phase 5 adds +5; accumulator adds +3.
+    assert "offensive posture" in result_text
+    assert "Mantis 5th Dan" in result_text
+    # atkRollTotal must include both +5 (current) and +3 (accumulator).
+    atk_total = page.evaluate("() => { const els = document.querySelectorAll('[x-data]'); for (const el of els) { const d = window.Alpine && window.Alpine.$data(el); if (d && typeof d.atkRollTotal === 'number') return d.atkRollTotal; } return null; }")
+    # Mantis base attack: 3k2 (attack 1, Fire 2). Low-dice mock -> kept sum 2,
+    # formula.flat default 0, plus +5 (Phase 5) + +3 (Phase 6) = 10.
+    assert atk_total is not None and atk_total >= 10
+
+
+@pytest.mark.school_abilities
+def test_mantis_5th_dan_damage_accumulator_in_parts(page, live_server_url):
+    """Phase 6: atkComputeDamage pushes the labeled +N entry into parts."""
+    _make_mantis_dan_5(page, live_server_url, "Mantis5Dmg")
+    _select_posture(page, "offensive")
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    parts = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.atkComputeDamage === 'function') {
+                return d.atkComputeDamage(0, false, false, 0, false).parts;
+            }
+        }
+        return null;
+    }""")
+    assert parts is not None
+    # Both the current-posture +5 and the 5th Dan +2 must appear as labeled lines.
+    assert any("offensive posture" in p and "+5" in p for p in parts)
+    assert any("Mantis 5th Dan" in p and "+2" in p for p in parts)
+
+
+@pytest.mark.school_abilities
+def test_mantis_5th_dan_wc_modal_defensive_accumulator(page, live_server_url):
+    """Phase 6: WC modal pre-roll Bonuses row surfaces defensive accumulator
+    separately from the current-posture +5. Post-roll breakdown also shows it."""
+    _make_mantis_dan_5(page, live_server_url, "Mantis5WC")
+    _select_posture(page, "defensive")
+    _select_posture(page, "defensive")
+    _select_posture(page, "offensive")  # current posture offensive; accumulator still +2 defensive
+    _set_light_wounds(page, 10)
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openWoundCheckModal === 'function') {
+                d.openWoundCheckModal();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="wound-check"]')
+    pre_text = modal.text_content()
+    # Current posture offensive -> Phase 5 defensive-+5 overlay off; 5th Dan
+    # defensive accumulator (+2) still applies.
+    assert "+5 from defensive posture" not in pre_text
+    assert "+2 from Mantis 5th Dan (defensive posture count)" in pre_text
+    # Roll and verify post-roll breakdown also contains the label.
+    _mock_dice_low(page)
+    modal.locator('button:has-text("Roll Wound Check")').first.click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    assert "+2 from Mantis 5th Dan (defensive posture count)" in modal.text_content()
+
+
+@pytest.mark.school_abilities
+def test_mantis_5th_dan_tn_display_bumps_with_accumulator(page, live_server_url):
+    """Phase 6: TN display reflects base + defensive posture +5 + accumulator +N.
+    The enumerated tooltip lists both contributions."""
+    _make_mantis_dan_5(page, live_server_url, "Mantis5TN")
+    tn_box = page.locator('[data-testid="tn-display"]')
+    base = int(tn_box.locator("span.font-bold").first.text_content())
+    assert base == 10  # 5 + 5*parry (parry=1)
+    # Two defensive declarations: current posture defensive (+5) + accum +2.
+    _select_posture(page, "defensive")
+    _select_posture(page, "defensive")
+    total = int(tn_box.locator("span.font-bold").first.text_content())
+    assert total == base + 5 + 2
+    # Both labels render (wait_for handles Alpine microtask flush).
+    bump = page.locator('[data-testid="tn-defensive-bump"]')
+    accum_label = page.locator('[data-testid="tn-5th-dan-accumulator"]')
+    bump.wait_for(state='visible', timeout=2000)
+    accum_label.wait_for(state='visible', timeout=2000)
+    # Tooltip enumerates both contributions.
+    title = tn_box.locator("span.font-bold").first.get_attribute("title")
+    assert title
+    assert "+5" in title and "defensive posture" in title
+    assert "+2" in title and "5th Dan" in title
+    # Switch to offensive -> current-posture +5 off, but accumulator stays.
+    _select_posture(page, "offensive")
+    total_after = int(tn_box.locator("span.font-bold").first.text_content())
+    assert total_after == base + 2
+    bump.wait_for(state='hidden', timeout=2000)
+    accum_label.wait_for(state='visible', timeout=2000)
+
+
+@pytest.mark.school_abilities
+def test_mantis_dan_4_no_accumulator_on_attack(page, live_server_url):
+    """Dan 4 Mantis: selecting postures builds postureHistory but the
+    accumulator overlay does NOT apply (only the Phase 5 current-posture +5)."""
+    _create_char(
+        page, live_server_url, "Mantis4NoAcc", "mantis_wave_treader",
+        knack_overrides={"athletics": 4, "iaijutsu": 4, "worldliness": 4},
+    )
+    _select_posture(page, "offensive")
+    _select_posture(page, "offensive")
+    _open_attack_modal(page, "attack")
+    text = _attack_modal_bonus_text(page)
+    # Current-posture +5 still lands (Phase 5 ability is not Dan-gated).
+    assert "+5 from offensive posture" in text
+    # The 5th Dan accumulator label MUST NOT appear.
+    assert "Mantis 5th Dan" not in text
+

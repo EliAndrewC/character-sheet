@@ -275,6 +275,17 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Defensive posture bumps the sheet's TN-to-be-hit display by +5 with a tooltip; swapping posture toggles the bump -> `test_school_abilities.py::test_mantis_defensive_posture_tn_display_bumps`
 - [x] Defensive posture overlays "+5 from defensive posture" in the WC modal pre-roll Bonuses and post-roll breakdown -> `test_school_abilities.py::test_mantis_defensive_posture_wc_modal_overlay`
 - [x] No posture selected -> no posture labels leak into the attack modal -> `test_school_abilities.py::test_mantis_no_posture_no_overlay`
+- [x] 5th Dan accumulator sub-block hidden when postureHistory is empty -> `test_school_abilities.py::test_mantis_5th_dan_accumulator_block_hidden_with_no_history`
+- [x] 5th Dan accumulator sub-block absent on Dan 4 Mantis -> `test_school_abilities.py::test_mantis_5th_dan_accumulator_block_absent_at_dan_4`
+- [x] 5th Dan accumulator counts offensive phases correctly -> `test_school_abilities.py::test_mantis_5th_dan_accumulator_counts_offensive`
+- [x] 5th Dan accumulator shows both offensive and defensive lines with mixed history -> `test_school_abilities.py::test_mantis_5th_dan_accumulator_counts_mixed`
+- [x] 5th Dan accumulator derived from postureHistory so it auto-resets on initiative roll -> `test_school_abilities.py::test_mantis_5th_dan_accumulator_resets_on_initiative`
+- [x] 5th Dan offensive accumulator labeled in attack modal pre-roll Bonuses + Damage bonuses rows (independent of current posture) -> `test_school_abilities.py::test_mantis_5th_dan_attack_modal_pre_roll_includes_accumulator`
+- [x] rollAttack snapshots 5th Dan offensive accumulator into formula.bonuses (post-roll breakdown + atkRollTotal include it, stacked with current-posture +5) -> `test_school_abilities.py::test_mantis_5th_dan_attack_post_roll_snapshot`
+- [x] atkComputeDamage pushes labeled 5th Dan offensive accumulator line into parts, stacking with current-posture +5 -> `test_school_abilities.py::test_mantis_5th_dan_damage_accumulator_in_parts`
+- [x] WC modal pre-roll Bonuses row and post-roll breakdown show labeled 5th Dan defensive accumulator (independent of current posture) -> `test_school_abilities.py::test_mantis_5th_dan_wc_modal_defensive_accumulator`
+- [x] TN display reflects base + defensive-posture +5 + 5th Dan accumulator; enumerated tooltip lists both; switching to offensive keeps only the accumulator -> `test_school_abilities.py::test_mantis_5th_dan_tn_display_bumps_with_accumulator`
+- [x] Dan 4 Mantis: current-posture +5 lands but no 5th Dan accumulator label -> `test_school_abilities.py::test_mantis_dan_4_no_accumulator_on_attack`
 
 ### Merchant
 
