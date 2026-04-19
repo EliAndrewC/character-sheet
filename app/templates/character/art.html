@@ -38,7 +38,8 @@
 
     {% if headshot_url %}
     <div class="flex items-start gap-4 bg-white rounded-lg shadow p-4 border border-ink/10 mb-6"
-         data-testid="current-art-panel">
+         data-testid="current-art-panel"
+         x-data="{ confirmingDelete: false }">
         <img src="{{ headshot_url }}" alt="Current headshot"
              class="rounded-md object-cover"
              style="width: 90px; height: 120px;">
@@ -48,13 +49,11 @@
                 Uploading new art will replace this. This cannot be undone.
             </p>
             <form method="POST" action="/characters/{{ character.id }}/art/delete"
-                  x-data="{ confirming: false }"
-                  @submit="if (!confirming) { $event.preventDefault(); confirming = true; }">
+                  @submit="if (!confirmingDelete) { $event.preventDefault(); confirmingDelete = true; }">
                 <button type="submit"
                         class="bg-red-700 hover:bg-red-800 text-parchment px-3 py-2 rounded text-sm font-medium"
                         data-action="delete-art"
-                        x-text="confirming ? 'Click again to confirm deletion' : 'Delete current art'">
-                </button>
+                        x-text="confirmingDelete ? 'Click again to confirm deletion' : 'Delete current art'">Delete current art</button>
             </form>
         </div>
     </div>

@@ -1020,7 +1020,7 @@
                         </div>
                     </div>
                     <div class="relative"
-                         x-data="{ artMenu: false, confirmOverwrite: false }">
+                         x-data="{ artMenu: false, confirmOverwrite: false, confirmingDelete: false }">
                         <button type="button" @click="artMenu = !artMenu"
                                 class="bg-indigo-700 hover:bg-indigo-800 text-parchment px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm flex items-center gap-1"
                                 data-action="character-art-menu">
@@ -1061,14 +1061,12 @@
                             {% if character.headshot_s3_key %}
                             <form method="POST"
                                   action="/characters/{{ character.id }}/art/delete"
-                                  x-data="{ confirming: false }"
-                                  @submit="if (!confirming) { $event.preventDefault(); confirming = true; }"
+                                  @submit="if (!confirmingDelete) { $event.preventDefault(); confirmingDelete = true; }"
                                   class="border-t border-ink/10">
                                 <button type="submit"
                                         class="block w-full text-left px-3 py-2 hover:bg-parchment text-ink"
                                         data-action="delete-art"
-                                        x-text="confirming ? 'Click again to confirm' : 'Delete art'">
-                                </button>
+                                        x-text="confirmingDelete ? 'Click again to confirm' : 'Delete art'">Delete art</button>
                             </form>
                             {% endif %}
                         </div>
