@@ -1043,11 +1043,21 @@
                                 Upload new art
                             </a>
                             {% endif %}
+                            {% if art_gen_enabled() %}
                             <a href="/characters/{{ character.id }}/art/generate"
                                class="block w-full text-left px-3 py-2 hover:bg-parchment text-ink border-t border-ink/10"
                                data-action="generate-with-ai">
                                 Generate with AI
                             </a>
+                            {% else %}
+                            <div class="block w-full text-left px-3 py-2 text-ink/40 border-t border-ink/10 cursor-default tooltip-trigger relative"
+                                 data-action="generate-with-ai-disabled">
+                                Generate with AI
+                                <div class="tooltip-content absolute right-0 bottom-full mb-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-56 text-left">
+                                    AI art generation is temporarily disabled.
+                                </div>
+                            </div>
+                            {% endif %}
                             {% if character.headshot_s3_key %}
                             <form method="POST"
                                   action="/characters/{{ character.id }}/art/delete"
