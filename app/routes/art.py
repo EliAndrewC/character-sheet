@@ -691,4 +691,26 @@ def art_generate_status(
     return JSONResponse(payload)
 
 
+# ---------------------------------------------------------------------------
+# Clicktest storage stub: serves bytes from the local disk when
+# ART_STORAGE_USE_TEST_STUB=1. The route is registered unconditionally
+# but returns 404 when the stub is off, so production traffic never
+# sees anything useful here.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/test-art-stub/{encoded_key}")
+def test_art_stub(encoded_key: str):
+    if not art_storage.use_disk_stub():
+        return Response(status_code=404)
+    data = art_storage.stub_read_bytes(encoded_key)
+    if data is None:
+        return Response(status_code=404)
+    return Response(
+        content=data,
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=604800"},
+    )
+
+
 __all__ = ["router"]

@@ -263,14 +263,53 @@ Order in the dropdown matches the order of this dict. The selector default is `'
 
 ---
 
-## Phase 10 - Polish, deploy, background clicktest run
+## Phase 10 - Character-art clicktests
+
+**Goal:** bring the `character_art` mark from empty to fully exercising the feature end-to-end in a real browser. Phases 4-9 deferred every e2e test, annotating each COVERAGE.md item with its unit-test reference - that unit coverage keeps the server honest but doesn't catch the class of bugs clicktests exist for (AJAX handlers returning the wrong content type, Alpine state divergence, redirects landing on the wrong URL, interactive overlay timing).
+
+**Pragmatism:** we do NOT write one clicktest per checklist line. Where the difference between items is one the unit tests already nail (PNG vs JPG vs WEBP format; every individual clan; every specific aspect-ratio rejection), one golden-path clicktest suffices. Where a checklist item is inherently not browser-visible (S3 key lifecycle), it gets marked `[-]` with a reason rather than pretending it's pending.
+
+### Implementation steps
+
+1. **E2E harness env vars.** Update `tests/e2e/conftest.py` to set `ART_GEN_ENABLED=true` and `ART_GEN_USE_TEST_STUB=1` in the uvicorn subprocess, mirroring the `IMPORT_USE_TEST_STUB` pattern. This lets the generation clicktests drive the real wizard without touching Imagen.
+2. **Edit-page kill-switch gate.** The "Generate with AI" link must render as a disabled-with-tooltip entry when `ART_GEN_ENABLED=false` (Appendix A item 32). Currently it's always a live link. Plumb `art_gen_enabled` as a Jinja global and update `character/edit.html` accordingly.
+3. **`tests/e2e/test_character_art_upload.py`** (mark: `character_art`). Covers:
+   - "Character Art" dropdown visible on edit page, Upload link goes to landing
+   - Upload landing rejects wrong-format file and rejects wrong aspect ratio (one rejection test, not one per error - unit tests cover the per-error copy)
+   - Happy path: upload a valid PNG, land on crop page, assert Cropper initialised with the detected bbox, save, land on edit page with success banner
+   - Delete art via the dropdown modal, return to edit page with the deleted banner
+   - Overwrite modal appears when uploading a replacement
+4. **`tests/e2e/test_character_art_display.py`** (mark: `character_art`). Covers:
+   - List page: a character with art shows the img; one without shows the placeholder (two characters on the same page)
+   - Sheet page at `lg` width: the art grid is present when the character has art
+   - Sheet page when character has no art: no grid, school section full-width
+5. **`tests/e2e/test_character_art_generate.py`** (mark: `character_art`). Covers:
+   - Click "Generate with AI" from edit dropdown -> step 1 page
+   - Step 1 -> step 2 carries the selected gender; Alpine `subject` pronoun is "He" or "She"
+   - Age checkbox is visually disabled (cannot be unchecked in the UI)
+   - Checking an optional row enables its text input; unchecking disables it
+   - Click "Create Prompt" -> step 3 shows the assembled prompt in a textarea
+   - Click "Generate Art" -> textarea locks, status indicator shows; stub returns image; Cropper appears in-place; Save button commits to character
+   - Force a failure by setting the rate-limit to 0: banner appears, textarea re-enables, button label becomes "Try Again"
+   - Kill-switch: with `ART_GEN_ENABLED=false`, the dropdown entry renders disabled
+6. **Re-mark COVERAGE.md.** Replace `[ ]` with `[x] -> <test_file>::<test_fn>` for items a clicktest now covers; use `[-]` with a short reason for items the plan decided unit-tests-only.
+7. **Run `pytest -m character_art` until green.** Don't run the full suite - that's Phase 11.
+
+### Out of scope for Phase 10
+
+- JS-error regression tests for the art pages (moved to Phase 11)
+- Phase-10-level responsive assertions beyond what's already in `test_responsive.py`
+- Deploy + background full-suite kickoff (Phase 11)
+
+---
+
+## Phase 11 - Polish, deploy, background clicktest run
 
 **Goal:** ship it.
 
 1. Add JS-error tests to `test_sheet_js_errors.py` and `test_editor_controls.py` for the new art-related Alpine state (image `null` branches, missing crop box, etc.).
-2. Add responsive sanity assertions to `test_responsive.py` covering both the list-page headshots and the sheet-page art float.
-3. Deploy to Fly.io (UI change).
-4. Kick off the full clicktest suite in the background; report done without blocking on the result (per CLAUDE.md workflow step 8).
+2. Deploy to Fly.io (UI change).
+3. Kick off the full clicktest suite in the background; report done without blocking on the result (per CLAUDE.md workflow step 8).
 
 ---
 
@@ -293,44 +332,8 @@ These are the numbers a reviewer will ask about. Gathered in one place:
 
 ---
 
-## Appendix A - Full clicktest checklist (copy to COVERAGE.md in Phase 1)
+## Appendix A - Clicktest checklist
 
-Add a new `## Character Art` section to `tests/e2e/COVERAGE.md` with these lines, all `[ ]`. Mark them as tests land.
+The full checklist lives in **`tests/e2e/COVERAGE.md`** under the `## Character Art` section - that is the living source of truth, updated as each phase lands. Phase 1 seeded it from this appendix; subsequent phases flipped its boxes to `[x]` (real clicktest landed) or `[-]` (explicitly unit-tested-only, with a reason) as work completed.
 
-```
-## Character Art
-
-- [ ] "Upload new art" button visible on edit page for users with edit access
-- [ ] "Upload new art" button hidden for users without edit access
-- [ ] Upload rejects non-image file with clear error banner
-- [ ] Upload rejects oversized file (> 5 MB) with clear error banner
-- [ ] Upload rejects image outside allowed aspect ratio with clear error banner
-- [ ] Upload of valid PNG redirects to crop page
-- [ ] Upload of valid JPG redirects to crop page
-- [ ] Upload of valid WEBP redirects to crop page
-- [ ] Crop page seeds the crop box from detected face bbox
-- [ ] Crop page falls back to centered-square when no face detected
-- [ ] Crop page enforces locked aspect ratio during drag
-- [ ] Save-crop writes full + headshot, redirects back to edit page with success banner
-- [ ] Overwrite confirm modal appears when replacing existing art
-- [ ] Delete-art confirm modal removes art and reverts to placeholder
-- [ ] Character list page shows headshot for characters that have art
-- [ ] Character list page shows placeholder for characters without art
-- [ ] Character list page does not overflow horizontally at 375 px viewport
-- [ ] View Sheet floats full art to the right of the school section at >= lg breakpoint
-- [ ] View Sheet stacks full art and school section below lg breakpoint
-- [ ] View Sheet omits art block for characters without art (no empty column)
-- [ ] "Generate with AI" button opens step 1 (gender)
-- [ ] Step 1 -> step 2 carries gender forward; pronouns are correct
-- [ ] Step 2 age checkbox cannot be unchecked
-- [ ] Step 2 optional rows disable their text input until the checkbox is checked
-- [ ] Step 2 "Create Prompt" assembles the prompt and advances to step 3
-- [ ] Step 3 textarea is editable before "Generate Art" is clicked
-- [ ] Step 3 textarea locks while generation is in flight; unlocks on success or failure
-- [ ] Successful generation redirects to the crop page with the generated art
-- [ ] Failed generation shows a retry link that preserves the prompt
-- [ ] Generation stub returns the expected canned image based on prompt keyword (smoke check)
-- [ ] Per-user rate limit blocks the 26th generation in 24 h with a clear banner
-- [ ] ART_GEN_ENABLED=false disables the "Generate with AI" button with a disabled-state tooltip
-- [ ] Deleting the character also removes its S3 art keys (checked via orphan cleanup)
-```
+The original 33-item template used to live here verbatim; it was removed once the live doc diverged (a few row wordings were updated in Phase 7/8 to match Eli's "same-page generation + crop" spec) to avoid two sources drifting apart. Consult `tests/e2e/COVERAGE.md` for current status.
