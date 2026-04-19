@@ -6,6 +6,9 @@ Because this is a big feature, the plan is broken into small phases that can eac
 
 Open questions for the user live at the bottom in "Open Questions" - please answer those before we begin Phase 2 (some answers change the design of later phases).
 
+**Clicktest scope during this effort:** run only the targeted clicktests for the phase being worked on - the specific new tests added in that phase plus any directly related existing tests (e.g. the school-selection suite for Phase 1, the `school_abilities` mark for later phases). Do NOT run the full e2e suite between phases. The full suite is deferred until Phase 11 (post-deploy), per `CLAUDE.md` step 8.
+
+
 ---
 
 ## Goals & scope
@@ -243,21 +246,63 @@ Eli's answer: same S3 bucket is fine
 
 2. **Face detection approach:** OpenCV Haar cascades locally, or a Gemini Vision bbox call? OpenCV adds ~35 MB to the image; Gemini adds per-upload latency + API cost.
 
-OpenCV Haar sounds fine
+Eli's answer: OpenCV Haar sounds fine
 
 3. **Headshot aspect ratio:** 1:1 square (my default in this plan), or a portrait ratio like 4:5 or 3:4 that better matches where a face sits in a photo?
 
-
+Eli's answer: I think a rectangle is better than a square, so let's go with a 3:4 ratio
 
 4. **Narrow-screen stack order on View Sheet:** when the layout collapses, should the full art appear *above* the school section or *below* it? I'm defaulting to above (it's visually heavier and reads as "primary"), but "below" keeps the important mechanics at the top.
+
+Eli's answer: above is better
+
 5. **Public visibility:** the index page shows characters to logged-in users. Are those characters (and therefore their art) visible to *any* logged-in user, or scoped to campaign/group membership? That affects whether we need per-character presigned URLs vs a single signed-cookie trick.
+
+Eli's answer: all art should be visible to everyone; we never need to worry about whether someone is logged in for them to be able to see this art
+
 6. **Gemini image model choice:** `gemini-2.5-flash-image-preview` is the default in this plan. If your key uses Imagen 3 / Imagen 4 instead, the endpoint and request shape differ - please confirm which model you'd like and we'll lock that in.
+
+Eli's answer: we should use imagen-4.0-generate-001 (unless gemini-2.5-flash-image-preview is more advanced) because imagen-4.0-generate-001 is what I have used with these prompts in other projects and I have liked it
+
 7. **Clan colors table:** the prefix "wearing their <clan colors>" is only automated if we map school/clan -> color pair. Do you want us to hand-enter those colors in a new table in `game_data.py`, or always leave the prefix's color clause for the user to fill in on step 3?
+
+Eli's answer: we should have a pre-existing map, but the select defaults to Wasp clan, and here is the map of colors to use:
+
+CLAN_COLORS = {
+    'Crab': 'dark blue and light gray',
+    'Crane': 'light blue and white / silver',
+    'Dragon': 'gold and dark green',
+    'Lion': 'yellow and brown',
+    'Phoenix': 'red and orange',
+    'Scorpion': 'black and dark red',
+    'Unicorn': 'purple and white with gold trim',
+    'Imperial': 'dark green with gold trim and fine chrysanthemum embroidery',
+    'Sparrow': 'dun brown and black',
+    'Fox': 'green and silver',
+    'Wasp': 'black and gold',
+    'Dragonfly': 'blue, brown, and gold',
+    'Hare': 'red and white',
+}
+
 8. **Age default:** should the age number-input pre-fill with anything (e.g., 30), or start blank requiring the user to type a value?
+
+Eli's answer: start with a default value of 20 years old
+
 9. **Rate-limit parity:** 10 AI generations per user per 24 hours (matching the importer) - is that the right cap, or do you want tighter/looser?
+
+Eli's answer: let's go with 25 AI generations within 24 hours per user
+
 10. **Who sees the "Generate with AI" button:** everyone with edit access, or only admins/GMs? This is a cost-control question, not a feature-access one.
+
+Eli's answer: anyone with edit access for a character can generate art for that character
+
 11. **When to cleanup orphans:** every startup (current plan), only on a dedicated cron, or after every art change? Startup is the simplest and matches the DB backup cadence.
+
+Eli's answer: startup is fine, so long as it does the same thing as the database backup, which is to background the backup process with a ~30 second sleep (I believe that's the pattern)
+
 12. **Keeping a Drafts-vs-Published art distinction:** when a user clicks Apply Changes and a new version is published, does the art carry over to the published version (yes, I think), and does editing the art in a Draft leave the published art untouched until Apply (also yes, I think)? Confirm so we can implement this correctly the first time.
+
+Eli's answer: Draft-vs-Published is for character stats rather than metadata, and character art is considered metadata, therefore it should update immeidately.  This also means that if character art is the only thing to change for a character, then that doesn't put the character into Draft status.
 
 ---
 
