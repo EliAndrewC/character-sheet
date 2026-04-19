@@ -32,11 +32,15 @@ Non-goals for this pass:
 **Goal:** land everything we need *before* writing feature code so that missing pieces are visible as we go.
 
 1. Add a new `## Character Art` section to `tests/e2e/COVERAGE.md` populated with the full clicktest checklist below (all `[ ]`). Every subsequent phase flips its own boxes to `[x]`. The checklist is in Appendix A of this document; copy it verbatim.
-2. Add a new pytest mark `character_art` in `pytest.ini`.
-3. Add `art/` subdirectory under `tests/e2e/` and a matching `tests/import_fixtures/art/` directory (the latter for unit-test fixtures). Add a short `README.md` explaining the fixture naming convention (`<case>.png` / `<case>.jpg`, optional `<case>.expected.json` with detected-face bbox).
-4. Add a `school-features/` note? No - this doesn't belong there; it's not school-specific.
+2. Add a new pytest mark `character_art` in `pytest.ini` with a one-line description (matches the existing pattern for other marks in that file).
+3. Create two fixture directories, each with a `README.md` that states its purpose and naming convention:
+   - **`tests/e2e/art/`** - sample image files that Playwright uploads during the Phase 4 clicktests (e.g. `small_valid.png`, `valid.jpg`, `valid.webp`, `too_large.png`, `wrong_ratio_banner.jpg`, `not_an_image.txt`). Naming: `<case>.<ext>` where `<case>` describes the scenario the test exercises. These are real bytes, committed to the repo, kept under 100 KB each so the repo doesn't bloat.
+   - **`tests/import_fixtures/art/`** - unit-test fixtures for the non-browser code paths. Two subtrees:
+     - face-detect fixtures (`portrait_clear_face.jpg`, `abstract_no_face.png`, `very_small_face.jpg`) with optional sibling `<case>.expected.json` files carrying the expected bbox plus tolerance.
+     - `stub_outputs/` - canned PNGs returned by the Phase 8 generation stub, keyed by prompt-keyword (`wasp.png`, `scorpion.png`, `fallback.png`).
+   The READMEs exist so future maintainers know which directory to drop a new fixture in without rereading this plan.
 
-**Tests:** none yet (this phase only adds empty files and one section to COVERAGE.md).
+**Tests:** none yet (this phase only adds empty directories, two READMEs, one `pytest.ini` line, and one section to `COVERAGE.md`).
 
 ---
 
