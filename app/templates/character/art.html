@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}L7R - Character Art - {{ character.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto" data-testid="art-landing-page">
+    <div class="flex items-center gap-3 mb-6">
+        <a href="/characters/{{ character.id }}/edit"
+           class="text-ink/60 hover:text-ink text-sm">&larr; Back to edit</a>
+    </div>
+    <h1 class="text-3xl font-bold mb-2">Character Art: {{ character.name }}</h1>
+    <p class="text-ink/70 mb-6">
+        Upload a portrait for this character. PNG, JPG, or WebP, up to {{ max_upload_mb }} MB.
+        After uploading you'll pick the headshot crop used on the character list page.
+    </p>
+
+    {% if request.query_params.get('art_error') %}
+    <div class="rounded bg-red-50 border border-red-300 text-red-900 px-4 py-3 mb-6"
+         data-testid="art-error-banner">
+        {% if request.query_params.get('art_error') == 'storage_not_configured' %}
+        Character art storage is not configured on this server. Contact the GM.
+        {% elif request.query_params.get('art_error') == 'upload_failed' %}
+        Could not save the art - the upload to S3 failed. Please try again.
+        {% elif request.query_params.get('art_error') == 'expired' %}
+        That upload expired before you could crop it. Please upload again.
+        {% else %}
+        Could not save the art. Please try again.
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if error_message %}
+    <div class="rounded bg-red-50 border border-red-300 text-red-900 px-4 py-3 mb-6"
+         data-testid="art-error-banner">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
+    {% if headshot_url %}
+    <div class="flex items-start gap-4 bg-white rounded-lg shadow p-4 border border-ink/10 mb-6"
+         data-testid="current-art-panel">
+        <img src="{{ headshot_url }}" alt="Current headshot"
+             class="rounded-md object-cover"
+             style="width: 90px; height: 120px;">
+        <div class="flex-1">
+            <div class="font-semibold mb-1">Current headshot</div>
+            <p class="text-sm text-ink/70 mb-3">
+                Uploading new art will replace this. This cannot be undone.
+            </p>
+            <form method="POST" action="/characters/{{ character.id }}/art/delete"
+                  x-data="{ confirming: false }"
+                  @submit="if (!confirming) { $event.preventDefault(); confirming = true; }">
+                <button type="submit"
+                        class="bg-red-700 hover:bg-red-800 text-parchment px-3 py-2 rounded text-sm font-medium"
+                        data-action="delete-art"
+                        x-text="confirming ? 'Click again to confirm deletion' : 'Delete current art'">
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/characters/{{ character.id }}/art/upload"
+          enctype="multipart/form-data"
+          class="space-y-4 bg-white rounded-lg shadow p-6 border border-ink/10"
+          data-testid="art-upload-form">
+        <div>
+            <label for="art-file" class="block text-sm font-medium mb-1">
+                {% if headshot_url %}Choose a new image{% else %}Choose an image{% endif %}
+            </label>
+            <input id="art-file" type="file" name="file"
+                   accept="image/png,image/jpeg,image/webp"
+                   required
+                   class="block w-full text-sm border border-ink/20 rounded p-2 bg-parchment">
+        </div>
+        <button type="submit"
+                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded font-medium"
+                data-action="upload-art">
+            Upload &amp; Crop
+        </button>
+    </form>
+</div>
+{% endblock %}

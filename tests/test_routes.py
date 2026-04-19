@@ -1560,13 +1560,13 @@ class TestPriestRitualsLinkOnSheet:
 
 
 class TestImportKillSwitchNavBar:
-    """When IMPORT_ENABLED=false, the navbar's "New Character" control is a
-    single submit button posting to /characters - no dropdown, no link to
-    /import. When IMPORT_ENABLED=true (default), the dropdown shows both
-    options."""
+    """IMPORT_ENABLED gates the navbar's "New Character" control. When the
+    env var is true the dropdown shows Create + Import; when false OR unset
+    (fail-closed default) the control collapses to a single submit button
+    posting to /characters - no dropdown, no /import link."""
 
     def test_dropdown_visible_when_import_enabled(self, client, monkeypatch):
-        monkeypatch.delenv("IMPORT_ENABLED", raising=False)
+        monkeypatch.setenv("IMPORT_ENABLED", "true")
         resp = client.get("/")
         assert resp.status_code == 200
         assert 'data-testid="new-character-menu"' in resp.text
@@ -1586,6 +1586,16 @@ class TestImportKillSwitchNavBar:
         # The button itself stays - now as a direct submit (no submenu).
         assert 'data-testid="new-character-button"' in resp.text
         assert 'action="/characters"' in resp.text
+
+    def test_dropdown_hidden_when_env_var_unset(self, client, monkeypatch):
+        """A missing IMPORT_ENABLED leaves the feature OFF - fail-closed
+        so a future .env that forgets the flag keeps the dropdown hidden."""
+        monkeypatch.delenv("IMPORT_ENABLED", raising=False)
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert 'data-testid="new-character-menu"' not in resp.text
+        assert 'data-testid="new-character-option-import"' not in resp.text
+        assert 'href="/import"' not in resp.text
 
     def test_disabled_button_submits_directly_to_characters(self, client, monkeypatch):
         """The visible 'New Character' button when import is off must POST to
@@ -2230,7 +2240,263 @@ class TestShugenjaVoidMax:
         assert resp.status_code == 200
 
 
-class TestWoundCheckProbability10k10Caps:
+class TestActionDiceShapeAndColor:
+    """Action dice (side panel + initiative result panel) use the same SVG
+    kite shape as the roll-animation dice, and don't distinguish low vs
+    high values by color. Spent/Phase 0/athletics-only remain categorically
+    distinct, but 2 and 8 render identically."""
+
+    def test_side_panel_action_dice_use_svg_kite(self, client):
+        cid = _seed_character(client, name="ActionDiceShape")
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # The action-die button no longer uses `rounded-full`; instead it
+        # wraps an SVG with the shared `die` class.
+        # Slice to the action-dice section so we don't match unrelated SVGs.
+        start = resp.text.find('data-testid="action-dice-section"')
+        assert start != -1
+        section = resp.text[start:start + 4000]
+        assert 'data-action="action-die"' in section
+        assert 'rounded-full' not in section
+        # The svg uses the shared class so it picks up svg.die styling.
+        assert 'class="die action-die' in section or "class='die action-die" in section
+
+    def test_side_panel_action_dice_have_no_low_value_variant(self, client):
+        """The old :class expression branched on die.value <= 3 to make
+        low-value dice red. The new markup has no such branch."""
+        cid = _seed_character(client, name="ActionDiceColor")
+        resp = client.get(f"/characters/{cid}")
+        start = resp.text.find('data-testid="action-dice-section"')
+        section = resp.text[start:start + 4000]
+        assert "die.value <= 3" not in section
+        assert "phase <= 3" not in section
+
+    def test_initiative_result_action_dice_use_svg_kite(self, client):
+        """The Action Dice panel inside the initiative-result view must
+        match the side panel's kite shape for visual consistency."""
+        cid = _seed_character(client, name="InitResultShape")
+        resp = client.get(f"/characters/{cid}")
+        # The initiative result panel header literally says 'Action Dice'.
+        idx = resp.text.find(">Action Dice<")
+        assert idx != -1
+        panel = resp.text[idx:idx + 4000]
+        assert "rounded-full" not in panel
+        assert "phase <= 3" not in panel
+        assert "class=\"die action-die" in panel or "class='die action-die" in panel
+    """The 5-item side panel on the character sheet (Impaired, Dying,
+    TN to be hit, Wound Check, Initiative) is ordered so Initiative appears
+    last - below Wound Check rather than in the middle of the combat stats.
+    Togashi Ise Zumi renders a different Initiative markup (two variants),
+    but the ordering rule holds for both."""
+
+    def _label_positions(self, text, labels):
+        return {lbl: text.find(lbl) for lbl in labels}
+
+    def test_regular_character_initiative_last(self, client):
+        cid = _seed_character(client, name="Order Check")
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        pos = self._label_positions(resp.text, [
+            "Impaired at:", "Dying at:", "TN to be hit:",
+            "Wound Check:", "Initiative:",
+        ])
+        for label, idx in pos.items():
+            assert idx != -1, f"{label} missing from sheet"
+        assert (
+            pos["Impaired at:"]
+            < pos["Dying at:"]
+            < pos["TN to be hit:"]
+            < pos["Wound Check:"]
+            < pos["Initiative:"]
+        ), f"side panel out of order: {pos}"
+
+    def test_togashi_initiative_last(self, client):
+        """Togashi's dual-variant Initiative box still appears last."""
+        cid = _seed_character(
+            client, name="Togashi Order", school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        pos = self._label_positions(resp.text, [
+            "Impaired at:", "Dying at:", "TN to be hit:",
+            "Wound Check:", "Initiative:",
+        ])
+        assert (
+            pos["Impaired at:"]
+            < pos["Dying at:"]
+            < pos["TN to be hit:"]
+            < pos["Wound Check:"]
+            < pos["Initiative:"]
+        )
+
+
+class TestAthleticsPredeclaredParryRow:
+    """The athletics picker should have a 5th row, Athletics (Predeclared
+    parry), below Athletics (Parry). Like the existing predeclared-parry
+    option on the parry menu, it adds a +5 flat bonus and tags the roll
+    with reason 'predeclared parry' via executeRollWithExtraFlat."""
+
+    def test_row_markup_present(self, client):
+        cid = _seed_character(
+            client, name="AthPredecl", school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+            skills={"athletics": 2},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-athletics-combat="predeclared-parry"' in resp.text
+        # The click handler must route through executeRollWithExtraFlat with
+        # the athletics:parry formula and the +5 predeclared-parry bonus.
+        assert (
+            "executeRollWithExtraFlat('athletics:parry', 0, null, 5,"
+            " 'predeclared parry')"
+        ) in resp.text
+        # And appear AFTER the plain Athletics (Parry) row in DOM order so
+        # it renders below it in the picker.
+        parry_idx = resp.text.find('data-athletics-combat="parry"')
+        pre_idx = resp.text.find('data-athletics-combat="predeclared-parry"')
+        assert parry_idx != -1 and pre_idx != -1
+        assert parry_idx < pre_idx
+
+    def test_void_submenu_preserves_predeclared_bonus(self, client):
+        """The void-spend flyout on the new row must also carry the +5
+        bonus, so spending void still stacks with the predeclared raise."""
+        cid = _seed_character(
+            client, name="AthPredecl2", school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+            skills={"athletics": 2},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert 'data-athletics-void-submenu="predeclared-parry"' in resp.text
+        assert (
+            "executeRollWithExtraFlat('athletics:parry', opt.count, opt, 5,"
+            " 'predeclared parry')"
+        ) in resp.text
+
+
+class TestAthleticsAttackVoidSubmenu:
+    """The athletics picker menu shows a void-spend flyout on the
+    Athletics (Parry) row; the Athletics (Attack) row should mirror it so
+    the menu isn't lopsided. Clicking an option must open the attack
+    modal with the void count preselected."""
+
+    def test_sheet_has_athletics_attack_void_submenu(self, client):
+        cid = _seed_character(
+            client, name="AthAttackVoid", school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+            skills={"athletics": 2},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # The submenu lives inside a data-athletics-void-submenu="attack"
+        # block mirroring the existing =parry block.
+        assert 'data-athletics-void-submenu="attack"' in resp.text
+        # Both the row gate and the flyout click handler reference the
+        # athletics:attack roll key.
+        assert "openAttackModal('athletics:attack', opt.count)" in resp.text
+
+    def test_open_attack_modal_accepts_preselected_void(self, client):
+        """The Alpine method must accept an optional preselect argument so
+        the submenu can hand off a chosen void count to the modal."""
+        cid = _seed_character(client, name="Akodo")
+        resp = client.get(f"/characters/{cid}")
+        # The signature must include an argument; the body assigns it to
+        # this.atkVoidSelected on open.
+        assert "openAttackModal(key, preselectedVoid" in resp.text
+
+
+class TestTogashiRerollGate:
+    """The Togashi 4th Dan reroll button must not offer itself on rolls that
+    can never be contested. Damage rolls (e.g. Dragon Tattoo) are never
+    contested, so the button's x-show condition gates on the formula's
+    is_damage_roll flag - not just a single hard-coded roll key - so any
+    future damage roll surfacing in the regular modal is also excluded."""
+
+    def test_reroll_condition_excludes_damage_rolls(self, client):
+        cid = _seed_character(
+            client, name="Togashi 4D", school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            knacks={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # The visibility predicate for the reroll button references the
+        # damage-roll flag on the formula. Without this, Dragon Tattoo
+        # (a damage roll) would offer the "reroll if contested" button.
+        assert "!formula?.is_damage_roll" in resp.text
+
+    def test_dragon_tattoo_formula_flagged_as_damage_roll(self, client):
+        """Prove the flag is actually set on the Dragon Tattoo formula in
+        the embedded roll-formulas JSON, so the gate above matches."""
+        import json, re
+        cid = _seed_character(
+            client, name="Togashi DT", school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        m = re.search(
+            r'id="roll-formulas">(.*?)</script>', resp.text, re.DOTALL,
+        )
+        assert m is not None
+        formulas = json.loads(m.group(1))
+        assert formulas["knack:dragon_tattoo"]["is_damage_roll"] is True
+
+
+class TestTogashiAthleticsRaiseInAttackModal:
+    """Togashi 3rd Dan's 'Spend Athletics Raise' button must appear in the
+    attack-result modal when the roll is athletics:attack, since athletics
+    used as an attack is still an athletics roll. Athletics:parry already
+    goes through the regular roll modal where the existing
+    currentRollKey.startsWith('athletics:') gate covers it."""
+
+    def _seed_togashi_3d(self, client):
+        return _seed_character(
+            client, name="Togashi AtkRaise",
+            school="togashi_ise_zumi",
+            school_ring_choice="Void",
+            ring_void=3,
+            skills={"precepts": 2, "athletics": 2},
+            knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3},
+        )
+
+    def test_attack_modal_contains_togashi_raise_button(self, client):
+        """The sheet embeds a spend button keyed by is_athletics_attack."""
+        cid = self._seed_togashi_3d(client)
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # A button wired to a new atkSpendTogashiRaise() handler must appear
+        # inside the attack-result block and must be gated on the formula
+        # flag so it only shows for athletics:attack, not regular attacks.
+        assert 'atkSpendTogashiRaise()' in resp.text
+        assert 'atkUndoTogashiRaise()' in resp.text
+        # Visibility predicate references the athletics-attack flag
+        assert 'atkFormula?.is_athletics_attack' in resp.text
+
+    def test_non_togashi_sheet_has_no_atk_togashi_raise_handlers(self, client):
+        """The handler is an Alpine method defined once in the component, so
+        it renders for any character's sheet. But the button's *condition*
+        still requires schoolAbilities.togashi_daily_athletics_raises, so a
+        non-togashi sheet must not activate the button at runtime. We assert
+        the schoolAbilities flag is False so the condition is falsy."""
+        import json, re
+        cid = _seed_character(
+            client, name="Akodo", school="akodo_bushi",
+            school_ring_choice="Water",
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        m = re.search(
+            r'id="school-abilities">(.*?)</script>', resp.text, re.DOTALL,
+        )
+        assert m is not None
+        abilities = json.loads(m.group(1))
+        assert abilities.get("togashi_daily_athletics_raises") in (False, None)
     """The wound check probability table key loop applies 10k10 caps for each
     void spend level. High Water + void spend pushes rolled past 10 and kept
     past 10, exercising both cap branches (lines 377-381 in pages.py)."""

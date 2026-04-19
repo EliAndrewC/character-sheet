@@ -83,6 +83,48 @@ def test_homepage_no_horizontal_overflow(page, live_server_url):
     _assert_no_horizontal_overflow(page)
 
 
+def test_homepage_headshot_placeholder_fits_card_at_phone_width(page, live_server_url):
+    """The headshot placeholder next to each character name must be the
+    documented 60x80 px and must not push the card text off-screen on a
+    375 px phone."""
+    # Need at least one character for the list to render any card.
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Placeholder Card")
+    select_school(page, "akodo_bushi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.goto(live_server_url)
+    page.set_viewport_size(PHONE)
+
+    placeholder = page.locator('[data-testid="character-headshot-placeholder"]').first
+    placeholder.wait_for()
+    box = placeholder.bounding_box()
+    assert box is not None
+    # Documented 60x80 (3:4 portrait) - allow a couple of px for Tailwind
+    # rounding, never a zero-width collapse.
+    assert 58 <= box["width"] <= 62, f"headshot width {box['width']} px"
+    assert 78 <= box["height"] <= 82, f"headshot height {box['height']} px"
+    _assert_no_horizontal_overflow(page)
+
+
+def test_sheet_no_horizontal_overflow_across_widths(page, live_server_url):
+    """View Sheet must not overflow horizontally at phone, tablet, or
+    desktop widths. The Phase 6 art/school grid was the trigger for
+    adding this test - it ensures the lg:grid doesn't blow past the
+    viewport on narrow screens."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "SheetWidths")
+    for viewport in (
+        {"width": 375, "height": 667},     # phone
+        {"width": 768, "height": 1024},    # tablet
+        {"width": 1280, "height": 720},    # desktop
+    ):
+        page.set_viewport_size(viewport)
+        page.goto(sheet_url)
+        page.wait_for_load_state("networkidle")
+        _assert_no_horizontal_overflow(page)
+
+
 # ---------------------------------------------------------------------------
 # Nav hamburger toggle
 # ---------------------------------------------------------------------------

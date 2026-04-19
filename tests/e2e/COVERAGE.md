@@ -379,11 +379,18 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] 3rd Dan athletics raise undo restores pool -> `test_school_abilities.py::test_togashi_athletics_raise_undo_restores_pool`
 - [x] 3rd Dan athletics raise per-roll capped by pool remaining -> `test_school_abilities.py::test_togashi_athletics_raise_capped_by_pool_remaining`
 - [x] 3rd Dan athletics raise button hidden when pool empty -> `test_school_abilities.py::test_togashi_athletics_raise_button_hidden_when_pool_empty`
+- [ ] 3rd Dan athletics raise spendable on athletics:parry (existing regular modal path) -> `test_school_abilities.py::test_togashi_athletics_raise_on_athletics_parry`
+- [ ] 3rd Dan athletics raise spendable on athletics:attack (attack modal HIT block adds +5 to atkRollTotal and decrements pool) -> `test_school_abilities.py::test_togashi_athletics_raise_on_athletics_attack_hit`
+- [ ] 3rd Dan athletics raise undo from attack modal restores atkRollTotal and pool -> `test_school_abilities.py::test_togashi_athletics_raise_atk_undo_restores_total_and_pool`
+- [ ] 3rd Dan athletics raise button absent on regular (non-athletics) attack even for togashi 3D -> `test_school_abilities.py::test_togashi_athletics_raise_button_absent_on_regular_attack`
+- [ ] Athletics (Attack) row exposes a void-spend flyout; clicking an option opens the attack modal with preselected void -> `test_rolls.py::test_athletics_picker_attack_has_void_submenu`
+- [ ] Athletics picker has 5th row "Athletics (Predeclared parry)" that rolls athletics:parry with +5 flat -> `test_rolls.py::test_athletics_picker_has_predeclared_parry_row`
 - [x] 4th Dan reroll button on contested rolls -> `test_school_abilities.py::test_togashi_4th_dan_reroll_behavioral`
 - [x] 4th Dan reroll limited to once per roll (button hidden after use, reappears on next roll; post-reroll banner notes original is discarded) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_only_once_per_roll`
 - [x] 4th Dan reroll hidden on initiative (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_initiative`
 - [x] 4th Dan reroll hidden on Etiquette (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_etiquette`
 - [x] 4th Dan reroll hidden on Heraldry (never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_heraldry`
+- [ ] 4th Dan reroll hidden on Dragon Tattoo (damage rolls are never contested) -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_dragon_tattoo`
 - [x] Dragon Tattoo does not offer void spending (damage roll, not skill roll) -> `test_school_abilities.py::test_togashi_dragon_tattoo_no_void_spend`
 - [x] Conviction spend button appears on skill roll results -> `test_school_abilities.py::test_conviction_button_appears_on_skill_roll`
 - [x] Conviction spend button does NOT appear on initiative rolls -> `test_school_abilities.py::test_conviction_not_on_initiative`
@@ -966,11 +973,12 @@ Kill switch & rate limit (covered by unit suite only):
       clicktest would need to restart the shared live server with
       a different env var, which the current harness doesn't support)
 - [ ] Navbar "New Character" collapses to a single submit button when
-      `IMPORT_ENABLED=false` (no dropdown, no /import link)
+      `IMPORT_ENABLED=false` OR unset (fail-closed default)
       (unit: `test_routes.py::TestImportKillSwitchNavBar`; same env-var
       restart limitation prevents a clicktest)
 - [x] Navbar "New Character" shows dropdown with Import option when
-      `IMPORT_ENABLED` is unset/true -> `test_create_character.py::test_new_character_dropdown_shows_import_option_when_enabled`
+      `IMPORT_ENABLED=true` -> `test_create_character.py::test_new_character_dropdown_shows_import_option_when_enabled`
+      (the clicktest harness sets `IMPORT_ENABLED=true` on the live server)
 - [ ] Rate-limit hit shows the banner
       (unit: `test_import_routes.py::test_post_rate_limit_blocks_before_job_creation`)
 
@@ -989,31 +997,94 @@ JS-error sanity:
 ## Character Art
 
 - [ ] "Upload new art" button visible on edit page for users with edit access
+      (unit: `test_art_routes.py::TestEditPageIntegration::test_character_art_menu_appears_on_edit_page`;
+      clicktest to add in Phase 10)
 - [ ] "Upload new art" button hidden for users without edit access
+      (unit: `test_art_routes.py::TestLandingPage::test_403_when_not_editor` - permission gate
+      enforced at the route level; non-editors cannot load the edit page either)
 - [ ] Upload rejects non-image file with clear error banner
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_wrong_format_rejected_422`;
+      clicktest to add in Phase 10)
 - [ ] Upload rejects oversized file (> 5 MB) with clear error banner
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_oversized_upload_rejected_413`;
+      clicktest to add in Phase 10)
 - [ ] Upload rejects image outside allowed aspect ratio with clear error banner
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_wrong_aspect_ratio_rejected_422`;
+      clicktest to add in Phase 10)
 - [ ] Upload of valid PNG redirects to crop page
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_valid_upload_redirects_to_crop[png-_png_bytes]`;
+      clicktest to add in Phase 10)
 - [ ] Upload of valid JPG redirects to crop page
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_valid_upload_redirects_to_crop[jpg-_jpeg_bytes]`;
+      clicktest to add in Phase 10)
 - [ ] Upload of valid WEBP redirects to crop page
+      (unit: `test_art_routes.py::TestUploadEndpoint::test_valid_upload_redirects_to_crop[webp-_webp_bytes]`;
+      clicktest to add in Phase 10)
 - [ ] Crop page seeds the crop box from detected face bbox
+      (unit: `test_art_routes.py::TestCropPage::test_renders_cropper_for_valid_staging_id` +
+      `test_art_face_detect.py::TestEndToEndRealPortrait`;
+      clicktest to add in Phase 10)
 - [ ] Crop page falls back to centered-square when no face detected
+      (unit: `test_art_face_detect.py::TestEndToEndNoFaceFixture`;
+      clicktest to add in Phase 10)
 - [ ] Crop page enforces locked aspect ratio during drag
+      (pure Cropper.js - no unit equivalent; clicktest to add in Phase 10)
 - [ ] Save-crop writes full + headshot, redirects back to edit page with success banner
+      (unit: `test_art_routes.py::TestCropSave::test_happy_path_uploads_to_s3_and_updates_character` +
+      `test_art_routes.py::TestEditPageIntegration::test_art_saved_banner_renders`;
+      clicktest to add in Phase 10)
 - [ ] Overwrite confirm modal appears when replacing existing art
+      (unit: `test_art_routes.py::TestEditPageIntegration::test_overwrite_modal_only_shows_when_art_exists`;
+      clicktest to add in Phase 10)
 - [ ] Delete-art confirm modal removes art and reverts to placeholder
+      (unit: `test_art_routes.py::TestDeleteEndpoint::test_happy_path_deletes_s3_and_clears_columns` +
+      `test_art_routes.py::TestEditPageIntegration::test_delete_option_only_shows_when_art_exists`;
+      clicktest to add in Phase 10)
 - [ ] Character list page shows headshot for characters that have art
+      (unit: `test_headshot_url.py::TestIndexPageRendering::test_shows_headshot_img_when_character_has_art` +
+      `test_mixed_cards_render_correct_element_per_character`;
+      clicktest to add in Phase 10)
 - [ ] Character list page shows placeholder for characters without art
-- [ ] Character list page does not overflow horizontally at 375 px viewport
+      (unit: `test_headshot_url.py::TestIndexPageRendering::test_shows_placeholder_when_character_has_no_art` +
+      `test_mixed_cards_render_correct_element_per_character`;
+      clicktest to add in Phase 10)
+- [x] Character list page does not overflow horizontally at 375 px viewport ->
+      `test_responsive.py::test_homepage_headshot_placeholder_fits_card_at_phone_width`
+      + `test_homepage_no_horizontal_overflow`
 - [ ] View Sheet floats full art to the right of the school section at >= lg breakpoint
-- [ ] View Sheet stacks full art and school section below lg breakpoint
+      (unit: `test_headshot_url.py::TestSheetPageRendering::test_sheet_shows_art_grid_when_character_has_art`
+      proves the `lg:grid lg:grid-cols-2` wrapper + `lg:order-last` on the art div
+      are emitted; clicktest to add in Phase 10)
+- [x] View Sheet stacks full art and school section below lg breakpoint ->
+      `test_responsive.py::test_sheet_no_horizontal_overflow_across_widths`
+      (covers 375 / 768 / 1280 px)
 - [ ] View Sheet omits art block for characters without art (no empty column)
+      (unit: `test_headshot_url.py::TestSheetPageRendering::test_sheet_omits_grid_when_character_has_no_art` +
+      `test_sheet_omits_grid_when_bucket_unconfigured`; clicktest to add in Phase 10)
 - [ ] "Generate with AI" button opens step 1 (gender)
+      (unit: `test_art_routes.py::TestEditPageGenerateLink::test_generate_with_ai_appears_in_art_dropdown`
+      + `TestGenerateGenderPage::test_renders_for_owner`;
+      clicktest to add in Phase 10)
 - [ ] Step 1 -> step 2 carries gender forward; pronouns are correct
+      (unit: `test_art_routes.py::TestGenerateOptionsPage::test_renders_with_wasp_selected_by_default`
+      asserts the hidden `name="gender" value="male"` field;
+      `test_art_prompt.py::TestMaleMinimalPrompt::test_uses_he_pronoun` +
+      `TestFemaleMinimalPrompt::test_uses_she_pronoun` prove the pronoun branch;
+      clicktest to add in Phase 10)
 - [ ] Step 2 age checkbox cannot be unchecked
+      (unit: `test_art_routes.py::TestGenerateOptionsPage::test_renders_with_wasp_selected_by_default`
+      asserts `age-checkbox` + `disabled`;
+      clicktest to add in Phase 10)
 - [ ] Step 2 optional rows disable their text input until the checkbox is checked
+      (no unit equivalent - pure Alpine; clicktest to add in Phase 10)
 - [ ] Step 2 "Create Prompt" assembles the prompt and advances to step 3
+      (unit: `test_art_routes.py::TestGenerateAssemble::test_happy_path_stages_prompt_and_redirects`;
+      `test_art_prompt.py::TestEveryFieldCombined::test_full_prompt_contains_every_part`
+      proves assembly order; clicktest to add in Phase 10)
 - [ ] Step 3 textarea is editable before "Generate Art" is clicked
+      (unit: `test_art_routes.py::TestGenerateReviewPage::test_renders_textarea_with_staged_prompt`
+      confirms the textarea is rendered with the staged prompt;
+      the `disabled` binding is Alpine-driven - clicktest to add in Phase 10)
 - [ ] Step 3 textarea locks while generation is in flight; unlocks on success or failure
 - [ ] Successful generation redirects to the crop page with the generated art
 - [ ] Failed generation shows a retry link that preserves the prompt
