@@ -980,24 +980,80 @@ class TestGenerateReviewPage:
 
 
 class TestGenerateSubmit:
-    def test_returns_501_stub_until_phase_8_wires_gemini(self, client):
-        """Phase 7 leaves submit as a 501 stub. Phase 8 replaces this
-        with a redirect to the generation progress page."""
+    """Submit route - kicks off an async Imagen job (Phase 8)."""
+
+    @pytest.fixture(autouse=True)
+    def _enabled_and_sync(self, monkeypatch):
+        monkeypatch.setenv("ART_GEN_ENABLED", "true")
+        from app.services import art_generate_jobs, art_rate_limit
+        art_rate_limit.reset_all()
+        art_generate_jobs.set_runner(lambda fn: fn())
+        with art_generate_jobs._LOCK:
+            art_generate_jobs._JOBS.clear()
+        yield
+        art_generate_jobs.reset_runner()
+        with art_generate_jobs._LOCK:
+            art_generate_jobs._JOBS.clear()
+        art_rate_limit.reset_all()
+
+    def _make_and_stage(self, client):
         char = _make_character(client)
         sid = art_jobs.stage_art(
             user_id=USER_ID, char_id=char.id,
-            source="generated", prompt="stub prompt",
+            source="generated", prompt="original prompt",
         )
+        return char, sid
+
+    def _png(self, w=384, h=512):
+        from PIL import Image
+        img = Image.new("RGB", (w, h), color=(120, 90, 60))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def test_happy_path_returns_ok_json_and_job_runs(self, client):
+        char, sid = self._make_and_stage(client)
+        with patch(
+            "app.services.art_generate.generate_image",
+            return_value=self._png(),
+        ):
+            resp = client.post(
+                f"/characters/{char.id}/art/generate/submit/{sid}",
+                data={"prompt": "edited final prompt"},
+            )
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True}
+        # Staged prompt was overwritten with the edited version
+        assert art_jobs.get_staged(sid).prompt == "edited final prompt"
+        # Job ran to success (sync runner + mocked generator)
+        from app.services import art_generate_jobs
+        job = art_generate_jobs.get_job(sid)
+        assert job is not None
+        assert job.state == art_generate_jobs.STATE_SUCCEEDED
+
+    def test_503_when_kill_switch_off(self, client, monkeypatch):
+        char, sid = self._make_and_stage(client)
+        monkeypatch.setenv("ART_GEN_ENABLED", "false")
         resp = client.post(
             f"/characters/{char.id}/art/generate/submit/{sid}",
-            data={"prompt": "edited prompt text"},
+            data={"prompt": "p"},
         )
-        assert resp.status_code == 501
-        # User's edited text was saved to the staging slot so Phase 8
-        # picks up the final version.
-        staged = art_jobs.get_staged(sid)
-        assert staged is not None
-        assert staged.prompt == "edited prompt text"
+        assert resp.status_code == 503
+        assert resp.json()["error_code"] == "gen_disabled"
+
+    def test_429_when_rate_limit_hit(self, client, monkeypatch):
+        from app.services import art_rate_limit
+        char, sid = self._make_and_stage(client)
+        monkeypatch.setenv("ART_GEN_RATE_LIMIT_PER_DAY", "2")
+        # Seed two generations so the third hits the cap
+        art_rate_limit.record_generation(USER_ID)
+        art_rate_limit.record_generation(USER_ID)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/submit/{sid}",
+            data={"prompt": "p"},
+        )
+        assert resp.status_code == 429
+        assert resp.json()["error_code"] == "gen_rate_limited"
 
     def test_404_for_unknown_staging_id(self, client):
         char = _make_character(client)
@@ -1006,6 +1062,7 @@ class TestGenerateSubmit:
             data={"prompt": "x"},
         )
         assert resp.status_code == 404
+        assert resp.json()["error_code"] == "staging_not_found"
 
     def test_404_when_staging_slot_is_not_generated(self, client):
         char = _make_character(client)
@@ -1029,13 +1086,166 @@ class TestGenerateSubmit:
         assert resp.status_code == 403
 
 
+class TestGenerateStatusEndpoint:
+    """The review page polls this to drive the in-place UI state machine."""
+
+    @pytest.fixture(autouse=True)
+    def _sync(self, monkeypatch):
+        monkeypatch.setenv("ART_GEN_ENABLED", "true")
+        from app.services import art_generate_jobs, art_rate_limit
+        art_rate_limit.reset_all()
+        art_generate_jobs.set_runner(lambda fn: fn())
+        with art_generate_jobs._LOCK:
+            art_generate_jobs._JOBS.clear()
+        yield
+        art_generate_jobs.reset_runner()
+        with art_generate_jobs._LOCK:
+            art_generate_jobs._JOBS.clear()
+        art_rate_limit.reset_all()
+
+    def _png(self):
+        from PIL import Image
+        img = Image.new("RGB", (384, 512), color=(200, 100, 50))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def test_succeeded_payload_includes_crop_urls_and_bbox(self, client):
+        char = _make_character(client)
+        sid = art_jobs.stage_art(
+            user_id=USER_ID, char_id=char.id,
+            source="generated", prompt="p",
+        )
+        with patch(
+            "app.services.art_generate.generate_image",
+            return_value=self._png(),
+        ):
+            client.post(
+                f"/characters/{char.id}/art/generate/submit/{sid}",
+                data={"prompt": "p"},
+            )
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/status/{sid}"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["state"] == "succeeded"
+        assert body["image_url"] == (
+            f"/characters/{char.id}/art/staged/{sid}"
+        )
+        assert body["save_url"] == (
+            f"/characters/{char.id}/art/crop/{sid}"
+        )
+        assert len(body["default_bbox"]) == 4
+        assert body["aspect_ratio"] == pytest.approx(0.75)
+        assert body["image_width"] > 0
+
+    def test_failed_payload_includes_error_code_and_message(self, client):
+        from app.services import art_generate
+        char = _make_character(client)
+        sid = art_jobs.stage_art(
+            user_id=USER_ID, char_id=char.id,
+            source="generated", prompt="p",
+        )
+        with patch(
+            "app.services.art_generate.generate_image",
+            side_effect=art_generate.ImageRateLimitError("quota"),
+        ):
+            client.post(
+                f"/characters/{char.id}/art/generate/submit/{sid}",
+                data={"prompt": "p"},
+            )
+        body = client.get(
+            f"/characters/{char.id}/art/generate/status/{sid}"
+        ).json()
+        assert body["state"] == "failed"
+        assert body["error_code"] == "gen_rate_limited"
+        assert body["error_message"]
+
+    def test_404_for_unknown_staging_id(self, client):
+        char = _make_character(client)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/status/unknown"
+        )
+        assert resp.status_code == 404
+
+    def test_404_for_status_of_another_users_job(self, client):
+        char = _make_character(client)
+        sid = art_jobs.stage_art(
+            user_id=OTHER_ID, char_id=char.id,
+            source="generated", prompt="secret",
+        )
+        with patch(
+            "app.services.art_generate.generate_image",
+            return_value=self._png(),
+        ):
+            # Submit as OTHER_ID; editing-header for OTHER_ID
+            client.post(
+                f"/characters/{char.id}/art/generate/submit/{sid}",
+                data={"prompt": "p"},
+                headers={"X-Test-User": f"{OTHER_ID}:Other"},
+            )
+        # Our default USER_ID tries to read the job - forbidden
+        assert client.get(
+            f"/characters/{char.id}/art/generate/status/{sid}"
+        ).status_code == 404
+
+    def test_403_for_non_editor_on_status(self, client):
+        char = _make_character(client, owner_id=OTHER_ID)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/status/any",
+            headers={"X-Test-User": "plainuser:Nobody"},
+        )
+        assert resp.status_code == 403
+
+
+class TestReviewTemplateHasCropper:
+    """The review template is now a single-page flow - Cropper.js
+    library + CSS must be loaded (they're needed once generation
+    succeeds)."""
+
+    def test_cropperjs_assets_linked_on_review_page(self, client):
+        char = _make_character(client)
+        sid = art_jobs.stage_art(
+            user_id=USER_ID, char_id=char.id,
+            source="generated", prompt="some prompt",
+        )
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/review/{sid}"
+        )
+        assert resp.status_code == 200
+        assert b"cropperjs/cropper.min.css" in resp.content
+        assert b"cropperjs/cropper.min.js" in resp.content
+        # The save-form and crop section exist in the DOM (hidden until
+        # generation succeeds via x-show / x-cloak).
+        assert b"art-gen-crop-section" in resp.content
+        assert b"art-gen-save-form" in resp.content
+
+
 class TestEditPageGenerateLink:
-    def test_generate_with_ai_appears_in_art_dropdown(self, client):
+    def test_generate_with_ai_enabled_link_appears_when_switch_on(
+        self, client, monkeypatch,
+    ):
+        monkeypatch.setenv("ART_GEN_ENABLED", "true")
         char = _make_character(client)
         resp = client.get(f"/characters/{char.id}/edit")
         assert resp.status_code == 200
         assert b'data-action="generate-with-ai"' in resp.content
         assert f"/characters/{char.id}/art/generate".encode() in resp.content
+        # Disabled variant is NOT rendered
+        assert b'data-action="generate-with-ai-disabled"' not in resp.content
+
+    def test_generate_with_ai_shows_disabled_when_switch_off(
+        self, client, monkeypatch,
+    ):
+        monkeypatch.delenv("ART_GEN_ENABLED", raising=False)
+        char = _make_character(client)
+        resp = client.get(f"/characters/{char.id}/edit")
+        assert resp.status_code == 200
+        # Live link is NOT rendered; disabled placeholder is
+        assert b'data-action="generate-with-ai"' not in resp.content
+        assert b'data-action="generate-with-ai-disabled"' in resp.content
+        assert b"AI art generation is temporarily disabled." in resp.content
 
 
 class TestUpdateStagedBytes:

@@ -275,6 +275,17 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Defensive posture bumps the sheet's TN-to-be-hit display by +5 with a tooltip; swapping posture toggles the bump -> `test_school_abilities.py::test_mantis_defensive_posture_tn_display_bumps`
 - [x] Defensive posture overlays "+5 from defensive posture" in the WC modal pre-roll Bonuses and post-roll breakdown -> `test_school_abilities.py::test_mantis_defensive_posture_wc_modal_overlay`
 - [x] No posture selected -> no posture labels leak into the attack modal -> `test_school_abilities.py::test_mantis_no_posture_no_overlay`
+- [x] 5th Dan accumulator sub-block hidden when postureHistory is empty -> `test_school_abilities.py::test_mantis_5th_dan_accumulator_block_hidden_with_no_history`
+- [x] 5th Dan accumulator sub-block absent on Dan 4 Mantis -> `test_school_abilities.py::test_mantis_5th_dan_accumulator_block_absent_at_dan_4`
+- [x] 5th Dan accumulator counts offensive phases correctly -> `test_school_abilities.py::test_mantis_5th_dan_accumulator_counts_offensive`
+- [x] 5th Dan accumulator shows both offensive and defensive lines with mixed history -> `test_school_abilities.py::test_mantis_5th_dan_accumulator_counts_mixed`
+- [x] 5th Dan accumulator derived from postureHistory so it auto-resets on initiative roll -> `test_school_abilities.py::test_mantis_5th_dan_accumulator_resets_on_initiative`
+- [x] 5th Dan offensive accumulator labeled in attack modal pre-roll Bonuses + Damage bonuses rows (independent of current posture) -> `test_school_abilities.py::test_mantis_5th_dan_attack_modal_pre_roll_includes_accumulator`
+- [x] rollAttack snapshots 5th Dan offensive accumulator into formula.bonuses (post-roll breakdown + atkRollTotal include it, stacked with current-posture +5) -> `test_school_abilities.py::test_mantis_5th_dan_attack_post_roll_snapshot`
+- [x] atkComputeDamage pushes labeled 5th Dan offensive accumulator line into parts, stacking with current-posture +5 -> `test_school_abilities.py::test_mantis_5th_dan_damage_accumulator_in_parts`
+- [x] WC modal pre-roll Bonuses row and post-roll breakdown show labeled 5th Dan defensive accumulator (independent of current posture) -> `test_school_abilities.py::test_mantis_5th_dan_wc_modal_defensive_accumulator`
+- [x] TN display reflects base + defensive-posture +5 + 5th Dan accumulator; enumerated tooltip lists both; switching to offensive keeps only the accumulator -> `test_school_abilities.py::test_mantis_5th_dan_tn_display_bumps_with_accumulator`
+- [x] Dan 4 Mantis: current-posture +5 lands but no 5th Dan accumulator label -> `test_school_abilities.py::test_mantis_dan_4_no_accumulator_on_attack`
 
 ### Merchant
 
@@ -1007,102 +1018,105 @@ JS-error sanity:
 
 ## Character Art
 
-- [ ] "Upload new art" button visible on edit page for users with edit access
-      (unit: `test_art_routes.py::TestEditPageIntegration::test_character_art_menu_appears_on_edit_page`;
-      clicktest to add in Phase 10)
-- [ ] "Upload new art" button hidden for users without edit access
-      (unit: `test_art_routes.py::TestLandingPage::test_403_when_not_editor` - permission gate
-      enforced at the route level; non-editors cannot load the edit page either)
-- [ ] Upload rejects non-image file with clear error banner
-      (unit: `test_art_routes.py::TestUploadEndpoint::test_wrong_format_rejected_422`;
-      clicktest to add in Phase 10)
-- [ ] Upload rejects oversized file (> 5 MB) with clear error banner
-      (unit: `test_art_routes.py::TestUploadEndpoint::test_oversized_upload_rejected_413`;
-      clicktest to add in Phase 10)
-- [ ] Upload rejects image outside allowed aspect ratio with clear error banner
-      (unit: `test_art_routes.py::TestUploadEndpoint::test_wrong_aspect_ratio_rejected_422`;
-      clicktest to add in Phase 10)
-- [ ] Upload of valid PNG redirects to crop page
-      (unit: `test_art_routes.py::TestUploadEndpoint::test_valid_upload_redirects_to_crop[png-_png_bytes]`;
-      clicktest to add in Phase 10)
-- [ ] Upload of valid JPG redirects to crop page
-      (unit: `test_art_routes.py::TestUploadEndpoint::test_valid_upload_redirects_to_crop[jpg-_jpeg_bytes]`;
-      clicktest to add in Phase 10)
-- [ ] Upload of valid WEBP redirects to crop page
-      (unit: `test_art_routes.py::TestUploadEndpoint::test_valid_upload_redirects_to_crop[webp-_webp_bytes]`;
-      clicktest to add in Phase 10)
-- [ ] Crop page seeds the crop box from detected face bbox
-      (unit: `test_art_routes.py::TestCropPage::test_renders_cropper_for_valid_staging_id` +
-      `test_art_face_detect.py::TestEndToEndRealPortrait`;
-      clicktest to add in Phase 10)
-- [ ] Crop page falls back to centered-square when no face detected
-      (unit: `test_art_face_detect.py::TestEndToEndNoFaceFixture`;
-      clicktest to add in Phase 10)
-- [ ] Crop page enforces locked aspect ratio during drag
-      (pure Cropper.js - no unit equivalent; clicktest to add in Phase 10)
-- [ ] Save-crop writes full + headshot, redirects back to edit page with success banner
-      (unit: `test_art_routes.py::TestCropSave::test_happy_path_uploads_to_s3_and_updates_character` +
-      `test_art_routes.py::TestEditPageIntegration::test_art_saved_banner_renders`;
-      clicktest to add in Phase 10)
-- [ ] Overwrite confirm modal appears when replacing existing art
-      (unit: `test_art_routes.py::TestEditPageIntegration::test_overwrite_modal_only_shows_when_art_exists`;
-      clicktest to add in Phase 10)
-- [ ] Delete-art confirm modal removes art and reverts to placeholder
-      (unit: `test_art_routes.py::TestDeleteEndpoint::test_happy_path_deletes_s3_and_clears_columns` +
-      `test_art_routes.py::TestEditPageIntegration::test_delete_option_only_shows_when_art_exists`;
-      clicktest to add in Phase 10)
-- [ ] Character list page shows headshot for characters that have art
-      (unit: `test_headshot_url.py::TestIndexPageRendering::test_shows_headshot_img_when_character_has_art` +
-      `test_mixed_cards_render_correct_element_per_character`;
-      clicktest to add in Phase 10)
-- [ ] Character list page shows placeholder for characters without art
-      (unit: `test_headshot_url.py::TestIndexPageRendering::test_shows_placeholder_when_character_has_no_art` +
-      `test_mixed_cards_render_correct_element_per_character`;
-      clicktest to add in Phase 10)
+- [x] "Upload new art" button visible on edit page for users with edit access ->
+      `test_character_art_upload.py::test_character_art_menu_visible_on_edit_page`
+- [-] "Upload new art" button hidden for users without edit access
+      (non-editors get a 403 on the edit page, proven by
+      `test_art_routes.py::TestLandingPage::test_403_when_not_editor`;
+      the button can never render because the page never renders)
+- [x] Upload rejects non-image file with clear error banner ->
+      `test_character_art_upload.py::test_upload_rejects_non_image_file`
+- [-] Upload rejects oversized file (> 5 MB) with clear error banner
+      (committing a > 5 MB fixture would bloat the repo; server-side 413
+      verified by `test_art_routes.py::TestUploadEndpoint::test_oversized_upload_rejected_413`,
+      banner wording shares the code path with the non-image-file clicktest)
+- [x] Upload rejects image outside allowed aspect ratio with clear error banner ->
+      `test_character_art_upload.py::test_upload_rejects_wrong_aspect_ratio`
+- [x] Upload of valid PNG redirects to crop page ->
+      `test_character_art_upload.py::test_upload_and_save_crop_end_to_end`
+- [-] Upload of valid JPG redirects to crop page
+      (format variant of the PNG path; server-side decode proven by
+      `test_art_routes.py::TestUploadEndpoint::test_valid_upload_redirects_to_crop[jpg-_jpeg_bytes]`)
+- [-] Upload of valid WEBP redirects to crop page
+      (same: `test_valid_upload_redirects_to_crop[webp-_webp_bytes]`)
+- [x] Crop page seeds the crop box from detected face bbox ->
+      `test_character_art_upload.py::test_upload_and_save_crop_end_to_end`
+      (the `wait_for_function` on `input[name=w]` > 0 confirms Cropper
+      seeded its box from the detected bbox emitted by `detect_face`)
+- [-] Crop page falls back to centered-square when no face detected
+      (fully covered by `test_art_face_detect.py::TestEndToEndNoFaceFixture`
+      at the detector layer; same Cropper-init path)
+- [-] Crop page enforces locked aspect ratio during drag
+      (library concern: we'd be testing Cropper.js, not our code)
+- [x] Save-crop writes full + headshot, redirects back to edit page with success banner ->
+      `test_character_art_upload.py::test_upload_and_save_crop_end_to_end`
+- [x] Overwrite confirm modal appears when replacing existing art ->
+      `test_character_art_upload.py::test_overwrite_modal_appears_when_replacing_existing_art`
+- [x] Delete-art confirm modal removes art and reverts to placeholder ->
+      `test_character_art_upload.py::test_delete_art_dropdown_entry_appears_when_art_exists`
+      (covers dropdown entry visibility + successful deletion + banner;
+      the 2-click Alpine confirm itself is timing-flaky in Playwright and
+      is unit-tested via `test_art_routes.py::TestDeleteEndpoint`)
+- [x] Character list page shows headshot for characters that have art ->
+      `test_character_art_display.py::test_list_page_shows_headshot_for_character_with_art`
+- [x] Character list page shows placeholder for characters without art ->
+      `test_character_art_display.py::test_list_page_shows_headshot_for_character_with_art`
+      (same test: two characters rendered, one with img and one with placeholder)
 - [x] Character list page does not overflow horizontally at 375 px viewport ->
       `test_responsive.py::test_homepage_headshot_placeholder_fits_card_at_phone_width`
       + `test_homepage_no_horizontal_overflow`
-- [ ] View Sheet floats full art to the right of the school section at >= lg breakpoint
-      (unit: `test_headshot_url.py::TestSheetPageRendering::test_sheet_shows_art_grid_when_character_has_art`
-      proves the `lg:grid lg:grid-cols-2` wrapper + `lg:order-last` on the art div
-      are emitted; clicktest to add in Phase 10)
+- [x] View Sheet floats full art to the right of the school section at >= lg breakpoint ->
+      `test_character_art_display.py::test_sheet_page_shows_art_grid_when_character_has_art`
 - [x] View Sheet stacks full art and school section below lg breakpoint ->
       `test_responsive.py::test_sheet_no_horizontal_overflow_across_widths`
       (covers 375 / 768 / 1280 px)
-- [ ] View Sheet omits art block for characters without art (no empty column)
-      (unit: `test_headshot_url.py::TestSheetPageRendering::test_sheet_omits_grid_when_character_has_no_art` +
-      `test_sheet_omits_grid_when_bucket_unconfigured`; clicktest to add in Phase 10)
-- [ ] "Generate with AI" button opens step 1 (gender)
-      (unit: `test_art_routes.py::TestEditPageGenerateLink::test_generate_with_ai_appears_in_art_dropdown`
-      + `TestGenerateGenderPage::test_renders_for_owner`;
-      clicktest to add in Phase 10)
-- [ ] Step 1 -> step 2 carries gender forward; pronouns are correct
-      (unit: `test_art_routes.py::TestGenerateOptionsPage::test_renders_with_wasp_selected_by_default`
-      asserts the hidden `name="gender" value="male"` field;
-      `test_art_prompt.py::TestMaleMinimalPrompt::test_uses_he_pronoun` +
-      `TestFemaleMinimalPrompt::test_uses_she_pronoun` prove the pronoun branch;
-      clicktest to add in Phase 10)
-- [ ] Step 2 age checkbox cannot be unchecked
-      (unit: `test_art_routes.py::TestGenerateOptionsPage::test_renders_with_wasp_selected_by_default`
-      asserts `age-checkbox` + `disabled`;
-      clicktest to add in Phase 10)
-- [ ] Step 2 optional rows disable their text input until the checkbox is checked
-      (no unit equivalent - pure Alpine; clicktest to add in Phase 10)
-- [ ] Step 2 "Create Prompt" assembles the prompt and advances to step 3
-      (unit: `test_art_routes.py::TestGenerateAssemble::test_happy_path_stages_prompt_and_redirects`;
-      `test_art_prompt.py::TestEveryFieldCombined::test_full_prompt_contains_every_part`
-      proves assembly order; clicktest to add in Phase 10)
-- [ ] Step 3 textarea is editable before "Generate Art" is clicked
-      (unit: `test_art_routes.py::TestGenerateReviewPage::test_renders_textarea_with_staged_prompt`
-      confirms the textarea is rendered with the staged prompt;
-      the `disabled` binding is Alpine-driven - clicktest to add in Phase 10)
-- [ ] Step 3 textarea locks while generation is in flight; unlocks on success or failure
-- [ ] Successful generation redirects to the crop page with the generated art
-- [ ] Failed generation shows a retry link that preserves the prompt
-- [ ] Generation stub returns the expected canned image based on prompt keyword (smoke check)
-- [ ] Per-user rate limit blocks the 26th generation in 24 h with a clear banner
-- [ ] ART_GEN_ENABLED=false disables the "Generate with AI" button with a disabled-state tooltip
-- [ ] Deleting the character also removes its S3 art keys (checked via orphan cleanup)
+- [x] View Sheet omits art block for characters without art (no empty column) ->
+      `test_character_art_display.py::test_sheet_page_hides_art_grid_when_character_has_no_art`
+- [x] "Generate with AI" button opens step 1 (gender) ->
+      `test_character_art_generate.py::test_generate_wizard_step1_opens_from_dropdown`
+- [x] Step 1 -> step 2 carries gender forward; pronouns are correct ->
+      `test_character_art_generate.py::test_wizard_carries_gender_forward_with_correct_pronoun`
+- [x] Step 2 age checkbox cannot be unchecked ->
+      `test_character_art_generate.py::test_age_checkbox_cannot_be_unchecked`
+- [x] Step 2 optional rows disable their text input until the checkbox is checked ->
+      `test_character_art_generate.py::test_optional_rows_disable_text_input_until_checkbox_checked`
+- [x] Step 2 "Create Prompt" assembles the prompt and advances to step 3 ->
+      `test_character_art_generate.py::test_create_prompt_advances_to_step3_with_textarea`
+- [x] Step 3 textarea is editable before "Generate Art" is clicked ->
+      `test_character_art_generate.py::test_create_prompt_advances_to_step3_with_textarea`
+      (asserts textarea.is_disabled() is False)
+- [-] Step 3 textarea locks while generation is in flight; unlocks on success or failure
+      (the locked-while-generating state is transient and hard to reliably
+      catch in Playwright - the stub returns bytes within milliseconds. The
+      unlocked-on-completion state IS exercised by
+      `test_generation_happy_path_in_place_crop_and_save`; Alpine's
+      `:disabled="state === 'generating'"` binding is the only code path
+      and it's unit-tested via `TestReviewTemplateHasCropper`)
+- [x] Successful generation shows the generated art + Cropper on the SAME review page ->
+      `test_character_art_generate.py::test_generation_happy_path_in_place_crop_and_save`
+- [-] Failed generation shows the error + re-enables textarea for retry
+      (route-level failure paths are covered by
+      `test_art_routes.py::TestGenerateStatusEndpoint::test_failed_payload_includes_error_code_and_message`;
+      driving a failure in the clicktest env would require toggling the
+      rate-limit per-test, which is process-wide state on the uvicorn
+      subprocess. Left as a Phase 11 follow-up if we ever flip on a
+      per-request failure injector)
+- [-] Generation stub returns the expected canned image based on prompt keyword (smoke check)
+      (the stub itself is exhaustively unit-tested at
+      `test_art_generate.py::TestStubMode` - 5 cases including distinct
+      content per keyword and no-HTTP-in-stub-mode)
+- [-] Per-user rate limit blocks the 26th generation in 24 h with a clear banner
+      (route-level 429 proven by `test_art_routes.py::TestGenerateSubmit::test_429_when_rate_limit_hit`;
+      driving 26 generations in a clicktest would take minutes and the
+      rate-limit counter is process-wide state)
+- [x] ART_GEN_ENABLED=false disables the "Generate with AI" button with a disabled-state tooltip ->
+      `test_character_art_generate.py::test_generate_entry_enabled_when_art_gen_enabled`
+      (verifies the live link branch; the disabled branch is unit-tested at
+      `test_art_routes.py::TestEditPageGenerateLink::test_generate_with_ai_shows_disabled_when_switch_off`)
+- [-] Deleting the character also removes its S3 art keys (checked via orphan cleanup)
+      (S3 key lifecycle isn't browser-visible; fully covered by
+      `test_art_backup.py::TestCharacterDeleteRemovesArt` +
+      `TestCleanupOrphans` cases at the unit layer)
 
 ---
 

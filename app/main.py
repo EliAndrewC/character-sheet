@@ -99,6 +99,12 @@ def full_art_url(char) -> str | None:
 templates.env.globals["headshot_url"] = headshot_url
 templates.env.globals["full_art_url"] = full_art_url
 
+# Kill-switch check for the "Generate with AI" dropdown entry on the
+# edit page. Read at request time so toggling the env var doesn't need
+# a restart (mirrors how ``import_enabled`` is wired above).
+from app.services.art_rate_limit import art_gen_enabled as _art_gen_enabled
+templates.env.globals["art_gen_enabled"] = _art_gen_enabled
+
 
 # Per-school rules-link substitutions for the "Special Ability" text. When a
 # school's ability quotes a rules section that lives in the upstream L7R
@@ -233,6 +239,12 @@ def _check_and_backup():
             backup_status["last_success"] = now
             backup_status["last_error"] = None
             log.info("Backup completed: %s", result["key"])
+            # Sweep orphaned character-art S3 objects after the DB
+            # snapshot lands. Only runs on a successful backup so a
+            # credentials failure shows up as "backup failed" in the
+            # admin banner rather than being overwritten by a
+            # downstream symptom.
+            _sweep_art_orphans(bucket, region)
         else:
             backup_status["last_error"] = result["error"]
             log.error("Backup failed: %s", result["error"])
@@ -240,6 +252,20 @@ def _check_and_backup():
         backup_status["in_progress"] = False
         backup_status["last_error"] = str(e)
         log.error("Backup check failed: %s", e)
+
+
+def _sweep_art_orphans(bucket: str, region: str):
+    """Run the art-orphan cleanup sweep; record errors on backup_status."""
+    try:
+        from app.services.art_backup import cleanup_orphans
+        db = SessionLocal()
+        try:
+            cleanup_orphans(db, bucket=bucket, region=region)
+        finally:
+            db.close()
+    except Exception as e:
+        backup_status["last_error"] = f"Art orphan cleanup failed: {e}"
+        log.error("Art orphan cleanup failed: %s", e)
 
 
 def _seed_campaign_players():

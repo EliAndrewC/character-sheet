@@ -22,6 +22,61 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Disk-backed test stub
+#
+# Clicktests can't reach a real S3 bucket, so when
+# ``ART_STORAGE_USE_TEST_STUB=1`` is set on the live uvicorn subprocess
+# every S3 call is redirected to the local filesystem. The matching
+# ``/test-art-stub/{key}`` route (registered by ``app.routes.art`` when
+# the same env var is set) serves the bytes back so the browser can
+# display them. In production the env var is never set and the stub
+# is a no-op.
+# ---------------------------------------------------------------------------
+
+
+_STUB_DIR_ENV = "ART_STORAGE_STUB_DIR"
+_DEFAULT_STUB_DIR = "/tmp/l7r_art_stub"
+
+
+def use_disk_stub() -> bool:
+    return os.environ.get("ART_STORAGE_USE_TEST_STUB", "").lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+def _stub_dir() -> str:
+    return os.environ.get(_STUB_DIR_ENV, _DEFAULT_STUB_DIR)
+
+
+def _stub_path(key: str) -> str:
+    # Flatten slashes so each S3 key becomes a single file on disk.
+    safe = key.replace("/", "__")
+    return os.path.join(_stub_dir(), safe)
+
+
+def _stub_key_from_path(path: str) -> str:
+    return os.path.basename(path).replace("__", "/")
+
+
+def stub_key_encoded(key: str) -> str:
+    """Return the single-segment filename the ``/test-art-stub`` route serves."""
+    return key.replace("/", "__")
+
+
+def stub_key_decoded(encoded: str) -> str:
+    return encoded.replace("__", "/")
+
+
+def stub_read_bytes(encoded: str) -> Optional[bytes]:
+    """Read a stub file by its encoded filename. Returns None if missing."""
+    path = os.path.join(_stub_dir(), encoded)
+    if not os.path.isfile(path):
+        return None
+    with open(path, "rb") as fp:
+        return fp.read()
+
+
+# ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
@@ -90,6 +145,14 @@ def upload_art(
     the route layer catches and converts to a banner.
     """
     full_key, head_key = make_art_keys(char_id, now)
+    if use_disk_stub():
+        os.makedirs(_stub_dir(), exist_ok=True)
+        with open(_stub_path(full_key), "wb") as fp:
+            fp.write(full_bytes)
+        with open(_stub_path(head_key), "wb") as fp:
+            fp.write(headshot_bytes)
+        log.info("Art stubbed to disk: %s + %s", full_key, head_key)
+        return full_key, head_key
     client = _get_s3_client(region)
     client.put_object(
         Bucket=bucket,
@@ -121,6 +184,13 @@ def delete_art(bucket: str, region: str, *keys: Optional[str]) -> None:
     real_keys = [k for k in keys if k]
     if not real_keys:
         return
+    if use_disk_stub():
+        for key in real_keys:
+            path = _stub_path(key)
+            if os.path.isfile(path):
+                os.unlink(path)
+                log.info("Art stub deleted: %s", key)
+        return
     client = _get_s3_client(region)
     for key in real_keys:
         client.delete_object(Bucket=bucket, Key=key)
@@ -133,7 +203,12 @@ def public_url(key: str, bucket: str, region: str) -> str:
     Objects are uploaded with ``ACL=public-read`` so signing is not
     required. ``us-east-1`` uses the virtual-hosted path without a
     region component; every other region includes the region.
+
+    In stub mode the URL is a local ``/test-art-stub/{encoded_key}``
+    path so the browser loads bytes straight off the clicktest server.
     """
+    if use_disk_stub():
+        return f"/test-art-stub/{stub_key_encoded(key)}"
     if region == "us-east-1":
         return f"https://{bucket}.s3.amazonaws.com/{key}"
     return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
@@ -141,6 +216,11 @@ def public_url(key: str, bucket: str, region: str) -> str:
 
 def list_art_keys(bucket: str, region: str) -> list[str]:
     """List every S3 key under the art prefix."""
+    if use_disk_stub():
+        d = _stub_dir()
+        if not os.path.isdir(d):
+            return []
+        return [_stub_key_from_path(os.path.join(d, f)) for f in os.listdir(d)]
     client = _get_s3_client(region)
     keys: list[str] = []
     paginator = client.get_paginator("list_objects_v2")

@@ -41,6 +41,19 @@ def live_server_url():
     # keeps the feature disabled). The clicktest suite exercises the
     # import flow, so opt in explicitly for the live server.
     env["IMPORT_ENABLED"] = "true"
+    # Character art (Phase 7/8): enable the feature + Imagen stub so
+    # the wizard works end-to-end without hitting Google.
+    env["ART_GEN_ENABLED"] = "true"
+    env["ART_GEN_USE_TEST_STUB"] = "1"
+    # Disk-backed storage stub for S3. The storage layer switches to
+    # a local tmpdir and the ``/test-art-stub/{key}`` route serves the
+    # bytes back so the browser can display them. The bucket name is
+    # just a placeholder to satisfy the "storage configured" check.
+    env["ART_STORAGE_USE_TEST_STUB"] = "1"
+    art_stub_dir = f"/tmp/l7r_art_stub_{port}"
+    env["ART_STORAGE_STUB_DIR"] = art_stub_dir
+    env["S3_BACKUP_BUCKET"] = "stub-bucket"
+    env["S3_BACKUP_REGION"] = "us-east-1"
 
     proc = subprocess.Popen(
         [
@@ -81,6 +94,10 @@ def live_server_url():
     proc.wait(timeout=5)
     if os.path.exists(db_path):
         os.remove(db_path)
+    # Clean up art storage stub tmpdir
+    import shutil
+    if os.path.isdir(art_stub_dir):
+        shutil.rmtree(art_stub_dir, ignore_errors=True)
 
 
 @pytest.fixture()
