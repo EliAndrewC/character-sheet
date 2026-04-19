@@ -104,16 +104,17 @@
 
 > For each phase in which you declare an offensive posture, you gain +1 to all attack and damage rolls for the remainder of the round. For each phase in which you choose a defensive posture, you gain +1 to your wound checks and your TN to be hit for the remainder of the round.
 
-**Status:** Not yet implemented. Built on top of the posture tracker:
-- Track two running counters per round: `offensivePhaseCount`, `defensivePhaseCount`. Incremented each time the player clicks the respective posture button.
-- Display "Accumulated 5th Dan bonuses" under the posture list:
-  - +`offensivePhaseCount` to attack and damage rolls (all subsequent rolls this round).
-  - +`defensivePhaseCount` to wound checks and TN to be hit.
-- Both counters reset to 0 on initiative roll. They are NOT cleared by the posture "Clear bonuses" button (since those bonuses are already "spent into" the round and the player wouldn't want to retroactively unwind them) - but see implementation plan for the open question.
-- Accumulators integrate into the same pathways as the 3rd Dan accumulators (attack/damage bonuses on attack roll modal; wound-check bonuses and TN display on the sheet; wound check probability table).
+**Status:** Implemented (Phase 6). Built on top of the posture tracker:
+- `offensivePhaseCount()` and `defensivePhaseCount()` are derived from `postureHistory` (no separate state), so they auto-reset whenever `resetMantisRound()` fires (initiative roll or action-dice Clear) along with the rest of Phase 4's round-tracker state.
+- The "Accumulated 5th Dan bonuses" sub-block appears under the posture tracker (testid `mantis-5th-dan-accumulator`) on Dan 5 Mantis sheets whenever either count > 0. Lines: "+N to attack and damage rolls" when offensive > 0; "+M to wound checks and TN" when defensive > 0.
+- Attack/damage integration reuses the same overlay helpers (`_mantisLiveAttackLabels`, `_mantisLiveAttackFlat`, `_mantisLiveDamageLabels`, `_mantisLiveWcLabels`, `_mantisLiveWcFlat`). These combine the Phase 5 current-posture +5 with the 5th Dan accumulator; the labeled entries go into pre-roll rows, probability tables, and post-roll breakdowns. `rollAttack` and `rollWoundCheck` snapshot the accumulator into `formula.flat` / `formula.bonus_sources` / `formula.bonuses` at roll time, and `atkComputeDamage` adds the labeled line to `parts` with the flat added so both pre-roll preview and post-roll damage-result breakdown show it.
+- TN display: local x-data tracks `defensiveCount` (populated from the enriched `mantis-posture-changed` event detail) in addition to `posture`. The displayed TN is `base + (posture==='defensive' ? 5 : 0) + (accum ? defensiveCount : 0)`. The tooltip enumerates each contributing bonus. A `tn-5th-dan-accumulator` label (`+N 5th Dan`) renders alongside the existing `tn-defensive-bump` label when the accumulator applies.
 
-**Unit tests:** TBD.
-**Clicktests:** TBD.
+**Server flag:** `school_abilities["mantis_posture_accumulation"]` in `app/routes/pages.py` is `True` when school is Mantis Wave-Treader AND Dan >= 5. Gates the `<div>` sub-block and feeds the `accum` flag in the TN display's x-data scope.
+
+**Unit tests:** `tests/test_routes.py::TestMantisPostureTracking` — `test_mantis_5th_dan_has_posture_accumulation_flag`, `test_mantis_4th_dan_does_not_have_posture_accumulation_flag`, `test_non_mantis_does_not_have_posture_accumulation_flag`, `test_mantis_5th_dan_accumulator_block_renders`, `test_mantis_4th_dan_accumulator_block_absent`, `test_tn_display_5th_dan_accumulator_wiring_present`, `test_tn_display_dan_4_mantis_accum_false`.
+
+**Clicktests:** `tests/e2e/test_school_abilities.py` — `test_mantis_5th_dan_accumulator_block_hidden_with_no_history`, `test_mantis_5th_dan_accumulator_block_absent_at_dan_4`, `test_mantis_5th_dan_accumulator_counts_offensive`, `test_mantis_5th_dan_accumulator_counts_mixed`, `test_mantis_5th_dan_accumulator_resets_on_initiative`, `test_mantis_5th_dan_attack_modal_pre_roll_includes_accumulator`, `test_mantis_5th_dan_attack_post_roll_snapshot`, `test_mantis_5th_dan_damage_accumulator_in_parts`, `test_mantis_5th_dan_wc_modal_defensive_accumulator`, `test_mantis_5th_dan_tn_display_bumps_with_accumulator`, `test_mantis_dan_4_no_accumulator_on_attack`.
 
 ---
 
