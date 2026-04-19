@@ -1913,28 +1913,39 @@ def test_togashi_initiative_normal_variant_rolls_correct_dice(page, live_server_
     _wait_roll_done(page)
     # Void=3, dan=1: main init 5k3. finalDice carries only the main roll.
     assert _count_result_dice(page) == 5
-    # The standalone athletics die was rolled; read the Alpine state.
-    ath = page.evaluate("""() => {
+    # The standalone athletics die is now persisted as an entry in actionDice
+    # with the ``athletics_only`` flag set (was a separate togashiAthleticsDie field).
+    ath_value = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
             const d = window.Alpine && window.Alpine.$data(el);
-            if (d && typeof d.togashiAthleticsDie === 'number') return d.togashiAthleticsDie;
+            if (d && Array.isArray(d.actionDice) && d.phase === 'done') {
+                const entry = d.actionDice.find(x => x && x.athletics_only);
+                return entry ? entry.value : 0;
+            }
         }
         return 0;
     }""")
-    assert 1 <= ath <= 10
+    assert 1 <= ath_value <= 10
 
 
 def test_togashi_initiative_normal_variant_shows_athletics_die_label(page, live_server_url):
     """Togashi normal initiative result modal shows the athletics-only die as a
-    distinct blue die with an 'athletics only' label."""
+    distinct blue die. The label moved from a visible 'athletics only' caption
+    to an SVG <title> tooltip ('Athletics-only action die ...') and the
+    school-specific note still calls out the blue die."""
     _create_char(page, live_server_url, "TogashiInitNLab", "togashi_ise_zumi")
     page.locator('[data-roll-key="initiative"]').click()
     page.wait_for_selector('[data-togashi-init-normal]', state='visible')
     page.locator('[data-togashi-init-normal]').click()
     _wait_roll_done(page)
-    text = page.locator('[data-modal="dice-roller"]').text_content()
-    assert "athletics only" in text.lower()
+    modal = page.locator('[data-modal="dice-roller"]')
+    text = modal.text_content().lower()
+    # Either the SVG <title> renders into text content (browser-dependent) or
+    # the school-specific note line is shown - one of them must be visible.
+    assert "athletics-only action die" in text or "blue action die" in text
+    # The athletics-only die SVG carries the .athletics-only class.
+    assert modal.locator('svg.action-die.athletics-only').count() == 1
 
 
 def test_togashi_initiative_athletics_variant_rolls_correct_dice(page, live_server_url):
@@ -1946,16 +1957,19 @@ def test_togashi_initiative_athletics_variant_rolls_correct_dice(page, live_serv
     _wait_roll_done(page)
     # Void=3, dan=1: base 5k3 + 3 athletics dice = 8k6
     assert _count_result_dice(page) == 8
-    # No standalone athletics die on this variant.
-    ath = page.evaluate("""() => {
+    # No standalone athletics-only die on this variant: actionDice has no
+    # entry flagged athletics_only.
+    has_ath = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
             const d = window.Alpine && window.Alpine.$data(el);
-            if (d && typeof d.togashiAthleticsDie === 'number') return d.togashiAthleticsDie;
+            if (d && Array.isArray(d.actionDice) && d.phase === 'done') {
+                return d.actionDice.some(x => x && x.athletics_only);
+            }
         }
         return null;
     }""")
-    assert ath == 0
+    assert has_ath is False
 
 
 def test_togashi_initiative_dan_advancement_bonus(page, live_server_url):
@@ -2450,7 +2464,9 @@ def test_kakita_phase_0_behavioral(page, live_server_url):
         }
         return [];
     }""")
-    assert 0 in action_dice, f"Expected Phase 0 in action dice {action_dice}"
+    # actionDice now holds {value, ...} entries instead of raw numbers.
+    values = [d.get("value") if isinstance(d, dict) else d for d in action_dice]
+    assert 0 in values, f"Expected Phase 0 in action dice {action_dice}"
     result = _get_roll_result_text(page)
     assert "Phase 0" in result
 
@@ -2741,7 +2757,9 @@ def test_shinjo_4th_dan_initiative_highest_1_behavioral(page, live_server_url):
         }
         return [];
     }""")
-    assert 1 in action_dice, f"Expected 1 in action dice {action_dice} (Shinjo 4th Dan sets highest to 1)"
+    # actionDice now holds {value, ...} entries instead of raw numbers.
+    values = [d.get("value") if isinstance(d, dict) else d for d in action_dice]
+    assert 1 in values, f"Expected 1 in action dice {action_dice} (Shinjo 4th Dan sets highest to 1)"
     result = _get_roll_result_text(page)
     assert "Shinjo" in result or "set to 1" in result.lower()
 
@@ -3286,6 +3304,79 @@ def test_togashi_4th_dan_reroll_hidden_on_parry(page, live_server_url):
     _roll_via_menu_or_direct(page, "parry")
     reroll_btn = page.locator('button:has-text("Reroll (Togashi 4th Dan)")')
     assert not reroll_btn.is_visible(), "Reroll must not appear on parry rolls"
+
+
+def test_togashi_init_athletics_die_appears_in_side_panel(page, live_server_url):
+    """After rolling initiative as a Togashi Ise Zumi, the Actions side
+    panel must show the athletics-only bonus die alongside the main
+    action dice, styled with the athletics-only (blue) variant and
+    carrying the tooltip that explains it."""
+    _create_char(page, live_server_url, "TogashiInitAD", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3})
+    page.locator('[data-roll-key="initiative"]').click()
+    page.wait_for_selector('[data-togashi-init-normal]', state='visible', timeout=3000)
+    page.locator('[data-togashi-init-normal]').click()
+    _wait_roll_done(page)
+    page.locator('[data-modal="dice-roller"] button:has-text("×")').click()
+    page.wait_for_timeout(200)
+    ath_die = page.locator(
+        '[data-testid="action-dice-section"] '
+        '[data-action="action-die"][data-die-athletics-only="true"]'
+    )
+    assert ath_die.count() == 1
+    assert (
+        ath_die.get_attribute("title")
+        == "Athletics-only action die (Togashi special ability)"
+    )
+
+
+def test_togashi_non_athletics_parry_skips_athletics_die(page, live_server_url):
+    """Spending the lowest unspent die for a plain parry must skip the
+    athletics-only die even if it's the lowest value."""
+    _create_char(page, live_server_url, "TogashiNonAthSkip", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3})
+    page.evaluate("""
+        window._trackingBridge.actionDice = [
+            {value: 2, spent: false, athletics_only: true},
+            {value: 5, spent: false}
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(150)
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_timeout(200)
+    page.locator('[data-parry-menu] button:has-text("Roll")').first.click()
+    _wait_roll_done(page)
+    dice = page.evaluate("window._trackingBridge.actionDice")
+    ath = next(d for d in dice if d.get("athletics_only"))
+    reg = next(d for d in dice if not d.get("athletics_only"))
+    assert ath["spent"] is False
+    assert reg["spent"] is True
+
+
+def test_togashi_athletics_parry_can_spend_athletics_die(page, live_server_url):
+    """The athletics-only die's per-die menu offers Athletics Parry, and
+    selecting it spends THAT die - confirming athletics actions are an
+    eligible target for the otherwise-restricted athletics-only die."""
+    _create_char(page, live_server_url, "TogashiAthParrySpend", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 3, "conviction": 3, "dragon_tattoo": 3})
+    page.evaluate("""
+        window._trackingBridge.actionDice = [
+            {value: 2, spent: false, athletics_only: true},
+            {value: 5, spent: false}
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(150)
+    # Open the athletics-only die's menu (it's the first die).
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.locator('[data-action-die-menu-item="athletics-parry"]:visible').click()
+    _wait_roll_done(page)
+    dice = page.evaluate("window._trackingBridge.actionDice")
+    ath = next(d for d in dice if d.get("athletics_only"))
+    reg = next(d for d in dice if not d.get("athletics_only"))
+    assert ath["spent"] is True, "athletics-only die should be spent for athletics:parry"
+    assert reg["spent"] is False
 
 
 def test_togashi_4th_dan_reroll_hidden_on_athletics_parry(page, live_server_url):
