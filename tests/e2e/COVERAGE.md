@@ -388,7 +388,7 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 
 ## JS Error Checks
 
-- [x] No JS errors on sheet page (parametrized across 6 schools) → `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors`
+- [x] No JS errors on sheet page (parametrized across 7 schools, including Mantis Wave-Treader) → `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors`
 
 ## Void Point Spending
 
@@ -557,6 +557,9 @@ When adding a feature, add lines here first (marked `[ ]`). After writing the cl
 - [x] Non-school ring max 5 → `test_editor_controls.py::test_nonschool_ring_max_5`
 - [x] Changing school resets knacks → `test_school_rings.py::test_changing_school_resets_knacks`
 - [x] Multi-ring to fixed-ring hides dropdown → `test_school_rings.py::test_changing_multi_to_fixed_hides_dropdown`
+- [x] Mantis Wave-Treader defaults school ring to Void and bumps Void to 3 → `test_editor_controls.py::test_mantis_defaults_ring_to_void`
+- [x] Priest (variable-ring school) still defaults ring to Water → `test_editor_controls.py::test_priest_still_defaults_ring_to_water`
+- [x] Mantis Wave-Treader is selectable and saves as a first version → `test_editor_controls.py::test_mantis_school_is_selectable_and_saves`
 
 ## Character Editor — Rings
 
