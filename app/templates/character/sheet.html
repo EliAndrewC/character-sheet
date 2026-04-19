@@ -194,10 +194,19 @@
                     <span class="font-bold">{{ ring_map['Void'] + 1 }} dice, keep {{ ring_map['Void'] }}</span>
                 </div>
             {% endif %}
-            <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
+            <div class="bg-parchment rounded p-2 flex items-center flex-wrap"
+                 x-data="{ posture: (window._trackingBridge?.currentPosture?.() || null) }"
+                 @mantis-posture-changed.window="posture = $event.detail.posture"
+                 data-testid="tn-display">
                 <span class="text-ink/60">TN to be hit:</span>&nbsp;
-                <span class="font-bold">{{ 5 + 5 * character.parry }}</span>&nbsp;
+                <span class="font-bold"
+                      :class="posture === 'defensive' ? 'text-gold' : ''"
+                      :title="posture === 'defensive' ? 'Mantis Wave-Treader defensive posture (+5)' : null"
+                      x-text="{{ 5 + 5 * character.parry }} + (posture === 'defensive' ? 5 : 0)"></span>&nbsp;
                 <span class="text-xs text-ink/50">(parry {{ character.parry }})</span>
+                <span x-show="posture === 'defensive'" x-cloak
+                      class="text-xs text-gold ml-1"
+                      data-testid="tn-defensive-bump">+5 defensive posture</span>
             </div>
             <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
                 <span class="text-ink/60">Wound Check:</span>&nbsp;
@@ -338,6 +347,10 @@
                 })(),
                 actionDice: {{ (action_dice or [])|tojson }},
                 actionMenuOpen: null,
+                // Mantis Wave-Treader per-phase posture tracker state. Lives in
+                // adventure_state so it survives reloads but resets per round.
+                posturePhase: ({{ (adventure_state or {})|tojson }}).mantis_posture_phase || 1,
+                postureHistory: ({{ (adventure_state or {})|tojson }}).mantis_posture_history || [],
                 _charId: {{ character.id }},
                 _saving: false,
                 showResetModal: false,
@@ -365,6 +378,9 @@
                 },
 
                 setActionDice(values) {
+                    // Initiative rolls are the end-of-round trigger: replace
+                    // action dice and reset Mantis round state in one shot.
+                    this.resetMantisRound();
                     this.actionDice = (values || []).map(v => ({value: v, spent: false}));
                     this.actionMenuOpen = null;
                     this.save();
@@ -372,7 +388,36 @@
                 clearActionDice() {
                     this.actionDice = [];
                     this.actionMenuOpen = null;
+                    this.resetMantisRound();
                     this.save();
+                },
+                // Mantis Wave-Treader posture tracker helpers.
+                currentPosture() {
+                    return this.postureHistory.length > 0
+                        ? this.postureHistory[this.postureHistory.length - 1]
+                        : null;
+                },
+                selectPosture(type) {
+                    if (this.posturePhase > 10) return;
+                    if (type !== 'offensive' && type !== 'defensive') return;
+                    this.postureHistory = [...this.postureHistory, type];
+                    this.posturePhase += 1;
+                    this.adventureState.mantis_posture_phase = this.posturePhase;
+                    this.adventureState.mantis_posture_history = this.postureHistory;
+                    window.dispatchEvent(new CustomEvent('mantis-posture-changed',
+                        { detail: { posture: type } }));
+                    this.save();
+                },
+                resetMantisRound() {
+                    // Zeros the Mantis per-round posture tracker. Later phases
+                    // hang more state off this helper (3rd Dan accumulators,
+                    // etc.). The caller is responsible for calling save().
+                    this.posturePhase = 1;
+                    this.postureHistory = [];
+                    delete this.adventureState.mantis_posture_phase;
+                    delete this.adventureState.mantis_posture_history;
+                    window.dispatchEvent(new CustomEvent('mantis-posture-changed',
+                        { detail: { posture: null } }));
                 },
                 toggleActionMenu(i) {
                     this.actionMenuOpen = this.actionMenuOpen === i ? null : i;
@@ -946,6 +991,40 @@
                     <span class="font-bold text-accent">Reflected <span x-text="kuniLW"></span> LW to attacker.</span>
                     <span class="text-ink/60">You take <span x-text="Math.floor(kuniLW / 2)"></span> additional LW.</span>
                 </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('mantis_posture_tracking') %}
+            <div class="mt-2 pt-2 border-t border-ink/10" data-testid="mantis-posture-tracker">
+                <div class="text-sm text-ink/60 mb-1">Posture</div>
+                {% if viewer_can_edit %}
+                <div class="flex gap-2 flex-wrap">
+                    <button type="button"
+                            @click="selectPosture('offensive')"
+                            :disabled="posturePhase > 10"
+                            data-action="mantis-posture-offensive"
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                        Offensive Posture for Phase <span x-text="posturePhase"></span>
+                    </button>
+                    <button type="button"
+                            @click="selectPosture('defensive')"
+                            :disabled="posturePhase > 10"
+                            data-action="mantis-posture-defensive"
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                        Defensive Posture for Phase <span x-text="posturePhase"></span>
+                    </button>
+                </div>
+                {% endif %}
+                <div x-show="currentPosture()" x-cloak class="text-sm mt-1"
+                     data-testid="mantis-current-posture">
+                    Current: Phase <span x-text="postureHistory.length"></span> -
+                    <span class="capitalize" x-text="currentPosture()"></span>
+                </div>
+                <div x-show="currentPosture()" x-cloak
+                     class="text-xs text-ink/50 mt-0.5"
+                     data-testid="mantis-posture-bonuses"
+                     x-text="currentPosture() === 'offensive'
+                        ? 'Active bonuses: +5 attack rolls, +5 damage rolls'
+                        : 'Active bonuses: +5 wound checks, +5 TN to be hit'"></div>
             </div>
             {% endif %}
         </div>
@@ -1935,9 +2014,9 @@
                               x-text="'(+' + wcProbs.flat + ' flat bonus)'"></span>
                     </div>
 
-                    {# Bonus sources #}
-                    <div x-show="formulas.wound_check?.bonus_sources?.length > 0" x-cloak class="text-xs text-ink/60">
-                        Bonuses: <span x-text="formulas.wound_check?.bonus_sources?.join(', ')"></span>
+                    {# Bonus sources. Mantis defensive posture overlays a live +5. #}
+                    <div x-show="formulas.wound_check?.bonus_sources?.length > 0 || (window._trackingBridge?.currentPosture?.() === 'defensive')" x-cloak class="text-xs text-ink/60">
+                        Bonuses: <span x-text="[...(formulas.wound_check?.bonus_sources || []), ...(window._trackingBridge?.currentPosture?.() === 'defensive' ? ['+5 from defensive posture'] : [])].join(', ')"></span>
                     </div>
 
                     {# Doji Artisan 5th Dan: auto-bonus from light wounds #}
@@ -2387,17 +2466,19 @@
                     </div>
 
                     {# Formula bonuses (e.g. Kitsuki +2*Water, Courtier +Air) #}
-                    <div x-show="atkFormula?.bonus_sources?.length > 0" x-cloak
+                    {# Mantis offensive posture overlays a live +5 attack bonus into this list. #}
+                    <div x-show="(atkFormula?.bonus_sources?.length > 0) || (window._trackingBridge?.currentPosture?.() === 'offensive')" x-cloak
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
                         <span class="font-medium">Bonuses:</span>
-                        <span x-text="atkFormula?.bonus_sources?.join(', ')"></span>
+                        <span x-text="[...(atkFormula?.bonus_sources || []), ...(window._trackingBridge?.currentPosture?.() === 'offensive' ? ['+5 from offensive posture'] : [])].join(', ')"></span>
                     </div>
 
                     {# Damage-side bonuses (Courtier +Air, Mantis 2nd Dan +5, etc.) #}
-                    <div x-show="atkFormula?.damage_bonus_sources?.length > 0" x-cloak
+                    {# Mantis offensive posture also overlays +5 on damage. #}
+                    <div x-show="(atkFormula?.damage_bonus_sources?.length > 0) || (window._trackingBridge?.currentPosture?.() === 'offensive')" x-cloak
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
                         <span class="font-medium">Damage bonuses:</span>
-                        <span x-text="atkFormula?.damage_bonus_sources?.join(', ')"></span>
+                        <span x-text="[...(atkFormula?.damage_bonus_sources || []), ...(window._trackingBridge?.currentPosture?.() === 'offensive' ? ['+5 from offensive posture'] : [])].join(', ')"></span>
                     </div>
 
                     {# Isawa Duelist 3rd Dan: note that TN trade is assumed in probabilities #}
@@ -5879,8 +5960,10 @@
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const dojiBonus = this._dojiAtkBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
+                // Mantis Wave-Treader: offensive posture adds +5 to attack rolls.
+                const postureFlat = window._trackingBridge?.currentPosture?.() === 'offensive' ? 5 : 0;
                 const target = Math.max(0,
-                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - shosuroFlat);
+                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - shosuroFlat - postureFlat);
                 return target < arr.length ? arr[target] : 0;
             },
 
@@ -5891,7 +5974,8 @@
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const dojiBonus = this._dojiAtkBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
-                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + shosuroFlat;
+                const postureFlat = window._trackingBridge?.currentPosture?.() === 'offensive' ? 5 : 0;
+                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + shosuroFlat + postureFlat;
             },
 
             atkAvgExtraDice(voidCount) {
@@ -5984,6 +6068,12 @@
                     parts.push('+5 flat from 2nd Dan');
                     residualFlat -= 5;
                 }
+                // Mantis Wave-Treader Special: offensive posture adds +5 flat damage.
+                // Read live posture so pre-roll preview reflects current state.
+                if (window._trackingBridge?.currentPosture?.() === 'offensive') {
+                    parts.push('+5 flat from offensive posture');
+                    flat += 5;
+                }
                 if (residualFlat > 0) {
                     parts.push(`+${residualFlat} flat bonus`);
                 }
@@ -6041,6 +6131,16 @@
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
+
+                // Mantis Wave-Treader Special: offensive posture at attack-roll
+                // time adds +5 to the attack roll. Snapshot into formula so the
+                // post-roll breakdown shows the labeled entry even if posture
+                // changes before the damage roll.
+                if (window._trackingBridge?.currentPosture?.() === 'offensive') {
+                    formula.flat = (formula.flat || 0) + 5;
+                    formula.bonus_sources = [...(formula.bonus_sources || []), '+5 from offensive posture'];
+                    formula.bonuses = [...(formula.bonuses || []), { label: 'offensive posture', amount: 5 }];
+                }
 
                 // Isawa Duelist 3rd Dan: auto-apply TN trade bonus (user can undo post-roll)
                 this.atkIsawaTnTrade = false;
@@ -6342,7 +6442,9 @@
                 const shosuroFlat = this.wcIsStrike
                     ? (p.shosuro_flats_no_reroll?.[key] || 0)
                     : (p.shosuro_flats?.[key] || 0);
-                const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise + dojiBonus + shosuroFlat;
+                // Mantis Wave-Treader: defensive posture adds +5 to wound checks.
+                const postureFlat = window._trackingBridge?.currentPosture?.() === 'defensive' ? 5 : 0;
+                const flat = (p.flat || 0) + daidojiBonus + vpFlat + wcVpRaise + dojiBonus + shosuroFlat + postureFlat;
                 const lw = this.wcLightWounds;
                 const target = Math.max(0, lw - flat);
 
@@ -6387,6 +6489,14 @@
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
+
+                // Mantis Wave-Treader Special: defensive posture at wound-check
+                // time adds +5 and labels the bonus in bonus_sources.
+                if (window._trackingBridge?.currentPosture?.() === 'defensive') {
+                    formula.flat = (formula.flat || 0) + 5;
+                    if (!formula.bonus_sources) formula.bonus_sources = [];
+                    formula.bonus_sources = [...formula.bonus_sources, '+5 from defensive posture'];
+                }
 
                 // Iaijutsu strike: no reroll
                 if (this.wcIsStrike) {

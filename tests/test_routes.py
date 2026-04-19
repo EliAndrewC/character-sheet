@@ -583,6 +583,149 @@ class TestPriestBlessRituals:
         assert "target makes a roll to perform research" not in resp.text
 
 
+class TestMantisPostureTracking:
+    """The ``mantis_posture_tracking`` flag gates the posture tracker block
+    that renders in the Tracking section for Mantis Wave-Treader characters.
+    The buttons drive per-phase posture selection; later phases hang the
+    mechanical bonuses off the same state."""
+
+    def _school_abilities(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(
+            r'id="school-abilities">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        return json.loads(m.group(1))
+
+    def test_mantis_has_posture_tracking_flag(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 1, "iaijutsu": 1, "worldliness": 1},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_posture_tracking") is True
+
+    def test_non_mantis_does_not_have_posture_tracking_flag(self, client):
+        cid = _seed_character(
+            client, school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_posture_tracking") is False
+
+    def test_posture_tracker_renders_on_mantis_sheet(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 1, "iaijutsu": 1, "worldliness": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # The tracker block is gated by the mantis_posture_tracking flag and
+        # carries a stable testid for the clicktests.
+        assert 'data-testid="mantis-posture-tracker"' in resp.text
+        assert 'data-action="mantis-posture-offensive"' in resp.text
+        assert 'data-action="mantis-posture-defensive"' in resp.text
+        # Phase label (literal text up to the x-text span)
+        assert "Offensive Posture for Phase" in resp.text
+        assert "Defensive Posture for Phase" in resp.text
+
+    def test_posture_tracker_absent_on_non_mantis_sheet(self, client):
+        cid = _seed_character(
+            client, school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-testid="mantis-posture-tracker"' not in resp.text
+        assert 'data-action="mantis-posture-offensive"' not in resp.text
+        assert 'data-action="mantis-posture-defensive"' not in resp.text
+
+    def test_posture_state_roundtrips_through_track(self, client):
+        """Posture selections persist via adventure_state so they survive
+        a page reload. The /track endpoint is the bridge."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 1, "iaijutsu": 1, "worldliness": 1},
+        )
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"adventure_state": {
+                "mantis_posture_phase": 4,
+                "mantis_posture_history": ["offensive", "defensive", "offensive"],
+            }},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.adventure_state["mantis_posture_phase"] == 4
+        assert char.adventure_state["mantis_posture_history"] == [
+            "offensive", "defensive", "offensive",
+        ]
+
+    def test_posture_state_hydrates_into_tracking_script(self, client):
+        """The Alpine trackingData() initializer reads posture state directly
+        from adventure_state so an in-progress round is restored on reload."""
+        cid = _seed_character(
+            client,
+            school="mantis_wave_treader",
+            school_ring_choice="Void",
+            knacks={"athletics": 1, "iaijutsu": 1, "worldliness": 1},
+            adventure_state={
+                "mantis_posture_phase": 3,
+                "mantis_posture_history": ["offensive", "defensive"],
+            },
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # The tojson call in the template embeds the JSON literal inline.
+        assert '"mantis_posture_phase": 3' in resp.text
+        assert '"mantis_posture_history": ["offensive", "defensive"]' in resp.text
+
+    def test_posture_bonus_summary_block_present(self, client):
+        """Phase 5: the posture tracker renders an active-bonus summary line
+        whose testid the clicktests look for."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 1, "iaijutsu": 1, "worldliness": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-testid="mantis-posture-bonuses"' in resp.text
+        # The summary text distinguishes offensive vs defensive.
+        assert "+5 attack rolls" in resp.text
+        assert "+5 wound checks" in resp.text
+
+    def test_tn_display_is_alpine_enabled_for_posture_overlay(self, client):
+        """Phase 5: the TN-to-be-hit box is wrapped in an x-data scope that
+        listens for mantis-posture-changed so the +5 defensive bump is live."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 1, "iaijutsu": 1, "worldliness": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # A stable testid + event wiring + tooltip hook are all visible on the
+        # rendered sheet; the clicktests key off the testid and the visible
+        # "+5 defensive posture" label.
+        assert 'data-testid="tn-display"' in resp.text
+        assert "mantis-posture-changed" in resp.text
+        assert "+5 defensive posture" in resp.text
+
+    def test_tn_display_on_non_mantis_still_renders_base(self, client):
+        """Non-Mantis sheets still carry the tn-display testid (the x-data
+        listener fires only when a mantis-posture-changed event arrives, which
+        never happens for non-Mantis), so TN rendering is unchanged."""
+        cid = _seed_character(
+            client, school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-testid="tn-display"' in resp.text
+
+
 class TestPartyPriestsContext:
     """The ``party_priests`` list feeds the "<priest> priest blessed for 10
     rerolls" button on the sheet's roll modal. It includes every priest in the
