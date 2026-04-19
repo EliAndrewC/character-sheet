@@ -30,7 +30,7 @@ from PIL import Image
 
 from app.database import get_db
 from app.models import Character, User as UserModel
-from app.services import art_image, art_jobs, art_storage
+from app.services import art_image, art_jobs, art_prompt, art_storage
 from app.services.art_face_detect import detect_face
 from app.services.art_image import HEADSHOT_ASPECT_RATIO
 from app.services.auth import can_edit_character, get_all_editors
@@ -420,6 +420,193 @@ def art_delete(
     return RedirectResponse(
         f"/characters/{char_id}/edit?art_deleted=1",
         status_code=303,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 7: Mad-libs prompt builder UI
+#
+# The wizard has three visible steps (gender -> options -> review) and
+# five routes. Step 3 (assemble) is POST-only; it builds the final
+# prompt, drops it in a staging slot, and redirects to the review GET.
+# Phase 8 wires the submit route to kick off a real Gemini call; for
+# now it's a stub that returns a 501 so the clicktests for steps 1-3
+# can exercise the flow without hitting the network.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/characters/{char_id}/art/generate", response_class=HTMLResponse)
+def art_generate_gender(
+    request: Request, char_id: int, db: Session = Depends(get_db),
+):
+    """Step 1: gender selection."""
+    character, err = _load_character_for_edit(request, db, char_id)
+    if err is not None:
+        return err
+    return _templates().TemplateResponse(
+        request=request,
+        name="character/art_generate_gender.html",
+        context={"character": character},
+    )
+
+
+@router.get(
+    "/characters/{char_id}/art/generate/options",
+    response_class=HTMLResponse,
+)
+def art_generate_options(
+    request: Request,
+    char_id: int,
+    gender: str = "",
+    db: Session = Depends(get_db),
+):
+    """Step 2: mad-libs form. Gender is carried forward via query string
+    from step 1 so a refresh on this page doesn't lose the selection."""
+    character, err = _load_character_for_edit(request, db, char_id)
+    if err is not None:
+        return err
+    if gender not in ("male", "female"):
+        # Nudge the user back to step 1 rather than rendering a form
+        # that can't produce a valid prompt.
+        return RedirectResponse(
+            f"/characters/{char_id}/art/generate", status_code=303,
+        )
+    return _templates().TemplateResponse(
+        request=request,
+        name="character/art_generate_options.html",
+        context={
+            "character": character,
+            "gender": gender,
+            "clan_colors": art_prompt.CLAN_COLORS,
+            "default_clan": art_prompt.DEFAULT_CLAN,
+            "default_age": art_prompt.DEFAULT_AGE,
+            "age_min": art_prompt.AGE_MIN,
+            "age_max": art_prompt.AGE_MAX,
+            "armor_options": art_prompt.ARMOR_OPTIONS,
+        },
+    )
+
+
+@router.post("/characters/{char_id}/art/generate/assemble")
+def art_generate_assemble(
+    request: Request,
+    char_id: int,
+    gender: str = Form(...),
+    clan: str = Form(...),
+    age: int = Form(...),
+    holding: str = Form(""),
+    expression: str = Form(""),
+    armor: str = Form(""),
+    armor_modifier: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Step 2 -> step 3. Builds the prompt, stages it, redirects."""
+    _character, err = _load_character_for_edit(request, db, char_id)
+    if err is not None:
+        return err
+
+    try:
+        prompt = art_prompt.assemble_prompt(
+            gender=gender, clan=clan, age=age,
+            holding=holding, expression=expression,
+            armor=armor, armor_modifier=armor_modifier,
+        )
+    except ValueError:
+        # Any out-of-range input bounces back to step 1. We don't try
+        # to carry partial state forward - it's rare enough that a
+        # clean reset is less confusing than a half-filled form.
+        return RedirectResponse(
+            f"/characters/{char_id}/art/generate", status_code=303,
+        )
+
+    staging_id = art_jobs.stage_art(
+        user_id=request.state.user["discord_id"],
+        char_id=char_id,
+        source="generated",
+        prompt=prompt,
+    )
+    return RedirectResponse(
+        f"/characters/{char_id}/art/generate/review/{staging_id}",
+        status_code=303,
+    )
+
+
+@router.get(
+    "/characters/{char_id}/art/generate/review/{staging_id}",
+    response_class=HTMLResponse,
+)
+def art_generate_review(
+    request: Request,
+    char_id: int,
+    staging_id: str,
+    db: Session = Depends(get_db),
+):
+    """Step 3: show the assembled prompt in an editable textarea."""
+    character, err = _load_character_for_edit(request, db, char_id)
+    if err is not None:
+        return err
+
+    staged = art_jobs.get_staged(staging_id)
+    if (
+        staged is None
+        or staged.char_id != char_id
+        or staged.user_id != request.state.user["discord_id"]
+        or staged.source != "generated"
+        or not staged.prompt
+    ):
+        return HTMLResponse(
+            "That prompt is no longer available. Please start over.",
+            status_code=404,
+        )
+    return _templates().TemplateResponse(
+        request=request,
+        name="character/art_generate_review.html",
+        context={
+            "character": character,
+            "staging_id": staging_id,
+            "prompt_text": staged.prompt,
+        },
+    )
+
+
+@router.post(
+    "/characters/{char_id}/art/generate/submit/{staging_id}"
+)
+def art_generate_submit(
+    request: Request,
+    char_id: int,
+    staging_id: str,
+    prompt: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Step 3 -> Phase 8 kickoff. Stub until Phase 8 wires in Gemini.
+
+    The user may have edited the prompt in the textarea, so we overwrite
+    the staged prompt before handing off.
+    """
+    _character, err = _load_character_for_edit(request, db, char_id)
+    if err is not None:
+        return err
+
+    staged = art_jobs.get_staged(staging_id)
+    if (
+        staged is None
+        or staged.char_id != char_id
+        or staged.user_id != request.state.user["discord_id"]
+        or staged.source != "generated"
+    ):
+        return HTMLResponse(
+            "That prompt is no longer available. Please start over.",
+            status_code=404,
+        )
+    # Save the (possibly edited) prompt before Phase 8 reads it.
+    staged.prompt = prompt
+    # Phase 8 will replace this with a real redirect to the generation
+    # progress page. Keep the 501 so any accidental production hit is
+    # loud rather than silent.
+    return HTMLResponse(
+        "Art generation is not yet implemented. This wires up in Phase 8.",
+        status_code=501,
     )
 
 

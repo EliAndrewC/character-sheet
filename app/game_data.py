@@ -2651,3 +2651,26 @@ ALL_DATA = {
     "schools_by_category": SCHOOLS_BY_CATEGORY,
     "combat_reference": COMBAT_REFERENCE,
 }
+
+
+# Canonical clan colors used by the character-art generation prompt
+# builder (Phase 7+). The dropdown order in the mad-libs UI matches
+# the order of this dict; 'Wasp' is the default selection because
+# this is the Wasp campaign (a Wasp-clan character often trained at a
+# school belonging to another clan, so auto-detecting from the
+# character's school would be wrong more often than right).
+CLAN_COLORS = {
+    'Crab': 'dark blue and light gray',
+    'Crane': 'light blue and white / silver',
+    'Dragon': 'gold and dark green',
+    'Lion': 'yellow and brown',
+    'Phoenix': 'red and orange',
+    'Scorpion': 'black and dark red',
+    'Unicorn': 'purple and white with gold trim',
+    'Imperial': 'dark green with gold trim and fine chrysanthemum embroidery',
+    'Sparrow': 'dun brown and black',
+    'Fox': 'green and silver',
+    'Wasp': 'black and gold',
+    'Dragonfly': 'blue, brown, and gold',
+    'Hare': 'red and white',
+}

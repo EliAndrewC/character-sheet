@@ -63,7 +63,15 @@
         {% endif %}
     </div>
 
-    <!-- SCHOOL & DAN -->
+    <!-- SCHOOL & DAN (with optional CHARACTER ART floated beside on lg+) -->
+    {% set _full_art = full_art_url(character) %}
+    {% if _full_art %}<div class="lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start"
+                          data-testid="sheet-art-grid">
+    <div class="mb-6 lg:mb-0 lg:order-last" data-testid="character-full-art">
+        <img src="{{ _full_art }}" alt="Character art"
+             class="w-full rounded-lg shadow border border-ink/10 object-contain bg-white">
+    </div>
+    {% endif %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <div class="flex items-baseline gap-4 mb-4">
             {% if school %}
@@ -92,6 +100,7 @@
         </div>
         {% endif %}
     </section>
+    {% if _full_art %}</div>{% endif %}
 
     <!-- RINGS -->
     {% set ring_map = character.rings %}

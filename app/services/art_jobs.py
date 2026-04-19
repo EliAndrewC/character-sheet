@@ -34,11 +34,15 @@ class StagedArt:
     id: str
     user_id: str         # Discord ID of the uploader (enforces owner-only crop)
     char_id: int         # Character the art is being staged for
-    full_bytes: bytes    # Validated, EXIF-normalised WebP-ready image bytes
-    width: int           # Dimensions after EXIF-transpose
-    height: int
     source: str          # "upload" or "generated"
-    prompt: Optional[str] = None  # Only set for "generated"
+    # Bytes are populated by Phase 4 uploads immediately and by the
+    # Phase 8 generation worker once Gemini returns. Phase 7's prompt-
+    # review staging creates the slot with empty bytes and fills them
+    # in when the user submits for generation.
+    full_bytes: bytes = b""
+    width: int = 0
+    height: int = 0
+    prompt: Optional[str] = None  # Set for generated art
     created_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
@@ -70,13 +74,19 @@ def stage_art(
     *,
     user_id: str,
     char_id: int,
-    full_bytes: bytes,
-    width: int,
-    height: int,
+    full_bytes: bytes = b"",
+    width: int = 0,
+    height: int = 0,
     source: str = "upload",
     prompt: Optional[str] = None,
 ) -> str:
-    """Stash the image bytes under a new staging id and return the id."""
+    """Stash the image bytes under a new staging id and return the id.
+
+    Phase 4 (upload) passes ``full_bytes`` + dimensions. Phase 7
+    (generate-prompt-review) passes ``source="generated"`` and
+    ``prompt=...`` with no bytes. Phase 8 updates the existing slot
+    via ``update_staged_bytes`` once generation completes.
+    """
     _reap_expired()
     staging_id = str(uuid.uuid4())
     record = StagedArt(
@@ -92,6 +102,29 @@ def stage_art(
     with _LOCK:
         _STAGED[staging_id] = record
     return staging_id
+
+
+def update_staged_bytes(
+    staging_id: str,
+    *,
+    full_bytes: bytes,
+    width: int,
+    height: int,
+) -> None:
+    """Fill in the image bytes for an existing staging slot.
+
+    Used by Phase 8 after Gemini returns an image: the prompt-review
+    slot already exists, and we update it in place rather than
+    allocating a new id, so the progress page can redirect straight to
+    the crop page with the same id.
+    """
+    with _LOCK:
+        record = _STAGED.get(staging_id)
+        if record is None:  # pragma: no cover - the caller just created it
+            return
+        record.full_bytes = full_bytes
+        record.width = width
+        record.height = height
 
 
 def get_staged(staging_id: str) -> Optional[StagedArt]:
@@ -111,6 +144,7 @@ __all__ = [
     "STAGING_TTL",
     "StagedArt",
     "stage_art",
+    "update_staged_bytes",
     "get_staged",
     "clear_staged",
 ]
