@@ -797,6 +797,188 @@ class TestMantisPostureTracking:
         assert resp.status_code == 200
         assert "accum: false" in resp.text
 
+    def test_mantis_3rd_dan_offensive_flag_at_dan_3(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_3rd_dan_offensive") is True
+        # X defaults to attack skill rank; unseeded attack starts at 1.
+        assert flags.get("mantis_3rd_dan_x") == 1
+
+    def test_mantis_3rd_dan_offensive_x_matches_attack_skill(self, client):
+        """mantis_3rd_dan_x is fed by the character's attack skill rank."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+            attack=4,
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_3rd_dan_x") == 4
+
+    def test_mantis_2nd_dan_does_not_have_3rd_dan_offensive(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_3rd_dan_offensive") is False
+        assert flags.get("mantis_3rd_dan_x") == 0
+
+    def test_non_mantis_does_not_have_3rd_dan_offensive(self, client):
+        cid = _seed_character(
+            client, school="akodo_bushi",
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_3rd_dan_offensive") is False
+
+    def test_mantis_3rd_dan_button_markup_present(self, client):
+        """The attack-result-modal button is rendered (inside x-show gating)
+        on Dan 3+ Mantis sheets - clicktests key off the data-action attr."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-action="mantis-3rd-dan-offensive"' in resp.text
+        assert 'data-testid="mantis-3rd-dan-offensive-accum"' in resp.text
+        # Button label is hard-coded so grep it here to catch accidental typos.
+        assert "Spend another action to increase attack and damage" in resp.text
+
+    def test_mantis_2nd_dan_no_3rd_dan_button(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-action="mantis-3rd-dan-offensive"' not in resp.text
+
+    def test_mantis_3rd_dan_accum_state_roundtrips(self, client):
+        """The 3rd Dan offensive accumulator is persisted via adventure_state."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+        )
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"adventure_state": {"mantis_offensive_3rd_dan_accum": 3}},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.adventure_state["mantis_offensive_3rd_dan_accum"] == 3
+
+    def test_mantis_3rd_dan_accum_hydrates_into_tracking(self, client):
+        """Hydrating a non-zero accumulator from adventure_state on page load."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+            adventure_state={"mantis_offensive_3rd_dan_accum": 5},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert '"mantis_offensive_3rd_dan_accum": 5' in resp.text
+
+    def test_mantis_3rd_dan_defensive_flag_at_dan_3(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_3rd_dan_defensive") is True
+
+    def test_mantis_2nd_dan_does_not_have_3rd_dan_defensive(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_3rd_dan_defensive") is False
+
+    def test_non_mantis_does_not_have_3rd_dan_defensive(self, client):
+        cid = _seed_character(
+            client, school="akodo_bushi",
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("mantis_3rd_dan_defensive") is False
+
+    def test_mantis_3rd_dan_defensive_button_markup_present(self, client):
+        """Dan 3+ Mantis renders the Tracking-section defensive button and the
+        Clear bonuses button. Clicktests key off both data-action attrs."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-action="mantis-3rd-dan-defensive"' in resp.text
+        assert 'data-testid="mantis-3rd-dan-defensive-accum"' in resp.text
+        assert 'data-action="mantis-clear-bonuses"' in resp.text
+        # Button labels hard-coded - guard against accidental typos.
+        assert "Spend action to increase TN and wound checks" in resp.text
+        assert "Clear bonuses" in resp.text
+
+    def test_mantis_2nd_dan_no_3rd_dan_defensive_button(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-action="mantis-3rd-dan-defensive"' not in resp.text
+        # Clear bonuses is still rendered (it's gated on mantis_posture_tracking,
+        # not on 3rd Dan) for any Mantis character since it drives round reset.
+        assert 'data-action="mantis-clear-bonuses"' in resp.text
+
+    def test_mantis_3rd_dan_defensive_accum_state_roundtrips(self, client):
+        """Defensive accumulator persists via adventure_state."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+        )
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"adventure_state": {"mantis_defensive_3rd_dan_accum": 4}},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.adventure_state["mantis_defensive_3rd_dan_accum"] == 4
+
+    def test_mantis_3rd_dan_defensive_accum_hydrates(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+            adventure_state={"mantis_defensive_3rd_dan_accum": 7},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert '"mantis_defensive_3rd_dan_accum": 7' in resp.text
+
+    def test_tn_display_has_3rd_dan_accumulator_wiring(self, client):
+        """Dan 3+ Mantis TN display x-data carries has3rdDan flag and tooltip
+        plumbing for the defensive accumulator."""
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 3, "iaijutsu": 3, "worldliness": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert "has3rdDan: true" in resp.text
+        assert 'data-testid="tn-3rd-dan-accumulator"' in resp.text
+
+    def test_tn_display_dan_2_mantis_has3rdDan_false(self, client):
+        cid = _seed_character(
+            client, school="mantis_wave_treader", school_ring_choice="Void",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert "has3rdDan: false" in resp.text
+
 
 class TestPartyPriestsContext:
     """The ``party_priests`` list feeds the "<priest> priest blessed for 10

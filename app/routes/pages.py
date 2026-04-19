@@ -485,6 +485,15 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # offensive posture to attack/damage; +1 per declared defensive posture
         # to wound checks and TN). Derived client-side from postureHistory.
         "mantis_posture_accumulation": character.school == "mantis_wave_treader" and dan >= 5,
+        # Mantis Wave-Treader 3rd Dan offensive: after an attack roll made
+        # during an offensive-posture phase, spend one action die for +X
+        # attack/damage for the rest of the round (X = attack skill).
+        "mantis_3rd_dan_offensive": character.school == "mantis_wave_treader" and dan >= 3,
+        "mantis_3rd_dan_x": attack_skill if character.school == "mantis_wave_treader" and dan >= 3 else 0,
+        # Mantis Wave-Treader 3rd Dan defensive: after seeing an attack roll
+        # made against you in a defensive-posture phase, spend one action die
+        # for +X wound-check / TN for the rest of the round.
+        "mantis_3rd_dan_defensive": character.school == "mantis_wave_treader" and dan >= 3,
     }
 
     # Compute wound check probability slice for client-side display.

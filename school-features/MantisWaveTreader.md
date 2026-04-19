@@ -16,12 +16,12 @@
 - **Defensive:** +5 flat to wound checks (labeled in WC modal pre-roll Bonuses row and post-roll breakdown via `formula.bonus_sources`) and +5 to the sheet's TN-to-be-hit display (with a tooltip explaining the bump).
 - The posture tracker itself shows an "Active bonuses:" summary line beneath the current-posture line.
 
-**Implementation (Phase 4 + 5):**
+**Implementation (Phase 4, 5, 9):**
 - `app/routes/pages.py`: `school_abilities["mantis_posture_tracking"]` flag gates the tracker block when school is `mantis_wave_treader`.
 - `app/templates/character/sheet.html`:
   - `trackingData()` Alpine component gains `posturePhase`, `postureHistory`, `currentPosture()`, `selectPosture(type)`, and `resetMantisRound()`. `setActionDice()` and `clearActionDice()` both call `resetMantisRound()` - those are the two end-of-round triggers per the spec. `selectPosture` / `resetMantisRound` dispatch a `mantis-posture-changed` window event so out-of-scope listeners (the TN display) stay reactive.
   - Attack modal: `atkHitChance` / `atkAvgAttackRoll` read live posture and add +5 to the probability flat. `rollAttack` snapshots the posture at attack-roll time into `formula.flat`, `formula.bonus_sources`, and `formula.bonuses`. `atkComputeDamage` reads live posture and pushes `"+5 flat from offensive posture"` into `parts` + adds 5 to `flat`. Pre-roll Bonuses / Damage bonuses rows overlay the label live.
-  - WC modal: `wcProbRow` reads live posture and adds +5 to the probability flat. `rollWoundCheck` snapshots the posture into `formula.flat` and appends `"+5 from defensive posture"` to `formula.bonus_sources`. Pre-roll Bonuses row overlays the label live.
+  - WC modal: `wcProbRow` reads live posture and adds +5 to the probability flat. `rollWoundCheck` snapshots the posture into `formula.flat` and appends `"+5 from defensive posture"` to `formula.bonus_sources`. Pre-roll Bonuses row overlays the label live. (Phase 9 verified that this same flow also carries the 5th Dan defensive-count accumulator and the 3rd Dan defensive accumulator into both the probability table and the post-roll breakdown - see `_mantisLiveWcFlat` / `_mantisLiveWcLabels`.)
   - TN display (top derived stats): now has its own `x-data` with a `mantis-posture-changed.window` listener; bumps the displayed value by 5 and shows a "+5 defensive posture" label with a tooltip when defensive.
 - Storage: `adventure_state.mantis_posture_phase` and `adventure_state.mantis_posture_history`. No schema change.
 
@@ -76,14 +76,29 @@
 >
 > After seeing the result of an attack roll made against you while fighting with a defensive posture, you may spend one action die from any phase to increase your wound checks and TN to be hit by X for the remainder of the round, where X is your attack skill.
 
-**Status:** Not yet implemented. Non-standard 3rd Dan (no `third_dan` config block - too bespoke). Requires:
-- **Offensive branch** - The attack-roll result modal shows a button "Spend another action to increase attack and damage by X for the round" (X = attack skill) when the character is Mantis Wave-Treader at Dan >= 3, the current phase's posture is offensive, and at least one action die is still unspent. Tooltip carries the rules text verbatim. Clicking marks the lowest unspent action die spent and adds X to an `offensive3rdDan` accumulator that applies to all subsequent attack rolls and damage rolls until the next initiative roll.
-- **Defensive branch** - A button "Spend action to increase TN and wound checks by X" (X = attack skill) shown in the Tracking section below the posture-bonus list while in a defensive posture, with rules-text tooltip. Clicking spends one action die and adds X to a `defensive3rdDan` accumulator that applies to all wound checks and to the displayed TN until the next initiative roll.
-- Both accumulators reset on initiative roll, and both are zeroed by the "Clear bonuses" button and by the action-dice "Clear" button.
-- The wound check modal's probability table displays these accumulators as additive bonuses and factors them into the "% chance" and "average serious wounds" computations.
+**Status:** Both branches implemented (Phases 7 + 8).
 
-**Unit tests:** TBD.
-**Clicktests:** TBD.
+**Offensive branch (Phase 7):**
+- Server flags: `school_abilities["mantis_3rd_dan_offensive"]` (Dan 3+) and `mantis_3rd_dan_x` (= character's attack skill rank).
+- The attack-result modal renders a button "Spend another action to increase attack and damage by X for the round" (data-action `mantis-3rd-dan-offensive`, with the rules-text tooltip). Gated on Mantis 3rd Dan + `currentPosture === 'offensive'` + at least one unspent action die; shown on both hit and miss branches.
+- Clicking fires `trackingData.incrementMantis3rdDanOffensive(X)`, which spends the lowest unspent action die (labeled `Mantis 3rd Dan (offensive)`) via `spendLowestUnspentActionDie` and adds X to `offensive3rdDanAccum`. Persists via `adventure_state.mantis_offensive_3rd_dan_accum`.
+- Feeds the same overlay helpers (`_mantisLiveAttackLabels`, `_mantisLiveAttackFlat`, `atkComputeDamage`) used by Phase 5 and Phase 6, so pre-roll Bonuses + Damage bonuses rows, attack probability, post-roll breakdown, and damage parts all surface the labeled line. `rollAttack` snapshots it into `formula.flat` / `bonus_sources` / `bonuses`.
+
+**Defensive branch (Phase 8):**
+- Server flag: `school_abilities["mantis_3rd_dan_defensive"]` (Dan 3+). Reuses `mantis_3rd_dan_x` for X.
+- The Tracking-section posture-tracker block renders a button "Spend action to increase TN and wound checks by X" (data-action `mantis-3rd-dan-defensive`, with the rules-text tooltip). Gated on Mantis 3rd Dan + `currentPosture === 'defensive'` + at least one unspent action die.
+- Clicking fires `trackingData.incrementMantis3rdDanDefensive(X)`, which spends the lowest unspent action die (labeled `Mantis 3rd Dan (defensive)`) and adds X to `defensive3rdDanAccum`. Persists via `adventure_state.mantis_defensive_3rd_dan_accum`.
+- Feeds `_mantisLiveWcLabels` / `_mantisLiveWcFlat` and `rollWoundCheck`, so the WC modal's pre-roll Bonuses + post-roll breakdown + probability table include the labeled +X (stacks additively with Phase 5 current-posture +5 and Phase 6 5th Dan defensive accumulator).
+- TN display: local x-data now carries a `defensive3rdDan` field and a `has3rdDan` flag; `total()` adds it to the displayed value, `tooltip()` enumerates it, and a `tn-3rd-dan-accumulator` inline label renders `+X 3rd Dan` alongside the existing `tn-defensive-bump` (+5 defensive posture) and `tn-5th-dan-accumulator` (+N 5th Dan) labels.
+
+**Clear bonuses + end-of-round wiring (Phase 8):**
+- The posture-tracker block renders a "Clear bonuses" button (data-action `mantis-clear-bonuses`) visible whenever any per-round state is non-zero (`actionDice.length > 0 || postureHistory.length > 0 || offensive3rdDanAccum > 0 || defensive3rdDanAccum > 0`). Clicking delegates to `clearActionDice()`, which wipes actionDice and calls `resetMantisRound()`.
+- `resetMantisRound()` now zeros `defensive3rdDanAccum` alongside `offensive3rdDanAccum`, postureHistory, and posturePhase - so rolling initiative, clicking the action-dice "Clear" button, OR clicking "Clear bonuses" all have the same effect (end-of-round reset).
+- The `mantis-posture-changed` event detail now also carries `offensive3rdDan` and `defensive3rdDan` so the TN display (and any future cross-scope listener) can react to 3rd Dan accumulator changes without a separate event.
+
+**Unit tests:** `tests/test_routes.py::TestMantisPostureTracking` - all prior Phase 7 tests plus `test_mantis_3rd_dan_defensive_flag_at_dan_3`, `test_mantis_2nd_dan_does_not_have_3rd_dan_defensive`, `test_non_mantis_does_not_have_3rd_dan_defensive`, `test_mantis_3rd_dan_defensive_button_markup_present`, `test_mantis_2nd_dan_no_3rd_dan_defensive_button`, `test_mantis_3rd_dan_defensive_accum_state_roundtrips`, `test_mantis_3rd_dan_defensive_accum_hydrates`, `test_tn_display_has_3rd_dan_accumulator_wiring`, `test_tn_display_dan_2_mantis_has3rdDan_false`.
+
+**Clicktests:** `tests/e2e/test_school_abilities.py` - all prior Phase 7 tests plus `test_mantis_3rd_dan_defensive_button_hidden_without_posture`, `test_mantis_3rd_dan_defensive_button_hidden_in_offensive_posture`, `test_mantis_3rd_dan_defensive_button_hidden_no_action_dice`, `test_mantis_3rd_dan_defensive_button_absent_on_dan_2`, `test_mantis_3rd_dan_defensive_click_spends_die_and_accumulates`, `test_mantis_3rd_dan_defensive_two_spends_stack`, `test_mantis_3rd_dan_defensive_wc_overlay`, `test_mantis_3rd_dan_defensive_tn_display`, `test_mantis_clear_bonuses_zeros_everything`, `test_mantis_clear_bonuses_button_hidden_when_empty`, `test_mantis_action_dice_clear_equivalent_to_clear_bonuses`.
 
 ---
 
