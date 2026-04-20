@@ -63,14 +63,23 @@
         {% endif %}
     </div>
 
-    <!-- SCHOOL & DAN (with optional CHARACTER ART floated beside on lg+) -->
+    <!-- SCHOOL & DAN (with optional CHARACTER ART floated beside on lg+).
+         When art is present, the art column spans the full height of
+         School + Rings so the left column has enough content to balance a
+         tall portrait instead of leaving dead space below Techniques. -->
     {% set _full_art = full_art_url(character) %}
-    {% if _full_art %}<div class="lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start"
+    {% if _full_art %}<div class="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-stretch"
                           data-testid="sheet-art-grid">
     <div class="mb-6 lg:mb-0 lg:order-last" data-testid="character-full-art">
+        {# object-cover + lg:h-full makes the art fill the column to match the
+           left column's height exactly, cropping (from the bottom, via
+           object-top) if the natural aspect would overflow. This keeps the
+           layout tight regardless of portrait aspect - no dead space in
+           either column. On mobile the art is auto-height (natural aspect). #}
         <img src="{{ _full_art }}" alt="Character art"
-             class="w-full rounded-lg shadow border border-ink/10 object-contain bg-white">
+             class="w-full lg:h-full rounded-lg shadow border border-ink/10 object-contain lg:object-cover lg:object-top bg-white">
     </div>
+    <div class="space-y-6">
     {% endif %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <div class="flex items-baseline gap-4 mb-4">
@@ -100,7 +109,6 @@
         </div>
         {% endif %}
     </section>
-    {% if _full_art %}</div>{% endif %}
 
     <!-- RINGS -->
     {% set ring_map = character.rings %}
@@ -364,6 +372,7 @@
             </div>
         </div>
     </section>
+    {% if _full_art %}</div></div>{% endif %}
 
     <!-- LIVE TRACKING -->
     <script>
@@ -2917,6 +2926,30 @@
 
                 {# ── PRE-ROLL ── #}
                 <div x-show="atkPhase === 'pre'" class="space-y-4">
+                    {# Missing-action-dice warning. Rolls can still happen without
+                       any unspent action dice (e.g. an attack outside a combat
+                       round), but players who forgot to roll initiative get an
+                       orange nudge with a one-click shortcut to do so. #}
+                    <div x-show="initiativeWarningVariant() === 'no-init'" x-cloak
+                         data-testid="attack-init-warning-no-init"
+                         class="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded p-2">
+                        Note: you are using <span x-text="attackActionName()"></span> without having
+                        <button type="button"
+                                data-action="roll-initiative-from-warning"
+                                @click="triggerInitiativeFromWarning()"
+                                class="underline hover:text-orange-900 font-medium">rolled initiative</button>.
+                    </div>
+                    <div x-show="initiativeWarningVariant() === 'out-of-dice'" x-cloak
+                         data-testid="attack-init-warning-out-of-dice"
+                         class="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded p-2">
+                        Note: you are out of action dice for the round. Did you mean to
+                        <button type="button"
+                                data-action="roll-initiative-from-warning"
+                                @click="triggerInitiativeFromWarning()"
+                                class="underline hover:text-orange-900 font-medium">roll initiative</button>
+                        before using <span x-text="attackActionName()"></span>?
+                    </div>
+
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium mb-1">
@@ -3071,6 +3104,7 @@
                                     class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">+</button>
                         </div>
                         <button type="button" @click="rollAttack()"
+                                data-action="roll-attack"
                                 class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium ml-auto">
                             Roll <span x-text="(atkFormula?.label || 'Attack').replace(/\s*\(.*\)/, '')"></span>
                         </button>
@@ -6636,6 +6670,42 @@
 
             atkIsAthleticsAttack() {
                 return this.atkFormula?.attack_variant === 'athletics_attack';
+            },
+
+            // Human-readable name of the action the attack modal is handling.
+            // Falls back to the formula label (stripped of parenthetical rings
+            // like "(Fire)") and finally to a generic label.
+            attackActionName() {
+                const raw = this.atkFormula?.label || 'Attack';
+                return raw.replace(/\s*\(.*\)\s*$/, '').trim() || 'Attack';
+            },
+
+            // Returns a string describing when to warn the player about an
+            // attempted action-die-spending action:
+            //   'no-init'      -> no action dice present at all (never rolled
+            //                     initiative this combat).
+            //   'out-of-dice'  -> dice rolled but every one is spent.
+            //   null           -> at least one unspent die, no warning.
+            // Athletics-only dice count as "available" for the warning - they
+            // exist and might be spendable (Mantis 4th Dan) or simply signal
+            // that initiative has been rolled.
+            initiativeWarningVariant() {
+                const dice = window._trackingBridge?.actionDice || [];
+                if (!dice.length) return 'no-init';
+                if (dice.every(d => d.spent)) return 'out-of-dice';
+                return null;
+            },
+
+            // Close any open action-die-spending modal and trigger the
+            // initiative action. Uses the DOM's initiative entrypoint so
+            // school-specific branches (Togashi choice menu, etc.) fire
+            // exactly as they do from a normal click.
+            triggerInitiativeFromWarning() {
+                this.atkModalOpen = false;
+                this.close();  // dice-roller modal (if open)
+                this.rollMenuOpen = false;
+                const btn = document.querySelector('[data-roll-key="initiative"]');
+                if (btn) btn.click();
             },
 
             atkEffectiveTN() {

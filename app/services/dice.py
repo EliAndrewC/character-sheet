@@ -622,37 +622,41 @@ def build_athletics_combat_formula(
 ) -> Optional[RollFormula]:
     """Build an athletics-attack or athletics-parry formula.
 
-    Per rules/05-school_knacks.md §Athletics: "You may also use this knack to
-    attack or parry. If you use it to attack, your TN is increased by 5 times
-    the defender's parry skill. If you use it to parry, then your TN is raised
-    by 5 times the attack skill of the attacker."
+    Per the Athletics rules: you may substitute this knack for your attack or
+    parry, rolling (athletics + Fire)k(Fire) or (athletics + Air)k(Air). Note
+    the ring is NOT doubled here - that doubling only applies when athletics
+    is rolled for generic physical actions (running, climbing, etc).
 
-    The base roll is the athletics formula locked to the combat ring
-    (Fire for attack, Air for parry). In addition to athletics-specific school
-    bonuses (inherited from build_athletics_formula), attack/parry school
-    bonuses also apply - e.g. Kitsuki +2*Water on attack, Shinjo's 1st Dan
-    extra die on parry.
+    Attack/parry school bonuses still apply on top - e.g. Kitsuki +2*Water on
+    attack, Shinjo's 1st Dan extra die on parry - and so do athletics-specific
+    school bonuses (school_technique_bonus tagged with ``athletics``).
 
     Returns None if the character has no athletics knack (rank 0).
     """
     if which not in ("attack", "parry"):
         return None
     knacks = character_data.get("knacks", {}) or {}
-    if knacks.get("athletics", 0) <= 0:
+    athletics_rank = knacks.get("athletics", 0)
+    if athletics_rank <= 0:
         return None
     ring_name = "Fire" if which == "attack" else "Air"
+    rings = character_data.get("rings", {})
+    ring_val = rings.get(ring_name, 2)
 
-    formula = build_athletics_formula(ring_name, character_data)
-    if formula is None:  # pragma: no cover — ring_name is always Fire/Air (valid), so build_athletics_formula cannot return None here; guard is defensive against future refactors.
-        return None
-    formula.label = f"Athletics {'Attack' if which == 'attack' else 'Parry'} ({ring_name})"
+    formula = RollFormula(
+        label=f"Athletics {'Attack' if which == 'attack' else 'Parry'} ({ring_name})",
+        rolled=ring_val + athletics_rank,
+        kept=ring_val,
+        flat=0,
+        **_reroll_fields(character_data),
+    )
 
     school_id = character_data.get("school", "")
     tech_choices = character_data.get("technique_choices") or {}
+    _apply_school_technique_bonus(formula, "athletics", school_id, knacks, tech_choices)
     _apply_school_technique_bonus(formula, which, school_id, knacks, tech_choices)
 
     dan = compute_dan(knacks) if knacks else 0
-    rings = character_data.get("rings", {})
 
     if school_id == "kitsuki_magistrate" and which == "attack":
         water_val = rings.get("Water", 2)

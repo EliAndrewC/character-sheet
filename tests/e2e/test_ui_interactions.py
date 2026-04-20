@@ -202,7 +202,7 @@ def test_lucky_reroll_on_attack(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
     assert lucky_btn.count() > 0, "Lucky button should appear on attack result"
@@ -215,7 +215,7 @@ def test_no_lucky_on_attack_without_advantage(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
     assert lucky_btn.count() == 0, "Lucky button should NOT appear without advantage"
@@ -232,7 +232,7 @@ def test_lucky_reroll_on_damage(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Roll damage if hit
     dmg_btn = modal.locator('button:has-text("Make Damage Roll"):visible')
@@ -286,7 +286,7 @@ def test_lucky_carries_over_free_raise_attack(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("25")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Spend a free raise
     raise_btn = modal.locator('button:has-text("Spend Free Raise"):visible')
@@ -411,7 +411,7 @@ def test_lucky_carries_over_akodo_bonus(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("30")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Apply Akodo bonus
     apply_btn = modal.locator('button:has-text("Apply +10"):visible')
@@ -446,7 +446,7 @@ def test_lucky_prevtotal_updates_with_post_reroll_bonus(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("25")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Use Lucky immediately (no bonuses spent yet)
     lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
@@ -592,7 +592,7 @@ def test_failed_parry_checkbox(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     hit = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -742,7 +742,7 @@ def test_akodo_banked_bonus_on_miss(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("30")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     page.evaluate("if (window._origRandom) Math.random = window._origRandom")
     # Should have missed
@@ -789,7 +789,7 @@ def test_akodo_undo_visible_after_all_bonuses_spent(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     page.evaluate("if (window._origRandom) Math.random = window._origRandom")
     # Apply the only bonus - this spends all bonuses
