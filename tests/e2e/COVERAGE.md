@@ -181,6 +181,12 @@ also wait for the post-update DOM to settle.
 - [x] 5th Dan never-TN skill shows no input/checkbox -> `test_school_abilities.py::test_doji_5th_dan_never_tn_skill_no_input`
 - [x] 5th Dan attack auto-applies bonus from TN -> `test_school_abilities.py::test_doji_5th_dan_attack_auto_bonus`
 - [x] 5th Dan wound check auto-applies bonus from LW -> `test_school_abilities.py::test_doji_5th_dan_wound_check_auto_bonus`
+- [x] 4th Dan "target has not attacked me this round" checkbox hidden below 4th Dan -> `test_school_abilities.py::test_doji_4th_dan_untouched_checkbox_hidden_below_4th_dan`
+- [x] 4th Dan checkbox visible on the attack modal with hidden-until-checked phase dropdown -> `test_school_abilities.py::test_doji_4th_dan_untouched_checkbox_visible_on_attack`
+- [x] 4th Dan bonus shifts the attack probability table (hit chance increases) -> `test_school_abilities.py::test_doji_4th_dan_bonus_shifts_probability_table`
+- [x] 4th Dan bonus applied to the roll and labeled in the post-roll breakdown -> `test_school_abilities.py::test_doji_4th_dan_bonus_applied_to_roll_and_breakdown`
+- [x] 4th Dan: unchecked checkbox yields no bonus -> `test_school_abilities.py::test_doji_4th_dan_bonus_not_applied_when_unchecked`
+- [x] 4th Dan: checkbox also surfaces on the attack modal for counterattack -> `test_school_abilities.py::test_doji_4th_dan_counterattack_shows_checkbox`
 
 ### Hida
 
@@ -1146,6 +1152,8 @@ JS-error sanity:
       + `test_homepage_no_horizontal_overflow`
 - [x] View Sheet floats full art to the right of the school section at >= lg breakpoint ->
       `test_character_art_display.py::test_sheet_page_shows_art_grid_when_character_has_art`
+- [x] View Sheet art column height matches the School+Rings left-column stack ->
+      `test_character_art_display.py::test_sheet_art_height_matches_left_column`
 - [x] View Sheet stacks full art and school section below lg breakpoint ->
       `test_responsive.py::test_sheet_no_horizontal_overflow_across_widths`
       (covers 375 / 768 / 1280 px)

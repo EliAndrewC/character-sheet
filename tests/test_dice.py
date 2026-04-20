@@ -10,6 +10,7 @@ import pytest
 from app.services.dice import (
     apply_dice_caps,
     build_all_roll_formulas,
+    build_athletics_combat_formula,
     build_athletics_formula,
     build_combat_formula,
     build_initiative_formula,
@@ -1443,6 +1444,86 @@ class TestSchoolAbilities:
         assert f_sometimes.doji_5th_dan_optional is False
         wc = build_wound_check_formula(char)
         assert wc["doji_5th_dan_wc"] is False
+
+    # --- Doji Artisan 4th Dan: "untouched target" flag on attack-type rolls ---
+    def test_doji_4th_dan_attack_flag(self):
+        """Doji 4th Dan: base attack formula gets the untouched_target flag."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 4, "oppose_social": 4, "worldliness": 4},
+            attack=3,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.doji_4th_dan_untouched_target is True
+
+    def test_doji_4th_dan_parry_no_flag(self):
+        """Doji 4th Dan: parry is defensive, not an attack, no flag."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 4, "oppose_social": 4, "worldliness": 4},
+            parry=3,
+        )
+        f = build_combat_formula("parry", char)
+        assert f.doji_4th_dan_untouched_target is False
+
+    def test_doji_4th_dan_counterattack_knack_flag(self):
+        """Doji 4th Dan: counterattack (attack-type knack) gets the flag."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 4, "oppose_social": 4, "worldliness": 4},
+        )
+        f = build_knack_formula("counterattack", char)
+        assert f.doji_4th_dan_untouched_target is True
+
+    def test_doji_4th_dan_oppose_social_knack_no_flag(self):
+        """Doji 4th Dan: non-attack knacks (e.g. oppose_social) no flag."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 4, "oppose_social": 4, "worldliness": 4},
+        )
+        f = build_knack_formula("oppose_social", char)
+        assert f.doji_4th_dan_untouched_target is False
+
+    def test_doji_4th_dan_athletics_attack_flag(self):
+        """Doji 4th Dan: athletics-as-attack also gets the flag. Dan is the
+        minimum knack rank, so athletics must be at 4+ too."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"athletics": 4, "counterattack": 4, "oppose_social": 4, "worldliness": 4},
+        )
+        f = build_athletics_combat_formula("attack", char)
+        assert f.doji_4th_dan_untouched_target is True
+
+    def test_doji_4th_dan_athletics_parry_no_flag(self):
+        """Doji 4th Dan: athletics-as-parry has no flag (defensive only)."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"athletics": 4, "counterattack": 4, "oppose_social": 4, "worldliness": 4},
+        )
+        f = build_athletics_combat_formula("parry", char)
+        assert f.doji_4th_dan_untouched_target is False
+
+    def test_doji_below_4th_dan_no_untouched_flag(self):
+        """Doji below 4th Dan: no untouched_target flag on attack formulas."""
+        char = make_character_data(
+            school="doji_artisan",
+            knacks={"counterattack": 3, "oppose_social": 3, "worldliness": 3},
+            attack=3,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.doji_4th_dan_untouched_target is False
+        k = build_knack_formula("counterattack", char)
+        assert k.doji_4th_dan_untouched_target is False
+
+    def test_doji_4th_dan_flag_only_for_doji_school(self):
+        """Other schools at Dan 4+ do not get the Doji 4th Dan flag."""
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+            attack=3,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.doji_4th_dan_untouched_target is False
 
     def test_shared_tn_groupings_values(self):
         """Verify the shared TN groupings contain expected skills."""

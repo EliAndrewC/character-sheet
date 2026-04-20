@@ -69,14 +69,29 @@
 
 > Raise your current and maximum Air or Water by 1. Raising that ring now costs 5 fewer XP. When attacking a target who has not attacked you this round, you receive a bonus equal to the current phase.
 
-**Status:** Partially implemented. Ring raise is fully implemented; "bonus equal to current phase when attacking untouched targets" is out of scope (combat-phase tracking).
+**Status:** Fully implemented.
 - Ring raise (+1 to the chosen school ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "Air or Water", the 4th Dan ring raise applies to whichever ring was chosen.
+- "Untouched target" bonus: attack-type formulas (attack, counterattack, double_attack, lunge, athletics:attack) get a `doji_4th_dan_untouched_target` flag server-side. The attack modal's pre-roll page shows a "Target has not attacked me this round" checkbox for Doji Artisan 4th Dan characters. Ticking it reveals a 1-10 phase dropdown; the picked phase becomes a flat bonus that feeds the probability chart (`atkHitChance` / `atkAvgAttackRoll`), is auto-applied to the roll via `formula.flat`, and surfaces in the post-roll breakdown as a labeled "+N from Doji 4th Dan (phase N, target had not attacked)" line.
 
 **Unit tests:**
 - `test_remaining_features.py:25` - tests SCHOOL_RING_OPTIONS for Doji (Air or Water)
+- `test_dice.py::TestSchoolAbilities::test_doji_4th_dan_attack_flag`
+- `test_dice.py::TestSchoolAbilities::test_doji_4th_dan_parry_no_flag`
+- `test_dice.py::TestSchoolAbilities::test_doji_4th_dan_counterattack_knack_flag`
+- `test_dice.py::TestSchoolAbilities::test_doji_4th_dan_oppose_social_knack_no_flag`
+- `test_dice.py::TestSchoolAbilities::test_doji_4th_dan_athletics_attack_flag`
+- `test_dice.py::TestSchoolAbilities::test_doji_4th_dan_athletics_parry_no_flag`
+- `test_dice.py::TestSchoolAbilities::test_doji_below_4th_dan_no_untouched_flag`
+- `test_dice.py::TestSchoolAbilities::test_doji_4th_dan_flag_only_for_doji_school`
 
 **Clicktests:**
 - `test_school_rings.py:35` - tests school ring selection for Doji Artisan
+- `test_school_abilities.py::test_doji_4th_dan_untouched_checkbox_hidden_below_4th_dan`
+- `test_school_abilities.py::test_doji_4th_dan_untouched_checkbox_visible_on_attack`
+- `test_school_abilities.py::test_doji_4th_dan_bonus_shifts_probability_table`
+- `test_school_abilities.py::test_doji_4th_dan_bonus_applied_to_roll_and_breakdown`
+- `test_school_abilities.py::test_doji_4th_dan_bonus_not_applied_when_unchecked`
+- `test_school_abilities.py::test_doji_4th_dan_counterattack_shows_checkbox`
 
 ---
 

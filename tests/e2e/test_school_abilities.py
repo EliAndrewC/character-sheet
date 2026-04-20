@@ -3259,6 +3259,127 @@ def test_doji_5th_dan_wound_check_auto_bonus(page, live_server_url):
     assert bonus == 4  # floor((30-10)/5)
 
 
+def test_doji_4th_dan_untouched_checkbox_hidden_below_4th_dan(page, live_server_url):
+    """Doji below 4th Dan: the untouched-target checkbox is NOT rendered."""
+    _create_char(page, live_server_url, "Doji3NoUT", "doji_artisan",
+                 knack_overrides={"counterattack": 3, "oppose_social": 3, "worldliness": 3})
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    ut = page.locator('[data-testid="doji-4th-dan-untouched"]')
+    assert not ut.is_visible()
+
+
+def test_doji_4th_dan_untouched_checkbox_visible_on_attack(page, live_server_url):
+    """Doji 4th Dan: the checkbox is visible on the attack modal's pre-roll
+    page, with a phase dropdown that only appears once checked."""
+    _create_char(page, live_server_url, "Doji4UT", "doji_artisan",
+                 knack_overrides={"counterattack": 4, "oppose_social": 4, "worldliness": 4})
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    ut = page.locator('[data-testid="doji-4th-dan-untouched"]')
+    assert ut.is_visible()
+    assert ut.locator('[data-action="doji-4th-dan-phase"]').count() == 1
+    # Dropdown hidden until checkbox is ticked.
+    assert not ut.locator('[data-action="doji-4th-dan-phase"]').is_visible()
+    ut.locator('[data-action="doji-4th-dan-untouched-checkbox"]').check()
+    ut.locator('[data-action="doji-4th-dan-phase"]').wait_for(
+        state='visible', timeout=2000)
+
+
+def test_doji_4th_dan_bonus_shifts_probability_table(page, live_server_url):
+    """Doji 4th Dan: ticking the checkbox and picking a phase raises the hit
+    chance in the probability table (the bonus is added to the attack roll)."""
+    _create_char(page, live_server_url, "Doji4Prob", "doji_artisan",
+                 knack_overrides={"counterattack": 4, "oppose_social": 4, "worldliness": 4})
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    base_chance = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.atkHitChance === 'function') return d.atkHitChance(0);
+        }
+        return 0;
+    }""")
+    ut = page.locator('[data-testid="doji-4th-dan-untouched"]')
+    ut.locator('[data-action="doji-4th-dan-untouched-checkbox"]').check()
+    ut.locator('[data-action="doji-4th-dan-phase"]').select_option("10")
+    boosted = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.atkHitChance === 'function') return d.atkHitChance(0);
+        }
+        return 0;
+    }""")
+    assert boosted >= base_chance
+    assert boosted > 0
+
+
+def test_doji_4th_dan_bonus_applied_to_roll_and_breakdown(page, live_server_url):
+    """Doji 4th Dan: rolling with the checkbox ticked adds +phase to the
+    formula and surfaces the labeled line in the post-roll breakdown."""
+    _create_char(page, live_server_url, "Doji4Roll", "doji_artisan",
+                 knack_overrides={"counterattack": 4, "oppose_social": 4, "worldliness": 4})
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    modal = page.locator('[data-modal="attack"]')
+    ut = page.locator('[data-testid="doji-4th-dan-untouched"]')
+    ut.locator('[data-action="doji-4th-dan-untouched-checkbox"]').check()
+    ut.locator('[data-action="doji-4th-dan-phase"]').select_option("7")
+    modal.locator('[data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+    bonus = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return {
+                bonus: d.formula?.doji_4th_dan_bonus || 0,
+                phase: d.formula?.doji_4th_dan_phase || 0,
+            };
+        }
+        return null;
+    }""")
+    assert bonus == {"bonus": 7, "phase": 7}
+    breakdown = page.locator('[data-testid="doji-4th-dan-breakdown"]')
+    assert breakdown.is_visible()
+    assert "+7" in breakdown.text_content()
+
+
+def test_doji_4th_dan_bonus_not_applied_when_unchecked(page, live_server_url):
+    """Doji 4th Dan: without the checkbox the formula has no 4th Dan bonus."""
+    _create_char(page, live_server_url, "Doji4NoApply", "doji_artisan",
+                 knack_overrides={"counterattack": 4, "oppose_social": 4, "worldliness": 4})
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    modal = page.locator('[data-modal="attack"]')
+    # Leave the checkbox unchecked; set a phase directly just to prove it
+    # doesn't leak into the formula.
+    page.evaluate("() => { window._diceRoller.atkDojiPhase = 5; }")
+    modal.locator('[data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+    bonus = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return d.formula?.doji_4th_dan_bonus || 0;
+        }
+        return 0;
+    }""")
+    assert bonus == 0
+    assert not page.locator('[data-testid="doji-4th-dan-breakdown"]').is_visible()
+
+
+def test_doji_4th_dan_counterattack_shows_checkbox(page, live_server_url):
+    """Doji 4th Dan counterattack (an attack-type knack) also surfaces the
+    untouched-target checkbox on its attack modal."""
+    _create_char(page, live_server_url, "Doji4Counter", "doji_artisan",
+                 knack_overrides={"counterattack": 4, "oppose_social": 4, "worldliness": 4})
+    page.locator('[data-roll-key="knack:counterattack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    assert page.locator('[data-testid="doji-4th-dan-untouched"]').is_visible()
+
+
 def test_togashi_4th_dan_reroll_behavioral(page, live_server_url):
     """Togashi 4th Dan: Reroll button produces a new result."""
     _create_char(page, live_server_url, "Togashi4RB", "togashi_ise_zumi",

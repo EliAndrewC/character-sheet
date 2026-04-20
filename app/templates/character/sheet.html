@@ -3048,6 +3048,33 @@
                         bonus (from TN <span x-text="atkTN"></span>)
                     </div>
 
+                    {# Doji Artisan 4th Dan: "target has not attacked me this
+                       round" bonus = current phase. The phase matters but we
+                       can't derive it from action-die state alone (the attack
+                       may be made before any action die is spent), so the
+                       player picks it from a dropdown. #}
+                    <div x-show="atkFormula?.doji_4th_dan_untouched_target" x-cloak
+                         data-testid="doji-4th-dan-untouched"
+                         class="text-xs text-ink/60 bg-parchment rounded p-2 space-y-1">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" x-model="atkDojiUntouchedTarget"
+                                   data-action="doji-4th-dan-untouched-checkbox"
+                                   class="rounded border-ink/30">
+                            <span>Target has not attacked me this round (Doji 4th Dan: +phase)</span>
+                        </label>
+                        <div x-show="atkDojiUntouchedTarget" x-cloak class="flex items-center gap-2">
+                            <label>Current phase:</label>
+                            <select x-model.number="atkDojiPhase"
+                                    data-action="doji-4th-dan-phase"
+                                    class="border rounded px-1 py-0.5 text-xs">
+                                <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="p">
+                                    <option :value="p" x-text="p"></option>
+                                </template>
+                            </select>
+                            <span class="text-ink/50">(+<span x-text="atkDojiPhase"></span> to the roll)</span>
+                        </div>
+                    </div>
+
                     {# Ikoma 4th Dan: 10-dice floor on unparried damage #}
                     <div x-show="schoolAbilities.ikoma_10_dice_floor" x-cloak
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
@@ -3174,6 +3201,10 @@
                         </div>
                         <div x-show="formula?.doji_5th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="formula?.doji_5th_dan_bonus"></span> from Doji 5th Dan (TN <span x-text="atkTN"></span>)
+                        </div>
+                        <div x-show="formula?.doji_4th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
+                             data-testid="doji-4th-dan-breakdown">
+                            &bull; +<span x-text="formula?.doji_4th_dan_bonus"></span> from Doji 4th Dan (phase <span x-text="formula?.doji_4th_dan_phase"></span>, target had not attacked)
                         </div>
                         <div x-show="shosuroLowest3Bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="shosuroLowest3Bonus"></span> from Shosuro 5th Dan (lowest 3 dice added to result)
@@ -5188,6 +5219,11 @@
             atkDamageParts: [],
             atkDamageConvictionSpent: 0,
             atkOtakuTradeDice: false,
+            // Doji Artisan 4th Dan: "target has not attacked me this round"
+            // bonus equal to the current phase. Both values are pre-roll
+            // inputs so the probability chart reflects the bonus.
+            atkDojiUntouchedTarget: false,
+            atkDojiPhase: 1,
             // Wound check
             wcModalOpen: false,
             wcPhase: 'pre',  // 'pre' | 'rolling' | 'result'
@@ -6650,6 +6686,8 @@
                 this.atkFailedParry = false;
                 this.atkIsawaTnTrade = false;
                 this.atkOtakuTradeDice = false;
+                this.atkDojiUntouchedTarget = false;
+                this.atkDojiPhase = 1;
                 // Athletics-attack TN = 5 + 10*parry; regular TN = 5 + 5*parry.
                 // Reset atkTN to a sane default if the previous value isn't one of
                 // the new variant's dropdown options (so the <select> isn't blank).
@@ -6787,6 +6825,16 @@
                     ? Math.max(0, Math.floor((this.atkTN - 10) / 5)) : 0;
             },
 
+            // Doji Artisan 4th Dan: +phase when attacking a target that has
+            // not attacked you this round. Returns 0 unless the pre-roll
+            // checkbox is ticked and the formula exposes the flag.
+            _dojiUntouchedBonus() {
+                if (!this.atkFormula?.doji_4th_dan_untouched_target) return 0;
+                if (!this.atkDojiUntouchedTarget) return 0;
+                const phase = parseInt(this.atkDojiPhase, 10);
+                return Number.isFinite(phase) && phase > 0 ? phase : 0;
+            },
+
             atkHitChance(voidCount) {
                 const probs = this.atkProbs[this.atkKey];
                 if (!probs) return 0;
@@ -6795,12 +6843,13 @@
                 const arr = probs.probs[rk];
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const dojiBonus = this._dojiAtkBonus();
+                const dojiUntouched = this._dojiUntouchedBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
                 // Mantis Wave-Treader: offensive posture (+5) plus 5th Dan
                 // offensive-posture-count accumulator (+N) feed into the target.
                 const postureFlat = this._mantisLiveAttackFlat();
                 const target = Math.max(0,
-                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - shosuroFlat - postureFlat);
+                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - dojiUntouched - shosuroFlat - postureFlat);
                 return target < arr.length ? arr[target] : 0;
             },
 
@@ -6810,9 +6859,10 @@
                 const rk = probs.void_keys?.[String(voidCount)];
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const dojiBonus = this._dojiAtkBonus();
+                const dojiUntouched = this._dojiUntouchedBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
                 const postureFlat = this._mantisLiveAttackFlat();
-                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + shosuroFlat + postureFlat;
+                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + dojiUntouched + shosuroFlat + postureFlat;
             },
 
             atkAvgExtraDice(voidCount) {
@@ -7041,6 +7091,19 @@
                     if (dojiBonus > 0) {
                         formula.flat += dojiBonus;
                         formula.doji_5th_dan_bonus = dojiBonus;
+                    }
+                }
+
+                // Doji Artisan 4th Dan: if the player ticked "target has not
+                // attacked me this round", add the chosen phase as a flat
+                // bonus and stamp it onto the formula for the post-roll
+                // breakdown.
+                if (formula.doji_4th_dan_untouched_target && this.atkDojiUntouchedTarget) {
+                    const phase = parseInt(this.atkDojiPhase, 10) || 0;
+                    if (phase > 0) {
+                        formula.flat += phase;
+                        formula.doji_4th_dan_bonus = phase;
+                        formula.doji_4th_dan_phase = phase;
                     }
                 }
 

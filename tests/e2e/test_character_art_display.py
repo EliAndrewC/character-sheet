@@ -111,3 +111,30 @@ def test_sheet_page_hides_art_grid_when_character_has_no_art(
     # Art grid + full-art are absent
     assert page.locator('[data-testid="sheet-art-grid"]').count() == 0
     assert page.locator('[data-testid="character-full-art"]').count() == 0
+
+
+def test_sheet_art_height_matches_left_column(page, live_server_url):
+    """At lg+ widths the art fills the grid cell so its bottom lines up with
+    the bottom of the School+Rings stack on the left. Before this layout
+    tweak, the art overhung Rings by hundreds of pixels."""
+    page.set_viewport_size({"width": 1280, "height": 900})
+    with_art = _create_character(page, live_server_url, "ArtHeightAlign")
+    _upload_and_save_art(page, with_art)
+    page.goto(with_art)
+    page.wait_for_selector('[data-testid="sheet-art-grid"]')
+    page.wait_for_selector('[data-testid="character-full-art"] img')
+    # Wait for the image to load so its rendered height is real.
+    page.wait_for_function(
+        "() => { const i = document.querySelector('[data-testid=\"character-full-art\"] img');"
+        " return i && i.complete && i.naturalWidth > 0; }"
+    )
+    gap = page.evaluate("""() => {
+        const art = document.querySelector('[data-testid="character-full-art"]');
+        const grid = document.querySelector('[data-testid="sheet-art-grid"]');
+        // The left content column is the non-art direct child of the grid.
+        const left = [...grid.children].find(el =>
+            el.getAttribute('data-testid') !== 'character-full-art');
+        return Math.abs(art.getBoundingClientRect().bottom
+                      - left.getBoundingClientRect().bottom);
+    }""")
+    assert gap <= 4, f"art/left-column bottoms should align within 4px, got {gap}px"
