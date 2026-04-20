@@ -1,7 +1,13 @@
 """E2E: Light wounds modal — add, set total, take serious, minus dropdown."""
 
 import pytest
-from tests.e2e.helpers import select_school, apply_changes, start_new_character
+from tests.e2e.helpers import (
+    add_light_wounds,
+    apply_changes,
+    dismiss_wc_modal,
+    select_school,
+    start_new_character,
+)
 
 pytestmark = pytest.mark.tracking
 
@@ -26,12 +32,8 @@ def _get_sw(page):
 
 
 def _add_light_wounds(page, amount):
-    """Use the + modal to add light wounds."""
-    page.locator('[data-action="lw-plus"]').click()
-    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
-    page.fill('input[placeholder="Amount"]', str(amount))
-    page.locator('input[placeholder="Amount"]').locator('..').locator('button', has_text="Add").click()
-    page.wait_for_timeout(500)
+    """Use the + modal to add light wounds and dismiss the auto-opened WC modal."""
+    add_light_wounds(page, amount)
 
 
 def test_plus_opens_modal(page, live_server_url):
@@ -119,3 +121,35 @@ def test_minus_disabled_at_zero(page, live_server_url):
     """Minus button disabled when light wounds is 0."""
     _create_char(page, live_server_url)
     assert page.locator('[data-action="lw-minus"]').is_disabled()
+
+
+def test_add_to_total_auto_opens_wound_check(page, live_server_url):
+    """Using Add in the + modal auto-opens the wound check modal."""
+    _create_char(page, live_server_url)
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page.fill('input[placeholder="Amount"]', "5")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button', has_text="Add").click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+
+
+def test_set_total_auto_opens_wound_check(page, live_server_url):
+    """Using Set in the + modal auto-opens the wound check modal when LW > 0."""
+    _create_char(page, live_server_url)
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="New total"]', timeout=3000)
+    page.fill('input[placeholder="New total"]', "8")
+    page.locator('input[placeholder="New total"]').locator('..').locator('button', has_text="Set").click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+
+
+def test_set_total_to_zero_does_not_open_wound_check(page, live_server_url):
+    """Setting total to 0 should not open the wound check modal."""
+    _create_char(page, live_server_url)
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="New total"]', timeout=3000)
+    page.fill('input[placeholder="New total"]', "0")
+    page.locator('input[placeholder="New total"]').locator('..').locator('button', has_text="Set").click()
+    page.wait_for_timeout(500)
+    modal = page.locator('[data-modal="wound-check"]')
+    assert not modal.is_visible()

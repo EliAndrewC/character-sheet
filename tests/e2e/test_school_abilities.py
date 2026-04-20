@@ -1,7 +1,7 @@
 """E2E: School-specific ability UI - buttons, banked bonuses, display notes."""
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
+from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character, dismiss_wc_modal
 
 pytestmark = [pytest.mark.rolls]
 
@@ -751,7 +751,6 @@ def test_mirumoto_5th_dan_prob_charts_include_bonus(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "30")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
 
     # Get wound check pass chance with 0 VP and 1 VP
@@ -1497,6 +1496,7 @@ def test_hida_trade_sw_button_works(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "15")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
+    dismiss_wc_modal(page)
     assert not trade_btn.is_disabled(), "Button should be enabled when LW > 0"
     # Click the button
     trade_btn.click()
@@ -1713,7 +1713,6 @@ def test_shosuro_5th_dan_wound_check_lowest_3_dice(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     # Open WC modal and check the pre-roll note
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     pre_text = page.locator('[data-modal="wound-check"]').text_content()
     assert "Shosuro 5th Dan" in pre_text
@@ -2049,7 +2048,6 @@ def _roll_wound_check(page):
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -2296,7 +2294,6 @@ def test_bayushi_5th_dan_half_lw_behavioral(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_high(page)  # dice roll 7 each -> ~35 total for a 5k3+flat roll
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -2344,7 +2341,6 @@ def test_bayushi_below_5th_dan_no_half_lw(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_low(page)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -2385,7 +2381,6 @@ def test_bayushi_5th_dan_prob_table_shows_half_lw(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     # Open wound check modal to see the probability table
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     # The Bayushi 5th Dan note should appear
     wc_modal = page.locator('[data-modal="wound-check"]')
@@ -2404,7 +2399,6 @@ def test_bayushi_below_5th_dan_prob_table_no_half_note(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "60")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     halved_note = wc_modal.locator('text="Bayushi 5th Dan"')
@@ -2608,7 +2602,6 @@ def test_daidoji_5th_dan_tn_note_behavioral(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_high(page)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -2634,7 +2627,6 @@ def test_daidoji_3rd_dan_counterattack_checkbox(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     # Open wound check
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     # Checkbox should be visible with "Hit was counterattacked" (self Daidoji)
@@ -2671,7 +2663,6 @@ def test_daidoji_below_3rd_dan_no_counterattack_checkbox(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     checkbox = wc_modal.locator('text="Hit was counterattacked"')
@@ -2699,7 +2690,6 @@ def test_non_daidoji_with_party_counterattack_checkbox(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     # Should show the party member's name in the checkbox label
@@ -2827,6 +2817,7 @@ def test_hida_4th_dan_trade_sw_behavioral(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "25")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
+    dismiss_wc_modal(page)
     # Button should now be enabled
     assert not trade_btn.is_disabled(), "Button should be enabled with LW > 0"
     # Click - should ADD 2 SW and reset LW to 0
@@ -2851,6 +2842,7 @@ def test_hida_trade_sw_can_be_used_multiple_times(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
+    dismiss_wc_modal(page)
     trade_btn.click()
     page.wait_for_timeout(300)
     assert page.locator('[x-text="seriousWounds"]').text_content().strip() == "2"
@@ -2862,6 +2854,7 @@ def test_hida_trade_sw_can_be_used_multiple_times(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "20")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
+    dismiss_wc_modal(page)
     assert not trade_btn.is_disabled(), "Should be enabled again with new LW"
     trade_btn.click()
     page.wait_for_timeout(300)
@@ -3043,7 +3036,6 @@ def test_yogo_serious_wound_temp_vp_behavioral(page, live_server_url):
     page.wait_for_timeout(300)
     _mock_dice_low(page)
     # Roll wound check - should fail with 80 LW and low dice
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -3071,6 +3063,7 @@ def test_yogo_3rd_dan_vp_heals_lw_behavioral(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "20")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
+    dismiss_wc_modal(page)
     lw_before = page.evaluate("window._trackingBridge?.lightWounds || 0")
     assert lw_before == 20
     # Give VP
@@ -3718,7 +3711,6 @@ def test_yogo_4th_dan_post_roll_vp_behavioral(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     # Roll wound check (no VP pre-roll)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -3767,7 +3759,6 @@ def test_yogo_4th_dan_wc_prob_chart_includes_raise(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "30")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     # Get pass chance at 0 VP and 1 VP from the probability table
     pass_0, pass_1 = page.evaluate("""() => {
@@ -3829,7 +3820,6 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
     page.wait_for_timeout(300)
     _mock_dice_high(page)
     # Roll wound check
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -3873,7 +3863,6 @@ def test_akodo_4th_dan_vp_on_passed_wound_check(page, live_server_url):
     page.wait_for_timeout(300)
     _mock_dice_high(page)
     # Roll wound check
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -3933,7 +3922,6 @@ def test_akodo_4th_dan_vp_on_failed_wound_check(page, live_server_url):
     page.wait_for_timeout(300)
     _mock_dice_low(page)
     # Roll wound check
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -3983,7 +3971,6 @@ def test_akodo_5th_dan_reflect_ui_behavioral(page, live_server_url):
     page.fill('input[placeholder="Amount"]', "10")
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -4090,7 +4077,6 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_low(page)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -4151,7 +4137,6 @@ def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_low(page)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -4431,7 +4416,6 @@ def test_hida_5th_dan_counterattack_wc_bonus(page, live_server_url):
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
     page.wait_for_timeout(300)
     _mock_dice_high(page)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     page.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
@@ -4755,7 +4739,7 @@ def _become_impaired(page):
 def _setup_impaired_target_with_party_priest(page, live_server_url, priest_name):
     """Seed a Priest and an Akodo ally in the same group. Navigate to the
     ally's sheet and make them Impaired. Returns the ally's sheet URL."""
-    from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
+    from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character, dismiss_wc_modal
 
     # Priest: rank 1 knacks is enough (any Dan provides the ritual).
     page.goto(live_server_url)
@@ -5241,7 +5225,8 @@ def test_mantis_posture_tracker_advance(page, live_server_url):
 
 @pytest.mark.school_abilities
 def test_mantis_posture_tracker_disable_at_11(page, live_server_url):
-    """After 10 posture picks (phases 1-10), both buttons are disabled."""
+    """After 10 posture picks (phases 1-10), both buttons are disabled and
+    their labels show '...' instead of the out-of-range '11'."""
     _create_char(page, live_server_url, "MantisPost11", "mantis_wave_treader")
     offensive = page.locator('[data-action="mantis-posture-offensive"]')
     defensive = page.locator('[data-action="mantis-posture-defensive"]')
@@ -5251,6 +5236,10 @@ def test_mantis_posture_tracker_disable_at_11(page, live_server_url):
     page.wait_for_function("() => window._trackingBridge.posturePhase === 11")
     assert offensive.is_disabled()
     assert defensive.is_disabled()
+    off_text = offensive.text_content().strip()
+    def_text = defensive.text_content().strip()
+    assert "..." in off_text and "11" not in off_text
+    assert "..." in def_text and "11" not in def_text
 
 
 @pytest.mark.school_abilities
@@ -5875,8 +5864,9 @@ def test_mantis_3rd_dan_button_hidden_on_dan_2(page, live_server_url):
 
 @pytest.mark.school_abilities
 def test_mantis_3rd_dan_click_spends_die_and_accumulates(page, live_server_url):
-    """Clicking the button spends the lowest unspent action die (labeled) and
-    bumps offensive3rdDanAccum by X (= attack skill rank)."""
+    """Clicking the button spends the highest-value unspent regular action
+    die (the "last" phase of the round) and bumps offensive3rdDanAccum by
+    X (= attack skill rank)."""
     # Attack skill set to 3 so the accumulator reliably reflects that X > 1.
     _make_mantis_dan_3(page, live_server_url, "Mantis3Click", attack=3)
     _seed_action_dice(page, [4, 7])
@@ -5890,9 +5880,9 @@ def test_mantis_3rd_dan_click_spends_die_and_accumulates(page, live_server_url):
     page.wait_for_function(
         "() => (window._trackingBridge.offensive3rdDanAccum || 0) === 3"
     )
-    # The attack roll itself spent index 0 (value 4); the Mantis 3rd Dan
-    # click then spent the next unspent die (index 1, value 7) with the
-    # labeled reason.
+    # The attack roll itself spent index 0 (value 4, lowest). The Mantis
+    # 3rd Dan click then spent the highest-value unspent die (index 1,
+    # value 7) with the labeled reason.
     state = page.evaluate("""() => {
         return window._trackingBridge.actionDice.map(d => ({
             value: d.value, spent: d.spent, spent_by: d.spent_by || null,
@@ -5921,9 +5911,9 @@ def test_mantis_3rd_dan_two_spends_stack_accumulator(page, live_server_url):
     page.wait_for_function(
         "() => (window._trackingBridge.offensive3rdDanAccum || 0) === 4"
     )
-    # After: attack roll spent index 0, first Mantis click spent index 1,
-    # second Mantis click spent index 2. All three dice are spent; the
-    # latter two carry the Mantis label.
+    # Attack roll spent index 0 (lowest, value 3); the two Mantis 3rd Dan
+    # clicks spend the highest-value unspent regular dice in descending
+    # order - index 2 (value 7) first, then index 1 (value 5).
     state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
         spent: d.spent, spent_by: d.spent_by || null
     }))""")
@@ -6053,8 +6043,8 @@ def test_mantis_3rd_dan_defensive_button_absent_on_dan_2(page, live_server_url):
 
 @pytest.mark.school_abilities
 def test_mantis_3rd_dan_defensive_click_spends_die_and_accumulates(page, live_server_url):
-    """Click spends lowest unspent action die (labeled) and bumps
-    defensive3rdDanAccum by X (= attack skill)."""
+    """Click spends the highest-value unspent regular action die (the "last"
+    phase of the round) and bumps defensive3rdDanAccum by X (= attack skill)."""
     _make_mantis_dan_3(page, live_server_url, "Mantis3DefClick", attack=3)
     _seed_action_dice(page, [4, 7])
     _select_posture(page, "defensive")
@@ -6067,10 +6057,90 @@ def test_mantis_3rd_dan_defensive_click_spends_die_and_accumulates(page, live_se
     state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
         spent: d.spent, spent_by: d.spent_by || null
     }))""")
-    # Lowest unspent (index 0, value 4) is now spent with the labeled reason.
-    assert state[0]["spent"] is True
-    assert state[0]["spent_by"] == "Mantis 3rd Dan (defensive)"
+    # Highest-value unspent regular die (index 1, value 7) is now spent.
+    assert state[0]["spent"] is False
+    assert state[1]["spent"] is True
+    assert state[1]["spent_by"] == "Mantis 3rd Dan (defensive)"
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_defensive_prefers_4th_dan_die(page, live_server_url):
+    """When the Mantis 4th Dan bonus die is present and unspent, the
+    defensive-3rd-Dan button spends it instead of a regular action die."""
+    _make_mantis_dan_4(page, live_server_url, "Mantis3DefPrefer4th")
+    _roll_initiative(page)
+    _select_posture(page, "defensive")
+    fourth_idx = page.evaluate(
+        "() => (window._trackingBridge?.actionDice || [])"
+        ".findIndex(d => d.mantis_4th_dan)"
+    )
+    assert fourth_idx >= 0
+    page.locator('[data-action="mantis-3rd-dan-defensive"]').click()
+    page.wait_for_function(
+        "() => (window._trackingBridge.defensive3rdDanAccum || 0) > 0"
+    )
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        spent: !!d.spent, mantis_4th_dan: !!d.mantis_4th_dan,
+        spent_by: d.spent_by || null
+    }))""")
+    # Only the 4th Dan die was spent; other dice remain unspent.
+    fourth = [d for d in state if d["mantis_4th_dan"]]
+    assert len(fourth) == 1
+    assert fourth[0]["spent"] is True
+    assert fourth[0]["spent_by"] == "Mantis 3rd Dan (defensive)"
+    for d in state:
+        if not d["mantis_4th_dan"]:
+            assert d["spent"] is False
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_offensive_prefers_4th_dan_die(page, live_server_url):
+    """The offensive-3rd-Dan button (in the attack-result modal) also spends
+    the Mantis 4th Dan die first when it's available."""
+    _make_mantis_dan_4(page, live_server_url, "Mantis3OffPrefer4th")
+    _roll_initiative(page)
+    _select_posture(page, "offensive")
+    fourth_idx_before = page.evaluate(
+        "() => (window._trackingBridge?.actionDice || [])"
+        ".findIndex(d => d.mantis_4th_dan)"
+    )
+    assert fourth_idx_before >= 0
+    _open_attack_modal(page, "attack")
+    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    _wait_attack_result(page)
+    page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
+    page.wait_for_function(
+        "() => (window._trackingBridge.offensive3rdDanAccum || 0) > 0"
+    )
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        spent: !!d.spent, mantis_4th_dan: !!d.mantis_4th_dan,
+        spent_by: d.spent_by || null,
+    }))""")
+    fourth = [d for d in state if d["mantis_4th_dan"]]
+    assert len(fourth) == 1
+    assert fourth[0]["spent"] is True
+    assert fourth[0]["spent_by"] == "Mantis 3rd Dan (offensive)"
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_defensive_spends_highest_regular_die(page, live_server_url):
+    """Without a 4th Dan bonus die, the defensive-3rd-Dan button spends the
+    highest-value unspent regular action die, not the lowest."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DefHighest", attack=2)
+    _seed_action_dice(page, [2, 5, 8])
+    _select_posture(page, "defensive")
+    page.locator('[data-action="mantis-3rd-dan-defensive"]').click()
+    page.wait_for_function(
+        "() => (window._trackingBridge.defensive3rdDanAccum || 0) === 2"
+    )
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        value: d.value, spent: !!d.spent, spent_by: d.spent_by || null
+    }))""")
+    # Highest-value die (value 8, last index) was spent; lower dice untouched.
+    assert state[0]["spent"] is False
     assert state[1]["spent"] is False
+    assert state[2]["spent"] is True
+    assert state[2]["spent_by"] == "Mantis 3rd Dan (defensive)"
 
 
 @pytest.mark.school_abilities
@@ -6156,6 +6226,98 @@ def test_mantis_3rd_dan_defensive_tn_display(page, live_server_url):
     assert title
     assert "+5" in title and "defensive posture" in title
     assert "+3 Mantis 3rd Dan (defensive)" in title
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_action_die_menu_hidden_without_posture(page, live_server_url):
+    """Per-die action menu: neither 3rd Dan option shown without a posture."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DieNoPose")
+    _seed_action_dice(page, [3, 5])
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.wait_for_selector('[data-action-die-menu-item="attack"]', state='visible', timeout=2000)
+    assert page.locator('[data-action-die-menu-item="mantis-3rd-dan-offensive"]').count() == 0
+    assert page.locator('[data-action-die-menu-item="mantis-3rd-dan-defensive"]').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_action_die_menu_offensive_only_in_offensive(page, live_server_url):
+    """Offensive posture => only the offensive 3rd Dan menu item appears."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DieOff")
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "offensive")
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.wait_for_selector('[data-action-die-menu-item="mantis-3rd-dan-offensive"]', state='visible', timeout=2000)
+    assert page.locator('[data-action-die-menu-item="mantis-3rd-dan-defensive"]').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_action_die_menu_defensive_only_in_defensive(page, live_server_url):
+    """Defensive posture => only the defensive 3rd Dan menu item appears."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DieDef")
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "defensive")
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.wait_for_selector('[data-action-die-menu-item="mantis-3rd-dan-defensive"]', state='visible', timeout=2000)
+    assert page.locator('[data-action-die-menu-item="mantis-3rd-dan-offensive"]').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_action_die_menu_absent_on_dan_2(page, live_server_url):
+    """Dan 2 Mantis never renders the 3rd Dan menu items, any posture."""
+    _create_char(
+        page, live_server_url, "Mantis2DieNone", "mantis_wave_treader",
+        knack_overrides={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+    )
+    _seed_action_dice(page, [3, 5])
+    _select_posture(page, "offensive")
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.wait_for_selector('[data-action-die-menu-item="attack"]', state='visible', timeout=2000)
+    assert page.locator('[data-action-die-menu-item="mantis-3rd-dan-offensive"]').count() == 0
+    assert page.locator('[data-action-die-menu-item="mantis-3rd-dan-defensive"]').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_action_die_offensive_spends_specific_die(page, live_server_url):
+    """Clicking the offensive 3rd Dan menu item spends the clicked die (not
+    the lowest unspent one) and bumps the offensive accumulator by X."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DieOffClick", attack=3)
+    _seed_action_dice(page, [3, 5, 7])
+    _select_posture(page, "offensive")
+    # Open the menu on the second die (index 1, value 5).
+    dice = page.locator('[data-testid="action-dice-section"] [data-action="action-die"]')
+    dice.nth(1).click()
+    item = page.locator('[data-action-die-menu-item="mantis-3rd-dan-offensive"]:visible')
+    item.wait_for(state='visible', timeout=2000)
+    item.click()
+    page.wait_for_function("() => (window._trackingBridge.offensive3rdDanAccum || 0) === 3")
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        value: d.value, spent: d.spent, spent_by: d.spent_by || null,
+    }))""")
+    assert state[0]["spent"] is False
+    assert state[1]["spent"] is True
+    assert state[1]["spent_by"] == "Mantis 3rd Dan (offensive)"
+    assert state[2]["spent"] is False
+
+
+@pytest.mark.school_abilities
+def test_mantis_3rd_dan_action_die_defensive_spends_specific_die(page, live_server_url):
+    """Clicking the defensive 3rd Dan menu item spends the clicked die and
+    bumps the defensive accumulator by X."""
+    _make_mantis_dan_3(page, live_server_url, "Mantis3DieDefClick", attack=2)
+    _seed_action_dice(page, [4, 6])
+    _select_posture(page, "defensive")
+    dice = page.locator('[data-testid="action-dice-section"] [data-action="action-die"]')
+    dice.nth(0).click()
+    item = page.locator('[data-action-die-menu-item="mantis-3rd-dan-defensive"]:visible')
+    item.wait_for(state='visible', timeout=2000)
+    item.click()
+    page.wait_for_function("() => (window._trackingBridge.defensive3rdDanAccum || 0) === 2")
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        value: d.value, spent: d.spent, spent_by: d.spent_by || null,
+    }))""")
+    assert state[0]["spent"] is True
+    assert state[0]["spent_by"] == "Mantis 3rd Dan (defensive)"
+    assert state[1]["spent"] is False
 
 
 @pytest.mark.school_abilities
@@ -6495,6 +6657,140 @@ def test_non_mantis_dan_4_no_4th_dan_die(page, live_server_url):
             .filter(d => d.mantis_4th_dan).length
     """)
     assert mantis_count == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_4th_dan_die_flags_survive_reload(page, live_server_url):
+    """Regression test: the athletics_only and mantis_4th_dan flags must be
+    persisted on save so the die retains its restrictions after a reload."""
+    _make_mantis_dan_4(page, live_server_url, "Mantis4Persist")
+    _roll_initiative(page)
+    # The bonus die is initially in memory with both flags set.
+    page.wait_for_function(
+        "() => (window._trackingBridge?.actionDice || [])"
+        ".some(d => d.mantis_4th_dan && d.athletics_only)",
+        timeout=10000,
+    )
+    # Wait for the save-round-trip so the server has the flagged entry.
+    page.wait_for_timeout(1000)
+    page.reload()
+    page.wait_for_selector('[data-testid="action-dice-section"]', state='visible', timeout=10000)
+    page.wait_for_function(
+        "() => (window._trackingBridge?.actionDice || []).length > 0",
+        timeout=10000,
+    )
+    flags = page.evaluate("""() => {
+        const die = (window._trackingBridge?.actionDice || [])
+            .find(d => d.mantis_4th_dan);
+        return die ? {athletics_only: !!die.athletics_only, mantis_4th_dan: !!die.mantis_4th_dan} : null;
+    }""")
+    assert flags == {"athletics_only": True, "mantis_4th_dan": True}
+
+
+@pytest.mark.school_abilities
+def test_mantis_regular_die_menu_hides_athletics_options(page, live_server_url):
+    """Regular (non-bonus) Mantis action dice must NOT surface the Athletics
+    Attack / Parry / Predeclared Parry options in the per-die menu."""
+    _make_mantis_dan_4(page, live_server_url, "MantisDieNoAth")
+    _seed_action_dice(page, [3, 5])
+    # Open the first (regular) die's menu.
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.wait_for_selector('[data-action-die-menu-item="attack"]:visible', timeout=2000)
+    # Regular combat options are visible.
+    assert page.locator('[data-action-die-menu-item="attack"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="parry"]:visible').count() == 1
+    # Athletics variants are hidden.
+    assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 0
+    assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 0
+    assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_4th_dan_die_menu_shows_only_athletics_and_3rd_dan(page, live_server_url):
+    """The Mantis 4th Dan athletics-only die surfaces Athletics Attack/Parry/
+    Predeclared Parry, hides regular Attack/Parry, and (in offensive posture)
+    also shows the Mantis 3rd Dan offensive option."""
+    _make_mantis_dan_4(page, live_server_url, "Mantis4DieMenu")
+    _roll_initiative(page)
+    # Find the Mantis 4th Dan die (athletics-only) and open its menu.
+    page.wait_for_function(
+        "() => (window._trackingBridge?.actionDice || [])"
+        ".some(d => d.mantis_4th_dan)"
+    )
+    _select_posture(page, "offensive")
+    idx = page.evaluate(
+        "() => (window._trackingBridge?.actionDice || [])"
+        ".findIndex(d => d.mantis_4th_dan)"
+    )
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').nth(idx).click()
+    page.wait_for_selector('[data-action-die-menu-item="athletics-attack"]:visible', timeout=2000)
+    assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="mantis-3rd-dan-offensive"]:visible').count() == 1
+    # Regular combat variants are not offered.
+    assert page.locator('[data-action-die-menu-item="attack"]:visible').count() == 0
+    assert page.locator('[data-action-die-menu-item="parry"]:visible').count() == 0
+    assert page.locator('[data-action-die-menu-item="double-attack"]:visible').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_attack_skill_menu_no_athletics_choice(page, live_server_url):
+    """Clicking the Attack skill on a Mantis character must not open the
+    Togashi-style attack-choice menu; it should go straight to the attack
+    modal. Athletics attack is reached via the Athletics skill instead."""
+    _create_char(page, live_server_url, "MantisAtkNoChoice", "mantis_wave_treader")
+    # Confirm athletics:attack formula does exist server-side (would normally
+    # trigger the attack choice menu for Togashi).
+    has_formula = page.evaluate("() => !!(window._diceRoller?.formulas?.['athletics:attack'])")
+    assert has_formula is True
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    # The attack-choice menu never appeared.
+    assert page.locator('[data-roll-menu="root"]:visible').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_mantis_parry_skill_menu_no_athletics_row(page, live_server_url):
+    """Clicking the Parry skill on a Mantis character opens the parry menu
+    without the Athletics Parry row."""
+    _create_char(page, live_server_url, "MantisParryNoAth", "mantis_wave_treader")
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    # The parry menu is present but without the athletics option.
+    assert page.locator('[data-parry-menu] [data-parry-menu-athletics]').count() == 0
+
+
+@pytest.mark.school_abilities
+def test_togashi_attack_skill_menu_shows_athletics_choice(page, live_server_url):
+    """Togashi Ise Zumi keeps the Athletics attack/parry options everywhere."""
+    _create_char(page, live_server_url, "TogashiAtkChoice", "togashi_ise_zumi")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-attack-choice-menu]', state='visible', timeout=3000)
+    # The attack choice menu includes both regular and athletics options.
+    assert page.locator('[data-attack-choice-menu]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_togashi_parry_skill_menu_shows_athletics_row(page, live_server_url):
+    """Togashi Ise Zumi's Parry menu still includes the Athletics Parry row."""
+    _create_char(page, live_server_url, "TogashiParryAth", "togashi_ise_zumi")
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    assert page.locator('[data-parry-menu] [data-parry-menu-athletics]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_togashi_regular_die_menu_shows_athletics_options(page, live_server_url):
+    """Regression for Togashi: regular (non-athletics-only) action dice still
+    surface the Athletics Attack/Parry/Predeclared Parry options."""
+    _create_char(page, live_server_url, "TogashiDieAth", "togashi_ise_zumi")
+    _seed_action_dice(page, [3, 5])
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.wait_for_selector('[data-action-die-menu-item="athletics-attack"]:visible', timeout=2000)
+    assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').count() == 1
 
 
 @pytest.mark.school_abilities

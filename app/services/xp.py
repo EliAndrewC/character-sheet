@@ -241,13 +241,34 @@ def ring_xp_items(
     school_ring: str,
     dan: int = 0,
 ) -> List[dict]:
-    """One item per individual ring raise. Mirrors ``calculate_ring_xp``."""
+    """One item per individual ring raise. Mirrors ``calculate_ring_xp``.
+
+    Free school-ring raises (the school-ring 2->3 everyone gets, and the
+    additional 3->4 from the 4th Dan technique) are included as 0 XP rows
+    so the breakdown shows every raise the character actually received.
+    """
     items: List[dict] = []
     for ring_name, target in rings.items():
         is_school = ring_name == school_ring
         base = RING_SCHOOL_DEFAULT if is_school else RING_DEFAULT
         if is_school and dan >= 4:
             base = max(base, 4)  # 3->4 free at 4th Dan
+
+        if is_school and target >= RING_SCHOOL_DEFAULT:
+            items.append({
+                "xp": 0,
+                "label": ring_name,
+                "from_val": RING_DEFAULT,
+                "to_val": RING_SCHOOL_DEFAULT,
+            })
+            if dan >= 4 and target >= 4:
+                items.append({
+                    "xp": 0,
+                    "label": ring_name,
+                    "from_val": RING_SCHOOL_DEFAULT,
+                    "to_val": 4,
+                })
+
         for new_val in range(base + 1, target + 1):
             cost = ring_raise_cost(new_val)
             if is_school and dan >= 4:

@@ -2,7 +2,13 @@
 rolling animation, post-roll result application."""
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
+from tests.e2e.helpers import (
+    apply_changes,
+    click_plus,
+    dismiss_wc_modal,
+    select_school,
+    start_new_character,
+)
 
 pytestmark = [pytest.mark.rolls, pytest.mark.tracking]
 
@@ -27,6 +33,7 @@ def _create_character_with_wounds(page, live_server_url, name="WCTest",
     page.locator('input[placeholder="New total"]').fill(str(light_wounds))
     page.locator('button:text("Set")').last.click()
     page.wait_for_timeout(500)
+    dismiss_wc_modal(page)
     return page.url
 
 

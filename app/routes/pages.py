@@ -494,6 +494,14 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # made against you in a defensive-posture phase, spend one action die
         # for +X wound-check / TN for the rest of the round.
         "mantis_3rd_dan_defensive": character.school == "mantis_wave_treader" and dan >= 3,
+        # Togashi Ise Zumi treats Athletics attacks/parries as a standard
+        # variant of the regular attack/parry, so those options appear in
+        # the Attack and Parry roll menus and on every action die's menu.
+        # Other schools (including Mantis Wave-Treader) must open the
+        # Athletics skill directly to use Athletics as attack/parry, with
+        # one exception: athletics-only action dice (Mantis 4th Dan bonus
+        # die) still surface the options on their own menu.
+        "athletics_combat_everywhere": character.school == "togashi_ise_zumi",
     }
 
     # Compute wound check probability slice for client-side display.
