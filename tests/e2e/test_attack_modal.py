@@ -216,6 +216,68 @@ def test_attack_damage_roll_produces_result(page, live_server_url):
         assert "damage" in modal.text_content().lower()
 
 
+def test_damage_parts_include_10k10_overflow_bullet(page, live_server_url):
+    """Regression: when a damage roll overflows 10k10 (kept > 10 after the
+    rolled-cap cascade), each extra kept die converts to +2 flat. That +2N
+    used to silently inflate the damage total with no line in the breakdown
+    to explain it, so the bullets didn't sum to the displayed total. The
+    overflow must now appear in ``atkDamageParts`` so the damage result
+    modal renders a '+N bonus for rolling K die(s) past 10k10' bullet.
+    Plural-dice path: two kept dice past 10k10 → +4 flat."""
+    _create_attacker(page, live_server_url, "DmgOverflow")
+    _wait_alpine(page)
+    # Exercise atkComputeDamage directly. Going through the UI to hit
+    # exactly this overflow state is brittle; this call enters the same
+    # code path the UI would. 5k8 base weapon + Fire 5 + 4 bonus kept dice
+    # = 5k12 before caps → 10k10 + (2 × 2 kept past cap) = +4 flat.
+    parts = page.evaluate("""() => {
+        const d = window._diceRoller;
+        d.atkFormula = {
+            damage_ring_val: 5, damage_ring_name: 'Fire',
+            damage_extra_rolled: 0, damage_extra_kept: 4,
+            damage_flat_bonus: 0,
+        };
+        d.atkWeaponRolled = 0;
+        d.atkWeaponKept = 8;
+        d.schoolAbilities = d.schoolAbilities || {};
+        const r = d.atkComputeDamage(0, false, false, 0, false);
+        return { parts: r.parts, flat: r.flat, rolled: r.rolled, kept: r.kept };
+    }""")
+    assert parts["rolled"] == 5 and parts["kept"] == 10, \
+        f"Damage roll should cap kept at 10, got {parts['rolled']}k{parts['kept']}"
+    overflow_parts = [p for p in parts["parts"] if "past 10k10" in p]
+    assert len(overflow_parts) == 1, \
+        f"Expected exactly one overflow bullet in parts, got: {parts['parts']}"
+    assert "+4" in overflow_parts[0] and "2 dice past 10k10" in overflow_parts[0], \
+        f"Overflow bullet wording off: {overflow_parts[0]!r}"
+
+
+def test_damage_parts_overflow_singular_for_one_die(page, live_server_url):
+    """The overflow bullet pluralizes correctly when only one extra die
+    lands past 10k10 (the specific case the user hit - a '+2 bonus for
+    rolling 1 die past 10k10' missing from the breakdown)."""
+    _create_attacker(page, live_server_url, "DmgOverflowOne")
+    _wait_alpine(page)
+    # 0k8 weapon + Fire 5 + 3 extra kept = 5k11 before caps → 5k10 + 2 flat.
+    parts = page.evaluate("""() => {
+        const d = window._diceRoller;
+        d.atkFormula = {
+            damage_ring_val: 5, damage_ring_name: 'Fire',
+            damage_extra_rolled: 0, damage_extra_kept: 3,
+            damage_flat_bonus: 0,
+        };
+        d.atkWeaponRolled = 0;
+        d.atkWeaponKept = 8;
+        d.schoolAbilities = d.schoolAbilities || {};
+        const r = d.atkComputeDamage(0, false, false, 0, false);
+        return { parts: r.parts };
+    }""")
+    overflow_parts = [p for p in parts["parts"] if "past 10k10" in p]
+    assert len(overflow_parts) == 1, f"Expected one overflow bullet: {parts['parts']}"
+    assert "+2" in overflow_parts[0] and "1 die past 10k10" in overflow_parts[0], \
+        f"Singular 'die' expected for a +2 overflow, got: {overflow_parts[0]!r}"
+
+
 def test_attack_dice_animation_visible(page, live_server_url):
     """Attack roll shows dice animation in the attack tray."""
     _create_attacker(page, live_server_url, "AtkAnim")

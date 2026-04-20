@@ -1135,6 +1135,60 @@ class TestSchoolAbilities:
         atk = formulas["knack:iaijutsu:attack"]
         assert atk["damage_flat_bonus"] == 0
 
+    def test_kakita_iaijutsu_attack_bonus_sources_lists_1st_dan_extra_die(self):
+        """The iaijutsu:attack formula exposes a bonus_sources summary so the
+        pre-roll probability panel shows the 1st Dan +1 rolled die."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+            attack=2,
+        )
+        atk = build_all_roll_formulas(char)["knack:iaijutsu:attack"]
+        assert any("1st Dan" in s for s in atk["bonus_sources"])
+        assert atk["iaijutsu_first_dan_extra_die"] is True
+
+    def test_kakita_iaijutsu_attack_bonus_sources_lists_2nd_dan_free_raise(self):
+        """The iaijutsu:attack formula exposes the 2nd Dan +5 free raise in
+        bonus_sources (via the structured bonuses list on the knack formula)."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 2, "iaijutsu": 2, "lunge": 2},
+            attack=2,
+        )
+        atk = build_all_roll_formulas(char)["knack:iaijutsu:attack"]
+        sources = " | ".join(atk["bonus_sources"])
+        assert "2nd Dan" in sources
+        assert "+5" in sources
+
+    def test_kakita_iaijutsu_attack_formula_includes_1st_dan_rolled_die(self):
+        """Rolled count must actually include the +1 1st Dan die so the
+        probability chart's computation reflects it."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["knack:iaijutsu:attack"]
+        iai = formulas["knack:iaijutsu"]
+        # Both iaijutsu knack rolls (same underlying build_knack_formula) get
+        # the +1; the shared rolled count is the ring value + rank + 1.
+        assert atk["rolled"] == iai["rolled"]
+        # Sanity: 1 rank + 2 ring + 1 (1st Dan) = 4 rolled, 2 kept.
+        assert atk["rolled"] == 4
+        assert atk["kept"] == 2
+
+    def test_kakita_iaijutsu_attack_formula_includes_2nd_dan_flat_in_probability(self):
+        """Flat total on the attack variant includes the +5 2nd Dan free
+        raise, so the probability chart's hit % uses it."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 2, "iaijutsu": 2, "lunge": 2},
+            attack=2,
+        )
+        atk = build_all_roll_formulas(char)["knack:iaijutsu:attack"]
+        assert atk["flat"] == 5
+
     # --- Kakita Duelist 3rd Dan: defender-phase bonus flag ---
     def test_kakita_3rd_dan_attack_flag_set(self):
         """Kakita 3rd Dan: base attack formula carries the defender-phase flag."""
