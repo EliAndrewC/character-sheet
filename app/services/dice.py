@@ -1112,6 +1112,40 @@ def build_all_roll_formulas(
                 "knack:iaijutsu:strike", strike
             )
 
+    # Kakita Duelist: iaijutsu used as an attack (Phase-0 interrupts,
+    # attacks spent from a Phase-0 action die, and later the 4th-Dan
+    # interrupt / 5th-Dan contested phase-0 workflows). This is a
+    # sibling to ``knack:iaijutsu`` that opens the attack modal instead
+    # of the dice-roller. The base roll mirrors the iaijutsu knack and
+    # inherits the usual iaijutsu damage metadata (+5 at 4th Dan).
+    if (school_id == "kakita_duelist"
+            and "knack:iaijutsu" in out
+            and school is not None
+            and "iaijutsu" in school.school_knacks):
+        base_formula = build_knack_formula("iaijutsu", character_data)
+        if base_formula is not None:
+            atk = base_formula.to_dict()
+            atk["label"] = base_formula.label.replace(
+                "Iaijutsu", "Iaijutsu Attack", 1)
+            atk["is_attack_type"] = True
+            atk["attack_variant"] = "iaijutsu"
+            atk["is_bushi"] = is_bushi
+            atk["damage_ring_name"] = damage_ring_name
+            atk["damage_ring_val"] = damage_ring_val
+            # Damage mirrors what ``knack:iaijutsu`` stamps above.
+            iai_flat = damage_flat_bonus
+            iai_sources = list(damage_bonus_sources)
+            if dan >= 4:
+                iai_flat += FREE_RAISE_VALUE
+                iai_sources.append("+5 from 4th Dan (iaijutsu)")
+            atk["damage_flat_bonus"] = iai_flat
+            atk["damage_extra_rolled"] = damage_extra_rolled
+            atk["damage_extra_kept"] = damage_extra_kept
+            atk["damage_bonus_sources"] = iai_sources
+            out["knack:iaijutsu:attack"] = _annotate_third_dan(
+                "knack:iaijutsu:attack", atk
+            )
+
     # Combat
     for which in ("attack", "parry"):
         formula = build_combat_formula(which, character_data)

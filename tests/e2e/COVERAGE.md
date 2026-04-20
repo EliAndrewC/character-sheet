@@ -253,6 +253,18 @@ also wait for the post-update DOM to settle.
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_kakita_1st_dan_behavioral`
 - [x] 2nd Dan behavioral iaijutsu bonus -> `test_school_abilities.py::test_kakita_2nd_dan_behavioral`
 - [x] Phase-zero initiative flag behavioral -> `test_school_abilities.py::test_kakita_phase_0_behavioral`
+- [x] Special Ability: a rolled 10 on Kakita initiative is KEPT and becomes a Phase-0 (value=0) action die, even when non-10 dice are lower -> `test_school_abilities.py::test_kakita_initiative_keeps_10_over_higher_lower_dice`
+- [x] Special Ability: multiple rolled 10s all become Phase-0 action dice -> `test_school_abilities.py::test_kakita_initiative_two_10s_both_become_phase_0`
+- [x] Regression: non-Kakita initiative still discards rolled 10s (no Phase 0) -> `test_school_abilities.py::test_non_kakita_10_on_initiative_is_unkept`
+- [x] Phase-0 action die carries the .phase-zero SVG class on the Actions panel -> `test_school_abilities.py::test_kakita_phase_0_die_has_phase_zero_svg_class`
+- [x] Phase-0 action die survives a page reload (value + class) -> `test_school_abilities.py::test_kakita_phase_0_die_survives_reload`
+- [x] Phase-0 action die tooltip mentions the Kakita iaijutsu-only restriction -> `test_school_abilities.py::test_kakita_phase_0_die_tooltip_mentions_iaijutsu`
+- [x] Phase-0 die's per-die menu offers ONLY Iaijutsu Attack + Mark-as-spent -> `test_school_abilities.py::test_kakita_phase_zero_die_menu_shows_only_iaijutsu_attack`
+- [x] Non-Phase-0 (value > 0) Kakita dice keep the full normal menu -> `test_school_abilities.py::test_kakita_non_zero_die_menu_unchanged`
+- [x] Iaijutsu Attack menu item opens the attack modal with attack_variant='iaijutsu' -> `test_school_abilities.py::test_kakita_phase_zero_menu_opens_attack_modal_for_iaijutsu`
+- [x] Attack modal pre-roll shows "Kakita Phase 0 iaijutsu attack" note -> `test_school_abilities.py::test_kakita_phase_zero_attack_modal_notes_interrupt`
+- [x] Rolling from the Phase-0 iaijutsu attack modal spends the clicked Phase-0 die (not another) -> `test_school_abilities.py::test_kakita_phase_zero_attack_spends_the_clicked_die`
+- [x] Non-Kakita schools with iaijutsu don't expose knack:iaijutsu:attack (Kakita-only) -> `test_school_abilities.py::test_non_kakita_with_iaijutsu_does_not_expose_iaijutsu_attack_key`
 
 ### Kitsuki
 

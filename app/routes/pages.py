@@ -521,6 +521,13 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "shinjo_3rd_dan_parry_decrement": (
             attack_skill if character.school == "shinjo_bushi" and dan >= 3 else 0
         ),
+        # Kakita Duelist Special Ability: 10s on initiative are Phase 0. The
+        # dice roller reads the initiative formula's own ``kakita_phase_zero``
+        # flag; this ability flag lets the client gate Kakita-only UI bits
+        # (Phase-0 visual markers, per-die-menu iaijutsu-only restriction
+        # from Phase 2, interrupt-attack button from Phase 4, etc.) without
+        # having to reach into the dice roller's formulas cross-scope.
+        "kakita_phase_zero": character.school == "kakita_duelist",
     }
 
     # Compute wound check probability slice for client-side display.

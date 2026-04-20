@@ -1360,7 +1360,9 @@
                                             ? 'Mantis 4th Dan athletics die. May only be spent on movement, athletics, or the Mantis 3rd Dan technique.'
                                             : (die.athletics_only
                                                 ? 'Athletics-only action die (Togashi special ability)'
-                                                : (die.spent ? 'Spent - click to mark as unspent' : 'Click to mark as spent')))"
+                                                : ({{ 'true' if school_abilities.get('kakita_phase_zero') else 'false' }} && die.value === 0
+                                                    ? 'Phase 0 (Kakita interrupt): iaijutsu attacks only.'
+                                                    : (die.spent ? 'Spent - click to mark as unspent' : 'Click to mark as spent'))))"
                                     :data-die-spent-by="die.spent_by || ''">
                                 {# Same SVG kite shape as the roll-animation
                                    dice (see app/static/js/dice.js). Color
@@ -1392,7 +1394,27 @@
                                             data-action="action-die-unspent"
                                             class="block w-full text-left px-3 py-2 hover:bg-parchment">Mark as unspent</button>
                                 </template>
-                                <template x-if="!die.spent">
+                                {% if school_abilities.get('kakita_phase_zero') %}
+                                {# Kakita Phase-0 dice may only be spent on an
+                                   iaijutsu attack. Everything else (Roll
+                                   Attack, Parry, athletics variants, Mantis
+                                   3rd Dan, etc.) is suppressed for these
+                                   dice by gating the "normal" menu below on
+                                   the same value-zero check. #}
+                                <template x-if="!die.spent && die.value === 0">
+                                    <div>
+                                        <button type="button"
+                                                data-action-die-menu-item="iaijutsu-attack"
+                                                @click="window._diceRoller?.rollForActionDie('knack:iaijutsu:attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                class="block w-full text-left px-3 py-2 hover:bg-parchment">Iaijutsu Attack</button>
+                                        <button type="button"
+                                                @click="spendActionDie(i)"
+                                                data-action="action-die-spent"
+                                                class="block w-full text-left px-3 py-2 hover:bg-parchment border-t border-ink/10 text-ink/60">Mark as spent</button>
+                                    </div>
+                                </template>
+                                {% endif %}
+                                <template x-if="!die.spent && !(die.value === 0 && {{ 'true' if school_abilities.get('kakita_phase_zero') else 'false' }})">
                                     <div>
                                         {# ── ATTACK-MODAL ACTIONS (no void submenu) ── #}
                                         <template x-if="!die.athletics_only">
@@ -3127,6 +3149,17 @@
                             (+<span x-text="_shinjoPhaseBonus()"></span> to the roll,
                             held <span x-text="_shinjoPhasesHeld()"></span> phase<span x-show="_shinjoPhasesHeld() !== 1">s</span>)
                         </span>
+                    </div>
+
+                    {# Kakita Duelist Phase-0 iaijutsu attack note. Shown for
+                       any iaijutsu-variant attack (spent from a Phase-0 die
+                       in this phase; future phases add the interrupt /
+                       5th-Dan entry points that also route through here). #}
+                    <div x-show="atkFormula?.attack_variant === 'iaijutsu'
+                                 && schoolAbilities.kakita_phase_zero" x-cloak
+                         data-testid="kakita-phase-zero-attack-note"
+                         class="text-xs text-gold bg-parchment rounded p-2 font-medium">
+                        Kakita Phase 0 iaijutsu attack.
                     </div>
 
                     {# Ikoma 4th Dan: 10-dice floor on unparried damage #}
@@ -5962,6 +5995,7 @@
                     counterattack: 'Counterattack',
                     lunge: 'Lunge',
                     athletics_attack: 'Athletics Attack',
+                    iaijutsu: 'Iaijutsu Attack',
                 };
                 const label = labelMap[variant] || 'Attack';
                 const effTN = this.atkEffectiveTN ? this.atkEffectiveTN() : this.atkTN;
@@ -6159,7 +6193,18 @@
                 );
 
                 const indexed = dice.map((d, i) => ({ ...d, idx: i }));
-                const sortedAsc = [...indexed].sort((a, b) => a.value - b.value);
+                // Kakita Duelist Special Ability: a 10 on initiative is
+                // actually Phase 0, so it MUST sort ahead of every non-10
+                // die for keep-lowest purposes - otherwise the keep-lowest
+                // slice discards it and the player loses their Phase-0 die.
+                // We only remap the sort key, not ``value`` itself; the
+                // initiative branch below converts the kept 10 to a 0 for
+                // the final action-die list.
+                const kakitaInit = !!(this.formula.is_initiative && this.formula.kakita_phase_zero);
+                const sortValue = (v) => (kakitaInit && v === 10) ? 0 : v;
+                const sortedAsc = [...indexed].sort(
+                    (a, b) => sortValue(a.value) - sortValue(b.value) || a.idx - b.idx
+                );
                 const keptCount = Math.min(kept, sortedAsc.length);
 
                 const isInit = this.formula.is_initiative;

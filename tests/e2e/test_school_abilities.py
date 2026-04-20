@@ -2532,6 +2532,275 @@ def test_kakita_phase_0_behavioral(page, live_server_url):
     assert "Phase 0" in result
 
 
+# ---------------------------------------------------------------------------
+# Kakita Special Ability — Phase 0 from sort-10s-as-0s on initiative
+# ---------------------------------------------------------------------------
+
+
+def _mock_dice_sequence(page, values):
+    """Install a Math.random stub that produces the given d10 results in
+    order. Each value ``v`` comes back as ``Math.floor(Math.random()*10)+1``,
+    so we feed ``(v-1)/10 + epsilon`` so the floor lands on ``v-1`` and the
+    final roll is ``v``. Dice-roll paths that call Math.random for any other
+    purpose will also see these values, so use short sequences and restore."""
+    seq = [((v - 1) / 10) + 0.001 for v in values]
+    page.evaluate(f"""() => {{
+        window._origRandom = Math.random;
+        const seq = {seq!r};
+        let i = 0;
+        Math.random = () => {{
+            const v = seq[i % seq.length];
+            i++;
+            return v;
+        }};
+    }}""")
+
+
+def test_kakita_initiative_keeps_10_over_higher_lower_dice(page, live_server_url):
+    """Regression for the sort bug: rolling a 10 alongside non-10 dice on
+    Kakita initiative must KEEP the 10 (treated as 0 for sort) and convert
+    it to a Phase-0 action die. Previously the keep-lowest logic discarded
+    the 10 and the player lost the Phase-0 die entirely."""
+    _create_char(page, live_server_url, "KakitaKeep10", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    # Default character: Void=2; Kakita 1st Dan grants +1 initiative die, so
+    # the formula is 4k2. Feed dice [2, 5, 10, 7] in order. Sort treating 10
+    # as 0: [10, 2, 5, 7]. Keep first 2: [10, 2] -> action dice [0, 2]
+    # after 10->0 rewrite and final sort.
+    _mock_dice_sequence(page, [2, 5, 10, 7])
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    values = page.evaluate("""() =>
+        (window._trackingBridge?.actionDice || []).map(d => d.value)
+    """)
+    assert sorted(values) == [0, 2], f"got action dice {values}"
+
+
+def test_kakita_initiative_two_10s_both_become_phase_0(page, live_server_url):
+    """Two rolled 10s on Kakita initiative should both be kept and both
+    convert to Phase-0 (value=0) action dice."""
+    _create_char(page, live_server_url, "KakitaTwo10s", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    # 4k2 roll: dice 10, 8, 10, 4. Sort 10-as-0: [10, 10, 4, 8].
+    # Keep first 2: [10, 10] -> action dice [0, 0].
+    _mock_dice_sequence(page, [10, 8, 10, 4])
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    values = page.evaluate("""() =>
+        (window._trackingBridge?.actionDice || []).map(d => d.value)
+    """)
+    assert sorted(values) == [0, 0], f"got action dice {values}"
+
+
+def test_non_kakita_10_on_initiative_is_unkept(page, live_server_url):
+    """Regression: non-Kakita characters treat 10 as the highest value on
+    initiative, so a rolled 10 gets unkept (keep-lowest) and never appears
+    as a value-0 action die."""
+    _create_char(page, live_server_url, "AkodoKeepLow", "akodo_bushi",
+                 knack_overrides={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+    # Akodo has no initiative extra die; 3k2 (void=2, no 1st Dan init extra).
+    # Dice 10, 3, 5 -> keep the 2 lowest (3, 5). No Phase 0.
+    _mock_dice_sequence(page, [10, 3, 5])
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    values = page.evaluate("""() =>
+        (window._trackingBridge?.actionDice || []).map(d => d.value)
+    """)
+    assert 0 not in values, f"non-Kakita should not produce Phase 0 dice; got {values}"
+    assert 10 not in values, f"10 should be unkept for non-Kakita; got {values}"
+
+
+def test_kakita_phase_0_die_has_phase_zero_svg_class(page, live_server_url):
+    """The Actions-panel SVG for a value-0 die carries the .phase-zero class
+    so CSS can render it distinctly (dark red text)."""
+    _create_char(page, live_server_url, "KakitaP0Svg", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    _mock_dice_ten(page)
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    # Close the roll-result modal so the Actions panel can register hits.
+    page.locator('[data-modal="dice-roller"] button:has-text("\u00d7")').click()
+    page.wait_for_timeout(200)
+    section = page.locator('[data-testid="action-dice-section"]')
+    assert section.locator('svg.action-die.phase-zero').count() > 0
+
+
+def test_kakita_phase_0_die_survives_reload(page, live_server_url):
+    """After rolling initiative, the phase-0 die persists through a reload:
+    value stays 0, the SVG retains its .phase-zero class."""
+    _create_char(page, live_server_url, "KakitaP0Reload", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    _mock_dice_ten(page)
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    page.wait_for_timeout(500)  # save round-trip
+    page.reload()
+    page.wait_for_selector('[data-testid="action-dice-section"]', state='visible',
+                           timeout=10000)
+    page.wait_for_function(
+        "() => (window._trackingBridge?.actionDice || []).length > 0",
+        timeout=5000,
+    )
+    values = page.evaluate("""() =>
+        (window._trackingBridge?.actionDice || []).map(d => d.value)
+    """)
+    assert 0 in values, f"Phase 0 die lost on reload; got {values}"
+    section = page.locator('[data-testid="action-dice-section"]')
+    assert section.locator('svg.action-die.phase-zero').count() > 0
+
+
+def test_kakita_phase_0_die_tooltip_mentions_iaijutsu(page, live_server_url):
+    """Hovering a Kakita phase-0 die shows the iaijutsu-only hint."""
+    _create_char(page, live_server_url, "KakitaP0Tip", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    _mock_dice_ten(page)
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    page.locator('[data-modal="dice-roller"] button:has-text("\u00d7")').click()
+    page.wait_for_timeout(200)
+    btn = page.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"][data-die-value="0"]'
+    ).first
+    tooltip = btn.get_attribute('title')
+    assert tooltip and "Phase 0 (Kakita interrupt)" in tooltip
+    assert "iaijutsu" in tooltip.lower()
+
+
+# ---------------------------------------------------------------------------
+# Kakita Phase-0 die: per-die menu only offers iaijutsu attack
+# ---------------------------------------------------------------------------
+
+
+def _seed_kakita_phase_zero_die(page):
+    """Put a single value-0 (phase-0) action die on the tracking bridge for
+    direct menu testing. We bypass the initiative roll here so tests can
+    rely on a known die layout without mocking the d10 sequence."""
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 0, spent: false}];
+    }""")
+
+
+def test_kakita_phase_zero_die_menu_shows_only_iaijutsu_attack(page, live_server_url):
+    """The per-die menu on a Kakita phase-0 die exposes Iaijutsu Attack and
+    Mark-as-spent only; every other option (Roll Attack, Parry, Double
+    Attack, etc.) is suppressed by the kakita_phase_zero gate."""
+    _create_char(page, live_server_url, "KakitaP0Menu", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    _seed_kakita_phase_zero_die(page)
+    page.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"]'
+    ).first.click()
+    page.wait_for_selector(
+        '[data-action-die-menu-item="iaijutsu-attack"]:visible', timeout=2000)
+    assert page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').count() == 1
+    for kind in ("attack", "parry", "double-attack", "counterattack",
+                 "lunge", "feint", "predeclared-parry", "athletics-attack",
+                 "athletics-parry", "athletics-predeclared-parry"):
+        assert page.locator(
+            f'[data-action-die-menu-item="{kind}"]:visible'
+        ).count() == 0, f"{kind} leaked into the phase-0 menu"
+    # Mark-as-spent still there as an escape hatch.
+    assert page.locator('[data-action="action-die-spent"]:visible').count() == 1
+
+
+def test_kakita_non_zero_die_menu_unchanged(page, live_server_url):
+    """Regular (value > 0) Kakita action dice see the full normal menu;
+    no accidental lock-out from the Phase-0 gate."""
+    _create_char(page, live_server_url, "KakitaNonZeroMenu", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [{value: 4, spent: false}];
+    }""")
+    page.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"]'
+    ).first.click()
+    page.wait_for_selector(
+        '[data-action-die-menu-item="attack"]:visible', timeout=2000)
+    assert page.locator('[data-action-die-menu-item="attack"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="parry"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="double-attack"]:visible').count() == 1
+    # The iaijutsu-attack menu item is Phase-0-only and does not leak onto
+    # a regular die.
+    assert page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').count() == 0
+
+
+def test_kakita_phase_zero_menu_opens_attack_modal_for_iaijutsu(page, live_server_url):
+    """Clicking Iaijutsu Attack on a Phase-0 die opens the attack modal
+    with attack_variant === 'iaijutsu' (new in Phase 2)."""
+    _create_char(page, live_server_url, "KakitaP0Open", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    _seed_kakita_phase_zero_die(page)
+    page.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"]'
+    ).first.click()
+    page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    variant = page.evaluate("() => window._diceRoller?.atkFormula?.attack_variant")
+    assert variant == "iaijutsu"
+
+
+def test_kakita_phase_zero_attack_modal_notes_interrupt(page, live_server_url):
+    """The pre-roll page displays a 'Kakita Phase 0 iaijutsu attack' note."""
+    _create_char(page, live_server_url, "KakitaP0Note", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    _seed_kakita_phase_zero_die(page)
+    page.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"]'
+    ).first.click()
+    page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    note = page.locator('[data-testid="kakita-phase-zero-attack-note"]')
+    assert note.is_visible()
+    assert "Phase 0" in note.text_content()
+    assert "iaijutsu" in note.text_content().lower()
+
+
+def test_kakita_phase_zero_attack_spends_the_clicked_die(page, live_server_url):
+    """Rolling from the Phase-0 iaijutsu attack modal spends THE Phase-0
+    die (the one the player clicked), not some other action die."""
+    _create_char(page, live_server_url, "KakitaP0Spend", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    # Two dice: a Phase-0 die at index 0 and a regular die at index 1.
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 0, spent: false},
+            {value: 5, spent: false},
+        ];
+    }""")
+    # Open the Phase-0 die's menu and pick Iaijutsu Attack.
+    page.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"]'
+    ).first.click()
+    page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        value: d.value, spent: d.spent,
+    }))""")
+    assert state[0] == {"value": 0, "spent": True}
+    assert state[1] == {"value": 5, "spent": False}
+
+
+def test_non_kakita_with_iaijutsu_does_not_expose_iaijutsu_attack_key(page, live_server_url):
+    """Regression: non-Kakita characters with the iaijutsu knack don't get
+    ``knack:iaijutsu:attack`` in their formulas (the attack-variant is
+    Kakita-only)."""
+    _create_char(page, live_server_url, "AkodoIaiNoAtk", "akodo_bushi",
+                 knack_overrides={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+    has_key = page.evaluate(
+        "() => !!(window._diceRoller?.formulas?.['knack:iaijutsu:attack'])"
+    )
+    assert has_key is False
+
+
 def test_kitsuki_water_interrogation_behavioral(page, live_server_url):
     """Kitsuki Special: interrogation uses Water ring; attack has +2*Water bonus."""
     _create_char(page, live_server_url, "KitsukiWaterB", "kitsuki_magistrate",

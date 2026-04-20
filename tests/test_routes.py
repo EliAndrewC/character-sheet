@@ -505,6 +505,42 @@ class TestInitiativePerRoundResetFlags:
         assert flags.get("priest_round_conviction_refresh") is False
 
 
+class TestKakitaPhaseZeroFlag:
+    """The ``kakita_phase_zero`` flag gates every Kakita-Duelist-specific UI
+    hook (Phase-0 visual markers, iaijutsu-only per-die menu, interrupt-attack
+    button, 5th Dan contested-iaijutsu modal). It's true for any Kakita
+    Duelist regardless of Dan (the Special Ability is always-on), false for
+    everyone else.
+    """
+
+    def _school_abilities(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(
+            r'id="school-abilities">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        return json.loads(m.group(1))
+
+    def test_kakita_has_phase_zero_flag(self, client):
+        cid = _seed_character(
+            client, name="Kakita1D", school="kakita_duelist",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("kakita_phase_zero") is True
+
+    def test_non_kakita_does_not_have_phase_zero_flag(self, client):
+        cid = _seed_character(
+            client, name="Akodo1D", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("kakita_phase_zero") is False
+
+
 class TestPriestBlessRituals:
     """The ``priest_bless_rituals`` flag gates the Bless conversation topic and
     Bless research buttons on the sheet. The rituals come with the Priest
