@@ -521,6 +521,7 @@ also wait for the post-update DOM to settle.
 - [x] Equal-value rolled die is excluded from the swap menu -> `test_school_abilities.py::test_priest_3rd_dan_equal_value_rolled_die_excluded_from_menu`
 - [x] Clicking a pool die opens its swap dropdown; clicking again closes it -> `test_school_abilities.py::test_priest_3rd_dan_swap_dropdown_opens_and_closes`
 - [x] Swap dropdown stays inside the viewport (fixed positioning + horizontal clamp) -> `test_school_abilities.py::test_priest_3rd_dan_swap_menu_stays_within_viewport`
+- [x] Swap dropdown closes on any outside click (document-level listener) -> `test_school_abilities.py::test_priest_3rd_dan_swap_menu_closes_on_outside_click`
 - [x] Ally swap updates ally's roll and broadcasts new pool to the priest -> `test_school_abilities.py::test_ally_swaps_priest_pool_die_and_broadcasts`
 - [x] Ally swap rejects equal-or-higher rolled dice even if invoked directly -> `test_school_abilities.py::test_ally_swap_strictly_rejects_equal_or_higher_rolled_die`
 

@@ -3159,6 +3159,63 @@ class TestInitiativeBoxDisplay:
         assert "10 dice, keep 2" in resp.text
 
 
+class TestWoundCheckBoxDisplay:
+    """The Wound Check box on the sheet must show the same rolled/kept/flat
+    the actual roll uses - including 1st Dan extra-die, 2nd Dan +5 flat,
+    and Strength of the Earth. Previously the box hard-coded
+    ``(Water+1)kWater`` and ignored every bonus."""
+
+    def test_no_bonus_school_shows_plain_base(self, client):
+        # Kakita Duelist's 1st Dan list does NOT include wound_check, and
+        # 2nd Dan is iaijutsu (not wound_check), so the box should match
+        # the raw (Water+1)kWater base with no bonuses.
+        cid = _seed_character(
+            client, name="WCNoBonus", school="kakita_duelist",
+            school_ring_choice="Air",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert "Wound Check:" in resp.text
+        # Water defaults to 3 in _seed_character. Base 4k3, no bonuses.
+        assert ">4k3</span>" in resp.text
+
+    def test_shinjo_1st_dan_shows_extra_wound_check_die(self, client):
+        """Shinjo 1st Dan's extra wound-check die must show in the box."""
+        cid = _seed_character(
+            client, name="ShinjoWC", school="shinjo_bushi",
+            school_ring_choice="Air",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        # Water=3 -> base 4k3, 1st Dan +1 rolled -> 5k3.
+        assert ">5k3</span>" in resp.text
+
+    def test_yogo_2nd_dan_shows_plus_5_flat(self, client):
+        """Yogo Warden 2nd Dan is +5 free raise on wound_check. Knack ranks
+        2 make dan=2 and trigger the 2nd Dan bonus."""
+        cid = _seed_character(
+            client, name="YogoWC", school="yogo_warden",
+            knacks={"double_attack": 2, "iaijutsu": 2, "feint": 2},
+        )
+        resp = client.get(f"/characters/{cid}")
+        # Water=3 -> base 4k3, 1st Dan +1 rolled -> 5k3, 2nd Dan +5 flat.
+        assert ">5k3 + 5</span>" in resp.text
+
+    def test_strength_of_the_earth_shows_plus_5_flat(self, client):
+        """Strength of the Earth advantage grants +5 flat on wound checks."""
+        cid = _seed_character(
+            client, name="SoEWC", school="kakita_duelist",
+            school_ring_choice="Air",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+            advantages=["strength_of_the_earth"],
+        )
+        resp = client.get(f"/characters/{cid}")
+        # Water=3 -> base 4k3, +5 flat from Strength of the Earth. Kakita
+        # is used here instead of a bushi with a wound_check 1st Dan so the
+        # +5 flat isn't conflated with a school free raise.
+        assert ">4k3 + 5</span>" in resp.text
+
+
 class TestAthleticsPredeclaredParryRow:
     """The athletics picker should have a 5th row, Athletics (Predeclared
     parry), below Athletics (Parry). Like the existing predeclared-parry
