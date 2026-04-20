@@ -119,7 +119,7 @@ def test_attack_roll_shows_hit_or_miss(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # Use a low TN to increase hit chance
     page.locator('[data-modal="attack"] select').first.select_option("5")
-    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     # Wait for result
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -142,7 +142,7 @@ def test_attack_hit_shows_damage_roll_button(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # TN 5 should almost always hit
     page.locator('[data-modal="attack"] select').first.select_option("5")
-    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -163,7 +163,7 @@ def test_attack_damage_roll_produces_result(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] select').first.select_option("5")
-    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -194,9 +194,108 @@ def test_attack_dice_animation_visible(page, live_server_url):
     page.evaluate("if (window._diceRoller) window._diceRoller.prefs.dice_animation_enabled = true")
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
-    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_function(
         "document.querySelectorAll('#dice-animation-atk svg.die').length > 0",
         timeout=15000,
     )
     assert page.locator('#dice-animation-atk svg.die').count() > 0
+
+
+# ---------------------------------------------------------------------------
+# Missing-action-dice warning
+# ---------------------------------------------------------------------------
+
+
+def test_attack_modal_warns_when_no_initiative(page, live_server_url):
+    """Attack modal's pre-roll page shows the no-init warning when the
+    character has no action dice at all (never rolled initiative)."""
+    _create_attacker(page, live_server_url, "AtkNoInit")
+    _wait_alpine(page)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    warning = page.locator('[data-testid="attack-init-warning-no-init"]')
+    assert warning.is_visible()
+    text = warning.text_content()
+    assert "Attack" in text
+    assert "rolled initiative" in text
+    # The "rolled initiative" link is a real button.
+    assert warning.locator('button[data-action="roll-initiative-from-warning"]').count() == 1
+    # The other warning variant is not visible.
+    assert not page.locator('[data-testid="attack-init-warning-out-of-dice"]').is_visible()
+
+
+def test_attack_modal_warns_when_out_of_action_dice(page, live_server_url):
+    """Attack modal shows the out-of-dice warning when every action die is
+    already spent."""
+    _create_attacker(page, live_server_url, "AtkOutDice")
+    _wait_alpine(page)
+    # Seed two action dice, both spent. setActionDice force-resets spent to
+    # false, so write directly to the reactive array.
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [
+            {value: 3, spent: true},
+            {value: 5, spent: true},
+        ];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    warning = page.locator('[data-testid="attack-init-warning-out-of-dice"]')
+    assert warning.is_visible()
+    text = warning.text_content()
+    assert "out of action dice" in text
+    assert "Attack" in text
+    # The no-init variant is not visible.
+    assert not page.locator('[data-testid="attack-init-warning-no-init"]').is_visible()
+
+
+def test_attack_modal_hides_warning_when_dice_available(page, live_server_url):
+    """With at least one unspent action die, neither warning variant shows."""
+    _create_attacker(page, live_server_url, "AtkDiceOK")
+    _wait_alpine(page)
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [
+            {value: 3, spent: false},
+            {value: 5, spent: true},
+        ];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    assert not page.locator('[data-testid="attack-init-warning-no-init"]').is_visible()
+    assert not page.locator('[data-testid="attack-init-warning-out-of-dice"]').is_visible()
+
+
+def test_attack_modal_warning_button_triggers_initiative(page, live_server_url):
+    """Clicking the warning's rolled-initiative button closes the attack
+    modal and opens/rolls initiative."""
+    _create_attacker(page, live_server_url, "AtkWarnInit")
+    _wait_alpine(page)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    page.locator('[data-testid="attack-init-warning-no-init"]'
+                 ' button[data-action="roll-initiative-from-warning"]').click()
+    # Attack modal closes.
+    page.wait_for_selector('[data-modal="attack"]', state='hidden', timeout=3000)
+    # Initiative roll fires - action dice eventually populate the bridge.
+    page.wait_for_function(
+        "() => (window._trackingBridge?.actionDice || []).length > 0",
+        timeout=10000,
+    )
+
+
+def test_attack_modal_warning_reflects_athletics_attack_name(page, live_server_url):
+    """The <name of action> placeholder in the warning is the modal's own
+    action label, not hardcoded 'Attack'. Use Togashi (the school that
+    exposes Athletics Attack from the regular Attack menu) to verify."""
+    _create_attacker(page, live_server_url, "AtkAthName", school="togashi_ise_zumi")
+    _wait_alpine(page)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-attack-choice-menu]', state='visible', timeout=3000)
+    page.locator('[data-attack-choice="athletics_attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    warning = page.locator('[data-testid="attack-init-warning-no-init"]')
+    assert warning.is_visible()
+    # Label strips the parenthetical ring, e.g. "Athletics Attack (Fire)" -> "Athletics Attack".
+    assert "Athletics Attack" in warning.text_content()

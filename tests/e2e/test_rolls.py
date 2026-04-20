@@ -526,7 +526,7 @@ def test_die_top_angle_is_about_70_degrees(page, live_server_url):
     # Attack now opens the attack modal - click "Roll Attack" to start the roll
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] select:visible').select_option("5")
-    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     # Wait until the rolling phase has rendered the dice tray AND the dice
     # have stopped tumbling (otherwise the rotation transform skews
     # getBoundingClientRect and the measured angle is wrong).
@@ -1013,7 +1013,7 @@ def test_attack_auto_spends_lowest_action_die(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # Click the Roll button inside the attack modal
-    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_timeout(500)
     dice = page.evaluate("window._trackingBridge.actionDice")
     assert dice[0]["spent"] is True
@@ -1032,7 +1032,7 @@ def test_attack_with_all_dice_spent_still_rolls(page, live_server_url):
     page.wait_for_timeout(100)
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
-    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_timeout(500)
     dice = page.evaluate("window._trackingBridge.actionDice")
     # Both were already spent; remain spent, nothing else to spend.
@@ -1080,7 +1080,7 @@ def test_attack_annotates_spent_die_with_result(page, live_server_url):
     page.wait_for_timeout(100)
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
-    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_timeout(500)
     spent_by = page.evaluate("window._trackingBridge.actionDice[0].spent_by")
     assert spent_by is not None
@@ -1109,7 +1109,7 @@ def test_attack_tooltip_updates_when_conviction_spent_on_damage(page, live_serve
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     # TN 5 is trivially low, guaranteeing a hit so damage roll is available.
     page.locator('[data-modal="attack"] select').first.select_option("5")
-    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -1247,7 +1247,7 @@ def test_action_die_menu_attack_opens_modal_spends_on_roll(page, live_server_url
     # Each die renders its own (hidden) menu, so scope to the open one.
     page.locator('[data-action-die-menu-item="attack"]:visible').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
-    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {

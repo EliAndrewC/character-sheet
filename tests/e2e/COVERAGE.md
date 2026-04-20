@@ -63,6 +63,11 @@ also wait for the post-update DOM to settle.
 - [x] Hit shows Make Damage Roll button -> `test_attack_modal.py::test_attack_hit_shows_damage_roll_button`
 - [x] Dice animation visible during attack roll -> `test_attack_modal.py::test_attack_dice_animation_visible`
 - [x] Attack probability table shows "Attack Roll" column with (r)k(k) values per void level -> `test_attack_modal.py::test_attack_modal_shows_attack_roll_rk_column`
+- [x] Attack modal pre-roll shows "without having rolled initiative" warning when no action dice exist -> `test_attack_modal.py::test_attack_modal_warns_when_no_initiative`
+- [x] Attack modal pre-roll shows "out of action dice" warning when every action die is spent -> `test_attack_modal.py::test_attack_modal_warns_when_out_of_action_dice`
+- [x] Attack modal hides both warnings when an unspent action die is available -> `test_attack_modal.py::test_attack_modal_hides_warning_when_dice_available`
+- [x] Warning's "rolled initiative" button closes the attack modal and triggers the initiative roll -> `test_attack_modal.py::test_attack_modal_warning_button_triggers_initiative`
+- [x] Warning's action name reflects the modal's action label (e.g. "Athletics Attack") -> `test_attack_modal.py::test_attack_modal_warning_reflects_athletics_attack_name`
 - [x] Damage roll produces result after hit -> `test_attack_modal.py::test_attack_damage_roll_produces_result`
 - [x] Lucky button on regular roll (present/absent) -> `test_ui_interactions.py::test_lucky_on_regular_roll`, `test_no_lucky_on_regular_roll_without_advantage`
 - [x] Lucky button on attack result (present/absent) -> `test_ui_interactions.py::test_lucky_reroll_on_attack`, `test_no_lucky_on_attack_without_advantage`

@@ -149,8 +149,9 @@ class TestAthleticsCombat:
         assert "athletics:parry" in formulas
 
     def test_athletics_attack_uses_fire_ring(self):
-        """Athletics-attack uses Fire ring (the combat attack ring).
-        Base formula is 2*Fire + athletics_rank rolled, Fire kept."""
+        """Athletics-attack uses Fire ring. Per the rules, substitution formula
+        is (athletics + Fire)k(Fire) - the ring is NOT doubled (that doubling
+        only applies to generic athletics actions, not attack/parry)."""
         char = make_character_data(
             school="",  # no school bonuses
             rings={"Air": 2, "Fire": 3, "Earth": 2, "Water": 2, "Void": 2},
@@ -158,11 +159,11 @@ class TestAthleticsCombat:
         )
         formulas = build_all_roll_formulas(char)
         a = formulas["athletics:attack"]
-        assert a["rolled"] == 2 * 3 + 2  # 2*Fire + athletics
+        assert a["rolled"] == 3 + 2  # Fire + athletics
         assert a["kept"] == 3  # Fire
 
     def test_athletics_parry_uses_air_ring(self):
-        """Athletics-parry uses Air ring (the combat parry ring)."""
+        """Athletics-parry uses Air ring, formula (athletics + Air)k(Air)."""
         char = make_character_data(
             school="",
             rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
@@ -170,7 +171,7 @@ class TestAthleticsCombat:
         )
         formulas = build_all_roll_formulas(char)
         p = formulas["athletics:parry"]
-        assert p["rolled"] == 2 * 4 + 1  # 2*Air + athletics
+        assert p["rolled"] == 4 + 1  # Air + athletics
         assert p["kept"] == 4  # Air
 
     def test_athletics_attack_is_attack_type_with_variant(self):
@@ -220,10 +221,10 @@ class TestAthleticsCombat:
         )
         formulas = build_all_roll_formulas(char)
         p = formulas["athletics:parry"]
-        # Base: 2*Air(3) + athletics(2) = 8 rolled, 3 kept.
-        # +1 die from 1st Dan (parry in first_dan_extra_die) → 9 rolled.
+        # Base: Air(3) + athletics(2) = 5 rolled, 3 kept.
+        # +1 die from 1st Dan (parry in first_dan_extra_die) -> 6 rolled.
         # +5 flat from 2nd Dan free raise (parry).
-        assert p["rolled"] == 9
+        assert p["rolled"] == 6
         assert p["kept"] == 3
         assert p["flat"] == 5
 
@@ -237,8 +238,8 @@ class TestAthleticsCombat:
         )
         formulas = build_all_roll_formulas(char)
         a = formulas["athletics:attack"]
-        # Base: 2*Fire(2) + athletics(1) = 5. +1 from 1st Dan (attack).
-        assert a["rolled"] == 6
+        # Base: Fire(2) + athletics(1) = 3. +1 from 1st Dan (attack).
+        assert a["rolled"] == 4
         assert a["kept"] == 2
 
     def test_athletics_attack_inherits_courtier_air_bonus(self):
@@ -264,8 +265,8 @@ class TestAthleticsCombat:
         )
         formulas = build_all_roll_formulas(char)
         a = formulas["athletics:attack"]
-        # Base: 2*Fire(2) + athletics(1) = 5. 1st Dan (attack): +1. Acting: +3.
-        assert a["rolled"] == 9
+        # Base: Fire(2) + athletics(1) = 3. 1st Dan (attack): +1. Acting: +3.
+        assert a["rolled"] == 7
 
     def test_athletics_attack_label(self):
         char = make_character_data(

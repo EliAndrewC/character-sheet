@@ -212,7 +212,7 @@ def _open_attack_modal_and_roll(page, roll_key):
         }
     }""")
     modal = page.locator('[data-modal="attack"]')
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
 
 
@@ -532,7 +532,7 @@ def test_hida_3rd_dan_reroll_appears(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     assert page.locator('text="Hida 3rd Dan: select up to"').is_visible()
     assert page.locator('button:text("Skip")').is_visible()
@@ -1159,7 +1159,7 @@ def test_hida_reroll_selection_appears(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     assert page.locator('text="Hida 3rd Dan: select up to"').is_visible()
     assert page.locator('button:text("Skip")').is_visible()
@@ -1693,7 +1693,7 @@ def test_shosuro_5th_dan_attack_lowest_3_dice(page, live_server_url):
     pre_text = page.locator('[data-modal="attack"]').text_content()
     assert "Shosuro 5th Dan" in pre_text
     # Roll the attack; bonus row should appear in result
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     result_text = page.locator('[data-modal="attack"]').text_content()
     assert "Shosuro 5th Dan" in result_text and "lowest 3" in result_text
@@ -2436,7 +2436,7 @@ def test_brotherhood_unarmed_damage_behavioral(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     dmg_text = _get_attack_result_text(page)
     assert "unarmed" in dmg_text.lower() or "1k1" in dmg_text
@@ -2475,7 +2475,7 @@ def test_isawa_duelist_water_damage_behavioral(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Roll damage
     modal.locator('button:has-text("Make Damage Roll")').click()
@@ -2606,7 +2606,7 @@ def test_daidoji_3rd_dan_raises_note_behavioral(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     result = _get_attack_result_text(page)
     assert "Daidoji 3rd Dan" in result
@@ -2783,7 +2783,7 @@ def test_matsu_5th_dan_lw_reset_note_behavioral(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")  # low TN for guaranteed hit
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Roll damage
     modal.locator('button:has-text("Make Damage Roll")').click()
@@ -3198,7 +3198,7 @@ def test_doji_5th_dan_attack_auto_bonus(page, live_server_url):
     pre_text = modal.text_content()
     assert "Doji 5th Dan" in pre_text
     # Roll
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Verify the bonus is in the result breakdown
     result_text = modal.text_content()
@@ -3865,7 +3865,7 @@ def test_akodo_3rd_dan_bank_and_apply_behavioral(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # The Apply button should be visible (wait for Alpine to render the banked bonuses UI)
     page.locator('button:has-text("Apply +")').first.wait_for(state='visible', timeout=10000)
@@ -4026,7 +4026,7 @@ def test_bayushi_vp_damage_behavioral(page, live_server_url):
     if vp_btn.is_visible():
         vp_btn.click()
         page.wait_for_timeout(100)
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     result = _get_attack_result_text(page)
     assert "Bayushi" in result or "VP" in result
@@ -4050,7 +4050,7 @@ def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     _restore_dice(page)
     # The bonus should already be in the result (auto-applied, no Apply button needed)
@@ -4237,7 +4237,7 @@ def test_matsu_4th_dan_near_miss_behavioral(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("15")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Check Alpine state for near-miss
     state = page.evaluate("""() => {
@@ -4263,7 +4263,7 @@ def test_mirumoto_4th_dan_parry_reduction_behavioral(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Check the failed parry checkbox using x-model attribute
     page.locator('input[x-model="atkFailedParry"]').check()
@@ -4282,7 +4282,7 @@ def test_otaku_4th_dan_lunge_parry_behavioral(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Check failed parry
     page.locator('input[x-model="atkFailedParry"]').check()
@@ -4302,7 +4302,7 @@ def test_otaku_5th_dan_trade_dice_behavioral(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Boost extra dice so total damage dice > 10 (base damage is ~7, need 11+)
     page.evaluate("""() => {
@@ -4407,7 +4407,7 @@ def test_hida_5th_dan_counterattack_wc_bonus(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
 
     # Check that the counterattack excess was banked
@@ -4477,7 +4477,7 @@ def test_hida_below_5th_dan_no_counterattack_wc_bonus(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("5")
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
 
     # Nothing should be banked
@@ -5034,7 +5034,7 @@ def test_mantis_2nd_dan_attack_choice_labeled(page, live_server_url):
     modal_text = _attack_modal_bonus_text(page)
     assert "2nd Dan" in modal_text
     # Post-roll: roll and verify the breakdown includes "2nd Dan technique".
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     result_text = page.locator('[data-modal="attack"]').text_content()
     assert "2nd Dan technique" in result_text
@@ -5139,7 +5139,7 @@ def test_mantis_2nd_dan_damage_choice_labeled(page, live_server_url):
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select[x-model\\.number="atkTN"]').first.select_option("5")
     _mock_dice_high(page)
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     # Click Make Damage Roll (button inside the attack modal once the attack hits).
     roll_dmg_btn = modal.locator('button:has-text("Make Damage Roll")')
@@ -5407,7 +5407,7 @@ def test_mantis_offensive_posture_attack_post_roll_breakdown(page, live_server_u
     # Snapshot baseTotal that would be applied without posture for sanity.
     # Roll with fixed low dice so the +5 is unambiguous.
     _mock_dice_low(page)
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     _restore_dice(page)
     modal = page.locator('[data-modal="attack"]')
@@ -5448,7 +5448,7 @@ def test_mantis_offensive_posture_damage_preview_and_result(page, live_server_ur
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select[x-model\\.number="atkTN"]').first.select_option("5")
     _mock_dice_high(page)
-    modal.locator('button:has-text("Roll")').first.click()
+    modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     modal.locator('button:has-text("Make Damage Roll")').first.click()
     page.wait_for_function("""() => {
@@ -5662,7 +5662,7 @@ def test_mantis_5th_dan_attack_post_roll_snapshot(page, live_server_url):
     _select_posture(page, "offensive")
     _open_attack_modal(page, "attack")
     _mock_dice_low(page)
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     _restore_dice(page)
     result_text = page.locator('[data-modal="attack"]').text_content()
@@ -5834,7 +5834,7 @@ def test_mantis_3rd_dan_button_hidden_without_posture(page, live_server_url):
     _make_mantis_dan_3(page, live_server_url, "Mantis3BtnHidden")
     _seed_action_dice(page, [3, 5])
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     assert not page.locator('[data-action="mantis-3rd-dan-offensive"]').is_visible()
 
@@ -5846,7 +5846,7 @@ def test_mantis_3rd_dan_button_hidden_in_defensive_posture(page, live_server_url
     _seed_action_dice(page, [3, 5])
     _select_posture(page, "defensive")
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     assert not page.locator('[data-action="mantis-3rd-dan-offensive"]').is_visible()
 
@@ -5864,7 +5864,7 @@ def test_mantis_3rd_dan_button_hidden_with_no_unspent_action_dice(page, live_ser
     }""")
     _select_posture(page, "offensive")
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     assert not page.locator('[data-action="mantis-3rd-dan-offensive"]').is_visible()
 
@@ -5879,7 +5879,7 @@ def test_mantis_3rd_dan_button_hidden_on_dan_2(page, live_server_url):
     _seed_action_dice(page, [3, 5])
     _select_posture(page, "offensive")
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     assert page.locator('[data-action="mantis-3rd-dan-offensive"]').count() == 0
 
@@ -5894,7 +5894,7 @@ def test_mantis_3rd_dan_click_spends_die_and_accumulates(page, live_server_url):
     _seed_action_dice(page, [4, 7])
     _select_posture(page, "offensive")
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     btn = page.locator('[data-action="mantis-3rd-dan-offensive"]')
     btn.wait_for(state='visible', timeout=10000)
@@ -5922,7 +5922,7 @@ def test_mantis_3rd_dan_two_spends_stack_accumulator(page, live_server_url):
     _seed_action_dice(page, [3, 5, 7])
     _select_posture(page, "offensive")
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     btn = page.locator('[data-action="mantis-3rd-dan-offensive"]')
     btn.click()
@@ -5953,7 +5953,7 @@ def test_mantis_3rd_dan_next_attack_includes_accumulator(page, live_server_url):
     _select_posture(page, "offensive")
     # First attack: roll, click the 3rd Dan button.
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     page.locator('[data-action="mantis-3rd-dan-offensive"]').wait_for(state='visible', timeout=10000)
     page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
@@ -5967,7 +5967,7 @@ def test_mantis_3rd_dan_next_attack_includes_accumulator(page, live_server_url):
     # Roll and verify post-roll breakdown carries the same label (via
     # formula.bonuses snapshot in rollAttack).
     _mock_dice_low(page)
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     _restore_dice(page)
     post_text = page.locator('[data-modal="attack"]').text_content()
@@ -5982,7 +5982,7 @@ def test_mantis_3rd_dan_damage_includes_accumulator(page, live_server_url):
     _seed_action_dice(page, [3, 5])
     _select_posture(page, "offensive")
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
     page.wait_for_function("() => window._trackingBridge.offensive3rdDanAccum === 3")
@@ -6008,7 +6008,7 @@ def test_mantis_3rd_dan_resets_on_initiative(page, live_server_url):
     _seed_action_dice(page, [3, 5])
     _select_posture(page, "offensive")
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
     page.wait_for_function("() => window._trackingBridge.offensive3rdDanAccum === 2")
@@ -6128,7 +6128,7 @@ def test_mantis_3rd_dan_offensive_prefers_4th_dan_die(page, live_server_url):
     )
     assert fourth_idx_before >= 0
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
     page.wait_for_function(
@@ -6357,7 +6357,7 @@ def test_mantis_clear_bonuses_zeros_everything(page, live_server_url):
     # Switch to offensive and roll an attack to enable the offensive button.
     _select_posture(page, "offensive")
     _open_attack_modal(page, "attack")
-    page.locator('[data-modal="attack"]').locator('button:has-text("Roll")').first.click()
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
     page.locator('[data-action="mantis-3rd-dan-offensive"]').click()
     page.wait_for_function("() => window._trackingBridge.offensive3rdDanAccum === 3")

@@ -549,11 +549,15 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Physical feats of agility, climbing, running, swimming, and acrobatics."
         ),
         rules_text=(
-            "When performing generic athletic tasks, roll extra dice equal to "
-            "this knack. You may also use this knack to attack or parry. If you "
-            "use it to attack, your TN is equal to 5 plus 10 times the defender's "
-            "parry skill. If you use it to parry, then your TN is raised by 5 "
-            "times the attack skill of the attacker."
+            "When performing physical actions which are not covered by skills "
+            "(e.g. running, climbing, swimming, etc) everyone rolls (2 * Ring)k(Ring). "
+            "Characters with the athletics knack roll extra dice on such rolls "
+            "equal to their rank in this knack. Additionally, you may substitute "
+            "this knack for your attack or parry when making those rolls, i.e. "
+            "(athletics + Fire)k(Fire) or (athletics + Air)k(Air). This comes "
+            "at a penalty: if you use it to attack, your TN to hit is increased "
+            "by 5 times the defender's parry skill, and if you use it to parry, "
+            "then your TN is raised by 5 times the attack skill of the attacker."
         ),
     ),
     SchoolKnack(
