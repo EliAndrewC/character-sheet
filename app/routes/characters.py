@@ -13,6 +13,7 @@ from app.game_data import (
 )
 from app.models import Character, CharacterVersion, GamingGroup, User
 from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids, get_all_editors
+from app.services.rolls import compute_dan
 from app.services.sanitize import sanitize_sections
 from app.services.versions import publish_character, revert_character
 from app.services.xp import calculate_total_xp
@@ -272,6 +273,58 @@ async def ally_conviction(
     priest.adventure_state = adv_state
     db.commit()
     return JSONResponse({"used": new_used, "pool_max": pool_max})
+
+
+@router.post("/{char_id}/precepts-pool")
+async def precepts_pool(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Priest 3rd Dan: a party member can commit a post-swap pool back to
+    this priest's ``precepts_pool`` column. The swap itself (which dice
+    move in and out) is computed client-side; this endpoint just accepts
+    the resulting whole-list and normalises it.
+
+    Replace-whole-list was chosen over a per-index mutation so concurrent
+    allies editing in the same session can't produce a partially-mutated
+    pool; last-write-wins matches the best-effort ``_postPriestAllyDelta``
+    pattern used by the 5th Dan conviction sibling.
+
+    Caller must be logged in and share a gaming group with the priest; the
+    priest must be a Priest at dan>=3.
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    priest = db.query(Character).filter(Character.id == char_id).first()
+    if not priest:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    if priest.school != "priest":
+        return JSONResponse({"error": "Not a priest"}, status_code=400)
+    p_school_obj = SCHOOLS.get(priest.school)
+    p_knack_ranks = [
+        (priest.knacks or {}).get(k, 1) for k in (p_school_obj.school_knacks or [])
+    ] if p_school_obj else []
+    p_dan = min(p_knack_ranks) if p_knack_ranks else 0
+    if p_dan < 3:
+        return JSONResponse({"error": "Priest is not at 3rd Dan"}, status_code=400)
+    caller_chars = db.query(Character).filter(
+        Character.owner_discord_id == user["discord_id"],
+        Character.gaming_group_id == priest.gaming_group_id,
+    ).all()
+    # Owner-as-caller is allowed unconditionally even when no other group
+    # character exists (a priest swapping from their own pool via this
+    # endpoint, rather than through /track, is a supported path).
+    is_owner = priest.owner_discord_id == user["discord_id"]
+    if not is_owner and (not priest.gaming_group_id or not caller_chars):
+        return JSONResponse(
+            {"error": "Caller is not in the priest's gaming group"}, status_code=403
+        )
+    body = await request.json()
+    if not isinstance(body, dict) or "pool" not in body:
+        return JSONResponse({"error": "Body must include 'pool'"}, status_code=400)
+    priest.precepts_pool = _sanitize_precepts_pool(body["pool"])
+    db.commit()
+    return JSONResponse({"pool": priest.precepts_pool})
 
 
 @router.post("/{char_id}/autosave")
@@ -780,6 +833,18 @@ async def track_state(
         character.adventure_state = body["adventure_state"]
     if "action_dice" in body:
         character.action_dice = _sanitize_action_dice(body["action_dice"])
+    if "precepts_pool" in body:
+        pool = _sanitize_precepts_pool(body["precepts_pool"])
+        # Defensive guard: only Priests at 3rd Dan or higher can hold a
+        # pool. An incoming payload from a stale tab (character dropped
+        # below 3rd Dan after the tab loaded) gets silently wiped rather
+        # than persisting a pool that should no longer exist.
+        if pool and (
+            character.school != "priest"
+            or compute_dan(character.knacks or {}) < 3
+        ):
+            pool = []
+        character.precepts_pool = pool
 
     db.commit()
     return JSONResponse({"status": "ok"})
@@ -816,6 +881,39 @@ def _sanitize_action_dice(raw: Any) -> list:
         if entry.get("mantis_4th_dan"):
             out["mantis_4th_dan"] = True
         cleaned.append(out)
+    return cleaned
+
+
+PRECEPTS_POOL_MAX_ENTRIES = 10
+# Upper sanity bound on a single die value. Reroll-10s means a single die
+# can legitimately exceed 10 (e.g. 10 + 9 = 19); a very long run of 10s
+# could theoretically produce any integer. Cap at 100 to reject obvious
+# garbage without clipping realistic rolls.
+PRECEPTS_POOL_MAX_VALUE = 100
+
+
+def _sanitize_precepts_pool(raw: Any) -> list:
+    """Coerce a client-supplied precepts_pool list into safe storage shape.
+
+    Each entry becomes ``{"value": int}`` clamped to ``1..PRECEPTS_POOL_MAX_VALUE``.
+    Non-list payloads become ``[]``; malformed entries are dropped; the list
+    is capped at ``PRECEPTS_POOL_MAX_ENTRIES`` entries (the maximum
+    reasonable precepts skill rank).
+    """
+    if not isinstance(raw, list):
+        return []
+    cleaned: list = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            value = int(entry.get("value"))
+        except (TypeError, ValueError):
+            continue
+        value = max(1, min(PRECEPTS_POOL_MAX_VALUE, value))
+        cleaned.append({"value": value})
+        if len(cleaned) >= PRECEPTS_POOL_MAX_ENTRIES:
+            break
     return cleaned
 
 

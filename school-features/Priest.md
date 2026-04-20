@@ -105,7 +105,101 @@ Mechanical rituals:
 
 > Roll X dice at the beginning of combat, where X is equal to your precepts skill. You may swap any of these dice for any rolled die on any attack, parry, wound check, or damage roll. You may swap any of these dice for any lower die on any of those types of rolls made by any ally.
 
-**Status:** Out of scope - requires cross-sheet interaction (swapping dice into allies' rolls).
+**Status:** Fully implemented.
+
+Mechanics:
+- **Pool storage** lives on the Character model as a JSON column
+  `precepts_pool` (`[{"value": int}, ...]`). Migration in `database.py::_migrate_add_columns`.
+- **Pool creation** is manual: a "Roll Pool" button in the Tracking panel
+  rolls X dice (X = precepts skill rank), all kept, 10s reroll on. The
+  resulting values are stored as the pool.
+- **Pool persistence:** pool survives combat ends and page reloads. NOT
+  wiped by the action-dice "Clear" button or by rolling initiative. IS
+  wiped by the per-adventure Reset modal (listed as "Clear precepts pool
+  (N dice)"). IS wiped server-side in `publish_character` /
+  `revert_character` if a knack change drops the priest below 3rd Dan;
+  `/track` defensively coerces to `[]` if a stale tab tries to persist a
+  non-priest / sub-3rd-Dan pool.
+- **Party broadcast:** `priest_precepts_allies` context mirrors the 5th
+  Dan `priest_conviction_allies`. Filters: priest school, dan >= 3,
+  non-empty pool, shared gaming group, excludes self.
+- **Display:** pool renders as dice icons inside the discretionary-bonus
+  area of four roll modals (generic dice-roller for parry/athletics:parry,
+  attack, damage, wound-check). The `_isPreceptsPoolQualifyingRoll(modal)`
+  helper uses `formula.is_attack_type` to distinguish Kakita's combat
+  iaijutsu (qualifying) from iaijutsu-duel knack rolls (not qualifying).
+- **Swap UI:** clicking a pool die opens a dropdown of eligible rolled
+  values ("Swap with a rolled N"). Eligibility is strict `pool_die >
+  rolled_die` for both self and ally (equal is a no-op, excluded).
+  Dedup across same-value rolled dice. Empty eligible set shows a
+  disabled "No lower rolled dice to swap with" entry.
+- **Swap effect:** replaces the chosen rolled-die value in `finalDice`
+  with the pool die value, puts the replaced rolled value back into
+  the pool, re-keeps top-N, propagates the keptSum delta to `baseTotal`
+  and whichever modal-specific total is active (`atkRollTotal`,
+  `atkDamageTotal`, `wcRollTotal`), appends a structured
+  `preceptsPoolSwapBonuses` entry (rendered as `+N (swapped rolled X -> Y)`
+  under the pool block), and persists: self via `/track`, ally via
+  `POST /characters/{priest_id}/precepts-pool`.
+
+**Implementation:**
+- `app/models.py` — `precepts_pool` column on `Character`.
+- `app/database.py::_migrate_add_columns` — migration entry.
+- `app/routes/characters.py::_sanitize_precepts_pool`,
+  `/track` handler (accepts + sanitizes + defensive dan-check),
+  `POST /characters/{char_id}/precepts-pool` (swap endpoint).
+- `app/routes/pages.py` — `priest_precepts_pool` /
+  `priest_precepts_pool_size` flags in `school_abilities`;
+  `priest_precepts_allies` context list.
+- `app/services/versions.py::_wipe_precepts_pool_if_dan_drop` — called
+  from `publish_character` and `revert_character`.
+- `app/templates/character/sheet.html` — Alpine state
+  (`preceptsPool`, `priestPreceptsAllies`, `preceptsPoolMenuOpen`,
+  `preceptsPoolSwapBonuses`); methods
+  `rollPreceptsPool`, `clearPreceptsPool`,
+  `_isPreceptsPoolQualifyingRoll`, `preceptsPoolAlliesForThisRoll`,
+  `preceptsSwapOptions`, `swapPreceptsDie`,
+  `_postPreceptsPoolReplace`, `_preceptsActiveModal`,
+  `_preceptsModalKeptCount`; `precepts_pool_block` Jinja macro;
+  `precepts-pool-section` UI in the Tracking panel;
+  pool block wired into all four roll-result modals.
+
+**Unit tests:**
+- `test_routes.py::TestTrackState::test_track_precepts_pool_sanitization` (sanitizer)
+- `test_routes.py::TestTrackState::test_track_rejects_pool_for_non_priest`
+- `test_routes.py::TestTrackState::test_track_rejects_pool_for_priest_below_3rd_dan`
+- `test_routes.py::TestPriestPreceptsPoolContext` (school_abilities flags + Alpine serialization)
+- `test_routes.py::TestPriestPreceptsAlliesContext` (party-broadcast context)
+- `test_routes.py::TestPriestPreceptsPoolEndpoint` (swap endpoint)
+- `test_routes.py::TestPreceptsPoolAuth::test_requires_authentication`
+- `test_versions.py::TestPreceptsPoolDanDrop` (publish / revert wipe)
+
+**Clicktests:**
+- Roll + clear + persist: `test_priest_3rd_dan_pool_button_visible_only_for_priest_3rd_dan`,
+  `test_priest_3rd_dan_roll_creates_pool_of_size_equal_to_precepts`,
+  `test_priest_3rd_dan_clear_button_empties_pool`,
+  `test_priest_3rd_dan_pool_persists_across_reload`,
+  `test_priest_3rd_dan_pool_not_cleared_by_action_dice_clear`,
+  `test_priest_3rd_dan_pool_not_cleared_by_initiative_roll`.
+- Per-adventure reset: `test_priest_3rd_dan_adventure_reset_clears_pool`,
+  `test_priest_3rd_dan_reset_modal_lists_pool_clear`,
+  `test_priest_3rd_dan_reset_button_enabled_with_only_pool`.
+- Display in roll modals: `test_priest_3rd_dan_pool_appears_on_own_parry_roll`,
+  `test_priest_3rd_dan_pool_appears_on_own_wound_check`,
+  `test_priest_3rd_dan_pool_does_not_appear_on_skill_roll`,
+  `test_priest_3rd_dan_pool_predicate_excludes_iaijutsu_duel`,
+  `test_priest_3rd_dan_empty_pool_does_not_render_block`,
+  `test_ally_sees_priest_3rd_dan_pool_on_attack_roll`.
+- Swap: `test_priest_3rd_dan_swap_pool_die_with_lower_rolled_die`,
+  `test_priest_3rd_dan_swap_promotes_unkept_die_into_kept`,
+  `test_priest_3rd_dan_swap_menu_dedupes_rolled_values`,
+  `test_priest_3rd_dan_swap_menu_shows_disabled_when_no_lower`,
+  `test_priest_3rd_dan_equal_value_rolled_die_excluded_from_menu`,
+  `test_priest_3rd_dan_swap_dropdown_opens_and_closes`,
+  `test_ally_swaps_priest_pool_die_and_broadcasts`,
+  `test_ally_swap_strictly_rejects_equal_or_higher_rolled_die`.
+- Hygiene: `test_sheet_js_errors.py::test_sheet_no_js_errors_for_priest_3rd_dan_with_pool`,
+  `test_responsive.py::test_precepts_pool_no_overflow_at_phone_width`.
 
 ---
 

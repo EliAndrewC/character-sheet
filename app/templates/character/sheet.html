@@ -25,6 +25,76 @@
 </div>
 {% endmacro %}
 
+{# Macro: render the Priest 3rd Dan precepts pool block inside a roll
+   modal. ``modal`` is one of "attack" / "damage" / "wc" / "roll" and is
+   passed to the Alpine helpers so the pool's visibility matches the
+   active roll type. Clicking a pool die opens a dropdown of eligible
+   rolled-die values (strictly lower); picking one commits the swap,
+   which rewrites finalDice, re-keeps the top-N, updates the active
+   modal's total, and persists the new pool via /track or the swap
+   endpoint (self vs ally). #}
+{% macro precepts_pool_block(modal, key_prefix) %}
+<template x-for="priest in preceptsPoolAlliesForThisRoll('{{ modal }}')" :key="'{{ key_prefix }}-' + priest.priest_id">
+    <div class="bg-parchment rounded p-3 text-sm"
+         :data-testid="'precepts-pool-in-roll-' + priest.priest_id"
+         :data-precepts-pool-modal="'{{ modal }}'">
+        <div class="text-xs font-medium mb-1">
+            <span x-text="priest.name"></span>'s Precepts Pool
+        </div>
+        <div class="flex flex-wrap gap-1">
+            <template x-for="(die, j) in priest.pool" :key="j">
+                <div class="relative"
+                     data-precepts-pool-die
+                     :data-priest-id="priest.priest_id"
+                     :data-die-index="j"
+                     :data-die-value="die.value">
+                    <button type="button"
+                            @click="preceptsPoolMenuOpen = (preceptsPoolMenuOpen === (priest.priest_id + ':' + j) ? null : (priest.priest_id + ':' + j))"
+                            :data-action="'precepts-pool-die-' + priest.priest_id + '-' + j"
+                            class="block cursor-pointer hover:opacity-80 transition-opacity"
+                            title="Click to swap this die with one of your rolled dice">
+                        <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
+                             class="die action-die"
+                             :class="die.value >= 10 ? 'two-digit' : ''">
+                            <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+                            <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
+                                  x-text="die.value"></text>
+                        </svg>
+                    </button>
+                    <div x-show="preceptsPoolMenuOpen === (priest.priest_id + ':' + j)"
+                         x-cloak
+                         @click.outside="if (preceptsPoolMenuOpen === (priest.priest_id + ':' + j)) preceptsPoolMenuOpen = null"
+                         :data-precepts-swap-menu="priest.priest_id + ':' + j"
+                         class="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm whitespace-nowrap min-w-[200px]">
+                        <template x-for="opt in preceptsSwapOptions(priest, die.value)" :key="opt.label">
+                            <button type="button"
+                                    :disabled="!!opt.disabled"
+                                    @click="if (!opt.disabled) swapPreceptsDie(priest, j, opt.value)"
+                                    :data-precepts-swap-option="opt.disabled ? 'none' : opt.value"
+                                    class="block w-full text-left px-3 py-2 hover:bg-parchment disabled:opacity-40 disabled:cursor-not-allowed"
+                                    x-text="opt.label"></button>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+        {# Swap history for this priest's pool during the current roll.
+           Rendered as an auxiliary bonus-source line so players can see
+           where their roll total is coming from. #}
+        <div x-show="preceptsPoolSwapBonuses.some(b => b.priestId === priest.priest_id)"
+             x-cloak class="mt-2 text-xs text-ink/70 space-y-0.5">
+            <template x-for="b in preceptsPoolSwapBonuses.filter(b => b.priestId === priest.priest_id)" :key="b.rolledValueBefore + '-' + b.poolValueAfter">
+                <div data-testid="precepts-pool-swap-entry">
+                    <span x-text="(b.poolValueAfter - b.rolledValueBefore >= 0 ? '+' : '') + (b.poolValueAfter - b.rolledValueBefore)"></span>
+                    (swapped rolled <span x-text="b.rolledValueBefore"></span>
+                    &rarr; <span x-text="b.poolValueAfter"></span>)
+                </div>
+            </template>
+        </div>
+    </div>
+</template>
+{% endmacro %}
+
 <div class="space-y-6">
 
     <!-- DRAFT STATUS BANNER -->
@@ -438,6 +508,10 @@
                 })(),
                 actionDice: {{ (action_dice or [])|tojson }},
                 actionMenuOpen: null,
+                // Priest 3rd Dan precepts dice pool. Persists across combat
+                // rounds; cleared only by the per-adventure reset. Each entry
+                // is {value: int 1-10}.
+                preceptsPool: {{ (precepts_pool or [])|tojson }},
                 // Identifies the currently-hovered row in the per-die action
                 // menu when that row has a void-spend flyout ("<dieIndex>-<row>").
                 actionMenuHoverRow: null,
@@ -451,9 +525,30 @@
                 // Mantis 3rd Dan defensive: per-round accumulator set by the
                 // Tracking-section button; feeds WC + TN overlays.
                 defensive3rdDanAccum: ({{ (adventure_state or {})|tojson }}).mantis_defensive_3rd_dan_accum || 0,
+                // Kakita 5th Dan: once-per-combat-round contested iaijutsu.
+                // Persists across page reloads within a round; reset on the
+                // next initiative roll (via setActionDice).
+                kakita5thDanUsed: !!({{ (adventure_state or {})|tojson }}).kakita_5th_dan_used,
                 _charId: {{ character.id }},
                 _saving: false,
                 showResetModal: false,
+
+                // Roll formulas parsed from the same JSON blob diceRoller()
+                // loads later. The per-action-die menu's x-if gates for
+                // Double Attack / Counterattack / Lunge / Feint read these
+                // via this reactive field instead of ``window._diceRoller``
+                // - the dice-roller component initializes AFTER tracking
+                // (it's lower in the DOM), and the global reference isn't
+                // reactive, so Alpine never re-evaluated the gates and the
+                // knack menu items were invisible until some other
+                // reactive change (e.g. rolling initiative) happened to
+                // remount the template.
+                rollFormulas: (() => {
+                    try {
+                        const el = document.getElementById('roll-formulas');
+                        return el ? JSON.parse(el.textContent || '{}') : {};
+                    } catch (e) { return {}; }
+                })(),
 
                 async save() {
                     if (this._saving) return;
@@ -472,6 +567,7 @@
                             current_temp_void_points: this.tempVoidPoints,
                             adventure_state: this.adventureState,
                             action_dice: this.actionDice,
+                            precepts_pool: this.preceptsPool,
                         }),
                     });
                     this._saving = false;
@@ -493,12 +589,47 @@
                         return entry;
                     });
                     this.actionMenuOpen = null;
+                    // Kakita 5th Dan is once per combat round; rolling
+                    // initiative is the round boundary, so clear the flag.
+                    this.kakita5thDanUsed = false;
+                    delete this.adventureState.kakita_5th_dan_used;
                     this.save();
                 },
                 clearActionDice() {
                     this.actionDice = [];
                     this.actionMenuOpen = null;
                     this.resetMantisRound();
+                    this.save();
+                },
+                async rollPreceptsPool() {
+                    // Priest 3rd Dan: roll X dice (X = precepts skill rank),
+                    // all kept, 10s reroll on. The resulting values form the
+                    // pool that persists across combat rounds and is cleared
+                    // only by the per-adventure reset.
+                    const n = {{ school_abilities.get('priest_precepts_pool_size', 0) }};
+                    if (n <= 0) return;
+                    let animEnabled = true, soundEnabled = true;
+                    try {
+                        const p = JSON.parse(document.getElementById('user-prefs').textContent || '{}');
+                        animEnabled = p.dice_animation_enabled !== false;
+                        soundEnabled = p.dice_sound_enabled !== false;
+                    } catch (e) { /* keep defaults */ }
+                    const playSound = soundEnabled && window.L7RDice
+                        ? (k) => window.L7RDice.playDiceSound(k) : null;
+                    const dice = await window.L7RDice.rollAndAnimate(
+                        n, true, animEnabled, playSound, 'dice-animation-precepts'
+                    );
+                    this.preceptsPool = dice
+                        .map(d => ({ value: d.value }))
+                        .sort((a, b) => b.value - a.value);
+                    this.save();
+                },
+                clearPreceptsPool() {
+                    this.preceptsPool = [];
+                    // Clear any stale dice from the last roll's animation so
+                    // the tray is empty when the Roll Pool button reappears.
+                    const tray = document.getElementById('dice-animation-precepts');
+                    if (tray) tray.innerHTML = '';
                     this.save();
                 },
                 // Mantis Wave-Treader posture tracker helpers.
@@ -666,6 +797,41 @@
                     this.save();
                     return true;
                 },
+                // Kakita Phase 0 Interrupt: spend the two highest unspent
+                // non-athletics-only action dice and open the attack modal
+                // for an iaijutsu attack. The dice roller handles the modal
+                // side; the tracking bridge owns the dice so the spend
+                // persists even if the modal is closed without rolling.
+                _kakitaInterruptEligibleCount() {
+                    return (this.actionDice || [])
+                        .filter(d => !d.spent && !d.athletics_only).length;
+                },
+                _kakitaSpendTwoHighestForInterrupt() {
+                    const dice = this.actionDice || [];
+                    // Pair each unspent eligible die with its index, sort by
+                    // value DESCENDING, and spend the top two. "Highest" is
+                    // by raw value, so a Phase-0 die (value 0) is last pick -
+                    // which is the correct reading of the rules: the
+                    // interrupt costs your two HIGHEST (latest-phase) dice.
+                    const candidates = dice
+                        .map((d, idx) => ({d, idx}))
+                        .filter(x => !x.d.spent && !x.d.athletics_only)
+                        .sort((a, b) => (b.d.value || 0) - (a.d.value || 0));
+                    if (candidates.length < 2) return false;
+                    for (let k = 0; k < 2; k++) {
+                        const {d} = candidates[k];
+                        d.spent = true;
+                        d.spent_by = 'Kakita Phase 0 interrupt';
+                    }
+                    this.save();
+                    return true;
+                },
+                kakitaPhase0Interrupt() {
+                    if (!this._kakitaSpendTwoHighestForInterrupt()) return;
+                    if (window._diceRoller?.openKakitaPhase0InterruptModal) {
+                        window._diceRoller.openKakitaPhase0InterruptModal();
+                    }
+                },
                 spendActionDieForMantis3rdDan(i, posture, amount) {
                     // Called from the per-die action menu. Spends the clicked
                     // die and accumulates +X on the chosen posture's rolls
@@ -748,6 +914,10 @@
                     // Leftover action dice from a prior combat round also
                     // count as clearable state.
                     if ((this.actionDice || []).length > 0) return true;
+                    // A non-empty precepts pool (Priest 3rd Dan) carries across
+                    // combat rounds and is only cleared by the per-adventure
+                    // reset or its own Clear button.
+                    if ((this.preceptsPool || []).length > 0) return true;
                     return false;
                 },
 
@@ -765,6 +935,10 @@
                     if (nAD > 0) {
                         items.push('Clear ' + nAD + ' action ' + (nAD > 1 ? 'dice' : 'die'));
                     }
+                    const nPP = (this.preceptsPool || []).length;
+                    if (nPP > 0) {
+                        items.push('Clear precepts pool (' + nPP + ' ' + (nPP > 1 ? 'dice' : 'die') + ')');
+                    }
                     return items;
                 },
 
@@ -776,6 +950,10 @@
                     // Wipe any leftover action dice from a prior combat round.
                     this.actionDice = [];
                     this.actionMenuOpen = null;
+                    // Priest 3rd Dan precepts pool is per-adventure state.
+                    this.preceptsPool = [];
+                    const precTray = document.getElementById('dice-animation-precepts');
+                    if (precTray) precTray.innerHTML = '';
                     // Clear all combat-session bonuses
                     this.akodoBankedBonuses = [];
                     this.bayushiBankedFeintRaise = 0;
@@ -872,18 +1050,18 @@
                     <div class="text-sm text-ink/60">Light Wounds</div>
                     <div class="flex items-center gap-2">
                         {% if viewer_can_edit %}
-                        <button @click="lwMinusMenu = !lwMinusMenu"
-                                :disabled="lightWounds <= 0"
-                                data-action="lw-minus"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
-                        {% endif %}
-                        {% if viewer_can_edit %}
                         <button x-show="lightWounds > 0" x-cloak
                                 @click="$dispatch('open-wound-check')"
                                 data-action="roll-wound-check"
                                 class="text-xs bg-accent/10 hover:bg-accent/20 text-accent font-medium px-2 py-1 rounded transition-colors">
                             WC
                         </button>
+                        {% endif %}
+                        {% if viewer_can_edit %}
+                        <button @click="lwMinusMenu = !lwMinusMenu"
+                                :disabled="lightWounds <= 0"
+                                data-action="lw-minus"
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
                         {% endif %}
                         <span class="text-lg font-bold w-8 text-center" x-text="lightWounds"></span>
                         {% if viewer_can_edit %}
@@ -1129,10 +1307,15 @@
                 </div>
             </div>
             {% endif %}
-            {% if school_abilities.get('isawa_bank_wc_excess') %}
+            {# Shared Isawa Duelist 5th Dan / Shinjo Bushi 5th Dan banked
+               wound-check excess. Both schools push onto the same
+               ``bankedWcExcess`` state array, so this block just needs to
+               render whenever either ability is granted. #}
+            {% if school_abilities.get('isawa_bank_wc_excess') or school_abilities.get('shinjo_bank_parry_excess') %}
             <div class="mt-2 pt-2 border-t border-ink/10"
+                 data-testid="banked-wc-excess-tracking"
                  x-show="bankedWcExcess.length > 0" x-cloak>
-                <div class="text-sm text-ink/60 mb-1">Banked Wound Check Excess</div>
+                <div class="text-sm text-ink/60 mb-1">Banked 5th Dan Wound Check Bonuses</div>
                 <div class="space-y-1">
                     <template x-for="(b, i) in bankedWcExcess" :key="'wce'+i">
                         <div class="flex items-center justify-between gap-2 text-sm">
@@ -1431,26 +1614,26 @@
                                                     class="block w-full text-left px-3 py-2 hover:bg-parchment">Athletics Attack</button>
                                         </template>
                                         {% endif %}
-                                        <template x-if="!die.athletics_only && window._diceRoller?.formulas?.['knack:double_attack']">
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:double_attack']">
                                             <button type="button"
                                                     data-action-die-menu-item="double-attack"
                                                     @click="window._diceRoller?.rollForActionDie('knack:double_attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
                                                     class="block w-full text-left px-3 py-2 hover:bg-parchment">Double Attack</button>
                                         </template>
-                                        <template x-if="!die.athletics_only && window._diceRoller?.formulas?.['knack:counterattack']">
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:counterattack']">
                                             <button type="button"
                                                     data-action-die-menu-item="counterattack"
                                                     @click="window._diceRoller?.rollForActionDie('knack:counterattack', i); actionMenuOpen = null; actionMenuHoverRow = null"
                                                     class="block w-full text-left px-3 py-2 hover:bg-parchment">Counterattack</button>
                                         </template>
-                                        <template x-if="!die.athletics_only && window._diceRoller?.formulas?.['knack:lunge']">
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:lunge']">
                                             <button type="button"
                                                     data-action-die-menu-item="lunge"
                                                     @click="window._diceRoller?.rollForActionDie('knack:lunge', i); actionMenuOpen = null; actionMenuHoverRow = null"
                                                     class="block w-full text-left px-3 py-2 hover:bg-parchment">Lunge</button>
                                         </template>
                                         {# ── FEINT (roll modal, with void flyout) ── #}
-                                        <template x-if="!die.athletics_only && window._diceRoller?.formulas?.['knack:feint']">
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:feint']">
                                             <div class="relative"
                                                  @mouseenter="actionMenuHoverRow = i + '-feint'"
                                                  @mouseleave="actionMenuHoverRow = null">
@@ -1614,7 +1797,109 @@
                         </div>
                     </template>
                 </div>
+
+                {% if school_abilities.get('kakita_phase_zero') and viewer_can_edit %}
+                {# Kakita Duelist Special Ability: interrupt in Phase 0 for
+                   the cost of your 2 highest remaining action dice. The
+                   resulting attack uses iaijutsu (opens the iaijutsu attack
+                   variant in the attack modal). Per the rules the cost is
+                   paid when the declaration is made, so the spent flags
+                   stay set even if the player closes the attack modal
+                   without rolling. #}
+                <div class="mt-3">
+                    <button type="button"
+                            @click="kakitaPhase0Interrupt()"
+                            :disabled="_kakitaInterruptEligibleCount() < 2"
+                            data-action="kakita-phase-zero-interrupt"
+                            title="Spend your 2 highest unspent action dice to make a Phase 0 iaijutsu interrupt attack. The cost is paid as soon as you click - declaring the interrupt cannot be undone by closing the modal."
+                            class="px-3 py-1.5 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30 font-medium">
+                        Phase 0 Interrupt (-2 highest dice)
+                    </button>
+                </div>
+                {% endif %}
             </div>
+
+            {% if school_abilities.get('kakita_5th_dan_phase_zero_contest') and viewer_can_edit %}
+            {# Kakita 5th Dan: once per combat round at phase 0, contested
+               iaijutsu against an opponent. Lives outside the action-dice
+               section because the ability fires at the start of combat and
+               doesn't require action dice to have been rolled yet. #}
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Kakita 5th Dan</h3>
+                <button type="button"
+                        @click="window._diceRoller?.openKakita5thDanModal()"
+                        :disabled="kakita5thDanUsed"
+                        data-action="kakita-5th-dan-contest"
+                        title="Once per combat round at Phase 0, make a contested iaijutsu roll against an opponent. Damage scales +/- 1 die per 5-point gap."
+                        class="px-3 py-1.5 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30 font-medium">
+                    Phase 0 Contested Iaijutsu
+                </button>
+                <div x-show="kakita5thDanUsed" x-cloak class="text-xs text-ink/60 italic mt-1"
+                     data-testid="kakita-5th-used-note">
+                    Used this round. Roll initiative to refresh.
+                </div>
+            </div>
+            {% endif %}
+
+            {# ── Priest 3rd Dan precepts dice pool ──
+               Rolled at the start of combat (pool size = precepts skill rank).
+               Unlike action dice, persists across combat rounds - the Clear
+               button here and the per-adventure reset are the only things
+               that wipe it. The swap UI that lets pool dice replace rolled
+               dice on party members' rolls is added in a later phase. #}
+            {% if school_abilities.get('priest_precepts_pool') %}
+            <div class="mb-6" data-testid="precepts-pool-section">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide">
+                        Precepts Pool
+                        <span class="ml-1 text-xs text-ink/50 font-normal">
+                            ({{ school_abilities.get('priest_precepts_pool_size', 0) }} dice)
+                        </span>
+                    </h3>
+                    {% if viewer_can_edit %}
+                    <button type="button"
+                            x-show="preceptsPool.length > 0"
+                            @click="clearPreceptsPool()"
+                            data-action="clear-precepts-pool"
+                            class="text-xs text-ink/50 hover:text-accent">Clear</button>
+                    {% endif %}
+                </div>
+                {% if viewer_can_edit %}
+                <button type="button"
+                        x-show="preceptsPool.length === 0"
+                        @click="rollPreceptsPool()"
+                        data-action="roll-precepts-pool"
+                        :disabled="{{ school_abilities.get('priest_precepts_pool_size', 0) }} === 0"
+                        :title="{{ school_abilities.get('priest_precepts_pool_size', 0) }} === 0
+                            ? 'Raise your Precepts skill to at least 1 to create a pool.'
+                            : 'Roll your precepts pool for this combat.'"
+                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                    Roll Pool
+                </button>
+                {% endif %}
+                <div id="dice-animation-precepts"
+                     x-show="preceptsPool.length === 0"
+                     class="min-h-0 flex flex-wrap gap-2 mt-1"></div>
+                <div x-show="preceptsPool.length > 0"
+                     class="flex flex-wrap gap-2">
+                    <template x-for="(die, i) in preceptsPool" :key="i">
+                        <div class="relative">
+                            <div data-testid="precepts-pool-die"
+                                 :data-die-index="i"
+                                 :data-die-value="die.value">
+                                <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
+                                     class="die action-die"
+                                     :class="die.value === 10 ? 'two-digit' : ''">
+                                    <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+                                    <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
+                                          x-text="die.value"></text>
+                                </svg>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            {% endif %}
 
             {% if per_adventure %}
             <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-3">Per-Adventure Abilities</h3>
@@ -2267,6 +2552,7 @@
         "daily_max": 2 * _conv_rank,
     } | tojson }}</script>
     <script type="application/json" id="priest-conviction-allies">{{ priest_conviction_allies | tojson }}</script>
+    <script type="application/json" id="priest-precepts-allies">{{ priest_precepts_allies | tojson }}</script>
     <script type="application/json" id="party-priests">{{ party_priests | tojson }}</script>
     <script src="/static/js/dice.js?v={{ static_v('js/dice.js') }}"></script>
     <div x-data="diceRoller()" x-init="init()">
@@ -2861,7 +3147,7 @@
                                     <button x-show="!b.spent" type="button"
                                             @click="bankedWcExcess[i].spent = true; wcExcessSpentThisRoll += b.amount; baseTotal += b.amount; wcRollTotal += b.amount; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } window._trackingBridge?.saveBankedBonuses();"
                                             class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium">
-                                        Apply +<span x-text="b.amount"></span>
+                                        Apply +<span x-text="b.amount"></span> (5th Dan bonus)
                                     </button>
                                 </template>
                                 <button type="button"
@@ -2917,6 +3203,11 @@
                                     </span>
                                 </template>
                             </div>
+                            {# Priest 3rd Dan precepts pool block (display only in Phase 4;
+                               click-to-swap wired in Phase 5). #}
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                {{ precepts_pool_block('wc', 'wc-p') }}
+                            </div>
                             <button type="button" @click="wcAcceptResult()"
                                     class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium mt-2">
                                 Accept Result
@@ -2965,6 +3256,157 @@
         </div>
 
         {# ── Attack Modal ── #}
+        {# ── Kakita 5th Dan Phase-0 contested-iaijutsu modal ── #}
+        <div x-show="k5Open" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="kakita-5th-dan">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent">Kakita 5th Dan: Phase 0 Contest</h3>
+                    <button type="button" @click="closeKakita5thDanModal()"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+                <div class="text-xs text-gold bg-parchment rounded p-2 font-medium mb-3"
+                     data-testid="kakita-5th-banner">
+                    Phase 0 contested iaijutsu. Attacker phase = 0.
+                </div>
+
+                {# PRE-ROLL #}
+                <div x-show="k5Phase === 'pre'" class="space-y-3">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" x-model="k5OpponentHasIaijutsu"
+                               data-action="kakita-5th-opponent-has-iaijutsu"
+                               class="rounded border-ink/30">
+                        <span>Opponent has iaijutsu knack</span>
+                    </label>
+                    <div x-show="!k5OpponentHasIaijutsu" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Opponent rolls attack instead; you gain +1 free raise (+5 flat) on your iaijutsu roll.
+                    </div>
+
+                    {% if school_abilities.get('kakita_3rd_dan_defender_phase_bonus_x') %}
+                    <div class="text-xs text-ink/60 bg-parchment rounded p-2 flex flex-wrap items-center gap-2">
+                        <span>Kakita 3rd Dan: die 0, defender's first action in phase</span>
+                        <select x-model.number="k5DefenderPhase"
+                                data-action="kakita-5th-defender-phase"
+                                class="border rounded px-1 py-0.5 text-xs">
+                            <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                            <option value="11">no remaining actions</option>
+                        </select>
+                        <span class="text-ink/50">
+                            (+<span data-testid="kakita-5th-3rd-dan-bonus"
+                                    x-text="(schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0)
+                                            * Math.max(0, (parseInt(k5DefenderPhase, 10) || 0))"></span>
+                            from 3rd Dan,
+                            X = <span x-text="schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0"></span>)
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    <div class="text-xs text-ink/60 bg-parchment rounded p-2"
+                         data-testid="kakita-5th-prebonus">
+                        Total pre-roll bonus: +<span x-text="_kakita5thPreRollBonus()"></span>
+                    </div>
+
+                    <button type="button"
+                            @click="rollKakita5thDanContest()"
+                            data-action="kakita-5th-roll"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                        Roll Iaijutsu (contested)
+                    </button>
+                </div>
+
+                {# CONTEST RESULT #}
+                <div x-show="k5Phase === 'result'" x-cloak class="space-y-3">
+                    <div class="text-base font-mono font-bold text-ink/80"
+                         data-testid="kakita-5th-formula"
+                         x-text="k5FormulaText"></div>
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in k5RollDice" :key="i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3 text-lg font-bold">
+                        Your roll: <span class="text-accent" data-testid="kakita-5th-total" x-text="k5RollTotal"></span>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm">Opponent's iaijutsu/attack roll:</label>
+                        <input type="number" x-model.number="k5OpponentRoll" min="0"
+                               data-action="kakita-5th-opponent-roll"
+                               class="w-20 border rounded px-2 py-1 text-sm text-center">
+                    </div>
+                    <div x-show="k5OpponentRoll > 0" x-cloak
+                         class="text-sm"
+                         data-testid="kakita-5th-outcome">
+                        <span x-show="k5RollTotal > k5OpponentRoll" class="text-green-700 font-medium">
+                            Won by <span x-text="k5RollTotal - k5OpponentRoll"></span>.
+                        </span>
+                        <span x-show="k5RollTotal < k5OpponentRoll" class="text-red-700 font-medium">
+                            Lost by <span x-text="k5OpponentRoll - k5RollTotal"></span>.
+                        </span>
+                        <span x-show="k5RollTotal === k5OpponentRoll" class="text-ink/60 font-medium">
+                            Tied.
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm">Base weapon damage</label>
+                        <input type="number" x-model.number="k5WeaponRolled" min="0" max="10"
+                               data-action="kakita-5th-weapon-rolled"
+                               class="w-16 border rounded px-2 py-1 text-sm text-center">
+                        <span class="font-mono">k</span>
+                        <input type="number" x-model.number="k5WeaponKept" min="1" max="10"
+                               data-action="kakita-5th-weapon-kept"
+                               class="w-16 border rounded px-2 py-1 text-sm text-center">
+                    </div>
+                    <button type="button"
+                            @click="rollKakita5thDanDamage()"
+                            data-action="kakita-5th-roll-damage"
+                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                        Roll Damage
+                    </button>
+                </div>
+
+                {# DAMAGE RESULT #}
+                <div x-show="k5Phase === 'damage-result'" x-cloak class="space-y-3">
+                    <div class="bg-ink/5 rounded p-3 text-base">
+                        <div>Your iaijutsu: <span class="font-bold" x-text="k5RollTotal"></span></div>
+                        <div>Opponent: <span class="font-bold" x-text="k5OpponentRoll"></span></div>
+                        <div x-show="k5DamageDiceAdjust !== 0" x-cloak
+                             data-testid="kakita-5th-damage-adjust">
+                            Damage dice adjustment:
+                            <span class="font-bold" :class="k5DamageDiceAdjust > 0 ? 'text-green-700' : 'text-red-700'"
+                                  x-text="(k5DamageDiceAdjust > 0 ? '+' : '') + k5DamageDiceAdjust"></span>
+                        </div>
+                    </div>
+                    <div class="text-sm">
+                        <span class="text-ink/60">Damage dice:</span>
+                        <template x-for="(d, i) in k5DamageDice" :key="i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                        <span x-show="k5DamageDice.length === 0" class="text-ink/40 italic">no dice rolled</span>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="font-bold text-2xl text-accent"
+                             data-testid="kakita-5th-damage-total"
+                             x-text="k5DamageTotal + ' damage'"></div>
+                    </div>
+                    <button type="button" @click="closeKakita5thDanModal()"
+                            class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div x-show="atkModalOpen" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
              data-modal="attack">
@@ -3141,7 +3583,11 @@
                         <select x-model.number="atkShinjoPhase"
                                 data-action="shinjo-phase"
                                 class="border rounded px-1 py-0.5 text-xs">
-                            <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="p">
+                            {# An action die "comes up" in its own phase, so
+                               spending it earlier than that is impossible -
+                               the dropdown omits the sub-die-value phases
+                               rather than offering clamped-to-zero options. #}
+                            <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter(p => p >= (_shinjoDieToSpend()?.value || 1))" :key="p">
                                 <option :value="p" x-text="p"></option>
                             </template>
                         </select>
@@ -3156,10 +3602,43 @@
                        in this phase; future phases add the interrupt /
                        5th-Dan entry points that also route through here). #}
                     <div x-show="atkFormula?.attack_variant === 'iaijutsu'
-                                 && schoolAbilities.kakita_phase_zero" x-cloak
+                                 && schoolAbilities.kakita_phase_zero
+                                 && !atkKakitaInterrupt" x-cloak
                          data-testid="kakita-phase-zero-attack-note"
                          class="text-xs text-gold bg-parchment rounded p-2 font-medium">
                         Kakita Phase 0 iaijutsu attack.
+                    </div>
+                    <div x-show="atkKakitaInterrupt" x-cloak
+                         data-testid="kakita-phase-zero-interrupt-note"
+                         class="text-xs text-gold bg-parchment rounded p-2 font-medium">
+                        Phase 0 Kakita interrupt attack (2 highest dice spent).
+                    </div>
+
+                    {# Kakita Duelist 3rd Dan defender-phase bonus. The player
+                       picks the defender's next action phase from a 1-10
+                       dropdown (plus an 11-labeled "no remaining actions"
+                       default per the rules). Suppressed when the initiative
+                       warning would fire or no action die will be spent,
+                       mirroring the Shinjo / Doji 4th Dan controls above. #}
+                    <div x-show="atkFormula?.kakita_3rd_dan_defender_phase_bonus
+                                 && (schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0) > 0
+                                 && initiativeWarningVariant() === null
+                                 && (_shinjoDieToSpend() || atkForceAttackerPhase !== null)" x-cloak
+                         data-testid="kakita-3rd-dan-bonus"
+                         class="text-xs text-ink/60 bg-parchment rounded p-2 flex flex-wrap items-center gap-2">
+                        <span>Kakita 3rd Dan: die <span class="font-mono" x-text="_kakita3rdDanAttackerPhase()"></span>, defender's next action in phase</span>
+                        <select x-model.number="atkKakitaDefenderPhase"
+                                data-action="kakita-3rd-dan-defender-phase"
+                                class="border rounded px-1 py-0.5 text-xs">
+                            <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                            <option value="11">no remaining actions</option>
+                        </select>
+                        <span class="text-ink/50" data-testid="kakita-3rd-dan-bonus-display">
+                            (+<span x-text="_kakita3rdDanBonus()"></span> to the roll,
+                            X = <span x-text="schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0"></span>)
+                        </span>
                     </div>
 
                     {# Ikoma 4th Dan: 10-dice floor on unparried damage #}
@@ -3298,6 +3777,13 @@
                             &bull; +<span x-text="formula?.shinjo_phase_bonus"></span> from Shinjo Bushi (die
                             <span x-text="formula?.shinjo_phase_bonus_die_value"></span>
                             held to phase <span x-text="formula?.shinjo_phase_bonus_phase"></span>)
+                        </div>
+                        <div x-show="formula?.kakita_3rd_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
+                             data-testid="kakita-3rd-dan-breakdown">
+                            &bull; +<span x-text="formula?.kakita_3rd_dan_bonus"></span> from Kakita 3rd Dan (die
+                            <span x-text="formula?.kakita_3rd_dan_attacker_phase"></span>,
+                            defender phase <span x-text="formula?.kakita_3rd_dan_defender_phase"></span>,
+                            X = <span x-text="formula?.kakita_3rd_dan_x"></span>)
                         </div>
                         <div x-show="shosuroLowest3Bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="shosuroLowest3Bonus"></span> from Shosuro 5th Dan (lowest 3 dice added to result)
@@ -3475,6 +3961,10 @@
                             </div>
                         </template>
 
+                        {# Priest 3rd Dan precepts pool block (display only in Phase 4;
+                           click-to-swap wired in Phase 5). #}
+                        {{ precepts_pool_block('attack', 'atk-p') }}
+
                         {# Mirumoto 3rd Dan: spend points for +2 on attack #}
                         <div x-show="schoolAbilities.mirumoto_round_points && ((window._trackingBridge?.mirumotoRoundPoints || 0) > 0 || mirumotoPointsSpentThisRoll > 0)" x-cloak class="mt-2 pt-2 border-t border-green-200">
                             <div class="flex items-center gap-2 text-sm">
@@ -3581,9 +4071,11 @@
                         </button>
                     </div>
 
-                    {# MISS #}
+                    {# MISS — display the effective TN, which is the +20
+                       elevated TN on a double attack. Showing the base TN
+                       here would contradict the hit/miss calculation. #}
                     <div x-show="!atkHit" x-cloak class="bg-red-50 border border-red-300 rounded p-3">
-                        <div class="font-bold text-red-800">MISSED - needed <span x-text="atkTN"></span>, rolled <span x-text="atkRollTotal"></span></div>
+                        <div class="font-bold text-red-800">MISSED - needed <span x-text="atkEffectiveTN()"></span>, rolled <span x-text="atkRollTotal"></span></div>
                         {# Discretionary bonuses might turn a miss into a hit #}
                         <div x-show="atkFormula?.adventure_raises_max_per_roll > 0" x-cloak class="mt-2">
                             <div class="flex items-center gap-2 text-sm">
@@ -3822,6 +4314,11 @@
                             </div>
                         </div>
                     </template>
+
+                    {# Priest 3rd Dan precepts pool block (display only in Phase 4;
+                       click-to-swap wired in Phase 5). #}
+                    {{ precepts_pool_block('damage', 'dmg-p') }}
+
                     {# Lucky reroll for damage #}
                     <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyDamage()"
                             class="bg-gold/20 hover:bg-gold/30 text-ink px-4 py-2 rounded text-sm font-medium">
@@ -4361,6 +4858,16 @@
                             from <span x-text="mirumotoPointsSpentThisRoll"></span> 3rd Dan point<span x-show="mirumotoPointsSpentThisRoll > 1">s</span>
                         </div>
 
+                        {# Shinjo Bushi: +2*(phases held) once the player picks the phase #}
+                        <div x-show="shinjoParryBonusApplied > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5"
+                             data-testid="shinjo-parry-phase-breakdown">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="shinjoParryBonusApplied"></span>
+                            from Shinjo Bushi (die <span x-text="shinjoParryDieValue"></span>
+                            held to phase <span x-text="shinjoParryPhase"></span>)
+                        </div>
+
                         {# Conviction points spent on this roll #}
                         <div x-show="convictionSpentThisRoll > 0" x-cloak
                              class="text-xs text-ink/70 list-disc list-inside mt-0.5">
@@ -4468,6 +4975,44 @@
                             </div>
                         </div>
                     </template>
+
+                    {# Priest 3rd Dan precepts pool block (display only in Phase 4;
+                       click-to-swap wired in Phase 5). #}
+                    {{ precepts_pool_block('roll', 'roll-p') }}
+                    </div>
+
+                    {# Shinjo Bushi Special Ability: pick the phase the parry
+                       action takes place in so we can apply +2X where X is
+                       the number of phases the spent die was held. Asked
+                       post-roll (unlike the attack modal, which asks pre-roll
+                       because the bonus feeds into the hit-probability chart)
+                       - on a parry we just need to adjust the displayed
+                       total. #}
+                    <div x-show="phase === 'done'
+                                 && schoolAbilities.shinjo_phase_bonus
+                                 && formula?.shinjo_phase_bonus_attack
+                                 && shinjoParryDieValue !== null"
+                         x-cloak
+                         data-testid="shinjo-parry-phase-bonus"
+                         class="bg-parchment rounded p-2 text-sm flex flex-wrap items-center gap-2">
+                        <span>Shinjo Bushi: die <span class="font-mono" x-text="shinjoParryDieValue"></span> spent at phase</span>
+                        <select x-model.number="shinjoParryPhase"
+                                @change="_applyShinjoParryBonus()"
+                                data-action="shinjo-parry-phase"
+                                class="border rounded px-1 py-0.5 text-xs">
+                            <option :value="null">-</option>
+                            {# Sub-die-value phases are impossible (the die
+                               hasn't "come up" yet), so the picker only offers
+                               phases >= the spent die's value. #}
+                            <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter(p => p >= (shinjoParryDieValue || 1))" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                        </select>
+                        <span x-show="shinjoParryBonusApplied > 0" x-cloak class="text-ink/60"
+                              data-testid="shinjo-parry-phase-bonus-display">
+                            (+<span x-text="shinjoParryBonusApplied"></span> to the roll,
+                            held <span x-text="(shinjoParryPhase || 0) - (shinjoParryDieValue || 0)"></span> phase<span x-show="((shinjoParryPhase || 0) - (shinjoParryDieValue || 0)) !== 1">s</span>)
+                        </span>
                     </div>
 
                     {# Mirumoto 3rd Dan: spend points for +2 on parry/attack in regular roll #}
@@ -4982,6 +5527,16 @@
             priestAllies: [],  // [{priest_id, name, rank, max_per_roll, pool_max, used}]
             partyPriests: [],  // [{priest_id, name}] — any priest in the gaming group
             priestAllySpentThisRoll: {},  // {priest_id: N spent on the current roll}
+            // Priest 3rd Dan precepts pool exposed by party-member priests.
+            // Shape: [{priest_id, name, pool: [{value}, ...]}]. Self is never
+            // included - the priest's own sheet uses preceptsPool directly.
+            priestPreceptsAllies: [],
+            // Swap menu state, keyed by "<priest_id>:<poolDieIndex>" to
+            // stay unique across simultaneously-available ally pools.
+            preceptsPoolMenuOpen: null,
+            // Structured swap events for the current roll. Rendered as an
+            // auxiliary bonus-source list under each result panel.
+            preceptsPoolSwapBonuses: [],
             raisesSpentThisRoll: 0,
             // Courtier 5th Dan optional TN/contested bonus
             courtier5thApplied: false,
@@ -4994,6 +5549,13 @@
             luckyPrevActionDice: [],
             luckyOriginalWasHigher: false,
             perRoundResetMessages: [],
+            // Shinjo Bushi phase bonus on the parry result modal. The spent
+            // die's value is snapshot at roll time (before the attack-die
+            // spend mutates its displayed value); the player then picks the
+            // phase post-roll and the bonus is applied live to baseTotal.
+            shinjoParryPhase: null,
+            shinjoParryDieValue: null,
+            shinjoParryBonusApplied: 0,
 
             // Pools that were already full are skipped so the initiative
             // modal doesn't show a "refreshed" message when nothing changed.
@@ -5322,6 +5884,46 @@
             // the action die's value; the player picks the current phase
             // from a dropdown on the attack modal's pre-roll page.
             atkShinjoPhase: 1,
+            // Kakita Duelist 3rd Dan: attack bonus = X * (defender's next
+            // phase - attacker's phase), X = attack skill. Attacker phase
+            // is the to-be-spent action die's value (Phase-0 dice count as
+            // 0). Defender phase defaults to 11 = "no remaining actions
+            // this round", which per the rules yields the maximum bonus.
+            atkKakitaDefenderPhase: 11,
+            // Override for the attacker phase used by the Kakita 3rd Dan
+            // bonus. The normal flow reads the to-be-spent action die's
+            // value; the Phase-0 interrupt entry point sets this to 0
+            // instead, since declaring the interrupt spends the 2 highest
+            // dice as a cost (not as "the phase the attack happens in").
+            atkForceAttackerPhase: null,
+            // True when the current attack modal is being driven by the
+            // Kakita Phase 0 interrupt entry point. Distinguishes the
+            // interrupt banner from the "spent from a Phase-0 die"
+            // banner - the former mentions the 2-highest-dice cost.
+            atkKakitaInterrupt: false,
+            // Kakita 5th Dan contested iaijutsu modal. Its own dedicated
+            // lightweight modal (not the attack modal) because the flow is
+            // contested-roll + auto-scaling damage rather than TN-based
+            // attack. attacker_phase is hard-coded to 0 so the 3rd Dan
+            // bonus (if applicable) uses defender_phase * X directly.
+            k5Open: false,
+            k5Phase: 'pre',  // 'pre' | 'result' | 'damage-result'
+            k5OpponentHasIaijutsu: true,
+            k5DefenderPhase: 11,
+            k5WeaponRolled: {{ 1 if character.school == 'brotherhood_of_shinsei_monk' else (4 if school and school.category in ('bushi', 'counterattack', 'duelist', 'investigator') else 3) }},
+            k5WeaponKept: {{ 3 if character.school == 'brotherhood_of_shinsei_monk' else 2 }},
+            k5RollTotal: 0,
+            k5RollDice: [],
+            k5FormulaText: '',
+            k5NoIaijutsuBonus: 0,
+            k5KakitaBonus: 0,
+            k5OpponentRoll: 0,
+            k5DamageTotal: 0,
+            k5DamageDice: [],
+            k5DamageRolled: 0,
+            k5DamageKept: 0,
+            k5DamageFlat: 0,
+            k5DamageDiceAdjust: 0,
             // Wound check
             wcModalOpen: false,
             wcPhase: 'pre',  // 'pre' | 'rolling' | 'result'
@@ -5415,6 +6017,11 @@
                         document.getElementById('priest-conviction-allies').textContent || '[]'
                     );
                 } catch (e) { this.priestAllies = []; }
+                try {
+                    this.priestPreceptsAllies = JSON.parse(
+                        document.getElementById('priest-precepts-allies').textContent || '[]'
+                    );
+                } catch (e) { this.priestPreceptsAllies = []; }
                 try {
                     this.partyPriests = JSON.parse(
                         document.getElementById('party-priests').textContent || '[]'
@@ -5981,6 +6588,63 @@
                 return `${label}: total ${this.baseTotal}`;
             },
 
+            // Shinjo Bushi Special Ability on parry rolls: capture the spent
+            // action die's value at the start of the roll so the result modal
+            // can show a phase-selection prompt. The die has already been
+            // marked spent by _autoSpendActionDie, but its value is preserved
+            // on the tracking bridge. If the roll isn't parry-flavoured (or
+            // the character isn't Shinjo Bushi), reset state so a previous
+            // roll's picker doesn't leak into this one.
+            _captureShinjoParryDieValue(formula) {
+                const eligible = formula?.shinjo_phase_bonus_attack
+                        && this.schoolAbilities?.shinjo_phase_bonus;
+                if (!eligible) {
+                    this.shinjoParryPhase = null;
+                    this.shinjoParryDieValue = null;
+                    this.shinjoParryBonusApplied = 0;
+                    return;
+                }
+                const idx = this._actionDieSpentIndex;
+                const t = window._trackingBridge;
+                const die = (idx != null && idx >= 0 && t)
+                    ? (t.actionDice || [])[idx] : null;
+                this.shinjoParryDieValue = die ? (die.value || 0) : null;
+                this.shinjoParryPhase = null;
+                this.shinjoParryBonusApplied = 0;
+            },
+
+            _shinjoParryPendingBonus() {
+                // Live preview of the bonus the dropdown would apply given
+                // the currently-selected phase; 0 when nothing is selected
+                // yet, the die wasn't captured, or the phase is <= the die's
+                // value (so the die hadn't been held any phases).
+                const phase = parseInt(this.shinjoParryPhase, 10);
+                if (!Number.isFinite(phase) || phase <= 0) return 0;
+                const dieVal = this.shinjoParryDieValue;
+                if (dieVal == null) return 0;
+                return 2 * Math.max(0, phase - dieVal);
+            },
+
+            _applyShinjoParryBonus() {
+                // Called from the phase <select>'s @change. Roll the new
+                // bonus into baseTotal and stamp phase metadata onto the
+                // formula so the breakdown line renders with labels. The
+                // delta approach keeps repeated changes (or a change then
+                // back to "-") idempotent without having to re-derive the
+                // total from scratch.
+                const newBonus = this._shinjoParryPendingBonus();
+                const delta = newBonus - (this.shinjoParryBonusApplied || 0);
+                this.baseTotal += delta;
+                this.shinjoParryBonusApplied = newBonus;
+                if (this.formula) {
+                    const phase = parseInt(this.shinjoParryPhase, 10) || 0;
+                    this.formula.shinjo_phase_bonus = newBonus;
+                    this.formula.shinjo_phase_bonus_phase = phase;
+                    this.formula.shinjo_phase_bonus_die_value =
+                        this.shinjoParryDieValue || 0;
+                }
+            },
+
             _describeFeintForDie(key) {
                 // key is "knack:feint" or "knack:feint:<ring>" - strip the ring.
                 return `Feint: total ${this.baseTotal}`;
@@ -6018,6 +6682,7 @@
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
+                this.preceptsPoolSwapBonuses = [];
                 this.courtier5thApplied = false;
                 this.dojiOpponentResult = 0;
                 this.dojiTnRollApplied = false;
@@ -6028,6 +6693,7 @@
                 const f = { ...this.formulas[key] };
                 f.flat += extraFlat;
                 f.bonuses = [...(f.bonuses || []), { label: reason, amount: extraFlat }];
+                this._captureShinjoParryDieValue(f);
 
                 if (voidSpent > 0 && option) {
                     f.rolled += voidSpent;
@@ -6070,6 +6736,7 @@
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
+                this.preceptsPoolSwapBonuses = [];
                 this.courtier5thApplied = false;
                 this.dojiOpponentResult = 0;
                 this.dojiTnRollApplied = false;
@@ -6080,6 +6747,7 @@
                 const f = { ...this.formulas[key] };
                 this.perRoundResetMessages = f.is_initiative
                     ? this._resetPerRoundAbilities() : [];
+                this._captureShinjoParryDieValue(f);
 
                 if (owSpent > 0) {
                     const cap = f.otherworldliness_capacity || 0;
@@ -6504,6 +7172,201 @@
                 }
             },
 
+            // --- Priest 3rd Dan precepts pool display ---
+            _isPreceptsPoolQualifyingRoll(modal) {
+                // modal: 'attack' | 'damage' | 'wc' | 'roll'.
+                // Returns true when the current modal's active roll is an
+                // attack / parry / damage / wound check per the 3rd Dan rules.
+                // Iaijutsu duel rolls (knack:iaijutsu, knack:iaijutsu:strike)
+                // are excluded because they're not "attack, parry, wound
+                // check, or damage" rolls per the user's spec - they're a
+                // separate contested roll. The Kakita combat iaijutsu attack
+                // (knack:iaijutsu:attack) IS included because it's an attack
+                // roll - is_attack_type is set on it.
+                if (modal === 'attack') {
+                    return !!(this.atkFormula && this.atkFormula.is_attack_type);
+                }
+                if (modal === 'damage') {
+                    // Damage panel is only visible when atkPhase hits
+                    // 'damage-result', so the block reuses the same flag.
+                    return !!(this.atkFormula && this.atkFormula.is_attack_type);
+                }
+                if (modal === 'wc') {
+                    return true;   // wound-check modal only ever hosts wound check rolls
+                }
+                // Generic dice-roller modal: parry, athletics:parry, and
+                // any attack-type knack roll that goes through it.
+                const f = this.formula;
+                if (f && f.is_attack_type) return true;
+                if (this.currentRollKey === 'parry') return true;
+                if (this.currentRollKey === 'athletics:parry') return true;
+                return false;
+            },
+            preceptsPoolAlliesForThisRoll(modal) {
+                // Returns [{priest_id, name, pool, isSelf}, ...]. Empty
+                // list when the current roll doesn't qualify or no pool
+                // is available anywhere.
+                if (!this._isPreceptsPoolQualifyingRoll(modal)) return [];
+                const out = [];
+                if (this.schoolAbilities && this.schoolAbilities.priest_precepts_pool) {
+                    const t = window._trackingBridge;
+                    const selfPool = (t && Array.isArray(t.preceptsPool)) ? t.preceptsPool : [];
+                    if (selfPool.length > 0) {
+                        out.push({
+                            priest_id: 'self',
+                            name: this._charName || 'Your',
+                            pool: selfPool,
+                            isSelf: true,
+                        });
+                    }
+                }
+                for (const a of (this.priestPreceptsAllies || [])) {
+                    if ((a.pool || []).length > 0) {
+                        out.push({
+                            priest_id: a.priest_id,
+                            name: a.name,
+                            pool: a.pool,
+                            isSelf: false,
+                        });
+                    }
+                }
+                return out;
+            },
+
+            _preceptsModalKeptCount() {
+                // The kept-count (N for "keep top N") of the active modal's
+                // roll. All qualifying rolls keep the highest N.
+                if (this.atkModalOpen && this.atkPhase === 'damage-result') {
+                    return this.atkDamageKept || 0;
+                }
+                if (this.atkModalOpen) {
+                    return (this.atkFormula && this.atkFormula.kept) || 0;
+                }
+                if (this.wcModalOpen) {
+                    return (this.formulas && this.formulas['wound_check']
+                            && this.formulas['wound_check'].kept) || 0;
+                }
+                return (this.formula && this.formula.kept) || 0;
+            },
+            _preceptsActiveModal() {
+                if (this.atkModalOpen && this.atkPhase === 'damage-result') return 'damage';
+                if (this.atkModalOpen) return 'attack';
+                if (this.wcModalOpen) return 'wc';
+                return 'roll';
+            },
+            preceptsSwapOptions(priest, poolDieValue) {
+                // Per-pool-die dropdown options. Rule: pool_die.value > rolled_die.value
+                // strictly (equal-value is a no-op, excluded for both self and ally).
+                // Returns a single disabled entry when nothing qualifies so the
+                // menu still gives the user a clear "nope" signal.
+                const rolled = Array.isArray(this.finalDice) ? this.finalDice : [];
+                const eligible = rolled.filter(d => d && d.value < poolDieValue);
+                const values = Array.from(new Set(eligible.map(d => d.value))).sort((a, b) => a - b);
+                if (values.length === 0) {
+                    return [{ disabled: true, label: 'No lower rolled dice to swap with' }];
+                }
+                return values.map(v => ({ value: v, label: 'Swap with a rolled ' + v }));
+            },
+            swapPreceptsDie(priest, poolDieIndex, rolledValue) {
+                // Commit a swap: the clicked pool die moves into finalDice,
+                // the replaced rolled die returns to the priest's pool. Kept
+                // set is recomputed (top-N by value), totals shift by the
+                // change in keptSum, and a structured bonus-source entry is
+                // appended for display. Pool change is persisted per-owner.
+                if (!Array.isArray(this.finalDice)) return;
+                const rolledIdx = this.finalDice.findIndex(
+                    d => d && d.value === rolledValue
+                );
+                if (rolledIdx < 0) return;
+                const pool = priest && Array.isArray(priest.pool) ? priest.pool : null;
+                if (!pool) return;
+                const poolDie = pool[poolDieIndex];
+                if (!poolDie) return;
+                const poolValue = poolDie.value;
+                if (poolValue <= rolledValue) return;  // enforcement: strictly greater
+
+                const prevRolledValue = this.finalDice[rolledIdx].value;
+
+                this.finalDice.splice(rolledIdx, 1, {
+                    value: poolValue,
+                    kept: false,
+                    parts: [poolValue],
+                });
+                pool.splice(poolDieIndex, 1, { value: prevRolledValue });
+
+                // Re-kept: keep the top-N by value.
+                const keptCount = this._preceptsModalKeptCount();
+                const sortedIdx = this.finalDice
+                    .map((d, i) => ({ i, v: d.value }))
+                    .sort((a, b) => a.v - b.v);
+                const keptIdxSet = new Set(
+                    sortedIdx.slice(sortedIdx.length - keptCount).map(x => x.i)
+                );
+                for (let i = 0; i < this.finalDice.length; i++) {
+                    this.finalDice[i] = {
+                        ...this.finalDice[i],
+                        kept: keptIdxSet.has(i),
+                    };
+                }
+                this.keptDice = this.finalDice.filter(d => d.kept);
+                const newKeptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+
+                // Propagate the new keptSum to the active modal's total.
+                const modal = this._preceptsActiveModal();
+                const delta = newKeptSum - this.keptSum;
+                this.keptSum = newKeptSum;
+                this.baseTotal += delta;
+                if (modal === 'attack') {
+                    this.atkRollTotal += delta;
+                    if (typeof this._atkUpdateHitState === 'function') {
+                        this._atkUpdateHitState();
+                    }
+                    if (typeof this._refreshAttackDieTooltip === 'function') {
+                        this._refreshAttackDieTooltip();
+                    }
+                } else if (modal === 'damage') {
+                    this.atkDamageTotal += delta;
+                    if (typeof this._refreshAttackDieTooltip === 'function') {
+                        this._refreshAttackDieTooltip();
+                    }
+                } else if (modal === 'wc') {
+                    this.wcRollTotal += delta;
+                    if (typeof this._wcUpdateMargin === 'function') {
+                        this._wcUpdateMargin();
+                    }
+                }
+
+                this.preceptsPoolSwapBonuses = [
+                    ...(this.preceptsPoolSwapBonuses || []),
+                    {
+                        priestId: priest.priest_id,
+                        priestName: priest.name,
+                        isSelf: !!priest.isSelf,
+                        rolledValueBefore: prevRolledValue,
+                        poolValueAfter: poolValue,
+                    },
+                ];
+
+                if (priest.isSelf) {
+                    const t = window._trackingBridge;
+                    if (t) {
+                        t.preceptsPool = pool;
+                        t.save();
+                    }
+                } else {
+                    this._postPreceptsPoolReplace(priest.priest_id, pool);
+                }
+
+                this.preceptsPoolMenuOpen = null;
+            },
+            _postPreceptsPoolReplace(priestId, pool) {
+                fetch('/characters/' + priestId + '/precepts-pool', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ pool }),
+                }).catch(() => { /* best-effort */ });
+            },
+
             // --- Priest 5th Dan ally conviction ---
             priestAllySpent(priestId) {
                 return this.priestAllySpentThisRoll[priestId] || 0;
@@ -6811,7 +7674,18 @@
                 this.atkOtakuTradeDice = false;
                 this.atkDojiUntouchedTarget = false;
                 this.atkDojiPhase = 1;
-                this.atkShinjoPhase = 1;
+                // Default the Shinjo phase picker to the to-be-spent die's
+                // value so the dropdown's initial selection matches its own
+                // first option (the phase-bonus dropdown starts at die_value
+                // since earlier phases are impossible).
+                this.atkShinjoPhase = this._shinjoDieToSpend()?.value || 1;
+                this.atkKakitaDefenderPhase = 11;
+                // Phase-4 interrupt callers set atkForceAttackerPhase AFTER
+                // openAttackModal - so the default reset lives here in the
+                // generic entrypoint, and the interrupt path overwrites it
+                // immediately after calling openAttackModal.
+                this.atkForceAttackerPhase = null;
+                this.atkKakitaInterrupt = false;
                 // Athletics-attack TN = 5 + 10*parry; regular TN = 5 + 5*parry.
                 // Reset atkTN to a sane default if the previous value isn't one of
                 // the new variant's dropdown options (so the <select> isn't blank).
@@ -6824,6 +7698,159 @@
                 this.atkParrySkill = Math.max(1, Math.floor((this.atkTN - 5) / tnStep));
                 this.atkShowCustomTN = false;
                 this.atkModalOpen = true;
+            },
+
+            // Kakita Phase 0 interrupt: the tracking bridge spent the two
+            // highest action dice, we open the iaijutsu-attack modal here
+            // and force the attacker phase to 0 (so the 3rd Dan bonus, if
+            // applicable, computes as X * defender_phase and the usual
+            // _autoSpendActionDie path does NOT fire a second time).
+            openKakitaPhase0InterruptModal() {
+                if (!this.formulas['knack:iaijutsu:attack']) return;
+                this.openAttackModal('knack:iaijutsu:attack', null);
+                this.atkForceAttackerPhase = 0;
+                this.atkKakitaInterrupt = true;
+            },
+
+            // --- Kakita 5th Dan: Phase-0 contested iaijutsu modal ---
+
+            openKakita5thDanModal() {
+                const t = window._trackingBridge;
+                if (t?.kakita5thDanUsed) return;
+                this.k5Phase = 'pre';
+                this.k5OpponentHasIaijutsu = true;
+                this.k5DefenderPhase = 11;
+                this.k5RollTotal = 0;
+                this.k5RollDice = [];
+                this.k5FormulaText = '';
+                this.k5NoIaijutsuBonus = 0;
+                this.k5KakitaBonus = 0;
+                this.k5OpponentRoll = 0;
+                this.k5DamageTotal = 0;
+                this.k5DamageDice = [];
+                this.k5DamageRolled = 0;
+                this.k5DamageKept = 0;
+                this.k5DamageFlat = 0;
+                this.k5DamageDiceAdjust = 0;
+                this.k5Open = true;
+            },
+
+            closeKakita5thDanModal() {
+                this.k5Open = false;
+            },
+
+            _kakita5thIaijutsuFormula() {
+                // Prefer the Kakita-only iaijutsu:attack variant (carries
+                // the Phase-2 is_attack_type + Phase-4 3rd-Dan flag); fall
+                // back to the regular iaijutsu knack formula otherwise.
+                return this.formulas['knack:iaijutsu:attack']
+                    || this.formulas['knack:iaijutsu'];
+            },
+
+            _kakita5thPreRollBonus() {
+                // Reports the sum of pre-roll bonuses that will be added
+                // to the contested iaijutsu roll for display on the 'pre'
+                // page. The 3rd Dan bonus uses attacker_phase=0 per the
+                // 5th Dan rules.
+                let bonus = 0;
+                if (!this.k5OpponentHasIaijutsu) {
+                    bonus += 5;  // free raise when opponent can't iaijutsu
+                }
+                const x = this.schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0;
+                if (x > 0) {
+                    const def = parseInt(this.k5DefenderPhase, 10);
+                    if (Number.isFinite(def)) {
+                        bonus += x * Math.max(0, def - 0);
+                    }
+                }
+                return bonus;
+            },
+
+            async rollKakita5thDanContest() {
+                const f = this._kakita5thIaijutsuFormula();
+                if (!f) return;
+                let rolled = f.rolled || 0;
+                let kept = f.kept || 0;
+                let flat = f.flat || 0;
+                // Opponent-has-no-iaijutsu: +5 free raise to the character.
+                this.k5NoIaijutsuBonus = this.k5OpponentHasIaijutsu ? 0 : 5;
+                flat += this.k5NoIaijutsuBonus;
+                // 3rd Dan bonus with attacker_phase = 0.
+                const x = this.schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0;
+                const def = parseInt(this.k5DefenderPhase, 10);
+                this.k5KakitaBonus = x > 0 && Number.isFinite(def)
+                    ? x * Math.max(0, def - 0) : 0;
+                flat += this.k5KakitaBonus;
+                this.k5Phase = 'rolling';
+                const dice = window.L7RDice.rollAllDice(rolled, !!f.reroll_tens);
+                // Keep the highest ``kept`` dice.
+                const sorted = dice
+                    .map((d, i) => ({...d, idx: i}))
+                    .sort((a, b) => a.value - b.value);
+                const keptIdx = new Set(
+                    sorted.slice(sorted.length - kept).map(d => d.idx));
+                this.k5RollDice = dice.map((d, i) => ({
+                    value: d.value, kept: keptIdx.has(i),
+                }));
+                const keptSum = dice.reduce(
+                    (s, d, i) => s + (keptIdx.has(i) ? d.value : 0), 0);
+                this.k5RollTotal = keptSum + flat;
+                this.k5FormulaText = flat > 0
+                    ? `${rolled}k${kept} + ${flat}`
+                    : `${rolled}k${kept}`;
+                this.k5Phase = 'result';
+            },
+
+            async rollKakita5thDanDamage() {
+                const f = this._kakita5thIaijutsuFormula();
+                if (!f) return;
+                // Base damage: weapon + iaijutsu damage metadata. Matches
+                // the attack modal's default damage shape.
+                const weaponRolled = parseInt(this.k5WeaponRolled, 10) || 0;
+                const weaponKept = parseInt(this.k5WeaponKept, 10) || 0;
+                const ringVal = f.damage_ring_val || 0;
+                const extraRolled = f.damage_extra_rolled || 0;
+                const extraKept = f.damage_extra_kept || 0;
+                this.k5DamageFlat = f.damage_flat_bonus || 0;
+                // Contest scaling: +/- floor(diff / 5) rolled dice.
+                const diff = this.k5RollTotal - (parseInt(this.k5OpponentRoll, 10) || 0);
+                this.k5DamageDiceAdjust = diff >= 0
+                    ? Math.floor(diff / 5) : -Math.floor((-diff) / 5);
+                this.k5DamageRolled = Math.max(0,
+                    weaponRolled + extraRolled + ringVal + this.k5DamageDiceAdjust);
+                this.k5DamageKept = Math.max(0, weaponKept + extraKept);
+                // Rolls cap at 10k10 per L7R standards.
+                if (this.k5DamageRolled > 10) { this.k5DamageKept += (this.k5DamageRolled - 10); this.k5DamageRolled = 10; }
+                if (this.k5DamageKept > 10) { this.k5DamageFlat += 2 * (this.k5DamageKept - 10); this.k5DamageKept = 10; }
+                if (this.k5DamageRolled <= 0 || this.k5DamageKept <= 0) {
+                    this.k5DamageDice = [];
+                    this.k5DamageTotal = this.k5DamageFlat;
+                    this.k5Phase = 'damage-result';
+                    this._markKakita5thUsed();
+                    return;
+                }
+                const dice = window.L7RDice.rollAllDice(this.k5DamageRolled, true);
+                const sorted = dice
+                    .map((d, i) => ({...d, idx: i}))
+                    .sort((a, b) => a.value - b.value);
+                const keptIdx = new Set(
+                    sorted.slice(sorted.length - this.k5DamageKept).map(d => d.idx));
+                this.k5DamageDice = dice.map((d, i) => ({
+                    value: d.value, kept: keptIdx.has(i),
+                }));
+                const keptSum = dice.reduce(
+                    (s, d, i) => s + (keptIdx.has(i) ? d.value : 0), 0);
+                this.k5DamageTotal = keptSum + this.k5DamageFlat;
+                this.k5Phase = 'damage-result';
+                this._markKakita5thUsed();
+            },
+
+            _markKakita5thUsed() {
+                const t = window._trackingBridge;
+                if (!t) return;
+                t.kakita5thDanUsed = true;
+                t.adventureState.kakita_5th_dan_used = true;
+                t.save();
             },
 
             atkIsDoubleAttack() {
@@ -6852,6 +7879,14 @@
             // exist and might be spendable (Mantis 4th Dan) or simply signal
             // that initiative has been rolled.
             initiativeWarningVariant() {
+                // Interrupt-style entry points (Kakita Phase 0 interrupt,
+                // eventually Kakita 5th Dan) have already paid the action-
+                // die cost up-front via ``atkForceAttackerPhase``, so the
+                // "no initiative / out of dice" nudge would be misleading.
+                if (this.atkForceAttackerPhase !== null
+                        && this.atkForceAttackerPhase !== undefined) {
+                    return null;
+                }
                 const dice = window._trackingBridge?.actionDice || [];
                 if (!dice.length) return 'no-init';
                 if (dice.every(d => d.spent)) return 'out-of-dice';
@@ -6996,6 +8031,39 @@
                 return 2 * this._shinjoPhasesHeld();
             },
 
+            // Kakita Duelist 3rd Dan: X * (defender_phase - attacker_phase)
+            // where X is attack skill. Attacker phase is normally the spent
+            // action die's value, but the Phase-0 interrupt entry point
+            // sets ``atkForceAttackerPhase = 0`` because the interrupt
+            // spends its 2 highest dice as a cost rather than "in" their
+            // phase. Defender phase is the player's pre-roll pick (clamped
+            // to >= attacker phase so the bonus can't go negative).
+            _kakita3rdDanAttackerPhase() {
+                if (this.atkForceAttackerPhase !== null
+                        && this.atkForceAttackerPhase !== undefined) {
+                    return this.atkForceAttackerPhase;
+                }
+                const die = this._shinjoDieToSpend();
+                return die ? (die.value || 0) : 0;
+            },
+            _kakita3rdDanBonus() {
+                if (!this.atkFormula?.kakita_3rd_dan_defender_phase_bonus) return 0;
+                if (this.initiativeWarningVariant() !== null) return 0;
+                // Interrupt path: attacker phase is forced to 0 and the
+                // cost dice are already spent - no additional die-to-spend.
+                // Normal path: still require a to-be-spent action die.
+                const forced = this.atkForceAttackerPhase;
+                if ((forced === null || forced === undefined)
+                        && !this._shinjoDieToSpend()) return 0;
+                const x = this.schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0;
+                if (x <= 0) return 0;
+                const defender = parseInt(this.atkKakitaDefenderPhase, 10);
+                const attacker = this._kakita3rdDanAttackerPhase();
+                if (!Number.isFinite(defender)) return 0;
+                const phases = Math.max(0, defender - attacker);
+                return x * phases;
+            },
+
             atkHitChance(voidCount) {
                 const probs = this.atkProbs[this.atkKey];
                 if (!probs) return 0;
@@ -7006,12 +8074,13 @@
                 const dojiBonus = this._dojiAtkBonus();
                 const dojiUntouched = this._dojiUntouchedBonus();
                 const shinjoPhase = this._shinjoPhaseBonus();
+                const kakita3rd = this._kakita3rdDanBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
                 // Mantis Wave-Treader: offensive posture (+5) plus 5th Dan
                 // offensive-posture-count accumulator (+N) feed into the target.
                 const postureFlat = this._mantisLiveAttackFlat();
                 const target = Math.max(0,
-                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - dojiUntouched - shinjoPhase - shosuroFlat - postureFlat);
+                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - dojiUntouched - shinjoPhase - kakita3rd - shosuroFlat - postureFlat);
                 return target < arr.length ? arr[target] : 0;
             },
 
@@ -7023,9 +8092,10 @@
                 const dojiBonus = this._dojiAtkBonus();
                 const dojiUntouched = this._dojiUntouchedBonus();
                 const shinjoPhase = this._shinjoPhaseBonus();
+                const kakita3rd = this._kakita3rdDanBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
                 const postureFlat = this._mantisLiveAttackFlat();
-                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + dojiUntouched + shinjoPhase + shosuroFlat + postureFlat;
+                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + dojiUntouched + shinjoPhase + kakita3rd + shosuroFlat + postureFlat;
             },
 
             atkAvgExtraDice(voidCount) {
@@ -7194,12 +8264,22 @@
                 // label is a placeholder - it will be replaced with the full
                 // attack result once the roll completes. Only athletics:attack
                 // counts as an athletics action for athletics-only die spending.
-                this._autoSpendActionDie('Attack (rolling...)', this._isAthleticsActionKey(this.atkKey));
+                // Interrupt-style entry points (Kakita Phase 0 interrupt)
+                // have already paid their dice cost up-front and set
+                // ``atkForceAttackerPhase``; those skip the auto-spend so
+                // the attack doesn't consume a third die.
+                if (this.atkForceAttackerPhase === null
+                        || this.atkForceAttackerPhase === undefined) {
+                    this._autoSpendActionDie('Attack (rolling...)', this._isAthleticsActionKey(this.atkKey));
+                } else {
+                    this._actionDieSpentIndex = -1;
+                }
                 const voidCount = this.atkVoidSelected;
                 const formula = { ...this.formulas[this.atkKey] };
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
+                this.preceptsPoolSwapBonuses = [];
 
                 // Mantis Wave-Treader Special: offensive posture at attack-roll
                 // time adds +5 to the attack roll. Snapshot into formula so the
@@ -7290,6 +8370,37 @@
                         formula.shinjo_phase_bonus = bonus;
                         formula.shinjo_phase_bonus_phase = phase;
                         formula.shinjo_phase_bonus_die_value = spentDie?.value || 0;
+                    }
+                }
+
+                // Kakita Duelist 3rd Dan: stamp defender-phase bonus onto
+                // the formula. Attacker phase comes from the forced override
+                // (Phase-0 interrupt = 0) if set, else the spent die's value.
+                if (formula.kakita_3rd_dan_defender_phase_bonus) {
+                    const x = this.schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0;
+                    let attackerPhase = null;
+                    if (this.atkForceAttackerPhase !== null
+                            && this.atkForceAttackerPhase !== undefined) {
+                        attackerPhase = this.atkForceAttackerPhase;
+                    } else {
+                        const idx = this._actionDieSpentIndex;
+                        const t = window._trackingBridge;
+                        const spentDie = (idx != null && idx >= 0 && t)
+                            ? (t.actionDice || [])[idx] : null;
+                        if (spentDie) attackerPhase = spentDie.value || 0;
+                    }
+                    if (x > 0 && attackerPhase !== null) {
+                        const defenderPhase = parseInt(this.atkKakitaDefenderPhase, 10);
+                        const phases = Number.isFinite(defenderPhase)
+                            ? Math.max(0, defenderPhase - attackerPhase) : 0;
+                        const bonus = x * phases;
+                        if (bonus > 0) {
+                            formula.flat += bonus;
+                            formula.kakita_3rd_dan_bonus = bonus;
+                            formula.kakita_3rd_dan_attacker_phase = attackerPhase;
+                            formula.kakita_3rd_dan_defender_phase = defenderPhase;
+                            formula.kakita_3rd_dan_x = x;
+                        }
                     }
                 }
 
@@ -7518,6 +8629,7 @@
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
+                this.preceptsPoolSwapBonuses = [];
                 const isLunge = f.attack_variant === 'lunge';
                 const isDA = f.attack_variant === 'double_attack';
                 const trade = this.atkOtakuTradeDice ? 10 : 0;
@@ -7548,6 +8660,7 @@
                 }
                 this.atkDamageTotal = this.keptSum + flat + this.atkDamageShosuroBonus + this.convictionSpentThisRoll + this.totalPriestAllySpentThisRoll();
                 this.atkDamageRolled = rolled;
+                this.atkDamageKept = kept;
                 this.atkDamageFlat = flat;
                 this.atkDamageParts = dmg.parts || [];
                 this.atkDamageConvictionSpent = 0;
@@ -7585,7 +8698,8 @@
                 const hasUnspentMatsu = (this.matsuBankedWcBonuses || []).some(b => !b.spent);
                 const hasConviction = (this.convictionConfig.rank || 0) > 0 && this.convictionPoolAvail() > 0;
                 const hasPriestAlly = (this.priestAllies || []).some(p => this.priestAllyPoolAvail(p) > 0);
-                this.wcHasDiscretionary = (this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0) || hasUnspentMatsu || hasUnspentWcExcess || hasPostRollVp || hasConviction || hasPriestAlly;
+                const hasPreceptsPool = this.preceptsPoolAlliesForThisRoll('wc').length > 0;
+                this.wcHasDiscretionary = (this.wcMaxRaisesPerRoll > 0 && raisesAvail > 0) || hasUnspentMatsu || hasUnspentWcExcess || hasPostRollVp || hasConviction || hasPriestAlly || hasPreceptsPool;
                 this.wcModalOpen = true;
             },
 
@@ -7654,6 +8768,7 @@
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
+                this.preceptsPoolSwapBonuses = [];
 
                 // Mantis Wave-Treader Special: defensive posture at wound-check
                 // time adds +5 and labels the bonus in bonus_sources.
@@ -8043,6 +9158,7 @@
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
+                this.preceptsPoolSwapBonuses = [];
                 this.courtier5thApplied = false;
                 this.dojiOpponentResult = 0;
                 this.dojiTnRollApplied = false;

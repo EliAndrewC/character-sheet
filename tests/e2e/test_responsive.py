@@ -108,6 +108,35 @@ def test_homepage_headshot_placeholder_fits_card_at_phone_width(page, live_serve
     _assert_no_horizontal_overflow(page)
 
 
+def test_precepts_pool_no_overflow_at_phone_width(page, live_server_url):
+    """A 3rd Dan priest with a full 10-die precepts pool must not cause
+    horizontal overflow at phone width. The pool dice icons should wrap
+    within their flex container rather than forcing a scroll."""
+    # Create the priest at desktop width first so the editor renders normally.
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PhonePool")
+    select_school(page, "priest")
+    for knack in ("conviction", "otherworldliness", "pontificate"):
+        click_plus(page, f"knack_{knack}", 2)
+    click_plus(page, "skill_precepts", 5)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Phone Pool")
+    sheet_url = page.url
+    # Seed a full 10-die pool so the section renders its widest possible state.
+    page.evaluate("""
+        window._trackingBridge.preceptsPool = Array.from({length: 10}, () => ({value: 10}));
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.set_viewport_size(PHONE)
+    page.goto(sheet_url)
+    page.wait_for_selector('[data-testid="precepts-pool-section"]')
+    page.wait_for_load_state("networkidle")
+    _assert_no_horizontal_overflow(page)
+
+
 def test_sheet_no_horizontal_overflow_across_widths(page, live_server_url):
     """View Sheet must not overflow horizontally at phone, tablet, or
     desktop widths. The Phase 6 art/school grid was the trigger for

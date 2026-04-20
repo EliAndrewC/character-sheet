@@ -789,6 +789,25 @@ class TestBuildAllRollFormulas:
         assert "knack:feint" in formulas
         assert "knack:iaijutsu" in formulas
 
+    def test_missing_school_knacks_default_to_rank_one(self):
+        """School knacks start at rank 1 for free, so formulas must be
+        generated for them even when the stored knacks dict is empty or
+        missing entries (e.g. a draft that predates a school change).
+        Without this, the per-action-die menu would drop options like
+        Double Attack, Counterattack, Lunge, and Feint."""
+        for school_id, expected in [
+            ("shinjo_bushi", {"double_attack", "iaijutsu", "lunge"}),
+            ("akodo_bushi", {"double_attack", "feint", "iaijutsu"}),
+            ("daidoji_yojimbo", {"counterattack", "double_attack", "iaijutsu"}),
+            ("bayushi_bushi", {"double_attack", "feint", "iaijutsu"}),
+        ]:
+            char = make_character_data(school=school_id, knacks={})
+            formulas = build_all_roll_formulas(char)
+            for knack_id in expected:
+                assert f"knack:{knack_id}" in formulas, (
+                    f"{school_id} missing knack:{knack_id} when knacks dict is empty"
+                )
+
     def test_third_dan_annotates_applicable_skills(self):
         """At 3rd Dan, skills in the technique's applicable_to list get
         adventure_raises_max_per_roll set to the source skill rank."""
@@ -1115,6 +1134,77 @@ class TestSchoolAbilities:
         formulas = build_all_roll_formulas(char)
         atk = formulas["knack:iaijutsu:attack"]
         assert atk["damage_flat_bonus"] == 0
+
+    # --- Kakita Duelist 3rd Dan: defender-phase bonus flag ---
+    def test_kakita_3rd_dan_attack_flag_set(self):
+        """Kakita 3rd Dan: base attack formula carries the defender-phase flag."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+            attack=2,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.kakita_3rd_dan_defender_phase_bonus is True
+
+    def test_kakita_3rd_dan_parry_no_flag(self):
+        """Kakita 3rd Dan: parry doesn't get the attack-only flag."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+            parry=2,
+        )
+        f = build_combat_formula("parry", char)
+        assert f.kakita_3rd_dan_defender_phase_bonus is False
+
+    def test_kakita_3rd_dan_attack_knack_flags(self):
+        """Kakita 3rd Dan: attack-type knacks carry the flag."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+        )
+        for kid in ("double_attack", "lunge"):
+            f = build_knack_formula(kid, char)
+            assert f.kakita_3rd_dan_defender_phase_bonus is True, kid
+
+    def test_kakita_3rd_dan_athletics_attack_flag(self):
+        """Kakita 3rd Dan: athletics-as-attack carries the flag."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"athletics": 3, "double_attack": 3, "iaijutsu": 3, "lunge": 3},
+        )
+        f = build_athletics_combat_formula("attack", char)
+        assert f.kakita_3rd_dan_defender_phase_bonus is True
+
+    def test_kakita_3rd_dan_iaijutsu_attack_flag(self):
+        """The Kakita-only knack:iaijutsu:attack variant also carries the flag."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["knack:iaijutsu:attack"]
+        assert atk["kakita_3rd_dan_defender_phase_bonus"] is True
+
+    def test_kakita_below_3rd_dan_no_defender_phase_flag(self):
+        """Kakita at Dan 1/2 does not carry the flag."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 2, "iaijutsu": 2, "lunge": 2},
+            attack=2,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.kakita_3rd_dan_defender_phase_bonus is False
+
+    def test_kakita_3rd_dan_flag_only_for_kakita_school(self):
+        """Other 3rd Dan schools don't carry the Kakita 3rd Dan flag."""
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+            attack=2,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.kakita_3rd_dan_defender_phase_bonus is False
 
     # --- Kitsuki Magistrate: +2*Water flat on attacks ---
     def test_kitsuki_magistrate_attack_water_bonus(self):
@@ -1607,16 +1697,18 @@ class TestSchoolAbilities:
         f = build_combat_formula("attack", char)
         assert f.shinjo_phase_bonus_attack is True
 
-    def test_shinjo_special_ability_parry_no_flag(self):
-        """Shinjo parry is defensive: no phase-bonus flag (the Special
-        Ability only applies to the attack side of that pair)."""
+    def test_shinjo_special_ability_parry_flag(self):
+        """Shinjo parry is flagged too: the Special Ability rules text
+        ("each action you take in combat has a bonus of 2X") applies to
+        both sides of attack/parry, so the parry result modal surfaces a
+        phase-selection prompt just like the attack modal does."""
         char = make_character_data(
             school="shinjo_bushi",
             knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
             parry=2,
         )
         f = build_combat_formula("parry", char)
-        assert f.shinjo_phase_bonus_attack is False
+        assert f.shinjo_phase_bonus_attack is True
 
     def test_shinjo_special_ability_attack_knack_flag(self):
         """Shinjo attack-type knacks (double_attack, lunge) get the flag."""

@@ -111,6 +111,36 @@ def test_attack_modal_tn_dropdown(page, live_server_url):
 # ---------------------------------------------------------------------------
 
 
+def test_double_attack_miss_shows_elevated_tn(page, live_server_url):
+    """A missed double attack must report the effective TN (base + 20), not
+    the base TN, so the 'needed X, rolled Y' banner lines up with the
+    hit/miss calculation (which uses the elevated TN)."""
+    _create_attacker(page, live_server_url, "DblAtkMiss")
+    _wait_alpine(page)
+    # Force dice to roll low so the attack misses even at a modest TN.
+    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.0")
+    page.locator('[data-roll-key="knack:double_attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select').first.select_option("20")
+    modal.locator('[data-action="roll-attack"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    page.evaluate("Math.random = window._origRandom")
+    miss_text = modal.locator('div:has-text("MISSED")').first.text_content()
+    # Effective TN for a double attack at base TN 20 is 40.
+    assert "needed 40" in miss_text, \
+        f"Expected elevated double-attack TN (40) in miss banner, got: {miss_text!r}"
+    assert "needed 20" not in miss_text, \
+        f"Miss banner should NOT show the base TN (20) for a double attack: {miss_text!r}"
+
+
 def test_attack_roll_shows_hit_or_miss(page, live_server_url):
     """Rolling an attack shows HIT or MISSED."""
     _create_attacker(page, live_server_url, "AtkRoll")

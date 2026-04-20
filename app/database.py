@@ -75,6 +75,7 @@ def _migrate_add_columns():
         ("rank_recognition_awards", "TEXT", "'[]'"),
         ("current_temp_void_points", "INTEGER", "0"),
         ("action_dice", "TEXT", "'[]'"),
+        ("precepts_pool", "TEXT", "'[]'"),
         ("technique_choices", "TEXT", "'{}'"),
         ("google_sheet_id", "TEXT", "NULL"),
         ("google_sheet_exported_state", "TEXT", "NULL"),

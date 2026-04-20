@@ -243,6 +243,34 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                 "used": conv_used,
             })
 
+    # Party-priest 3rd Dan precepts pool: each Priest ally at dan >= 3 with a
+    # non-empty precepts pool surfaces the pool to this character so they can
+    # swap their rolled dice for the priest's dice on attack/parry/damage/WC
+    # rolls. Self is excluded; the priest's own sheet uses ``preceptsPool``
+    # state directly rather than routing through this list.
+    priest_precepts_allies = []
+    if character.gaming_group_id:
+        for p in party_chars:
+            if p.school != "priest":
+                continue
+            p_school_obj = SCHOOLS.get(p.school)
+            if not p_school_obj:  # pragma: no cover - "priest" is always in SCHOOLS
+                continue
+            p_knack_ranks = [
+                (p.knacks or {}).get(k, 1) for k in p_school_obj.school_knacks
+            ]
+            p_dan = min(p_knack_ranks) if p_knack_ranks else 0
+            if p_dan < 3:
+                continue
+            pool = list(p.precepts_pool or [])
+            if not pool:
+                continue
+            priest_precepts_allies.append({
+                "priest_id": p.id,
+                "name": p.name,
+                "pool": pool,
+            })
+
     effective = compute_effective_status(char_dict, party_members=party_members_data)
     all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
 
@@ -468,6 +496,15 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Priest Special: the 10 rituals include "Bless conversation topic" and
         # "Bless research", each a 2k1 roll added to someone else's roll.
         "priest_bless_rituals": character.school == "priest",
+        # Priest 3rd Dan: precepts dice pool (X dice, X = precepts skill rank)
+        # rolled at the start of combat; any pool die can swap into any rolled
+        # die on attack/parry/damage/wound_check rolls. Persists across combat
+        # rounds, cleared only by the per-adventure reset.
+        "priest_precepts_pool": character.school == "priest" and dan >= 3,
+        "priest_precepts_pool_size": (
+            (char_dict.get("skills") or {}).get("precepts", 0)
+            if character.school == "priest" and dan >= 3 else 0
+        ),
         # Ide Diplomat 3rd Dan: spend VP to subtract Xk1 from someone's roll
         "ide_subtract_roll": character.school == "ide_diplomat" and dan >= 3,
         "ide_subtract_x": (char_dict.get("skills") or {}).get("tact", 0) if character.school == "ide_diplomat" and dan >= 3 else 0,
@@ -528,6 +565,19 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # from Phase 2, interrupt-attack button from Phase 4, etc.) without
         # having to reach into the dice roller's formulas cross-scope.
         "kakita_phase_zero": character.school == "kakita_duelist",
+        # Kakita Duelist 3rd Dan: attack bonus of X per phase before the
+        # defender's next action, where X is the attack skill. Non-zero only
+        # when 3rd Dan (X = attack skill); zero means the control stays
+        # hidden on the attack modal.
+        "kakita_3rd_dan_defender_phase_bonus_x": (
+            attack_skill if character.school == "kakita_duelist" and dan >= 3 else 0
+        ),
+        # Kakita Duelist 5th Dan: once per combat round at phase 0, make a
+        # contested iaijutsu roll against an opponent. Damage scales +/- 1
+        # rolled die per 5-point gap. The client renders a dedicated modal.
+        "kakita_5th_dan_phase_zero_contest": (
+            character.school == "kakita_duelist" and dan >= 5
+        ),
     }
 
     # Compute wound check probability slice for client-side display.
@@ -663,6 +713,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "void_max": void_max,
             "adventure_state": character.adventure_state or {},
             "action_dice": character.action_dice or [],
+            "precepts_pool": character.precepts_pool or [],
             "all_groups": all_groups,
             "roll_formulas": roll_formulas,
             "is_impaired_now": is_impaired_now,
@@ -675,6 +726,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "school_abilities": school_abilities,
             "daidoji_counterattack_party": daidoji_counterattack_party,
             "priest_conviction_allies": priest_conviction_allies,
+            "priest_precepts_allies": priest_precepts_allies,
             "party_priests": party_priests,
         },
     )

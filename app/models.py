@@ -168,6 +168,10 @@ class Character(Base):
     # initiative and cleared by the Clear button. Each entry is
     # {"value": int (0-10), "spent": bool}.
     action_dice: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list)
+    # Priest 3rd Dan precepts dice pool. Persists across combat rounds (so
+    # it is NOT cleared by action-dice Clear or by rolling initiative) but
+    # IS cleared by the per-adventure reset. Each entry is {"value": int (1-10)}.
+    precepts_pool: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list)
 
     # Metadata
     notes: Mapped[str] = mapped_column(String, default="")
@@ -236,7 +240,7 @@ class Character(Base):
                     "attack": 1, "parry": 1, "rank_locked": False,
                     "current_light_wounds": 0, "current_serious_wounds": 0,
                     "current_void_points": 0, "current_temp_void_points": 0,
-                    "action_dice": [],
+                    "action_dice": [], "precepts_pool": [],
                     "notes": "", "sections": [],
                     "rank_recognition_awards": []}
         for key in current:
@@ -319,6 +323,7 @@ class Character(Base):
             "current_void_points": self.current_void_points,
             "current_temp_void_points": self.current_temp_void_points,
             "action_dice": self.action_dice or [],
+            "precepts_pool": self.precepts_pool or [],
             "notes": self.notes,
             "sections": self.sections or [],
             "google_sheet_id": self.google_sheet_id,

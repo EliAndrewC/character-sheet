@@ -113,13 +113,10 @@
             fill: rgba(44,24,16,0.4);
             text-decoration: line-through;
         }
-        svg.die.action-die.phase-zero .die-shape {
-            fill: #fff7e0;
-            stroke: #d4a017;
-        }
-        svg.die.action-die.phase-zero .die-text {
-            fill: #8b0000;
-        }
+        /* Kakita Phase-0 dice carry ``.phase-zero`` as a DOM marker but render
+           in the default action-die colors - per feedback, 10s / 0s on
+           initiative and action-dice panels are NOT special the way a 10 on
+           a normal-reroll roll would be, so there's nothing to highlight. */
         svg.die.action-die.athletics-only .die-shape {
             fill: #e0f2fe;
             stroke: #0369a1;
