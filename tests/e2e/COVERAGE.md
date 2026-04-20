@@ -520,6 +520,7 @@ also wait for the post-update DOM to settle.
 - [x] Priest can impair their own roll by swapping a LOW pool die for a HIGH kept die (refreshes the pool) -> `test_school_abilities.py::test_priest_3rd_dan_self_swap_can_impair_roll_to_refresh_pool`
 - [x] Equal-value rolled die is excluded from the swap menu -> `test_school_abilities.py::test_priest_3rd_dan_equal_value_rolled_die_excluded_from_menu`
 - [x] Clicking a pool die opens its swap dropdown; clicking again closes it -> `test_school_abilities.py::test_priest_3rd_dan_swap_dropdown_opens_and_closes`
+- [x] Swap dropdown stays inside the viewport (fixed positioning + horizontal clamp) -> `test_school_abilities.py::test_priest_3rd_dan_swap_menu_stays_within_viewport`
 - [x] Ally swap updates ally's roll and broadcasts new pool to the priest -> `test_school_abilities.py::test_ally_swaps_priest_pool_die_and_broadcasts`
 - [x] Ally swap rejects equal-or-higher rolled dice even if invoked directly -> `test_school_abilities.py::test_ally_swap_strictly_rejects_equal_or_higher_rolled_die`
 
@@ -607,6 +608,7 @@ also wait for the post-update DOM to settle.
 - [x] Conviction spend button does NOT appear on initiative rolls -> `test_school_abilities.py::test_conviction_not_on_initiative`
 - [x] Conviction spend adds +1 and decrements the daily pool -> `test_school_abilities.py::test_conviction_spend_adds_plus_one_and_decrements_pool`
 - [x] Conviction points persist through Togashi 4th Dan reroll -> `test_school_abilities.py::test_conviction_survives_togashi_reroll`
+- [x] Spend Conviction button shows on a MISSED attack (can turn a narrow miss into a hit) -> `test_school_abilities.py::test_conviction_button_on_missed_attack`
 - [x] Akodo 1st Dan: attack modal pre-roll shows +1 rolled die note -> `test_school_abilities.py::test_akodo_1st_dan_attack_modal_pre_roll_extra_die`
 - [x] Ikoma 2nd Dan: attack modal pre-roll shows +5 free raise -> `test_school_abilities.py::test_ikoma_2nd_dan_attack_modal_pre_roll_free_raise`
 - [x] Brotherhood 2nd Dan: attack modal pre-roll shows +5 free raise -> `test_school_abilities.py::test_brotherhood_2nd_dan_attack_modal_pre_roll_free_raise`

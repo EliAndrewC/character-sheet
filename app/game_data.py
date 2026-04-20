@@ -1104,7 +1104,7 @@ _SCHOOLS_LIST: List[School] = [
         ),
         school_knacks=["double_attack", "iaijutsu", "lunge"],
         techniques={
-            1: "Roll one extra die on double attack, initiative, and parry rolls.",
+            1: "Roll one extra die on initiative, parry, and wound check rolls.",
             2: "You get a free raise on parry rolls.",
             3: (
                 "After a successful or unsuccessful parry, all your action dice "
@@ -2227,7 +2227,7 @@ SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
         # 3rd Dan: non-standard (increase attacker's next action dice)
     },
     "shinjo_bushi": {
-        "first_dan_extra_die": ["double_attack", "initiative", "parry"],
+        "first_dan_extra_die": ["initiative", "parry", "wound_check"],
         "second_dan_free_raise": "parry",
         # 3rd Dan: non-standard (decrease action dice after parry)
     },

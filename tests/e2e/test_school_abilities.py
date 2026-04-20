@@ -2823,6 +2823,40 @@ def test_priest_3rd_dan_equal_value_rolled_die_excluded_from_menu(page, live_ser
     assert labels == ["Swap with a rolled 3", "Swap with a rolled 4"]
 
 
+def test_priest_3rd_dan_swap_menu_stays_within_viewport(page, live_server_url):
+    """The swap dropdown uses fixed positioning with viewport clamping, so
+    the menu's edges stay inside the browser window and its options aren't
+    cut off even when a pool die sits at the edge of the modal."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestSwapClamp", precepts=2)
+    page.set_viewport_size({"width": 800, "height": 600})
+    _stage_swap_context(page, pool=[9, 4], rolled=[7, 2], kept_count=1)
+    page.wait_for_function(
+        "document.querySelectorAll('[data-precepts-pool-die]').length >= 2",
+        timeout=5000,
+    )
+    page.locator(
+        '[data-modal="dice-roller"] [data-action^="precepts-pool-die-self-"]'
+    ).first.click()
+    page.wait_for_timeout(150)
+    menu = page.locator(
+        '[data-modal="dice-roller"] [data-precepts-swap-menu="self:0"]'
+    )
+    assert menu.is_visible()
+    rect = menu.bounding_box()
+    viewport = page.viewport_size
+    assert rect is not None
+    assert rect["x"] >= 0, f"menu left={rect['x']} off-screen left"
+    assert rect["x"] + rect["width"] <= viewport["width"] + 1, (
+        f"menu right={rect['x'] + rect['width']} exceeds viewport width "
+        f"{viewport['width']}"
+    )
+    assert rect["y"] >= 0, f"menu top={rect['y']} off-screen top"
+    assert rect["y"] + rect["height"] <= viewport["height"] + 1, (
+        f"menu bottom={rect['y'] + rect['height']} exceeds viewport height "
+        f"{viewport['height']}"
+    )
+
+
 def test_priest_3rd_dan_swap_dropdown_opens_and_closes(page, live_server_url):
     """Clicking a pool die button opens its dropdown; clicking again closes it."""
     _create_priest_3rd_dan(page, live_server_url, "PriestSwap6", precepts=2)
@@ -6143,6 +6177,35 @@ def test_conviction_spend_adds_plus_one_and_decrements_pool(page, live_server_ur
     assert after["total"] == before["total"] + 1
     assert after["spent"] == before["spent"] + 1
     assert after["pool"] == before["pool"] - 1
+
+
+def test_conviction_button_on_missed_attack(page, live_server_url):
+    """A character with the conviction knack must see Spend Conviction (+1)
+    on a MISSED attack - spending a point can turn a narrow miss into a
+    hit, so gating the button to the HIT panel was a bug."""
+    _create_char(page, live_server_url, "ConvMissAtk", "brotherhood_of_shinsei_monk",
+                 knack_overrides={"conviction": 3, "otherworldliness": 3, "worldliness": 3})
+    _mock_dice_low(page)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    modal = page.locator('[data-modal="attack"]')
+    # TN 30 (max in the dropdown) guarantees a miss against mocked-low dice.
+    modal.locator('select:visible').first.select_option("30")
+    modal.locator('[data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+    _restore_dice(page)
+    # MISS panel is visible; Conviction spend must be too.
+    assert "MISSED" in modal.text_content(), \
+        "Test precondition: attack should have missed against TN 40 with mocked-low dice"
+    spend = modal.locator('[data-action="spend-conviction-atk-miss"]')
+    assert spend.is_visible(), \
+        "Spend Conviction button must appear on the MISS panel of the attack modal"
+    # Clicking it raises atkRollTotal and fires _atkUpdateHitState.
+    before = page.evaluate("() => window._diceRoller.atkRollTotal")
+    spend.click()
+    page.wait_for_timeout(150)
+    after = page.evaluate("() => window._diceRoller.atkRollTotal")
+    assert after == before + 1, f"Conviction spend should add 1 to atkRollTotal: {before} -> {after}"
 
 
 def test_conviction_survives_togashi_reroll(page, live_server_url):

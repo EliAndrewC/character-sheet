@@ -2173,6 +2173,31 @@ class TestInitiativeAndFlags:
         # Base: 2(parry) + 2(Air) = 4. 1st Dan: +1 for parry.
         assert f.rolled == 5
 
+    def test_shinjo_1st_dan_wound_check_extra_die(self):
+        """Shinjo 1st Dan rolls one extra die on wound checks (the slot
+        that used to carry the double-attack extra die)."""
+        char = make_character_data(
+            school="shinjo_bushi",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        wc = build_all_roll_formulas(char)["wound_check"]
+        # Base wound check: (Water+1)kWater = 4k3. 1st Dan: +1 rolled -> 5k3.
+        assert wc["rolled"] == 5
+        assert wc["kept"] == 3
+
+    def test_shinjo_1st_dan_double_attack_no_longer_gets_extra_die(self):
+        """Shinjo's 1st Dan no longer gives an extra die on double attack -
+        the slot moved to wound check. Double attack rolls use the plain
+        knack base (rank + ring) with no school +1 die."""
+        char = make_character_data(
+            school="shinjo_bushi",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+        )
+        f = build_knack_formula("double_attack", char)
+        # Base: rank(1) + Fire(2) = 3 rolled. No extra from 1st Dan.
+        assert f.rolled == 3
+
     def test_shinjo_4th_dan_flag(self):
         char = make_character_data(
             school="shinjo_bushi",

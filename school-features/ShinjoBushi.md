@@ -41,15 +41,20 @@
 
 ## 1st Dan
 
-> Roll one extra die on double attack, initiative, and parry rolls.
+> Roll one extra die on initiative, parry, and wound check rolls.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
-- `first_dan_extra_die: ["double_attack", "initiative", "parry"]`
-- Applied in `app/services/dice.py:_apply_school_technique_bonus()` for double_attack and parry.
-- Initiative extra die applied in `build_initiative_formula()` at `dice.py:492-494` (checks `"initiative"` in `first_dan_extra_die`).
-- Note: wound_check is NOT in the 1st Dan list for Shinjo (unlike most bushi schools).
+- `first_dan_extra_die: ["initiative", "parry", "wound_check"]`
+- Applied in `app/services/dice.py:_apply_school_technique_bonus()` for parry.
+- Initiative extra die applied in `build_initiative_formula()` (checks `"initiative"` in `first_dan_extra_die`).
+- Wound check extra die applied in `build_wound_check_formula()` (checks `"wound_check"` in `first_dan_extra_die`).
 
-**Unit tests:** None specific to Shinjo 1st Dan (no test verifies the initiative extra die from 1st Dan).
+**Unit tests:**
+- `test_dice.py::TestInitiativeAndFlags::test_shinjo_1st_dan_initiative_extra_die`
+- `test_dice.py::TestInitiativeAndFlags::test_shinjo_1st_dan_parry_extra_die`
+- `test_dice.py::TestInitiativeAndFlags::test_shinjo_1st_dan_wound_check_extra_die`
+- `test_dice.py::TestInitiativeAndFlags::test_shinjo_1st_dan_double_attack_no_longer_gets_extra_die`
+
 **Clicktests:**
 - `test_school_abilities.py::test_shinjo_1st_dan_formula_extra_die`
 
