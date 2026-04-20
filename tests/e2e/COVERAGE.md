@@ -61,6 +61,7 @@ also wait for the post-update DOM to settle.
 - [x] TN dropdown shows common values -> `test_attack_modal.py::test_attack_modal_tn_dropdown`
 - [x] Attack roll shows HIT or MISSED -> `test_attack_modal.py::test_attack_roll_shows_hit_or_miss`
 - [x] Double attack miss banner shows the elevated TN (base + 20), not the base TN -> `test_attack_modal.py::test_double_attack_miss_shows_elevated_tn`
+- [x] Damage roll breakdown surfaces the 10k10 overflow bonus as a "+N bonus for rolling K die(s) past 10k10" bullet (plural + singular paths) -> `test_attack_modal.py::test_damage_parts_include_10k10_overflow_bullet`, `test_attack_modal.py::test_damage_parts_overflow_singular_for_one_die`
 - [x] Hit shows Make Damage Roll button -> `test_attack_modal.py::test_attack_hit_shows_damage_roll_button`
 - [x] Dice animation visible during attack roll -> `test_attack_modal.py::test_attack_dice_animation_visible`
 - [x] Attack probability table shows "Attack Roll" column with (r)k(k) values per void level -> `test_attack_modal.py::test_attack_modal_shows_attack_roll_rk_column`
@@ -268,14 +269,21 @@ also wait for the post-update DOM to settle.
 - [x] Attack modal pre-roll shows "Kakita Phase 0 iaijutsu attack" note -> `test_school_abilities.py::test_kakita_phase_zero_attack_modal_notes_interrupt`
 - [x] Rolling from the Phase-0 iaijutsu attack modal spends the clicked Phase-0 die (not another) -> `test_school_abilities.py::test_kakita_phase_zero_attack_spends_the_clicked_die`
 - [x] Non-Kakita schools with iaijutsu don't expose knack:iaijutsu:attack (Kakita-only) -> `test_school_abilities.py::test_non_kakita_with_iaijutsu_does_not_expose_iaijutsu_attack_key`
+- [x] Iaijutsu attack modal pre-roll panel lists the 1st Dan extra die and 2nd Dan free raise -> `test_school_abilities.py::test_kakita_iaijutsu_attack_modal_lists_1st_dan_and_2nd_dan_bonuses`
+- [x] Iaijutsu attack formula's rolled count includes the 1st Dan +1k0 (probability chart reflects it) -> `test_school_abilities.py::test_kakita_iaijutsu_attack_modal_probability_uses_1st_dan_rolled_die`
+- [x] Iaijutsu attack roll results show a dedicated 1st Dan +1 rolled die breakdown line -> `test_school_abilities.py::test_kakita_iaijutsu_attack_results_show_1st_dan_extra_die_line`
+- [x] Kakita iaijutsu:attack formula carries the iaijutsu_first_dan_extra_die flag -> `test_school_abilities.py::test_non_kakita_iaijutsu_attack_has_no_1st_dan_flag`
 - [x] 3rd Dan defender-phase control hidden without initiative (warning fires instead) -> `test_school_abilities.py::test_kakita_3rd_dan_defender_phase_control_hidden_without_initiative`
 - [x] 3rd Dan defender-phase control hidden when all dice are spent -> `test_school_abilities.py::test_kakita_3rd_dan_defender_phase_control_hidden_out_of_dice`
-- [x] 3rd Dan defender-phase control visible with unspent action die, default 11 ("no remaining actions") -> `test_school_abilities.py::test_kakita_3rd_dan_defender_phase_control_visible_with_action_dice`
+- [x] 3rd Dan defender-phase control visible with unspent action die, defaults to the "Select phase" sentinel (no bonus until a real phase is picked, hint text replaces the bonus display) -> `test_school_abilities.py::test_kakita_3rd_dan_defender_phase_control_visible_with_action_dice`
 - [x] 3rd Dan bonus applied to roll, labeled in post-roll breakdown -> `test_school_abilities.py::test_kakita_3rd_dan_bonus_applied_to_attack_roll`
 - [x] 3rd Dan bonus clamps to 0 when defender acts first (attacker phase > defender phase) -> `test_school_abilities.py::test_kakita_3rd_dan_bonus_clamps_when_defender_acts_first`
 - [x] 3rd Dan bonus raises the attack probability chart live -> `test_school_abilities.py::test_kakita_3rd_dan_bonus_shifts_probability_chart`
 - [x] 3rd Dan bonus uses the clicked action die's value when opened via that die's menu -> `test_school_abilities.py::test_kakita_3rd_dan_bonus_uses_clicked_die_value`
-- [x] 3rd Dan dropdown "no remaining actions" (11) default yields X*(11 - attacker_phase) bonus -> `test_school_abilities.py::test_kakita_3rd_dan_phase_11_default_is_no_remaining_actions`
+- [x] 3rd Dan dropdown "no remaining actions" (11) yields X*(11 - attacker_phase) bonus when picked explicitly -> `test_school_abilities.py::test_kakita_3rd_dan_phase_11_yields_max_bonus_for_no_remaining_actions`
+- [x] 3rd Dan: Roll button disabled with "Select phase" default; tooltip explains; picking a phase enables the button -> `test_school_abilities.py::test_kakita_3rd_dan_roll_button_disabled_until_phase_picked`
+- [x] 3rd Dan: picking "no remaining actions" (11) counts as an explicit selection and enables the Roll button -> `test_school_abilities.py::test_kakita_3rd_dan_roll_button_enabled_with_no_remaining_actions`
+- [x] Kakita below 3rd Dan: Roll button is never gated by the (absent) phase dropdown -> `test_school_abilities.py::test_kakita_below_3rd_dan_roll_button_always_enabled`
 - [x] Kakita below 3rd Dan doesn't render the bonus control -> `test_school_abilities.py::test_kakita_below_3rd_dan_no_bonus_control`
 - [x] 3rd Dan bonus applies to Phase-0 iaijutsu attacks (attacker phase = 0) -> `test_school_abilities.py::test_kakita_3rd_dan_bonus_on_phase_zero_die`
 - [x] Phase-0 Interrupt button not rendered for non-Kakita schools -> `test_school_abilities.py::test_kakita_interrupt_button_hidden_for_non_kakita`
@@ -286,6 +294,7 @@ also wait for the post-update DOM to settle.
 - [x] Phase-0 Interrupt 3rd Dan bonus uses attacker phase = 0 even though no Phase-0 die was spent -> `test_school_abilities.py::test_kakita_interrupt_uses_phase_zero_as_attacker_phase`
 - [x] Phase-0 Interrupt suppresses the "out of action dice" / "no initiative" warning (cost was deliberate) -> `test_school_abilities.py::test_kakita_interrupt_suppresses_initiative_warning`
 - [x] Phase-0 Interrupt roll does NOT consume an additional action die -> `test_school_abilities.py::test_kakita_interrupt_rolling_does_not_spend_a_third_die`
+- [x] Phase-0 Interrupt attack modal uses the Kakita knack:iaijutsu:attack formula so a Dan 4 character's damage inherits the +5 from 4th Dan (iaijutsu) -> `test_school_abilities.py::test_kakita_interrupt_attack_inherits_4th_dan_damage_bonus`
 - [x] Phase-0 Interrupt: closing the modal without rolling leaves the 2 dice spent (no refund) -> `test_school_abilities.py::test_kakita_interrupt_persists_after_modal_close`
 - [x] 5th Dan Phase-0 Contest button visible on Dan 5 Kakita sheet -> `test_school_abilities.py::test_kakita_5th_dan_button_visible_on_dan_5_sheet`
 - [x] 5th Dan button hidden below Dan 5 Kakita -> `test_school_abilities.py::test_kakita_below_5th_dan_hides_button`
@@ -300,6 +309,17 @@ also wait for the post-update DOM to settle.
 - [x] 5th Dan button disabled after use; re-enabled on next initiative roll -> `test_school_abilities.py::test_kakita_5th_dan_button_disabled_after_use_until_next_initiative`
 - [x] 5th Dan: cancel via × on the pre-phase does not consume the once-per-round flag -> `test_school_abilities.py::test_kakita_5th_dan_modal_cancel_before_roll_does_not_consume`
 - [x] 5th Dan damage inherits the Kakita 4th Dan iaijutsu +5 flat -> `test_school_abilities.py::test_kakita_5th_dan_modal_inherits_4th_dan_damage_bonus`
+- [x] 5th Dan opponent-skill dropdown defaults to rank 4 when "opponent has iaijutsu" is checked -> `test_school_abilities.py::test_kakita_5th_dan_opponent_skill_dropdown_defaults_to_4`
+- [x] 5th Dan opponent-skill dropdown drops to rank 3 when the iaijutsu checkbox is unchecked -> `test_school_abilities.py::test_kakita_5th_dan_opponent_skill_drops_to_3_when_unchecked`
+- [x] 5th Dan opponent-skill dropdown returns to rank 4 when the iaijutsu checkbox is re-checked -> `test_school_abilities.py::test_kakita_5th_dan_opponent_skill_back_to_4_when_rechecked`
+- [x] 5th Dan contested-roll skill bonus: +5 per rank Kakita iaijutsu exceeds the opponent's picked skill -> `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_higher`
+- [x] 5th Dan contested-roll skill bonus is 0 when ranks are equal -> `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_equal`
+- [x] 5th Dan contested-roll skill bonus clamps to 0 when opponent rank is higher -> `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_lower`
+- [x] 5th Dan pre-roll bonus includes the skill gap; post-roll breakdown labels it -> `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_shown_in_prebonus_and_breakdown`
+- [x] 5th Dan contest + damage rolls route through rollAndAnimate (so animation / sound prefs apply) -> `test_school_abilities.py::test_kakita_5th_dan_uses_rollandanimate_for_contest`
+- [x] 5th Dan section hidden before initiative is rolled (no action dice) -> `test_school_abilities.py::test_kakita_5th_dan_section_hidden_before_initiative`
+- [x] 5th Dan section appears once action dice exist on the tracking bridge -> `test_school_abilities.py::test_kakita_5th_dan_section_appears_after_initiative`
+- [x] 5th Dan section disappears when the Actions-panel Clear wipes all action dice -> `test_school_abilities.py::test_kakita_5th_dan_section_disappears_when_action_dice_cleared`
 - [x] 5th Dan used flag persists through a page reload via adventureState -> `test_school_abilities.py::test_kakita_5th_dan_used_flag_persists_through_reload`
 
 ### Kitsuki
@@ -486,6 +506,7 @@ also wait for the post-update DOM to settle.
 - [x] Reset confirm modal lists "Clear precepts pool (N dice)" when non-empty -> `test_school_abilities.py::test_priest_3rd_dan_reset_modal_lists_pool_clear`
 - [x] Global Reset button stays enabled when the only clearable state is the pool -> `test_school_abilities.py::test_priest_3rd_dan_reset_button_enabled_with_only_pool`
 - [x] Precepts pool renders on priest's own parry roll -> `test_school_abilities.py::test_priest_3rd_dan_pool_appears_on_own_parry_roll`
+- [x] Precepts pool renders on FAILED attack rolls (swap can turn a miss into a hit) -> `test_school_abilities.py::test_priest_3rd_dan_pool_shows_on_missed_attack`
 - [x] Precepts pool renders on priest's own wound check -> `test_school_abilities.py::test_priest_3rd_dan_pool_appears_on_own_wound_check`
 - [x] Precepts pool does NOT render on a non-qualifying roll (knack, skill) -> `test_school_abilities.py::test_priest_3rd_dan_pool_does_not_appear_on_skill_roll`
 - [x] Predicate excludes iaijutsu-duel knack but includes combat-iaijutsu attack -> `test_school_abilities.py::test_priest_3rd_dan_pool_predicate_excludes_iaijutsu_duel`
@@ -494,7 +515,9 @@ also wait for the post-update DOM to settle.
 - [x] Priest can swap a pool die with a strictly-lower rolled die -> `test_school_abilities.py::test_priest_3rd_dan_swap_pool_die_with_lower_rolled_die`
 - [x] Swap promotes a previously-unkept die into the kept set -> `test_school_abilities.py::test_priest_3rd_dan_swap_promotes_unkept_die_into_kept`
 - [x] Swap menu dedupes same-value rolled dice -> `test_school_abilities.py::test_priest_3rd_dan_swap_menu_dedupes_rolled_values`
-- [x] Swap menu shows disabled "No lower rolled dice" entry when nothing eligible -> `test_school_abilities.py::test_priest_3rd_dan_swap_menu_shows_disabled_when_no_lower`
+- [x] Self-swap menu is disabled only when every rolled die exactly equals the pool die (otherwise the priest can swap in either direction, including impair-and-refresh) -> `test_school_abilities.py::test_priest_3rd_dan_self_swap_menu_disabled_only_when_all_rolled_equal`
+- [x] Ally-swap menu shows "No lower rolled dice" when no strictly-lower rolled die exists -> `test_school_abilities.py::test_priest_3rd_dan_ally_swap_menu_disabled_when_no_lower`
+- [x] Priest can impair their own roll by swapping a LOW pool die for a HIGH kept die (refreshes the pool) -> `test_school_abilities.py::test_priest_3rd_dan_self_swap_can_impair_roll_to_refresh_pool`
 - [x] Equal-value rolled die is excluded from the swap menu -> `test_school_abilities.py::test_priest_3rd_dan_equal_value_rolled_die_excluded_from_menu`
 - [x] Clicking a pool die opens its swap dropdown; clicking again closes it -> `test_school_abilities.py::test_priest_3rd_dan_swap_dropdown_opens_and_closes`
 - [x] Ally swap updates ally's roll and broadcasts new pool to the priest -> `test_school_abilities.py::test_ally_swaps_priest_pool_die_and_broadcasts`
@@ -515,6 +538,7 @@ also wait for the post-update DOM to settle.
 - [x] 4th Dan initiative highest die set to 1 -> `test_school_abilities.py::test_shinjo_4th_dan_initiative_highest_1_behavioral`
 - [x] 5th Dan parry excess applied to wound check -> `test_school_abilities.py::test_shinjo_5th_dan_parry_excess_behavioral`
 - [x] 5th Dan banked excess surfaces in the Tracking section and WC "Apply +N" buttons carry a "5th Dan bonus" label -> `test_school_abilities.py::test_shinjo_5th_dan_banked_excess_in_tracking_section`
+- [x] 5th Dan Bank Excess button re-enables on subsequent parry rolls and accumulates entries -> `test_school_abilities.py::test_shinjo_5th_dan_bank_excess_resets_between_parry_rolls`
 - [x] Special Ability: phase-bonus control suppressed when no action dice (warning fires instead) -> `test_school_abilities.py::test_shinjo_phase_bonus_hidden_without_initiative`
 - [x] Special Ability: phase-bonus control suppressed when all dice are spent -> `test_school_abilities.py::test_shinjo_phase_bonus_hidden_out_of_dice`
 - [x] Special Ability: phase-bonus dropdown visible on attack modal when action dice exist -> `test_school_abilities.py::test_shinjo_phase_bonus_visible_with_action_dice`

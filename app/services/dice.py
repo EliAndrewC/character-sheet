@@ -1178,6 +1178,24 @@ def build_all_roll_formulas(
             # 3rd Dan defender-phase bonus fires on any iaijutsu attack too.
             if dan >= 3:
                 atk["kakita_3rd_dan_defender_phase_bonus"] = True
+            # Derive bonus_sources for the pre-roll probability panel and
+            # flag the 1st Dan +1 rolled die for the post-roll breakdown.
+            # Iaijutsu isn't in ATTACK_TYPE_KEYS, so _annotate_attack_type
+            # skips it; replicate its bonus_sources logic here instead.
+            iai_first_dan_list = SCHOOL_TECHNIQUE_BONUSES.get(
+                "kakita_duelist", {}
+            ).get("first_dan_extra_die") or []
+            iai_bonus_sources: list = []
+            if dan >= 1 and "iaijutsu" in iai_first_dan_list:
+                iai_bonus_sources.append("+1 rolled die from 1st Dan")
+                atk["iaijutsu_first_dan_extra_die"] = True
+            for b in atk.get("bonuses", []) or []:
+                amount = b.get("amount", 0)
+                label = b.get("label") or ""
+                if amount and label:
+                    sign = "+" if amount >= 0 else ""
+                    iai_bonus_sources.append(f"{sign}{amount} from {label}")
+            atk["bonus_sources"] = iai_bonus_sources
             out["knack:iaijutsu:attack"] = _annotate_third_dan(
                 "knack:iaijutsu:attack", atk
             )

@@ -1,6 +1,8 @@
 # Kakita Duelist Implementation Plan
 
-This plan brings the Kakita Duelist school to full feature parity with the rest of the game. Each phase is independently shippable; later phases build on earlier ones.
+**Status: all five phases shipped.** Per-phase test inventories have been consolidated into `tests/e2e/COVERAGE.md` (clicktests) and `tests/test_dice.py` / `tests/test_routes.py` (unit tests); this doc is kept as the historical design record. See `school-features/KakitaDuelist.md` for the current per-ability status.
+
+This plan brought the Kakita Duelist school to full feature parity with the rest of the game. Each phase was independently shippable; later phases built on earlier ones.
 
 **School abilities recap** (from `app/game_data.py` and `school-features/KakitaDuelist.md`):
 - **Special Ability** — 10s on initiative rolls go into Phase 0. Phase 0 action dice are spent on iaijutsu attacks. Interrupt attacks (Phase 0) are iaijutsu.
@@ -38,20 +40,9 @@ Today's bug: the client's initiative sort (`runRoll()` around `const sortedAsc =
 
 `build_initiative_formula` already sets `reroll_tens: False` for every school (`dice.py:889`, confirmed by the docstring "No reroll-10s"). So a rolled 10 on initiative stays exactly 10 for any character; no Kakita-specific reroll-disable is needed.
 
-### COVERAGE.md additions
+### Tests (all delivered)
 
-Unit tests (`test_dice.py`):
-- [ ] `test_kakita_initiative_formula_has_phase_zero_flag` — `build_initiative_formula` stamps `kakita_phase_zero=True` for Kakita, not for other schools.
-- [ ] `test_non_kakita_initiative_no_phase_zero_flag` — the flag is absent for every other school.
-- [ ] `test_routes_pages_exposes_kakita_phase_zero_ability` — `school_abilities["kakita_phase_zero"]` is `True` for Kakita, `False` otherwise.
-
-Clicktests (`test_school_abilities.py`):
-- [ ] `test_kakita_initiative_keeps_10s_as_phase_0_dice` — with dice mocked to include a 10, the Kakita initiative roll keeps it and the 10 becomes a value-0 action die on the Actions panel.
-- [ ] `test_kakita_initiative_prefers_10s_over_higher_non_tens` — dice rolled [2, 5, 10] with 1 kept yields the 10-as-0 kept (not the 2) because 10 sorts as 0.
-- [ ] `test_kakita_initiative_multiple_10s_all_become_phase_0` — two rolled 10s both become value-0 action dice.
-- [ ] `test_kakita_phase_zero_die_survives_reload` — roll initiative, reload the page, the 0 die is still present and still carries its visual marker.
-- [ ] `test_non_kakita_10s_unkept_on_initiative` — regression: non-Kakita initiative with a 10 in the roll still discards it (no Phase 0).
-- [ ] `test_kakita_phase_zero_die_has_phase_zero_svg_class` — the rendered SVG for a value-0 die carries the `.phase-zero` class on the Actions panel.
+Unit tests covering the flag on the initiative formula + `school_abilities` exposure live in `test_dice.py::TestSchoolAbilities::test_kakita_phase_zero_flag`, `test_non_kakita_initiative_no_phase_zero_flag`, and `test_routes.py::TestKakitaPhaseZeroFlag::{test_kakita_has_phase_zero_flag, test_non_kakita_does_not_have_phase_zero_flag}`. Clicktests covering the 10-sorts-as-0 keep, multiple 10s, non-Kakita regression, `.phase-zero` SVG marker, reload persistence, and the iaijutsu-only tooltip are all listed in `tests/e2e/COVERAGE.md` under the Kakita section.
 
 ---
 
@@ -74,20 +65,9 @@ The Special Ability text says Phase-0 actions are iaijutsu attacks. Today the pe
    - The attack modal needs to accept `knack:iaijutsu:attack` as a valid key. Verify `labelMap` and `atkFormula.attack_variant` branches handle "iaijutsu"; update the title, damage display, and result breakdown to read "Iaijutsu Attack".
    - When opened for a phase-0 die (detectable via `_preSpentDieIndex` pointing at a die with `value === 0`), render a small note: "Phase 0 Kakita interrupt attack."
 
-### COVERAGE.md additions
+### Tests (all delivered)
 
-Unit tests (`test_dice.py`):
-- [ ] `test_kakita_iaijutsu_attack_formula_exposed` — `build_all_roll_formulas` returns `knack:iaijutsu:attack` for Kakita only, with `is_attack_type=True` and `attack_variant="iaijutsu"`.
-- [ ] `test_non_kakita_no_iaijutsu_attack_formula` — other schools don't get the attack-variant key.
-- [ ] `test_kakita_iaijutsu_attack_formula_mirrors_iaijutsu_knack_rolled_kept` — rolled/kept match the regular iaijutsu knack formula.
-- [ ] `test_kakita_iaijutsu_attack_formula_respects_4th_dan_damage_bonus` — iaijutsu-damage metadata on the attack formula inherits the Kakita 4th Dan +5 flat on damage.
-
-Clicktests (`test_school_abilities.py`):
-- [ ] `test_kakita_phase_zero_die_menu_shows_only_iaijutsu_attack` — value-0 die's per-die menu shows "Iaijutsu Attack" and "Mark as spent" and nothing else.
-- [ ] `test_kakita_non_zero_die_menu_unchanged` — a normal (value 1-10) die for a Kakita still exposes the full regular menu.
-- [ ] `test_kakita_phase_zero_menu_opens_attack_modal_for_iaijutsu` — clicking the Iaijutsu Attack item on a 0 die opens the attack modal with `atkFormula.attack_variant === 'iaijutsu'`.
-- [ ] `test_kakita_phase_zero_attack_modal_notes_interrupt` — the pre-roll page shows a "Phase 0 Kakita interrupt attack" note.
-- [ ] `test_kakita_phase_zero_attack_spends_the_clicked_die` — rolling from that modal spends the phase-0 die (not some other one).
+Unit tests for the Kakita-only `knack:iaijutsu:attack` formula live in `test_dice.py::TestSchoolAbilities::{test_kakita_iaijutsu_attack_formula_exposed, test_non_kakita_no_iaijutsu_attack_formula, test_kakita_iaijutsu_attack_formula_mirrors_iaijutsu_knack_rolled_kept, test_kakita_iaijutsu_attack_formula_respects_4th_dan_damage_bonus, test_kakita_below_4th_dan_iaijutsu_attack_no_damage_bonus}`. Clicktests covering the restricted per-die menu, the non-zero regression, attack-modal routing, interrupt note, clicked-die spend, and the non-Kakita regression are all listed in `tests/e2e/COVERAGE.md`.
 
 ---
 
@@ -115,26 +95,9 @@ Mirror the Shinjo-phase-bonus wiring from the recent commit. The attack modal as
    - No unspent action dice → no bonus control shown (existing warning fires instead), same pattern as Shinjo.
    - Phase-0 attacks: attacker_phase = 0. If defender acts in phase 5, bonus = 5 × attack.
 
-### COVERAGE.md additions
+### Tests (all delivered)
 
-Unit tests (`test_dice.py`):
-- [ ] `test_kakita_3rd_dan_attack_flag_set` — every attack-type formula carries `kakita_3rd_dan_defender_phase_bonus=True` for Kakita 3rd Dan+.
-- [ ] `test_kakita_3rd_dan_parry_no_flag` — parry doesn't carry the flag.
-- [ ] `test_kakita_3rd_dan_knack_flags` — counterattack / double_attack / lunge / iaijutsu-as-attack formulas all carry the flag.
-- [ ] `test_kakita_3rd_dan_athletics_attack_flag` — athletics-as-attack carries the flag.
-- [ ] `test_kakita_below_3rd_dan_no_flag` — Kakita at Dan 1/2 does not carry the flag.
-- [ ] `test_kakita_3rd_dan_flag_only_for_kakita_school` — other schools never carry it.
-
-Clicktests (`test_school_abilities.py`):
-- [ ] `test_kakita_3rd_dan_defender_phase_control_hidden_without_initiative` — no action dice ⇒ no bonus control (warning shows instead).
-- [ ] `test_kakita_3rd_dan_defender_phase_control_hidden_out_of_dice` — every die spent ⇒ no bonus control.
-- [ ] `test_kakita_3rd_dan_defender_phase_control_visible_with_action_dice` — action die present ⇒ control rendered, dropdown defaulted to 11 ("no remaining actions").
-- [ ] `test_kakita_3rd_dan_bonus_applied_to_attack_roll` — with attacker die=4, defender phase=10, attack skill=2 ⇒ +12 stamped on `formula.kakita_3rd_dan_bonus`, labeled in breakdown.
-- [ ] `test_kakita_3rd_dan_bonus_clamps_when_defender_acts_first` — attacker die=7, defender phase=3 ⇒ +0 (clamp).
-- [ ] `test_kakita_3rd_dan_bonus_shifts_probability_chart` — picking a later defender phase raises `atkHitChance()` live.
-- [ ] `test_kakita_3rd_dan_bonus_uses_clicked_die_value` — opening attack via a specific action die's menu computes the bonus against that die's value.
-- [ ] `test_kakita_3rd_dan_phase_11_default_represents_no_remaining_actions` — the dropdown's labeled "no remaining actions" option yields the expected bonus for attacker_phase=die.value.
-- [ ] `test_kakita_below_3rd_dan_no_bonus_control` — Kakita 2nd Dan doesn't render the control.
+Unit tests for the `kakita_3rd_dan_defender_phase_bonus` flag across every attack-type formula (plus negatives for parry, sub-3rd-Dan, and non-Kakita) live in `test_dice.py::TestSchoolAbilities::{test_kakita_3rd_dan_attack_flag_set, test_kakita_3rd_dan_parry_no_flag, test_kakita_3rd_dan_attack_knack_flags, test_kakita_3rd_dan_athletics_attack_flag, test_kakita_3rd_dan_iaijutsu_attack_flag, test_kakita_below_3rd_dan_no_defender_phase_flag, test_kakita_3rd_dan_flag_only_for_kakita_school}`. Clicktests for the hidden/visible states, bonus application, clamping, live probability-chart updates, clicked-die value, phase-11 default, below-3rd-Dan hide, and the Phase-0-die case are all listed in `tests/e2e/COVERAGE.md`.
 
 ---
 
@@ -162,17 +125,9 @@ The Special Ability grants Kakita the right to interrupt in phase 0 at the cost 
 3. **Reset**
    - If the player closes the modal without rolling, the 2 dice STAY spent (per rules — they paid the cost by declaring). Alternative: give them a "Cancel interrupt, refund dice" button — but the rules don't grant a refund. Ship without a refund; flag the decision in the feature doc.
 
-### COVERAGE.md additions
+### Tests (all delivered)
 
-Clicktests (`test_school_abilities.py`):
-- [ ] `test_kakita_interrupt_button_hidden_for_non_kakita` — other schools never see the button.
-- [ ] `test_kakita_interrupt_button_hidden_below_1st_dan` — not applicable (Special Ability is 1st Dan); instead: `test_kakita_interrupt_button_visible_on_kakita_sheet`.
-- [ ] `test_kakita_interrupt_button_disabled_with_fewer_than_two_dice` — only 1 unspent die ⇒ disabled.
-- [ ] `test_kakita_interrupt_button_spends_two_highest_dice` — click marks the 2 highest unspent dice spent with the Kakita label.
-- [ ] `test_kakita_interrupt_button_opens_iaijutsu_attack_modal` — click opens the attack modal with `attack_variant === 'iaijutsu'` and an interrupt banner.
-- [ ] `test_kakita_interrupt_attack_uses_phase_zero_as_attacker_phase` — 3rd Dan bonus with defender phase=10 yields +10 × attack (because attacker_phase=0).
-- [ ] `test_kakita_interrupt_attack_inherits_4th_dan_damage_bonus` — Kakita 4th Dan interrupt damage roll includes the iaijutsu +5 flat.
-- [ ] `test_kakita_interrupt_persists_after_modal_close` — closing the modal without rolling leaves the 2 dice spent (no refund).
+Clicktests covering the hidden-for-non-Kakita state, visible-on-Kakita button, the disabled-with-fewer-than-two-dice gate, the 2-highest spend mechanics, opens-iaijutsu-modal-with-banner flow, phase-0 attacker_phase plumbing, 4th Dan damage inheritance through the interrupt path (`test_kakita_interrupt_attack_inherits_4th_dan_damage_bonus`), the no-additional-third-die-spent invariant, the no-init-warning suppression, and the no-refund-on-close behavior are all listed in `tests/e2e/COVERAGE.md`.
 
 ---
 
@@ -206,25 +161,9 @@ The 5th Dan technique is its own mini-duel. It deserves a dedicated modal — th
    - 5th Dan is once per combat round. When initiative is rolled again (which calls `resetMantisRound` style), also reset a `kakita_5th_dan_used_this_round` flag so the button becomes enabled again. Store on the tracking bridge.
    - Disable the button when `kakita_5th_dan_used_this_round` is true; re-enable on the next initiative roll.
 
-### COVERAGE.md additions
+### Tests (all delivered)
 
-Unit tests (`test_dice.py`):
-- [ ] `test_school_abilities_exposes_kakita_5th_dan_phase_zero_contest` — flag true for Kakita Dan 5, false below and for other schools.
-
-Clicktests (`test_school_abilities.py`):
-- [ ] `test_kakita_5th_dan_button_visible_on_kakita_dan_5_sheet` — button is rendered.
-- [ ] `test_kakita_below_5th_dan_hides_button` — Kakita Dan 4 doesn't see it.
-- [ ] `test_kakita_5th_dan_button_opens_phase_zero_contest_modal` — click opens the new modal in 'pre' phase.
-- [ ] `test_kakita_5th_dan_modal_defaults_opponent_has_iaijutsu_true` — checkbox defaults on.
-- [ ] `test_kakita_5th_dan_opponent_without_iaijutsu_grants_plus_5_flat` — unchecking the checkbox adds a labeled +5 flat to the pre-roll summary.
-- [ ] `test_kakita_5th_dan_3rd_dan_bonus_applies_with_attacker_phase_0` — Dan 5 character also at Dan 3+ (which they are by construction) sees the defender-phase dropdown; picking phase 10 ⇒ +10 × attack skill bonus from attacker_phase=0.
-- [ ] `test_kakita_5th_dan_rolls_iaijutsu_contested` — clicking Roll produces a baseTotal consistent with the iaijutsu formula + bonuses.
-- [ ] `test_kakita_5th_dan_damage_scales_up_on_win_by_5` — entering an opponent roll 5 below yours adds 1 rolled damage die.
-- [ ] `test_kakita_5th_dan_damage_scales_down_on_loss_by_5` — entering an opponent roll 5 above yours removes 1 rolled damage die (floor 0 enforced).
-- [ ] `test_kakita_5th_dan_damage_unchanged_when_diff_under_5` — a 4-point difference leaves the damage formula alone.
-- [ ] `test_kakita_5th_dan_button_disabled_after_use_until_next_initiative` — rolling disables the button; rolling initiative re-enables it.
-- [ ] `test_kakita_5th_dan_modal_inherits_4th_dan_damage_bonus` — Kakita Dan 5 (so ≥ 4) damage gets +5 flat.
-- [ ] `test_kakita_5th_dan_modal_cancel_before_roll_does_not_consume` — closing the modal via × on the pre-phase does not flip `kakita_5th_dan_used_this_round`.
+Unit tests for the `school_abilities.kakita_5th_dan_phase_zero_contest` flag (Kakita Dan 5+ only) live in `test_routes.py::TestKakitaPhaseZeroFlag::{test_kakita_5th_dan_has_phase_zero_contest_flag, test_kakita_below_5th_dan_no_phase_zero_contest_flag, test_non_kakita_no_phase_zero_contest_flag}`. Clicktests covering the button visibility on Dan 5 and hide below, the modal entry, the opponent-iaijutsu checkbox default + the +5 no-iaijutsu bonus, the 3rd Dan bonus at attacker_phase=0, the roll applying both bonuses, damage scaling up/down/unchanged, the disabled-after-use / re-enabled-on-initiative cycle, the cancel-before-roll invariant, 4th Dan damage inheritance, and reload persistence are all listed in `tests/e2e/COVERAGE.md`.
 
 ---
 

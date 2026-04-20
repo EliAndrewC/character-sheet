@@ -67,10 +67,18 @@
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["double_attack", "iaijutsu", "initiative"]`
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_initiative_formula()`.
+- The Kakita-only `knack:iaijutsu:attack` variant also surfaces the bonus: its `bonus_sources` list includes "+1 rolled die from 1st Dan" so the attack modal's pre-roll probability panel reports it, and an `iaijutsu_first_dan_extra_die` flag drives a dedicated "+1 rolled die from 1st Dan (iaijutsu)" line in the post-roll breakdown.
 
-**Unit tests:** None specific to Kakita 1st Dan.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_bonus_sources_lists_1st_dan_extra_die`
+- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_formula_includes_1st_dan_rolled_die`
+
 **Clicktests:**
 - `test_school_abilities.py::test_kakita_1st_dan_formula_extra_die`
+- `test_school_abilities.py::test_kakita_iaijutsu_attack_modal_lists_1st_dan_and_2nd_dan_bonuses`
+- `test_school_abilities.py::test_kakita_iaijutsu_attack_modal_probability_uses_1st_dan_rolled_die`
+- `test_school_abilities.py::test_kakita_iaijutsu_attack_results_show_1st_dan_extra_die_line`
+- `test_school_abilities.py::test_non_kakita_iaijutsu_attack_has_no_1st_dan_flag`
 
 ---
 
@@ -81,8 +89,12 @@
 **Status:** Fully implemented.
 - `second_dan_free_raise: "iaijutsu"`
 - Applied as +5 flat bonus on iaijutsu rolls via `_apply_school_technique_bonus()`.
+- Also surfaces on the `knack:iaijutsu:attack` variant: the 2nd Dan free raise rides on `atk.flat` / `atk.bonuses` (via `build_knack_formula`'s call into `_apply_school_technique_bonus`) and is echoed into `bonus_sources` for the attack modal's pre-roll summary.
 
-**Unit tests:** None.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_bonus_sources_lists_2nd_dan_free_raise`
+- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_formula_includes_2nd_dan_flat_in_probability`
+
 **Clicktests:**
 - `test_school_abilities.py::test_kakita_2nd_dan_iaijutsu_bonus`
 
@@ -96,7 +108,7 @@
 
 **Implementation:**
 - Server: `app/services/dice.py` stamps `kakita_3rd_dan_defender_phase_bonus = True` on every attack-type formula (base attack, attack-variant knacks, athletics-attack, and the Phase-2 `knack:iaijutsu:attack`) for Kakita 3rd Dan+. `app/routes/pages.py` exposes `school_abilities.kakita_3rd_dan_defender_phase_bonus_x = attack_skill` (0 when not 3rd Dan+).
-- Client: the attack modal's pre-roll page renders a dropdown for the defender's next action (1-10 and an 11-labeled "no remaining actions" default, per the rules). The control is gated on the formula flag, a non-zero X, the initiative warning not firing, and an action die being available. The bonus is `max(0, defender_phase - attacker_phase) * X`, where attacker_phase = the to-be-spent die's value (Phase-0 dice count as 0). `atkHitChance` and `atkAvgAttackRoll` consume the bonus so the probability chart updates live. `rollAttack()` snapshots `kakita_3rd_dan_bonus / _attacker_phase / _defender_phase / _x` onto the formula for the post-roll breakdown.
+- Client: the attack modal's pre-roll page renders a dropdown for the defender's next action (1-10 plus an 11-labeled "no remaining actions" option, per the rules). The dropdown defaults to a 0 "Select phase" sentinel - NOT to 11 - so the player has to pick a phase explicitly; leaving the default silently zeros the bonus, and defaulting to 11 would silently maximize it. While the sentinel is selected the live bonus display is hidden, a hint line ("Pick the defender's next action phase to enable the roll.") appears, and the Roll button is disabled with a tooltip (`_kakita3rdDanNeedsPhase()` gates the disabled attribute). The control is gated on the formula flag, a non-zero X, the initiative warning not firing, and an action die being available. The bonus is `max(0, defender_phase - attacker_phase) * X`, where attacker_phase = the to-be-spent die's value (Phase-0 dice count as 0). `atkHitChance` and `atkAvgAttackRoll` consume the bonus so the probability chart updates live. `rollAttack()` snapshots `kakita_3rd_dan_bonus / _attacker_phase / _defender_phase / _x` onto the formula for the post-roll breakdown.
 
 **Questions (ANSWERED):**
 - The bonus is X per phase before the defender's next action, where X is the attack skill rank.
@@ -121,9 +133,12 @@
 - `test_school_abilities.py::test_kakita_3rd_dan_bonus_clamps_when_defender_acts_first`
 - `test_school_abilities.py::test_kakita_3rd_dan_bonus_shifts_probability_chart`
 - `test_school_abilities.py::test_kakita_3rd_dan_bonus_uses_clicked_die_value`
-- `test_school_abilities.py::test_kakita_3rd_dan_phase_11_default_is_no_remaining_actions`
+- `test_school_abilities.py::test_kakita_3rd_dan_phase_11_yields_max_bonus_for_no_remaining_actions`
 - `test_school_abilities.py::test_kakita_below_3rd_dan_no_bonus_control`
 - `test_school_abilities.py::test_kakita_3rd_dan_bonus_on_phase_zero_die`
+- `test_school_abilities.py::test_kakita_3rd_dan_roll_button_disabled_until_phase_picked`
+- `test_school_abilities.py::test_kakita_3rd_dan_roll_button_enabled_with_no_remaining_actions`
+- `test_school_abilities.py::test_kakita_below_3rd_dan_roll_button_always_enabled`
 
 ---
 
@@ -152,9 +167,12 @@
 **Implementation:**
 - Server: `app/routes/pages.py` exposes `school_abilities.kakita_5th_dan_phase_zero_contest = True` (Kakita Duelist at Dan ≥ 5 only).
 - Tracking bridge: new `kakita5thDanUsed` flag (persisted via `adventureState.kakita_5th_dan_used`); cleared by `setActionDice()` on the next initiative roll so the ability refreshes each round.
-- Dice roller: dedicated `k5Open/k5Phase` modal state with 'pre' / 'result' / 'damage-result' phases plus `k5OpponentHasIaijutsu`, `k5DefenderPhase`, `k5WeaponRolled/Kept`, and scratch state for the roll/damage results. `openKakita5thDanModal()` resets + opens; `rollKakita5thDanContest()` rolls iaijutsu with +5 no-iaijutsu bonus and the 3rd-Dan-at-attacker-phase-0 bonus (reusing the same X = attack skill plumbing as Phase 3); `rollKakita5thDanDamage()` computes `diff = player - opponent`, adjusts rolled dice by `floor(diff/5)` (positive = extra, negative = fewer), clamps to L7R 10k10 caps, rolls damage, and then flips `kakita5thDanUsed`.
-- UI: a Kakita-only "Kakita 5th Dan" panel in the tracking area with a "Phase 0 Contested Iaijutsu" button (disabled when `kakita5thDanUsed`) plus a dedicated `data-modal="kakita-5th-dan"` modal that walks the player through checkbox + defender-phase picker → roll → opponent-roll input → damage roll → damage total.
+- Dice roller: dedicated `k5Open/k5Phase` modal state with 'pre' / 'rolling' / 'result' / 'damage-rolling' / 'damage-result' phases plus `k5OpponentHasIaijutsu`, `k5DefenderPhase`, `k5OpponentSkillRank`, `k5OwnIaijutsuRank`, `k5WeaponRolled/Kept`, and scratch state for the roll/damage results. `openKakita5thDanModal()` resets + opens; `rollKakita5thDanContest()` rolls iaijutsu with the +5 no-iaijutsu bonus, the 3rd-Dan-at-attacker-phase-0 bonus (reusing the same X = attack skill plumbing as Phase 3), AND the general contested-roll skill bonus (+5 per rank the Kakita's iaijutsu exceeds the opponent's picked skill, clamped at 0). `rollKakita5thDanDamage()` computes `diff = player - opponent`, adjusts rolled dice by `floor(diff/5)`, clamps to L7R 10k10 caps, rolls damage, and then flips `kakita5thDanUsed`.
+- Both rolls (contest and damage) go through `L7RDice.rollAndAnimate`, so `prefs.dice_animation_enabled` and `prefs.dice_sound_enabled` drive the animation tray and sound the same way they do for every other combat roll. Dedicated tray IDs (`dice-animation-k5` and `dice-animation-k5-damage`) sit inside the modal and are only visible during their respective rolling phases.
+- UI: a Kakita-only "Kakita 5th Dan" panel in the tracking area with a "Phase 0 Contested Iaijutsu" button (disabled when `kakita5thDanUsed`) plus a dedicated `data-modal="kakita-5th-dan"` modal that walks the player through the opponent-iaijutsu checkbox + opponent-skill-rank dropdown (1-5; defaults to 4 when the opponent has iaijutsu, 3 when they don't - toggling the checkbox flips the dropdown default) + defender-phase picker → animated contest roll → opponent-roll input → animated damage roll → damage total. The contest result view lists each applied bonus (no-iaijutsu, 3rd Dan, contested skill gap) as a labeled breakdown line. The section is gated on the tracking bridge having action dice (`actionDice.length > 0`) so it appears after the Kakita rolls initiative and disappears when the Actions-panel Clear wipes the dice.
 - Cancelling via the × before rolling does NOT consume the once-per-round flag (checked post-damage-roll only).
+
+**General contested-roll skill-gap bonus:** for every rank by which the Kakita's iaijutsu exceeds the opponent's picked skill (iaijutsu when they have it, attack when they don't), the player gains +5 flat (one free raise). This is a general contested-roll rule that currently only surfaces on the 5th Dan modal; future contested-roll flows should use the same `_kakita5thContestSkillBonus` math pattern.
 
 **Unit tests:**
 - `test_routes.py::TestKakitaPhaseZeroFlag::test_kakita_5th_dan_has_phase_zero_contest_flag`
@@ -175,4 +193,15 @@
 - `test_school_abilities.py::test_kakita_5th_dan_button_disabled_after_use_until_next_initiative`
 - `test_school_abilities.py::test_kakita_5th_dan_modal_cancel_before_roll_does_not_consume`
 - `test_school_abilities.py::test_kakita_5th_dan_modal_inherits_4th_dan_damage_bonus`
+- `test_school_abilities.py::test_kakita_5th_dan_opponent_skill_dropdown_defaults_to_4`
+- `test_school_abilities.py::test_kakita_5th_dan_opponent_skill_drops_to_3_when_unchecked`
+- `test_school_abilities.py::test_kakita_5th_dan_opponent_skill_back_to_4_when_rechecked`
+- `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_higher`
+- `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_equal`
+- `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_lower`
+- `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_shown_in_prebonus_and_breakdown`
+- `test_school_abilities.py::test_kakita_5th_dan_uses_rollandanimate_for_contest`
+- `test_school_abilities.py::test_kakita_5th_dan_section_hidden_before_initiative`
+- `test_school_abilities.py::test_kakita_5th_dan_section_appears_after_initiative`
+- `test_school_abilities.py::test_kakita_5th_dan_section_disappears_when_action_dice_cleared`
 - `test_school_abilities.py::test_kakita_5th_dan_used_flag_persists_through_reload`
