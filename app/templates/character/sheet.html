@@ -288,10 +288,18 @@
                     <span class="font-bold">{{ _togashi_ath_rolled }}k{{ _togashi_ath_kept }} athletics actions</span>
                 </div>
             {% else %}
+                {# Pull rolled/kept from the server-computed formula so
+                   school bonuses (1st Dan extra die for Shinjo / Kakita /
+                   Hiruma / Mantis Wave-Treader, and Matsu Bushi's flat 10
+                   dice) show up in the displayed box, not just in the
+                   actual roll result. #}
+                {% set _init_f = roll_formulas.get('initiative', {}) %}
+                {% set _init_rolled = _init_f.get('rolled', ring_map['Void'] + 1) %}
+                {% set _init_kept = _init_f.get('kept', ring_map['Void']) %}
                 <div class="bg-parchment rounded p-2 flex items-center flex-wrap cursor-pointer hover:ring-2 hover:ring-accent/40 transition-shadow"
                      data-roll-key="initiative" title="Click to roll Initiative">
                     <span class="text-ink/60">Initiative:</span>&nbsp;
-                    <span class="font-bold">{{ ring_map['Void'] + 1 }} dice, keep {{ ring_map['Void'] }}</span>
+                    <span class="font-bold">{{ _init_rolled }} dice, keep {{ _init_kept }}</span>
                 </div>
             {% endif %}
         </div>

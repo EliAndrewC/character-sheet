@@ -2612,6 +2612,77 @@ class TestActionDiceShapeAndColor:
         )
 
 
+class TestInitiativeBoxDisplay:
+    """The Initiative box on the sheet must show the same rolled/kept
+    the actual roll uses - including 1st Dan extra-die bonuses for Shinjo
+    Bushi, Kakita Duelist, Hiruma Scout, Mantis Wave-Treader, and the flat
+    10 dice for Matsu Bushi. Previously the display hard-coded (Void+1)kVoid
+    and ignored these school bonuses."""
+
+    def test_regular_school_no_bonus(self, client):
+        cid = _seed_character(
+            client, name="NoBonusInit", school="akodo_bushi",
+            ring_water=3,  # Void defaults to 2
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert "Initiative:" in resp.text
+        assert "3 dice, keep 2" in resp.text  # (Void+1)kVoid = 3k2
+
+    def test_shinjo_bushi_adds_1st_dan_die(self, client):
+        """The user-reported case: Shinjo gets +1 initiative die at 1st Dan."""
+        cid = _seed_character(
+            client, name="Shinjo4Void", school="shinjo_bushi",
+            school_ring_choice="Air",
+            ring_void=4,
+            knacks={"double_attack": 1, "horsemanship": 1, "lunge": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        # Void=4 -> base 5k4, +1 from 1st Dan -> 6k4.
+        assert "6 dice, keep 4" in resp.text
+
+    def test_kakita_duelist_adds_1st_dan_die(self, client):
+        cid = _seed_character(
+            client, name="KakitaInit", school="kakita_duelist",
+            school_ring_choice="Air",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        # Void defaults to 2 -> base 3k2, +1 from 1st Dan -> 4k2.
+        assert "4 dice, keep 2" in resp.text
+
+    def test_hiruma_scout_adds_1st_dan_die(self, client):
+        cid = _seed_character(
+            client, name="HirumaInit", school="hiruma_scout",
+            school_ring_choice="Air",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert "4 dice, keep 2" in resp.text
+
+    def test_mantis_wave_treader_adds_1st_dan_die(self, client):
+        cid = _seed_character(
+            client, name="MantisInit", school="mantis_wave_treader",
+            school_ring_choice="Void",
+            # Mantis school ring defaults to Void, which auto-raises to 3.
+            ring_void=3,
+            knacks={"athletics": 1, "iaijutsu": 1, "worldliness": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        # Void=3 -> base 4k3, +1 from 1st Dan -> 5k3.
+        assert "5 dice, keep 3" in resp.text
+
+    def test_matsu_bushi_shows_10_dice(self, client):
+        """Matsu Bushi's special ability: always roll 10 dice on initiative."""
+        cid = _seed_character(
+            client, name="MatsuInit", school="matsu_bushi",
+            school_ring_choice="Fire",
+            knacks={"attack_skill": 1, "iaijutsu": 1, "lunge": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        # Default Void=2, Matsu flat override to 10 -> 10k2.
+        assert "10 dice, keep 2" in resp.text
+
+
 class TestAthleticsPredeclaredParryRow:
     """The athletics picker should have a 5th row, Athletics (Predeclared
     parry), below Athletics (Parry). Like the existing predeclared-parry

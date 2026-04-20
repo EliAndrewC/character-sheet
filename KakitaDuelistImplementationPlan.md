@@ -12,9 +12,9 @@ This plan brings the Kakita Duelist school to full feature parity with the rest 
 
 ---
 
-## Phase 1 — Verify & strengthen the Phase 0 Special Ability
+## Phase 1 — Make Kakita initiative actually keep its 10s as Phase 0
 
-Today the initiative path in `sheet.html` already maps `value === 10` to `0` when `formula.kakita_phase_zero` is set, and an initiative-result note mentions Phase 0. That logic has no unit tests and the UI barely calls out phase-0 dice on the Actions panel. This phase locks the foundation down so every downstream feature has something reliable to key off.
+Today's bug: the client's initiative sort (`runRoll()` around `const sortedAsc = [...indexed].sort((a, b) => a.value - b.value)`) keeps the lowest dice, so 10s are always *unkept*. The subsequent `v === 10 ? 0 : v` rewrite therefore never fires on a kept die — a Kakita's 10s get discarded instead of becoming Phase 0 action dice. The fix is to sort 10s as if they were 0s for Kakita, which makes them the first dice the keep-lowest logic picks up; the existing post-keep rewrite then turns them into value-0 action dice.
 
 ### What to do
 
@@ -22,10 +22,21 @@ Today the initiative path in `sheet.html` already maps `value === 10` to `0` whe
    - Confirm `build_initiative_formula()` in `app/services/dice.py` sets `kakita_phase_zero = True` for `kakita_duelist`.
    - Add a `school_abilities.kakita_phase_zero` flag in `app/routes/pages.py` (true for Kakita Duelist) so the client can gate UI without reading the initiative formula from the dice roller cross-scope.
 
-2. **Client**
-   - Walk through `runRoll()` around the existing `v === 10 ? 0 : v` mapping and make sure the converted value persists to `actionDice`, `window._trackingBridge`, and the server-saved `action_dice` payload (so the 0 survives a reload — relies on the earlier `_sanitize_action_dice` fix that already preserves `value`).
-   - In the Actions-panel per-die rendering (`sheet.html` around the action-die SVG), add a gold/phase-zero visual class when `die.value === 0` *and* `schoolAbilities.kakita_phase_zero` (CSS already has `.phase-zero .die-text`).
-   - Tooltip on a value-0 die should read "Phase 0 (Kakita interrupt): iaijutsu attacks only."
+2. **Client — sort + keep path (`runRoll()` in `sheet.html`)**
+   - Introduce a helper `sortValue(v)` that returns `0` when `this.formula.kakita_phase_zero && v === 10`, otherwise `v`. Sort `indexed` by `sortValue(a.value) - sortValue(b.value)`. Tiebreak on original index so repeated rolls remain stable.
+   - `keptIdx` (initiative branch) still slices the bottom `keptCount` of the sorted list — with the new sort, any rolled 10s now occupy the bottom positions and get kept.
+   - After the kept slice is populated, the existing `actions.map(v => v === 10 ? 0 : v)` converts them to Phase-0 dice. Verify ordering: `actions.sort((a, b) => a - b)` should run AFTER the 10→0 rewrite (else 10s end up sorted to the back despite being Phase 0). The current code has the sort first and the rewrite after; move the rewrite above the final sort, or sort by `sortValue` in both places.
+   - Persistence: the 0-valued entries flow into `window._trackingBridge.setActionDice(...)` ⇒ `save()` ⇒ `_sanitize_action_dice` (already preserves `value`), so reload is already covered.
+
+3. **Actions-panel visual**
+   - The existing SVG class binding already writes `phase-zero` when `die.value === 0` and `base.html` already paints that class dark red. Confirm this path fires for the per-die button in the Actions panel (it does — same binding as the initiative-result modal uses). Tooltip on a value-0 die should read "Phase 0 (Kakita interrupt): iaijutsu attacks only." (Phase 2 tightens the menu to actually restrict this.)
+
+4. **Regression guard**
+   - For a non-Kakita character, the sort helper is a passthrough — 10s still get un-kept and the action dice never contain 0s. Re-run the Togashi/Shinjo/Mantis initiative clicktests to be sure.
+
+### reroll_tens is NOT a concern here
+
+`build_initiative_formula` already sets `reroll_tens: False` for every school (`dice.py:889`, confirmed by the docstring "No reroll-10s"). So a rolled 10 on initiative stays exactly 10 for any character; no Kakita-specific reroll-disable is needed.
 
 ### COVERAGE.md additions
 
@@ -35,10 +46,12 @@ Unit tests (`test_dice.py`):
 - [ ] `test_routes_pages_exposes_kakita_phase_zero_ability` — `school_abilities["kakita_phase_zero"]` is `True` for Kakita, `False` otherwise.
 
 Clicktests (`test_school_abilities.py`):
-- [ ] `test_kakita_initiative_10s_become_phase_0_dice` — Kakita initiative roll with mocked-high dice produces action dice with `value === 0` flagged as phase-zero.
+- [ ] `test_kakita_initiative_keeps_10s_as_phase_0_dice` — with dice mocked to include a 10, the Kakita initiative roll keeps it and the 10 becomes a value-0 action die on the Actions panel.
+- [ ] `test_kakita_initiative_prefers_10s_over_higher_non_tens` — dice rolled [2, 5, 10] with 1 kept yields the 10-as-0 kept (not the 2) because 10 sorts as 0.
+- [ ] `test_kakita_initiative_multiple_10s_all_become_phase_0` — two rolled 10s both become value-0 action dice.
 - [ ] `test_kakita_phase_zero_die_survives_reload` — roll initiative, reload the page, the 0 die is still present and still carries its visual marker.
-- [ ] `test_non_kakita_10s_stay_as_10s_on_initiative` — regression: non-Kakita initiative keeps 10s at 10 (no Phase 0).
-- [ ] `test_kakita_phase_zero_die_has_gold_svg_class` — the rendered SVG for a value-0 die carries the `.phase-zero` class.
+- [ ] `test_non_kakita_10s_unkept_on_initiative` — regression: non-Kakita initiative with a 10 in the roll still discards it (no Phase 0).
+- [ ] `test_kakita_phase_zero_die_has_phase_zero_svg_class` — the rendered SVG for a value-0 die carries the `.phase-zero` class on the Actions panel.
 
 ---
 
