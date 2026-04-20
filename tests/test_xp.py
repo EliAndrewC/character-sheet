@@ -439,9 +439,14 @@ class TestXpBreakdown:
     """The rich per-item breakdown used by the sheet's expandable XP Summary."""
 
     def test_default_character_has_only_wasp_note(self):
-        """A fresh character has empty per-category rows but the HRR Wasp note is always present."""
+        """A fresh character has the free school-ring raise as a 0 XP row,
+        empty per-category rows elsewhere, and the HRR Wasp note."""
         breakdown = calculate_xp_breakdown(make_character_data())
-        assert breakdown["rings"]["rows"] == []
+        # Default character has Water=3 (school ring) -> free 2->3 raise shown.
+        assert breakdown["rings"]["rows"] == [
+            {"xp": 0, "label": "Water", "from_val": 2, "to_val": 3},
+        ]
+        assert breakdown["rings"]["total"] == 0
         assert breakdown["school_knacks"]["rows"] == []
         assert breakdown["skills"]["subsections"][0]["rows"] == []
         assert breakdown["skills"]["subsections"][1]["rows"] == []
@@ -472,11 +477,12 @@ class TestXpBreakdown:
             rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
         )
         rows = calculate_xp_breakdown(data)["rings"]["rows"]
-        # Air 2->3 (15), Air 3->4 (20), Water 3->4 (20). school_ring=Water so Water
-        # starts at 3 and only its 3->4 raise costs. Sorted by (from_val, label):
-        #   (2, "Air"), (3, "Air"), (3, "Water").
+        # school_ring=Water, so Water's 2->3 is a free 0 XP row and only its
+        # 3->4 raise costs. Sorted by (from_val, label):
+        #   (2, "Air"), (2, "Water"), (3, "Air"), (3, "Water").
         assert [(r["label"], r["from_val"], r["to_val"], r["xp"]) for r in rows] == [
             ("Air", 2, 3, 15),
+            ("Water", 2, 3, 0),
             ("Air", 3, 4, 20),
             ("Water", 3, 4, 20),
         ]
@@ -688,7 +694,8 @@ class TestXpBreakdown:
         assert any(r["label"] == "made_up_knack" for r in rows)
 
     def test_4th_dan_school_ring_discount(self):
-        """4th Dan: school ring 3->4 free, all other school ring raises -5 XP."""
+        """4th Dan: school-ring 2->3 free (base), 3->4 free (4th Dan), and the
+        remaining raises get a -5 XP discount."""
         data = make_character_data(
             knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},  # min knack=4 -> dan 4
             school_ring_choice="Water",
@@ -696,12 +703,12 @@ class TestXpBreakdown:
         )
         breakdown = calculate_xp_breakdown(data)
         rings_rows = breakdown["rings"]["rows"]
-        # Water 3->4 should be free (skipped), Water 4->5 should cost 25-5=20
         water_rows = [r for r in rings_rows if r["label"] == "Water"]
-        assert len(water_rows) == 1  # only the 4->5 raise (3->4 is free at 4th Dan)
-        assert water_rows[0]["from_val"] == 4
-        assert water_rows[0]["to_val"] == 5
-        assert water_rows[0]["xp"] == 20  # 25 - 5 discount
+        assert [(r["from_val"], r["to_val"], r["xp"]) for r in water_rows] == [
+            (2, 3, 0),    # free school-ring raise
+            (3, 4, 0),    # free 4th Dan raise
+            (4, 5, 20),   # 25 - 5 discount
+        ]
 
     def test_unknown_advantage_ignored(self):
         data = make_character_data(advantages=["nonexistent_advantage"])

@@ -61,13 +61,11 @@ def _wait_wc_result(page):
 
 
 def _add_lw_and_open_wc(page, amount):
-    """Add light wounds and open wound check modal."""
+    """Add light wounds; the wound check modal auto-opens."""
     page.locator('[data-action="lw-plus"]').click()
     page.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
     page.fill('input[placeholder="Amount"]', str(amount))
     page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
-    page.wait_for_timeout(300)
-    page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
 
 

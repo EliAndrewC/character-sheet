@@ -791,7 +791,10 @@ def _sanitize_action_dice(raw: Any) -> list:
     Each entry becomes ``{"value": int, "spent": bool}`` with the value
     clamped to 0-10. An optional ``"spent_by"`` string (describing the
     action that auto-spent the die) is preserved, capped at 500 chars.
-    Malformed or non-list payloads become ``[]``.
+    The ``athletics_only`` flag (Togashi Ise Zumi extra die, Mantis 4th
+    Dan bonus die) and the ``mantis_4th_dan`` marker flag are preserved
+    so the die's spending restrictions survive a reload. Malformed or
+    non-list payloads become ``[]``.
     """
     if not isinstance(raw, list):
         return []
@@ -808,6 +811,10 @@ def _sanitize_action_dice(raw: Any) -> list:
         spent_by = entry.get("spent_by")
         if isinstance(spent_by, str) and spent_by:
             out["spent_by"] = spent_by[:500]
+        if entry.get("athletics_only"):
+            out["athletics_only"] = True
+        if entry.get("mantis_4th_dan"):
+            out["mantis_4th_dan"] = True
         cleaned.append(out)
     return cleaned
 

@@ -572,13 +572,41 @@
                     }
                     this.save();
                 },
+                // Picks the action die to spend for a Mantis 3rd Dan technique
+                // invocation from the attack-result or tracking-section button.
+                // Rule: prefer the Mantis 4th Dan athletics bonus die (it's
+                // restricted to movement / athletics / this technique, so
+                // spending it "for free" is the best use); otherwise spend
+                // the HIGHEST-value unspent regular action die (the "last"
+                // phase of the round, so the player doesn't waste an earlier
+                // phase that could still be used for a real action). Returns
+                // the chosen index or -1 if no eligible die exists.
+                _pickMantis3rdDanDie() {
+                    const dice = this.actionDice;
+                    const fourth = dice.findIndex(d => !d.spent && d.mantis_4th_dan);
+                    if (fourth >= 0) return fourth;
+                    let bestIdx = -1;
+                    let bestValue = -1;
+                    for (let i = 0; i < dice.length; i++) {
+                        const d = dice[i];
+                        if (d.spent || d.athletics_only) continue;
+                        if (d.value > bestValue) {
+                            bestValue = d.value;
+                            bestIdx = i;
+                        }
+                    }
+                    return bestIdx;
+                },
                 incrementMantis3rdDanOffensive(amount) {
                     // Called from the attack-result-modal button. Spends the
-                    // lowest unspent action die (labeled) and accumulates +X
-                    // on subsequent attack and damage rolls this round.
+                    // Mantis 4th Dan bonus die if available, otherwise the
+                    // highest-value unspent regular action die, and
+                    // accumulates +X on subsequent attack / damage rolls.
                     if (!amount) return false;
-                    const idx = this.spendLowestUnspentActionDie('Mantis 3rd Dan (offensive)');
+                    const idx = this._pickMantis3rdDanDie();
                     if (idx < 0) return false;
+                    this.actionDice[idx].spent = true;
+                    this.actionDice[idx].spent_by = 'Mantis 3rd Dan (offensive)';
                     this.offensive3rdDanAccum = (this.offensive3rdDanAccum || 0) + amount;
                     this.adventureState.mantis_offensive_3rd_dan_accum = this.offensive3rdDanAccum;
                     this._dispatchMantisPostureChanged(this.currentPosture());
@@ -586,14 +614,41 @@
                     return true;
                 },
                 incrementMantis3rdDanDefensive(amount) {
-                    // Called from the Tracking-section button. Spends the
-                    // lowest unspent action die (labeled) and accumulates +X
-                    // on subsequent wound checks and on the displayed TN.
+                    // Called from the Tracking-section button. Same die-
+                    // selection rule as the offensive counterpart; accumulates
+                    // +X on subsequent wound checks and on the displayed TN.
                     if (!amount) return false;
-                    const idx = this.spendLowestUnspentActionDie('Mantis 3rd Dan (defensive)');
+                    const idx = this._pickMantis3rdDanDie();
                     if (idx < 0) return false;
+                    this.actionDice[idx].spent = true;
+                    this.actionDice[idx].spent_by = 'Mantis 3rd Dan (defensive)';
                     this.defensive3rdDanAccum = (this.defensive3rdDanAccum || 0) + amount;
                     this.adventureState.mantis_defensive_3rd_dan_accum = this.defensive3rdDanAccum;
+                    this._dispatchMantisPostureChanged(this.currentPosture());
+                    this.save();
+                    return true;
+                },
+                spendActionDieForMantis3rdDan(i, posture, amount) {
+                    // Called from the per-die action menu. Spends the clicked
+                    // die and accumulates +X on the chosen posture's rolls
+                    // (attack/damage for offensive, parry/WC for defensive).
+                    if (!amount) return false;
+                    const d = this.actionDice[i];
+                    if (!d || d.spent) return false;
+                    const label = posture === 'offensive'
+                        ? 'Mantis 3rd Dan (offensive)'
+                        : 'Mantis 3rd Dan (defensive)';
+                    d.spent = true;
+                    d.spent_by = label;
+                    if (posture === 'offensive') {
+                        this.offensive3rdDanAccum = (this.offensive3rdDanAccum || 0) + amount;
+                        this.adventureState.mantis_offensive_3rd_dan_accum = this.offensive3rdDanAccum;
+                    } else {
+                        this.defensive3rdDanAccum = (this.defensive3rdDanAccum || 0) + amount;
+                        this.adventureState.mantis_defensive_3rd_dan_accum = this.defensive3rdDanAccum;
+                    }
+                    this.actionMenuOpen = null;
+                    this.actionMenuHoverRow = null;
                     this._dispatchMantisPostureChanged(this.currentPosture());
                     this.save();
                     return true;
@@ -737,6 +792,9 @@
                     this.lwPlusModal = false;
                     this.lwAddAmount = '';
                     this.save();
+                    if (this.lightWounds > 0) {
+                        window.dispatchEvent(new CustomEvent('open-wound-check'));
+                    }
                 },
                 lwSetToTotal() {
                     const val = parseInt(this.lwNewTotal);
@@ -744,6 +802,9 @@
                     this.lwPlusModal = false;
                     this.lwNewTotal = '';
                     this.save();
+                    if (this.lightWounds > 0) {
+                        window.dispatchEvent(new CustomEvent('open-wound-check'));
+                    }
                 },
                 lwResetToZero() {
                     this.lightWounds = 0;
@@ -764,11 +825,10 @@
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
              x-data="trackingData()"
              x-init="window._trackingBridge = $data">
-        <h2 class="text-xl font-bold mb-4 text-accent">Tracking</h2>
-
         <div class="flex flex-col md:flex-row gap-10">
         <!-- Wounds & Void (left column) -->
-        <div class="space-y-3 shrink-0">
+        <div class="flex-1 min-w-0 space-y-3">
+            <h2 class="text-xl font-bold mb-4 text-accent">Tracking</h2>
             <div class="relative">
                 <div class="flex items-center justify-between gap-4">
                     <div class="text-sm text-ink/60">Light Wounds</div>
@@ -779,19 +839,19 @@
                                 data-action="lw-minus"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
                         {% endif %}
+                        {% if viewer_can_edit %}
+                        <button x-show="lightWounds > 0" x-cloak
+                                @click="$dispatch('open-wound-check')"
+                                data-action="roll-wound-check"
+                                class="text-xs bg-accent/10 hover:bg-accent/20 text-accent font-medium px-2 py-1 rounded transition-colors">
+                            WC
+                        </button>
+                        {% endif %}
                         <span class="text-lg font-bold w-8 text-center" x-text="lightWounds"></span>
                         {% if viewer_can_edit %}
                         <button @click="lwPlusModal = true"
                                 data-action="lw-plus"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
-                        {% endif %}
-                        {% if viewer_can_edit %}
-                        <button x-show="lightWounds > 0" x-cloak
-                                @click="$dispatch('open-wound-check')"
-                                data-action="roll-wound-check"
-                                class="text-xs bg-accent/10 hover:bg-accent/20 text-accent font-medium px-2 py-1 rounded transition-colors ml-1">
-                            WC
-                        </button>
                         {% endif %}
                     </div>
                 </div>
@@ -1150,14 +1210,14 @@
                             :disabled="posturePhase > 10"
                             data-action="mantis-posture-offensive"
                             class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
-                        Offensive Posture for Phase <span x-text="posturePhase"></span>
+                        Offensive Posture for Phase <span x-text="posturePhase > 10 ? '...' : posturePhase"></span>
                     </button>
                     <button type="button"
                             @click="selectPosture('defensive')"
                             :disabled="posturePhase > 10"
                             data-action="mantis-posture-defensive"
                             class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
-                        Defensive Posture for Phase <span x-text="posturePhase"></span>
+                        Defensive Posture for Phase <span x-text="posturePhase > 10 ? '...' : posturePhase"></span>
                     </button>
                 </div>
                 {% endif %}
@@ -1303,7 +1363,7 @@
                                                     @click="window._diceRoller?.rollForActionDie('attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
                                                     class="block w-full text-left px-3 py-2 hover:bg-parchment">Roll Attack</button>
                                         </template>
-                                        <template x-if="window._diceRoller?.formulas?.['athletics:attack']">
+                                        <template x-if="window._diceRoller?.formulas?.['athletics:attack'] && (die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }})">
                                             <button type="button"
                                                     data-action-die-menu-item="athletics-attack"
                                                     @click="window._diceRoller?.rollForActionDie('athletics:attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
@@ -1406,7 +1466,7 @@
                                             </div>
                                         </template>
                                         {# ── ATHLETICS PARRY (roll modal, with void flyout) ── #}
-                                        <template x-if="window._diceRoller?.formulas?.['athletics:parry']">
+                                        <template x-if="window._diceRoller?.formulas?.['athletics:parry'] && (die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }})">
                                             <div class="relative"
                                                  @mouseenter="actionMenuHoverRow = i + '-ath-parry'"
                                                  @mouseleave="actionMenuHoverRow = null">
@@ -1432,7 +1492,7 @@
                                             </div>
                                         </template>
                                         {# ── ATHLETICS PREDECLARED PARRY (roll modal, with void flyout) ── #}
-                                        <template x-if="window._diceRoller?.formulas?.['athletics:parry']">
+                                        <template x-if="window._diceRoller?.formulas?.['athletics:parry'] && (die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }})">
                                             <div class="relative"
                                                  @mouseenter="actionMenuHoverRow = i + '-ath-predeclared'"
                                                  @mouseleave="actionMenuHoverRow = null">
@@ -1457,6 +1517,27 @@
                                                 </div>
                                             </div>
                                         </template>
+                                        {# ── MANTIS 3RD DAN ── #}
+                                        {% if school_abilities.get('mantis_3rd_dan_offensive') %}
+                                        <template x-if="window._trackingBridge?.currentPosture?.() === 'offensive'">
+                                            <button type="button"
+                                                    data-action-die-menu-item="mantis-3rd-dan-offensive"
+                                                    @click="window._trackingBridge?.spendActionDieForMantis3rdDan(i, 'offensive', {{ school_abilities.get('mantis_3rd_dan_x', 0) }})"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">
+                                                Mantis 3rd Dan (+<span>{{ school_abilities.get('mantis_3rd_dan_x', 0) }}</span> attack &amp; damage)
+                                            </button>
+                                        </template>
+                                        {% endif %}
+                                        {% if school_abilities.get('mantis_3rd_dan_defensive') %}
+                                        <template x-if="window._trackingBridge?.currentPosture?.() === 'defensive'">
+                                            <button type="button"
+                                                    data-action-die-menu-item="mantis-3rd-dan-defensive"
+                                                    @click="window._trackingBridge?.spendActionDieForMantis3rdDan(i, 'defensive', {{ school_abilities.get('mantis_3rd_dan_x', 0) }})"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">
+                                                Mantis 3rd Dan (+<span>{{ school_abilities.get('mantis_3rd_dan_x', 0) }}</span> parry &amp; wound checks)
+                                            </button>
+                                        </template>
+                                        {% endif %}
                                         {# ── MANUAL ── #}
                                         <button type="button"
                                                 @click="spendActionDie(i)"
@@ -1468,9 +1549,6 @@
                             {% endif %}
                         </div>
                     </template>
-                </div>
-                <div class="text-xs text-ink/60 mt-2">
-                    Lowest unspent die is auto-spent when you attack or parry.
                 </div>
             </div>
 
@@ -2357,8 +2435,13 @@
                             </template>
                         </div>
                     </div>
-                    {# Athletics parry: only appears when the parry menu is for the regular ``parry`` key and an athletics:parry formula exists. #}
-                    <template x-if="rollMenuKey === 'parry' && formulas['athletics:parry']">
+                    {# Athletics parry: only appears when the parry menu is
+                       for the regular ``parry`` key, an athletics:parry
+                       formula exists, AND the school treats athletics as a
+                       standard attack/parry variant (Togashi Ise Zumi). Other
+                       schools access Athletics parry through the Athletics
+                       skill directly. #}
+                    <template x-if="rollMenuKey === 'parry' && formulas['athletics:parry'] && schoolAbilities.athletics_combat_everywhere">
                         <div class="relative border-t border-ink/10"
                              @mouseenter="parryHoverRow = 'athletics'"
                              @mouseleave="parryHoverRow = null">
@@ -3941,7 +4024,10 @@
                                     <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
                                          class="die action-die"
                                          :class="(die.athletics_only ? 'athletics-only ' : '') + (die.value === 0 ? 'phase-zero ' : '') + (die.value === 10 ? 'two-digit' : '')">
-                                        <template x-if="die.athletics_only">
+                                        <template x-if="die.mantis_4th_dan">
+                                            <title>Mantis 4th Dan athletics die. May only be spent on movement, athletics, or the Mantis 3rd Dan technique.</title>
+                                        </template>
+                                        <template x-if="die.athletics_only && !die.mantis_4th_dan">
                                             <title>Athletics-only action die (Togashi special ability)</title>
                                         </template>
                                         <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
@@ -3965,8 +4051,11 @@
                             <template x-if="formula && formula.hiruma_4th_dan">
                                 <div class="text-ink/70 italic">Hiruma 4th Dan: all action dice lowered by 2 (min 1).</div>
                             </template>
-                            <template x-if="actionDice.some(d => d.athletics_only)">
+                            <template x-if="actionDice.some(d => d.athletics_only && !d.mantis_4th_dan)">
                                 <div class="text-sky-700 italic">Togashi Special: the blue action die is a bonus die that may only be spent on athletics actions.</div>
+                            </template>
+                            <template x-if="actionDice.some(d => d.mantis_4th_dan)">
+                                <div class="text-sky-700 italic">Mantis 4th Dan: the blue action die may only be spent on movement, athletics actions, or the Mantis 3rd Dan technique.</div>
                             </template>
                         </div>
                         <div x-show="perRoundResetMessages.length > 0" x-cloak
@@ -5306,10 +5395,13 @@
                 }
 
                 // Attack (regular) with athletics available: show a choice menu
-                // so the player can pick regular vs athletics attack. All other
-                // attack variants (double_attack, counterattack, lunge, iaijutsu
-                // strike, athletics:attack) jump straight to the modal.
-                if (key === 'attack' && this.formulas['athletics:attack']) {
+                // so the player can pick regular vs athletics attack. Only the
+                // Togashi Ise Zumi school treats athletics as a standard attack
+                // variant this way; other schools access Athletics attack via
+                // the Athletics skill directly (or via an athletics-only die).
+                if (key === 'attack'
+                        && this.formulas['athletics:attack']
+                        && this.schoolAbilities.athletics_combat_everywhere) {
                     const pos = this._computeRollMenuPos(el);
                     this.rollMenuKey = key;
                     this.rollMenuTitle = f.label;

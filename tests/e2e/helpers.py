@@ -66,6 +66,34 @@ def create_and_apply(page, live_server_url, name="Test Character", school="akodo
     return page.url
 
 
+def dismiss_wc_modal(page):
+    """Close the wound-check modal if it is currently open.
+
+    Adding light wounds auto-opens the WC modal. Tests that do not care
+    about rolling a wound check call this to dismiss it and get back to
+    interacting with the page underneath.
+    """
+    modal = page.locator('[data-modal="wound-check"]')
+    if modal.count() > 0 and modal.is_visible():
+        modal.locator('button', has_text="\u00d7").first.click()
+        page.wait_for_timeout(100)
+
+
+def add_light_wounds(page, amount, *, dismiss_wc=True):
+    """Add light wounds via the + modal.
+
+    By default also dismisses the auto-opened wound-check modal so that
+    callers can continue interacting with the page.
+    """
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
+    page.fill('input[placeholder="Amount"]', str(amount))
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button', has_text="Add").click()
+    page.wait_for_timeout(300)
+    if dismiss_wc:
+        dismiss_wc_modal(page)
+
+
 def apply_changes(page, summary="Test version"):
     """Click Apply Changes, fill in the modal summary, and confirm.
 

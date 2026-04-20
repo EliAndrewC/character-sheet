@@ -318,10 +318,19 @@ also wait for the post-update DOM to settle.
 - [x] 3rd Dan defensive button hidden in offensive posture -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_button_hidden_in_offensive_posture`
 - [x] 3rd Dan defensive button hidden when no unspent action dice -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_button_hidden_no_action_dice`
 - [x] 3rd Dan defensive button absent on Dan 2 Mantis -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_button_absent_on_dan_2`
-- [x] Clicking 3rd Dan defensive button spends lowest unspent action die (labeled) and bumps defensive3rdDanAccum by X -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_click_spends_die_and_accumulates`
+- [x] Clicking 3rd Dan defensive button spends the highest-value unspent regular action die (labeled) and bumps defensive3rdDanAccum by X -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_click_spends_die_and_accumulates`
+- [x] Defensive 3rd Dan button prefers the Mantis 4th Dan bonus die over regular action dice -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_prefers_4th_dan_die`
+- [x] Offensive 3rd Dan button prefers the Mantis 4th Dan bonus die over regular action dice -> `test_school_abilities.py::test_mantis_3rd_dan_offensive_prefers_4th_dan_die`
+- [x] Defensive 3rd Dan button spends the HIGHEST-value unspent regular die when no 4th Dan die is present -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_spends_highest_regular_die`
 - [x] Two defensive spends stack at 2X -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_two_spends_stack`
 - [x] WC modal pre-roll Bonuses + post-roll breakdown include +X from Mantis 3rd Dan (defensive) -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_wc_overlay`
 - [x] TN display includes +5 current posture + +X 3rd Dan accumulator; enumerated tooltip lists each contribution; inline "+X 3rd Dan" label visible -> `test_school_abilities.py::test_mantis_3rd_dan_defensive_tn_display`
+- [x] Action-die menu: neither 3rd Dan item shown without a posture -> `test_school_abilities.py::test_mantis_3rd_dan_action_die_menu_hidden_without_posture`
+- [x] Action-die menu: offensive 3rd Dan item shown (defensive hidden) in offensive posture -> `test_school_abilities.py::test_mantis_3rd_dan_action_die_menu_offensive_only_in_offensive`
+- [x] Action-die menu: defensive 3rd Dan item shown (offensive hidden) in defensive posture -> `test_school_abilities.py::test_mantis_3rd_dan_action_die_menu_defensive_only_in_defensive`
+- [x] Action-die menu: neither 3rd Dan item present on Dan 2 Mantis -> `test_school_abilities.py::test_mantis_3rd_dan_action_die_menu_absent_on_dan_2`
+- [x] Action-die menu: offensive 3rd Dan click spends the clicked die (labeled) and bumps offensive accumulator by X -> `test_school_abilities.py::test_mantis_3rd_dan_action_die_offensive_spends_specific_die`
+- [x] Action-die menu: defensive 3rd Dan click spends the clicked die (labeled) and bumps defensive accumulator by X -> `test_school_abilities.py::test_mantis_3rd_dan_action_die_defensive_spends_specific_die`
 - [x] Clear bonuses button zeros postureHistory, both 3rd Dan accumulators, and action dice -> `test_school_abilities.py::test_mantis_clear_bonuses_zeros_everything`
 - [x] Clear bonuses button hidden on a fresh sheet with no round state -> `test_school_abilities.py::test_mantis_clear_bonuses_button_hidden_when_empty`
 - [x] Action-dice "Clear" button is equivalent to Clear bonuses (wipes everything) -> `test_school_abilities.py::test_mantis_action_dice_clear_equivalent_to_clear_bonuses`
@@ -336,6 +345,14 @@ also wait for the post-update DOM to settle.
 - [x] 4th Dan die cleared by Clear bonuses button -> `test_school_abilities.py::test_mantis_4th_dan_die_cleared_by_clear_bonuses`
 - [x] Dan 3 Mantis does not get the 4th Dan bonus die -> `test_school_abilities.py::test_mantis_dan_3_no_4th_dan_die`
 - [x] Non-Mantis Dan 4 does not get the 4th Dan bonus die -> `test_school_abilities.py::test_non_mantis_dan_4_no_4th_dan_die`
+- [x] 4th Dan die's athletics_only + mantis_4th_dan flags survive a page reload -> `test_school_abilities.py::test_mantis_4th_dan_die_flags_survive_reload`
+- [x] Regular Mantis action-die menu hides Athletics Attack/Parry/Predeclared Parry -> `test_school_abilities.py::test_mantis_regular_die_menu_hides_athletics_options`
+- [x] Mantis 4th Dan die menu shows only Athletics variants + Mantis 3rd Dan (no regular combat) -> `test_school_abilities.py::test_mantis_4th_dan_die_menu_shows_only_athletics_and_3rd_dan`
+- [x] Mantis Attack skill menu skips the athletics choice and opens the attack modal directly -> `test_school_abilities.py::test_mantis_attack_skill_menu_no_athletics_choice`
+- [x] Mantis Parry skill menu has no Athletics Parry row -> `test_school_abilities.py::test_mantis_parry_skill_menu_no_athletics_row`
+- [x] Togashi Attack skill menu still shows the athletics choice -> `test_school_abilities.py::test_togashi_attack_skill_menu_shows_athletics_choice`
+- [x] Togashi Parry skill menu still shows the Athletics Parry row -> `test_school_abilities.py::test_togashi_parry_skill_menu_shows_athletics_row`
+- [x] Togashi regular action-die menu still shows Athletics options -> `test_school_abilities.py::test_togashi_regular_die_menu_shows_athletics_options`
 
 ### Merchant
 
@@ -836,6 +853,9 @@ also wait for the post-update DOM to settle.
 - [x] Light wounds + opens modal → `test_light_wounds.py::test_plus_opens_modal`
 - [x] Light wounds modal: add to total → `test_light_wounds.py::test_modal_add_to_total`
 - [x] Light wounds modal: set total directly → `test_light_wounds.py::test_modal_set_total`
+- [x] Light wounds modal: Add auto-opens wound check → `test_light_wounds.py::test_add_to_total_auto_opens_wound_check`
+- [x] Light wounds modal: Set auto-opens wound check → `test_light_wounds.py::test_set_total_auto_opens_wound_check`
+- [x] Light wounds modal: Set to 0 does not open wound check → `test_light_wounds.py::test_set_total_to_zero_does_not_open_wound_check`
 - [x] Light wounds modal: take serious wounds and reset → `test_light_wounds.py::test_modal_take_serious_and_reset`
 - [x] Light wounds - opens dropdown → `test_light_wounds.py::test_minus_dropdown_reset`
 - [x] Light wounds - dropdown: reset to 0 → `test_light_wounds.py::test_minus_dropdown_reset`
@@ -906,6 +926,7 @@ also wait for the post-update DOM to settle.
 - [x] New category labels (School Knacks, Attack / Parry, HRR) and ordering → `test_sheet_display.py::test_xp_summary_new_labels_and_ordering`
 - [x] Expansion panel collapsed by default → `test_sheet_display.py::test_xp_summary_collapsed_by_default`
 - [x] Click to expand, switch sections, click same to collapse → `test_sheet_display.py::test_xp_summary_expand_switch_collapse`
+- [x] Rings breakdown shows free school-ring 2->3 raise as 0 XP row → `test_sheet_display.py::test_xp_summary_rings_shows_free_school_ring_raise`
 - [x] HRR always shows Wasp Campaign reminder → `test_sheet_display.py::test_xp_summary_hrr_always_shows_wasp_note`
 - [x] Empty categories are not clickable → `test_sheet_display.py::test_xp_summary_empty_categories_not_clickable`
 - [x] Disadvantages box on bottom row, expandable → `test_sheet_display.py::test_xp_summary_disadvantages_on_bottom_row`

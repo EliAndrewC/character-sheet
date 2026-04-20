@@ -1648,6 +1648,32 @@ class TestTrackState:
         assert "spent_by" not in char.action_dice[1]
         assert char.action_dice[2]["spent_by"] == "real"
 
+    def test_track_action_dice_preserves_athletics_and_mantis_flags(self, client):
+        """The athletics_only and mantis_4th_dan flags must round-trip so the
+        die's spending restrictions survive a reload."""
+        cid = _seed_character(client, name="Action Dice Flags")
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={
+                "action_dice": [
+                    {"value": 7, "spent": False, "athletics_only": True},
+                    {"value": 1, "spent": False, "athletics_only": True,
+                     "mantis_4th_dan": True},
+                    {"value": 5, "spent": False},
+                    {"value": 3, "spent": False, "athletics_only": False,
+                     "mantis_4th_dan": False},
+                ]
+            },
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.action_dice[0] == {"value": 7, "spent": False, "athletics_only": True}
+        assert char.action_dice[1] == {
+            "value": 1, "spent": False, "athletics_only": True, "mantis_4th_dan": True,
+        }
+        assert char.action_dice[2] == {"value": 5, "spent": False}
+        assert char.action_dice[3] == {"value": 3, "spent": False}
+
 
 class TestPublish:
     def test_publish_creates_version(self, client):

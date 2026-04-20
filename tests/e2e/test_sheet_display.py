@@ -235,6 +235,19 @@ def test_xp_summary_expand_switch_collapse(page, live_server_url):
     assert not panel.is_visible()
 
 
+def test_xp_summary_rings_shows_free_school_ring_raise(page, live_server_url):
+    """The Rings breakdown includes the free school-ring 2->3 raise as a 0 XP
+    row so the player can see every raise their character actually received."""
+    _create_xp_rich_character(page, live_server_url)
+    page.locator('[data-xp-card="rings"]').click()
+    page.wait_for_timeout(200)
+    rings_text = page.locator('[data-xp-detail="rings"]').text_content()
+    # Akodo Bushi's school ring defaults to Water. Water 2 -> 3 is free.
+    assert "Water" in rings_text
+    assert "2 → 3" in rings_text
+    assert "0 XP" in rings_text
+
+
 def test_xp_summary_hrr_always_shows_wasp_note(page, live_server_url):
     """Even with no Honor/Rank/Recognition XP spent, expanding HRR shows the Wasp note."""
     create_and_apply(page, live_server_url, name="Plain Character", school="akodo_bushi")
