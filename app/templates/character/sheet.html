@@ -1363,12 +1363,14 @@
                                                     @click="window._diceRoller?.rollForActionDie('attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
                                                     class="block w-full text-left px-3 py-2 hover:bg-parchment">Roll Attack</button>
                                         </template>
-                                        <template x-if="window._diceRoller?.formulas?.['athletics:attack'] && (die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }})">
+                                        {% if school_abilities.get('has_athletics_combat') %}
+                                        <template x-if="die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }}">
                                             <button type="button"
                                                     data-action-die-menu-item="athletics-attack"
                                                     @click="window._diceRoller?.rollForActionDie('athletics:attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
                                                     class="block w-full text-left px-3 py-2 hover:bg-parchment">Athletics Attack</button>
                                         </template>
+                                        {% endif %}
                                         <template x-if="!die.athletics_only && window._diceRoller?.formulas?.['knack:double_attack']">
                                             <button type="button"
                                                     data-action-die-menu-item="double-attack"
@@ -1466,7 +1468,8 @@
                                             </div>
                                         </template>
                                         {# ── ATHLETICS PARRY (roll modal, with void flyout) ── #}
-                                        <template x-if="window._diceRoller?.formulas?.['athletics:parry'] && (die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }})">
+                                        {% if school_abilities.get('has_athletics_combat') %}
+                                        <template x-if="die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }}">
                                             <div class="relative"
                                                  @mouseenter="actionMenuHoverRow = i + '-ath-parry'"
                                                  @mouseleave="actionMenuHoverRow = null">
@@ -1492,7 +1495,7 @@
                                             </div>
                                         </template>
                                         {# ── ATHLETICS PREDECLARED PARRY (roll modal, with void flyout) ── #}
-                                        <template x-if="window._diceRoller?.formulas?.['athletics:parry'] && (die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }})">
+                                        <template x-if="die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }}">
                                             <div class="relative"
                                                  @mouseenter="actionMenuHoverRow = i + '-ath-predeclared'"
                                                  @mouseleave="actionMenuHoverRow = null">
@@ -1517,6 +1520,7 @@
                                                 </div>
                                             </div>
                                         </template>
+                                        {% endif %}
                                         {# ── MANTIS 3RD DAN ── #}
                                         {% if school_abilities.get('mantis_3rd_dan_offensive') %}
                                         <template x-if="window._trackingBridge?.currentPosture?.() === 'offensive'">
@@ -2210,7 +2214,7 @@
         <div x-show="rollMenuOpen" x-cloak @click.outside="rollMenuOpen = false"
              data-roll-menu="root"
              class="fixed z-50 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[240px]"
-             :style="'top:' + rollMenuPos.top + 'px; left:' + rollMenuPos.left + 'px'">
+             :style="'top:' + rollMenuPos.top + 'px; left:' + rollMenuPos.left + 'px' + (rollMenuPos.flipped ? '; transform: translateY(-100%)' : '')">
             <template x-if="rollMenuHasAthleticsPicker">
                 <div data-athletics-picker-menu>
                     <template x-for="ring in ['Air', 'Fire', 'Water', 'Earth']" :key="ring">
@@ -5169,7 +5173,7 @@
             rollMenuOpen: false,
             rollMenuKey: '',
             rollMenuTitle: '',
-            rollMenuPos: { top: 0, left: 0 },
+            rollMenuPos: { top: 0, left: 0, flipped: false },
             rollMenuOptions: [],
             rollMenuHasStrike: false,
             rollMenuHasParry: false,
@@ -5471,17 +5475,21 @@
                 // but clamp into the viewport so the menu doesn't open off-screen.
                 const rect = el.getBoundingClientRect();
                 const menuWidth = 280;
-                const menuHeight = 280;  // generous estimate covering most menu variants
+                const menuHeight = 280;  // estimate used only to decide whether to flip above
                 let left = rect.left;
                 if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 8;
                 if (left < 8) left = 8;
                 let top = rect.bottom + 4;
+                let flipped = false;
                 if (top + menuHeight > window.innerHeight) {
-                    // Flip above the clicked element if there's more room there.
-                    const above = rect.top - menuHeight - 4;
-                    top = above > 8 ? above : Math.max(8, window.innerHeight - menuHeight - 8);
+                    // Not enough room below: flip above. Anchor at the element's
+                    // top edge and let a translateY(-100%) transform in the
+                    // template pull the menu's bottom up to that anchor, so the
+                    // actual rendered menu height doesn't leave a gap.
+                    top = rect.top - 4;
+                    flipped = true;
                 }
-                return { top, left };
+                return { top, left, flipped };
             },
 
             getOwPoolAvail() {
@@ -5791,6 +5799,15 @@
                 }
             },
 
+            _refreshAttackDieTooltip() {
+                // Rewrites the spent action die's tooltip from current state so
+                // discretionary bonuses (conviction, priest ally, etc.) that are
+                // added after the attack or damage roll show up immediately.
+                if (this._actionDieSpentIndex == null || this._actionDieSpentIndex < 0) return;
+                const includeDamage = this.atkPhase === 'damage-result';
+                this._annotateSpentActionDie(this._describeAttackForDie(includeDamage));
+            },
+
             _describeParryForDie(key) {
                 const label = key === 'athletics:parry' ? 'Athletics Parry' : 'Parry';
                 return `${label}: total ${this.baseTotal}`;
@@ -6060,7 +6077,14 @@
                         actions = actions.map(v => v === 10 ? 0 : v);
                     }
                     actions.sort((a, b) => a - b);
-                    const dice = actions.map(v => ({value: v}));
+                    // Togashi Ise Zumi all-athletics variant: every action die
+                    // is restricted to athletics actions, so flag each one so
+                    // it renders in blue and its per-die menu offers only the
+                    // athletics variants.
+                    const allAthletics = !!this.formula.togashi_athletics_only;
+                    const dice = actions.map(v => allAthletics
+                        ? {value: v, athletics_only: true}
+                        : {value: v});
 
                     // Togashi Ise Zumi normal variant: roll one additional
                     // standalone athletics-only action die alongside the
@@ -6215,6 +6239,7 @@
                     this._atkUpdateHitState();
                 }
                 if (target === 'wc') this._wcUpdateMargin();
+                if (target === 'attack' || target === 'damage') this._refreshAttackDieTooltip();
             },
             undoConviction(target) {
                 if (!this.canUndoConviction()) return;
@@ -6232,6 +6257,7 @@
                     this._atkUpdateHitState();
                 }
                 if (target === 'wc') this._wcUpdateMargin();
+                if (target === 'attack' || target === 'damage') this._refreshAttackDieTooltip();
             },
             // --- Togashi 3rd Dan daily athletics raises ---
             togashiRaisesPoolAvail() {
@@ -6315,6 +6341,7 @@
                     this._atkUpdateHitState();
                 }
                 if (target === 'wc') this._wcUpdateMargin();
+                if (target === 'attack' || target === 'damage') this._refreshAttackDieTooltip();
             },
             undoPriestAlly(priest, target) {
                 if (!this.canUndoPriestAlly(priest)) return;
@@ -6329,6 +6356,7 @@
                     this._atkUpdateHitState();
                 }
                 if (target === 'wc') this._wcUpdateMargin();
+                if (target === 'attack' || target === 'damage') this._refreshAttackDieTooltip();
             },
             totalPriestAllySpentThisRoll() {
                 return Object.values(this.priestAllySpentThisRoll).reduce((a, b) => a + b, 0);
