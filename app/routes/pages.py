@@ -510,6 +510,17 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # and would otherwise cache the first (undefined) evaluation before
         # the dice-roller component initialises.
         "has_athletics_combat": (character.knacks or {}).get("athletics", 0) > 0,
+        # Shinjo Bushi Special Ability: each action has +2X where X is the
+        # number of phases the spent action die was held. The client collects
+        # the current phase from the player at roll time and looks up the die
+        # that will be spent to compute the bonus.
+        "shinjo_phase_bonus": character.school == "shinjo_bushi",
+        # Shinjo Bushi 3rd Dan: after a parry, all unspent action dice are
+        # decreased by X (attack skill). A non-zero value enables the client's
+        # auto-decrement hook; zero means the character is below 3rd Dan.
+        "shinjo_3rd_dan_parry_decrement": (
+            attack_skill if character.school == "shinjo_bushi" and dan >= 3 else 0
+        ),
     }
 
     # Compute wound check probability slice for client-side display.

@@ -113,6 +113,59 @@ def test_sheet_page_hides_art_grid_when_character_has_no_art(
     assert page.locator('[data-testid="character-full-art"]').count() == 0
 
 
+def test_sheet_art_click_opens_full_image_modal(page, live_server_url):
+    """Clicking the sheet's character art opens a lightbox showing the
+    uncropped full image. The inner img uses object-contain, unlike the
+    thumbnail (which uses object-cover to fill the column)."""
+    sheet_url = _create_character(page, live_server_url, "ArtLightbox")
+    _upload_and_save_art(page, sheet_url)
+    page.goto(sheet_url)
+    page.wait_for_selector('[data-testid="sheet-art-grid"]')
+    modal = page.locator('[data-modal="character-full-art"]')
+    assert not modal.is_visible()
+    page.locator('[data-action="open-full-art"]').click()
+    modal.wait_for(state='visible', timeout=3000)
+    # The modal's inner img points at the same full-art URL.
+    modal_img_src = modal.locator('img').get_attribute('src')
+    thumb_src = page.locator('[data-action="open-full-art"]').get_attribute('src')
+    assert modal_img_src == thumb_src
+    # Modal img is displayed uncropped (object-contain).
+    modal_img_class = modal.locator('img').get_attribute('class') or ''
+    assert 'object-contain' in modal_img_class
+
+
+def test_sheet_art_modal_closes_on_backdrop_and_escape(page, live_server_url):
+    """The art lightbox closes when the backdrop is clicked, when the X
+    button is clicked, or when Escape is pressed."""
+    sheet_url = _create_character(page, live_server_url, "ArtLightboxClose")
+    _upload_and_save_art(page, sheet_url)
+    page.goto(sheet_url)
+    page.wait_for_selector('[data-testid="sheet-art-grid"]')
+    modal = page.locator('[data-modal="character-full-art"]')
+
+    # Backdrop click closes.
+    page.locator('[data-action="open-full-art"]').click()
+    modal.wait_for(state='visible', timeout=3000)
+    # Click near a corner to hit the backdrop, not the centered image.
+    modal.click(position={"x": 10, "y": 10})
+    page.wait_for_timeout(150)
+    assert not modal.is_visible()
+
+    # Escape key closes.
+    page.locator('[data-action="open-full-art"]').click()
+    modal.wait_for(state='visible', timeout=3000)
+    page.keyboard.press('Escape')
+    page.wait_for_timeout(150)
+    assert not modal.is_visible()
+
+    # X button closes.
+    page.locator('[data-action="open-full-art"]').click()
+    modal.wait_for(state='visible', timeout=3000)
+    page.locator('[data-action="close-full-art"]').click()
+    page.wait_for_timeout(150)
+    assert not modal.is_visible()
+
+
 def test_sheet_art_height_matches_left_column(page, live_server_url):
     """At lg+ widths the art fills the grid cell so its bottom lines up with
     the bottom of the School+Rings stack on the left. Before this layout

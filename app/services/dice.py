@@ -124,6 +124,7 @@ class RollFormula:
     doji_5th_dan_always: bool = False
     doji_5th_dan_optional: bool = False
     doji_4th_dan_untouched_target: bool = False
+    shinjo_phase_bonus_attack: bool = False
     shosuro_5th_dan: bool = False
     is_damage_roll: bool = False
     otherworldliness_capacity: int = 0
@@ -533,6 +534,13 @@ def build_knack_formula(
             and knack_id in {"counterattack", "double_attack", "lunge"}):
         formula.doji_4th_dan_untouched_target = True
 
+    # Shinjo Bushi Special Ability: phase bonus applies to attack-type knacks
+    # too (double_attack, counterattack, lunge - Shinjo's school knacks are
+    # double_attack and lunge; the others are flagged for consistency).
+    if (school_id == "shinjo_bushi"
+            and knack_id in {"counterattack", "double_attack", "lunge"}):
+        formula.shinjo_phase_bonus_attack = True
+
     _finalize_caps(formula)
     return formula
 
@@ -595,6 +603,12 @@ def build_combat_formula(
     # must be collected from the player at attack time.
     if school_id == "doji_artisan" and dan >= 4 and which == "attack":
         formula.doji_4th_dan_untouched_target = True
+
+    # Shinjo Bushi Special Ability: +2*(phases held) when spending an action
+    # die on an attack. The client computes the bonus from the picked phase
+    # and the to-be-spent action die's value.
+    if school_id == "shinjo_bushi" and which == "attack":
+        formula.shinjo_phase_bonus_attack = True
 
     _finalize_caps(formula)
     return formula
@@ -695,6 +709,10 @@ def build_athletics_combat_formula(
     # Doji Artisan 4th Dan: also applies when attacking via athletics.
     if school_id == "doji_artisan" and dan >= 4 and which == "attack":
         formula.doji_4th_dan_untouched_target = True
+
+    # Shinjo Bushi Special Ability also fires on an athletics-as-attack.
+    if school_id == "shinjo_bushi" and which == "attack":
+        formula.shinjo_phase_bonus_attack = True
 
     _finalize_caps(formula)
     return formula

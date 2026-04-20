@@ -440,6 +440,14 @@ also wait for the post-update DOM to settle.
 - [x] 2nd Dan behavioral parry bonus -> `test_school_abilities.py::test_shinjo_2nd_dan_behavioral`
 - [x] 4th Dan initiative highest die set to 1 -> `test_school_abilities.py::test_shinjo_4th_dan_initiative_highest_1_behavioral`
 - [x] 5th Dan parry excess applied to wound check -> `test_school_abilities.py::test_shinjo_5th_dan_parry_excess_behavioral`
+- [x] Special Ability: phase-bonus control suppressed when no action dice (warning fires instead) -> `test_school_abilities.py::test_shinjo_phase_bonus_hidden_without_initiative`
+- [x] Special Ability: phase-bonus control suppressed when all dice are spent -> `test_school_abilities.py::test_shinjo_phase_bonus_hidden_out_of_dice`
+- [x] Special Ability: phase-bonus dropdown visible on attack modal when action dice exist -> `test_school_abilities.py::test_shinjo_phase_bonus_visible_with_action_dice`
+- [x] Special Ability: +2*(phase - die value) applied to roll, labeled in post-roll breakdown -> `test_school_abilities.py::test_shinjo_phase_bonus_applied_to_attack_roll`
+- [x] Special Ability: picking a higher phase raises the attack probability chart -> `test_school_abilities.py::test_shinjo_phase_bonus_shifts_probability_chart`
+- [x] Special Ability: opening attack through a specific action die's menu uses that die's value -> `test_school_abilities.py::test_shinjo_phase_bonus_uses_clicked_die`
+- [x] 3rd Dan: parry roll decrements every unspent action die by X (attack skill) -> `test_school_abilities.py::test_shinjo_3rd_dan_parry_decrements_unspent_dice`
+- [x] 3rd Dan: below 3rd Dan, parry does NOT decrement action dice -> `test_school_abilities.py::test_shinjo_below_3rd_dan_no_parry_decrement`
 
 ### Shosuro
 
@@ -1154,6 +1162,10 @@ JS-error sanity:
       `test_character_art_display.py::test_sheet_page_shows_art_grid_when_character_has_art`
 - [x] View Sheet art column height matches the School+Rings left-column stack ->
       `test_character_art_display.py::test_sheet_art_height_matches_left_column`
+- [x] Clicking the sheet art opens a lightbox with the uncropped full image ->
+      `test_character_art_display.py::test_sheet_art_click_opens_full_image_modal`
+- [x] Lightbox closes on backdrop click, X button, and Escape ->
+      `test_character_art_display.py::test_sheet_art_modal_closes_on_backdrop_and_escape`
 - [x] View Sheet stacks full art and school section below lg breakpoint ->
       `test_responsive.py::test_sheet_no_horizontal_overflow_across_widths`
       (covers 375 / 768 / 1280 px)

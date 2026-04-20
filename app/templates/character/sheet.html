@@ -70,14 +70,35 @@
     {% set _full_art = full_art_url(character) %}
     {% if _full_art %}<div class="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6 lg:items-stretch"
                           data-testid="sheet-art-grid">
-    <div class="mb-6 lg:mb-0 lg:order-last" data-testid="character-full-art">
+    <div x-data="{ fullArtOpen: false }"
+         @keydown.escape.window="fullArtOpen = false"
+         class="mb-6 lg:mb-0 lg:order-last" data-testid="character-full-art">
         {# object-cover + lg:h-full makes the art fill the column to match the
            left column's height exactly, cropping (from the bottom, via
            object-top) if the natural aspect would overflow. This keeps the
            layout tight regardless of portrait aspect - no dead space in
-           either column. On mobile the art is auto-height (natural aspect). #}
+           either column. On mobile the art is auto-height (natural aspect).
+           Click opens a lightbox with the uncropped full image. #}
         <img src="{{ _full_art }}" alt="Character art"
-             class="w-full lg:h-full rounded-lg shadow border border-ink/10 object-contain lg:object-cover lg:object-top bg-white">
+             @click="fullArtOpen = true"
+             data-action="open-full-art"
+             title="Click to view full image"
+             class="w-full lg:h-full rounded-lg shadow border border-ink/10 object-contain lg:object-cover lg:object-top bg-white cursor-pointer hover:opacity-90 transition-opacity">
+
+        {# Lightbox. Fixed to the viewport; click the backdrop or the X, or
+           press Escape, to close. The inner img uses object-contain so the
+           full uncropped portrait is always visible. #}
+        <div x-show="fullArtOpen" x-cloak
+             @click.self="fullArtOpen = false"
+             data-modal="character-full-art"
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 p-4">
+            <button type="button" @click="fullArtOpen = false"
+                    aria-label="Close"
+                    data-action="close-full-art"
+                    class="absolute top-4 right-4 text-parchment text-4xl leading-none hover:opacity-70 cursor-pointer">&times;</button>
+            <img src="{{ _full_art }}" alt="Character art (full)"
+                 class="max-w-full max-h-full object-contain rounded-lg shadow-2xl">
+        </div>
     </div>
     <div class="space-y-6">
     {% endif %}
@@ -3075,6 +3096,31 @@
                         </div>
                     </div>
 
+                    {# Shinjo Bushi Special Ability: +2X where X is the number
+                       of phases the spent action die was held (current phase
+                       minus die value). Shown only when the attack will
+                       actually consume an action die - suppressed entirely
+                       when the initiative warning is active. #}
+                    <div x-show="atkFormula?.shinjo_phase_bonus_attack
+                                 && schoolAbilities.shinjo_phase_bonus
+                                 && initiativeWarningVariant() === null
+                                 && _shinjoDieToSpend()" x-cloak
+                         data-testid="shinjo-phase-bonus"
+                         class="text-xs text-ink/60 bg-parchment rounded p-2 flex flex-wrap items-center gap-2">
+                        <span>Shinjo Bushi: die <span class="font-mono" x-text="_shinjoDieToSpend()?.value ?? ''"></span> spent at phase</span>
+                        <select x-model.number="atkShinjoPhase"
+                                data-action="shinjo-phase"
+                                class="border rounded px-1 py-0.5 text-xs">
+                            <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                        </select>
+                        <span class="text-ink/50" data-testid="shinjo-phase-bonus-display">
+                            (+<span x-text="_shinjoPhaseBonus()"></span> to the roll,
+                            held <span x-text="_shinjoPhasesHeld()"></span> phase<span x-show="_shinjoPhasesHeld() !== 1">s</span>)
+                        </span>
+                    </div>
+
                     {# Ikoma 4th Dan: 10-dice floor on unparried damage #}
                     <div x-show="schoolAbilities.ikoma_10_dice_floor" x-cloak
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
@@ -3205,6 +3251,12 @@
                         <div x-show="formula?.doji_4th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
                              data-testid="doji-4th-dan-breakdown">
                             &bull; +<span x-text="formula?.doji_4th_dan_bonus"></span> from Doji 4th Dan (phase <span x-text="formula?.doji_4th_dan_phase"></span>, target had not attacked)
+                        </div>
+                        <div x-show="formula?.shinjo_phase_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
+                             data-testid="shinjo-phase-bonus-breakdown">
+                            &bull; +<span x-text="formula?.shinjo_phase_bonus"></span> from Shinjo Bushi (die
+                            <span x-text="formula?.shinjo_phase_bonus_die_value"></span>
+                            held to phase <span x-text="formula?.shinjo_phase_bonus_phase"></span>)
                         </div>
                         <div x-show="shosuroLowest3Bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="shosuroLowest3Bonus"></span> from Shosuro 5th Dan (lowest 3 dice added to result)
@@ -5224,6 +5276,11 @@
             // inputs so the probability chart reflects the bonus.
             atkDojiUntouchedTarget: false,
             atkDojiPhase: 1,
+            // Shinjo Bushi Special Ability: +2*(phases held) on actions
+            // spent from an action die. Phases held = current phase minus
+            // the action die's value; the player picks the current phase
+            // from a dropdown on the attack modal's pre-roll page.
+            atkShinjoPhase: 1,
             // Wound check
             wcModalOpen: false,
             wcPhase: 'pre',  // 'pre' | 'rolling' | 'result'
@@ -6209,6 +6266,19 @@
                         // Player enters the excess manually or we show a prompt.
                         // For now we store roll total so it can be used.
                     }
+                    // Shinjo Bushi 3rd Dan: after a parry, decrement every
+                    // remaining unspent action die by X (attack skill). The
+                    // reduced value feeds the Special Ability's phases-held
+                    // math on later rolls this round.
+                    if ((key === 'parry' || key === 'athletics:parry')
+                            && this.schoolAbilities.shinjo_3rd_dan_parry_decrement > 0
+                            && t) {
+                        const dec = this.schoolAbilities.shinjo_3rd_dan_parry_decrement;
+                        (t.actionDice || []).forEach(d => {
+                            if (!d.spent) d.value = (d.value || 0) - dec;
+                        });
+                        t.save();
+                    }
                     // Hiruma 3rd Dan: bank 2*attack for next attack and damage after parry (stacks)
                     if (key === 'parry' && this.schoolAbilities.hiruma_post_parry_bonus) {
                         this.hirumaBankedAttackBonus += this.schoolAbilities.hiruma_post_parry_amount || 0;
@@ -6688,6 +6758,7 @@
                 this.atkOtakuTradeDice = false;
                 this.atkDojiUntouchedTarget = false;
                 this.atkDojiPhase = 1;
+                this.atkShinjoPhase = 1;
                 // Athletics-attack TN = 5 + 10*parry; regular TN = 5 + 5*parry.
                 // Reset atkTN to a sane default if the previous value isn't one of
                 // the new variant's dropdown options (so the <select> isn't blank).
@@ -6835,6 +6906,43 @@
                 return Number.isFinite(phase) && phase > 0 ? phase : 0;
             },
 
+            // Shinjo Bushi Special Ability helpers. Returns the action die
+            // that would be spent on the current attack, or null if none
+            // will be spent (e.g. no unspent dice; warning has already
+            // fired by the time we reach this code path).
+            _shinjoDieToSpend() {
+                const t = window._trackingBridge;
+                if (!t) return null;
+                const dice = t.actionDice || [];
+                if (this._preSpentDieIndex != null && this._preSpentDieIndex >= 0) {
+                    const d = dice[this._preSpentDieIndex];
+                    return d && !d.spent ? d : null;
+                }
+                const isAth = this._isAthleticsActionKey(this.atkKey);
+                for (const d of dice) {
+                    if (d.spent) continue;
+                    if (!isAth && d.athletics_only) continue;
+                    return d;
+                }
+                return null;
+            },
+            // Phases the chosen die was held = current phase minus die value.
+            // Clamped to 0 so a die that hasn't "come up" yet contributes no
+            // bonus rather than a negative one.
+            _shinjoPhasesHeld() {
+                const die = this._shinjoDieToSpend();
+                if (!die) return 0;
+                const phase = parseInt(this.atkShinjoPhase, 10);
+                if (!Number.isFinite(phase) || phase <= 0) return 0;
+                return Math.max(0, phase - (die.value || 0));
+            },
+            _shinjoPhaseBonus() {
+                if (!this.atkFormula?.shinjo_phase_bonus_attack) return 0;
+                if (!this.schoolAbilities.shinjo_phase_bonus) return 0;
+                if (this.initiativeWarningVariant() !== null) return 0;
+                return 2 * this._shinjoPhasesHeld();
+            },
+
             atkHitChance(voidCount) {
                 const probs = this.atkProbs[this.atkKey];
                 if (!probs) return 0;
@@ -6844,12 +6952,13 @@
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const dojiBonus = this._dojiAtkBonus();
                 const dojiUntouched = this._dojiUntouchedBonus();
+                const shinjoPhase = this._shinjoPhaseBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
                 // Mantis Wave-Treader: offensive posture (+5) plus 5th Dan
                 // offensive-posture-count accumulator (+N) feed into the target.
                 const postureFlat = this._mantisLiveAttackFlat();
                 const target = Math.max(0,
-                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - dojiUntouched - shosuroFlat - postureFlat);
+                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - dojiUntouched - shinjoPhase - shosuroFlat - postureFlat);
                 return target < arr.length ? arr[target] : 0;
             },
 
@@ -6860,9 +6969,10 @@
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const dojiBonus = this._dojiAtkBonus();
                 const dojiUntouched = this._dojiUntouchedBonus();
+                const shinjoPhase = this._shinjoPhaseBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
                 const postureFlat = this._mantisLiveAttackFlat();
-                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + dojiUntouched + shosuroFlat + postureFlat;
+                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + dojiUntouched + shinjoPhase + shosuroFlat + postureFlat;
             },
 
             atkAvgExtraDice(voidCount) {
@@ -7104,6 +7214,29 @@
                         formula.flat += phase;
                         formula.doji_4th_dan_bonus = phase;
                         formula.doji_4th_dan_phase = phase;
+                    }
+                }
+
+                // Shinjo Bushi Special Ability: snapshot the phase bonus onto
+                // the formula so the post-roll breakdown can label it. The
+                // die-value snapshot is taken BEFORE _autoSpendActionDie ran
+                // (via this._actionDieSpentIndex, populated above) since that
+                // flipped ``spent`` on the chosen die.
+                if (formula.shinjo_phase_bonus_attack
+                        && this.schoolAbilities.shinjo_phase_bonus) {
+                    const idx = this._actionDieSpentIndex;
+                    const t = window._trackingBridge;
+                    const spentDie = (idx != null && idx >= 0 && t)
+                        ? (t.actionDice || [])[idx] : null;
+                    const phase = parseInt(this.atkShinjoPhase, 10) || 0;
+                    const heldFor = spentDie
+                        ? Math.max(0, phase - (spentDie.value || 0)) : 0;
+                    const bonus = 2 * heldFor;
+                    if (bonus > 0) {
+                        formula.flat += bonus;
+                        formula.shinjo_phase_bonus = bonus;
+                        formula.shinjo_phase_bonus_phase = phase;
+                        formula.shinjo_phase_bonus_die_value = spentDie?.value || 0;
                     }
                 }
 

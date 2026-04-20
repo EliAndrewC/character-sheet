@@ -1525,6 +1525,66 @@ class TestSchoolAbilities:
         f = build_combat_formula("attack", char)
         assert f.doji_4th_dan_untouched_target is False
 
+    # --- Shinjo Bushi Special Ability: phase bonus flag ---
+    def test_shinjo_special_ability_attack_flag(self):
+        """Shinjo Bushi attack formula gets the phase-bonus flag (any Dan)."""
+        char = make_character_data(
+            school="shinjo_bushi",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+            attack=2,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.shinjo_phase_bonus_attack is True
+
+    def test_shinjo_special_ability_parry_no_flag(self):
+        """Shinjo parry is defensive: no phase-bonus flag (the Special
+        Ability only applies to the attack side of that pair)."""
+        char = make_character_data(
+            school="shinjo_bushi",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+            parry=2,
+        )
+        f = build_combat_formula("parry", char)
+        assert f.shinjo_phase_bonus_attack is False
+
+    def test_shinjo_special_ability_attack_knack_flag(self):
+        """Shinjo attack-type knacks (double_attack, lunge) get the flag."""
+        char = make_character_data(
+            school="shinjo_bushi",
+            knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+        )
+        for kid in ("double_attack", "lunge"):
+            f = build_knack_formula(kid, char)
+            assert f.shinjo_phase_bonus_attack is True, kid
+
+    def test_shinjo_special_ability_non_attack_knack_no_flag(self):
+        """Shinjo iaijutsu isn't an attack-type knack; no phase-bonus flag."""
+        char = make_character_data(
+            school="shinjo_bushi",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+        )
+        f = build_knack_formula("iaijutsu", char)
+        assert f.shinjo_phase_bonus_attack is False
+
+    def test_shinjo_special_ability_athletics_attack_flag(self):
+        """Shinjo athletics-as-attack also carries the phase-bonus flag."""
+        char = make_character_data(
+            school="shinjo_bushi",
+            knacks={"athletics": 1, "double_attack": 1, "iaijutsu": 1, "lunge": 1},
+        )
+        f = build_athletics_combat_formula("attack", char)
+        assert f.shinjo_phase_bonus_attack is True
+
+    def test_shinjo_special_ability_flag_only_for_shinjo_school(self):
+        """Other schools don't get the Shinjo phase-bonus flag."""
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+            attack=2,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.shinjo_phase_bonus_attack is False
+
     def test_shared_tn_groupings_values(self):
         """Verify the shared TN groupings contain expected skills."""
         from app.services.dice import _5TH_DAN_TN_ALWAYS, _5TH_DAN_TN_NEVER
