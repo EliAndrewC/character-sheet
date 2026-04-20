@@ -11,18 +11,46 @@
 
 > Your 10s on initiative rolls are considered to be in a special Phase 0. You may use interrupt actions to attack using iaijutsu, and any Phase 0 attacks use iaijutsu.
 
-**Status:** Fully implemented.
-- `dice.py:497` sets `kakita_phase_zero = school_id == "kakita_duelist"`.
-- The flag is passed through the initiative formula and used on the sheet to display Phase 0 behavior.
-- `sheet.html` renders the Phase 0 information for Kakita initiative rolls.
+**Status:** Phases 1-2 done — Kakita correctly keeps 10s as Phase 0 on initiative, renders them distinctly, and restricts their per-die menu to a single Iaijutsu Attack option that opens the attack modal. Phases 3+ (3rd Dan defender-phase bonus, interrupt-attack button, 5th Dan contested phase-0 modal) are tracked in `/workspace/KakitaDuelistImplementationPlan.md`.
 
-**Implementation:** `app/services/dice.py:497` (`kakita_phase_zero`), `app/templates/character/sheet.html` (initiative display).
+**Implementation:**
+- `build_initiative_formula` in `app/services/dice.py` sets `kakita_phase_zero=True` on the initiative formula for `kakita_duelist`.
+- `app/routes/pages.py` exposes `school_abilities.kakita_phase_zero=True` so the rest of the client can gate Kakita-only UI without reading the initiative formula cross-scope.
+- `runRoll()` in `app/templates/character/sheet.html` uses a `sortValue(v)` helper that maps `10 -> 0` when the initiative formula carries `kakita_phase_zero`. The keep-lowest slice then picks up any rolled 10 first, and the existing `v === 10 ? 0 : v` rewrite converts kept 10s to value-0 action dice. Non-10 dice are untouched.
+- The Actions-panel SVG already paints `.phase-zero` on any value-0 die (from `base.html` CSS); the per-die tooltip reads "Phase 0 (Kakita interrupt): iaijutsu attacks only." when `school_abilities.kakita_phase_zero` is set.
+- Persistence: the 0-valued dice flow into `window._trackingBridge.setActionDice` → `save()` → `_sanitize_action_dice` (which preserves `value`), so the 0s survive a page reload.
+- **Phase-0 dice are restricted to iaijutsu attacks (Phase 2).** The per-die menu splits into two branches on `kakita_phase_zero`: value-0 dice get a single "Iaijutsu Attack" item plus "Mark as spent"; value > 0 dice see the unchanged full menu. Clicking Iaijutsu Attack routes through `rollForActionDie('knack:iaijutsu:attack', i)` and opens the attack modal with `attack_variant='iaijutsu'`. The attack modal's pre-roll page shows a "Kakita Phase 0 iaijutsu attack" gold banner for any iaijutsu-variant attack.
+- **`knack:iaijutsu:attack` formula.** `build_all_roll_formulas` in `dice.py` exposes this as a Kakita-only sibling of `knack:iaijutsu`, flagged `is_attack_type=True` and carrying the iaijutsu damage metadata (including the +5 from 4th Dan when applicable). Non-Kakita characters with iaijutsu knack do not get this key.
 
-**Unit tests:** None specific to Phase 0 mechanic.
+**Design note:** `build_initiative_formula` already sets `reroll_tens=False` for every school, so a kept 10 truly reads as 10 on the client. No Kakita-specific reroll override was needed.
+
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_kakita_phase_zero_flag`
+- `test_dice.py::TestSchoolAbilities::test_non_kakita_initiative_no_phase_zero_flag`
+- `test_routes.py::TestKakitaPhaseZeroFlag::test_kakita_has_phase_zero_flag`
+- `test_routes.py::TestKakitaPhaseZeroFlag::test_non_kakita_does_not_have_phase_zero_flag`
+- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_formula_exposed`
+- `test_dice.py::TestSchoolAbilities::test_non_kakita_no_iaijutsu_attack_formula`
+- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_formula_mirrors_iaijutsu_knack_rolled_kept`
+- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_formula_respects_4th_dan_damage_bonus`
+- `test_dice.py::TestSchoolAbilities::test_kakita_below_4th_dan_iaijutsu_attack_no_damage_bonus`
+
 **Clicktests:**
+- `test_school_abilities.py::test_kakita_phase_0_behavioral`
+- `test_school_abilities.py::test_kakita_initiative_keeps_10_over_higher_lower_dice`
+- `test_school_abilities.py::test_kakita_initiative_two_10s_both_become_phase_0`
+- `test_school_abilities.py::test_non_kakita_10_on_initiative_is_unkept`
+- `test_school_abilities.py::test_kakita_phase_0_die_has_phase_zero_svg_class`
+- `test_school_abilities.py::test_kakita_phase_0_die_survives_reload`
+- `test_school_abilities.py::test_kakita_phase_0_die_tooltip_mentions_iaijutsu`
+- `test_school_abilities.py::test_kakita_phase_zero_die_menu_shows_only_iaijutsu_attack`
+- `test_school_abilities.py::test_kakita_non_zero_die_menu_unchanged`
+- `test_school_abilities.py::test_kakita_phase_zero_menu_opens_attack_modal_for_iaijutsu`
+- `test_school_abilities.py::test_kakita_phase_zero_attack_modal_notes_interrupt`
+- `test_school_abilities.py::test_kakita_phase_zero_attack_spends_the_clicked_die`
+- `test_school_abilities.py::test_non_kakita_with_iaijutsu_does_not_expose_iaijutsu_attack_key`
 - `test_sheet_js_errors.py` includes `kakita_duelist` in the school list.
 - `test_school_selection.py` references `kakita_duelist` for selection testing.
-- `test_school_abilities.py::test_kakita_initiative_phase_0`
 
 ---
 

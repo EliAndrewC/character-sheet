@@ -1045,6 +1045,77 @@ class TestSchoolAbilities:
         iai = formulas["knack:iaijutsu"]
         assert iai["damage_flat_bonus"] == 0
 
+    # --- Kakita Duelist knack:iaijutsu:attack variant (Phase-0 attacks) ---
+    def test_kakita_iaijutsu_attack_formula_exposed(self):
+        """Kakita with iaijutsu knack gets a ``knack:iaijutsu:attack`` key
+        alongside the regular ``knack:iaijutsu`` - marked as an attack-type
+        formula so the client routes it through the attack modal."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        assert "knack:iaijutsu:attack" in formulas
+        atk = formulas["knack:iaijutsu:attack"]
+        assert atk["is_attack_type"] is True
+        assert atk["attack_variant"] == "iaijutsu"
+        assert atk["label"].startswith("Iaijutsu Attack")
+
+    def test_non_kakita_no_iaijutsu_attack_formula(self):
+        """Other schools with an iaijutsu knack do not get the attack
+        variant - the key is Kakita-only."""
+        for school, knack_keys in [
+            ("akodo_bushi", ["double_attack", "feint", "iaijutsu"]),
+            ("bayushi_bushi", ["double_attack", "feint", "iaijutsu"]),
+            ("mirumoto_bushi", ["iaijutsu", "parry", "counterattack"]),
+        ]:
+            char = make_character_data(
+                school=school,
+                knacks={k: 1 for k in knack_keys},
+            )
+            formulas = build_all_roll_formulas(char)
+            assert "knack:iaijutsu:attack" not in formulas, school
+
+    def test_kakita_iaijutsu_attack_formula_mirrors_iaijutsu_knack_rolled_kept(self):
+        """The attack-variant's base dice must match the regular iaijutsu
+        knack so the Phase-0 attack rolls the same roll the player would
+        roll via the normal iaijutsu flow."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 2, "iaijutsu": 2, "lunge": 2},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        iai = formulas["knack:iaijutsu"]
+        atk = formulas["knack:iaijutsu:attack"]
+        assert atk["rolled"] == iai["rolled"]
+        assert atk["kept"] == iai["kept"]
+        assert atk["flat"] == iai["flat"]
+
+    def test_kakita_iaijutsu_attack_formula_respects_4th_dan_damage_bonus(self):
+        """The attack variant inherits the 4th Dan iaijutsu damage +5 flat."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 4, "iaijutsu": 4, "lunge": 4},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["knack:iaijutsu:attack"]
+        assert atk["damage_flat_bonus"] == 5
+        assert any("4th Dan" in s for s in atk["damage_bonus_sources"])
+
+    def test_kakita_below_4th_dan_iaijutsu_attack_no_damage_bonus(self):
+        """Below 4th Dan the attack variant has no damage bonus."""
+        char = make_character_data(
+            school="kakita_duelist",
+            knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["knack:iaijutsu:attack"]
+        assert atk["damage_flat_bonus"] == 0
+
     # --- Kitsuki Magistrate: +2*Water flat on attacks ---
     def test_kitsuki_magistrate_attack_water_bonus(self):
         char = make_character_data(
@@ -1987,6 +2058,23 @@ class TestInitiativeAndFlags:
         )
         init = build_initiative_formula(char)
         assert init["kakita_phase_zero"] is True
+
+    def test_non_kakita_initiative_no_phase_zero_flag(self):
+        """Every non-Kakita school's initiative has kakita_phase_zero=False."""
+        for school, knack_keys in [
+            ("akodo_bushi", ["double_attack", "feint", "iaijutsu"]),
+            ("shinjo_bushi", ["double_attack", "iaijutsu", "lunge"]),
+            ("togashi_ise_zumi", ["athletics", "conviction", "dragon_tattoo"]),
+            ("mantis_wave_treader", ["athletics", "iaijutsu", "worldliness"]),
+            ("hida_bushi", ["counterattack", "iaijutsu", "lunge"]),
+            ("bayushi_bushi", ["double_attack", "feint", "iaijutsu"]),
+        ]:
+            char = make_character_data(
+                school=school,
+                knacks={k: 1 for k in knack_keys},
+            )
+            init = build_initiative_formula(char)
+            assert init["kakita_phase_zero"] is False, school
 
     def test_togashi_initiative_default_variant(self):
         """Togashi default initiative formula is a normal (V+1)kV roll;
