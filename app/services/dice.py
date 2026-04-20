@@ -124,6 +124,7 @@ class RollFormula:
     doji_5th_dan_always: bool = False
     doji_5th_dan_optional: bool = False
     doji_4th_dan_untouched_target: bool = False
+    kakita_3rd_dan_defender_phase_bonus: bool = False
     shinjo_phase_bonus_attack: bool = False
     shosuro_5th_dan: bool = False
     is_damage_roll: bool = False
@@ -541,6 +542,13 @@ def build_knack_formula(
             and knack_id in {"counterattack", "double_attack", "lunge"}):
         formula.shinjo_phase_bonus_attack = True
 
+    # Kakita Duelist 3rd Dan: defender-phase bonus applies on every attack-
+    # type knack (Kakita's school knacks include double_attack and lunge;
+    # counterattack flagged for completeness).
+    if (school_id == "kakita_duelist" and dan >= 3
+            and knack_id in {"counterattack", "double_attack", "lunge"}):
+        formula.kakita_3rd_dan_defender_phase_bonus = True
+
     _finalize_caps(formula)
     return formula
 
@@ -605,10 +613,18 @@ def build_combat_formula(
         formula.doji_4th_dan_untouched_target = True
 
     # Shinjo Bushi Special Ability: +2*(phases held) when spending an action
-    # die on an attack. The client computes the bonus from the picked phase
-    # and the to-be-spent action die's value.
-    if school_id == "shinjo_bushi" and which == "attack":
+    # die on an attack OR parry. The client computes the bonus from the picked
+    # phase and the to-be-spent action die's value (collected pre-roll on the
+    # attack modal, post-roll on the parry result modal).
+    if school_id == "shinjo_bushi" and which in ("attack", "parry"):
         formula.shinjo_phase_bonus_attack = True
+
+    # Kakita Duelist 3rd Dan: attack bonus = X * (defender's next phase -
+    # attacker's phase), where X is the attack skill. The client collects
+    # the defender's next phase (1..10 or 11 = "no remaining actions") and
+    # uses the to-be-spent action die's value as the attacker's phase.
+    if school_id == "kakita_duelist" and dan >= 3 and which == "attack":
+        formula.kakita_3rd_dan_defender_phase_bonus = True
 
     _finalize_caps(formula)
     return formula
@@ -710,9 +726,14 @@ def build_athletics_combat_formula(
     if school_id == "doji_artisan" and dan >= 4 and which == "attack":
         formula.doji_4th_dan_untouched_target = True
 
-    # Shinjo Bushi Special Ability also fires on an athletics-as-attack.
-    if school_id == "shinjo_bushi" and which == "attack":
+    # Shinjo Bushi Special Ability also fires on athletics-as-attack and
+    # athletics-as-parry.
+    if school_id == "shinjo_bushi" and which in ("attack", "parry"):
         formula.shinjo_phase_bonus_attack = True
+
+    # Kakita Duelist 3rd Dan also applies when attacking via athletics.
+    if school_id == "kakita_duelist" and dan >= 3 and which == "attack":
+        formula.kakita_3rd_dan_defender_phase_bonus = True
 
     _finalize_caps(formula)
     return formula
@@ -1072,13 +1093,25 @@ def build_all_roll_formulas(
             d["is_unskilled"] = True
             out[f"skill:{skill_id}"] = d
 
-    # School knacks (look up from the character's school)
+    # School knacks (look up from the character's school). School knacks
+    # start at rank 1 for free (given by the school), so treat a missing
+    # or zero entry in the character's knacks dict as rank 1 here - a
+    # stored dict that predates a school change or comes from an older
+    # import would otherwise drop the knack-action menu items
+    # (Double Attack, Counterattack, Lunge, Feint) even though the sheet
+    # displays those knacks at rank 1.
     school = SCHOOLS.get(school_id)
+    knack_char_data = character_data
     if school is not None:
+        normalized_knacks = dict(character_data.get("knacks") or {})
+        for knack_id in school.school_knacks:
+            if knack_id not in normalized_knacks:
+                normalized_knacks[knack_id] = 1
+        knack_char_data = {**character_data, "knacks": normalized_knacks}
         for knack_id in school.school_knacks:
             if knack_id in NON_ROLLABLE_KNACKS:
                 continue
-            formula = build_knack_formula(knack_id, character_data)
+            formula = build_knack_formula(knack_id, knack_char_data)
             if formula is not None:
                 d = _annotate_third_dan(f"knack:{knack_id}", formula.to_dict())
                 out[f"knack:{knack_id}"] = _annotate_attack_type(f"knack:{knack_id}", d)
@@ -1101,7 +1134,7 @@ def build_all_roll_formulas(
 
     # Iaijutsu strike variant (10s never rerolled during the strike)
     if school is not None and "iaijutsu" in school.school_knacks:
-        base_formula = build_knack_formula("iaijutsu", character_data)
+        base_formula = build_knack_formula("iaijutsu", knack_char_data)
         if base_formula is not None:
             strike = base_formula.to_dict()
             # "Iaijutsu (Fire)" -> "Iaijutsu Strike (Fire)"
@@ -1122,7 +1155,7 @@ def build_all_roll_formulas(
             and "knack:iaijutsu" in out
             and school is not None
             and "iaijutsu" in school.school_knacks):
-        base_formula = build_knack_formula("iaijutsu", character_data)
+        base_formula = build_knack_formula("iaijutsu", knack_char_data)
         if base_formula is not None:
             atk = base_formula.to_dict()
             atk["label"] = base_formula.label.replace(
@@ -1142,6 +1175,9 @@ def build_all_roll_formulas(
             atk["damage_extra_rolled"] = damage_extra_rolled
             atk["damage_extra_kept"] = damage_extra_kept
             atk["damage_bonus_sources"] = iai_sources
+            # 3rd Dan defender-phase bonus fires on any iaijutsu attack too.
+            if dan >= 3:
+                atk["kakita_3rd_dan_defender_phase_bonus"] = True
             out["knack:iaijutsu:attack"] = _annotate_third_dan(
                 "knack:iaijutsu:attack", atk
             )

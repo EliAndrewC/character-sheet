@@ -252,6 +252,236 @@ class TestPriestAllyConviction:
         assert _json.loads(m.group(1)) == []
 
 
+class TestPriestPreceptsAlliesContext:
+    """The ``priest_precepts_allies`` context list surfaces party priests at
+    3rd Dan or higher with a non-empty precepts pool. Self is excluded; the
+    priest's own pool goes through the priest's own ``preceptsPool`` state
+    rather than appearing in the ally list."""
+
+    def _setup_priest_and_ally(self, client, *, priest_rank=3, pool=None):
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="Precepts Group")
+        session.add(group); session.commit()
+        priest_id = _seed_character(
+            client, name="Precepts Priest", school="priest",
+            knacks={"conviction": priest_rank, "otherworldliness": priest_rank,
+                    "pontificate": priest_rank},
+            skills={"precepts": 3},
+            gaming_group_id=group.id, is_published=True,
+            precepts_pool=(pool if pool is not None else [{"value": 7}, {"value": 3}]),
+        )
+        ally_id = _seed_character(
+            client, name="Bushi Ally", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            gaming_group_id=group.id, is_published=True,
+        )
+        return priest_id, ally_id, group.id
+
+    def _precepts_list(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(
+            r'id="priest-precepts-allies">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        return json.loads(m.group(1))
+
+    def test_ally_sees_priest_with_pool(self, client):
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        allies = self._precepts_list(client, ally_id)
+        assert len(allies) == 1
+        entry = allies[0]
+        assert entry["priest_id"] == priest_id
+        assert entry["name"] == "Precepts Priest"
+        assert entry["pool"] == [{"value": 7}, {"value": 3}]
+
+    def test_priest_at_2nd_dan_not_in_allies(self, client):
+        _, ally_id, _ = self._setup_priest_and_ally(client, priest_rank=2)
+        # Dan 2 priest with a pool does NOT surface (the 3rd Dan ability
+        # is not yet unlocked; even if a stale pool existed on the column,
+        # the context skips them).
+        assert self._precepts_list(client, ally_id) == []
+
+    def test_priest_with_empty_pool_not_in_allies(self, client):
+        _, ally_id, _ = self._setup_priest_and_ally(client, pool=[])
+        assert self._precepts_list(client, ally_id) == []
+
+    def test_priest_in_different_group_not_in_allies(self, client):
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        priest_group = GamingGroup(name="Priest Group")
+        ally_group = GamingGroup(name="Other Group")
+        session.add_all([priest_group, ally_group])
+        session.commit()
+        _seed_character(
+            client, name="Isolated Priest", school="priest",
+            knacks={"conviction": 3, "otherworldliness": 3, "pontificate": 3},
+            skills={"precepts": 2},
+            gaming_group_id=priest_group.id, is_published=True,
+            precepts_pool=[{"value": 9}],
+        )
+        ally_id = _seed_character(
+            client, name="Separated Bushi", school="akodo_bushi",
+            gaming_group_id=ally_group.id, is_published=True,
+        )
+        assert self._precepts_list(client, ally_id) == []
+
+    def test_self_excluded_from_ally_list(self, client):
+        """The priest viewing their own sheet does NOT see themselves in
+        priest_precepts_allies (self pool renders via preceptsPool instead)."""
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        assert self._precepts_list(client, priest_id) == []
+
+    def test_sheet_embeds_precepts_allies_script(self, client):
+        """The ally's sheet page embeds the precepts-allies JSON script tag."""
+        _, ally_id, _ = self._setup_priest_and_ally(client)
+        resp = client.get(f"/characters/{ally_id}")
+        assert 'id="priest-precepts-allies"' in resp.text
+
+
+class TestPriestPreceptsPoolEndpoint:
+    """POST /characters/{priest_id}/precepts-pool: a party member commits a
+    post-swap pool back to the priest's character. Mirrors the gaming-group
+    permission model used by /ally-conviction."""
+
+    def _setup_priest_and_ally(self, client, *, priest_rank=3):
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="Precepts Endpoint Group")
+        session.add(group); session.commit()
+        priest_id = _seed_character(
+            client, name="Endpoint Priest", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": priest_rank, "otherworldliness": priest_rank,
+                    "pontificate": priest_rank},
+            skills={"precepts": 3},
+            gaming_group_id=group.id, is_published=True,
+            precepts_pool=[{"value": 7}, {"value": 3}],
+        )
+        ally_id = _seed_character(
+            client, name="Endpoint Bushi", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            gaming_group_id=group.id, is_published=True,
+        )
+        return priest_id, ally_id, group.id
+
+    def test_happy_path_replaces_pool(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"pool": [{"value": 10}, {"value": 2}, {"value": 5}]},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"pool": [{"value": 10}, {"value": 2}, {"value": 5}]}
+        char = query_db(client).filter(Character.id == priest_id).first()
+        assert char.precepts_pool == [{"value": 10}, {"value": 2}, {"value": 5}]
+
+    def test_rejects_non_priest_target(self, client):
+        _, ally_id, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{ally_id}/precepts-pool",
+            json={"pool": [{"value": 6}]},
+        )
+        assert resp.status_code == 400
+
+    def test_rejects_priest_below_3rd_dan(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client, priest_rank=2)
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"pool": [{"value": 6}]},
+        )
+        assert resp.status_code == 400
+
+    def test_rejects_unknown_priest(self, client):
+        resp = client.post(
+            "/characters/99999/precepts-pool",
+            json={"pool": []},
+        )
+        assert resp.status_code == 404
+
+    def test_rejects_caller_not_in_group(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        # Remove the priest from the gaming group. The caller's shared-group
+        # check now fails; unless the caller is the owner, they get a 403.
+        # _seed_character defaults owner_discord_id to the logged-in test
+        # user, so we also need to reassign the priest to a different owner
+        # to prove the group check (not the ownership fast-path) is what
+        # kicks in.
+        session = client._test_session_factory()
+        priest = session.query(Character).filter(Character.id == priest_id).first()
+        priest.gaming_group_id = None
+        priest.owner_discord_id = "some_other_user"
+        session.commit()
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"pool": [{"value": 6}]},
+        )
+        assert resp.status_code == 403
+
+    def test_owner_can_write_even_without_group(self, client):
+        """A priest editing their own pool via this endpoint is allowed even
+        if the priest is not in any gaming group (the same owner-fast-path
+        used elsewhere). Typical path is /track, but this endpoint accepts
+        too so the swap handler can be a single code path."""
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        session = client._test_session_factory()
+        priest = session.query(Character).filter(Character.id == priest_id).first()
+        priest.gaming_group_id = None
+        session.commit()
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"pool": [{"value": 4}]},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"pool": [{"value": 4}]}
+
+    def test_missing_pool_key_returns_400(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"not_pool": []},
+        )
+        assert resp.status_code == 400
+
+    def test_malformed_entries_dropped(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"pool": [
+                {"value": 8},
+                "not a dict",
+                {"value": "nope"},
+                {"value": 999},     # clamped to 100
+                {"value": 19},      # legit reroll-10s sum
+            ]},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"pool": [
+            {"value": 8}, {"value": 100}, {"value": 19},
+        ]}
+
+    def test_length_capped_at_10(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"pool": [{"value": 5} for _ in range(25)]},
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()["pool"]) == 10
+
+    def test_non_list_pool_becomes_empty(self, client):
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"pool": "not a list"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"pool": []}
+
+
 class TestAllyConvictionAuth:
     def test_requires_authentication(self):
         """Unauthenticated caller gets a 401 from ally-conviction endpoint."""
@@ -279,6 +509,25 @@ class TestAllyConvictionAuth:
         # Use a dummy db session; the endpoint should 401 before using it.
         resp = asyncio.get_event_loop().run_until_complete(
             ally_conviction(req, 1, db=None)
+        )
+        assert resp.status_code == 401
+
+
+class TestPreceptsPoolAuth:
+    def test_requires_authentication(self):
+        """Unauthenticated caller gets a 401 from the precepts-pool endpoint."""
+        import asyncio
+        from app.routes.characters import precepts_pool
+
+        class _Req:
+            class state: pass
+            state = state()
+            async def json(self): return {"pool": []}
+
+        req = _Req()
+        req.state.user = None
+        resp = asyncio.get_event_loop().run_until_complete(
+            precepts_pool(req, 1, db=None)
         )
         assert resp.status_code == 401
 
@@ -505,6 +754,93 @@ class TestInitiativePerRoundResetFlags:
         assert flags.get("priest_round_conviction_refresh") is False
 
 
+class TestPriestPreceptsPoolContext:
+    """The ``priest_precepts_pool`` flag gates the Priest 3rd Dan precepts
+    dice pool UI section. It is True only for priests at 3rd Dan or higher.
+    ``priest_precepts_pool_size`` carries the pool size (= precepts skill
+    rank) when the flag is True, otherwise 0."""
+
+    def _school_abilities(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(
+            r'id="school-abilities">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        return json.loads(m.group(1))
+
+    def test_priest_3rd_dan_has_flag_and_size(self, client):
+        cid = _seed_character(
+            client, name="Priest3D", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 3, "otherworldliness": 3, "pontificate": 3},
+            skills={"precepts": 4},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("priest_precepts_pool") is True
+        assert flags.get("priest_precepts_pool_size") == 4
+
+    def test_priest_2nd_dan_flag_false_and_size_zero(self, client):
+        cid = _seed_character(
+            client, name="Priest2D", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+            skills={"precepts": 4},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("priest_precepts_pool") is False
+        # Size is forced to 0 when the flag is off so no pool UI even if the
+        # player has a non-zero precepts rank.
+        assert flags.get("priest_precepts_pool_size") == 0
+
+    def test_non_priest_flag_false(self, client):
+        cid = _seed_character(
+            client, name="Akodo3D", school="akodo_bushi",
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+            skills={"precepts": 4},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("priest_precepts_pool") is False
+        assert flags.get("priest_precepts_pool_size") == 0
+
+    def test_priest_3rd_dan_rank_zero_precepts_gives_size_zero(self, client):
+        """A priest at 3rd Dan without any precepts skill rank gets flag True
+        but size 0 so the Roll button is disabled."""
+        cid = _seed_character(
+            client, name="Priest3DNoPrecepts", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 3, "otherworldliness": 3, "pontificate": 3},
+            skills={},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("priest_precepts_pool") is True
+        assert flags.get("priest_precepts_pool_size") == 0
+
+    def test_sheet_embeds_precepts_pool_json(self, client):
+        """The priest's saved pool is embedded on the Alpine component so
+        Alpine's preceptsPool state initializes correctly on page load."""
+        cid = _seed_character(
+            client, name="PriestWithPool", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 3, "otherworldliness": 3, "pontificate": 3},
+            skills={"precepts": 3},
+        )
+        # Seed a pool on the character.
+        client.post(
+            f"/characters/{cid}/track",
+            json={"precepts_pool": [{"value": 8}, {"value": 5}, {"value": 2}]},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # The serialized pool appears inline in the Alpine data object init.
+        assert 'preceptsPool:' in resp.text
+        # And carries the seeded values.
+        for expected in ('"value": 8', '"value": 5', '"value": 2'):
+            assert expected in resp.text
+
+
 class TestKakitaPhaseZeroFlag:
     """The ``kakita_phase_zero`` flag gates every Kakita-Duelist-specific UI
     hook (Phase-0 visual markers, iaijutsu-only per-die menu, interrupt-attack
@@ -539,6 +875,30 @@ class TestKakitaPhaseZeroFlag:
         )
         flags = self._school_abilities(client, cid)
         assert flags.get("kakita_phase_zero") is False
+
+    def test_kakita_5th_dan_has_phase_zero_contest_flag(self, client):
+        cid = _seed_character(
+            client, name="Kakita5D", school="kakita_duelist",
+            knacks={"double_attack": 5, "iaijutsu": 5, "lunge": 5},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("kakita_5th_dan_phase_zero_contest") is True
+
+    def test_kakita_below_5th_dan_no_phase_zero_contest_flag(self, client):
+        cid = _seed_character(
+            client, name="Kakita4D", school="kakita_duelist",
+            knacks={"double_attack": 4, "iaijutsu": 4, "lunge": 4},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("kakita_5th_dan_phase_zero_contest") is False
+
+    def test_non_kakita_no_phase_zero_contest_flag(self, client):
+        cid = _seed_character(
+            client, name="Akodo5D", school="akodo_bushi",
+            knacks={"double_attack": 5, "feint": 5, "iaijutsu": 5},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("kakita_5th_dan_phase_zero_contest") is False
 
 
 class TestPriestBlessRituals:
@@ -1709,6 +2069,86 @@ class TestTrackState:
         }
         assert char.action_dice[2] == {"value": 5, "spent": False}
         assert char.action_dice[3] == {"value": 3, "spent": False}
+
+    def test_track_rejects_pool_for_non_priest(self, client):
+        """Defensive /track guard: a non-priest cannot persist a non-empty
+        precepts_pool (the 3rd Dan ability is priest-only)."""
+        cid = _seed_character(
+            client, name="NotPriestPool", school="akodo_bushi",
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+        )
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"precepts_pool": [{"value": 6}]},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.precepts_pool == []
+
+    def test_track_rejects_pool_for_priest_below_3rd_dan(self, client):
+        """Defensive /track guard: a priest below 3rd Dan cannot persist a
+        non-empty precepts_pool."""
+        cid = _seed_character(
+            client, name="Dan2Priest", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+        )
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"precepts_pool": [{"value": 6}]},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.precepts_pool == []
+
+    def test_track_precepts_pool_sanitization(self, client):
+        """The precepts_pool sanitizer clamps values, drops bad entries,
+        rejects non-list payloads, and caps at 10 entries. Exercises a
+        priest at 3rd Dan so the pool can legitimately persist."""
+        cid = _seed_character(
+            client, name="Precepts Pool", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 3, "otherworldliness": 3, "pontificate": 3},
+        )
+        # Happy path: normal list round-trips.
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"precepts_pool": [
+                {"value": 3},
+                {"value": 10},
+                {"value": 1},
+            ]},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.precepts_pool == [{"value": 3}, {"value": 10}, {"value": 1}]
+        # Non-list payload -> empty list; malformed entries dropped;
+        # out-of-range values clamped; list capped at 10.
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"precepts_pool": "not a list"},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.precepts_pool == []
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"precepts_pool": [
+                "not a dict",
+                {"value": "oops"},
+                {"value": 0},      # clamped up to 1
+                {"value": 999},    # clamped down to sanity cap 100
+                {"value": 19},     # legit reroll-10s sum (10+9); passes through
+                *[{"value": 5} for _ in range(12)],
+            ]},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        # Exactly 10 entries; first three come from the clamped/passed trio.
+        assert len(char.precepts_pool) == 10
+        assert char.precepts_pool[0] == {"value": 1}
+        assert char.precepts_pool[1] == {"value": 100}
+        assert char.precepts_pool[2] == {"value": 19}
 
 
 class TestPublish:

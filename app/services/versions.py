@@ -210,6 +210,11 @@ def publish_character(
     # cannot return - revealing is permanent.
     character.is_hidden = False
 
+    # Priest 3rd Dan precepts pool only exists while the priest is at 3rd Dan
+    # or higher. If this publish drops them below 3rd Dan, wipe any stored
+    # pool so it doesn't silently resurrect if they later rank up again.
+    _wipe_precepts_pool_if_dan_drop(character)
+
     db.flush()
     return version
 
@@ -264,8 +269,24 @@ def revert_character(
     character.published_state = old_state
     character.is_published = True
 
+    # A revert may reset the priest's knack ranks such that their Dan falls
+    # below 3; in that case the precepts pool (a 3rd Dan ability) cannot exist.
+    _wipe_precepts_pool_if_dan_drop(character)
+
     db.flush()
     return version
+
+
+def _wipe_precepts_pool_if_dan_drop(character: Character) -> None:
+    """Clear Character.precepts_pool if the character is a Priest whose
+    current Dan is below 3. Called from publish_character and revert_character
+    so stale pool data doesn't outlive the 3rd Dan technique that created it.
+    """
+    if character.school != "priest":
+        return
+    dan = compute_dan(character.knacks or {})
+    if dan < 3:
+        character.precepts_pool = []
 
 
 def _restore_character_from_state(character: Character, state: Dict[str, Any]):

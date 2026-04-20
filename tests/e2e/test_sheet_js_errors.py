@@ -68,3 +68,48 @@ def test_sheet_has_no_javascript_errors(page, live_server_url, school):
     assert errors == [], (
         f"JavaScript errors on the sheet page for {school}:\n" + "\n".join(errors)
     )
+
+
+def test_sheet_no_js_errors_for_priest_3rd_dan_with_pool(page, live_server_url):
+    """A 3rd Dan priest with a populated precepts pool renders all the
+    Phase 0-5 pool markup (section, dice icons, swap dropdowns across four
+    roll modals) without throwing JavaScript errors. This exercises the
+    Phase 4/5 Alpine expressions with a real non-empty pool."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PriestPoolJSCheck")
+    select_school(page, "priest")
+    for knack in ("conviction", "otherworldliness", "pontificate"):
+        click_plus(page, f"knack_{knack}", 2)  # 1 -> 3 Dan
+    click_plus(page, "skill_precepts", 3)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Priest 3rd Dan with pool")
+    sheet_url = page.url
+
+    # Seed a pool so every pool-render path fires on reload.
+    page.evaluate("""
+        window._trackingBridge.preceptsPool = [
+            {value: 9}, {value: 6}, {value: 2}
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+
+    errors: list[str] = []
+    page.on("pageerror", lambda exc: errors.append(f"pageerror: {exc}"))
+    page.on(
+        "console",
+        lambda msg: errors.append(f"console.{msg.type}: {msg.text}")
+        if msg.type == "error"
+        else None,
+    )
+
+    page.goto(sheet_url)
+    page.wait_for_selector('[data-testid="precepts-pool-section"]')
+    page.wait_for_timeout(500)
+
+    assert errors == [], (
+        "JavaScript errors on a 3rd Dan priest's sheet with a pool:\n"
+        + "\n".join(errors)
+    )

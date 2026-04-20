@@ -11,16 +11,17 @@
 
 > Each action you take in combat has a bonus of 2X, where X is the number of phases for which the action die was held.
 
-**Status:** Implemented for attack-type rolls (regular attack, athletics-attack, double_attack, counterattack, lunge). The phase-bonus control does not currently surface on parry/feint/iaijutsu (those go straight from menu to roll without a pre-phase), but the 3rd-Dan parry decrement still reduces die values so the bonus remains correct on subsequent attacks.
+**Status:** Implemented for attack-type rolls (regular attack, athletics-attack, double_attack, counterattack, lunge) and parry rolls (regular parry and athletics-parry). The phase-bonus picker still does not surface on feint/iaijutsu rolls (those go straight from menu to roll without any action-die-value dependency the player wants to annotate).
 
 **Implementation:**
-- Server: `app/services/dice.py` stamps `shinjo_phase_bonus_attack = True` on every attack-type formula (base attack, attack-variant knacks, athletics-attack) for the `shinjo_bushi` school. `app/routes/pages.py` exposes `school_abilities.shinjo_phase_bonus = True`.
-- Client: the attack modal's pre-roll page renders a phase dropdown (1-10) when the flag is set, an action die is present to spend, AND the initiative warning is NOT firing. The displayed bonus is `2 * max(0, current_phase - die_value)`. `atkHitChance` and `atkAvgAttackRoll` both consume the bonus so the probability chart updates live. `rollAttack()` snapshots the bonus onto the formula (`shinjo_phase_bonus`, `shinjo_phase_bonus_phase`, `shinjo_phase_bonus_die_value`) so the post-roll breakdown can label it.
-- Die selection: when opening the attack through an action-die menu, the bonus uses the clicked die's value (via `_preSpentDieIndex`); otherwise it uses the lowest unspent eligible die (respecting `athletics_only` for athletics-attack).
+- Server: `app/services/dice.py` stamps `shinjo_phase_bonus_attack = True` on every attack-type AND parry-type formula (base attack/parry, attack-variant knacks, athletics-attack, athletics-parry) for the `shinjo_bushi` school. `app/routes/pages.py` exposes `school_abilities.shinjo_phase_bonus = True`.
+- Attack client: the attack modal's pre-roll page renders a phase dropdown (1-10) when the flag is set, an action die is present to spend, AND the initiative warning is NOT firing. The displayed bonus is `2 * max(0, current_phase - die_value)`. `atkHitChance` and `atkAvgAttackRoll` both consume the bonus so the probability chart updates live. `rollAttack()` snapshots the bonus onto the formula (`shinjo_phase_bonus`, `shinjo_phase_bonus_phase`, `shinjo_phase_bonus_die_value`) so the post-roll breakdown can label it.
+- Parry client: the parry result modal captures the spent action die's value at roll time (`_captureShinjoParryDieValue` inside `executeRoll` / `executeRollWithExtraFlat`), then renders a phase dropdown in the "done" panel. Picking a phase invokes `_applyShinjoParryBonus`, which adjusts `baseTotal` by the delta and stamps `shinjo_phase_bonus`/`shinjo_phase_bonus_phase`/`shinjo_phase_bonus_die_value` onto the formula; the breakdown line re-uses the same metadata as the attack path. Asked post-roll (not pre-roll) because a parry has no hit-probability chart that would need to update live.
+- Die selection: when opening the attack through an action-die menu, the bonus uses the clicked die's value (via `_preSpentDieIndex`); otherwise it uses the lowest unspent eligible die (respecting `athletics_only` for athletics-attack). Parry rolls read the die from `_actionDieSpentIndex` after `_autoSpendActionDie` runs.
 
 **Unit tests:**
 - `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_attack_flag`
-- `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_parry_no_flag`
+- `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_parry_flag`
 - `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_attack_knack_flag`
 - `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_non_attack_knack_no_flag`
 - `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_athletics_attack_flag`
@@ -33,6 +34,8 @@
 - `test_school_abilities.py::test_shinjo_phase_bonus_applied_to_attack_roll`
 - `test_school_abilities.py::test_shinjo_phase_bonus_shifts_probability_chart`
 - `test_school_abilities.py::test_shinjo_phase_bonus_uses_clicked_die`
+- `test_school_abilities.py::test_shinjo_phase_bonus_on_parry_result_modal`
+- `test_school_abilities.py::test_shinjo_phase_bonus_parry_picker_hidden_for_non_shinjo`
 
 ---
 

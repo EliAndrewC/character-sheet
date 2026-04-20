@@ -2251,6 +2251,717 @@ def test_priest_2nd_dan_behavioral(page, live_server_url):
     assert "Priest 2nd Dan" in _get_roll_result_text(page)
 
 
+# --- Priest 3rd Dan precepts dice pool (Phase 0: create + clear, no swap yet) ---
+
+def _create_priest_3rd_dan(page, live_server_url, name, precepts=3):
+    _create_char(page, live_server_url, name, "priest",
+                 knack_overrides={"conviction": 3, "otherworldliness": 3, "pontificate": 3},
+                 skill_overrides={"precepts": precepts})
+
+
+def test_priest_3rd_dan_pool_button_visible_only_for_priest_3rd_dan(page, live_server_url):
+    """Roll Pool button renders only for priests at 3rd Dan or higher.
+    Non-priests and lower-Dan priests should not see the section at all."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestPoolVisible", precepts=3)
+    assert page.locator('[data-testid="precepts-pool-section"]').count() == 1
+    assert page.locator('[data-action="roll-precepts-pool"]').is_visible()
+
+    # Priest at 2nd Dan does not see the section.
+    _create_char(page, live_server_url, "Priest2dNoPool", "priest",
+                 knack_overrides={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+                 skill_overrides={"precepts": 3})
+    assert page.locator('[data-testid="precepts-pool-section"]').count() == 0
+
+    # Non-priest does not see the section.
+    _create_char(page, live_server_url, "AkodoNoPool", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    assert page.locator('[data-testid="precepts-pool-section"]').count() == 0
+
+
+def test_priest_3rd_dan_roll_creates_pool_of_size_equal_to_precepts(page, live_server_url):
+    """Clicking Roll Pool rolls precepts-skill-many dice and stores them."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestRollPool", precepts=4)
+    # Wait for the tracking bridge (Alpine x-init) to hook up before poking
+    # anything on it - under batched runs it can take an extra frame.
+    page.wait_for_function(
+        "() => window._trackingBridge && Array.isArray(window._trackingBridge.preceptsPool)",
+        timeout=10000,
+    )
+    # Turn off animation so the test doesn't wait on the roll timeline.
+    page.evaluate("document.getElementById('user-prefs').textContent = '{\"dice_animation_enabled\":false,\"dice_sound_enabled\":false}'")
+    btn = page.locator('[data-action="roll-precepts-pool"]')
+    btn.wait_for(state='visible', timeout=5000)
+    btn.click()
+    # Poll until the pool is populated. The roll is async (dice.js animation
+    # pipeline + save()), so be generous with the timeout - larger batched
+    # runs can take longer under memory pressure.
+    page.wait_for_function(
+        "() => window._trackingBridge && window._trackingBridge.preceptsPool.length === 4",
+        timeout=15000,
+    )
+    # All values are positive integers. Reroll-10s means a single die can
+    # legitimately exceed 10 (e.g. 10 + 9 = 19 sums as one die's value).
+    pool = page.evaluate("window._trackingBridge.preceptsPool")
+    assert len(pool) == 4
+    for d in pool:
+        assert d["value"] >= 1
+    # Dice icons render in the DOM.
+    assert page.locator('[data-testid="precepts-pool-die"]').count() == 4
+
+
+def test_priest_3rd_dan_clear_button_empties_pool(page, live_server_url):
+    """Clear button empties the pool and hides the dice icons."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestClearPool", precepts=3)
+    # Seed a pool directly via the tracking bridge so the test doesn't
+    # depend on the roll animation timing.
+    page.evaluate("""
+        window._trackingBridge.preceptsPool = [
+            {value: 9}, {value: 6}, {value: 2}
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(100)
+    assert page.locator('[data-testid="precepts-pool-die"]').count() == 3
+    page.locator('[data-action="clear-precepts-pool"]').click()
+    page.wait_for_function(
+        "() => window._trackingBridge.preceptsPool.length === 0",
+        timeout=3000,
+    )
+    assert page.locator('[data-testid="precepts-pool-die"]').count() == 0
+    # Roll button is back.
+    assert page.locator('[data-action="roll-precepts-pool"]').is_visible()
+
+
+def test_priest_3rd_dan_pool_persists_across_reload(page, live_server_url):
+    """Pool survives page reload (stored in Character.precepts_pool)."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestPoolReload", precepts=3)
+    page.evaluate("""
+        window._trackingBridge.preceptsPool = [
+            {value: 7}, {value: 4}, {value: 1}
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(300)
+    page.reload()
+    page.wait_for_function(
+        "() => window._trackingBridge && window._trackingBridge.preceptsPool.length === 3",
+        timeout=5000,
+    )
+    pool = page.evaluate("window._trackingBridge.preceptsPool")
+    assert [d["value"] for d in pool] == [7, 4, 1]
+
+
+def test_priest_3rd_dan_pool_not_cleared_by_action_dice_clear(page, live_server_url):
+    """The action-dice Clear button must not touch the precepts pool - the
+    pool persists across combat rounds and only the per-adventure reset or
+    the pool's own Clear button wipes it."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestPoolKeep", precepts=3)
+    page.evaluate("""
+        window._trackingBridge.preceptsPool = [{value: 8}, {value: 3}];
+        window._trackingBridge.actionDice = [{value: 5, spent: false}];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    # Click the action-dice Clear button.
+    page.locator('[data-action="clear-action-dice"]').click()
+    page.wait_for_timeout(200)
+    # Action dice are gone.
+    assert page.evaluate("window._trackingBridge.actionDice.length") == 0
+    # Precepts pool is untouched.
+    assert page.evaluate("window._trackingBridge.preceptsPool.length") == 2
+
+
+def test_priest_3rd_dan_pool_not_cleared_by_initiative_roll(page, live_server_url):
+    """Rolling initiative (which replaces action dice) must not wipe the pool."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestPoolInit", precepts=3)
+    page.evaluate("""
+        window._trackingBridge.preceptsPool = [{value: 9}, {value: 4}];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    # setActionDice is the end-of-round trigger fired by initiative.
+    page.evaluate("window._trackingBridge.setActionDice([6, 2])")
+    page.wait_for_timeout(200)
+    assert page.evaluate("window._trackingBridge.actionDice.length") == 2
+    # Precepts pool is untouched.
+    pool = page.evaluate("window._trackingBridge.preceptsPool")
+    assert len(pool) == 2
+    assert [d["value"] for d in pool] == [9, 4]
+
+
+def test_priest_3rd_dan_adventure_reset_clears_pool(page, live_server_url):
+    """The per-adventure reset wipes the precepts pool as part of its
+    broader clear (along with counters, toggles, and action dice)."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestPoolReset", precepts=3)
+    page.evaluate("""
+        window._trackingBridge.preceptsPool = [
+            {value: 9}, {value: 6}, {value: 2}
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    assert page.evaluate("window._trackingBridge.preceptsPool.length") == 3
+    page.locator('[data-action="open-reset-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=10000)
+    page.locator('[data-action="confirm-reset"]').click()
+    page.wait_for_timeout(400)
+    assert page.evaluate("window._trackingBridge.preceptsPool.length") == 0
+
+
+def test_priest_3rd_dan_reset_modal_lists_pool_clear(page, live_server_url):
+    """The reset confirm modal enumerates what will be cleared; the precepts
+    pool gets its own 'Clear precepts pool (N dice)' line when non-empty."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestPoolSummary", precepts=3)
+    page.evaluate("""
+        window._trackingBridge.preceptsPool = [
+            {value: 8}, {value: 3}
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-reset-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-reset"]', state='visible', timeout=10000)
+    body = page.text_content('body')
+    assert "Clear precepts pool (2 dice)" in body
+
+
+def test_priest_3rd_dan_reset_button_enabled_with_only_pool(page, live_server_url):
+    """If the ONLY clearable state is a non-empty precepts pool (no counters
+    spent, no toggles set, no action dice), the global Reset button must
+    still be enabled so the pool is reachable."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestPoolOnly", precepts=3)
+    page.evaluate("""
+        window._trackingBridge.preceptsPool = [{value: 5}];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    btn = page.locator('[data-action="open-reset-modal"]')
+    assert not btn.is_disabled()
+
+
+# --- Priest 3rd Dan pool display on qualifying rolls (Phase 4) ---
+#
+# Phase 4 renders the pool in the discretionary-bonus area of every
+# qualifying roll modal (parry, attack, damage, wound check). Click-to-swap
+# interactivity is wired in Phase 5; these tests only verify presence/absence.
+
+def _seed_own_pool(page, dice):
+    """Seed the priest's own precepts pool via the tracking bridge."""
+    page.evaluate(
+        "values => {"
+        " window._trackingBridge.preceptsPool = values.map(v => ({value: v}));"
+        " window._trackingBridge.save();"
+        "}",
+        dice,
+    )
+    page.wait_for_timeout(200)
+
+
+def test_priest_3rd_dan_pool_appears_on_own_parry_roll(page, live_server_url):
+    """Priest's parry roll shows their precepts pool in the discretionary
+    bonus area of the dice-roller modal."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestParryPool", precepts=3)
+    _seed_own_pool(page, [9, 5, 2])
+    page.locator('[data-roll-key="parry"]').click()
+    # Parry goes through a small menu first with "Roll Parry" option.
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=5000)
+    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.click()
+    page.wait_for_function("""() => {
+        const d = window._diceRoller;
+        return d && d.phase === 'done';
+    }""", timeout=10000)
+    pool_block = page.locator('[data-modal="dice-roller"] [data-testid^="precepts-pool-in-roll-"]')
+    assert pool_block.count() == 1
+    dice = pool_block.locator('[data-precepts-pool-die]')
+    assert dice.count() == 3
+    values = [int(d.get_attribute('data-die-value')) for d in dice.all()]
+    assert sorted(values) == [2, 5, 9]
+
+
+def test_priest_3rd_dan_pool_appears_on_own_wound_check(page, live_server_url):
+    """Priest's wound check modal shows their precepts pool."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestWcPool", precepts=3)
+    _seed_own_pool(page, [8, 4])
+    # Seed light wounds so the Roll Wound Check button appears.
+    page.evaluate("""
+        window._trackingBridge.lightWounds = 10;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=5000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const d = window._diceRoller;
+        return d && d.wcPhase === 'result';
+    }""", timeout=10000)
+    pool_block = page.locator('[data-modal="wound-check"] [data-testid^="precepts-pool-in-roll-"]')
+    assert pool_block.count() == 1
+
+
+def test_priest_3rd_dan_pool_does_not_appear_on_skill_roll(page, live_server_url):
+    """Plain skill rolls are not an attack/parry/damage/WC so no pool block."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestSkillPool", precepts=3)
+    _seed_own_pool(page, [9, 5])
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    # Precepts is a priest school knack, so it's rollable as knack:precepts,
+    # but precepts as a *skill* isn't a roll key here. Pick a simple knack
+    # that's definitely rollable: pontificate (priest school knack).
+    page.locator('[data-roll-key="knack:pontificate"]').click()
+    page.wait_for_function("""() => {
+        const d = window._diceRoller;
+        return d && d.phase === 'done';
+    }""", timeout=10000)
+    pool_block = page.locator('[data-modal="dice-roller"] [data-testid^="precepts-pool-in-roll-"]')
+    assert pool_block.count() == 0
+
+
+def test_priest_3rd_dan_pool_predicate_excludes_iaijutsu_duel(page, live_server_url):
+    """The iaijutsu knack (used for contested duels) is not an attack/parry/
+    damage/WC per the 3rd Dan rules, so the precepts-pool predicate must
+    return false for it. The Kakita combat iaijutsu attack variant
+    (``knack:iaijutsu:attack``) is a proper attack roll and IS qualifying -
+    tested here against the predicate directly so party setup isn't needed."""
+    _create_char(page, live_server_url, "KakitaIaiPred", "kakita_duelist",
+                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
+    # Predicate evaluates against the dice-roller's formula + currentRollKey.
+    # Pretend the dice-roller is mid-iaijutsu-duel-knack roll:
+    duel_result = page.evaluate("""() => {
+        const d = window._diceRoller;
+        d.formula = d.formulas['knack:iaijutsu'] || null;
+        d.currentRollKey = 'knack:iaijutsu';
+        return d._isPreceptsPoolQualifyingRoll('roll');
+    }""")
+    assert duel_result is False
+    # And for the combat iaijutsu attack:
+    atk_result = page.evaluate("""() => {
+        const d = window._diceRoller;
+        d.atkFormula = d.formulas['knack:iaijutsu:attack'] || null;
+        return d._isPreceptsPoolQualifyingRoll('attack');
+    }""")
+    assert atk_result is True
+
+
+def test_ally_sees_priest_3rd_dan_pool_on_attack_roll(page, live_server_url):
+    """Set up a priest at 3rd Dan with a pool and a non-priest ally in the
+    same gaming group. When the ally rolls attack, the priest's pool renders
+    in the attack modal's discretionary-bonus area."""
+    # Priest at 3rd Dan (precepts=3) with a pool.
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Party Priest")
+    select_school(page, "priest")
+    for knack in ("conviction", "otherworldliness", "pontificate"):
+        click_plus(page, f"knack_{knack}", 2)  # 1 -> 3
+    click_plus(page, "skill_precepts", 3)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Priest 3rd Dan")
+    priest_url = page.url
+    # Assign to Tuesday Group.
+    page.goto(priest_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+    # Go to the sheet and seed the pool directly.
+    page.goto(priest_url)
+    page.wait_for_selector('[data-testid="precepts-pool-section"]', timeout=5000)
+    _seed_own_pool(page, [9, 4])
+
+    # Ally (Akodo) in same group.
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Party Ally")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "attack", 1)  # 1 -> 2
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Ally")
+    ally_url = page.url
+    page.goto(ally_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+
+    # Visit the ally's sheet; the priest_precepts_allies JSON should carry the pool.
+    page.goto(ally_url)
+    allies = page.evaluate("""() => {
+        const el = document.getElementById('priest-precepts-allies');
+        return JSON.parse(el.textContent || '[]');
+    }""")
+    assert len(allies) == 1
+    assert allies[0]["name"] == "Party Priest"
+    assert allies[0]["pool"] == [{"value": 9}, {"value": 4}]
+
+    # Fire an attack roll; the attack modal should show the priest's pool.
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    # Pre-roll: pool block is already in the DOM (the predicate is based on
+    # atkFormula.is_attack_type which is set when the modal opens).
+    # Filter by the attack-phase instance via the data-precepts-pool-modal
+    # attribute to distinguish it from the damage-phase instance.
+    attack_pool = page.locator(
+        '[data-modal="attack"] [data-precepts-pool-modal="attack"]'
+    )
+    assert attack_pool.count() == 1, \
+        f"expected 1 attack-phase pool block; got {attack_pool.count()}"
+    assert "Party Priest" in attack_pool.text_content()
+
+
+def test_priest_3rd_dan_empty_pool_does_not_render_block(page, live_server_url):
+    """A priest at 3rd Dan with an EMPTY pool gets no block rendered (the
+    template iterates only over priests with non-empty pools)."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestEmptyPool", precepts=3)
+    # Do NOT seed a pool - preceptsPool stays [].
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=5000)
+    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.click()
+    page.wait_for_function("""() => {
+        const d = window._diceRoller;
+        return d && d.phase === 'done';
+    }""", timeout=10000)
+    assert page.locator(
+        '[data-modal="dice-roller"] [data-testid^="precepts-pool-in-roll-"]'
+    ).count() == 0
+
+
+# --- Priest 3rd Dan SWAP (Phase 5) ---
+#
+# These tests drive the swap algorithm by staging finalDice / pool directly
+# via Alpine evaluate() rather than running a full roll pipeline. This keeps
+# the tests deterministic (no dice-rolling randomness) and lets us assert
+# exact before/after values on every swap case.
+
+def _stage_swap_context(page, pool, rolled, kept_count):
+    """Set up a deterministic roll-result state on the live diceRoller:
+    finalDice = rolled (a list of ints), pool = pool (list of ints),
+    kept-flag derived by keeping the top ``kept_count`` values, and a
+    fake formula so the parry-modal predicate accepts the roll."""
+    page.evaluate(
+        """({pool, rolled, keptCount}) => {
+            const d = window._diceRoller;
+            const bridge = window._trackingBridge;
+            // Seed the pool on the priest's own state.
+            bridge.preceptsPool = pool.map(v => ({value: v}));
+            bridge.save();
+            // Stage finalDice + kept flags (keep top-N by value).
+            const sorted = rolled.map((v, i) => ({v, i})).sort((a, b) => a.v - b.v);
+            const keptIdx = new Set(sorted.slice(sorted.length - keptCount).map(x => x.i));
+            d.finalDice = rolled.map((v, i) => ({value: v, kept: keptIdx.has(i), parts: [v]}));
+            d.keptDice = d.finalDice.filter(x => x.kept);
+            d.keptSum = d.keptDice.reduce((s, x) => s + x.value, 0);
+            d.baseTotal = d.keptSum;
+            d.formula = {kept: keptCount, is_attack_type: false};
+            d.currentRollKey = 'parry';
+            d.phase = 'done';
+            d.open = true;  // open the dice-roller modal so the pool block renders
+            d.preceptsPoolSwapBonuses = [];
+            d.preceptsPoolMenuOpen = null;
+        }""",
+        {"pool": pool, "rolled": rolled, "keptCount": kept_count},
+    )
+    page.wait_for_timeout(100)
+
+
+def _priest_swap_self(page, pool_die_index, rolled_value):
+    """Invoke swapPreceptsDie for the priest's own pool."""
+    return page.evaluate(
+        """({pi, rv}) => {
+            const d = window._diceRoller;
+            const allies = d.preceptsPoolAlliesForThisRoll('roll');
+            const self = allies.find(a => a.isSelf);
+            if (!self) return {error: 'no self pool'};
+            d.swapPreceptsDie(self, pi, rv);
+            return {
+                pool: window._trackingBridge.preceptsPool.map(x => x.value),
+                finalDice: d.finalDice.map(x => ({v: x.value, kept: !!x.kept})),
+                keptSum: d.keptSum,
+                baseTotal: d.baseTotal,
+                bonuses: d.preceptsPoolSwapBonuses,
+            };
+        }""",
+        {"pi": pool_die_index, "rv": rolled_value},
+    )
+
+
+def test_priest_3rd_dan_swap_pool_die_with_lower_rolled_die(page, live_server_url):
+    """The simplest case: priest swaps a pool 9 for a rolled 3. The pool 9
+    becomes a kept die; the replaced 3 returns to the pool. keptSum grows
+    by 9-3=6."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestSwap1", precepts=2)
+    _stage_swap_context(page, pool=[9, 2], rolled=[8, 3], kept_count=2)
+    before_total = page.evaluate("window._diceRoller.baseTotal")
+    result = _priest_swap_self(page, pool_die_index=0, rolled_value=3)
+    # Pool: first entry was 9 (now replaced by the rolled 3).
+    assert result["pool"][0] == 3
+    assert result["pool"][1] == 2
+    # finalDice: the rolled 3 got replaced by the pool 9; kept set is now
+    # {8, 9}. keptSum went from 8+3=11 to 8+9=17, delta +6.
+    kept_values = sorted([d["v"] for d in result["finalDice"] if d["kept"]])
+    assert kept_values == [8, 9]
+    assert result["keptSum"] == 17
+    assert result["baseTotal"] == before_total + 6
+    # One structured bonus-entry recorded.
+    assert len(result["bonuses"]) == 1
+    assert result["bonuses"][0]["rolledValueBefore"] == 3
+    assert result["bonuses"][0]["poolValueAfter"] == 9
+
+
+def test_priest_3rd_dan_swap_promotes_unkept_die_into_kept(page, live_server_url):
+    """Swapping a pool die for a currently-unkept rolled die promotes the
+    new high value into the kept set. Here kept is only {5}; rolled 1 is
+    unkept; pool 9 swaps with rolled 1 and promotes into kept (pushing 5
+    out)."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestSwap2", precepts=1)
+    _stage_swap_context(page, pool=[9], rolled=[5, 1], kept_count=1)
+    result = _priest_swap_self(page, pool_die_index=0, rolled_value=1)
+    # Pool: 9 replaced by the rolled 1.
+    assert result["pool"] == [1]
+    # finalDice values are {5, 9}; only 9 is kept (top 1 by value).
+    kept_values = [d["v"] for d in result["finalDice"] if d["kept"]]
+    assert kept_values == [9]
+    # keptSum went from 5 to 9.
+    assert result["keptSum"] == 9
+
+
+def test_priest_3rd_dan_swap_menu_dedupes_rolled_values(page, live_server_url):
+    """If two rolled dice have the same value, the dropdown offers a
+    single entry ("Swap with a rolled 4"), not two."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestSwap3", precepts=1)
+    _stage_swap_context(page, pool=[10], rolled=[4, 4, 8], kept_count=2)
+    options = page.evaluate("""() => {
+        const d = window._diceRoller;
+        const allies = d.preceptsPoolAlliesForThisRoll('roll');
+        const self = allies.find(a => a.isSelf);
+        return d.preceptsSwapOptions(self, self.pool[0].value);
+    }""")
+    labels = [o["label"] for o in options]
+    assert labels == ["Swap with a rolled 4", "Swap with a rolled 8"]
+
+
+def test_priest_3rd_dan_swap_menu_shows_disabled_when_no_lower(page, live_server_url):
+    """If no rolled die is strictly lower than the clicked pool die, the
+    dropdown shows a single disabled 'No lower rolled dice' entry."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestSwap4", precepts=1)
+    # Pool die is 3; all rolled dice are >= 3.
+    _stage_swap_context(page, pool=[3], rolled=[10, 7, 3], kept_count=2)
+    options = page.evaluate("""() => {
+        const d = window._diceRoller;
+        const allies = d.preceptsPoolAlliesForThisRoll('roll');
+        const self = allies.find(a => a.isSelf);
+        return d.preceptsSwapOptions(self, self.pool[0].value);
+    }""")
+    assert len(options) == 1
+    assert options[0].get("disabled") is True
+    assert "No lower rolled dice" in options[0]["label"]
+
+
+def test_priest_3rd_dan_equal_value_rolled_die_excluded_from_menu(page, live_server_url):
+    """Equal-value swap is a no-op so it's excluded for everyone (self
+    included) - pool 5 with rolled {5, 4, 3} offers only 4 and 3."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestSwap5", precepts=1)
+    _stage_swap_context(page, pool=[5], rolled=[5, 4, 3], kept_count=2)
+    options = page.evaluate("""() => {
+        const d = window._diceRoller;
+        const allies = d.preceptsPoolAlliesForThisRoll('roll');
+        const self = allies.find(a => a.isSelf);
+        return d.preceptsSwapOptions(self, self.pool[0].value);
+    }""")
+    labels = [o["label"] for o in options]
+    assert labels == ["Swap with a rolled 3", "Swap with a rolled 4"]
+
+
+def test_priest_3rd_dan_swap_dropdown_opens_and_closes(page, live_server_url):
+    """Clicking a pool die button opens its dropdown; clicking again closes it."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestSwap6", precepts=2)
+    _stage_swap_context(page, pool=[9, 4], rolled=[7, 2], kept_count=1)
+    page.wait_for_function(
+        "document.querySelectorAll('[data-precepts-pool-die]').length >= 2",
+        timeout=5000,
+    )
+    # The macro renders the pool block inside multiple modals; pick the
+    # one in the dice-roller modal (currently visible).
+    die_btns = page.locator(
+        '[data-modal="dice-roller"] [data-action^="precepts-pool-die-self-"]'
+    )
+    assert die_btns.count() == 2
+    die_btns.first.click()
+    page.wait_for_timeout(150)
+    menu = page.locator(
+        '[data-modal="dice-roller"] [data-precepts-swap-menu="self:0"]'
+    )
+    assert menu.is_visible()
+    option_labels = [el.text_content().strip() for el in menu.locator('button').all()]
+    assert "Swap with a rolled 2" in option_labels
+    assert "Swap with a rolled 7" in option_labels
+    # Click the same pool die again to toggle the dropdown closed.
+    die_btns.first.click()
+    page.wait_for_timeout(150)
+    assert not menu.is_visible()
+
+
+def test_ally_swaps_priest_pool_die_and_broadcasts(page, live_server_url):
+    """When an ally swaps with a priest's pool die, the swap:
+       - updates the ally's own rolled dice + total,
+       - broadcasts the new pool to the priest's character via
+         POST /characters/{priest_id}/precepts-pool,
+       - persists so both sheets see the updated pool on reload.
+    """
+    # Set up a priest with a pool in Tuesday Group.
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Swap Priest")
+    select_school(page, "priest")
+    for knack in ("conviction", "otherworldliness", "pontificate"):
+        click_plus(page, f"knack_{knack}", 2)
+    click_plus(page, "skill_precepts", 3)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Swap Priest")
+    priest_url = page.url
+    page.goto(priest_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+    page.goto(priest_url)
+    _seed_own_pool(page, [10, 3])
+
+    # Ally in same group.
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Swap Ally")
+    select_school(page, "akodo_bushi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Swap Ally")
+    ally_url = page.url
+    page.goto(ally_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+
+    page.goto(ally_url)
+    # Stage an attack-result state on the ally so the pool can swap into it.
+    # (The priestPreceptsAllies array is seeded by the context at page load.)
+    page.evaluate("""() => {
+        const d = window._diceRoller;
+        // Pretend the attack modal is open with finalDice from a roll.
+        d.finalDice = [
+            {value: 8, kept: true, parts: [8]},
+            {value: 2, kept: false, parts: [2]},
+        ];
+        d.keptDice = [d.finalDice[0]];
+        d.keptSum = 8;
+        d.baseTotal = 8;
+        d.atkRollTotal = 8;
+        d.atkFormula = {kept: 1, is_attack_type: true};
+        d.atkPhase = 'result';
+        d.atkModalOpen = true;
+        d.currentRollKey = 'attack';
+        d.preceptsPoolSwapBonuses = [];
+    }""")
+    page.wait_for_timeout(100)
+    # Invoke the swap via the exposed helper. The ally can only swap with
+    # a strictly-lower rolled die, so pool 10 swaps with rolled 2.
+    result = page.evaluate("""() => {
+        const d = window._diceRoller;
+        const priest = d.priestPreceptsAllies.find(p => p.name === 'Swap Priest');
+        d.swapPreceptsDie(priest, 0, 2);
+        return {
+            finalDice: d.finalDice.map(x => ({v: x.value, kept: !!x.kept})),
+            atkRollTotal: d.atkRollTotal,
+            priestPool: priest.pool.map(x => x.value),
+        };
+    }""")
+    # Ally's kept set is now {10}; total went from 8 to 10 (+2).
+    kept_values = [d["v"] for d in result["finalDice"] if d["kept"]]
+    assert kept_values == [10]
+    assert result["atkRollTotal"] == 10
+    # The priest's pool on the ally's local reference now has {2, 3}.
+    assert sorted(result["priestPool"]) == [2, 3]
+    # Wait for the POST to flush, then load the priest's sheet - DB should
+    # reflect the new pool.
+    page.wait_for_timeout(500)
+    page.goto(priest_url)
+    page.wait_for_selector('[data-testid="precepts-pool-section"]')
+    page.wait_for_function(
+        "() => window._trackingBridge && Array.isArray(window._trackingBridge.preceptsPool)"
+    )
+    persisted = page.evaluate(
+        "window._trackingBridge.preceptsPool.map(x => x.value)"
+    )
+    assert sorted(persisted) == [2, 3]
+
+
+def test_ally_swap_strictly_rejects_equal_or_higher_rolled_die(page, live_server_url):
+    """Even an ally who clicks swap with equal or higher rolled values
+    gets nothing - the swap helper no-ops (the dropdown never offered
+    those options in the first place, but guard against direct calls)."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "StrictSwapPriest")
+    select_school(page, "priest")
+    for knack in ("conviction", "otherworldliness", "pontificate"):
+        click_plus(page, f"knack_{knack}", 2)
+    click_plus(page, "skill_precepts", 2)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "StrictSwapPriest")
+    priest_url = page.url
+    page.goto(priest_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+    page.goto(priest_url)
+    _seed_own_pool(page, [5])
+
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "StrictSwapAlly")
+    select_school(page, "akodo_bushi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "StrictSwapAlly")
+    ally_url = page.url
+    page.goto(ally_url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(500)
+    page.goto(ally_url)
+    # Rolled dice: 5 (equal) and 8 (higher). Neither can be swapped with the
+    # pool 5. The direct swap call should no-op.
+    result = page.evaluate("""() => {
+        const d = window._diceRoller;
+        d.finalDice = [
+            {value: 5, kept: true, parts: [5]},
+            {value: 8, kept: true, parts: [8]},
+        ];
+        d.keptDice = [...d.finalDice];
+        d.keptSum = 13;
+        d.baseTotal = 13;
+        d.formula = {kept: 2, is_attack_type: false};
+        d.currentRollKey = 'parry';
+        d.phase = 'done';
+        d.open = true;
+        // Find the specific priest by name (other tests may have left
+        // other priests in the group with their own pools).
+        const priest = d.priestPreceptsAllies.find(p => p.name === 'StrictSwapPriest');
+        if (!priest) return {error: 'priest missing'};
+        const before = priest.pool.map(x => x.value);
+        d.swapPreceptsDie(priest, 0, 5);   // equal - rejected
+        d.swapPreceptsDie(priest, 0, 8);   // higher - rejected
+        return {
+            before,
+            after: priest.pool.map(x => x.value),
+            finalDice: d.finalDice.map(x => x.value),
+        };
+    }""")
+    assert "error" not in result, result
+    assert result["before"] == result["after"] == [5]
+    assert sorted(result["finalDice"]) == [5, 8]
+
+
 # --- Parry 2nd Dan ---
 
 def test_hiruma_2nd_dan_behavioral(page, live_server_url):
@@ -2615,7 +3326,9 @@ def test_non_kakita_10_on_initiative_is_unkept(page, live_server_url):
 
 def test_kakita_phase_0_die_has_phase_zero_svg_class(page, live_server_url):
     """The Actions-panel SVG for a value-0 die carries the .phase-zero class
-    so CSS can render it distinctly (dark red text)."""
+    as a DOM marker for future styling / tests. (The current CSS renders
+    Phase-0 dice the same as any other action die - 10s / 0s on action
+    dice aren't highlighted because no reroll is implied.)"""
     _create_char(page, live_server_url, "KakitaP0Svg", "kakita_duelist",
                  knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
     _mock_dice_ten(page)
@@ -2627,6 +3340,56 @@ def test_kakita_phase_0_die_has_phase_zero_svg_class(page, live_server_url):
     page.wait_for_timeout(200)
     section = page.locator('[data-testid="action-dice-section"]')
     assert section.locator('svg.action-die.phase-zero').count() > 0
+
+
+def test_initiative_roll_does_not_mark_10s_red(page, live_server_url):
+    """10s only mean something on rolls that reroll - not on initiative.
+    The rolling animation must NOT add the ``is-ten`` class when reroll-
+    tens is off, so a 10 on initiative renders the same as any other die."""
+    _create_char(page, live_server_url, "NoRedOnInit", "akodo_bushi",
+                 knack_overrides={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+    # Re-enable animations so the rolling tray actually renders.
+    page.evaluate("if (window._diceRoller) window._diceRoller.prefs.dice_animation_enabled = true")
+    _mock_dice_ten(page)
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_roll_done(page)
+    _restore_dice(page)
+    # The rolling tray's SVGs must not carry ``is-ten``.
+    modal = page.locator('[data-modal="dice-roller"]')
+    assert modal.locator('svg.is-ten').count() == 0
+
+
+def test_kakita_phase_0_die_not_styled_distinctly(page, live_server_url):
+    """Per feedback: a Phase-0 action die is NOT styled distinctly from
+    other action dice (no gold / red). The .phase-zero class stays as a
+    DOM marker but has no visual effect; a regular non-Phase-0 die looks
+    the same."""
+    _create_char(page, live_server_url, "KakitaP0Plain", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 0, spent: false},
+            {value: 5, spent: false},
+        ];
+    }""")
+    section = page.locator('[data-testid="action-dice-section"]')
+    assert section.locator('svg.action-die.phase-zero').count() == 1
+    assert section.locator('svg.action-die:not(.phase-zero)').count() == 1
+    # The CSS rules that used to color phase-zero have been removed, so
+    # both dice compute the same die-shape fill. Sanity-check by reading
+    # the computed fill off each.
+    fills = page.evaluate("""() => {
+        const section = document.querySelector('[data-testid="action-dice-section"]');
+        const phaseZero = section.querySelector('svg.action-die.phase-zero .die-shape');
+        const normal = section.querySelector('svg.action-die:not(.phase-zero):not(.athletics-only) .die-shape');
+        return {
+            phaseZero: phaseZero ? getComputedStyle(phaseZero).fill : null,
+            normal: normal ? getComputedStyle(normal).fill : null,
+        };
+    }""")
+    assert fills["phaseZero"] is not None
+    assert fills["normal"] is not None
+    assert fills["phaseZero"] == fills["normal"]
 
 
 def test_kakita_phase_0_die_survives_reload(page, live_server_url):
@@ -2799,6 +3562,592 @@ def test_non_kakita_with_iaijutsu_does_not_expose_iaijutsu_attack_key(page, live
         "() => !!(window._diceRoller?.formulas?.['knack:iaijutsu:attack'])"
     )
     assert has_key is False
+
+
+# ---------------------------------------------------------------------------
+# Kakita Duelist 3rd Dan: defender-phase bonus on attack rolls
+# ---------------------------------------------------------------------------
+
+def _make_kakita_dan_3(page, live_server_url, name, attack=1):
+    """Create a Kakita Duelist character at Dan 3 with an optional attack
+    skill override so the 3rd Dan ``X = attack skill`` bonus is non-trivial."""
+    _create_char(
+        page, live_server_url, name, "kakita_duelist",
+        knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+    )
+    if attack and attack > 1:
+        cid = _extract_char_id(page)
+        page.evaluate(f"""async () => {{
+            await fetch('/characters/{cid}/autosave', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{attack: {attack}}})
+            }});
+        }}""")
+        page.reload()
+        page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+
+
+def test_kakita_3rd_dan_defender_phase_control_hidden_without_initiative(page, live_server_url):
+    """No action dice -> initiative warning fires and the Kakita 3rd Dan
+    control stays hidden."""
+    _make_kakita_dan_3(page, live_server_url, "KakitaK3NoInit")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    assert not page.locator('[data-testid="kakita-3rd-dan-bonus"]').is_visible()
+    assert page.locator('[data-testid="attack-init-warning-no-init"]').is_visible()
+
+
+def test_kakita_3rd_dan_defender_phase_control_hidden_out_of_dice(page, live_server_url):
+    """Every action die spent -> control hidden (out-of-dice warning instead)."""
+    _make_kakita_dan_3(page, live_server_url, "KakitaK3Out")
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 4, spent: true}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    assert not page.locator('[data-testid="kakita-3rd-dan-bonus"]').is_visible()
+
+
+def test_kakita_3rd_dan_defender_phase_control_visible_with_action_dice(page, live_server_url):
+    """Action die present -> control rendered, dropdown defaulted to 11."""
+    _make_kakita_dan_3(page, live_server_url, "KakitaK3Vis")
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [{value: 4, spent: false}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    control = page.locator('[data-testid="kakita-3rd-dan-bonus"]')
+    assert control.is_visible()
+    default = page.evaluate(
+        "() => document.querySelector('[data-action=\"kakita-3rd-dan-defender-phase\"]').value")
+    assert default == "11"
+
+
+def test_kakita_3rd_dan_bonus_applied_to_attack_roll(page, live_server_url):
+    """Attacker die=4, defender phase=10, attack skill=2 -> bonus=+12 on the
+    formula, labeled in the post-roll breakdown."""
+    _make_kakita_dan_3(page, live_server_url, "KakitaK3Roll", attack=2)
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [{value: 4, spent: false}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    modal = page.locator('[data-modal="attack"]')
+    page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("10")
+    text = page.locator('[data-testid="kakita-3rd-dan-bonus-display"]').text_content()
+    assert "+12" in text
+    modal.locator('[data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+    result = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return {
+                bonus: d.formula?.kakita_3rd_dan_bonus || 0,
+                attacker: d.formula?.kakita_3rd_dan_attacker_phase || 0,
+                defender: d.formula?.kakita_3rd_dan_defender_phase || 0,
+                x: d.formula?.kakita_3rd_dan_x || 0,
+            };
+        }
+        return null;
+    }""")
+    assert result == {"bonus": 12, "attacker": 4, "defender": 10, "x": 2}
+    breakdown = page.locator('[data-testid="kakita-3rd-dan-breakdown"]')
+    assert breakdown.is_visible()
+    assert "+12" in breakdown.text_content()
+
+
+def test_kakita_3rd_dan_bonus_clamps_when_defender_acts_first(page, live_server_url):
+    """Attacker die=7, defender phase=3 -> clamp to 0 (no negative bonus)."""
+    _make_kakita_dan_3(page, live_server_url, "KakitaK3Clamp", attack=2)
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [{value: 7, spent: false}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("3")
+    text = page.locator('[data-testid="kakita-3rd-dan-bonus-display"]').text_content()
+    assert "+0" in text
+
+
+def test_kakita_3rd_dan_bonus_shifts_probability_chart(page, live_server_url):
+    """Picking a later defender phase raises atkHitChance live."""
+    _make_kakita_dan_3(page, live_server_url, "KakitaK3Prob", attack=2)
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [{value: 4, spent: false}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    # Start with phase 4 == attacker phase -> no bonus.
+    page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("4")
+    low = page.evaluate("() => window._diceRoller.atkHitChance(0)")
+    page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("11")
+    high = page.evaluate("() => window._diceRoller.atkHitChance(0)")
+    assert high >= low
+    assert high > 0
+
+
+def test_kakita_3rd_dan_bonus_uses_clicked_die_value(page, live_server_url):
+    """Opening attack via a specific action die's menu computes the bonus
+    against THAT die's value, not the lowest unspent."""
+    _make_kakita_dan_3(page, live_server_url, "KakitaK3Die", attack=2)
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 2, spent: false},
+            {value: 8, spent: false},
+        ];
+    }""")
+    # Open the higher-value die's menu.
+    page.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"]'
+    ).nth(1).click()
+    page.locator('[data-action-die-menu-item="attack"]:visible').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("10")
+    # attacker=8, defender=10, X=2 -> +4.
+    text = page.locator('[data-testid="kakita-3rd-dan-bonus-display"]').text_content()
+    assert "+4" in text
+
+
+def test_kakita_3rd_dan_phase_11_default_is_no_remaining_actions(page, live_server_url):
+    """The dropdown's default 'no remaining actions' (value=11) yields the
+    maximum bonus for the attacker-die phase."""
+    _make_kakita_dan_3(page, live_server_url, "KakitaK3P11", attack=2)
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [{value: 4, spent: false}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    # Don't change the dropdown; it should default to 11.
+    # attacker=4, defender=11, X=2 -> +14.
+    text = page.locator('[data-testid="kakita-3rd-dan-bonus-display"]').text_content()
+    assert "+14" in text
+
+
+def test_kakita_below_3rd_dan_no_bonus_control(page, live_server_url):
+    """Kakita 2nd Dan doesn't render the 3rd Dan bonus control."""
+    _create_char(page, live_server_url, "KakitaK2NoCtl", "kakita_duelist",
+                 knack_overrides={"double_attack": 2, "iaijutsu": 2, "lunge": 2})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [{value: 4, spent: false}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    assert not page.locator('[data-testid="kakita-3rd-dan-bonus"]').is_visible()
+
+
+def test_kakita_3rd_dan_bonus_on_phase_zero_die(page, live_server_url):
+    """When attacking from a Phase-0 die, attacker phase=0 and the bonus
+    equals X * defender_phase."""
+    _make_kakita_dan_3(page, live_server_url, "KakitaK3P0", attack=2)
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [{value: 0, spent: false}];
+    }""")
+    # Open the phase-0 die's menu and pick Iaijutsu Attack.
+    page.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"]'
+    ).first.click()
+    page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("5")
+    # attacker=0, defender=5, X=2 -> +10.
+    text = page.locator('[data-testid="kakita-3rd-dan-bonus-display"]').text_content()
+    assert "+10" in text
+
+
+# ---------------------------------------------------------------------------
+# Kakita Duelist Phase 0 Interrupt button
+# ---------------------------------------------------------------------------
+
+def test_kakita_interrupt_button_hidden_for_non_kakita(page, live_server_url):
+    """Other schools never see the Phase 0 Interrupt button."""
+    _create_char(page, live_server_url, "AkodoNoKakita", "akodo_bushi",
+                 knack_overrides={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 3, spent: false}, {value: 5, spent: false},
+        ];
+    }""")
+    assert page.locator('[data-action="kakita-phase-zero-interrupt"]').count() == 0
+
+
+def test_kakita_interrupt_button_visible_on_kakita_sheet(page, live_server_url):
+    """Kakita sheet shows the Phase 0 Interrupt button inside the Actions panel."""
+    _create_char(page, live_server_url, "KakitaIntVis", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 3, spent: false}, {value: 5, spent: false},
+        ];
+    }""")
+    btn = page.locator('[data-action="kakita-phase-zero-interrupt"]')
+    assert btn.is_visible()
+    assert "Phase 0 Interrupt" in btn.text_content()
+
+
+def test_kakita_interrupt_button_disabled_with_fewer_than_two_dice(page, live_server_url):
+    """One unspent eligible die -> button disabled."""
+    _create_char(page, live_server_url, "KakitaInt1Die", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 5, spent: false}, {value: 3, spent: true},
+        ];
+    }""")
+    assert page.locator('[data-action="kakita-phase-zero-interrupt"]').is_disabled()
+
+
+def test_kakita_interrupt_button_spends_two_highest_dice(page, live_server_url):
+    """Click marks the 2 highest unspent dice spent with the Kakita label;
+    lower dice and already-spent dice are untouched."""
+    _create_char(page, live_server_url, "KakitaIntSpend", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 2, spent: false},
+            {value: 5, spent: false},
+            {value: 8, spent: false},
+            {value: 4, spent: true},
+        ];
+    }""")
+    page.locator('[data-action="kakita-phase-zero-interrupt"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        value: d.value, spent: d.spent, spent_by: d.spent_by || null,
+    }))""")
+    # Value 2 stays unspent; 5 and 8 get spent with the Kakita label; the
+    # already-spent 4 remains spent but no new label.
+    assert state[0] == {"value": 2, "spent": False, "spent_by": None}
+    assert state[1]["spent"] is True
+    assert state[1]["spent_by"] == "Kakita Phase 0 interrupt"
+    assert state[2]["spent"] is True
+    assert state[2]["spent_by"] == "Kakita Phase 0 interrupt"
+    assert state[3] == {"value": 4, "spent": True, "spent_by": None}
+
+
+def test_kakita_interrupt_opens_iaijutsu_attack_modal_with_banner(page, live_server_url):
+    """Click opens the attack modal with attack_variant='iaijutsu' and the
+    interrupt banner (distinct from the Phase-0-die banner)."""
+    _create_char(page, live_server_url, "KakitaIntBanner", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 5, spent: false}, {value: 8, spent: false},
+        ];
+    }""")
+    page.locator('[data-action="kakita-phase-zero-interrupt"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    variant = page.evaluate("() => window._diceRoller?.atkFormula?.attack_variant")
+    assert variant == "iaijutsu"
+    banner = page.locator('[data-testid="kakita-phase-zero-interrupt-note"]')
+    assert banner.is_visible()
+    # The generic Phase-0-die banner is suppressed when the interrupt banner
+    # is shown.
+    assert not page.locator('[data-testid="kakita-phase-zero-attack-note"]').is_visible()
+
+
+def test_kakita_interrupt_uses_phase_zero_as_attacker_phase(page, live_server_url):
+    """3rd Dan bonus on an interrupt attack uses 0 as the attacker phase,
+    so a defender phase of 10 + attack skill 2 yields +20."""
+    _make_kakita_dan_3(page, live_server_url, "KakitaIntP0", attack=2)
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 5, spent: false}, {value: 8, spent: false},
+        ];
+    }""")
+    page.locator('[data-action="kakita-phase-zero-interrupt"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    # Dropdown defaults to 11 ("no remaining actions"); pick 10 explicitly.
+    page.locator('[data-action="kakita-3rd-dan-defender-phase"]').select_option("10")
+    text = page.locator('[data-testid="kakita-3rd-dan-bonus-display"]').text_content()
+    # attacker=0, defender=10, X=2 -> +20.
+    assert "+20" in text
+    # Attacker-phase display reads 0 (forced).
+    control = page.locator('[data-testid="kakita-3rd-dan-bonus"]')
+    assert "die 0" in control.text_content()
+
+
+def test_kakita_interrupt_suppresses_initiative_warning(page, live_server_url):
+    """Even if the interrupt spends every remaining die, the "out of
+    action dice" warning is suppressed - the cost was paid deliberately."""
+    _create_char(page, live_server_url, "KakitaIntNoWarn", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 5, spent: false}, {value: 8, spent: false},
+        ];
+    }""")
+    page.locator('[data-action="kakita-phase-zero-interrupt"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    assert not page.locator('[data-testid="attack-init-warning-no-init"]').is_visible()
+    assert not page.locator('[data-testid="attack-init-warning-out-of-dice"]').is_visible()
+
+
+def test_kakita_interrupt_rolling_does_not_spend_a_third_die(page, live_server_url):
+    """Rolling from the interrupt modal must NOT consume an additional
+    action die - the 2 highest were the full cost."""
+    _create_char(page, live_server_url, "KakitaIntNo3rdDie", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 2, spent: false},
+            {value: 5, spent: false},
+            {value: 8, spent: false},
+        ];
+    }""")
+    page.locator('[data-action="kakita-phase-zero-interrupt"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        value: d.value, spent: d.spent,
+    }))""")
+    # Only the two highest dice (5 and 8) are spent; the 2 remains unspent.
+    assert state[0] == {"value": 2, "spent": False}
+    assert state[1]["spent"] is True
+    assert state[2]["spent"] is True
+
+
+def test_kakita_interrupt_persists_after_modal_close(page, live_server_url):
+    """Closing the modal without rolling leaves the 2 dice spent (no refund
+    per the rules - the cost is paid on declaration)."""
+    _create_char(page, live_server_url, "KakitaIntNoRefund", "kakita_duelist",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        window._trackingBridge.actionDice = [
+            {value: 5, spent: false}, {value: 8, spent: false},
+        ];
+    }""")
+    page.locator('[data-action="kakita-phase-zero-interrupt"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    page.locator('[data-modal="attack"] button:has-text("\u00d7")').click()
+    page.wait_for_timeout(200)
+    state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
+        value: d.value, spent: d.spent,
+    }))""")
+    assert state[0]["spent"] is True
+    assert state[1]["spent"] is True
+
+
+# ---------------------------------------------------------------------------
+# Kakita Duelist 5th Dan: Phase-0 contested iaijutsu modal
+# ---------------------------------------------------------------------------
+
+def _make_kakita_dan_5(page, live_server_url, name, attack=1):
+    """Create a Kakita Duelist at Dan 5 with optional attack skill override."""
+    _create_char(
+        page, live_server_url, name, "kakita_duelist",
+        knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5},
+    )
+    if attack and attack > 1:
+        cid = _extract_char_id(page)
+        page.evaluate(f"""async () => {{
+            await fetch('/characters/{cid}/autosave', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{attack: {attack}}})
+            }});
+        }}""")
+        page.reload()
+        page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+
+
+def test_kakita_5th_dan_button_visible_on_dan_5_sheet(page, live_server_url):
+    """Dan 5 Kakita sheet shows the 5th Dan contest button."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5Btn")
+    assert page.locator('[data-action="kakita-5th-dan-contest"]').is_visible()
+
+
+def test_kakita_below_5th_dan_hides_button(page, live_server_url):
+    """Dan 4 Kakita does not see the 5th Dan contest button."""
+    _create_char(page, live_server_url, "Kakita4NoBtn", "kakita_duelist",
+                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "lunge": 4})
+    assert page.locator('[data-action="kakita-5th-dan-contest"]').count() == 0
+
+
+def test_kakita_5th_dan_button_opens_contest_modal(page, live_server_url):
+    """Clicking the button opens the contest modal in pre-phase."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5Open")
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    phase = page.evaluate("() => window._diceRoller?.k5Phase")
+    assert phase == "pre"
+    assert page.locator('[data-testid="kakita-5th-banner"]').is_visible()
+
+
+def test_kakita_5th_dan_modal_defaults_opponent_has_iaijutsu(page, live_server_url):
+    """Opponent-has-iaijutsu checkbox defaults to true; no +5 bonus."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5Def")
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    cb = page.locator('[data-action="kakita-5th-opponent-has-iaijutsu"]')
+    assert cb.is_checked()
+    prebonus = page.evaluate("() => window._diceRoller?._kakita5thPreRollBonus?.()")
+    # 3rd Dan bonus with attack=1, defender=11 -> 11; plus 0 no-iaijutsu.
+    assert prebonus == 11
+
+
+def test_kakita_5th_dan_opponent_without_iaijutsu_grants_plus_5(page, live_server_url):
+    """Unchecking the checkbox adds +5 to the pre-roll bonus."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5NoIai")
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    before = page.evaluate("() => window._diceRoller?._kakita5thPreRollBonus?.()")
+    page.locator('[data-action="kakita-5th-opponent-has-iaijutsu"]').uncheck()
+    after = page.evaluate("() => window._diceRoller?._kakita5thPreRollBonus?.()")
+    assert after == before + 5
+
+
+def test_kakita_5th_dan_3rd_dan_bonus_applies_with_attacker_phase_0(page, live_server_url):
+    """3rd Dan bonus on the contest uses attacker_phase=0 so defender=10 + X=2
+    yields +20."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5K3", attack=2)
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    page.locator('[data-action="kakita-5th-defender-phase"]').select_option("10")
+    bonus = page.evaluate(
+        "() => parseInt(document.querySelector('[data-testid=\"kakita-5th-3rd-dan-bonus\"]').textContent, 10)")
+    assert bonus == 20  # attack=2 * 10 phases
+
+
+def test_kakita_5th_dan_roll_applies_bonuses(page, live_server_url):
+    """Rolling the contest applies the pre-roll bonuses (3rd Dan + no-iaijutsu)
+    to the formula flat and sets a result total."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5Roll", attack=2)
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    page.locator('[data-action="kakita-5th-opponent-has-iaijutsu"]').uncheck()
+    page.locator('[data-action="kakita-5th-defender-phase"]').select_option("10")
+    _mock_dice_high(page)
+    page.locator('[data-action="kakita-5th-roll"]').click()
+    _restore_dice(page)
+    state = page.evaluate("""() => ({
+        phase: window._diceRoller?.k5Phase,
+        total: window._diceRoller?.k5RollTotal,
+        no_iai: window._diceRoller?.k5NoIaijutsuBonus,
+        kak3rd: window._diceRoller?.k5KakitaBonus,
+    })""")
+    assert state["phase"] == "result"
+    assert state["no_iai"] == 5
+    assert state["kak3rd"] == 20
+    assert state["total"] > 0
+
+
+def test_kakita_5th_dan_damage_scales_up_when_won_by_5(page, live_server_url):
+    """When the player wins by 5+, the damage roll gains floor(diff/5) rolled dice."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5Win")
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    _mock_dice_high(page)
+    page.locator('[data-action="kakita-5th-roll"]').click()
+    roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
+    page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total - 10))
+    page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    _restore_dice(page)
+    adjust = page.evaluate("() => window._diceRoller?.k5DamageDiceAdjust")
+    assert adjust == 2
+    phase = page.evaluate("() => window._diceRoller?.k5Phase")
+    assert phase == "damage-result"
+
+
+def test_kakita_5th_dan_damage_scales_down_when_lost_by_5(page, live_server_url):
+    """When the player loses by 5+, the damage roll loses floor(|diff|/5) rolled dice."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5Loss")
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    _mock_dice_low(page)
+    page.locator('[data-action="kakita-5th-roll"]').click()
+    roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
+    page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total + 10))
+    page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    _restore_dice(page)
+    adjust = page.evaluate("() => window._diceRoller?.k5DamageDiceAdjust")
+    assert adjust == -2
+
+
+def test_kakita_5th_dan_damage_unchanged_when_diff_under_5(page, live_server_url):
+    """A < 5-point gap yields no adjustment."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5Tight")
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    _mock_dice_high(page)
+    page.locator('[data-action="kakita-5th-roll"]').click()
+    roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
+    page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total - 4))
+    page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    _restore_dice(page)
+    adjust = page.evaluate("() => window._diceRoller?.k5DamageDiceAdjust")
+    assert adjust == 0
+
+
+def test_kakita_5th_dan_button_disabled_after_use_until_next_initiative(page, live_server_url):
+    """Rolling the contest flips the once-per-round flag and disables the
+    button; the next initiative roll (via setActionDice) re-enables it."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5Once")
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    _mock_dice_high(page)
+    page.locator('[data-action="kakita-5th-roll"]').click()
+    roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
+    page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total - 20))
+    page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    _restore_dice(page)
+    page.locator('[data-modal="kakita-5th-dan"] button:has-text("Close")').click()
+    assert page.locator('[data-action="kakita-5th-dan-contest"]').is_disabled()
+    page.evaluate("""() => {
+        window._trackingBridge.setActionDice([{value: 5, spent: false}]);
+    }""")
+    page.wait_for_timeout(100)
+    assert not page.locator('[data-action="kakita-5th-dan-contest"]').is_disabled()
+
+
+def test_kakita_5th_dan_modal_cancel_before_roll_does_not_consume(page, live_server_url):
+    """Closing the modal on the pre-phase leaves the once-per-round flag
+    clear - only rolling (completing damage) consumes it."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5Cancel")
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    page.locator('[data-modal="kakita-5th-dan"] button:has-text("\u00d7")').click()
+    page.wait_for_timeout(100)
+    used = page.evaluate("() => window._trackingBridge?.kakita5thDanUsed")
+    assert used is False
+    assert not page.locator('[data-action="kakita-5th-dan-contest"]').is_disabled()
+
+
+def test_kakita_5th_dan_modal_inherits_4th_dan_damage_bonus(page, live_server_url):
+    """Dan 5 Kakita (so >= 4) damage gets the iaijutsu +5 flat from 4th Dan."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5With4")
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    _mock_dice_high(page)
+    page.locator('[data-action="kakita-5th-roll"]').click()
+    roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
+    page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total))
+    page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    _restore_dice(page)
+    flat = page.evaluate("() => window._diceRoller?.k5DamageFlat")
+    assert flat >= 5
+
+
+def test_kakita_5th_dan_used_flag_persists_through_reload(page, live_server_url):
+    """The once-per-round flag persists via adventureState, so reloading
+    mid-round leaves the button disabled."""
+    _make_kakita_dan_5(page, live_server_url, "Kakita5Persist")
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    _mock_dice_high(page)
+    page.locator('[data-action="kakita-5th-roll"]').click()
+    roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
+    page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total))
+    page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    _restore_dice(page)
+    page.wait_for_timeout(500)  # save round-trip
+    page.reload()
+    page.wait_for_selector('[data-action="kakita-5th-dan-contest"]', state='attached',
+                           timeout=10000)
+    assert page.locator('[data-action="kakita-5th-dan-contest"]').is_disabled()
 
 
 def test_kitsuki_water_interrogation_behavioral(page, live_server_url):
@@ -3133,9 +4482,9 @@ def test_shinjo_phase_bonus_visible_with_action_dice(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     control = page.locator('[data-testid="shinjo-phase-bonus"]')
     assert control.is_visible()
-    # Default phase is 1 and the lowest unspent die is value=4, so phases
-    # held clamps to 0 and the bonus is 0 until the player picks a phase
-    # >= the die's value.
+    # Default phase matches the to-be-spent die (sub-die-value phases are
+    # impossible and are omitted from the dropdown), so the initial display
+    # shows 0 phases held and a +0 bonus until the player raises the phase.
     text = page.locator('[data-testid="shinjo-phase-bonus-display"]').text_content()
     assert "+0" in text
 
@@ -3214,6 +4563,146 @@ def test_shinjo_phase_bonus_uses_clicked_die(page, live_server_url):
     # Clicked die value=6, phase=9 -> held=3 -> +6.
     text = page.locator('[data-testid="shinjo-phase-bonus-display"]').text_content()
     assert "+6" in text
+
+
+def test_knack_menu_items_appear_on_fresh_page_load(page, live_server_url):
+    """Regression: the per-action-die menu's knack options (Double Attack,
+    Lunge, etc.) used to read ``window._diceRoller.formulas`` - a
+    non-reactive global set by a component that inits AFTER the tracking
+    section. On fresh page load Alpine evaluated the gates before the
+    dice-roller finished initializing, got undefined, and never
+    re-evaluated because the expression had no reactive dependencies. The
+    menu items only showed up after some other action (rolling initiative,
+    etc.) happened to trigger a remount. This test pins the reactive
+    rollFormulas fix by opening the menu before any interaction."""
+    _create_char(page, live_server_url, "ShinjoFreshMenu", "shinjo_bushi",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    # Sanity check: the fix relies on trackingData parsing the roll-formulas
+    # JSON into its own reactive field. Verify the parse worked and the
+    # knack formulas are present before even opening the menu.
+    formulas = page.evaluate("""() => {
+        const el = document.querySelector('[x-data*=trackingData]');
+        const d = el && window.Alpine && window.Alpine.$data(el);
+        return d ? Object.keys(d.rollFormulas || {}).filter(k => k.startsWith('knack:')) : null;
+    }""")
+    assert formulas is not None and 'knack:double_attack' in formulas, \
+        f"trackingData.rollFormulas should contain knack formulas on fresh load; got {formulas}"
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 3, spent: false}];
+    }""")
+    # Immediately open the action-die menu without touching anything else
+    # that might trigger a reactive re-evaluation of the inner templates.
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
+    page.wait_for_timeout(200)
+    assert page.locator('[data-action-die-menu-item="double-attack"]').is_visible(), \
+        "Double Attack must appear in the per-die menu on a fresh page load"
+    assert page.locator('[data-action-die-menu-item="lunge"]').is_visible(), \
+        "Lunge must appear in the per-die menu on a fresh page load"
+    # And options not granted by Shinjo's school knacks must stay absent.
+    assert page.locator('[data-action-die-menu-item="counterattack"]').count() == 0
+    assert page.locator('[data-action-die-menu-item="feint"]').count() == 0
+
+
+def test_shinjo_phase_bonus_dropdown_starts_at_die_value(page, live_server_url):
+    """The attack-modal phase picker should only offer phases >= the
+    to-be-spent die's value (since the action die hasn't "come up" yet in
+    any earlier phase). Selecting a phase earlier than the die's value is
+    physically impossible and should not appear as an option."""
+    _create_char(page, live_server_url, "ShinjoDropdownMin", "shinjo_bushi",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    # Die values 5 and 8 - opening through the high die means the dropdown
+    # must start at 8, not 1 or 5.
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 5, spent: false}, {value: 8, spent: false}];
+    }""")
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').nth(1).click()
+    page.locator('[data-action-die-menu-item="attack"]:visible').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    option_values = page.locator('[data-action="shinjo-phase"] option').evaluate_all(
+        "opts => opts.map(o => o.value)"
+    )
+    # Options come through as numeric strings from select/option rendering.
+    assert option_values == ["8", "9", "10"], \
+        f"Dropdown should offer phases 8-10 for die=8, got {option_values}"
+    # And the default selection is the die value itself (no bonus yet).
+    default_phase = page.evaluate("() => window._diceRoller.atkShinjoPhase")
+    assert default_phase == 8
+
+
+def test_shinjo_parry_phase_dropdown_starts_at_die_value(page, live_server_url):
+    """Same constraint on the parry result modal: the picker omits any
+    phase below the spent die's value."""
+    _create_char(page, live_server_url, "ShinjoParryMin", "shinjo_bushi",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 6, spent: false}];
+    }""")
+    _mock_dice_high(page)
+    _roll_via_menu_or_direct(page, "parry")
+    option_values = page.locator('[data-action="shinjo-parry-phase"] option').evaluate_all(
+        "opts => opts.map(o => o.value)"
+    )
+    # The leading "-" option is rendered with the string "null" (Alpine
+    # stringifies :value="null"). Real phase options start at the die's
+    # value (6) and run to 10; anything below 6 is omitted.
+    assert option_values == ["null", "6", "7", "8", "9", "10"], \
+        f"Parry dropdown should offer phases 6-10 for die=6, got {option_values}"
+
+
+def test_shinjo_phase_bonus_on_parry_result_modal(page, live_server_url):
+    """Shinjo: parry result modal exposes the same phase-bonus picker as
+    the attack modal. Picking a phase applies +2*(phase - die_value) to the
+    displayed total and stamps phase metadata onto the formula."""
+    _create_char(page, live_server_url, "ShinjoParryPh", "shinjo_bushi",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 4, spent: false}];
+    }""")
+    _mock_dice_high(page)
+    _roll_via_menu_or_direct(page, "parry")
+    # Picker should be visible and the captured die value should match.
+    picker = page.locator('[data-testid="shinjo-parry-phase-bonus"]')
+    assert picker.is_visible(), "Shinjo parry phase picker should show on result modal"
+    die_val = page.evaluate("() => window._diceRoller.shinjoParryDieValue")
+    assert die_val == 4
+    total_before = page.evaluate("() => window._diceRoller.baseTotal")
+    page.locator('[data-action="shinjo-parry-phase"]').select_option("9")
+    # Die value=4, phase=9 -> held=5 -> +10 bonus. baseTotal jumps by 10
+    # and the breakdown line surfaces.
+    total_after = page.evaluate("() => window._diceRoller.baseTotal")
+    assert total_after - total_before == 10
+    display = page.locator('[data-testid="shinjo-parry-phase-bonus-display"]')
+    assert "+10" in display.text_content()
+    breakdown = page.locator('[data-testid="shinjo-parry-phase-breakdown"]')
+    assert breakdown.is_visible()
+    assert "+10" in breakdown.text_content()
+    state = page.evaluate("""() => {
+        const d = window._diceRoller;
+        return {
+            bonus: d.formula?.shinjo_phase_bonus || 0,
+            phase: d.formula?.shinjo_phase_bonus_phase || 0,
+            die_value: d.formula?.shinjo_phase_bonus_die_value || 0,
+        };
+    }""")
+    assert state == {"bonus": 10, "phase": 9, "die_value": 4}
+
+
+def test_shinjo_phase_bonus_parry_picker_hidden_for_non_shinjo(page, live_server_url):
+    """Non-Shinjo characters never see the parry phase picker."""
+    _create_char(page, live_server_url, "AkodoParryPh", "akodo_bushi",
+                 knack_overrides={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 3, spent: false}];
+    }""")
+    _mock_dice_high(page)
+    _roll_via_menu_or_direct(page, "parry")
+    picker = page.locator('[data-testid="shinjo-parry-phase-bonus"]')
+    assert picker.count() == 0 or not picker.is_visible()
 
 
 # ---------------------------------------------------------------------------
@@ -4658,7 +6147,7 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
     """)
     page.wait_for_timeout(200)
     # Should show in tracking section with individual entries
-    assert page.locator('text="Banked Wound Check Excess"').is_visible()
+    assert page.locator('text="Banked 5th Dan Wound Check Bonuses"').is_visible()
     body = page.text_content("body")
     assert "+8" in body
     assert "+12" in body
@@ -4960,6 +6449,57 @@ def test_shinjo_5th_dan_parry_excess_behavioral(page, live_server_url):
         if expected_excess > 0:
             assert banked_total >= expected_excess, \
                 f"Expected banked >= {expected_excess}, got {banked_total}"
+
+
+def test_shinjo_5th_dan_banked_excess_in_tracking_section(page, live_server_url):
+    """Shinjo 5th Dan banked parry excess surfaces in the Tracking section
+    alongside every other discretionary banked bonus, and the wound-check
+    'Apply +N' buttons carry a '5th Dan bonus' label."""
+    _create_char(page, live_server_url, "Shinjo5Track", "shinjo_bushi",
+                 knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
+    page.evaluate("""() => {
+        window._trackingBridge.bankedWcExcess.push(
+            {amount: 10, spent: false},
+            {amount: 7, spent: false},
+        );
+        window._diceRoller.bankedWcExcess = window._trackingBridge.bankedWcExcess;
+        window._trackingBridge.save();
+    }""")
+    page.wait_for_timeout(200)
+    tracking_block = page.locator('[data-testid="banked-wc-excess-tracking"]')
+    assert tracking_block.is_visible(), \
+        "Shinjo 5th Dan banked excess should surface in tracking section"
+    body = tracking_block.text_content()
+    assert "+10" in body and "+7" in body
+    # Mark spent from tracking: the remaining entry stays visible, spent one strikes through.
+    tracking_block.locator('button:has-text("Mark spent")').first.click()
+    page.wait_for_timeout(200)
+    remaining = page.evaluate("""() =>
+        window._trackingBridge.bankedWcExcess.filter(b => !b.spent).length
+    """)
+    assert remaining == 1, f"Expected 1 unspent entry after marking, got {remaining}"
+    # Trigger a wound check to verify the Apply button carries the 5th Dan label.
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
+    page.fill('input[placeholder="Amount"]', "40")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button:has-text("Add")').click()
+    page.wait_for_timeout(300)
+    _mock_dice_low(page)
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    _restore_dice(page)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    apply_btn = wc_modal.locator('button:has-text("5th Dan bonus"):visible')
+    assert apply_btn.count() >= 1, \
+        "Wound-check modal should label the bankedWcExcess button as a 5th Dan bonus"
 
 
 def test_hida_5th_dan_counterattack_wc_bonus(page, live_server_url):
