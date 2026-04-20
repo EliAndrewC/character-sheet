@@ -123,6 +123,7 @@ class RollFormula:
     courtier_5th_dan_optional: int = 0
     doji_5th_dan_always: bool = False
     doji_5th_dan_optional: bool = False
+    doji_4th_dan_untouched_target: bool = False
     shosuro_5th_dan: bool = False
     is_damage_roll: bool = False
     otherworldliness_capacity: int = 0
@@ -525,6 +526,13 @@ def build_knack_formula(
     if school_id == "doji_artisan" and dan >= 5:
         formula.doji_5th_dan_always = True
 
+    # Doji Artisan 4th Dan: "untouched target" bonus on any attack-variant
+    # knack (Doji's school knacks include counterattack; other attack-type
+    # knacks are flagged just as defensively as the base attack formula).
+    if (school_id == "doji_artisan" and dan >= 4
+            and knack_id in {"counterattack", "double_attack", "lunge"}):
+        formula.doji_4th_dan_untouched_target = True
+
     _finalize_caps(formula)
     return formula
 
@@ -581,6 +589,12 @@ def build_combat_formula(
     # Doji Artisan 5th Dan: flag for client-side bonus (TN known from attack modal)
     if school_id == "doji_artisan" and dan >= 5:
         formula.doji_5th_dan_always = True
+
+    # Doji Artisan 4th Dan: flag for client-side "target has not attacked me
+    # this round" bonus. Bonus = the phase in which the attack happens, so it
+    # must be collected from the player at attack time.
+    if school_id == "doji_artisan" and dan >= 4 and which == "attack":
+        formula.doji_4th_dan_untouched_target = True
 
     _finalize_caps(formula)
     return formula
@@ -677,6 +691,10 @@ def build_athletics_combat_formula(
 
     if school_id == "doji_artisan" and dan >= 5:
         formula.doji_5th_dan_always = True
+
+    # Doji Artisan 4th Dan: also applies when attacking via athletics.
+    if school_id == "doji_artisan" and dan >= 4 and which == "attack":
+        formula.doji_4th_dan_untouched_target = True
 
     _finalize_caps(formula)
     return formula
