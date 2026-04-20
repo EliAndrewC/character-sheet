@@ -11,12 +11,28 @@
 
 > Each action you take in combat has a bonus of 2X, where X is the number of phases for which the action die was held.
 
-**Status:** Out of scope - requires combat-phase tracking (tracking how long each action die was held).
+**Status:** Implemented for attack-type rolls (regular attack, athletics-attack, double_attack, counterattack, lunge). The phase-bonus control does not currently surface on parry/feint/iaijutsu (those go straight from menu to roll without a pre-phase), but the 3rd-Dan parry decrement still reduces die values so the bonus remains correct on subsequent attacks.
 
-**Implementation:** `app/game_data.py:1059` (definition only). No corresponding logic in `dice.py` or templates.
+**Implementation:**
+- Server: `app/services/dice.py` stamps `shinjo_phase_bonus_attack = True` on every attack-type formula (base attack, attack-variant knacks, athletics-attack) for the `shinjo_bushi` school. `app/routes/pages.py` exposes `school_abilities.shinjo_phase_bonus = True`.
+- Client: the attack modal's pre-roll page renders a phase dropdown (1-10) when the flag is set, an action die is present to spend, AND the initiative warning is NOT firing. The displayed bonus is `2 * max(0, current_phase - die_value)`. `atkHitChance` and `atkAvgAttackRoll` both consume the bonus so the probability chart updates live. `rollAttack()` snapshots the bonus onto the formula (`shinjo_phase_bonus`, `shinjo_phase_bonus_phase`, `shinjo_phase_bonus_die_value`) so the post-roll breakdown can label it.
+- Die selection: when opening the attack through an action-die menu, the bonus uses the clicked die's value (via `_preSpentDieIndex`); otherwise it uses the lowest unspent eligible die (respecting `athletics_only` for athletics-attack).
 
-**Unit tests:** None.
-**Clicktests:** None.
+**Unit tests:**
+- `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_attack_flag`
+- `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_parry_no_flag`
+- `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_attack_knack_flag`
+- `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_non_attack_knack_no_flag`
+- `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_athletics_attack_flag`
+- `test_dice.py::TestSchoolAbilities::test_shinjo_special_ability_flag_only_for_shinjo_school`
+
+**Clicktests:**
+- `test_school_abilities.py::test_shinjo_phase_bonus_hidden_without_initiative`
+- `test_school_abilities.py::test_shinjo_phase_bonus_hidden_out_of_dice`
+- `test_school_abilities.py::test_shinjo_phase_bonus_visible_with_action_dice`
+- `test_school_abilities.py::test_shinjo_phase_bonus_applied_to_attack_roll`
+- `test_school_abilities.py::test_shinjo_phase_bonus_shifts_probability_chart`
+- `test_school_abilities.py::test_shinjo_phase_bonus_uses_clicked_die`
 
 ---
 
@@ -54,13 +70,22 @@
 
 > After a successful or unsuccessful parry, all your action dice are decreased by X, where X is equal to your attack skill. Action dice are considered to have been held since their newly lowered value. This can lower dice to negative numbers.
 
-**Status:** Out of scope - requires live action die manipulation and combat-phase tracking.
+**Status:** Fully implemented.
+
+**Implementation:**
+- Server: `app/routes/pages.py` exposes `school_abilities.shinjo_3rd_dan_parry_decrement = attack_skill` (non-zero only when `shinjo_bushi` + Dan >= 3).
+- Client: the dice roller's post-parry hook (alongside the Hiruma / Shinjo 5th Dan hooks) decrements every unspent entry in `window._trackingBridge.actionDice` by that amount. Spent dice are untouched. Fires for both `parry` and `athletics:parry`. Dice can go negative by design ("This can lower dice to negative numbers").
+- Feeds Special Ability: because the Special Ability computes phases-held from the live die value, the reduced values automatically yield a larger bonus on later attacks this round.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank.
 - "All your action dice" means all of the Shinjo's own remaining action dice are decreased.
 - "Considered to have been held since their newly lowered value" means the Special Ability's +2X bonus applies retroactively to the reduced values.
 - "Can lower dice to negative numbers" means there's no minimum.
+
+**Clicktests:**
+- `test_school_abilities.py::test_shinjo_3rd_dan_parry_decrements_unspent_dice`
+- `test_school_abilities.py::test_shinjo_below_3rd_dan_no_parry_decrement`
 
 ---
 

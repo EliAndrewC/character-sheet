@@ -2821,6 +2821,186 @@ def test_shinjo_4th_dan_initiative_highest_1_behavioral(page, live_server_url):
     assert "Shinjo" in result or "set to 1" in result.lower()
 
 
+# ---------------------------------------------------------------------------
+# Shinjo Bushi Special Ability: +2X phase bonus on attack
+# ---------------------------------------------------------------------------
+
+def test_shinjo_phase_bonus_hidden_without_initiative(page, live_server_url):
+    """Shinjo: phase-bonus control is suppressed when there are no action
+    dice; the initiative warning already tells the player what's missing."""
+    _create_char(page, live_server_url, "ShinjoPhNoInit", "shinjo_bushi",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    assert not page.locator('[data-testid="shinjo-phase-bonus"]').is_visible()
+    assert page.locator('[data-testid="attack-init-warning-no-init"]').is_visible()
+
+
+def test_shinjo_phase_bonus_hidden_out_of_dice(page, live_server_url):
+    """Shinjo: phase-bonus control is also suppressed when all action dice
+    are spent (the out-of-dice warning fires instead)."""
+    _create_char(page, live_server_url, "ShinjoPhOut", "shinjo_bushi",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 5, spent: true}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    assert not page.locator('[data-testid="shinjo-phase-bonus"]').is_visible()
+
+
+def test_shinjo_phase_bonus_visible_with_action_dice(page, live_server_url):
+    """Shinjo: phase-bonus control is visible on the attack modal when an
+    action die is available, and defaults to held=0 (the die's value itself
+    is the earliest phase on which it can be spent)."""
+    _create_char(page, live_server_url, "ShinjoPhVis", "shinjo_bushi",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 4, spent: false}, {value: 7, spent: false}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    control = page.locator('[data-testid="shinjo-phase-bonus"]')
+    assert control.is_visible()
+    # Default phase is 1 and the lowest unspent die is value=4, so phases
+    # held clamps to 0 and the bonus is 0 until the player picks a phase
+    # >= the die's value.
+    text = page.locator('[data-testid="shinjo-phase-bonus-display"]').text_content()
+    assert "+0" in text
+
+
+def test_shinjo_phase_bonus_applied_to_attack_roll(page, live_server_url):
+    """Shinjo: picking a current phase >= the spent die's value adds +2X
+    (where X = phase - die value) to the attack and labels it in the
+    post-roll breakdown."""
+    _create_char(page, live_server_url, "ShinjoPhRoll", "shinjo_bushi",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 4, spent: false}, {value: 7, spent: false}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    modal = page.locator('[data-modal="attack"]')
+    page.locator('[data-action="shinjo-phase"]').select_option("9")
+    # Lowest unspent die is value=4, phase=9 -> held=5 -> bonus=+10.
+    text = page.locator('[data-testid="shinjo-phase-bonus-display"]').text_content()
+    assert "+10" in text
+    modal.locator('[data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+    result = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return {
+                bonus: d.formula?.shinjo_phase_bonus || 0,
+                phase: d.formula?.shinjo_phase_bonus_phase || 0,
+                die_value: d.formula?.shinjo_phase_bonus_die_value || 0,
+            };
+        }
+        return null;
+    }""")
+    assert result == {"bonus": 10, "phase": 9, "die_value": 4}
+    breakdown = page.locator('[data-testid="shinjo-phase-bonus-breakdown"]')
+    assert breakdown.is_visible()
+    assert "+10" in breakdown.text_content()
+
+
+def test_shinjo_phase_bonus_shifts_probability_chart(page, live_server_url):
+    """Shinjo: raising the picked phase lifts the attack probability. Uses
+    atkHitChance directly so we don't have to actually roll."""
+    _create_char(page, live_server_url, "ShinjoPhProb", "shinjo_bushi",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 3, spent: false}];
+    }""")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    low = page.evaluate("() => window._diceRoller.atkHitChance(0)")
+    page.locator('[data-action="shinjo-phase"]').select_option("10")
+    high = page.evaluate("() => window._diceRoller.atkHitChance(0)")
+    # Phase 10 vs die=3 -> held 7 -> +14 to the roll. That can only raise
+    # the hit chance (or leave it at 1.0 already).
+    assert high >= low
+    assert high > 0
+
+
+def test_shinjo_phase_bonus_uses_clicked_die(page, live_server_url):
+    """Shinjo: when opening the attack through a specific action die's menu,
+    the bonus computes against THAT die's value (not the lowest)."""
+    _create_char(page, live_server_url, "ShinjoPhDie", "shinjo_bushi",
+                 knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [{value: 2, spent: false}, {value: 6, spent: false}];
+    }""")
+    # Open the higher-value die's menu and pick Roll Attack.
+    page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').nth(1).click()
+    page.locator('[data-action-die-menu-item="attack"]:visible').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    page.locator('[data-action="shinjo-phase"]').select_option("9")
+    # Clicked die value=6, phase=9 -> held=3 -> +6.
+    text = page.locator('[data-testid="shinjo-phase-bonus-display"]').text_content()
+    assert "+6" in text
+
+
+# ---------------------------------------------------------------------------
+# Shinjo Bushi 3rd Dan: decrement all unspent action dice after parry
+# ---------------------------------------------------------------------------
+
+def test_shinjo_3rd_dan_parry_decrements_unspent_dice(page, live_server_url):
+    """Shinjo 3rd Dan with attack=2: rolling parry decrements every unspent
+    action die by 2; the die that paid for the parry itself is untouched."""
+    _create_char(page, live_server_url, "Shinjo3Par", "shinjo_bushi",
+                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
+    # Attack skill defaults to 1 in make_character_data; bump to 2.
+    cid = _extract_char_id(page)
+    page.evaluate(f"""async () => {{
+        await fetch('/characters/{cid}/autosave', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{attack: 2}})
+        }});
+    }}""")
+    page.reload()
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [
+            {value: 3, spent: false},
+            {value: 5, spent: false},
+            {value: 7, spent: false},
+        ];
+    }""")
+    _roll_via_menu_or_direct(page, "parry")
+    # Parry auto-spent the lowest unspent die (value 3, index 0); the other
+    # two get decremented by attack=2.
+    dice = page.evaluate("() => window._trackingBridge.actionDice")
+    assert dice[0]["spent"] is True
+    assert dice[0]["value"] == 3  # spent dice are not decremented
+    assert dice[1] == {"value": 3, "spent": False}  # 5 - 2
+    assert dice[2] == {"value": 5, "spent": False}  # 7 - 2
+
+
+def test_shinjo_below_3rd_dan_no_parry_decrement(page, live_server_url):
+    """Shinjo 2nd Dan: no auto-decrement after parry (the 3rd Dan gate)."""
+    _create_char(page, live_server_url, "Shinjo2Par", "shinjo_bushi",
+                 knack_overrides={"double_attack": 2, "iaijutsu": 2, "lunge": 2})
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.actionDice = [
+            {value: 3, spent: false},
+            {value: 5, spent: false},
+        ];
+    }""")
+    _roll_via_menu_or_direct(page, "parry")
+    dice = page.evaluate("() => window._trackingBridge.actionDice")
+    assert dice[1] == {"value": 5, "spent": False}
+
+
 # ===========================================================================
 # BUTTON CLICK + STATE CHANGE TESTS
 # ===========================================================================
