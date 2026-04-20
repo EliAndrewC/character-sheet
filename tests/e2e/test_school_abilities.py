@@ -1993,7 +1993,9 @@ def test_togashi_initiative_normal_variant_shows_athletics_die_label(page, live_
 
 
 def test_togashi_initiative_athletics_variant_rolls_correct_dice(page, live_server_url):
-    """Togashi athletics initiative rolls base+3 dice (8 dice for default char)."""
+    """Togashi athletics initiative rolls base+3 dice (8 dice for default char)
+    and ALL resulting action dice are flagged athletics_only so they render
+    blue and restrict their per-die menus to athletics variants."""
     _create_char(page, live_server_url, "TogashiInitA", "togashi_ise_zumi")
     page.locator('[data-roll-key="initiative"]').click()
     page.wait_for_selector('[data-togashi-init-athletics]', state='visible')
@@ -2001,19 +2003,39 @@ def test_togashi_initiative_athletics_variant_rolls_correct_dice(page, live_serv
     _wait_roll_done(page)
     # Void=3, dan=1: base 5k3 + 3 athletics dice = 8k6
     assert _count_result_dice(page) == 8
-    # No standalone athletics-only die on this variant: actionDice has no
-    # entry flagged athletics_only.
-    has_ath = page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && Array.isArray(d.actionDice) && d.phase === 'done') {
-                return d.actionDice.some(x => x && x.athletics_only);
-            }
-        }
-        return null;
+    # Every kept action die on this variant is athletics-only.
+    flags = page.evaluate("""() => {
+        const dice = window._trackingBridge?.actionDice || [];
+        return {
+            count: dice.length,
+            all_athletics: dice.length > 0 && dice.every(d => d.athletics_only),
+        };
     }""")
-    assert has_ath is False
+    assert flags["count"] > 0
+    assert flags["all_athletics"] is True
+
+
+def test_togashi_all_athletics_variant_dice_render_blue(page, live_server_url):
+    """Every action die from the Togashi all-athletics initiative variant
+    renders in blue (svg.athletics-only) in the Actions side panel, since
+    every die is restricted to athletics actions."""
+    _create_char(page, live_server_url, "TogashiAllAthBlue", "togashi_ise_zumi")
+    page.locator('[data-roll-key="initiative"]').click()
+    page.wait_for_selector('[data-togashi-init-athletics]', state='visible')
+    page.locator('[data-togashi-init-athletics]').click()
+    _wait_roll_done(page)
+    # Close the roll modal so the Actions side panel is reachable.
+    page.locator('[data-modal="dice-roller"]').locator('button:has-text("\u00d7")').click()
+    page.wait_for_timeout(200)
+    counts = page.evaluate("""() => {
+        const section = document.querySelector('[data-testid="action-dice-section"]');
+        return {
+            total_dice: section ? section.querySelectorAll('svg.die.action-die').length : 0,
+            blue_dice: section ? section.querySelectorAll('svg.die.action-die.athletics-only').length : 0,
+        };
+    }""")
+    assert counts["total_dice"] > 0
+    assert counts["total_dice"] == counts["blue_dice"]
 
 
 def test_togashi_initiative_dan_advancement_bonus(page, live_server_url):
@@ -6662,7 +6684,9 @@ def test_non_mantis_dan_4_no_4th_dan_die(page, live_server_url):
 @pytest.mark.school_abilities
 def test_mantis_4th_dan_die_flags_survive_reload(page, live_server_url):
     """Regression test: the athletics_only and mantis_4th_dan flags must be
-    persisted on save so the die retains its restrictions after a reload."""
+    persisted on save so the die retains its restrictions AND its blue
+    athletics-only rendering after a reload; the per-die menu must still
+    surface Athletics Attack/Parry for the bonus die."""
     _make_mantis_dan_4(page, live_server_url, "Mantis4Persist")
     _roll_initiative(page)
     # The bonus die is initially in memory with both flags set.
@@ -6685,6 +6709,23 @@ def test_mantis_4th_dan_die_flags_survive_reload(page, live_server_url):
         return die ? {athletics_only: !!die.athletics_only, mantis_4th_dan: !!die.mantis_4th_dan} : null;
     }""")
     assert flags == {"athletics_only": True, "mantis_4th_dan": True}
+    # SVG still carries the blue athletics-only class for the 4th Dan die.
+    idx = page.evaluate(
+        "() => (window._trackingBridge?.actionDice || [])"
+        ".findIndex(d => d.mantis_4th_dan)"
+    )
+    assert idx >= 0
+    section = page.locator('[data-testid="action-dice-section"]')
+    assert section.locator(f'[data-action="action-die"][data-die-index="{idx}"]'
+                           ' svg.athletics-only').count() == 1
+    # Opening the menu still shows Athletics Attack / Parry / Predeclared Parry.
+    section.locator('[data-action="action-die"]').nth(idx).click()
+    page.wait_for_selector('[data-action-die-menu-item="athletics-attack"]:visible',
+                           timeout=2000)
+    assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible'
+                        ).count() == 1
 
 
 @pytest.mark.school_abilities

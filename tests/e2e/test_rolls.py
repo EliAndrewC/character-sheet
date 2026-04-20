@@ -162,6 +162,38 @@ def test_click_ring_always_shows_menu_even_with_zero_vp(page, live_server_url):
     assert menu.text_content() and "Air" in menu.text_content()
 
 
+def test_roll_menu_flipped_above_is_close_to_clicked_element(page, live_server_url):
+    """When the roll menu doesn't fit below the clicked element it flips above,
+    and the menu's bottom edge should sit just above the clicked element - NOT
+    with a huge gap that the naive 'estimated menu height' math used to create."""
+    _create_roller(page, live_server_url, "FlipGap")
+    # Restore VP so the menu shows a realistic number of rows.
+    page.evaluate("window._trackingBridge.voidPoints = 2; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    # Shrink the viewport and scroll so the ring sits near the bottom edge,
+    # forcing the menu to flip above.
+    page.set_viewport_size({"width": 900, "height": 500})
+    ring = page.locator('[data-roll-key="athletics:Earth"]')
+    ring.scroll_into_view_if_needed()
+    page.evaluate(
+        "el => { const r = el.getBoundingClientRect();"
+        "        window.scrollBy(0, r.top - (window.innerHeight - r.height - 8)); }",
+        ring.element_handle(),
+    )
+    page.wait_for_timeout(100)
+    ring.click()
+    page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=3000)
+    # Measure actual gap between the menu's bottom edge and the ring's top edge.
+    gap = page.evaluate(
+        "el => { const r = el.getBoundingClientRect();"
+        "        const m = document.querySelector('[data-roll-menu=\"root\"]').getBoundingClientRect();"
+        "        return r.top - m.bottom; }",
+        ring.element_handle(),
+    )
+    # Should be a small positive number (~4px design gap, allow some slack).
+    assert 0 <= gap <= 20, f"menu bottom is {gap}px above ring top; expected a tight anchor"
+
+
 def test_click_ring_shows_void_options_when_vp_available(page, live_server_url):
     """Athletics ring click shows the 'Spend N void points' dropdown when VP is available."""
     _create_roller(page, live_server_url, "ClickRingVP")
@@ -1056,6 +1088,59 @@ def test_attack_annotates_spent_die_with_result(page, live_server_url):
     assert "vs TN" in spent_by
     # Outcome must be recorded even if we don't know hit/miss in advance.
     assert "hit" in spent_by or "miss" in spent_by
+
+
+def test_attack_tooltip_updates_when_conviction_spent_on_damage(page, live_server_url):
+    """Conviction spent on damage (after the damage roll) must be reflected in
+    the spent action die's tooltip. Previously the tooltip was only written
+    once at the end of rollDamage(), so later discretionary bonuses were lost."""
+    import re
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "DmgConvTip")
+    select_school(page, "brotherhood_of_shinsei_monk")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Setup DmgConvTip")
+    # Seed an action die so the attack has one to auto-spend.
+    page.evaluate("window._trackingBridge.setActionDice([5]);")
+    page.wait_for_timeout(100)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    # TN 5 is trivially low, guaranteeing a hit so damage roll is available.
+    page.locator('[data-modal="attack"] select').first.select_option("5")
+    page.locator('[data-modal="attack"] button:has-text("Roll")').first.click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    modal = page.locator('[data-modal="attack"]')
+    assert "HIT" in modal.text_content()
+    modal.locator('button:text("Make Damage Roll")').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'damage-result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    before = page.evaluate("window._trackingBridge.actionDice[0].spent_by")
+    m = re.search(r"damage (\d+)", before or "")
+    assert m is not None, f"expected 'damage N' in tooltip, got {before!r}"
+    dmg_before = int(m.group(1))
+    modal.locator('[data-action="spend-conviction-damage"]').click()
+    page.wait_for_timeout(200)
+    after = page.evaluate("window._trackingBridge.actionDice[0].spent_by")
+    m2 = re.search(r"damage (\d+)", after or "")
+    assert m2 is not None, f"expected 'damage N' in tooltip, got {after!r}"
+    assert int(m2.group(1)) == dmg_before + 1, (
+        f"tooltip damage should be {dmg_before + 1} after +1 conviction; got {after!r}"
+    )
 
 
 def test_action_die_tooltip_uses_spent_by_text(page, live_server_url):

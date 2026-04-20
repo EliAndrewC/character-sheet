@@ -502,6 +502,14 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # one exception: athletics-only action dice (Mantis 4th Dan bonus
         # die) still surface the options on their own menu.
         "athletics_combat_everywhere": character.school == "togashi_ise_zumi",
+        # Whether the character has an athletics combat formula available
+        # (athletics knack rank 1+). Rendered as a static Jinja flag so the
+        # per-die action menu's Athletics Attack/Parry templates don't need
+        # to read the non-reactive ``window._diceRoller.formulas`` chain
+        # from the tracking scope - Alpine can't track that across components
+        # and would otherwise cache the first (undefined) evaluation before
+        # the dice-roller component initialises.
+        "has_athletics_combat": (character.knacks or {}).get("athletics", 0) > 0,
     }
 
     # Compute wound check probability slice for client-side display.

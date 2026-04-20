@@ -353,6 +353,7 @@ also wait for the post-update DOM to settle.
 - [x] Togashi Attack skill menu still shows the athletics choice -> `test_school_abilities.py::test_togashi_attack_skill_menu_shows_athletics_choice`
 - [x] Togashi Parry skill menu still shows the Athletics Parry row -> `test_school_abilities.py::test_togashi_parry_skill_menu_shows_athletics_row`
 - [x] Togashi regular action-die menu still shows Athletics options -> `test_school_abilities.py::test_togashi_regular_die_menu_shows_athletics_options`
+- [x] Togashi all-athletics initiative variant flags every action die athletics_only and renders them blue -> `test_school_abilities.py::test_togashi_all_athletics_variant_dice_render_blue`
 
 ### Merchant
 
@@ -542,6 +543,7 @@ also wait for the post-update DOM to settle.
 - [x] Click a Ring opens an Athletics roll modal → `test_rolls.py::test_click_ring_opens_athletics_modal`
 - [x] Click a Ring always opens the roll menu (even with 0 VP) → `test_rolls.py::test_click_ring_always_shows_menu_even_with_zero_vp`
 - [x] Click a Ring with VP shows "Spend N void points" dropdown options → `test_rolls.py::test_click_ring_shows_void_options_when_vp_available`
+- [x] Roll menu flipped above the clicked element sits close to it (no large gap) → `test_rolls.py::test_roll_menu_flipped_above_is_close_to_clicked_element`
 - [x] Athletics knack die icon opens a ring picker (Air/Fire/Water/Earth) → `test_rolls.py::test_athletics_knack_icon_opens_ring_picker`
 - [x] Selecting a ring from the athletics picker rolls that ring's Athletics formula → `test_rolls.py::test_athletics_knack_picker_rolls_selected_ring`
 - [x] Hovering a ring in the athletics picker reveals a void-spend submenu → `test_rolls.py::test_athletics_knack_picker_void_submenu`
@@ -576,6 +578,7 @@ also wait for the post-update DOM to settle.
 - [ ] Rerolling initiative replaces previous action dice → `test_rolls.py::test_initiative_reroll_replaces_previous_action_dice`
 - [ ] Parry annotates the spent die with the parry total → `test_rolls.py::test_parry_annotates_spent_die_with_result`
 - [ ] Attack annotates the spent die with roll total + hit/miss → `test_rolls.py::test_attack_annotates_spent_die_with_result`
+- [ ] Spent die tooltip updates when conviction is spent on damage → `test_rolls.py::test_attack_tooltip_updates_when_conviction_spent_on_damage`
 - [ ] Die's title attribute exposes the spent_by text → `test_rolls.py::test_action_die_tooltip_uses_spent_by_text`
 - [ ] Manual 'Action was spent' click leaves spent_by empty → `test_rolls.py::test_manual_spend_does_not_set_spent_by`
 - [x] 3rd Dan spend raise button visible for applicable skill → `test_rolls.py::test_spend_raise_button_visible_for_applicable_skill`
