@@ -2857,6 +2857,32 @@ def test_priest_3rd_dan_swap_menu_stays_within_viewport(page, live_server_url):
     )
 
 
+def test_priest_3rd_dan_swap_menu_closes_on_outside_click(page, live_server_url):
+    """Clicking anywhere outside the swap dropdown closes it. The dropdown
+    uses position:fixed which can confuse Alpine's @click.outside heuristic,
+    so a document-level listener handles the dismiss explicitly."""
+    _create_priest_3rd_dan(page, live_server_url, "PriestSwapOutside", precepts=2)
+    _stage_swap_context(page, pool=[9, 4], rolled=[7, 2], kept_count=1)
+    page.wait_for_function(
+        "document.querySelectorAll('[data-precepts-pool-die]').length >= 2",
+        timeout=5000,
+    )
+    page.locator(
+        '[data-modal="dice-roller"] [data-action^="precepts-pool-die-self-"]'
+    ).first.click()
+    page.wait_for_timeout(150)
+    menu = page.locator(
+        '[data-modal="dice-roller"] [data-precepts-swap-menu="self:0"]'
+    )
+    assert menu.is_visible()
+    # Dispatch a click on the document body that lands neither on a pool
+    # die nor on the dropdown. page.mouse.click works even for areas
+    # without an explicit clickable element.
+    page.mouse.click(5, 5)
+    page.wait_for_timeout(200)
+    assert not menu.is_visible(), "menu should close on outside click"
+
+
 def test_priest_3rd_dan_swap_dropdown_opens_and_closes(page, live_server_url):
     """Clicking a pool die button opens its dropdown; clicking again closes it."""
     _create_priest_3rd_dan(page, live_server_url, "PriestSwap6", precepts=2)

@@ -48,6 +48,12 @@
         </div>
         <div class="flex flex-wrap gap-1">
             <template x-for="(die, j) in priest.pool" :key="j">
+                {# Outside-click dismiss is handled by a document-level
+                   listener registered in diceRoller().init(). Using a
+                   direct listener (rather than @click.outside here)
+                   sidesteps Alpine's visibility heuristic, which can be
+                   confused by the menu's position:fixed + translateY
+                   transform. #}
                 <div class="relative"
                      data-precepts-pool-die
                      :data-priest-id="priest.priest_id"
@@ -68,7 +74,6 @@
                     </button>
                     <div x-show="preceptsPoolMenuOpen === (priest.priest_id + ':' + j)"
                          x-cloak
-                         @click.outside="if (preceptsPoolMenuOpen === (priest.priest_id + ':' + j)) preceptsPoolMenuOpen = null"
                          :data-precepts-swap-menu="priest.priest_id + ':' + j"
                          :style="'top:' + preceptsPoolMenuPos.top + 'px; left:' + preceptsPoolMenuPos.left + 'px' + (preceptsPoolMenuPos.flipped ? '; transform: translateY(-100%)' : '')"
                          class="fixed bg-white border border-ink/20 rounded shadow-lg z-[60] text-sm whitespace-nowrap min-w-[220px]">
@@ -347,9 +352,19 @@
                       data-testid="tn-3rd-dan-accumulator"
                       x-text="`+${defensive3rdDan} 3rd Dan`"></span>
             </div>
+            {# Wound check display reads the server-computed formula so
+               school bonuses (1st Dan extra die for most bushi, 2nd Dan +5
+               free raises, Strength of the Earth, etc.) show up in the
+               box instead of only appearing at roll time. Falls back to
+               (Water+1)kWater when the formula is unavailable (missing
+               school, unusual character state). #}
+            {% set _wc_f = roll_formulas.get('wound_check', {}) %}
+            {% set _wc_rolled = _wc_f.get('rolled', ring_map['Water'] + 1) %}
+            {% set _wc_kept = _wc_f.get('kept', ring_map['Water']) %}
+            {% set _wc_flat = _wc_f.get('flat', 0) %}
             <div class="bg-parchment rounded p-2 flex items-center flex-wrap">
                 <span class="text-ink/60">Wound Check:</span>&nbsp;
-                <span class="font-bold">{{ ring_map['Water'] + 1 }}k{{ ring_map['Water'] }}</span>
+                <span class="font-bold">{{ _wc_rolled }}k{{ _wc_kept }}{% if _wc_flat %} + {{ _wc_flat }}{% endif %}</span>
             </div>
             {% if character.school == 'togashi_ise_zumi' %}
                 {% set _togashi_base_rolled = ring_map['Void'] + 1 + (1 if dan >= 1 else 0) %}
@@ -6189,6 +6204,23 @@
                         document.getElementById('priest-precepts-allies').textContent || '[]'
                     );
                 } catch (e) { this.priestPreceptsAllies = []; }
+
+                // Close the precepts-pool swap dropdown on any click that
+                // lands outside a pool die or its dropdown. A document-level
+                // listener is used (rather than Alpine's @click.outside) so
+                // the visibility heuristic isn't affected by the menu's
+                // position:fixed + translateY transform.
+                document.addEventListener('click', (e) => {
+                    if (this.preceptsPoolMenuOpen == null) return;
+                    const target = e.target;
+                    if (target && target.closest && (
+                        target.closest('[data-precepts-pool-die]') ||
+                        target.closest('[data-precepts-swap-menu]')
+                    )) {
+                        return;
+                    }
+                    this.preceptsPoolMenuOpen = null;
+                });
                 try {
                     this.partyPriests = JSON.parse(
                         document.getElementById('party-priests').textContent || '[]'
