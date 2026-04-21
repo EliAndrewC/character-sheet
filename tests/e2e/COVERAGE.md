@@ -1033,11 +1033,15 @@ also wait for the post-update DOM to settle.
 - [x] Transparent note on Sincerity → `test_skill_rolls_display.py::test_transparent_note_on_sincerity`
 - [x] Unkempt note on Culture → `test_skill_rolls_display.py::test_unkempt_note_on_culture`
 - [x] Thoughtless note on Tact → `test_skill_rolls_display.py::test_thoughtless_note_on_tact`
+- [x] Kind Eye +20 note on Tact and Sincerity → `test_skill_rolls_display.py::test_kind_eye_note_on_tact_and_sincerity`
+- [x] Sincerity's Honor bonus labelled "on open rolls" → `test_skill_rolls_display.py::test_sincerity_honor_says_on_open_rolls`
+- [x] Kind Eye "Alternative totals" rows in dice modal (Tact + Sincerity) → `test_rolls.py::test_kind_eye_alternative_totals_on_tact_and_sincerity`
 
 ## Character Sheet — Advantages & Disadvantages Display
 
 - [x] Advantages listed → `test_sheet_display.py::test_advantages_listed_on_sheet`
 - [x] Advantage tooltip → `test_sheet_display.py::test_advantage_tooltip_on_hover`
+- [x] Tooltips appear only after a 2000ms hover delay → `test_sheet_display.py::test_tooltip_has_hover_delay`
 - [x] Disadvantages listed → `test_sheet_advanced.py::test_disadvantage_listed_on_sheet`
 - [x] Detail text shown inline → `test_sheet_advanced.py::test_advantage_detail_inline_on_sheet`
 - [x] Campaign advantage XP reflected → `test_sheet_advanced.py::test_campaign_advantage_xp_on_sheet`

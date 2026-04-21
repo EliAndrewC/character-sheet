@@ -246,8 +246,7 @@
             {% set is_school = ring_name == character.school_ring_choice %}
             <div class="ring-node {{ pos_class }}{{ ' ring-school' if is_school else '' }}"
                  style="border-color: {{ rc.border }}; background: {{ rc.bg }};"
-                 {% if ring_name != 'Void' %}data-roll-key="athletics:{{ ring_name }}"{% endif %}
-                 title="{{ 'Click to roll Athletics (' + ring_name + ')' if ring_name != 'Void' else 'Void' }}">
+                 {% if ring_name != 'Void' %}data-roll-key="athletics:{{ ring_name }}"{% endif %}>
                 <div class="ring-label" style="color: {{ rc.border }};">{{ ring_name }}</div>
                 <div class="ring-value">{{ ring_map[ring_name] }}</div>
                 {% if is_school %}
@@ -388,7 +387,7 @@
                 {% set _init_rolled = _init_f.get('rolled', ring_map['Void'] + 1) %}
                 {% set _init_kept = _init_f.get('kept', ring_map['Void']) %}
                 <div class="bg-parchment rounded p-2 flex items-center flex-wrap cursor-pointer hover:ring-2 hover:ring-accent/40 transition-shadow"
-                     data-roll-key="initiative" title="Click to roll Initiative">
+                     data-roll-key="initiative">
                     <span class="text-ink/60">Initiative:</span>&nbsp;
                     <span class="font-bold">{{ _init_rolled }} dice, keep {{ _init_kept }}</span>
                 </div>
@@ -2021,7 +2020,7 @@
         <h2 class="text-xl font-bold mb-4 text-accent">Combat Skills & School Knacks</h2>
         <div class="space-y-2">
             <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative cursor-pointer hover:ring-2 hover:ring-accent/40"
-                 data-roll-key="attack" title="Click to roll Attack">
+                 data-roll-key="attack">
                 <div class="flex items-center justify-between gap-4">
                     <span class="font-medium">Attack</span>
                     <div class="flex items-center gap-2">
@@ -2042,7 +2041,7 @@
                 </div>
             </div>
             <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative cursor-pointer hover:ring-2 hover:ring-accent/40"
-                 data-roll-key="parry" title="Click to roll Parry">
+                 data-roll-key="parry">
                 <div class="flex items-center justify-between gap-4">
                     <span class="font-medium">Parry</span>
                     <div class="flex items-center gap-2">
@@ -2076,7 +2075,6 @@
                     <div class="flex items-center gap-3">
                         {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction'] %}
                         <button type="button" data-roll-key="knack:{{ kid }}"
-                                title="Click to roll {{ info.data.name }}"
                                 class="text-base hover:scale-110 transition-transform">&#x1F3B2;</button>
                         {% endif %}
                         <div class="flex gap-0.5">
@@ -2227,7 +2225,7 @@
                 {% if skill.category == cat and skill.is_advanced == advanced %}
                 {% set rank = char_skills.get(sid, 0) %}
                 <div class="flex items-center gap-3 py-1 tooltip-trigger relative {{ 'opacity-60' if rank == 0 else '' }} cursor-pointer hover:bg-parchment/50 rounded px-1 -mx-1"
-                     data-roll-key="skill:{{ sid }}" title="Click to roll {{ skill.name }}{{ ' (unskilled)' if rank == 0 else '' }}">
+                     data-roll-key="skill:{{ sid }}">
                     <span class="w-24 sm:w-32 shrink-0 text-sm font-medium truncate">{{ skill.name }}</span>
                     <div class="flex gap-0.5">
                         {% for i in range(1, 6) %}

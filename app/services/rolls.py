@@ -39,6 +39,8 @@ class RollResult:
         parts = [f"{self.rolled}k{self.kept}"]
         if self.flat_bonus > 0:
             parts.append(f"+ {self.flat_bonus}")
+        elif self.flat_bonus < 0:
+            parts.append(f"- {abs(self.flat_bonus)}")
         return " ".join(parts)
 
     @property
@@ -138,18 +140,23 @@ def compute_skill_roll(
 
     skills = character_data.get("skills", {})
     rank = skills.get(skill_id, 0)
-    if rank <= 0:
-        return RollResult()
+    unskilled = rank <= 0
 
     rings = character_data.get("rings", {})
     ring_val = rings.get(skill_def.ring.value, 2)
 
     result = RollResult()
-    result.rolled = rank + ring_val
+    # Unskilled rolls don't add the rank to the dice pool, get a -10 penalty
+    # if the skill is advanced, and never reroll 10s. All other bonuses still
+    # apply (free raises, honor/recognition multipliers, synergies).
+    result.rolled = ring_val if unskilled else rank + ring_val
     result.kept = ring_val
 
     # We'll collect bonus explanations, then build the tooltip at the end
     bonus_parts = []  # list of (amount, description) for the parenthetical
+
+    if unskilled and skill_def.is_advanced:
+        result.flat_bonus -= 10
 
     # --- School technique bonuses (extra dice) ---
     school_id = character_data.get("school", "")
@@ -212,6 +219,10 @@ def compute_skill_roll(
                 result.flat_bonus += amount
                 adv_name = ADVANTAGES[adv_id].name
                 bonus_parts.append((amount, f"+{amount} from {adv_name}"))
+        elif adv_id == "kind_eye" and skill_id in ("tact", "sincerity"):
+            # 4 free raises (+20) vs servants and the mistreated. Conditional,
+            # so it's a note only - never added to flat_bonus.
+            bonus_parts.append((0, "+20 for servants and the mistreated"))
 
     # --- Campaign advantage bonuses (e.g. Highest Regard) ---
     campaign_advantages = character_data.get("campaign_advantages", [])
@@ -294,13 +305,18 @@ def compute_skill_roll(
                 bonus_parts.append((amount, f"+{amount} from {source_name}"))
 
     # --- Honor bonus ---
+    # Sincerity's honor bonus only applies on open rolls, so it's shown as a
+    # conditional note rather than being baked into the flat bonus.
     honor = character_data.get("honor", 1.0)
     if skill_id in _HONOR_BONUS_SKILLS:
         mult = _HONOR_BONUS_SKILLS[skill_id]
         bonus = int(mult * honor)
         if bonus > 0:
-            result.flat_bonus += bonus
-            bonus_parts.append((bonus, f"+{bonus} from Honor"))
+            if skill_id == "sincerity":
+                bonus_parts.append((0, f"+{bonus} from Honor on open rolls"))
+            else:
+                result.flat_bonus += bonus
+                bonus_parts.append((bonus, f"+{bonus} from Honor"))
 
     # --- Recognition bonus ---
     recognition = character_data.get("recognition", 1.0)
@@ -345,6 +361,12 @@ def compute_skill_roll(
         result.flat_bonus += bonus
         bonus_parts.append((bonus, f"+{bonus} from extra dice above 10k10"))
         result.kept = 10
+
+    if unskilled:
+        if skill_def.is_advanced:
+            bonus_parts.append((0, "unskilled: -10 advanced, no 10s reroll"))
+        else:
+            bonus_parts.append((0, "unskilled: no 10s reroll"))
 
     # Build tooltip: "4k2 + 9 (breakdown)"
     result.tooltip_lines.append(

@@ -99,12 +99,15 @@ class TestBaseRoll:
         assert result.kept == 3
         assert result.display.startswith("5k3")
 
-    def test_untrained_skill_zero(self):
-        """Skill at 0 — no roll info."""
-        data = make_character_data()
+    def test_untrained_skill_rolls_ring_only(self):
+        """Untrained basic skill rolls just the ring pool with an unskilled note."""
+        data = make_character_data(rings={"Air": 2}, skills={})
         result = compute_skill_roll("bragging", data)
-        assert result.rolled == 0
-        assert result.kept == 0
+        # Base: Air only (no rank). Bragging gets honor+recognition bonuses
+        # regardless of rank, so only the dice pool check matters here.
+        assert result.rolled == 2
+        assert result.kept == 2
+        assert "unskilled" in result.tooltip
 
     def test_unknown_skill_returns_empty(self):
         data = make_character_data()
@@ -112,13 +115,41 @@ class TestBaseRoll:
         assert result.rolled == 0
 
     def test_advanced_untrained_penalty(self):
-        """Advanced skill at 0 has a -10 penalty note."""
+        """Advanced skill at 0 has a -10 flat penalty and an unskilled note."""
         data = make_character_data(
-            skills={"history": 0},
+            skills={},
             rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+            school="",
+        )
+        # History (advanced, Water)
+        result = compute_skill_roll("history", data)
+        assert result.rolled == 3  # Water only
+        assert result.flat_bonus == -10
+        assert "unskilled" in result.tooltip
+        assert "-10" in result.tooltip
+
+    def test_unskilled_precepts_shows_honor_bonus(self):
+        """Precepts unskilled still gets its 2*Honor flat bonus displayed."""
+        data = make_character_data(
+            skills={},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+            school="",
+            honor=3.0,
+        )
+        result = compute_skill_roll("precepts", data)
+        assert result.rolled == 2  # Fire only
+        assert result.flat_bonus == 6  # 2 * 3.0 honor
+        assert "+6 from Honor" in result.tooltip
+        assert "unskilled" in result.tooltip
+
+    def test_unskilled_advanced_display_shows_minus(self):
+        """Display formula for unskilled advanced skill shows '- 10'."""
+        data = make_character_data(
+            skills={}, school="",
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
         )
         result = compute_skill_roll("history", data)
-        assert result.rolled == 0
+        assert result.display == "2k2 - 10"
 
 
 class TestHonorBonus:
@@ -146,13 +177,15 @@ class TestHonorBonus:
         assert "Honor" in result.tooltip
 
     def test_sincerity_gets_honor_on_open_rolls(self):
-        """Sincerity bonus = 2*Honor (on open rolls)."""
+        """Sincerity's honor bonus is conditional on open rolls - shown as a
+        note in the parenthetical, not baked into flat_bonus."""
         data = make_character_data(
             skills={"sincerity": 1},
             honor=2.0,
         )
         result = compute_skill_roll("sincerity", data)
-        assert result.flat_bonus == 4  # 2 * 2.0
+        assert result.flat_bonus == 0
+        assert "+4 from Honor on open rolls" in result.tooltip
 
 
 class TestAdvantageBonus:
@@ -189,6 +222,34 @@ class TestAdvantageBonus:
         data = make_character_data(skills={"etiquette": 2})
         result = compute_skill_roll("etiquette", data)
         assert result.flat_bonus == 0
+
+    def test_kind_eye_tact_note(self):
+        """Kind Eye adds a +20 conditional note on Tact (never flat)."""
+        data = make_character_data(
+            skills={"tact": 2},
+            advantages=["kind_eye"],
+        )
+        result = compute_skill_roll("tact", data)
+        assert result.flat_bonus == 0
+        assert "+20 for servants and the mistreated" in result.tooltip
+
+    def test_kind_eye_sincerity_note(self):
+        """Kind Eye adds the same conditional note on Sincerity."""
+        data = make_character_data(
+            skills={"sincerity": 2},
+            advantages=["kind_eye"],
+        )
+        result = compute_skill_roll("sincerity", data)
+        assert result.flat_bonus == 0
+        assert "+20 for servants and the mistreated" in result.tooltip
+
+    def test_kind_eye_does_not_apply_to_other_skills(self):
+        data = make_character_data(
+            skills={"etiquette": 2},
+            advantages=["kind_eye"],
+        )
+        result = compute_skill_roll("etiquette", data)
+        assert "servants" not in result.tooltip
 
 
 class TestSkillSynergies:
@@ -463,10 +524,16 @@ class TestRollResultDisplay:
         assert "k" in result.display
         assert "+" in result.display
 
-    def test_display_empty_when_untrained(self):
-        data = make_character_data()
+    def test_display_shows_unskilled_roll_when_untrained(self):
+        """Untrained skills now show the ring-only unskilled roll (the sheet
+        and edit page surface these so players can see all bonuses)."""
+        data = make_character_data(rings={"Air": 3}, skills={})
         result = compute_skill_roll("bragging", data)
-        assert result.display == ""
+        # Base pool is Air-only (3k3), no skill rank contribution.
+        assert result.rolled == 3
+        assert result.kept == 3
+        assert result.display.startswith("3k3")
+        assert "unskilled" in result.tooltip
 
     def test_tooltip_property(self):
         data = make_character_data(skills={"bragging": 1})

@@ -112,6 +112,21 @@ def test_advantage_tooltip_on_hover(page, live_server_url):
     assert charming_tooltip.count() > 0
 
 
+def test_tooltip_has_hover_delay(page, live_server_url):
+    """Tooltip appears only after a ~2000ms hover delay, not instantly."""
+    _create_full_character(page, live_server_url)
+    tooltip = page.locator('.tooltip-content', has_text="free raise on etiquette").first
+    tooltip.scroll_into_view_if_needed()
+    trigger = tooltip.locator('xpath=..')
+    trigger.hover()
+    # Well into the delay, still hidden.
+    page.wait_for_timeout(1500)
+    assert tooltip.evaluate("el => getComputedStyle(el).visibility") == "hidden"
+    # After the 2000ms delay has elapsed, tooltip becomes visible.
+    page.wait_for_timeout(800)
+    assert tooltip.evaluate("el => getComputedStyle(el).visibility") == "visible"
+
+
 # --- XP Summary ---
 
 def test_xp_breakdown_shown(page, live_server_url):

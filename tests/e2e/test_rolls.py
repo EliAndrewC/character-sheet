@@ -688,6 +688,36 @@ def test_unskilled_advanced_skill_shows_minus_10_in_breakdown(page, live_server_
     assert "unskilled advanced penalty" in modal_text
 
 
+def test_kind_eye_alternative_totals_on_tact_and_sincerity(page, live_server_url):
+    """Kind Eye surfaces the 'for servants and the mistreated' alt on Tact,
+    and 'on open rolls with servants and the mistreated' on Sincerity."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "KindEyeRoller")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_tact", 1)
+    click_plus(page, "skill_sincerity", 1)
+    page.check('input[name="adv_kind_eye"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Kind Eye setup")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+
+    page.locator('[data-roll-key="skill:tact"]').click()
+    _wait_for_roll_result(page)
+    tact_text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "Alternative totals" in tact_text
+    assert "for servants and the mistreated" in tact_text
+    page.locator('[data-modal="dice-roller"] button:has-text("Close")').first.click()
+    page.wait_for_timeout(200)
+
+    page.locator('[data-roll-key="skill:sincerity"]').click()
+    _wait_for_roll_result(page)
+    sincerity_text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "on open rolls with servants and the mistreated" in sincerity_text
+
+
 def test_spend_raise_button_visible_for_applicable_skill(page, live_server_url):
     """The 'Spend 3rd Dan Free Raise' button appears on the roll modal for
     skills in the 3rd Dan applicable_to list."""

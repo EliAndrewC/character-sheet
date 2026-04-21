@@ -1,10 +1,9 @@
 """Per-user rate limit and kill-switch for character-art generation.
 
-Rate limit (per Eli's direction in the implementation plan): 25
-successful generations per user per 24 hours. Implemented in-memory;
-single-machine Fly deployment tolerates the restart-on-deploy reset
-(worst case a user gets a few extra generations after a deploy, which
-is harmless).
+Rate limit (per Eli's direction): 100 successful generations per user
+per 24 hours. Implemented in-memory; single-machine Fly deployment
+tolerates the restart-on-deploy reset (worst case a user gets a few
+extra generations after a deploy, which is harmless).
 
 Kill switch: ``ART_GEN_ENABLED`` env var. Fail-closed default (False)
 so a missing secret doesn't silently turn the feature on.
@@ -18,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 
-DEFAULT_RATE_LIMIT_PER_DAY = 25
+DEFAULT_RATE_LIMIT_PER_DAY = 100
 RATE_WINDOW = timedelta(hours=24)
 
 
