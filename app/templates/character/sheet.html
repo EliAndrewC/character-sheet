@@ -4731,13 +4731,7 @@
                         Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
                     </div>
 
-                    {# If opponent also needs to resolve #}
-                    <div x-show="duelOpponentRoll && !duelOpponentHit" x-cloak>
-                        <p class="text-sm text-ink/70">Opponent missed. Duel continues to kenjutsu.</p>
-                        <button type="button" @click="duelOpen = false"
-                                class="mt-2 bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm font-medium">Close</button>
-                    </div>
-                    <div x-show="!duelOpponentRoll" x-cloak>
+                    <div>
                         <p class="text-sm text-ink/70">Enter opponent's roll to continue.</p>
                         <div class="flex gap-2 mt-2">
                             <input type="number" x-model="duelOpponentRoll" min="0" placeholder="Opponent's total"

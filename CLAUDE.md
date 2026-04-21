@@ -68,7 +68,7 @@ Unit tests use an in-memory SQLite database and FastAPI's TestClient (via httpx)
 ### E2E clicktests (slower, run selectively by feature area)
 
 ```bash
-python3 -m pytest tests/e2e/ -v --browser chromium                    # run ALL clicktests (~5 min)
+python3 -m pytest tests/e2e/ -v --browser chromium                    # run ALL clicktests (~46 min)
 python3 -m pytest tests/e2e/ -v --browser chromium -m tracking        # run by feature mark (~15 sec)
 python3 -m pytest tests/e2e/ -v --browser chromium -m advantages      # another mark example
 python3 -m pytest tests/e2e/ -v --browser chromium -m "skills or rings"  # combine marks
@@ -110,7 +110,7 @@ The key distinction: unit tests use TDD (tests first), clicktests are written af
 
 7. **Deploy after UI changes.** Any change that touches the frontend (templates, CSS, client-side JS) should be deployed to Fly.io after tests pass so the live site stays current.
 
-**Do NOT auto-run the full e2e suite.** The full suite takes ~37 minutes on the dev container and is not part of the per-feature loop. Targeted clicktests by `pytest.mark` (step 6) are the only e2e gate before declaring a feature done. Only run the full suite when the user explicitly asks for it.
+**Do NOT auto-run the full e2e suite.** The full suite takes ~46 minutes on the dev container and is not part of the per-feature loop. Targeted clicktests by `pytest.mark` (step 6) are the only e2e gate before declaring a feature done. Only run the full suite when the user explicitly asks for it.
 
 ## Project Structure
 

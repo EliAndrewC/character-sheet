@@ -8262,10 +8262,14 @@ def test_mantis_5th_dan_accumulator_counts_mixed(page, live_server_url):
     _select_posture(page, "offensive")  # phase 1
     _select_posture(page, "defensive")  # phase 2
     _select_posture(page, "offensive")  # phase 3
+    page.wait_for_function(
+        "() => window._trackingBridge?.offensivePhaseCount?.() === 2"
+        " && window._trackingBridge?.defensivePhaseCount?.() === 1"
+    )
     off_line = page.locator('[data-testid="mantis-5th-dan-offensive"]')
     def_line = page.locator('[data-testid="mantis-5th-dan-defensive"]')
-    off_line.wait_for(state='visible', timeout=10000)
-    def_line.wait_for(state='visible', timeout=10000)
+    off_line.wait_for(state='visible', timeout=30000)
+    def_line.wait_for(state='visible', timeout=30000)
     assert "+2" in off_line.text_content()
     assert "+1" in def_line.text_content()
 

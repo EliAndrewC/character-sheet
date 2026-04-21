@@ -31,16 +31,34 @@ def select_school(page, school_id):
     page.wait_for_selector("#school-details :text('Special Ability')", timeout=10000)
 
 
+def _click_pm(page, name, sign, times):
+    """Shared +/- click helper that verifies the backing input's value
+    actually changed after each click. Rapid clicks during Alpine
+    re-renders can otherwise be silently dropped under heavy session
+    load (the DOM node gets replaced mid-click), so we retry up to a
+    few times if the value didn't advance. Works for both integer
+    (knacks, skills) and fractional (honor's 0.5 steps) controls.
+
+    If the value refuses to change after a handful of retries we stop
+    silently — the button may be disabled at its cap/floor, which is
+    valid behavior for tests that probe boundaries."""
+    input_el = page.locator(f'input[name="{name}"]')
+    for _ in range(times):
+        start_val = input_el.input_value() or ""
+        for _ in range(10):
+            input_el.locator('..').locator(f'button:text("{sign}")').click(force=True)
+            if (input_el.input_value() or "") != start_val:
+                break
+
+
 def click_plus(page, name, times=1):
     """Click the + button for a +/- control."""
-    for _ in range(times):
-        page.locator(f'input[name="{name}"]').locator('..').locator('button:text("+")').click(force=True)
+    _click_pm(page, name, "+", times)
 
 
 def click_minus(page, name, times=1):
     """Click the - button for a +/- control."""
-    for _ in range(times):
-        page.locator(f'input[name="{name}"]').locator('..').locator('button:text("-")').click(force=True)
+    _click_pm(page, name, "-", times)
 
 
 def create_and_apply(page, live_server_url, name="Test Character", school="akodo_bushi",
