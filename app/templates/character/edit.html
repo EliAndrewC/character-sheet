@@ -663,7 +663,7 @@
                                         class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                             </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', false)"></span>
-                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
+                            <span class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -698,7 +698,7 @@
                                         class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                             </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', true)"></span>
-                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
+                            <span class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -733,7 +733,7 @@
                                         class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                             </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', false)"></span>
-                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
+                            <span class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -768,7 +768,7 @@
                                         class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                             </div>
                             <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', true)"></span>
-                            <span x-show="skills.{{ sid }} > 0" class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
+                            <span class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
                             <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
                                 <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
                                 <p>{{ skill.description }}</p>
@@ -1786,13 +1786,14 @@ function characterForm() {
         // --- Skill Roll Display ---
         skillRollDisplay(skillId) {
             const rank = this.skills[skillId] || 0;
-            if (rank === 0) return '';
+            const unskilled = rank <= 0;
+            const isAdvanced = ADVANCED_SKILLS.includes(skillId);
             const ringName = SKILL_RINGS[skillId];
             const ringVal = this.rings[ringName] || 2;
 
-            let rolled = rank + ringVal;
+            let rolled = unskilled ? ringVal : rank + ringVal;
             let kept = ringVal;
-            let flatBonus = 0;
+            let flatBonus = unskilled && isAdvanced ? -10 : 0;
             let parts = [];  // descriptions for the parenthetical
 
             // 1st Dan: extra die
@@ -1831,11 +1832,25 @@ function characterForm() {
                 }
             }
 
-            // Honor bonus
+            // Honor bonus - unconditional for Bragging / Precepts, conditional
+            // (open rolls only) for Sincerity so it stays out of flatBonus.
             const HONOR_SKILLS = {'bragging': 2, 'precepts': 2, 'sincerity': 2};
             if (HONOR_SKILLS[skillId]) {
                 const bonus = Math.floor(HONOR_SKILLS[skillId] * this.honor);
-                if (bonus > 0) { flatBonus += bonus; parts.push('+' + bonus + ' from Honor'); }
+                if (bonus > 0) {
+                    if (skillId === 'sincerity') {
+                        parts.push('+' + bonus + ' from Honor on open rolls');
+                    } else {
+                        flatBonus += bonus;
+                        parts.push('+' + bonus + ' from Honor');
+                    }
+                }
+            }
+
+            // Kind Eye: +20 on tact and open sincerity vs servants/mistreated.
+            // Conditional, so never added to flatBonus.
+            if (this.advantages.kind_eye && (skillId === 'tact' || skillId === 'sincerity')) {
+                parts.push('+20 for servants and the mistreated');
             }
 
             // Recognition bonus
@@ -1852,8 +1867,15 @@ function characterForm() {
                 }
             }
 
+            if (unskilled) {
+                parts.push(isAdvanced
+                    ? 'unskilled: -10 advanced, no 10s reroll'
+                    : 'unskilled: no 10s reroll');
+            }
+
             let display = rolled + 'k' + kept;
             if (flatBonus > 0) display += ' + ' + flatBonus;
+            else if (flatBonus < 0) display += ' - ' + Math.abs(flatBonus);
             if (parts.length > 0) display += ' (' + parts.join(', ') + ')';
             return display;
         },

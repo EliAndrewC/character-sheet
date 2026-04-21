@@ -246,47 +246,19 @@ def build_unskilled_formula(
     character_data: dict,
     party_members: Optional[List[dict]] = None,
 ) -> Optional[RollFormula]:
-    """Build a roll formula for an unskilled roll (rank 0).
+    """Build an unskilled roll formula (rank 0).
 
-    Unskilled rolls never reroll 10s. Advanced skills at rank 0 get
-    a -10 penalty.
+    Thin wrapper around ``build_skill_formula`` that forces rank 0 even if the
+    character has ranks in the skill. All bonuses (advantages, synergies,
+    honor, recognition, etc.) still apply; only the base pool drops to the
+    ring value, 10s stop rerolling, and advanced skills take a -10 penalty.
     """
-    skill_def = SKILLS.get(skill_id)
-    if skill_def is None:
+    if SKILLS.get(skill_id) is None:
         return None
-    rings = character_data.get("rings", {})
-    ring_val = rings.get(skill_def.ring.value, 2)
-    flat = -10 if skill_def.is_advanced else 0
-    bonuses = [{"label": "unskilled advanced penalty", "amount": -10}] if skill_def.is_advanced else []
-    formula = RollFormula(
-        label=f"{skill_def.name} ({skill_def.ring.value})",
-        rolled=ring_val,
-        kept=ring_val,
-        flat=flat,
-        bonuses=bonuses,
-        reroll_tens=False,
-        no_reroll_reason="unskilled",
-        unskilled_skill_name=skill_def.name,
-        otherworldliness_capacity=5 if not skill_def.is_advanced else 0,
-    )
-    # Priest 2nd Dan ally bonus: same skills as the skilled version.
-    if skill_id in ("bragging", "precepts", "sincerity") and party_members:
-        ally_priest = next(
-            (p for p in party_members
-             if p.get("school") == "priest" and (p.get("dan") or 0) >= 2),
-            None,
-        )
-        if ally_priest is not None:
-            ally_name = ally_priest.get("name", "an ally")
-            label = f"Priest 2nd Dan ({ally_name} in party)"
-            if skill_id == "sincerity":
-                formula.alternatives.append({
-                    "label": f"on open rolls ({label})",
-                    "extra_flat": FREE_RAISE_VALUE,
-                })
-            else:
-                _add_flat_bonus(formula, label, FREE_RAISE_VALUE)
-    return formula
+    skills_copy = dict(character_data.get("skills") or {})
+    skills_copy[skill_id] = 0
+    data_copy = {**character_data, "skills": skills_copy}
+    return build_skill_formula(skill_id, data_copy, party_members=party_members)
 
 
 def build_skill_formula(
@@ -294,15 +266,20 @@ def build_skill_formula(
     character_data: dict,
     party_members: Optional[List[dict]] = None,
 ) -> Optional[RollFormula]:
-    """Build a roll formula for a skill the character has at rank > 0."""
+    """Build a roll formula for a skill, skilled or unskilled.
+
+    For rank 0, the base pool is ring-only, advanced skills take a -10 flat
+    penalty, 10s don't reroll, and the formula is flagged as unskilled. All
+    other bonuses (school techniques, advantages, synergies, honor,
+    recognition, etc.) apply identically to skilled rolls.
+    """
     skill_def = SKILLS.get(skill_id)
     if skill_def is None:
         return None
 
     skills = character_data.get("skills", {}) or {}
     rank = skills.get(skill_id, 0)
-    if rank <= 0:
-        return None
+    unskilled = rank <= 0
 
     rings = character_data.get("rings", {})
     school_id = character_data.get("school", "")
@@ -314,14 +291,30 @@ def build_skill_formula(
         ring_name = skill_def.ring.value
     ring_val = rings.get(ring_name, 2)
 
-    formula = RollFormula(
-        label=f"{skill_def.name} ({ring_name})",
-        rolled=rank + ring_val,
-        kept=ring_val,
-        flat=0,
-        otherworldliness_capacity=max(0, 5 - rank) if not skill_def.is_advanced else 0,
-        **_reroll_fields(character_data),
-    )
+    if unskilled:
+        formula = RollFormula(
+            label=f"{skill_def.name} ({ring_name})",
+            rolled=ring_val,
+            kept=ring_val,
+            flat=-10 if skill_def.is_advanced else 0,
+            bonuses=(
+                [{"label": "unskilled advanced penalty", "amount": -10}]
+                if skill_def.is_advanced else []
+            ),
+            reroll_tens=False,
+            no_reroll_reason="unskilled",
+            unskilled_skill_name=skill_def.name,
+            otherworldliness_capacity=5 if not skill_def.is_advanced else 0,
+        )
+    else:
+        formula = RollFormula(
+            label=f"{skill_def.name} ({ring_name})",
+            rolled=rank + ring_val,
+            kept=ring_val,
+            flat=0,
+            otherworldliness_capacity=max(0, 5 - rank) if not skill_def.is_advanced else 0,
+            **_reroll_fields(character_data),
+        )
 
     knacks = character_data.get("knacks", {}) or {}
     tech_choices = character_data.get("technique_choices") or {}
@@ -353,6 +346,25 @@ def build_skill_formula(
             skill_list, raises = _ADVANTAGE_SKILL_BONUSES[adv_id]
             if skill_id in skill_list:
                 _add_flat_bonus(formula, ADVANTAGES[adv_id].name, raises * FREE_RAISE_VALUE)
+
+    # Kind Eye: +20 (4 free raises) on Tact and open Sincerity vs servants and
+    # the mistreated. Conditional - surfaced as an "Alternative totals" row.
+    # For Sincerity the bonus also requires an open roll, so the row stacks
+    # with the honor bonus (honor + 20).
+    if "kind_eye" in advantages:
+        kind_eye_flat = 4 * FREE_RAISE_VALUE
+        if skill_id == "tact":
+            formula.alternatives.append({
+                "label": "for servants and the mistreated",
+                "extra_flat": kind_eye_flat,
+            })
+        elif skill_id == "sincerity":
+            honor_val = character_data.get("honor", 1.0)
+            honor_bonus = int(_HONOR_BONUS_SKILLS["sincerity"] * honor_val)
+            formula.alternatives.append({
+                "label": "on open rolls with servants and the mistreated",
+                "extra_flat": honor_bonus + kind_eye_flat,
+            })
 
     # --- Campaign advantage bonuses (e.g. Highest Regard) ---
     campaign_advantages = character_data.get("campaign_advantages", []) or []
@@ -1071,27 +1083,18 @@ def build_all_roll_formulas(
             formula_dict["bonus_sources"] = bonus_sources
         return formula_dict
 
-    # Skills with rank > 0
+    # Every skill gets a formula. ``build_skill_formula`` handles both
+    # skilled and unskilled (rank 0) cases; we only need to flag the
+    # unskilled ones so the roll modal can distinguish them.
     skills = character_data.get("skills", {}) or {}
-    for skill_id, rank in skills.items():
-        if rank <= 0:
-            continue
+    for skill_id in SKILLS:
         formula = build_skill_formula(skill_id, character_data, party_members=party_members)
-        if formula is not None:
-            out[f"skill:{skill_id}"] = _annotate_third_dan(
-                f"skill:{skill_id}", formula.to_dict()
-            )
-
-    # Unskilled rolls: generate formulas for ALL skills at rank 0 so
-    # they can still be rolled (no reroll 10s, advanced get -10 penalty).
-    for skill_id, skill_def in SKILLS.items():
-        if skills.get(skill_id, 0) > 0:
-            continue  # already handled above
-        formula = build_unskilled_formula(skill_id, character_data, party_members=party_members)
-        if formula is not None:
-            d = formula.to_dict()
+        if formula is None:
+            continue
+        d = _annotate_third_dan(f"skill:{skill_id}", formula.to_dict())
+        if skills.get(skill_id, 0) <= 0:
             d["is_unskilled"] = True
-            out[f"skill:{skill_id}"] = d
+        out[f"skill:{skill_id}"] = d
 
     # School knacks (look up from the character's school). School knacks
     # start at rank 1 for free (given by the school), so treat a missing

@@ -9,8 +9,14 @@
     <script defer src="/static/js/alpine.min.js"></script>
     <style>
         [x-cloak] { display: none !important; }
-        .tooltip-content { display: none; }
-        .tooltip-trigger:hover .tooltip-content { display: block; }
+        .tooltip-content {
+            visibility: hidden;
+            transition: visibility 0s linear 0s;
+        }
+        .tooltip-trigger:hover .tooltip-content {
+            visibility: visible;
+            transition-delay: 2000ms;
+        }
         /* Touch devices: show a "?" indicator and use tap-to-toggle */
         @media (hover: none) {
             .tooltip-trigger { cursor: pointer; }
@@ -29,9 +35,12 @@
                 vertical-align: middle;
                 flex-shrink: 0;
             }
-            .tooltip-trigger:hover .tooltip-content { display: none; }
+            .tooltip-trigger:hover .tooltip-content { visibility: hidden; }
         }
-        .tooltip-trigger.tooltip-active > .tooltip-content { display: block !important; }
+        .tooltip-trigger.tooltip-active > .tooltip-content {
+            visibility: visible !important;
+            transition-delay: 0s;
+        }
         /* Rich-text section content (sanitized HTML rendered on the sheet) */
         .rich-section { font-size: 0.95rem; line-height: 1.6; }
         .rich-section p { margin: 0.5em 0; }

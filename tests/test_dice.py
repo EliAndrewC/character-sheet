@@ -339,9 +339,13 @@ class TestAthleticsCombat:
 
 
 class TestSkillFormula:
-    def test_zero_rank_returns_none(self):
+    def test_zero_rank_returns_unskilled_formula(self):
+        """Rank 0 now returns an unskilled formula (ring-only pool, no reroll)."""
         char = make_character_data(skills={"bragging": 0})
-        assert build_skill_formula("bragging", char) is None
+        f = build_skill_formula("bragging", char)
+        assert f is not None
+        assert f.reroll_tens is False
+        assert f.no_reroll_reason == "unskilled"
 
     def test_unknown_skill_returns_none(self):
         char = make_character_data(skills={"nonexistent": 3})
@@ -459,6 +463,66 @@ class TestSkillFormula:
         assert any("open rolls" in alt["label"] for alt in f.alternatives)
         # 2 * 3.0 = 6
         assert any(alt["extra_flat"] == 6 for alt in f.alternatives)
+
+    def test_kind_eye_tact_alternative(self):
+        """Kind Eye adds +20 'for servants and the mistreated' alt on Tact."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"tact": 2},
+            advantages=["kind_eye"],
+        )
+        f = build_skill_formula("tact", char)
+        assert f.flat == 0
+        matching = [
+            a for a in f.alternatives
+            if "servants and the mistreated" in a["label"]
+        ]
+        assert len(matching) == 1
+        assert matching[0]["extra_flat"] == 20
+
+    def test_kind_eye_sincerity_alternative_stacks_with_honor(self):
+        """Kind Eye on Sincerity creates a second alt that stacks with honor."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"sincerity": 2},
+            advantages=["kind_eye"],
+            honor=3.0,
+        )
+        f = build_skill_formula("sincerity", char)
+        labels = [a["label"] for a in f.alternatives]
+        assert "on open rolls" in labels
+        assert "on open rolls with servants and the mistreated" in labels
+        # honor 2*3 = 6, kind eye +20, stacked = 26
+        kind_eye_alt = next(
+            a for a in f.alternatives
+            if a["label"] == "on open rolls with servants and the mistreated"
+        )
+        assert kind_eye_alt["extra_flat"] == 26
+
+    def test_kind_eye_does_not_affect_other_skills(self):
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"etiquette": 2},
+            advantages=["kind_eye"],
+        )
+        f = build_skill_formula("etiquette", char)
+        assert not any("servants" in a["label"] for a in f.alternatives)
+
+    def test_kind_eye_unskilled_tact_alternative(self):
+        """Unskilled Tact (rank 0) with Kind Eye still surfaces the alt."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={},
+            advantages=["kind_eye"],
+        )
+        from app.services.dice import build_unskilled_formula
+        f = build_unskilled_formula("tact", char)
+        assert f is not None
+        assert any("servants" in a["label"] for a in f.alternatives)
 
     def test_bragging_honor_bonus_unconditional(self):
         char = make_character_data(
@@ -598,8 +662,11 @@ class TestSkillFormula:
         from app.services.dice import build_unskilled_formula
         char = make_character_data(school="", knacks={}, skills={})
         f = build_unskilled_formula("bragging", char)
-        assert f.flat == 0
-        assert f.bonuses == []
+        # Basic skills get no -10 penalty (only advanced do). Honor/recognition
+        # bonuses still apply, so flat may be non-zero.
+        assert not any(
+            b.get("label") == "unskilled advanced penalty" for b in f.bonuses
+        )
 
     def test_unskilled_no_reroll_reason_carries_skill_name(self):
         """The roll-result modal needs to render ``10s not rerolled due to
@@ -918,10 +985,14 @@ class TestBuildAllRollFormulas:
     def test_unskilled_basic_skill_no_penalty(self):
         char = make_character_data(skills={})
         formulas = build_all_roll_formulas(char)
-        # Bragging is basic
+        # Bragging is basic - gets no -10 penalty (advanced-only). Honor and
+        # recognition bonuses still apply and may contribute to flat.
         assert "skill:bragging" in formulas
-        assert formulas["skill:bragging"]["flat"] == 0
-        assert formulas["skill:bragging"]["is_unskilled"] is True
+        f = formulas["skill:bragging"]
+        assert f["is_unskilled"] is True
+        assert not any(
+            b.get("label") == "unskilled advanced penalty" for b in f["bonuses"]
+        )
 
     def test_each_value_is_a_dict_with_required_keys(self):
         char = make_character_data(skills={"bragging": 2}, attack=2)

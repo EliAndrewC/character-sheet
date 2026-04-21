@@ -43,9 +43,9 @@ class TestArtGenEnabled:
 
 
 class TestRateLimit:
-    def test_default_limit_is_25(self, monkeypatch):
+    def test_default_limit_is_100(self, monkeypatch):
         monkeypatch.delenv("ART_GEN_RATE_LIMIT_PER_DAY", raising=False)
-        assert art_rate_limit.rate_limit_per_day() == 25
+        assert art_rate_limit.rate_limit_per_day() == 100
 
     def test_env_override(self, monkeypatch):
         monkeypatch.setenv("ART_GEN_RATE_LIMIT_PER_DAY", "5")
@@ -72,10 +72,10 @@ class TestRateLimit:
         assert err is not None
         assert "3" in err and "limit" in err.lower()
 
-    def test_default_twenty_sixth_call_blocked(self, monkeypatch):
-        """Per the plan: 25 generations allowed; 26th is blocked."""
+    def test_default_hundred_first_call_blocked(self, monkeypatch):
+        """Per the plan: 100 generations allowed; 101st is blocked."""
         monkeypatch.delenv("ART_GEN_RATE_LIMIT_PER_DAY", raising=False)
-        for _ in range(25):
+        for _ in range(100):
             art_rate_limit.record_generation("u1")
         assert art_rate_limit.check_rate_limit("u1") is not None
 

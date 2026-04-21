@@ -286,12 +286,14 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "dice_sound_enabled": viewer_prefs.get("dice_sound_enabled", True),
     }
 
-    # Compute roll info for each skill. Party members are passed in so that
-    # group-wide disadvantage notes (e.g. Thoughtless) surface inline on the
-    # affected skills (just Tact for Thoughtless) instead of as a separate
-    # Party Effects section.
+    # Compute roll info for each skill, skilled or unskilled. Unskilled rolls
+    # still display (ring-only pool, -10 for advanced, 10s don't reroll) so
+    # rank-0 skills show their bonuses and the no-reroll indicator. Party
+    # members are passed in so that group-wide disadvantage notes (e.g.
+    # Thoughtless) surface inline on the affected skills (just Tact for
+    # Thoughtless) instead of as a separate Party Effects section.
     skill_rolls = {}
-    for sid in (char_dict.get("skills") or {}):
+    for sid in SKILLS:
         roll = compute_skill_roll(sid, char_dict, party_members=party_members_data)
         if roll.rolled > 0:
             skill_rolls[sid] = roll

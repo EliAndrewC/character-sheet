@@ -105,3 +105,54 @@ def test_thoughtless_note_on_tact(page, live_server_url):
                               skills={"tact": 1}, disadvantages=["thoughtless"],
                               name="Thoughtless")
     assert "Manipulation" in page.text_content("body")
+
+
+def test_kind_eye_note_on_tact_and_sincerity(page, live_server_url):
+    """Kind Eye surfaces the +20 servants-and-mistreated note on both skills."""
+    _create_char_with_skills(page, live_server_url,
+                              skills={"tact": 1, "sincerity": 1},
+                              advantages=["kind_eye"],
+                              name="Kind Eye Note")
+    body = page.text_content("body")
+    assert body.count("+20 for servants and the mistreated") == 2
+
+
+def test_sincerity_honor_says_on_open_rolls(page, live_server_url):
+    """Sincerity's honor bonus is annotated as 'on open rolls' rather than flat."""
+    _create_char_with_skills(page, live_server_url,
+                              skills={"sincerity": 1}, name="Sincerity Honor")
+    assert "from Honor on open rolls" in page.text_content("body")
+
+
+def test_unskilled_precepts_shows_honor_and_note(page, live_server_url):
+    """Unskilled Precepts (rank 0) still shows the Honor bonus and unskilled note."""
+    _create_char_with_skills(page, live_server_url,
+                              skills={}, name="Unskilled Precepts")
+    body = page.text_content("body")
+    # Precepts gets +2 from Honor (2 * default 1.0). Note appears on sheet.
+    assert "from Honor" in body
+    assert "unskilled: no 10s reroll" in body
+
+
+def test_unskilled_advanced_shows_minus_10_on_sheet(page, live_server_url):
+    """Unskilled advanced skill (e.g. History) shows -10 in the roll display."""
+    _create_char_with_skills(page, live_server_url,
+                              skills={}, name="Unskilled Adv")
+    body = page.text_content("body")
+    # The advanced-penalty annotation appears in the parenthetical.
+    assert "unskilled: -10 advanced" in body
+
+
+def test_unskilled_formula_shown_on_edit_page(page, live_server_url):
+    """Edit page renders the unskilled roll formula for rank-0 skills too."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Edit Unskilled")
+    select_school(page, "akodo_bushi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    body = page.text_content("body")
+    # Rank-0 Precepts should show honor bonus and unskilled note.
+    assert "unskilled: no 10s reroll" in body
+    # Rank-0 History (advanced) should show the -10 advanced penalty text.
+    assert "unskilled: -10 advanced" in body
