@@ -31,10 +31,7 @@ def test_test_login_creates_session(page_anon, live_server_url):
 
 
 def test_empty_state_create_link(page_anon, live_server_url):
-    """Empty state shows 'Create Your First Character' when no characters (for anon, shows login)."""
-    # Fresh page with no characters visible — anon can see published chars
-    # Since the e2e session accumulates characters, we just test the homepage loads
+    """Homepage loads for anon users whether or not characters exist."""
     page_anon.goto(live_server_url)
-    # The page should have either characters or the empty state
     body = page_anon.text_content("body")
     assert "Characters" in body
