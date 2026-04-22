@@ -292,6 +292,7 @@ def _wipe_precepts_pool_if_dan_drop(character: Character) -> None:
 def _restore_character_from_state(character: Character, state: Dict[str, Any]):
     """Update a character's draft fields from a state dict."""
     character.name = state.get("name", character.name)
+    character.name_explanation = state.get("name_explanation", "")
     character.player_name = state.get("player_name", "")
     character.school = state.get("school", "")
     character.school_ring_choice = state.get("school_ring_choice", "")

@@ -30,6 +30,7 @@ def _parse_form_to_dict(form_data: dict) -> dict:
     """Parse flat form data into the nested structure for Character.from_dict."""
     data = {
         "name": form_data.get("name", "").strip(),
+        "name_explanation": form_data.get("name_explanation", ""),
         "player_name": form_data.get("player_name", "").strip(),
         "school": form_data.get("school", ""),
         "school_ring_choice": form_data.get("school_ring_choice", ""),
@@ -134,6 +135,7 @@ async def update_character(
 
     # Update fields
     character.name = data["name"]
+    character.name_explanation = data["name_explanation"]
     # Handle owner reassignment (GM only)
     new_owner_id = form_data.get("owner_discord_id")
     if new_owner_id:
@@ -358,6 +360,8 @@ async def autosave_character(
     # Update character fields from JSON
     if "name" in body:
         character.name = body["name"]
+    if "name_explanation" in body:
+        character.name_explanation = body["name_explanation"] or ""
     if body.get("owner_discord_id"):
         # Only admins can reassign ownership
         from app.services.auth import is_admin

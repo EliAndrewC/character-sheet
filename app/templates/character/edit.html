@@ -47,6 +47,93 @@
         </div>
     </div>
 
+    <!-- Name generator modal -->
+    <div x-show="showNameModal" x-cloak
+         data-modal="name"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+         @click.self="showNameModal = false"
+         @keydown.escape.window="if (showNameModal) showNameModal = false">
+        <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4">
+            <h3 class="text-lg font-bold text-accent mb-3">Generate a Name</h3>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">Gender</label>
+                <select x-model="nameModalGender" @change="rollName()"
+                        data-field="name-gender"
+                        class="w-full border rounded px-3 py-2 bg-white">
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                </select>
+            </div>
+            <div class="mb-4 p-4 bg-parchment/60 rounded border border-ink/10 min-h-[8rem]">
+                <template x-if="nameModalError">
+                    <p class="text-sm text-red-700" data-field="name-error" x-text="nameModalError"></p>
+                </template>
+                <template x-if="!nameModalError">
+                    <div>
+                        <div class="flex items-start justify-between gap-3 mb-2">
+                            <div class="text-xl font-bold" data-field="name-result"
+                                 x-text="nameModalLoading ? '...' : nameModalName"></div>
+                            <button type="button" @click="rollName()" :disabled="nameModalLoading"
+                                    data-action="reroll-name"
+                                    title="Generate another name"
+                                    aria-label="Generate another name"
+                                    class="shrink-0 text-ink/60 hover:text-accent disabled:opacity-40 p-1">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2"
+                                     viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                          d="M4 4v6h6M20 20v-6h-6M20 9A8 8 0 006.3 6.3L4 8M4 15a8 8 0 0013.7 2.7L20 16"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="text-sm text-ink/70 leading-snug" data-field="name-explanation"
+                           x-text="nameModalLoading ? '' : nameModalExplanation"></p>
+                    </div>
+                </template>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button type="button" @click="showNameModal = false" data-action="cancel-name"
+                        class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
+                <button type="button" @click="applyNameFromModal()"
+                        :disabled="!nameModalName || nameModalLoading || !!nameModalError"
+                        data-action="apply-name"
+                        class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                    Use this name
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Name explanation modal -->
+    <div x-show="showExplanationModal" x-cloak
+         data-modal="name-explanation"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+         @click.self="cancelExplanationModal()"
+         @keydown.escape.window="if (showExplanationModal) cancelExplanationModal()">
+        <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-lg w-full mx-4">
+            <h3 class="text-lg font-bold text-accent mb-3">Name Explanation</h3>
+            <p class="text-sm text-ink/70 mb-3 leading-snug">
+                Rokugani choose their adult names at the age of 14, and this
+                choice reflects their self-identity. Consider explaining not
+                only the meaning of this name but what led your character to
+                select this name in particular.
+            </p>
+            <textarea x-model="explanationDraft" rows="8"
+                      data-field="name-explanation-text"
+                      placeholder="Describe what this name means and why your character chose it..."
+                      class="w-full border border-ink/20 rounded px-3 py-2 bg-parchment text-sm"></textarea>
+            <div class="flex justify-end gap-3 mt-4">
+                <button type="button" @click="cancelExplanationModal()"
+                        data-action="cancel-explanation"
+                        class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
+                <button type="button" @click="saveExplanationModal()"
+                        data-action="save-explanation"
+                        class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                    Save
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- GOOGLE SHEETS EXPORT BANNERS -->
     {% if request.query_params.get('sheets_url') %}
     <div class="bg-green-100 border border-green-400 text-green-800 rounded px-4 py-2 text-sm flex items-center justify-between mb-4">
@@ -138,9 +225,39 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label class="block text-sm font-medium mb-1">Character Name</label>
-                    <input type="text" name="name" required value="{{ character.name }}"
-                           @input="markDirty()"
-                           class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                    <div class="flex gap-2">
+                        <input type="text" name="name" required value="{{ character.name }}"
+                               x-ref="nameInput"
+                               @input="markDirty()"
+                               class="flex-1 min-w-0 border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                        <button type="button" @click="openNameModal()" data-action="open-name-modal"
+                                title="Generate a random name"
+                                class="shrink-0 px-3 py-2 rounded border border-ink/20 hover:bg-ink/10 text-ink/70"
+                                aria-label="Generate a random name">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8"
+                                 viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="3" y="3" width="18" height="18" rx="3"/>
+                                <circle cx="8.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/>
+                                <circle cx="15.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/>
+                                <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+                                <circle cx="8.5" cy="15.5" r="1.2" fill="currentColor" stroke="none"/>
+                                <circle cx="15.5" cy="15.5" r="1.2" fill="currentColor" stroke="none"/>
+                            </svg>
+                        </button>
+                        <button type="button" @click="openExplanationModal()"
+                                data-action="open-explanation-modal"
+                                :title="nameExplanation ? 'Edit name explanation' : 'Add a name explanation'"
+                                :class="nameExplanation
+                                    ? 'shrink-0 px-3 py-2 rounded border border-accent/40 bg-accent/5 hover:bg-accent/10 text-accent'
+                                    : 'shrink-0 px-3 py-2 rounded border border-ink/20 hover:bg-ink/10 text-ink/70'"
+                                aria-label="Edit name explanation">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8"
+                                 viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      d="M8 7h8M8 11h8M8 15h5M6 3h10a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Player</label>
@@ -1291,6 +1408,15 @@ function characterForm() {
         awardModalSource: '',
         awardModalRepType: 'good_reputation',
         awardModalRepText: '',
+        showNameModal: false,
+        nameModalGender: 'male',
+        nameModalName: '',
+        nameModalExplanation: '',
+        nameModalLoading: false,
+        nameModalError: '',
+        nameExplanation: {{ (character.name_explanation or '')|tojson }},
+        showExplanationModal: false,
+        explanationDraft: '',
         _awardSourceTimers: {},
         saveStatus: '',
         sheetsStale: {{ 'true' if character.google_sheet_is_stale else 'false' }},
@@ -1420,6 +1546,7 @@ function characterForm() {
             try {
                 const body = {
                     name: document.querySelector('input[name="name"]')?.value || this.school || 'New Character',
+                    name_explanation: this.nameExplanation || '',
                     owner_discord_id: document.querySelector('select[name="owner_discord_id"]')?.value || undefined,
                     school: this.school,
                     school_ring_choice: this.schoolRingChoice,
@@ -1633,6 +1760,70 @@ function characterForm() {
             // way to change those values from here on out is by adding,
             // editing, or deleting awards.
             return this.rankRecognitionAwards.length > 0;
+        },
+
+        // --- Name generator modal ---
+
+        openNameModal() {
+            this.showNameModal = true;
+            this.rollName();
+        },
+
+        async rollName() {
+            this.nameModalLoading = true;
+            this.nameModalError = '';
+            try {
+                const resp = await fetch('/api/names/random?gender=' + encodeURIComponent(this.nameModalGender));
+                if (!resp.ok) throw new Error('request failed');
+                const data = await resp.json();
+                this.nameModalName = data.name || '';
+                this.nameModalExplanation = data.explanation || '';
+            } catch (e) {
+                this.nameModalError = 'Could not load a name. Please try again.';
+                this.nameModalName = '';
+                this.nameModalExplanation = '';
+            } finally {
+                this.nameModalLoading = false;
+            }
+        },
+
+        applyNameFromModal() {
+            if (!this.nameModalName) return;
+            const input = this.$refs.nameInput;
+            if (!input) return;
+            const current = (input.value || '').trim();
+            const words = current ? current.split(/\s+/) : [];
+            const isDefault = !current || current === 'New Character';
+            let next;
+            if (isDefault || words.length <= 1) {
+                next = this.nameModalName;
+            } else {
+                words[words.length - 1] = this.nameModalName;
+                next = words.join(' ');
+            }
+            input.value = next;
+            // Adopt the generated explanation as the starting point for
+            // the player's own write-up, and pop the explanation editor
+            // so they can add to it right away.
+            this.nameExplanation = this.nameModalExplanation;
+            this.markDirty();
+            this.showNameModal = false;
+            this.openExplanationModal();
+        },
+
+        openExplanationModal() {
+            this.explanationDraft = this.nameExplanation || '';
+            this.showExplanationModal = true;
+        },
+
+        cancelExplanationModal() {
+            this.showExplanationModal = false;
+        },
+
+        saveExplanationModal() {
+            this.nameExplanation = this.explanationDraft;
+            this.markDirty();
+            this.showExplanationModal = false;
         },
 
         openAwardModal() {
