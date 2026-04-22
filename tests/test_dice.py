@@ -1414,6 +1414,33 @@ class TestSchoolAbilities:
         # No acting skill, so no acting bonus. Base: 2(attack) + 2(Fire) + 1(1st Dan) = 5
         assert f.rolled == 5
 
+    def test_shosuro_actor_roll_formulas_sheet_contract(self):
+        # Contract the sheet's Attack/Parry/Wound Check summary rows depend
+        # on: roll_formulas[...] must carry the full server-computed pool
+        # (including Shosuro Acting AND the L7R 10k10 cap), so the View
+        # Character page renders the correct XkY without re-deriving it.
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 1, "discern_honor": 1, "pontificate": 1},
+            skills={"acting": 5},
+            rings={"Air": 3, "Fire": 3, "Earth": 2, "Water": 4, "Void": 2},
+            attack=2,
+            parry=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        # Attack: 2(attack) + 3(Fire) + 1(1st Dan) + 5(acting) = 11 rolled,
+        # capped to 10 with the extra rolled die converting to kept -> 10k4.
+        assert formulas["attack"]["rolled"] == 10
+        assert formulas["attack"]["kept"] == 4
+        # Parry: 2(parry) + 3(Air) + 5(acting) = 10 rolled (1st Dan does not
+        # apply to parry for Shosuro Actor). Exactly at the cap -> 10k3.
+        assert formulas["parry"]["rolled"] == 10
+        assert formulas["parry"]["kept"] == 3
+        # Wound check: (Water+1)+1(1st Dan)+5(acting) = 11 rolled, capped
+        # to 10 with the extra rolled die converting to kept -> 10k5.
+        assert formulas["wound_check"]["rolled"] == 10
+        assert formulas["wound_check"]["kept"] == 5
+
     # --- Shosuro Actor 5th Dan: flag set on non-initiative formulas ---
     def test_shosuro_5th_dan_flag_on_attack(self):
         char = make_character_data(

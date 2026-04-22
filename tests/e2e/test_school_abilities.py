@@ -857,6 +857,42 @@ def test_shosuro_stipend_display(page, live_server_url):
     # All characters should have a stipend displayed
     stipend_el = page.locator('text="koku/year"').first
     assert stipend_el.is_visible()
+
+
+def test_shosuro_special_ability_in_sheet_rolls(page, live_server_url):
+    """Shosuro Actor: sheet Attack / Parry / Wound Check summaries fold in
+    the +acting rolled dice from the Special Ability (and the L7R 10k10 cap
+    converts the overflow into kept dice).
+
+    Stats: attack=2, parry=2, Fire=3, Air=3, Water=4, acting=5, Dan 1.
+      Attack:      2+3+1(1st Dan)+5(acting) = 11 rolled, capped to 10k4
+      Parry:       2+3+0+5(acting)          = 10 rolled, kept 3 -> 10k3
+      Wound check: 5(Water+1)+1(1st Dan)+5  = 11 rolled, capped to 10k5
+    """
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "ShosuroSheetRolls")
+    select_school(page, "shosuro_actor")
+    # Rings: school ring Air starts at 3; nudge Fire 2->3 and Water 2->4.
+    click_plus(page, "ring_fire", 1)
+    click_plus(page, "ring_water", 2)
+    # Combat skills default to 1; raise both to 2.
+    click_plus(page, "attack", 1)
+    click_plus(page, "parry", 1)
+    # Acting skill starts at 0; raise to 5.
+    click_plus(page, "skill_acting", 5)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "ShosuroSheetRolls setup")
+
+    # Sheet Attack row: look inside the attack clickable row for XkY text.
+    attack_row = page.locator('[data-roll-key="attack"]').first
+    assert "10k4" in attack_row.text_content()
+    parry_row = page.locator('[data-roll-key="parry"]').first
+    assert "10k3" in parry_row.text_content()
+    # Wound check row does not carry a data-roll-key; locate by label.
+    wc_row = page.locator('div', has=page.locator('text="Wound Check:"')).first
+    assert "10k5" in wc_row.text_content()
 def test_shugenja_1st_dan_element_selection(page, live_server_url):
     """Shugenja 1st Dan element selection (after enabling school)."""
     pass

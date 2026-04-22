@@ -94,6 +94,10 @@ class Character(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    # Free-form text explaining the meaning of the character's name, and
+    # the in-character reason they chose it at their adult-name ceremony.
+    # Displayed as a tooltip on the character sheet.
+    name_explanation: Mapped[str] = mapped_column(String, default="")
     player_name: Mapped[str] = mapped_column(String, default="")
     owner_discord_id: Mapped[Optional[str]] = mapped_column(String, default=None)
     editor_discord_ids: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
@@ -294,6 +298,7 @@ class Character(Base):
         return {
             "id": self.id,
             "name": self.name,
+            "name_explanation": self.name_explanation or "",
             "player_name": self.player_name,
             "owner_discord_id": self.owner_discord_id,
             "editor_discord_ids": self.editor_discord_ids or [],
@@ -342,6 +347,7 @@ class Character(Base):
 
         return cls(
             name=data.get("name", ""),
+            name_explanation=data.get("name_explanation", ""),
             player_name=data.get("player_name", ""),
             school=data.get("school", ""),
             school_ring_choice=data.get("school_ring_choice", ""),

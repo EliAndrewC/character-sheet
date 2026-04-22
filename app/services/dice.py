@@ -835,6 +835,16 @@ def build_wound_check_formula(character_data: dict) -> dict:
     # Shosuro Actor 5th Dan: add sum of lowest 3 dice to roll (post-roll)
     shosuro_5th_dan = school_id == "shosuro_actor" and dan >= 5
 
+    # Apply L7R 10k10 caps: rolled past 10 become kept, kept past 10 become
+    # +2 flat per overflow die. Without this, a Shosuro Actor with high
+    # acting rolls more than 10 dice on wound checks (the cap is applied to
+    # attack/parry/athletics/skill formulas via _finalize_caps but this
+    # builder returns a plain dict, not a RollFormula).
+    rolled, kept, overflow_flat = apply_dice_caps(rolled, kept)
+    if overflow_flat:
+        flat += overflow_flat
+        bonus_sources.append(f"+{overflow_flat} from extra dice above 10k10")
+
     return {
         "label": "Wound Check",
         "rolled": rolled,

@@ -84,6 +84,7 @@ def _migrate_add_columns():
         ("art_updated_at", "DATETIME", "NULL"),
         ("art_source", "TEXT", "NULL"),
         ("art_prompt", "TEXT", "NULL"),
+        ("name_explanation", "TEXT", "''"),
     ]
 
     # Migration bodies below are defensive first-run-on-old-schema branches.

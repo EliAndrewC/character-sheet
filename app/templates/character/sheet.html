@@ -122,7 +122,17 @@
     <!-- HEADER -->
     <div class="flex flex-wrap items-start justify-between gap-2">
         <div class="min-w-0">
-            <h1 class="text-3xl font-bold break-words">{{ character.name }}</h1>
+            <h1 class="text-3xl font-bold break-words">
+                {{ character.name }}{% if character.name_explanation %}<span class="tooltip-trigger relative inline-block align-middle ml-1 cursor-help"
+                      data-testid="name-explanation-tooltip">
+                    <svg class="w-5 h-5 inline-block text-ink/40 hover:text-ink/70" fill="none"
+                         stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M8 7h8M8 11h8M8 15h5M6 3h10a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z"/>
+                    </svg>
+                    <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-sm rounded shadow-lg w-80 max-w-[90vw] max-h-80 overflow-y-auto text-left font-normal whitespace-pre-wrap leading-snug">{{ character.name_explanation }}</span>
+                </span>{% endif %}
+            </h1>
             {% if owner_display_name %}
             <p class="text-ink/60">Player: {{ owner_display_name }}</p>
             {% endif %}
@@ -2019,6 +2029,15 @@
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10 md:w-2/3">
         <h2 class="text-xl font-bold mb-4 text-accent">Combat Skills & School Knacks</h2>
         <div class="space-y-2">
+            {# Pull rolled/kept/flat from the server-computed formula so
+               school bonuses (Shosuro Acting +acting rolled, Kitsuki
+               +2*Water flat, Courtier +Air flat, 1st Dan extra die, etc.)
+               show up in the sheet summary instead of only appearing in
+               the roll modal. Mirrors the wound-check block above. #}
+            {% set _atk_f = roll_formulas.get('attack', {}) %}
+            {% set _atk_rolled = _atk_f.get('rolled', character.attack + ring_map['Fire']) %}
+            {% set _atk_kept   = _atk_f.get('kept',   ring_map['Fire']) %}
+            {% set _atk_flat   = _atk_f.get('flat',   0) %}
             <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative cursor-pointer hover:ring-2 hover:ring-accent/40"
                  data-roll-key="attack">
                 <div class="flex items-center justify-between gap-4">
@@ -2030,16 +2049,20 @@
                             {% endfor %}
                         </div>
                         <span class="text-sm text-ink/60">
-                            {{ character.attack + ring_map['Fire'] }}k{{ ring_map['Fire'] }}
+                            {{ _atk_rolled }}k{{ _atk_kept }}{% if _atk_flat %} + {{ _atk_flat }}{% endif %}
                         </span>
                     </div>
                 </div>
                 <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                     <p class="font-medium mb-1">Attack (Fire)</p>
                     <p>Roll Attack + Fire to hit. TN to hit = 5 + 5 * defender's Parry skill. Extra damage die for every 5 points exceeding the TN.</p>
-                    <p class="mt-1 text-gold">You roll: {{ character.attack + ring_map['Fire'] }}k{{ ring_map['Fire'] }}</p>
+                    <p class="mt-1 text-gold">You roll: {{ _atk_rolled }}k{{ _atk_kept }}{% if _atk_flat %} + {{ _atk_flat }}{% endif %}</p>
                 </div>
             </div>
+            {% set _par_f = roll_formulas.get('parry', {}) %}
+            {% set _par_rolled = _par_f.get('rolled', character.parry + ring_map['Air']) %}
+            {% set _par_kept   = _par_f.get('kept',   ring_map['Air']) %}
+            {% set _par_flat   = _par_f.get('flat',   0) %}
             <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative cursor-pointer hover:ring-2 hover:ring-accent/40"
                  data-roll-key="parry">
                 <div class="flex items-center justify-between gap-4">
@@ -2051,14 +2074,14 @@
                             {% endfor %}
                         </div>
                         <span class="text-sm text-ink/60">
-                            {{ character.parry + ring_map['Air'] }}k{{ ring_map['Air'] }}
+                            {{ _par_rolled }}k{{ _par_kept }}{% if _par_flat %} + {{ _par_flat }}{% endif %}
                         </span>
                     </div>
                 </div>
                 <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                     <p class="font-medium mb-1">Parry (Air)</p>
                     <p>Roll Parry + Air to deflect an attack. TN = attacker's roll result. Your TN to be hit = 5 + 5 * Parry. Declaring parry before attack roll grants a free raise.</p>
-                    <p class="mt-1 text-gold">You roll: {{ character.parry + ring_map['Air'] }}k{{ ring_map['Air'] }}. Your TN to be hit: {{ 5 + 5 * character.parry }}</p>
+                    <p class="mt-1 text-gold">You roll: {{ _par_rolled }}k{{ _par_kept }}{% if _par_flat %} + {{ _par_flat }}{% endif %}. Your TN to be hit: {{ 5 + 5 * character.parry }}</p>
                 </div>
             </div>
             {% if char_knacks %}

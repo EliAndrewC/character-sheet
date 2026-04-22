@@ -565,6 +565,7 @@ also wait for the post-update DOM to settle.
 - [x] 5th Dan lowest 3 dice on skill rolls -> `test_school_abilities.py::test_shosuro_5th_dan_lowest_3_dice`
 - [x] 5th Dan lowest 3 dice on attack rolls (pre-roll note + result breakdown) -> `test_school_abilities.py::test_shosuro_5th_dan_attack_lowest_3_dice`
 - [x] 5th Dan lowest 3 dice on wound check rolls (pre-roll note + result breakdown) -> `test_school_abilities.py::test_shosuro_5th_dan_wound_check_lowest_3_dice`
+- [x] Special Ability folds +acting rolled dice (and 10k10 cap) into sheet Attack / Parry / Wound Check XkY summaries -> `test_school_abilities.py::test_shosuro_special_ability_in_sheet_rolls`
 
 ### Shugenja (skipped - school disabled)
 
@@ -794,6 +795,36 @@ also wait for the post-update DOM to settle.
 - [x] Earned XP field updates budget → `test_editor_controls.py::test_earned_xp_updates_budget`
 - [x] Notes textarea saves → `test_editor_controls.py::test_notes_saves`
 - [x] Save status shows "Saved" → `test_editor_controls.py::test_save_status_indicator`
+
+## Character Editor — Name Generator (edit.html)
+
+- [x] Dice icon visible next to Name field → `test_name_generator.py::test_generator_icon_visible`
+- [x] Modal opens showing a random name + explanation (male by default) → `test_name_generator.py::test_modal_opens_with_a_name_and_explanation`
+- [x] Cancel button closes the modal → `test_name_generator.py::test_modal_closes_on_cancel`
+- [x] Escape key closes the modal → `test_name_generator.py::test_modal_closes_on_escape`
+- [x] Reroll icon produces a different name → `test_name_generator.py::test_reroll_changes_the_name`
+- [x] Switching gender refetches from the correct endpoint → `test_name_generator.py::test_switching_to_female_refetches_from_female_endpoint`
+- [x] "Use this name" with "New Character" placeholder replaces entire field → `test_name_generator.py::test_apply_replaces_default_placeholder_entirely`
+- [x] "Use this name" with empty field replaces entire field → `test_name_generator.py::test_apply_replaces_empty_field_entirely`
+- [x] "Use this name" with single-word name replaces entire field → `test_name_generator.py::test_apply_replaces_single_word_entirely`
+- [x] "Use this name" with "Family Personal" replaces only personal name → `test_name_generator.py::test_apply_replaces_only_personal_name_for_two_word_name`
+- [x] "Use this name" with "Family no House Personal" replaces only personal name → `test_name_generator.py::test_apply_replaces_only_personal_name_for_no_house_form`
+- [x] "Use this name" auto-opens the explanation modal pre-populated with the generated text → `test_name_generator.py::test_apply_auto_opens_explanation_modal`
+
+## Character Editor — Name Explanation (edit.html)
+
+- [x] Note icon visible next to Name field → `test_name_explanation.py::test_explanation_icon_visible`
+- [x] Modal shows the intro prompt text + empty textarea for a new character → `test_name_explanation.py::test_modal_opens_with_intro_text_and_empty_textarea`
+- [x] Cancel button closes the modal → `test_name_explanation.py::test_modal_closes_on_cancel`
+- [x] Escape key closes the modal → `test_name_explanation.py::test_modal_closes_on_escape`
+- [x] Cancel discards unsaved textarea edits → `test_name_explanation.py::test_cancel_reverts_unsaved_edits`
+- [x] Save persists the explanation (survives page reload) → `test_name_explanation.py::test_save_persists_and_reloads`
+- [x] Icon switches to accent color once an explanation is saved → `test_name_explanation.py::test_icon_highlights_when_explanation_exists`
+
+## Character Sheet — Name Explanation Tooltip (sheet.html)
+
+- [x] Tooltip marker rendered + carries the explanation text → `test_name_explanation.py::test_sheet_shows_tooltip_icon_when_explanation_exists`
+- [x] No tooltip marker when the explanation is empty → `test_name_explanation.py::test_sheet_has_no_tooltip_icon_without_explanation`
 
 ## Character Editor — School Selection
 
@@ -1108,6 +1139,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `skills` | Skills +/- | `test_live_xp.py`, `test_editor_controls.py` |
 | `honor_rank_recognition` | Honor/Rank/Recognition controls | `test_live_xp.py`, `test_editor_controls.py`, `test_gm_awards.py` |
 | `gm_awards` | GM-awarded Rank/Recognition bonuses (modal, history, lock) | `test_gm_awards.py` |
+| `name_generator` | Random name generator, name explanation modal, and sheet tooltip | `test_name_generator.py`, `test_name_explanation.py` |
 | `responsive` | Responsive design sanity (overflow, hamburger, label widths) | `test_responsive.py` |
 | `advantages` | Advantage/disadvantage checkboxes | `test_live_xp.py`, `test_editor_controls.py` |
 | `exclusive_pairs` | Mutually exclusive pairs | `test_exclusive_pairs.py` |
