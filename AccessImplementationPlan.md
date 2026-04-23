@@ -23,14 +23,27 @@ with a login prompt for anonymous viewers.
 2. **Never persistent without permission.** Zero character state
    (VP, wounds, action dice, adventure state, conviction, precepts pool,
    banked bonuses) writes to the DB unless the viewer has edit access.
+   This includes side effects of rolls — e.g. rolling initiative
+   normally clears old action dice and resets per-round abilities; for
+   non-editors those changes happen in Alpine state only and reset on
+   refresh. The roll itself still computes and displays normally.
 3. **Always obvious.** Every roll result panel rendered for a viewer
    carries the red "read-only" banner with the appropriate message.
 4. **Server is authoritative.** Every mutation endpoint must reject
    non-editors on its own, independent of client-side gating.
-5. **Ally conviction + precepts-pool-as-ally stay gaming-group gated.**
-   These are party-wide features, not owner-only. A non-editor who IS
-   in the priest's gaming group is still the intended operator. See
-   open question Q1.
+5. **Ally conviction + precepts-pool-as-ally follow the rolling
+   character's edit gate.** These are party-wide features, so they are
+   NOT gated on edit access to the priest. Instead they are gated on
+   edit access to the character the viewer is rolling from: if the
+   viewer can edit that character and it shares a gaming group with the
+   priest, the spend persists to the priest. If the viewer cannot edit
+   the rolling character, the spend is local-only with the banner —
+   same treatment as VP and wounds. See Phase 7.
+6. **Hide controls that would no-op for non-editors.** Anything that
+   isn't a roll and would only short-circuit through the save shim
+   (e.g. "Reset Per-Adventure", admin/GM controls, the Edit button
+   itself) should be hidden for viewers, not shimmed. Don't render
+   what doesn't do anything.
 
 ## Current-state audit (summary)
 
@@ -41,9 +54,11 @@ with a login prompt for anonymous viewers.
   `POST /characters/{id}/track` (combat wounds, VP, action_dice,
   adventure_state, precepts_pool). `/track` already 403s non-editors.
 - `POST /characters/{id}/ally-conviction` and
-  `POST /characters/{id}/precepts-pool` are **gaming-group-gated, not
-  edit-gated** on purpose (party members consume the priest's
-  resources). Leave untouched pending Q1.
+  `POST /characters/{id}/precepts-pool` are **gaming-group-gated**
+  today. Phase 7 tightens them: the caller must also have edit access
+  to a character in the priest's gaming group (i.e. the rolling
+  character). Bare group membership is no longer sufficient; without
+  edit access the spend is local-only via the Phase 1 shim.
 - Many roll sub-UIs in `sheet.html` appear to be gated on
   `viewer_can_edit` today → those buttons don't render for viewers.
   Phase work will flip those to "render, call save() through the
@@ -59,15 +74,15 @@ introduce tests in their feature area; Phase 8 runs the full suite.
 ### Phase 1 — Infrastructure (no behavior change yet)
 
 - **Backend**
-  - Add `?return_to=` support to `/auth/login` and `/auth/callback`
+  - [x] Add `?return_to=` support to `/auth/login` and `/auth/callback`
     (session cookie or query-passthrough; reject non-same-origin).
-  - Pass `viewer_is_logged_in`, `owner_display_name`, and
+  - [x] Pass `viewer_is_logged_in`, `owner_display_name`, and
     `login_url_for_return_to_sheet` into the sheet template context.
     (`viewer_can_edit` already exists.)
 - **Frontend**
-  - Add Alpine state on the sheet's top-level component: `canEdit`,
+  - [x] Add Alpine state on the sheet's top-level component: `canEdit`,
     `isLoggedIn`, `ownerName`, `loginUrl`.
-  - Build a reusable banner partial
+  - [x] Build a reusable banner partial
     (`app/templates/character/partials/read_only_roll_banner.html`)
     that takes the three state flags and emits one of:
     - "You are not logged in, so void points and other effects of this
@@ -75,107 +90,156 @@ introduce tests in their feature area; Phase 8 runs the full suite.
       }}**, [please log in]({{ login_url }})."
     - "You don't have edit access to this character, so void points and
       other effects of this roll do not affect character stats."
-  - Include the partial on every roll-result panel on the sheet (attack,
+  - [x] Include the partial on every roll-result panel on the sheet (attack,
     damage, parry, wound check, skill roll, iaijutsu strike/focus,
     precepts draw, conviction consume, lucky reroll). Hidden when
     `canEdit` is true.
 - **Shim**
-  - Introduce a `save()` wrapper that short-circuits to
+  - [x] Introduce a `save()` wrapper that short-circuits to
     `Promise.resolve()` when `!canEdit`. No behavior change for editors.
 - **Tests**
-  - Unit: `/auth/login?return_to=/characters/42` round-trips correctly.
-  - Unit: sheet template renders `viewer_is_logged_in` + banner markup
+  - [x] Unit: `/auth/login?return_to=/characters/42` round-trips correctly.
+  - [x] Unit: sheet template renders `viewer_is_logged_in` + banner markup
     when appropriate.
-  - Clicktest: anon visitor loads a published sheet, the banner partial
+  - [x] Clicktest: anon visitor loads a published sheet, the banner partial
     is present in the DOM (hidden until a roll triggers it — can assert
     element exists with `x-show` attribute).
 
 ### Phase 2 — Action dice (initiative + spend + clear)
 
 - **Frontend**
-  - Un-gate Roll Initiative, Spend Die, Clear Action Dice, and any
+  - [x] Un-gate Roll Initiative, Spend Die, Clear Action Dice, and any
     per-die spend controls (double-attack, feint) so they render for
     viewers.
-  - All dice-state mutations (roll, spend, clear) update local Alpine
+  - [x] All dice-state mutations (roll, spend, clear) update local Alpine
     state and skip `save()` via the Phase 1 shim.
-  - Attack modal and initiative result panel render the read-only
+  - [x] Attack modal and initiative result panel render the read-only
     banner when `!canEdit`.
 - **Server**
-  - `/track` already 403s. Add a test that confirms it does for the
+  - [x] `/track` already 403s. Add a test that confirms it does for the
     action_dice field specifically (currently tested indirectly).
 - **Tests**
-  - Clicktest (new): anon rolls initiative → dice show → banner shows
+  - [x] Clicktest (new): anon rolls initiative → dice show → banner shows
     → refresh → dice are gone, original state unchanged.
-  - Clicktest (new): anon spends a die (double attack) → die marked
+  - [x] Clicktest (new): anon spends a die (double attack) → die marked
     spent locally → refresh → not spent.
-  - Clicktest (update): existing `rolls`-mark tests that assume
+  - [-] Clicktest (update): existing `rolls`-mark tests that assume
     `canEdit=True` may need parametrization or a separate file.
+    (No update needed - existing `rolls` tests all run under the `page`
+    admin fixture so `canEdit=True` holds; non-editor coverage lives in
+    `test_readonly_rolls.py` per option (1) above.)
 
 ### Phase 3 — Void points (regular + temp)
 
-- Un-gate VP +/- and "spend N void on this roll" controls.
-- Locally apply the VP delta during roll computation; do not persist.
-- Includes temp VP (Mantis Wave-Treader Worldliness).
-- **Tests:** non-editor viewer spends 2 VP on a skill roll, banner
-  shows, VP unchanged after refresh. Repeat for temp VP.
+- [x] Un-gate VP +/- and "spend N void on this roll" controls. (The
+  in-modal "spend N void" selectors and the rollMenu void options were
+  already not Jinja-gated; this reduced to removing the 4 tracking-panel
+  `{% if viewer_can_edit %}` blocks around the VP and Temp VP +/-.)
+- [x] Locally apply the VP delta during roll computation; do not persist.
+  (Inherited from the Phase 1 save shim: `deductVoidPoints` mutates
+  `_trackingBridge.voidPoints` and calls `t.save()`, which no-ops for
+  non-editors.)
+- [x] Includes temp VP (Mantis Wave-Treader Worldliness). (The temp-void
+  row is gated on `has_temp_void`, a template flag based on
+  `SCHOOLS_WITH_TEMP_VOID` - includes any school whose techniques mention
+  "temporary void" or whose knacks include feint. `akodo_bushi` -> has
+  feint -> has_temp_void=True, so the default test character already
+  exercises this path.)
+- **Tests:**
+  - [x] Non-editor viewer spends 2 VP on a skill roll, banner shows,
+    VP unchanged after refresh.
+  - [x] Repeat for temp VP.
 
 ### Phase 4 — Wound checks + wounds
 
-- Un-gate wound check buttons, "Take 1 Serious" / "Keep Light",
+- [ ] Un-gate wound check buttons, "Take 1 Serious" / "Keep Light",
   post-roll VP spend on WC, "Accept Result" applies wound check
   failure.
-- Local-only: LW/SW counters mutate in Alpine, never POSTed, banner
+- [ ] Local-only: LW/SW counters mutate in Alpine, never POSTed, banner
   shown on each WC result.
-- **Tests:** non-editor rolls WC, takes serious, wounds mutate locally;
-  refresh resets. Banner present.
+- **Tests:**
+  - [ ] Non-editor rolls WC, takes serious, wounds mutate locally;
+    refresh resets. Banner present.
 
 ### Phase 5 — Per-adventure consumables
 
-Covers every `adventure_state` key exercisable from a roll:
-
-- Lucky / Unlucky (reroll) — already consumable via `adventure_state`.
-- Akodo banked bonus (consume / undo).
-- Mantis 2nd Dan free-raise usage.
-- Priest's own conviction spend (not ally).
-- Adventure raises used.
-
-Treatment: un-gate the buttons, local-only state, banner. **No** reset
+Covers every `adventure_state` key exercisable from a roll. Treatment
+for each: un-gate the buttons, local-only state, banner. **No** reset
 per-adventure button for non-editors — it's not a roll.
 
-- **Tests:** one clicktest per consumable: non-editor exercises it,
-  banner shown, refresh resets counter.
+- [ ] Lucky / Unlucky (reroll) — already consumable via `adventure_state`.
+- [ ] Akodo banked bonus (consume / undo).
+- [ ] Mantis 2nd Dan free-raise usage.
+- [ ] Priest's own conviction spend (not ally).
+- [ ] Adventure raises used.
+- **Tests:**
+  - [ ] One clicktest per consumable above: non-editor exercises it,
+    banner shown, refresh resets counter.
 
 ### Phase 6 — Priest precepts pool (own priest)
 
 For the priest's OWN viewer (non-editor, logged in or not):
 
-- Un-gate "add pool die to this roll" UI.
-- Draw locally — pool count unchanged in DB.
-- Banner shown on the affected roll result.
-
-**Tests:** non-editor viewer uses 2 pool dice on an attack, attack
-shows the dice in the breakdown, banner shown, pool unchanged on
-refresh.
+- [ ] Un-gate "add pool die to this roll" UI.
+- [ ] Draw locally — pool count unchanged in DB.
+- [ ] Banner shown on the affected roll result.
+- **Tests:**
+  - [ ] Non-editor viewer uses 2 pool dice on an attack, attack shows
+    the dice in the breakdown, banner shown, pool unchanged on refresh.
 
 ### Phase 7 — Gaming-group interactions (cross-character)
 
-Pending Q1, this phase **either**:
+The gate for spending a priest's resources (ally conviction, priest's
+pool consumed by an ally) is the edit gate on the **rolling**
+character, not the priest. If the viewer has edit access to the
+character they're rolling from, and that character shares a gaming
+group with the priest, the server-side mutation persists and depletes
+the priest's resource. If they don't have edit access to the rolling
+character, the spend is local-only + banner, exactly like VP and
+wound state — they can burn the priest's notional 17 pool across 100
+test rolls with no real effect.
 
-- (a) Leaves `/ally-conviction` and cross-character precepts POSTs
-  alone. Party members who aren't the priest's editor still deplete
-  the priest's pool / conviction — because they're authorized by group
-  membership. The banner **does not** apply to these actions.
-- (b) Tightens: anyone without edit permission on the priest can use
-  the priest's pool / conviction locally on their own roll but does
-  not deplete the priest. Banner applies.
+- **Backend**
+  - [ ] Tighten `POST /characters/{id}/ally-conviction` and
+    `POST /characters/{id}/precepts-pool` to require that the caller
+    has edit access to a character in the target priest's gaming group.
+    Return 403 otherwise. Bare group membership is no longer enough.
+  - [ ] Accept the rolling character's ID on the request so the server
+    can verify both "this rolling char shares a group with the priest"
+    and "caller has edit access on the rolling char".
+- **Frontend**
+  - [ ] When `!canEdit` on the rolling character, route "spend ally
+    conviction" and "spend priest pool" through the Phase 1 save shim
+    so the priest's resource never depletes. Apply the banner to the
+    affected roll result.
+  - [ ] When `canEdit` on the rolling character, behavior is unchanged
+    (real depletion via the tightened endpoints above) — including the
+    case where the viewer has edit on their own character but NOT on
+    the priest.
+- **Tests**
+  - [ ] Unit: `/ally-conviction` 403s for a caller who is in the
+    priest's gaming group but has no edit access to any character in
+    that group (regression of tightened auth).
+  - [ ] Unit: `/precepts-pool` same regression.
+  - [ ] Unit: both endpoints still succeed when the caller has edit
+    access to a party-mate character but NOT to the priest.
+  - [ ] Clicktest: non-editor viewer of their own character spends ally
+    conviction on a skill roll → banner shown, priest's
+    `conviction_used` unchanged on refresh.
+  - [ ] Clicktest: non-editor viewer of their own character burns 5
+    priest-pool dice across multiple rolls → banner shown each time,
+    priest pool count unchanged on refresh.
+  - [ ] Clicktest (regression): editor of a party-mate character (not
+    the priest) spends ally conviction → priest's `conviction_used`
+    actually increments on refresh.
 
-Assume (a) is the default. Only implement (b) if Q1 says so.
+### Phase 8 — Full regression
 
-### Phase 8 — Full regression + deploy
+- [ ] Run full `pytest tests/e2e/ --browser chromium` once.
+- [ ] Update `COVERAGE.md` (new section + mark updates — see below).
 
-- Run full `pytest tests/e2e/ --browser chromium` once.
-- Update `COVERAGE.md` (new section + mark updates — see below).
-- Deploy to Fly.
+Deploy to Fly only when Eli explicitly asks. Same rule for any
+intermediate phase — do not deploy at phase boundaries.
 
 ## COVERAGE.md plan
 
@@ -236,53 +300,3 @@ After each phase's clicktests, run the owning feature area's existing
 mark (`-m tracking`, `-m rolls`, etc.) to confirm the editor path
 still works.
 
----
-
-## Questions for you
-
-**Q1 — Ally conviction / cross-character precepts pool**
-
-`POST /ally-conviction` and `POST /precepts-pool` today authorize on
-**gaming-group membership**, not edit permission, because that's the
-whole point: party members consume the priest's resources during
-combat. Two options:
-
-- **(a) Keep gaming-group model.** A party member who is in the
-  priest's group but NOT an editor on the priest CAN actually deplete
-  the priest's pool / conviction by clicking those buttons on their
-  own character's sheet. The read-only banner does NOT apply to these
-  actions. (Recommended — this matches the design intent.)
-- **(b) Tighten.** Only the priest's editor can truly deplete; everyone
-  else uses the priest's resources locally-only with the banner.
-
-Which do you want?
-
-**Q2 — Anon display name in the banner**
-
-"If you are **&lt;player name&gt;**, please log in." — use the
-owner's display name (same as shown in the "Player: X" line)? If the
-owner has never logged in (seeded user only), fall back to the
-character's `player_name` field.
-
-**Q3 — Login return_to for anon**
-
-After Discord OAuth from an anon sheet view, land the user back on the
-sheet they were viewing? (Any roll the anon was mid-flow gets lost —
-that's fine since nothing persisted.)
-
-**Q4 — Reset Per-Adventure button**
-
-Confirm: hide this button entirely for non-editors, rather than
-shimming it. It's not a roll; shimming provides no value.
-
-**Q5 — Phased deploys**
-
-Deploy at the end of each phase, or just a single deploy after Phase
-8? Single deploy is simpler; phased gives the campaign early value on
-the initiative fix but risks intermediate UI inconsistencies.
-
-**Q6 — Scope check: is there any roll that should stay editor-only?**
-
-E.g. the "Ready for next adventure" reset? Admin overrides on GM-award
-modals? I'd say anything that isn't a dice roll is out of scope for
-this work (those already have their own permission gates).

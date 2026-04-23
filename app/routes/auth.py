@@ -27,8 +27,20 @@ def _get_redirect_uri(request: Request) -> str:
     return f"{scheme}://{host}/auth/callback"
 
 
+def _sanitize_return_to(value: str) -> str:
+    """Only accept same-origin absolute paths - e.g. /characters/42.
+
+    Rejects absolute URLs, protocol-relative (//...), and anything that
+    doesn't start with a single slash. This prevents open-redirect
+    attacks via ?return_to=https://evil.example.
+    """
+    if not value or not value.startswith("/") or value.startswith("//"):
+        return ""
+    return value
+
+
 @router.get("/login")
-def login(request: Request):
+def login(request: Request, return_to: str = ""):
     """Redirect to Discord OAuth2 authorization page."""
     client_id = os.environ.get("DISCORD_CLIENT_ID", "")
     if not client_id:
@@ -45,6 +57,12 @@ def login(request: Request):
     }
     response = RedirectResponse(f"{DISCORD_AUTHORIZE_URL}?{urlencode(params)}")
     response.set_cookie("oauth_state", state, httponly=True, max_age=300, samesite="lax")
+    safe_return_to = _sanitize_return_to(return_to)
+    if safe_return_to:
+        response.set_cookie(
+            "oauth_return_to", safe_return_to,
+            httponly=True, max_age=300, samesite="lax",
+        )
     return response
 
 
@@ -120,13 +138,15 @@ async def callback(request: Request, code: str = "", state: str = "", db: DBSess
     db.add(auth_session)
     db.commit()
 
-    response = RedirectResponse("/", status_code=303)
+    return_to = _sanitize_return_to(request.cookies.get("oauth_return_to", ""))
+    response = RedirectResponse(return_to or "/", status_code=303)
     response.set_cookie(
         "session_id", session_id,
         httponly=True, max_age=60 * 60 * 24 * 30,  # 30 days
         samesite="lax", secure=True,
     )
     response.delete_cookie("oauth_state")
+    response.delete_cookie("oauth_return_to")
     return response
 
 

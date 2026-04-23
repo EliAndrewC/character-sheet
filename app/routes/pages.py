@@ -705,6 +705,8 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "effective": effective,
             "skill_rolls": skill_rolls,
             "viewer_can_edit": viewer_can_edit,
+            "viewer_is_logged_in": user is not None,
+            "login_url_for_return_to_sheet": f"/auth/login?return_to=/characters/{char_id}",
             "versions": versions,
             "owner_display_name": (owner.display_name or owner.discord_name) if owner else character.player_name,
             "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,

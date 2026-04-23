@@ -1938,6 +1938,31 @@ class TestTrackState:
         )
         assert resp.status_code == 403
 
+    def test_track_rejects_non_editor_action_dice(self, client):
+        """Read-only roll mode Phase 2: non-editor rolls initiative in the
+        browser and Alpine state updates locally, but the save shim must
+        not round-trip to /track. If it did (e.g. the shim regressed),
+        this endpoint is the last line of defense - confirm it 403s on
+        the action_dice field specifically, not just wounds."""
+        from app.models import User
+        session = client._test_session_factory()
+        session.add(User(discord_id="999", discord_name="owner", display_name="Owner"))
+        session.commit()
+        cid = _seed_character(
+            client, name="Action Dice Permission",
+            owner_discord_id="999",
+            action_dice=[{"value": 9, "spent": False}],
+        )
+        dice = [{"value": 1, "spent": True}, {"value": 2, "spent": True}]
+        resp = client.post(
+            f"/characters/{cid}/track",
+            json={"action_dice": dice},
+            headers={"X-Test-User": "test_user_1:Test User 1"},
+        )
+        assert resp.status_code == 403
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.action_dice == [{"value": 9, "spent": False}]
+
     def test_track_action_dice_set(self, client):
         cid = _seed_character(client, name="Action Dice Test")
         dice = [
@@ -3958,3 +3983,116 @@ class TestMakeDraftVisibleButton:
         resp = client.text if False else client.get(f"/characters/{cid}/edit").text
         # Tooltip mentions both editors-only and how to share
         assert "Make this draft visible" in resp or "make this draft visible" in resp.lower()
+
+
+class TestReadOnlyRollBannerContext:
+    """Phase 1 of the read-only roll mode: the sheet template must carry
+    the Alpine flags (canEdit / isLoggedIn) and emit the banner partial
+    for non-editors only. Editors get no banner at all; anon vs
+    logged-in non-editors get different copy."""
+
+    def _make_public_char(self, client):
+        session = client._test_session_factory()
+        from app.models import User
+        session.add(User(
+            discord_id="183026066498125825",
+            discord_name="eli",
+            display_name="Eli",
+        ))
+        char = Character(
+            name="Sheet For Readonly Tests",
+            school="akodo_bushi",
+            school_ring_choice="Water",
+            ring_water=3,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            owner_discord_id="183026066498125825",
+            is_published=True,
+            is_hidden=False,
+        )
+        session.add(char)
+        session.commit()
+        return char.id
+
+    def _anon_client(self, engine):
+        from fastapi.testclient import TestClient
+        from sqlalchemy.orm import sessionmaker
+        from app.database import get_db
+        from app.main import app
+        conn = engine.connect()
+        tx = conn.begin()
+        TestSession = sessionmaker(bind=conn)
+        def _override():
+            s = TestSession()
+            try: yield s
+            finally: s.close()
+        app.dependency_overrides[get_db] = _override
+        c = TestClient(app)
+        c._test_session_factory = TestSession
+        c._cleanup = (tx, conn)
+        return c
+
+    def test_editor_does_not_see_banner(self, client):
+        """The default test client is the owner/admin — no banner."""
+        cid = self._make_public_char(client)
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-testid="readonly-roll-banner"' not in resp.text
+
+    def test_editor_alpine_flag_true(self, client):
+        cid = self._make_public_char(client)
+        resp = client.get(f"/characters/{cid}")
+        # trackingData() carries canEdit so save() knows whether to POST
+        assert "canEdit: true" in resp.text
+
+    def test_non_editor_sees_no_edit_copy(self, client):
+        """A logged-in whitelisted non-admin sees the 'no edit access' banner."""
+        cid = self._make_public_char(client)
+        resp = client.get(
+            f"/characters/{cid}",
+            headers={"X-Test-User": "test_user_1:NonEditor"},
+        )
+        assert resp.status_code == 200
+        assert 'data-testid="readonly-roll-banner"' in resp.text
+        assert "don't have edit access" in resp.text
+        # Must NOT include the anonymous login-prompt copy
+        assert "not logged in" not in resp.text.lower()
+
+    def test_non_editor_alpine_flags(self, client):
+        cid = self._make_public_char(client)
+        resp = client.get(
+            f"/characters/{cid}",
+            headers={"X-Test-User": "test_user_1:NonEditor"},
+        )
+        assert "canEdit: false" in resp.text
+        assert "isLoggedIn: true" in resp.text
+
+    def test_anon_sees_login_prompt_with_owner_name(self, engine):
+        c = self._anon_client(engine)
+        try:
+            cid = self._make_public_char(c)
+            resp = c.get(f"/characters/{cid}")
+            assert resp.status_code == 200
+            assert 'data-testid="readonly-roll-banner"' in resp.text
+            assert "not logged in" in resp.text
+            assert "Eli" in resp.text  # owner display name
+            # Login link carries return_to pointing at this sheet
+            assert f"/auth/login?return_to=/characters/{cid}" in resp.text
+        finally:
+            c._cleanup[0].rollback()
+            c._cleanup[1].close()
+            from app.main import app
+            app.dependency_overrides.clear()
+
+    def test_anon_alpine_flags(self, engine):
+        c = self._anon_client(engine)
+        try:
+            cid = self._make_public_char(c)
+            resp = c.get(f"/characters/{cid}")
+            assert "canEdit: false" in resp.text
+            assert "isLoggedIn: false" in resp.text
+            assert f'"/auth/login?return_to=/characters/{cid}"' in resp.text
+        finally:
+            c._cleanup[0].rollback()
+            c._cleanup[1].close()
+            from app.main import app
+            app.dependency_overrides.clear()
