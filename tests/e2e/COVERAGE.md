@@ -1362,6 +1362,49 @@ JS-error sanity:
 
 ---
 
+## Read-only Roll Mode (sheet.html for viewers)
+
+Rolls work for viewers without edit access, but nothing persists. A red
+banner renders inside every roll-result panel for non-editors. Phase 1
+builds the infrastructure; Phases 2-7 un-gate each roll category.
+
+- [x] Editor sees no banner in the DOM at all ->
+      `test_readonly_rolls.py::test_editor_sees_no_banner_anywhere`
+- [x] Anonymous visitor: banner partial rendered per roll-result panel,
+      all copies hidden (inside x-show/x-cloak'd modal bodies) ->
+      `test_readonly_rolls.py::test_anon_sees_banner_hidden_in_dom`
+- [x] Anonymous banner carries a login link with return_to pointing at
+      the current sheet, plus "not logged in" copy ->
+      `test_readonly_rolls.py::test_anon_banner_carries_login_link`
+- [x] Logged-in non-editor: banner renders with "don't have edit access"
+      copy and NO login link inside the banner ->
+      `test_readonly_rolls.py::test_non_editor_sees_banner_hidden_in_dom`
+
+### Phase 2 - action dice
+
+- [x] Anon rolls initiative → action dice panel visible locally, banner
+      visible inside it, refresh clears everything (no /track POST) ->
+      `test_readonly_rolls.py::test_anon_rolls_initiative_no_persist`
+- [x] Anon opens per-die menu + marks a die spent → local state flips,
+      refresh has no dice at all ->
+      `test_readonly_rolls.py::test_anon_spends_action_die_no_persist`
+- [x] Server regression: /track 403s on action_dice field specifically
+      for a non-editor (backend last line of defense) ->
+      `tests/test_routes.py::TestTrackState::test_track_rejects_non_editor_action_dice`
+
+### Phase 3 - void points
+
+- [x] Non-editor spends 2 VP on an attack roll: VP decrements locally,
+      banner visible on result, refresh restores original VP ->
+      `test_readonly_rolls.py::test_non_editor_spends_vp_on_attack_no_persist`
+- [x] Non-editor decrements temp VP via the tracking panel's - button,
+      refresh restores the seeded value ->
+      `test_readonly_rolls.py::test_non_editor_spends_temp_vp_no_persist`
+
+Phase 4+ test coverage will land in this same file as each phase ships.
+
+---
+
 ## Coverage Summary
 
 **Covered:** ~280 test functions across 32 test files

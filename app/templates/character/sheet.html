@@ -416,6 +416,7 @@
                     <button type="button" @click="close()"
                             class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
                 </div>
+                {% include 'character/partials/read_only_roll_banner.html' %}
 
                 {# PRE-ROLL phase #}
                 <div x-show="ffPhase === 'pre'" x-cloak class="space-y-4">
@@ -562,6 +563,13 @@
                 _charId: {{ character.id }},
                 _saving: false,
                 showResetModal: false,
+                // Read-only roll mode: when canEdit is false, every save()
+                // short-circuits so nothing persists. Banner copy and the
+                // login link come from the same flags.
+                canEdit: {{ 'true' if viewer_can_edit else 'false' }},
+                isLoggedIn: {{ 'true' if viewer_is_logged_in else 'false' }},
+                ownerName: {{ (owner_display_name or '')|tojson }},
+                loginUrl: {{ login_url_for_return_to_sheet|tojson }},
 
                 // Roll formulas parsed from the same JSON blob diceRoller()
                 // loads later. The per-action-die menu's x-if gates for
@@ -581,6 +589,15 @@
                 })(),
 
                 async save() {
+                    // Read-only viewers get an in-memory shim: no POST, but
+                    // the Impaired indicator still fires so local wound-state
+                    // changes refresh the rest of the UI.
+                    if (!this.canEdit) {
+                        window.dispatchEvent(new CustomEvent('wound-changed', {
+                            detail: { serious: this.seriousWounds }
+                        }));
+                        return;
+                    }
                     if (this._saving) return;
                     this._saving = true;
                     // Notify the Impaired indicator so it updates reactively
@@ -1213,33 +1230,27 @@
                     {% endif %}
                 </div>
                 <div class="flex items-center gap-2">
-                    {% if viewer_can_edit %}
                     <button @click="voidPoints = Math.max(0, voidPoints - 1); save()"
                             :disabled="voidPoints <= 0"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
-                    {% endif %}
                     <span class="text-lg font-bold w-8 text-center" x-text="voidPoints"></span>
-                    {% if viewer_can_edit %}
                     <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); save()"
                             :disabled="voidPoints >= voidMax"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">+</button>
-                    {% endif %}
                 </div>
             </div>
             {% if has_temp_void %}
-            <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center justify-between gap-4" data-testid="temp-void-row">
                 <div class="text-sm text-ink/60">Temp Void</div>
                 <div class="flex items-center gap-2">
-                    {% if viewer_can_edit %}
                     <button @click="tempVoidPoints = Math.max(0, tempVoidPoints - 1); save()"
                             :disabled="tempVoidPoints <= 0"
+                            data-action="temp-vp-minus"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
-                    {% endif %}
                     <span class="text-lg font-bold w-8 text-center" x-text="tempVoidPoints"></span>
-                    {% if viewer_can_edit %}
                     <button @click="tempVoidPoints++; save()"
+                            data-action="temp-vp-plus"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
-                    {% endif %}
                 </div>
             </div>
             {% endif %}
@@ -1542,24 +1553,26 @@
         </div>
 
         <!-- Actions + Per-Adventure Abilities (right column) -->
-        {% if per_adventure or viewer_can_edit or action_dice %}
+        {# Right column always renders: non-editors need a DOM home for
+           action dice after rolling initiative, even when per_adventure
+           is empty on the stored character. Inner x-show guards keep
+           the column visually empty until content exists. #}
         <div class="flex-1 min-w-0">
             <!-- Action dice (shown after initiative is rolled, hidden after Clear) -->
             <div x-show="actionDice.length > 0" x-cloak class="mb-6"
                  data-testid="action-dice-section">
+                {% include 'character/partials/read_only_roll_banner.html' %}
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide">Actions</h3>
-                    {% if viewer_can_edit %}
                     <button type="button" @click="clearActionDice()"
                             data-action="clear-action-dice"
                             class="text-xs text-ink/50 hover:text-accent">Clear</button>
-                    {% endif %}
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <template x-for="(die, i) in actionDice" :key="i">
                         <div class="relative">
                             <button type="button"
-                                    {% if viewer_can_edit %}@click="toggleActionMenu(i)"{% endif %}
+                                    @click="toggleActionMenu(i)"
                                     data-action="action-die"
                                     :data-die-index="i"
                                     :data-die-spent="die.spent ? 'true' : 'false'"
@@ -1590,14 +1603,15 @@
                                           x-text="die.value"></text>
                                 </svg>
                             </button>
-                            {% if viewer_can_edit %}
                             {# Per-die action menu. Unspent dice can pay
                                for any action they're eligible to pay for;
                                athletics-only dice (Togashi special) are
                                restricted to athletics variants. Each
                                parry/feint row carries a void-spend flyout
                                because those rolls are executed directly
-                               rather than through the attack modal. #}
+                               rather than through the attack modal. Non-
+                               editors reach all the same actions; the
+                               Phase 1 save shim keeps them client-local. #}
                             <div x-show="actionMenuOpen === i" x-cloak
                                  @click.outside="if (actionMenuOpen === i) { actionMenuOpen = null; actionMenuHoverRow = null; }"
                                  class="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm whitespace-nowrap min-w-[200px]">
@@ -1823,7 +1837,6 @@
                                     </div>
                                 </template>
                             </div>
-                            {% endif %}
                         </div>
                     </template>
                 </div>
@@ -2018,7 +2031,6 @@
             {% endif %}
             {% endif %} {# end: if per_adventure #}
         </div>
-        {% endif %}
         </div> {# close flex flex-col md:flex-row #}
     </section>
 
@@ -2895,6 +2907,7 @@
                     <button type="button" @click="wcModalOpen = false"
                             class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
                 </div>
+                {% include 'character/partials/read_only_roll_banner.html' %}
 
                 {# ── PRE-ROLL: probability table + void selection ── #}
                 <div x-show="wcPhase === 'pre'" class="space-y-4">
@@ -3522,6 +3535,7 @@
                     <button type="button" @click="atkModalOpen = false"
                             class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
                 </div>
+                {% include 'character/partials/read_only_roll_banner.html' %}
 
                 {# ── PRE-ROLL ── #}
                 <div x-show="atkPhase === 'pre'" class="space-y-4">
@@ -4521,6 +4535,7 @@
                     <button type="button" @click="duelOpen = false"
                             class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
                 </div>
+                {% include 'character/partials/read_only_roll_banner.html' %}
 
                 {# ── SETUP ── #}
                 <div x-show="duelPhase === 'setup'" class="space-y-4">

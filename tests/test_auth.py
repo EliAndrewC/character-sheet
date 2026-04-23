@@ -346,6 +346,35 @@ class TestLoginRoute:
         assert resp.status_code == 307
         assert "https%3A%2F%2Fexample.com%2Fauth%2Fcallback" in resp.headers["location"]
 
+    def test_login_stashes_safe_return_to(self, client, monkeypatch):
+        """A safe same-origin return_to is stored in a cookie for the callback."""
+        monkeypatch.setenv("DISCORD_CLIENT_ID", "fake_client_id")
+        resp = client.get(
+            "/auth/login?return_to=/characters/42", follow_redirects=False
+        )
+        assert resp.status_code == 307
+        # Cookie values containing "/" are quoted on the wire; strip before comparing.
+        assert resp.cookies.get("oauth_return_to", "").strip('"') == "/characters/42"
+
+    def test_login_rejects_absolute_url_return_to(self, client, monkeypatch):
+        """return_to pointing at another origin must not be stashed."""
+        monkeypatch.setenv("DISCORD_CLIENT_ID", "fake_client_id")
+        resp = client.get(
+            "/auth/login?return_to=https://evil.example/steal",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 307
+        assert "oauth_return_to" not in resp.cookies
+
+    def test_login_rejects_protocol_relative_return_to(self, client, monkeypatch):
+        """//evil.example is protocol-relative - browsers treat it as absolute."""
+        monkeypatch.setenv("DISCORD_CLIENT_ID", "fake_client_id")
+        resp = client.get(
+            "/auth/login?return_to=//evil.example/x", follow_redirects=False
+        )
+        assert resp.status_code == 307
+        assert "oauth_return_to" not in resp.cookies
+
 
 class _FakeHttpResponse:
     def __init__(self, status_code, json_data=None):
@@ -461,6 +490,40 @@ class TestCallbackRoute:
         created = session.query(User).filter(User.discord_id == "183026066498125825").first()
         assert created is not None
         assert created.discord_name == "eli"
+
+    def test_happy_path_honors_safe_return_to_cookie(self, client, monkeypatch):
+        """After login, a valid return_to cookie redirects the user back to that path."""
+        self._setup_credentials(monkeypatch)
+        self._patch_httpx(
+            monkeypatch,
+            token_resp=_FakeHttpResponse(200, {"access_token": "tok"}),
+            user_resp=_FakeHttpResponse(
+                200, {"id": "183026066498125825", "username": "eli"}
+            ),
+        )
+        client.cookies.set("oauth_state", "st")
+        client.cookies.set("oauth_return_to", "/characters/42")
+        resp = client.get("/auth/callback?code=ok&state=st", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/characters/42"
+        # Cookie cleared so a later login without return_to doesn't reuse it
+        assert resp.cookies.get("oauth_return_to") in (None, "")
+
+    def test_happy_path_ignores_unsafe_return_to_cookie(self, client, monkeypatch):
+        """An absolute-URL return_to cookie must not leak the user off-site."""
+        self._setup_credentials(monkeypatch)
+        self._patch_httpx(
+            monkeypatch,
+            token_resp=_FakeHttpResponse(200, {"access_token": "tok"}),
+            user_resp=_FakeHttpResponse(
+                200, {"id": "183026066498125825", "username": "eli"}
+            ),
+        )
+        client.cookies.set("oauth_state", "st")
+        client.cookies.set("oauth_return_to", "https://evil.example/steal")
+        resp = client.get("/auth/callback?code=ok&state=st", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
 
     def test_happy_path_updates_existing_user(self, client, monkeypatch):
         """If a user already exists, their discord_name is updated but no duplicate row is made."""

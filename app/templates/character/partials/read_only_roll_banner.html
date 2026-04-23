@@ -1,0 +1,29 @@
+{# Read-only roll banner.
+
+    Rendered inside every roll-result panel. Only emits markup when the
+    viewer cannot edit, so the panel is empty of banner content for
+    editors. Two copies:
+
+    - Anon: explains the read-only state and prompts login if they are
+      the character's owner.
+    - Logged-in non-editor: explains the read-only state without a
+      login prompt.
+
+    Visibility otherwise follows the enclosing panel (which already
+    x-show's based on whether there is a roll result to display).
+#}
+{% if not viewer_can_edit %}
+<div class="bg-red-50 border border-red-300 text-red-900 rounded px-3 py-2 text-sm mt-2"
+     data-testid="readonly-roll-banner">
+    {% if viewer_is_logged_in %}
+    You don't have edit access to this character, so void points and
+    other effects of this roll do not affect character stats.
+    {% else %}
+    You are not logged in, so void points and other effects of this
+    roll do not affect character stats.{% if owner_display_name %} If
+    you are <strong>{{ owner_display_name }}</strong>,
+    <a href="{{ login_url_for_return_to_sheet }}"
+       class="underline font-medium">please log in</a>.{% endif %}
+    {% endif %}
+</div>
+{% endif %}
