@@ -76,13 +76,10 @@ def _refresh(client, char_id: int) -> Character:
 
 
 @pytest.fixture(autouse=True)
-def _clear_staging_registry():
-    """Each test runs against a fresh staging registry."""
-    with art_jobs._LOCK:
-        art_jobs._STAGED.clear()
+def _clear_staging_registry(tmp_path, monkeypatch):
+    """Each test runs against a fresh on-disk staging registry."""
+    monkeypatch.setenv("STAGED_ART_DIR", str(tmp_path / "staged_art"))
     yield
-    with art_jobs._LOCK:
-        art_jobs._STAGED.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -1291,19 +1288,6 @@ class TestUpdateStagedBytes:
         assert updated.source == "generated"
 
 
-class TestStagingRegistryTTL:
-    def test_reaper_drops_expired_entries(self):
-        from datetime import datetime, timedelta, timezone
-        sid = art_jobs.stage_art(
-            user_id="u1", char_id=1, full_bytes=b"x", width=256, height=256,
-        )
-        # Force-expire it
-        with art_jobs._LOCK:
-            art_jobs._STAGED[sid].created_at = (
-                datetime.now(timezone.utc) - art_jobs.STAGING_TTL - timedelta(seconds=1)
-            )
-        # Any call to stage_art/get_staged triggers the reaper
-        assert art_jobs.get_staged(sid) is None
-
+class TestStagingRegistryHousekeeping:
     def test_clear_staged_is_a_noop_for_unknown_id(self):
         art_jobs.clear_staged("does-not-exist")  # must not raise

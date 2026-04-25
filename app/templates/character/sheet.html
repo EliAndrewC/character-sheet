@@ -1096,30 +1096,23 @@
                 <div class="flex items-center justify-between gap-4">
                     <div class="text-sm text-ink/60">Light Wounds</div>
                     <div class="flex items-center gap-2">
-                        {% if viewer_can_edit %}
                         <button x-show="lightWounds > 0" x-cloak
                                 @click="$dispatch('open-wound-check')"
                                 data-action="roll-wound-check"
                                 class="text-xs bg-accent/10 hover:bg-accent/20 text-accent font-medium px-2 py-1 rounded transition-colors">
                             WC
                         </button>
-                        {% endif %}
-                        {% if viewer_can_edit %}
                         <button @click="lwMinusMenu = !lwMinusMenu"
                                 :disabled="lightWounds <= 0"
                                 data-action="lw-minus"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
-                        {% endif %}
                         <span class="text-lg font-bold w-8 text-center" x-text="lightWounds"></span>
-                        {% if viewer_can_edit %}
                         <button @click="lwPlusModal = true"
                                 data-action="lw-plus"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
-                        {% endif %}
                     </div>
                 </div>
 
-                {% if viewer_can_edit %}
                 <!-- Minus dropdown menu -->
                 <div x-show="lwMinusMenu" x-cloak @click.outside="lwMinusMenu = false"
                      class="absolute left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm w-48">
@@ -1202,21 +1195,16 @@
                         </div>
                     </div>
                 </div>
-                {% endif %}
             </div>
             <div class="flex items-center justify-between gap-4">
                 <div class="text-sm text-ink/60">Serious Wounds</div>
                 <div class="flex items-center gap-2">
-                    {% if viewer_can_edit %}
                     <button @click="seriousWounds = Math.max(0, seriousWounds - 1); save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } }))"
                             :disabled="seriousWounds <= 0"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
-                    {% endif %}
                     <span class="text-lg font-bold w-8 text-center" x-text="seriousWounds"></span>
-                    {% if viewer_can_edit %}
                     <button @click="seriousWounds++; save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } }))"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
-                    {% endif %}
                 </div>
             </div>
             <div class="flex items-center justify-between gap-4">
@@ -1901,15 +1889,12 @@
                             ({{ school_abilities.get('priest_precepts_pool_size', 0) }} dice)
                         </span>
                     </h3>
-                    {% if viewer_can_edit %}
                     <button type="button"
                             x-show="preceptsPool.length > 0"
                             @click="clearPreceptsPool()"
                             data-action="clear-precepts-pool"
                             class="text-xs text-ink/50 hover:text-accent">Clear</button>
-                    {% endif %}
                 </div>
-                {% if viewer_can_edit %}
                 <button type="button"
                         x-show="preceptsPool.length === 0"
                         @click="rollPreceptsPool()"
@@ -1921,7 +1906,6 @@
                         class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
                     Generate dice pool
                 </button>
-                {% endif %}
                 <div id="dice-animation-precepts"
                      x-show="preceptsPool.length === 0"
                      class="min-h-0 flex flex-wrap gap-2 mt-1"></div>
@@ -1954,7 +1938,6 @@
                 <div class="flex items-center justify-between gap-4">
                     <span class="text-sm font-medium">{{ ability.name }}</span>
                     <div class="flex items-center gap-2">
-                        {% if viewer_can_edit %}
                         {% if ability.per_day %}
                         <button @click="resetAbility('{{ ability.id }}')"
                                 :disabled="getCount('{{ ability.id }}') <= 0"
@@ -1965,14 +1948,11 @@
                         <button @click="setCount('{{ ability.id }}', Math.min({{ ability.max }}, getCount('{{ ability.id }}') + 1))"
                                 :disabled="getCount('{{ ability.id }}') >= {{ ability.max }}"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
-                        {% endif %}
                         <span class="text-sm font-bold w-16 text-center"
                               x-text="({{ ability.max }} - getCount('{{ ability.id }}')) + ' / {{ ability.max }}'"></span>
-                        {% if viewer_can_edit %}
                         <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
                                 :disabled="getCount('{{ ability.id }}') <= 0"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
-                        {% endif %}
                     </div>
                 </div>
                 {% elif ability.type == 'toggle' %}
@@ -1982,14 +1962,14 @@
                         <span x-text="getToggle('{{ ability.id }}') ? '{{ ability.name }}: used' : '{{ ability.name }}: unused'"
                               :class="getToggle('{{ ability.id }}') ? 'text-red-700 font-medium' : 'text-green-700 font-medium'"
                               class="text-xs"></span>
-                        {% if viewer_can_edit %}
                         <button x-show="!getToggle('{{ ability.id }}')"
                                 @click="setToggle('{{ ability.id }}', true)"
+                                data-action="toggle-{{ ability.id }}-on"
                                 class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded">Mark as used</button>
                         <button x-show="getToggle('{{ ability.id }}')" x-cloak
                                 @click="setToggle('{{ ability.id }}', false)"
+                                data-action="toggle-{{ ability.id }}-off"
                                 class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded">Undo</button>
-                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -7651,10 +7631,21 @@
                 this.preceptsPoolMenuOpen = null;
             },
             _postPreceptsPoolReplace(priestId, pool) {
+                // Phase 7 read-only shim: non-editors of the rolling
+                // character never persist cross-character pool swaps.
+                // The in-modal swap UI still updates local Alpine
+                // state; the banner on the affected roll result
+                // explains that the priest's resource isn't actually
+                // depleted.
+                const t = window._trackingBridge;
+                if (!t || !t.canEdit) return;
                 fetch('/characters/' + priestId + '/precepts-pool', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ pool }),
+                    body: JSON.stringify({
+                        pool,
+                        rolling_character_id: t._charId,
+                    }),
                 }).catch(() => { /* best-effort */ });
             },
 
@@ -7709,12 +7700,25 @@
                 return Object.values(this.priestAllySpentThisRoll).reduce((a, b) => a + b, 0);
             },
             _postPriestAllyDelta(priestId, delta) {
-                // Update the priest's persisted conviction_used counter. The
-                // endpoint validates that caller is in the same gaming group.
+                // Phase 7 read-only shim: non-editors of the rolling
+                // character never persist cross-character conviction
+                // spends. The local spent-this-roll counter still
+                // changes so the roll total and the banner reflect a
+                // notional spend.
+                const t = window._trackingBridge;
+                if (!t || !t.canEdit) return;
+                // Update the priest's persisted conviction_used counter.
+                // The endpoint now validates that the caller has edit
+                // access on the rolling character (passed as
+                // rolling_character_id) and that the rolling character
+                // shares the priest's gaming group.
                 fetch(`/characters/${priestId}/ally-conviction`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({delta}),
+                    body: JSON.stringify({
+                        delta,
+                        rolling_character_id: t._charId,
+                    }),
                 }).catch(() => { /* best-effort; UI already decremented locally */ });
             },
             raisesRemainingAdventure() {

@@ -329,3 +329,63 @@ class TestStartupThreadSweep:
         main._sweep_art_orphans("bucket-x", "us-east-1")
         assert "Art orphan cleanup failed" in main.backup_status["last_error"]
         assert "permissions error" in main.backup_status["last_error"]
+
+
+class TestSweepStagedArt:
+    def test_calls_cleanup_with_24h_cutoff(self, monkeypatch):
+        """``_sweep_staged_art`` calls ``art_jobs.cleanup_older_than``
+        with a cutoff ~24h in the past. We assert on the cutoff being
+        in the right window rather than an exact value, so the test
+        doesn't get flaky on slow CI."""
+        from datetime import datetime, timedelta, timezone
+        from app import main
+
+        captured = {}
+
+        def fake_cleanup(cutoff):
+            captured["cutoff"] = cutoff
+            return 3
+
+        monkeypatch.setattr(
+            "app.services.art_jobs.cleanup_older_than", fake_cleanup,
+        )
+        main._sweep_staged_art()
+
+        # The recorded cutoff should be very close to 24h ago. Allow
+        # a generous 5-minute window for slow runners.
+        target = datetime.now(timezone.utc) - timedelta(hours=24)
+        assert abs((captured["cutoff"] - target).total_seconds()) < 300
+
+    def test_swallows_cleanup_errors(self, monkeypatch):
+        """A sweep failure must not raise - the rest of startup keeps
+        running. The error gets logged."""
+        from app import main
+
+        def boom(_cutoff):
+            raise RuntimeError("disk full")
+
+        monkeypatch.setattr(
+            "app.services.art_jobs.cleanup_older_than", boom,
+        )
+        # Must not raise.
+        main._sweep_staged_art()
+
+    def test_runs_during_check_and_backup_before_bucket_short_circuit(
+        self, monkeypatch,
+    ):
+        """Even when ``S3_BACKUP_BUCKET`` is unset (local dev / no
+        backups), the staged-art sweep still runs. The backup branch
+        below it short-circuits, but the sweep above it does not."""
+        from app import main
+
+        monkeypatch.setattr("time.sleep", lambda _seconds: None)
+        monkeypatch.delenv("S3_BACKUP_BUCKET", raising=False)
+
+        called = {"n": 0}
+
+        def fake_sweep():
+            called["n"] += 1
+
+        monkeypatch.setattr(main, "_sweep_staged_art", fake_sweep)
+        main._check_and_backup()
+        assert called["n"] == 1

@@ -39,18 +39,36 @@ def test_character_visible_to_nonadmin(page, page_nonadmin, live_server_url):
     assert "Viewable Char" in page_nonadmin.text_content("h1")
 
 
-def test_tracking_buttons_hidden_for_nonadmin(page, page_nonadmin, live_server_url):
-    """Tracking section is read-only for non-editor viewers (no +/- buttons)."""
+def test_tracking_buttons_local_only_for_nonadmin(page, page_nonadmin, live_server_url):
+    """Read-only Roll Mode (Phases 2-4): Tracking +/- buttons RENDER for
+    non-editor viewers, but mutations are client-local only - the
+    Phase 1 save shim short-circuits the /track POST and the read-only
+    banner partial is carried in the DOM for roll-result modals.
+
+    The previous invariant (buttons hidden for non-editors) was replaced
+    by the Phase 2-4 un-gating: viewers now drive their own rolls and
+    resource spends without persisting anything. The backend 403 on
+    /track is still enforced by
+    ``test_track_endpoint_forbidden_for_nonadmin`` below as the
+    defence-in-depth layer."""
     url = create_and_apply(page, live_server_url, "Track Read Only")
     page_nonadmin.goto(url)
     page_nonadmin.wait_for_selector('text="Tracking"')
-    # Values still visible
+    # Values still visible.
     serious = page_nonadmin.locator('text="Serious Wounds"').locator('..').locator('span.font-bold')
     assert serious.first.text_content().strip() == "0"
-    # But +/- buttons should not be present
-    assert page_nonadmin.locator('text="Serious Wounds"').locator('..').locator('button', has_text="+").count() == 0
-    assert page_nonadmin.locator('text="Light Wounds"').locator('..').locator('button', has_text="+").count() == 0
-    assert page_nonadmin.locator('text="Void Points"').locator('..').locator('..').locator('button', has_text="+").count() == 0
+    # +/- buttons now render (un-gated in Phases 3-4).
+    assert page_nonadmin.locator('text="Serious Wounds"').locator('..').locator('button', has_text="+").count() > 0
+    assert page_nonadmin.locator('text="Light Wounds"').locator('..').locator('button', has_text="+").count() > 0
+    # Read-only banner partial is present in the DOM (hidden until a
+    # roll modal opens). Confirms the Phase 1 infrastructure is wired
+    # for this viewer.
+    banners = page_nonadmin.locator('[data-testid="readonly-roll-banner"]')
+    assert banners.count() > 0
+    for i in range(banners.count()):
+        assert not banners.nth(i).is_visible()
+    # canEdit flag on trackingData is false - save() short-circuits.
+    assert page_nonadmin.evaluate("window._trackingBridge.canEdit") is False
 
 
 def test_track_endpoint_forbidden_for_nonadmin(page, page_nonadmin, live_server_url):

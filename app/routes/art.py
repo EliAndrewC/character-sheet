@@ -636,7 +636,7 @@ def art_generate_submit(
             status_code=404,
         )
     # Save the (possibly edited) prompt before the worker reads it.
-    staged.prompt = prompt
+    art_jobs.update_staged_prompt(staging_id, prompt)
 
     art_generate_jobs.submit_job(
         user_id=user_id, char_id=char_id,

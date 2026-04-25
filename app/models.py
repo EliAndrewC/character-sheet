@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import JSON, Float, ForeignKey, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -81,7 +81,14 @@ class CharacterVersion(Base):
     __tablename__ = "character_versions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    character_id: Mapped[int] = mapped_column(nullable=False, index=True)
+    # ``ForeignKey`` here is mostly documentation: SQLite ships with FK
+    # enforcement off and we don't enable it, so the cascade is driven
+    # at the ORM level via the ``versions`` relationship on Character.
+    # Existing prod tables don't carry the constraint either (``create_all``
+    # is a no-op on tables that already exist).
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.id"), nullable=False, index=True,
+    )
     version_number: Mapped[int] = mapped_column(nullable=False)
     state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=False)
     summary: Mapped[str] = mapped_column(String, default="")
@@ -214,6 +221,17 @@ class Character(Base):
     art_updated_at: Mapped[Optional[datetime]] = mapped_column(default=None)
     art_source: Mapped[Optional[str]] = mapped_column(String, default=None)
     art_prompt: Mapped[Optional[str]] = mapped_column(String, default=None)
+
+    # Drives ORM cascade on delete: db.delete(character) takes the
+    # CharacterVersion rows with it. Without this, deleting a character
+    # leaves orphan revisions behind, and SQLite reuses the freed id
+    # on the next insert so the new character starts life with the
+    # deleted one's revision history hanging off it.
+    versions: Mapped[List["CharacterVersion"]] = relationship(
+        "CharacterVersion",
+        cascade="all, delete-orphan",
+        passive_deletes=False,
+    )
 
     # ------------------------------------------------------------------
     # Convenience helpers

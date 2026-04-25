@@ -224,15 +224,71 @@ def delete_character(request: Request, char_id: int, db: Session = Depends(get_d
 # ---------------------------------------------------------------------------
 
 
+def _check_rolling_char_can_edit_for_priest_spend(
+    db: Session, user: dict, rolling_character_id: Any, priest: Character
+) -> tuple[bool, JSONResponse | None]:
+    """Phase 7 tightening: for cross-character priest-resource spends,
+    the caller must have edit access to the ``rolling_character`` (i.e.
+    the character whose sheet they're rolling from) AND that character
+    must share the priest's gaming group. Returns (allowed, error_response).
+
+    Read-only viewers (who can't edit the rolling character) are rejected
+    server-side even though the frontend shim already short-circuits the
+    POST; we can't assume the client is well-behaved.
+    """
+    if not priest.gaming_group_id:
+        return False, JSONResponse(
+            {"error": "Priest is not in a gaming group"}, status_code=403
+        )
+    if rolling_character_id is None:
+        return False, JSONResponse(
+            {"error": "rolling_character_id required"}, status_code=400
+        )
+    try:
+        rolling_id = int(rolling_character_id)
+    except (TypeError, ValueError):
+        return False, JSONResponse(
+            {"error": "rolling_character_id must be an integer"}, status_code=400
+        )
+    rolling = db.query(Character).filter(Character.id == rolling_id).first()
+    if not rolling:
+        return False, JSONResponse(
+            {"error": "Rolling character not found"}, status_code=403
+        )
+    if rolling.gaming_group_id != priest.gaming_group_id:
+        return False, JSONResponse(
+            {"error": "Rolling character not in priest's gaming group"},
+            status_code=403,
+        )
+    rolling_owner = db.query(User).filter(
+        User.discord_id == rolling.owner_discord_id
+    ).first()
+    all_editors = get_all_editors(
+        rolling.editor_discord_ids or [],
+        rolling_owner.granted_account_ids or [] if rolling_owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"], rolling.owner_discord_id, all_editors
+    ):
+        return False, JSONResponse(
+            {"error": "Caller cannot edit rolling character"}, status_code=403
+        )
+    return True, None
+
+
 @router.post("/{char_id}/ally-conviction")
 async def ally_conviction(
     request: Request, char_id: int, db: Session = Depends(get_db)
 ):
-    """Priest 5th Dan: any party member can spend this priest's conviction on
-    their own rolls. The endpoint updates the priest's ``conviction_used``
-    counter in ``adventure_state`` by the requested ``delta`` (+1 or -1).
-    Caller must be logged in and in the same gaming group as the priest, and
-    the priest must actually be a Priest at dan>=5.
+    """Priest 5th Dan: a party member with edit access to their own
+    character (which must share the priest's gaming group) can spend
+    the priest's conviction on their rolls. The endpoint updates the
+    priest's ``conviction_used`` counter in ``adventure_state`` by the
+    requested ``delta`` (+1 or -1).
+
+    Phase 7 tightening: bare gaming-group membership is no longer enough
+    - the caller must have edit access to the ``rolling_character_id``
+    they pass in the body. Read-only viewers are blocked server-side.
     """
     user = getattr(request.state, "user", None)
     if not user:
@@ -243,7 +299,6 @@ async def ally_conviction(
     if priest.school != "priest":
         return JSONResponse({"error": "Not a priest"}, status_code=400)
     # Priest must be at 5th Dan (lowest school knack >= 5).
-    from app.game_data import SCHOOLS
     p_school_obj = SCHOOLS.get(priest.school)
     p_knack_ranks = [
         (priest.knacks or {}).get(k, 1) for k in (p_school_obj.school_knacks or [])
@@ -251,16 +306,12 @@ async def ally_conviction(
     p_dan = min(p_knack_ranks) if p_knack_ranks else 0
     if p_dan < 5:
         return JSONResponse({"error": "Priest is not at 5th Dan"}, status_code=400)
-    # Caller must share the priest's gaming group.
-    caller_chars = db.query(Character).filter(
-        Character.owner_discord_id == user["discord_id"],
-        Character.gaming_group_id == priest.gaming_group_id,
-    ).all()
-    if not priest.gaming_group_id or not caller_chars:
-        return JSONResponse(
-            {"error": "Caller is not in the priest's gaming group"}, status_code=403
-        )
     body = await request.json()
+    allowed, err = _check_rolling_char_can_edit_for_priest_spend(
+        db, user, body.get("rolling_character_id"), priest
+    )
+    if not allowed:
+        return err
     try:
         delta = int(body.get("delta", 0))
     except (TypeError, ValueError):
@@ -291,8 +342,11 @@ async def precepts_pool(
     pool; last-write-wins matches the best-effort ``_postPriestAllyDelta``
     pattern used by the 5th Dan conviction sibling.
 
-    Caller must be logged in and share a gaming group with the priest; the
-    priest must be a Priest at dan>=3.
+    Phase 7 tightening: non-owner callers must have edit access to the
+    ``rolling_character_id`` they pass in the body, and that character
+    must share the priest's gaming group. Owner-as-caller continues to
+    be allowed unconditionally (a priest swapping from their own pool
+    via this endpoint, rather than through /track, is a supported path).
     """
     user = getattr(request.state, "user", None)
     if not user:
@@ -309,21 +363,16 @@ async def precepts_pool(
     p_dan = min(p_knack_ranks) if p_knack_ranks else 0
     if p_dan < 3:
         return JSONResponse({"error": "Priest is not at 3rd Dan"}, status_code=400)
-    caller_chars = db.query(Character).filter(
-        Character.owner_discord_id == user["discord_id"],
-        Character.gaming_group_id == priest.gaming_group_id,
-    ).all()
-    # Owner-as-caller is allowed unconditionally even when no other group
-    # character exists (a priest swapping from their own pool via this
-    # endpoint, rather than through /track, is a supported path).
-    is_owner = priest.owner_discord_id == user["discord_id"]
-    if not is_owner and (not priest.gaming_group_id or not caller_chars):
-        return JSONResponse(
-            {"error": "Caller is not in the priest's gaming group"}, status_code=403
-        )
     body = await request.json()
     if not isinstance(body, dict) or "pool" not in body:
         return JSONResponse({"error": "Body must include 'pool'"}, status_code=400)
+    is_owner = priest.owner_discord_id == user["discord_id"]
+    if not is_owner:
+        allowed, err = _check_rolling_char_can_edit_for_priest_spend(
+            db, user, body.get("rolling_character_id"), priest
+        )
+        if not allowed:
+            return err
     priest.precepts_pool = _sanitize_precepts_pool(body["pool"])
     db.commit()
     return JSONResponse({"pool": priest.precepts_pool})

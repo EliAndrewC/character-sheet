@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.models import Character
+from app.models import Character, CharacterVersion
 from tests.conftest import make_character_form, query_db
 
 
@@ -136,20 +136,25 @@ class TestPriestAllyConviction:
         return priest_id, ally_id, group.id
 
     def test_ally_can_spend_priest_conviction(self, client):
-        priest_id, _, _ = self._setup_priest_and_ally(client)
-        resp = client.post(f"/characters/{priest_id}/ally-conviction",
-                           json={"delta": 1})
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": 1, "rolling_character_id": ally_id},
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["used"] == 1
         assert data["pool_max"] == 10  # 2 * rank(5)
 
     def test_ally_can_undo_priest_conviction(self, client):
-        priest_id, _, _ = self._setup_priest_and_ally(client)
-        client.post(f"/characters/{priest_id}/ally-conviction", json={"delta": 1})
-        client.post(f"/characters/{priest_id}/ally-conviction", json={"delta": 1})
-        resp = client.post(f"/characters/{priest_id}/ally-conviction",
-                           json={"delta": -1})
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        body = {"delta": 1, "rolling_character_id": ally_id}
+        client.post(f"/characters/{priest_id}/ally-conviction", json=body)
+        client.post(f"/characters/{priest_id}/ally-conviction", json=body)
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": -1, "rolling_character_id": ally_id},
+        )
         assert resp.status_code == 200
         assert resp.json()["used"] == 1
 
@@ -201,18 +206,21 @@ class TestPriestAllyConviction:
         assert resp.status_code == 400
 
     def test_used_clamps_to_pool_max(self, client):
-        priest_id, _, _ = self._setup_priest_and_ally(client, priest_rank=5)
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client, priest_rank=5)
         # pool_max = 10. Spend 15 times; used should cap at 10.
+        body = {"delta": 1, "rolling_character_id": ally_id}
         for _ in range(15):
-            client.post(f"/characters/{priest_id}/ally-conviction", json={"delta": 1})
+            client.post(f"/characters/{priest_id}/ally-conviction", json=body)
         session = client._test_session_factory()
         p = session.query(Character).filter(Character.id == priest_id).first()
         assert (p.adventure_state or {}).get("conviction_used") == 10
 
     def test_used_cannot_go_below_zero(self, client):
-        priest_id, _, _ = self._setup_priest_and_ally(client)
-        resp = client.post(f"/characters/{priest_id}/ally-conviction",
-                           json={"delta": -1})
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": -1, "rolling_character_id": ally_id},
+        )
         assert resp.status_code == 200
         assert resp.json()["used"] == 0
 
@@ -223,6 +231,88 @@ class TestPriestAllyConviction:
         assert resp.status_code == 200
         assert 'id="priest-conviction-allies"' in resp.text
         assert "Priest Ally" in resp.text
+
+    # ---- Phase 7 tightened-auth regressions ----
+
+    def test_requires_rolling_character_id(self, client):
+        """Phase 7: non-owner callers must pass rolling_character_id."""
+        priest_id, ally_id, group_id = self._setup_priest_and_ally(client)
+        # Reassign priest owner so admin is no longer the owner.
+        session = client._test_session_factory()
+        priest = session.query(Character).filter(Character.id == priest_id).first()
+        priest.owner_discord_id = "some_other_user"
+        ally = session.query(Character).filter(Character.id == ally_id).first()
+        ally.owner_discord_id = "test_user_1"
+        session.commit()
+        # test_user_1 is in the group (owns ally) but omits rolling_character_id.
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": 1},
+            headers={"X-Test-User": "test_user_1:AllyOwner"},
+        )
+        assert resp.status_code == 400
+
+    def test_rejects_rolling_char_caller_cannot_edit(self, client):
+        """Phase 7: a non-editor viewer of the rolling character is 403'd
+        server-side even if they're in the same gaming group."""
+        priest_id, ally_id, group_id = self._setup_priest_and_ally(client)
+        session = client._test_session_factory()
+        # Ally owned by admin, priest owned by someone else, test_user_1 has
+        # no edit access to either but gets a third char in the same group.
+        priest = session.query(Character).filter(Character.id == priest_id).first()
+        priest.owner_discord_id = "some_other_user"
+        session.commit()
+        # test_user_1 is in the group via a third char, but tries to drive
+        # the spend from the ally's sheet (they can't edit the ally).
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": 1, "rolling_character_id": ally_id},
+            headers={"X-Test-User": "test_user_1:NonEditor"},
+        )
+        assert resp.status_code == 403
+        # No state change.
+        p = session.query(Character).filter(Character.id == priest_id).first()
+        assert (p.adventure_state or {}).get("conviction_used", 0) == 0
+
+    def test_rejects_rolling_char_in_different_group(self, client):
+        """Phase 7: the rolling character must share the priest's group."""
+        from app.models import GamingGroup
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        session = client._test_session_factory()
+        other_group = GamingGroup(name="Other Group")
+        session.add(other_group); session.commit()
+        outsider_id = _seed_character(
+            client, name="Outsider", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            gaming_group_id=other_group.id, is_published=True,
+        )
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": 1, "rolling_character_id": outsider_id},
+        )
+        assert resp.status_code == 403
+
+    def test_allows_non_owner_editor_of_rolling_char(self, client):
+        """Phase 7: a caller who has edit access to a party-mate character
+        (even without owning the priest) is allowed to spend the priest's
+        conviction. The edit access can come from being a granted editor
+        on the party-mate char - not just ownership."""
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        session = client._test_session_factory()
+        # Priest owned by someone else. Ally owned by admin but
+        # test_user_1 is granted editor on the ally.
+        priest = session.query(Character).filter(Character.id == priest_id).first()
+        priest.owner_discord_id = "some_other_user"
+        ally = session.query(Character).filter(Character.id == ally_id).first()
+        ally.editor_discord_ids = ["test_user_1"]
+        session.commit()
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": 1, "rolling_character_id": ally_id},
+            headers={"X-Test-User": "test_user_1:GrantedEditor"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["used"] == 1
 
     def test_sheet_skips_priest_below_5th_dan(self, client):
         """A priest in the party at dan < 5 is not exposed as a conviction ally source
@@ -480,6 +570,63 @@ class TestPriestPreceptsPoolEndpoint:
         )
         assert resp.status_code == 200
         assert resp.json() == {"pool": []}
+
+    # ---- Phase 7 tightened-auth regressions ----
+
+    def test_non_owner_requires_rolling_character_id(self, client):
+        """Phase 7: a non-owner caller must pass rolling_character_id."""
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        session = client._test_session_factory()
+        priest = session.query(Character).filter(Character.id == priest_id).first()
+        priest.owner_discord_id = "some_other_user"
+        ally = session.query(Character).filter(Character.id == ally_id).first()
+        ally.owner_discord_id = "test_user_1"
+        session.commit()
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"pool": [{"value": 5}]},
+            headers={"X-Test-User": "test_user_1:AllyOwner"},
+        )
+        assert resp.status_code == 400
+
+    def test_rejects_non_editor_viewer_of_rolling_char(self, client):
+        """Phase 7: a viewer without edit access to the rolling character
+        is 403'd server-side (defence in depth even though the frontend
+        shim already skips the fetch for non-editors)."""
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        session = client._test_session_factory()
+        priest = session.query(Character).filter(Character.id == priest_id).first()
+        priest.owner_discord_id = "some_other_user"
+        session.commit()
+        # test_user_1 is authenticated but has no edit access to the
+        # ally (admin owns it, test_user_1 isn't in editor_discord_ids).
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"pool": [{"value": 5}], "rolling_character_id": ally_id},
+            headers={"X-Test-User": "test_user_1:NonEditor"},
+        )
+        assert resp.status_code == 403
+        # Pool unchanged.
+        p = session.query(Character).filter(Character.id == priest_id).first()
+        assert p.precepts_pool == [{"value": 7}, {"value": 3}]
+
+    def test_allows_non_owner_editor_of_rolling_char(self, client):
+        """Phase 7: caller with edit access to a party-mate (via the
+        editor_discord_ids grant, not ownership) is allowed."""
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        session = client._test_session_factory()
+        priest = session.query(Character).filter(Character.id == priest_id).first()
+        priest.owner_discord_id = "some_other_user"
+        ally = session.query(Character).filter(Character.id == ally_id).first()
+        ally.editor_discord_ids = ["test_user_1"]
+        session.commit()
+        resp = client.post(
+            f"/characters/{priest_id}/precepts-pool",
+            json={"pool": [{"value": 9}], "rolling_character_id": ally_id},
+            headers={"X-Test-User": "test_user_1:GrantedEditor"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"pool": [{"value": 9}]}
 
 
 class TestAllyConvictionAuth:
@@ -1520,6 +1667,75 @@ class TestDeleteCharacter:
     def test_delete_nonexistent_no_error(self, client):
         resp = client.post("/characters/999/delete", follow_redirects=False)
         assert resp.status_code == 303
+
+    def test_delete_cascades_to_character_versions(self, client):
+        """Deleting a Character must take its CharacterVersion rows
+        with it. Without this, SQLite reuses the freed id on the next
+        insert and the new character starts life with the deleted
+        character's revision history hanging off it."""
+        cid = _seed_character(client, name="To Delete")
+
+        # Seed a couple of version rows for this character so we can
+        # observe them being cascaded away.
+        session = client._test_session_factory()
+        try:
+            session.add_all([
+                CharacterVersion(
+                    character_id=cid, version_number=1,
+                    state={"name": "v1"}, summary="Initial",
+                ),
+                CharacterVersion(
+                    character_id=cid, version_number=2,
+                    state={"name": "v2"}, summary="Second",
+                ),
+            ])
+            session.commit()
+        finally:
+            session.close()
+
+        assert query_db(client, CharacterVersion).filter_by(
+            character_id=cid,
+        ).count() == 2
+
+        resp = client.post(f"/characters/{cid}/delete", follow_redirects=False)
+        assert resp.status_code == 303
+
+        assert query_db(client).filter_by(id=cid).count() == 0
+        assert query_db(client, CharacterVersion).filter_by(
+            character_id=cid,
+        ).count() == 0
+
+    def test_delete_does_not_touch_other_characters_versions(self, client):
+        """Cascade must scope to *this* character. A delete cannot
+        wipe revisions belonging to other characters that happen to
+        share an autoincrement neighborhood."""
+        keep_cid = _seed_character(client, name="Keep Me")
+        drop_cid = _seed_character(client, name="Drop Me")
+
+        session = client._test_session_factory()
+        try:
+            session.add_all([
+                CharacterVersion(
+                    character_id=keep_cid, version_number=1,
+                    state={"name": "k1"}, summary="Keep this",
+                ),
+                CharacterVersion(
+                    character_id=drop_cid, version_number=1,
+                    state={"name": "d1"}, summary="Drop this",
+                ),
+            ])
+            session.commit()
+        finally:
+            session.close()
+
+        client.post(f"/characters/{drop_cid}/delete", follow_redirects=False)
+
+        assert query_db(client, CharacterVersion).filter_by(
+            character_id=keep_cid,
+        ).count() == 1
+        assert query_db(client, CharacterVersion).filter_by(
+            character_id=drop_cid,
+        ).count() == 0
 
 
 class TestAutoSave:

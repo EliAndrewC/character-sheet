@@ -3,13 +3,19 @@
 import logging
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 from starlette.middleware.base import BaseHTTPMiddleware
+
+# Configure persistent file logging before any module loggers emit.
+# Has to happen at import time so log lines from imports below land in
+# the file too.
+from app.log_config import configure_logging
+configure_logging()
 
 from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
@@ -220,6 +226,11 @@ def _check_and_backup():
     import time
     time.sleep(30)
 
+    # Staged-art cleanup runs unconditionally - it's independent of
+    # S3 backup config (local dev with no bucket still benefits) and
+    # the bucket short-circuit below would otherwise skip it.
+    _sweep_staged_art()
+
     from app.services.backup import get_last_backup_time, run_backup, should_backup
 
     try:
@@ -258,6 +269,27 @@ def _check_and_backup():
         backup_status["in_progress"] = False
         backup_status["last_error"] = str(e)
         log.error("Backup check failed: %s", e)
+
+
+STAGED_ART_MAX_AGE = timedelta(hours=24)
+
+
+def _sweep_staged_art():
+    """Delete staging dirs older than 24h on the persistent volume.
+
+    The staging registry has no in-process TTL (records survive
+    machine restarts), so this is the only thing that prevents
+    abandoned uploads/generations from accumulating forever. Errors
+    are logged but never raise - a sweep failure must not block the
+    rest of startup."""
+    from app.services import art_jobs
+    try:
+        cutoff = datetime.now(timezone.utc) - STAGED_ART_MAX_AGE
+        purged = art_jobs.cleanup_older_than(cutoff)
+        if purged:
+            log.info("Staged-art sweep purged %d abandoned record(s)", purged)
+    except Exception as e:
+        log.error("Staged-art sweep failed: %s", e)
 
 
 def _sweep_art_orphans(bucket: str, region: str):

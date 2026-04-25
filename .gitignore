@@ -7,3 +7,5 @@ __pycache__/
 .coverage
 .test-state/
 client_secret*.json
+staged_art/
+logs/

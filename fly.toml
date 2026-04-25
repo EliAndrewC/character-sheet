@@ -5,6 +5,8 @@ primary_region = 'iad'
 
 [env]
   DATABASE_URL = "/data/l7r.db"
+  STAGED_ART_DIR = "/data/staged_art"
+  LOG_DIR = "/data/logs"
 
 [http_service]
   internal_port = 8080
