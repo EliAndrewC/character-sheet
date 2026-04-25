@@ -273,62 +273,165 @@ def _publish_with_advantage(page, live_server_url, adv_id, name="PerAdventureCha
     return page.url
 
 
-def test_non_editor_lucky_toggle_no_persist(
+def test_non_editor_lucky_mark_used_button_hidden(
     page, page_nonadmin, live_server_url
 ):
-    """Non-editor flips the Lucky 'Mark as used' toggle in the
-    per-adventure panel. Local adventure_state.lucky_used becomes true;
-    refresh has no effect server-side. Covers setToggle → save() which
-    is the shim shared by all per-adventure toggle abilities (Lucky,
-    Unlucky, Mantis 2nd Dan free-raise flag, etc.)."""
+    """The Lucky 'Mark as used' / 'Undo' toggle buttons in the
+    per-adventure panel are pure bookkeeping - clicking them only
+    flips local Alpine state because the save shim swallows the
+    POST. So per Principle 6, they are not rendered for non-editors.
+    The state label ('Lucky: unused') stays visible so viewers can
+    still SEE whether it's been used."""
     sheet_url = _publish_with_advantage(
         page, live_server_url, "lucky", name="LuckyReader"
     )
-    _disable_dice_animations(page_nonadmin)
+    # Editor regression: button IS rendered for the owner.
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    assert page.locator(
+        '[data-action="toggle-lucky_used-on"]'
+    ).count() == 1
+
+    # Non-editor: button is gone, state label still there.
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
-    assert page_nonadmin.evaluate(
-        "window._trackingBridge.getToggle('lucky_used')"
-    ) is False
+    assert page_nonadmin.locator(
+        '[data-action="toggle-lucky_used-on"]'
+    ).count() == 0
+    assert page_nonadmin.locator(
+        '[data-action="toggle-lucky_used-off"]'
+    ).count() == 0
+    # Status label still rendered for read-only visibility of the
+    # current state.
+    assert page_nonadmin.locator(
+        'text="Lucky (re-roll): unused"'
+    ).count() == 1
 
-    btn = page_nonadmin.locator('[data-action="toggle-lucky_used-on"]')
-    assert btn.is_visible()
-    btn.click()
-    page_nonadmin.wait_for_timeout(150)
-    assert page_nonadmin.evaluate(
-        "window._trackingBridge.getToggle('lucky_used')"
-    ) is True
 
-    page_nonadmin.reload()
+def _publish_with_knacks(page, live_server_url, *, name, school, knack_overrides):
+    """Create + publish a character with custom knack ranks. Returns
+    the sheet URL. Mirrors test_school_abilities._create_char but
+    finishes by returning the post-apply sheet URL."""
+    from tests.e2e.helpers import (
+        start_new_character, select_school, click_plus, apply_changes,
+    )
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, school)
+    for knack, rank in knack_overrides.items():
+        for _ in range(rank - 1):
+            click_plus(page, f"knack_{knack}", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Initial")
+    return page.url
+
+
+def test_non_editor_per_adventure_counter_buttons_hidden(
+    page, page_nonadmin, live_server_url
+):
+    """Per-adventure counter abilities render +/- buttons (and a
+    Reset button for per-day pools) that go through setCount/
+    resetAbility -> save(). For non-editors those POSTs are swallowed,
+    so the buttons are bookkeeping-only and Principle 6 says hide
+    them. The 'X / Y' remaining count stays visible.
+
+    Uses ``courtier`` school - its school_knacks include
+    ``worldliness`` which becomes a counter-type per-adventure ability
+    at the default rank-1 starting point, no XP-spending required."""
+    sheet_url = _publish_with_knacks(
+        page, live_server_url,
+        name="WorldlinessNonEditor", school="courtier",
+        knack_overrides={"worldliness": 1},
+    )
+
+    # Editor regression: the counter +/- buttons render for the owner.
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    section = page.locator(
+        'h3:has-text("Per-Adventure Abilities")'
+    ).locator('..')
+    assert section.locator('button:has-text("+")').count() >= 1
+    assert section.locator('button:has-text("-")').count() >= 1
+
+    # Non-editor: count text still rendered, buttons gone.
+    page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
-    assert page_nonadmin.evaluate(
-        "window._trackingBridge.getToggle('lucky_used')"
-    ) is False
+    section_n = page_nonadmin.locator(
+        'h3:has-text("Per-Adventure Abilities")'
+    ).locator('..')
+    # State display still there ("Worldliness: 1 / 1").
+    assert section_n.locator('text=Worldliness').count() >= 1
+    # No mutation buttons within the per-adventure section.
+    assert section_n.locator('button:has-text("+")').count() == 0
+    assert section_n.locator('button:has-text("-")').count() == 0
+    assert section_n.locator(
+        '[data-action^="reset-ability-"]'
+    ).count() == 0
+
+
+def test_non_editor_banked_bonus_mark_spent_button_hidden(
+    page, page_nonadmin, live_server_url
+):
+    """School-specific banked-bonus UIs (Akodo 3rd Dan attack bonus,
+    Bayushi/Hiruma/Hida/Isawa-Shinjo/Matsu equivalents) all render a
+    Mark-spent / Clear button gated by the same Jinja
+    viewer_can_edit gate. Pick the Akodo path as representative -
+    Akodo Bushi at 3rd Dan grants akodo_wc_attack_bonus; the inner
+    'Mark spent' button must not appear in the source for a
+    non-editor.
+
+    The block itself is x-show'd until akodoBankedBonuses is
+    non-empty, so the visibility check is on the rendered HTML
+    (server-side gate), not on element visibility."""
+    sheet_url = _publish_with_knacks(
+        page, live_server_url,
+        name="AkodoThirdDanReader", school="akodo_bushi",
+        knack_overrides={
+            "double_attack": 3, "feint": 3, "iaijutsu": 3,
+        },
+    )
+
+    # Editor regression: the Akodo banked-bonus block renders the
+    # 'Mark spent' button source even though the parent is x-show
+    # hidden until a bonus banks.
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    assert "Mark spent" in page.content(), (
+        "editor on 3rd Dan akodo should see the banked-bonus button "
+        "in the rendered HTML"
+    )
+
+    # Non-editor on the same character: the wrap removes the button
+    # entirely from the rendered HTML.
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+    assert "Mark spent" not in page_nonadmin.content(), (
+        "non-editor must not receive the banked-bonus 'Mark spent' "
+        "button in the page source"
+    )
 
 
 # Note: per-adventure counter abilities (adventure_raises, conviction,
-# otherworldliness, worldliness, togashi_daily_athletics_raises) all
-# route through setCount -> save(). The toggle path (lucky_used,
-# unlucky_used) routes through setToggle -> save(). Both hit the Phase
-# 1 save shim identically, so the Lucky toggle test above is
-# representative coverage for every per-adventure setToggle/setCount
-# consumable.
-#
-# School-specific banked-bonus UIs (akodo_banked_bonuses,
-# bayushi_banked_feint_raise, hiruma_banked_attack_bonus, etc.) render
-# only when the character has the relevant school_ability (typically
-# 3rd Dan+). They route through saveBankedBonuses() -> save() - the
-# same shim - so they are transitively covered by the Lucky test
-# without each requiring a dedicated high-rank character setup.
+# otherworldliness, worldliness, togashi_daily_athletics_raises) and
+# the toggle path (lucky_used, unlucky_used) all sit inside the same
+# templated per_adventure loop in sheet.html; the visibility gate
+# wraps the buttons in the loop body, so the Lucky-toggle and
+# courtier-counter tests above cover both paths structurally. The
+# Akodo banked-bonus test covers the school-specific banked-bonus
+# pattern; Bayushi / Hiruma / Hida / Isawa-Shinjo / Matsu use the
+# identical Jinja gate, so they are transitively covered without
+# requiring a dedicated high-Dan character per school.
 
 
 def test_reset_per_adventure_button_hidden_for_non_editor(
     page, page_nonadmin, live_server_url
 ):
     """The bulk Reset Per-Adventure Abilities button stays editor-only
-    per Principle 6: it isn't a roll and shimming it would no-op. The
-    per-ability Reset buttons (per_day counters) DO render for
-    non-editors - those are useful for local bookkeeping."""
+    per Principle 6: it isn't a roll and shimming it would no-op.
+    The per-ability Reset buttons on per-day counters are hidden by
+    the same gate (covered by the per-adventure-counter test above)."""
     sheet_url = _publish_with_advantage(
         page, live_server_url, "lucky", name="ResetHideCheck"
     )

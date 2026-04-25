@@ -197,7 +197,7 @@
         <div class="flex items-baseline gap-4 mb-4">
             {% if school %}
             <h2 class="text-xl font-bold text-accent">{{ school.name }}</h2>
-            <span class="text-sm bg-accent/10 text-accent rounded-full px-3 py-0.5 font-medium">
+            <span class="text-sm bg-accent/10 text-accent rounded-full px-3 py-0.5 font-medium text-center">
                 {{ dan }}{{ 'st' if dan == 1 else ('nd' if dan == 2 else ('rd' if dan == 3 else 'th')) }} Dan
             </span>
             <span class="text-sm text-ink/60">School Ring: {{ character.school_ring_choice }}</span>
@@ -1287,9 +1287,11 @@
                             <span :class="b.spent ? 'line-through text-ink/40' : 'font-medium'">
                                 +<span x-text="b.amount"></span>
                             </span>
+                            {% if viewer_can_edit %}
                             <button x-show="!b.spent"
                                     @click="akodoBankedBonuses[i].spent = true; saveBankedBonuses()"
                                     class="text-xs text-ink/50 hover:text-accent">Mark spent</button>
+                            {% endif %}
                             <span x-show="b.spent" class="text-xs text-ink/40">spent</span>
                         </div>
                     </template>
@@ -1305,8 +1307,10 @@
                         +<span x-text="bayushiBankedFeintRaise"></span>
                         (<span x-text="bayushiBankedFeintRaise / 5"></span> raise<span x-show="bayushiBankedFeintRaise > 5">s</span>)
                     </span>
+                    {% if viewer_can_edit %}
                     <button @click="bayushiBankedFeintRaise = Math.max(0, bayushiBankedFeintRaise - 5); if (window._diceRoller) window._diceRoller.bayushiBankedFeintRaise = bayushiBankedFeintRaise; saveBankedBonuses()"
                             class="text-xs text-ink/50 hover:text-accent">Mark 1 spent</button>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
@@ -1318,8 +1322,10 @@
                     <span class="font-medium">
                         +<span x-text="hirumaBankedAttackBonus"></span> (attack and damage)
                     </span>
+                    {% if viewer_can_edit %}
                     <button @click="const amt = {{ school_abilities.get('hiruma_post_parry_amount', 0) }}; hirumaBankedAttackBonus = Math.max(0, hirumaBankedAttackBonus - amt); if (window._diceRoller) window._diceRoller.hirumaBankedAttackBonus = hirumaBankedAttackBonus; saveBankedBonuses()"
                             class="text-xs text-ink/50 hover:text-accent">Mark 1 spent</button>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
@@ -1331,8 +1337,10 @@
                     <span class="font-medium">
                         +<span x-text="hidaBankedWcBonus"></span> to next wound check
                     </span>
+                    {% if viewer_can_edit %}
                     <button @click="hidaBankedWcBonus = 0; if (window._diceRoller) window._diceRoller.hidaBankedWcBonus = 0; saveBankedBonuses()"
                             class="text-xs text-ink/50 hover:text-accent">Clear</button>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
@@ -1351,9 +1359,11 @@
                             <span :class="b.spent ? 'line-through text-ink/40' : 'font-medium'">
                                 +<span x-text="b.amount"></span>
                             </span>
+                            {% if viewer_can_edit %}
                             <button x-show="!b.spent"
                                     @click="bankedWcExcess[i].spent = true; saveBankedBonuses()"
                                     class="text-xs text-ink/50 hover:text-accent">Mark spent</button>
+                            {% endif %}
                             <span x-show="b.spent" class="text-xs text-ink/40">spent</span>
                         </div>
                     </template>
@@ -1371,8 +1381,10 @@
                         </span>
                     </div>
                 </template>
+                {% if viewer_can_edit %}
                 <button @click="matsuBankedWcBonuses = []; if (window._diceRoller) window._diceRoller.matsuBankedWcBonuses = []; saveBankedBonuses()"
                         class="text-xs text-ink/50 hover:text-accent mt-1">Clear All</button>
+                {% endif %}
             </div>
             {% endif %}
             {% if school_abilities.get('ide_subtract_roll') %}
@@ -1938,6 +1950,7 @@
                 <div class="flex items-center justify-between gap-4">
                     <span class="text-sm font-medium">{{ ability.name }}</span>
                     <div class="flex items-center gap-2">
+                        {% if viewer_can_edit %}
                         {% if ability.per_day %}
                         <button @click="resetAbility('{{ ability.id }}')"
                                 :disabled="getCount('{{ ability.id }}') <= 0"
@@ -1948,11 +1961,14 @@
                         <button @click="setCount('{{ ability.id }}', Math.min({{ ability.max }}, getCount('{{ ability.id }}') + 1))"
                                 :disabled="getCount('{{ ability.id }}') >= {{ ability.max }}"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                        {% endif %}
                         <span class="text-sm font-bold w-16 text-center"
                               x-text="({{ ability.max }} - getCount('{{ ability.id }}')) + ' / {{ ability.max }}'"></span>
+                        {% if viewer_can_edit %}
                         <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
                                 :disabled="getCount('{{ ability.id }}') <= 0"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
+                        {% endif %}
                     </div>
                 </div>
                 {% elif ability.type == 'toggle' %}
@@ -1962,6 +1978,7 @@
                         <span x-text="getToggle('{{ ability.id }}') ? '{{ ability.name }}: used' : '{{ ability.name }}: unused'"
                               :class="getToggle('{{ ability.id }}') ? 'text-red-700 font-medium' : 'text-green-700 font-medium'"
                               class="text-xs"></span>
+                        {% if viewer_can_edit %}
                         <button x-show="!getToggle('{{ ability.id }}')"
                                 @click="setToggle('{{ ability.id }}', true)"
                                 data-action="toggle-{{ ability.id }}-on"
@@ -1970,6 +1987,7 @@
                                 @click="setToggle('{{ ability.id }}', false)"
                                 data-action="toggle-{{ ability.id }}-off"
                                 class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded">Undo</button>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -2729,7 +2747,7 @@
                 </div>
             </template>
             <div class="relative"
-                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasParry && !rollMenuHasAttackChoice"
+                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack"
                  @mouseenter="owHoverRow = 'roll'"
                  @mouseleave="owHoverRow = null">
                 <button type="button"
@@ -2751,7 +2769,7 @@
                     </template>
                 </div>
             </div>
-            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasParry || rollMenuHasAttackChoice ? [] : rollMenuOptions)" :key="'r'+opt.count">
+            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack ? [] : rollMenuOptions)" :key="'r'+opt.count">
                 <div class="relative"
                      @mouseenter="owHoverRow = 'r' + opt.count"
                      @mouseleave="owHoverRow = null">
@@ -2875,6 +2893,49 @@
                     </button>
                 </div>
             </template>
+            {# Touch-only attack menu: a single Roll button (which opens the
+               attack modal that desktop sees on click) so the bottom "View
+               rules text" row has somewhere to live without jumping straight
+               into the roll modal. #}
+            <template x-if="rollMenuHasMobileAttack">
+                <div data-mobile-attack-menu>
+                    <button type="button"
+                            data-mobile-attack-roll
+                            @click="rollMenuOpen = false; openAttackModal(rollMenuKey)"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
+                        Roll <span x-text="rollMenuTitle"></span>
+                    </button>
+                </div>
+            </template>
+            {# Bottom "View rules text" row. Populated only on touch devices
+               by openRollMenu() pulling the trigger's .tooltip-content HTML
+               into rollMenuRulesHtml. Desktop sees the same content via the
+               existing 2s hover tooltip and never gets this row. #}
+            <template x-if="rollMenuRulesHtml">
+                <button type="button"
+                        data-action="view-rules-text"
+                        @click="openRulesModal(rollMenuRulesHtml); rollMenuOpen = false"
+                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-ink/70 border-t border-ink/10">
+                    View rules text
+                </button>
+            </template>
+        </div>
+
+        {# ── Rules-text Modal (touch fallback for hover tooltips on rolls) ── #}
+        <div x-show="rulesModalOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4"
+             data-modal="rules-text"
+             @click.self="rulesModalOpen = false">
+            <div class="bg-white rounded-lg shadow-xl px-5 py-4 max-w-md w-full max-h-[80vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-2">
+                    <h3 class="text-lg font-bold text-accent">Rules text</h3>
+                    <button type="button" @click="rulesModalOpen = false"
+                            data-action="close-rules-modal"
+                            aria-label="Close"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+                <div class="text-sm text-ink whitespace-normal" data-rules-modal-body x-html="rulesModalContent"></div>
+            </div>
         </div>
 
         {# ── Wound Check Modal ── #}
@@ -6133,6 +6194,19 @@
             rollMenuHasTogashiInit: false,
             rollMenuHasAthleticsPicker: false,
             rollMenuHasAttackChoice: false,
+            // Touch-only menu mode for the Attack tile: instead of opening the
+            // attack modal directly the menu shows "Roll <title>" + "View
+            // rules text" rows so a tap user can read the description without
+            // committing to a roll.
+            rollMenuHasMobileAttack: false,
+            // HTML pulled from the trigger's .tooltip-content child when the
+            // menu is opened on a touch device. When non-empty, the menu
+            // renders a "View rules text" row at the bottom that opens the
+            // rules modal.
+            rollMenuRulesHtml: '',
+            // Rules-text modal (touch fallback for hover tooltips).
+            rulesModalOpen: false,
+            rulesModalContent: '',
             athHoverRow: null,
             rollMenuOwCapacity: 0,
             owHoverRow: null,
@@ -6328,6 +6402,15 @@
                 const f = this.formulas[key];
                 if (!f) return;
 
+                // On a touch device, capture the clicked element's inline
+                // tooltip (if any) so the menu can offer a "View rules text"
+                // row at the bottom. Desktop keeps its 2s hover tooltip and
+                // never sees the menu entry.
+                const isTouch = this._isTouchDevice();
+                const rulesHtml = isTouch ? this._readRulesText(el) : '';
+                this.rollMenuRulesHtml = rulesHtml;
+                this.rollMenuHasMobileAttack = false;
+
                 // Athletics knack: show a ring picker instead of rolling the
                 // default-ring formula, since Athletics varies by ring.
                 if (key === 'knack:athletics'
@@ -6376,7 +6459,9 @@
                     return;
                 }
 
-                // Initiative rolls directly (no void spending)
+                // Initiative rolls directly (no void spending) - per design,
+                // these tiles have no rules-text tooltip and stay click-to-
+                // roll on every device.
                 if (f.is_initiative) {
                     this.executeRoll(key, 0, null);
                     return;
@@ -6408,8 +6493,29 @@
                     return;
                 }
 
-                // Attack types open the attack modal
+                // Attack types: desktop opens the attack modal directly. On a
+                // touch device we instead show a small menu so the player can
+                // read the rules text without committing to the modal.
                 if (f.is_attack_type) {
+                    if (isTouch && rulesHtml) {
+                        const pos = this._computeRollMenuPos(el);
+                        this.rollMenuKey = key;
+                        this.rollMenuTitle = f.label;
+                        this.rollMenuPos = pos;
+                        this.rollMenuOptions = [];
+                        this.rollMenuHasStrike = false;
+                        this.rollMenuHasParry = false;
+                        this.rollMenuHasTogashiInit = false;
+                        this.rollMenuHasAthleticsPicker = false;
+                        this.rollMenuHasAttackChoice = false;
+                        this.rollMenuHasMobileAttack = true;
+                        this.rollMenuOwCapacity = 0;
+                        this.owHoverRow = null;
+                        this.athHoverRow = null;
+                        this.parryHoverRow = null;
+                        this.rollMenuOpen = true;
+                        return;
+                    }
                     this.openAttackModal(key);
                     return;
                 }
@@ -6429,8 +6535,10 @@
                 const owCap = f.otherworldliness_capacity || 0;
                 const owMax = Math.min(owCap, this.getOwPoolAvail());
 
-                // If no options, no special variants, and no OW available, roll directly
-                if (options.length === 0 && !hasStrike && !hasParry && !isAthleticsRing && owMax === 0) {
+                // If no options, no special variants, and no OW available, roll directly.
+                // Exception: on touch with rules text we still open the menu so the
+                // player can tap "View rules text" from the bottom row.
+                if (options.length === 0 && !hasStrike && !hasParry && !isAthleticsRing && owMax === 0 && !rulesHtml) {
                     this.executeRoll(key, 0, null);
                     return;
                 }
@@ -6452,6 +6560,28 @@
                 this.athHoverRow = null;
                 this.parryHoverRow = null;
                 this.rollMenuOpen = true;
+            },
+
+            _isTouchDevice() {
+                // True when the device has no hover capability (touch-only).
+                // Mirrors the same check that gates the tap-to-toggle handler
+                // for non-roll tooltips in base.html.
+                return window.matchMedia && window.matchMedia('(hover: none)').matches;
+            },
+
+            _readRulesText(el) {
+                // Pull the inline tooltip content (rules text) from the
+                // clicked roll element so the menu's "View rules text" row
+                // can show it in a modal. Returns '' if the element isn't a
+                // tooltip-trigger or has no .tooltip-content child.
+                if (!el || !el.classList || !el.classList.contains('tooltip-trigger')) return '';
+                const tt = el.querySelector(':scope > .tooltip-content');
+                return tt ? tt.innerHTML : '';
+            },
+
+            openRulesModal(html) {
+                this.rulesModalContent = html || '';
+                this.rulesModalOpen = true;
             },
 
             _computeRollMenuPos(el) {

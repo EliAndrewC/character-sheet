@@ -1203,6 +1203,12 @@ Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pyt
 - [x] Nav visible without hamburger on desktop → `test_responsive.py::test_nav_visible_without_hamburger_on_desktop`
 - [x] No zero-width truncated labels on editor → `test_responsive.py::test_no_zero_width_labels_on_editor`
 - [x] No zero-width truncated labels on sheet → `test_responsive.py::test_no_zero_width_labels_on_sheet`
+- [x] Dan badge text stays horizontally centered when wrapped at phone width → `test_responsive.py::test_dan_badge_text_centered`
+- [x] Skill tap on touch opens menu with View rules text option that opens rules modal → `test_mobile_rules_text.py::test_skill_tap_opens_menu_with_view_rules_text`
+- [x] Attack tap on touch opens menu with Roll Attack and View rules text rows → `test_mobile_rules_text.py::test_attack_tap_opens_menu_with_roll_and_view_rules`
+- [x] Parry menu on touch includes appended View rules text row → `test_mobile_rules_text.py::test_parry_menu_includes_view_rules_text_on_touch`
+- [x] Advantage tap toggles inline tooltip via tap-to-toggle (no menu) → `test_mobile_rules_text.py::test_advantage_tap_shows_inline_tooltip`
+- [x] No "?" indicator on touch tooltip-trigger ::after pseudo → `test_mobile_rules_text.py::test_no_question_mark_after_pseudo_element`
 
 ---
 
@@ -1444,13 +1450,22 @@ builds the infrastructure; Phases 2-7 un-gate each roll category.
 
 ### Phase 5 - per-adventure consumables
 
-- [x] Non-editor flips the Lucky per-adventure toggle; server state
-      unchanged on refresh. Representative for all
-      setCount/setToggle/saveBankedBonuses consumables that share the
-      Phase 1 save shim (adventure_raises, conviction,
-      otherworldliness, worldliness, akodo_banked_bonuses, bayushi/
-      hiruma/hida/matsu banked bonuses, lucky_used, unlucky_used) ->
-      `test_readonly_rolls.py::test_non_editor_lucky_toggle_no_persist`
+- [x] Lucky 'Mark as used' / 'Undo' toggle buttons absent from
+      non-editor DOM; state label ('Lucky: unused') still rendered.
+      Editor regression: button is present for the owner ->
+      `test_readonly_rolls.py::test_non_editor_lucky_mark_used_button_hidden`
+- [x] Per-adventure counter +/- buttons and per-day Reset buttons
+      absent from non-editor DOM; remaining-count text still rendered.
+      Uses courtier school to trigger the worldliness counter at
+      default rank-1 ->
+      `test_readonly_rolls.py::test_non_editor_per_adventure_counter_buttons_hidden`
+- [x] School-specific banked-bonus 'Mark spent' button absent from
+      non-editor page source even when the school grants the ability
+      (3rd Dan akodo_bushi). Editor regression: 'Mark spent' is in
+      the rendered HTML for the owner. Representative for all six
+      banked-bonus blocks (Akodo / Bayushi / Hiruma / Hida /
+      Isawa-Shinjo / Matsu) since they share the Jinja gate ->
+      `test_readonly_rolls.py::test_non_editor_banked_bonus_mark_spent_button_hidden`
 - [x] Reset Per-Adventure Abilities button absent from non-editor DOM
       (Principle 6: hide no-op controls) ->
       `test_readonly_rolls.py::test_reset_per_adventure_button_hidden_for_non_editor`
