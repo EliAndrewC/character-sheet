@@ -23,19 +23,16 @@ from app.services import (
 
 
 @pytest.fixture(autouse=True)
-def _sync_runner():
+def _sync_runner(tmp_path, monkeypatch):
+    monkeypatch.setenv("STAGED_ART_DIR", str(tmp_path / "staged_art"))
     art_generate_jobs.set_runner(lambda fn: fn())
     with art_generate_jobs._LOCK:
         art_generate_jobs._JOBS.clear()
-    with art_jobs._LOCK:
-        art_jobs._STAGED.clear()
     art_rate_limit.reset_all()
     yield
     art_generate_jobs.reset_runner()
     with art_generate_jobs._LOCK:
         art_generate_jobs._JOBS.clear()
-    with art_jobs._LOCK:
-        art_jobs._STAGED.clear()
     art_rate_limit.reset_all()
 
 

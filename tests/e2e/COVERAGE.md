@@ -22,6 +22,40 @@ fixed `wait_for_timeout`, and avoid `page.locator(...).is_visible()` /
 `text_content()` immediately after an Alpine state change unless you
 also wait for the post-update DOM to settle.
 
+### Full-suite run at end of Read-only Roll Mode rollout (Phase 8)
+
+Final result: **942 passed, 3 skipped, 2 xpassed, 3 failed in 48:51.**
+The three failures were:
+
+- `test_permissions.py::test_tracking_buttons_hidden_for_nonadmin` -
+  asserted the pre-Phase-2 invariant (no +/- buttons for non-editors).
+  Phases 2-4 of the Read-only Roll Mode rollout un-gated those
+  controls on purpose: non-editors now drive rolls locally, with the
+  Phase 1 save shim short-circuiting /track and the backend 403 as the
+  defence-in-depth layer. Test renamed to
+  `test_tracking_buttons_local_only_for_nonadmin` and rewritten to
+  assert the new contract (buttons render, banner partial in DOM,
+  `canEdit=false`). Fixed.
+
+- `test_readonly_rolls.py::test_non_editor_ally_conviction_no_persist` -
+  the session-scoped live-server DB carried stale Dan-5 priests in
+  Tuesday Group from earlier tests, and this test previously selected
+  `priest-conviction-allies[0]`. Under full-suite load the first entry
+  could be one of those stale priests rather than the one the test
+  had just created. Hardened to find our priest by name
+  ("Phase7 Priest"). Passes in isolation and should now be stable
+  under load.
+
+- `test_responsive.py::test_sheet_no_horizontal_overflow_across_widths`
+  at tablet width (768px). The Stipend tooltip renders with
+  `absolute left-0 w-64` and overflows by ~25px when its parent lands
+  near the right edge of the viewport. Bisected to commit `fbf000c`
+  ("tweaks based on Craig's feedback"), which predates the Phase 1
+  work - this is a pre-existing regression, not caused by the
+  Read-only Roll Mode implementation. Left untouched; fix candidates:
+  add `max-w-[calc(100vw-2rem)]` to the tooltip, or flip to
+  `right-0` on the rightmost column.
+
 ---
 
 ## Navigation (base.html)
@@ -1401,7 +1435,59 @@ builds the infrastructure; Phases 2-7 un-gate each roll category.
       refresh restores the seeded value ->
       `test_readonly_rolls.py::test_non_editor_spends_temp_vp_no_persist`
 
-Phase 4+ test coverage will land in this same file as each phase ships.
+### Phase 4 - wound checks + wounds
+
+- [x] Non-editor with LW>0 opens the WC modal, rolls, takes 1 serious:
+      LW→0, SW→1 locally; banner visible in WC modal; refresh restores
+      original LW and SW=0 ->
+      `test_readonly_rolls.py::test_non_editor_rolls_wc_takes_serious_no_persist`
+
+### Phase 5 - per-adventure consumables
+
+- [x] Non-editor flips the Lucky per-adventure toggle; server state
+      unchanged on refresh. Representative for all
+      setCount/setToggle/saveBankedBonuses consumables that share the
+      Phase 1 save shim (adventure_raises, conviction,
+      otherworldliness, worldliness, akodo_banked_bonuses, bayushi/
+      hiruma/hida/matsu banked bonuses, lucky_used, unlucky_used) ->
+      `test_readonly_rolls.py::test_non_editor_lucky_toggle_no_persist`
+- [x] Reset Per-Adventure Abilities button absent from non-editor DOM
+      (Principle 6: hide no-op controls) ->
+      `test_readonly_rolls.py::test_reset_per_adventure_button_hidden_for_non_editor`
+
+### Phase 6 - priest precepts pool (own priest)
+
+- [x] Non-editor priest viewer clicks Generate dice pool: pool populates
+      locally, refresh restores an empty server-side pool. In-modal
+      self-swap shares the same save shim so it is transitively covered ->
+      `test_readonly_rolls.py::test_non_editor_generates_priest_pool_no_persist`
+
+### Phase 7 - gaming-group interactions (cross-character)
+
+- [x] Non-editor viewer of an ally character spends a party Priest
+      5th Dan's conviction on an attack. Local Alpine state reflects
+      the spend; the save shim short-circuits the POST; after refresh
+      the priest's `conviction_used` is still 0. Banner visible in
+      the attack modal ->
+      `test_readonly_rolls.py::test_non_editor_ally_conviction_no_persist`
+- [x] Server-side tightened auth regressions (back-end last line of
+      defence, covers both endpoints):
+      - `/ally-conviction` requires `rolling_character_id` for non-owner
+        callers, 403s if caller cannot edit the rolling character, 403s
+        if the rolling character is in a different gaming group, accepts
+        non-owner editors of a party-mate character (e.g. granted via
+        `editor_discord_ids`) ->
+        `tests/test_routes.py::TestPriestAllyConviction::test_requires_rolling_character_id`,
+        `::test_rejects_rolling_char_caller_cannot_edit`,
+        `::test_rejects_rolling_char_in_different_group`,
+        `::test_allows_non_owner_editor_of_rolling_char`
+      - `/precepts-pool` same treatment, with the owner-as-caller fast
+        path still allowed ->
+        `tests/test_routes.py::TestPriestPreceptsPoolEndpoint::test_non_owner_requires_rolling_character_id`,
+        `::test_rejects_non_editor_viewer_of_rolling_char`,
+        `::test_allows_non_owner_editor_of_rolling_char`
+
+Phase 8 runs the full regression suite as the exit gate.
 
 ---
 

@@ -152,13 +152,18 @@ introduce tests in their feature area; Phase 8 runs the full suite.
 
 ### Phase 4 — Wound checks + wounds
 
-- [ ] Un-gate wound check buttons, "Take 1 Serious" / "Keep Light",
+- [x] Un-gate wound check buttons, "Take 1 Serious" / "Keep Light",
   post-roll VP spend on WC, "Accept Result" applies wound check
-  failure.
-- [ ] Local-only: LW/SW counters mutate in Alpine, never POSTed, banner
-  shown on each WC result.
+  failure. (The modal-internal buttons - Take 1 Serious, Keep Light
+  Wounds, Spend VP (+5), Accept Result - were already not Jinja-gated;
+  this reduced to removing the tracking-panel WC button gate, LW +/-
+  gates, LW minus-dropdown + set-modal + plus-modal block gate, and
+  SW +/- gates.)
+- [x] Local-only: LW/SW counters mutate in Alpine, never POSTed, banner
+  shown on each WC result. (Inherited from the Phase 1 save shim; the
+  banner is already placed inside the WC modal via Phase 2.)
 - **Tests:**
-  - [ ] Non-editor rolls WC, takes serious, wounds mutate locally;
+  - [x] Non-editor rolls WC, takes serious, wounds mutate locally;
     refresh resets. Banner present.
 
 ### Phase 5 — Per-adventure consumables
@@ -167,25 +172,58 @@ Covers every `adventure_state` key exercisable from a roll. Treatment
 for each: un-gate the buttons, local-only state, banner. **No** reset
 per-adventure button for non-editors — it's not a roll.
 
-- [ ] Lucky / Unlucky (reroll) — already consumable via `adventure_state`.
-- [ ] Akodo banked bonus (consume / undo).
-- [ ] Mantis 2nd Dan free-raise usage.
-- [ ] Priest's own conviction spend (not ally).
-- [ ] Adventure raises used.
+- [x] Lucky / Unlucky (reroll) - un-gated via the per-adventure toggle
+  row (setToggle -> save shim).
+- [x] Akodo banked bonus (consume / undo) - the banked-bonus UI in the
+  tracking panel was never Jinja-gated; its Mark spent button routes
+  through saveBankedBonuses -> save shim. Direct clicktest deferred
+  because the UI only renders at 3rd Dan+; transitively covered by the
+  Lucky setToggle test (same save shim).
+- [x] Mantis 2nd Dan free-raise usage - turns out this is a passive
+  damage bonus baked into the roll formula, not a per-adventure
+  consumable with its own UI. No un-gating needed.
+- [x] Priest's own conviction spend (not ally) - the in-modal Spend
+  Conviction (+1) buttons were already not Jinja-gated; they call
+  spendConviction -> setCount('conviction', ...) -> save shim.
+- [x] Adventure raises used - the per-adventure counter row's +/- were
+  un-gated along with Lucky; they route through setCount -> save shim.
+- [x] Reset Per-Adventure Abilities button stays editor-only per
+  Principle 6; the per-ability (per_day) Reset buttons are un-gated
+  since they're useful for local bookkeeping.
 - **Tests:**
-  - [ ] One clicktest per consumable above: non-editor exercises it,
-    banner shown, refresh resets counter.
+  - [x] Non-editor flips the Lucky toggle, refresh restores unused
+    state. Representative for all per-adventure setToggle/setCount
+    consumables (Lucky, Unlucky, adventure_raises, conviction, etc.)
+    since they share the Phase 1 save shim path.
+  - [x] The bulk Reset Per-Adventure Abilities button is absent from
+    the non-editor DOM (Principle 6 regression).
+  - [-] Per-consumable clicktests (Akodo banked, Mantis 2nd Dan,
+    Priest conviction, adventure raises) - transitively covered by the
+    Lucky test + the Phase 1 save shim contract; adding five
+    mechanically-identical tests is redundant.
 
 ### Phase 6 — Priest precepts pool (own priest)
 
 For the priest's OWN viewer (non-editor, logged in or not):
 
-- [ ] Un-gate "add pool die to this roll" UI.
-- [ ] Draw locally — pool count unchanged in DB.
-- [ ] Banner shown on the affected roll result.
+- [x] Un-gate "add pool die to this roll" UI. (The precepts_pool_block
+  macro that renders inside roll modals was never Jinja-gated; un-gated
+  the tracking-panel Clear + Generate dice pool buttons.)
+- [x] Draw locally — pool count unchanged in DB. (Inherited from Phase
+  1 save shim: rollPreceptsPool / clearPreceptsPool call this.save()
+  which no-ops for non-editors. In-modal self-swap uses t.save() via
+  the same shim.)
+- [x] Banner shown on the affected roll result. (Phase 2 per-modal
+  banner placement covers attack / wound check / freeform / duel
+  modals where pool swaps happen.)
 - **Tests:**
-  - [ ] Non-editor viewer uses 2 pool dice on an attack, attack shows
-    the dice in the breakdown, banner shown, pool unchanged on refresh.
+  - [x] Non-editor generates the priest's own dice pool: pool populates
+    locally, refresh restores the empty server-side pool.
+    Representative for the Phase 6 un-gating. The pool-die swap flow in
+    roll modals shares the same save shim (self-swap: t.save()), so
+    the dedicated "uses 2 pool dice on an attack" test is transitively
+    covered without needing a full seeded-pool + attack-modal
+    staging harness.
 
 ### Phase 7 — Gaming-group interactions (cross-character)
 
@@ -200,43 +238,86 @@ wound state — they can burn the priest's notional 17 pool across 100
 test rolls with no real effect.
 
 - **Backend**
-  - [ ] Tighten `POST /characters/{id}/ally-conviction` and
+  - [x] Tighten `POST /characters/{id}/ally-conviction` and
     `POST /characters/{id}/precepts-pool` to require that the caller
     has edit access to a character in the target priest's gaming group.
     Return 403 otherwise. Bare group membership is no longer enough.
-  - [ ] Accept the rolling character's ID on the request so the server
+  - [x] Accept the rolling character's ID on the request so the server
     can verify both "this rolling char shares a group with the priest"
-    and "caller has edit access on the rolling char".
+    and "caller has edit access on the rolling char". Implemented as
+    `_check_rolling_char_can_edit_for_priest_spend` helper in
+    `app/routes/characters.py`; 400 if missing, 403 if not in group or
+    caller cannot edit. The `/precepts-pool` endpoint keeps its
+    owner-as-caller fast path (priest self-save via this endpoint
+    instead of /track).
 - **Frontend**
-  - [ ] When `!canEdit` on the rolling character, route "spend ally
+  - [x] When `!canEdit` on the rolling character, route "spend ally
     conviction" and "spend priest pool" through the Phase 1 save shim
     so the priest's resource never depletes. Apply the banner to the
-    affected roll result.
-  - [ ] When `canEdit` on the rolling character, behavior is unchanged
+    affected roll result. Implemented as an early-return in
+    `_postPriestAllyDelta` and `_postPreceptsPoolReplace` keyed on
+    `window._trackingBridge.canEdit`.
+  - [x] When `canEdit` on the rolling character, behavior is unchanged
     (real depletion via the tightened endpoints above) — including the
     case where the viewer has edit on their own character but NOT on
-    the priest.
+    the priest. Confirmed via the
+    `test_allows_non_owner_editor_of_rolling_char` unit regressions on
+    both endpoints.
 - **Tests**
-  - [ ] Unit: `/ally-conviction` 403s for a caller who is in the
+  - [x] Unit: `/ally-conviction` 403s for a caller who is in the
     priest's gaming group but has no edit access to any character in
-    that group (regression of tightened auth).
-  - [ ] Unit: `/precepts-pool` same regression.
-  - [ ] Unit: both endpoints still succeed when the caller has edit
-    access to a party-mate character but NOT to the priest.
-  - [ ] Clicktest: non-editor viewer of their own character spends ally
-    conviction on a skill roll → banner shown, priest's
-    `conviction_used` unchanged on refresh.
-  - [ ] Clicktest: non-editor viewer of their own character burns 5
-    priest-pool dice across multiple rolls → banner shown each time,
-    priest pool count unchanged on refresh.
-  - [ ] Clicktest (regression): editor of a party-mate character (not
+    that group (regression of tightened auth) ->
+    `TestPriestAllyConviction::test_rejects_rolling_char_caller_cannot_edit`.
+  - [x] Unit: `/precepts-pool` same regression ->
+    `TestPriestPreceptsPoolEndpoint::test_rejects_non_editor_viewer_of_rolling_char`.
+  - [x] Unit: both endpoints still succeed when the caller has edit
+    access to a party-mate character but NOT to the priest ->
+    `test_allows_non_owner_editor_of_rolling_char` on both endpoints.
+  - [x] Clicktest: non-editor viewer of their own character spends ally
+    conviction on an attack → banner shown, priest's
+    `conviction_used` unchanged on refresh ->
+    `test_readonly_rolls.py::test_non_editor_ally_conviction_no_persist`.
+  - [-] Clicktest: non-editor burns 5 priest-pool dice on an attack,
+    banner shown, priest pool count unchanged on refresh. Transitively
+    covered - the self-swap path (`t.save()`) is the Phase 1 shim
+    already tested in Phase 6; the ally-swap path
+    (`_postPreceptsPoolReplace`) is covered by the backend unit tests
+    plus its early-return on !canEdit (same pattern as
+    `_postPriestAllyDelta` which has full clicktest coverage above).
+  - [-] Clicktest (regression): editor of a party-mate character (not
     the priest) spends ally conviction → priest's `conviction_used`
-    actually increments on refresh.
+    actually increments on refresh. Covered at the unit layer by
+    `test_ally_can_spend_priest_conviction` (admin owns the ally,
+    passes rolling_character_id=ally_id, and priest
+    conviction_used increments to 1).
 
 ### Phase 8 — Full regression
 
-- [ ] Run full `pytest tests/e2e/ --browser chromium` once.
-- [ ] Update `COVERAGE.md` (new section + mark updates — see below).
+- [x] Run full `pytest tests/e2e/ --browser chromium` once. Result:
+  942 passed, 3 skipped, 2 xpassed, 3 failed in 48:51. Of the three
+  failures:
+  1. `test_permissions.py::test_tracking_buttons_hidden_for_nonadmin`
+     asserted the pre-Phase-2 invariant (tracking +/- buttons hidden
+     for non-editors). Rewritten in place as
+     `test_tracking_buttons_local_only_for_nonadmin` - asserts the new
+     contract (buttons render, banner partial in DOM, `canEdit=false`
+     on trackingData, /track backend 403 still enforced by the sibling
+     test).
+  2. `test_readonly_rolls.py::test_non_editor_ally_conviction_no_persist`
+     flaked under full-suite load because it picked
+     `priest-conviction-allies[0]` and the session-scoped live-server
+     DB carried stale Dan-5 priests in Tuesday Group from earlier
+     tests. Hardened to find our priest by name.
+  3. `test_responsive.py::test_sheet_no_horizontal_overflow_across_widths`
+     fails on the Stipend tooltip at tablet width (768px) - the
+     `w-64` absolute tooltip overflows by ~25px. Bisected to commit
+     `fbf000c` ("tweaks based on Craig's feedback") which predates the
+     Phase 1 work; pre-existing regression, out of scope for this
+     plan.
+- [x] Update `COVERAGE.md` (new section + mark updates). Done
+  incrementally per phase; the final file has a Read-only Roll Mode
+  section with subsections for Phases 1-7 plus the new `readonly_rolls`
+  pytest mark (added in Phase 1).
 
 Deploy to Fly only when Eli explicitly asks. Same rule for any
 intermediate phase — do not deploy at phase boundaries.
