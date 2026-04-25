@@ -341,6 +341,47 @@ class TestPriestAllyConviction:
         assert m is not None
         assert _json.loads(m.group(1)) == []
 
+    def test_rejects_non_integer_rolling_character_id(self, client):
+        """Phase 7: a string that isn't parseable as int gets a 400."""
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": 1, "rolling_character_id": "not-a-number"},
+        )
+        assert resp.status_code == 400
+        assert "rolling_character_id must be an integer" in resp.json()["error"]
+
+    def test_rejects_unknown_rolling_character_id(self, client):
+        """Phase 7: a numerically-valid but nonexistent rolling_character_id is 403'd."""
+        priest_id, _, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": 1, "rolling_character_id": 99999},
+        )
+        assert resp.status_code == 403
+        assert "Rolling character not found" in resp.json()["error"]
+
+    def test_rejects_non_integer_delta_when_otherwise_valid(self, client):
+        """A non-int delta paired with a valid rolling_character_id falls back
+        to delta=0, which then trips the (-1, +1) range check."""
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": "bogus", "rolling_character_id": ally_id},
+        )
+        assert resp.status_code == 400
+        assert "delta must be +1 or -1" in resp.json()["error"]
+
+    def test_rejects_out_of_range_delta_when_otherwise_valid(self, client):
+        """delta=5 with a valid rolling_character_id is rejected."""
+        priest_id, ally_id, _ = self._setup_priest_and_ally(client)
+        resp = client.post(
+            f"/characters/{priest_id}/ally-conviction",
+            json={"delta": 5, "rolling_character_id": ally_id},
+        )
+        assert resp.status_code == 400
+        assert "delta must be +1 or -1" in resp.json()["error"]
+
 
 class TestPriestPreceptsAlliesContext:
     """The ``priest_precepts_allies`` context list surfaces party priests at
