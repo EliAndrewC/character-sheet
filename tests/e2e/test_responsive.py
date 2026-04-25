@@ -137,6 +137,24 @@ def test_precepts_pool_no_overflow_at_phone_width(page, live_server_url):
     _assert_no_horizontal_overflow(page)
 
 
+def test_dan_badge_text_centered(page, live_server_url):
+    """The Dan badge on the sheet has text-align: center so when the badge
+    gets squeezed on a narrow viewport and the text wraps to a second line
+    inside the oval, both lines stay horizontally centered rather than the
+    second line collapsing to the left edge."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "DanCenter")
+    page.set_viewport_size(PHONE)
+    page.goto(sheet_url)
+    page.wait_for_load_state("networkidle")
+    # Find the Dan badge - the only span with rounded-full inside the school section.
+    text_align = page.evaluate("""() => {
+        const span = [...document.querySelectorAll('span.rounded-full')]
+            .find(el => /\\d+(st|nd|rd|th) Dan/.test(el.textContent));
+        return span ? getComputedStyle(span).textAlign : null;
+    }""")
+    assert text_align == "center", f"Dan badge text-align is {text_align!r}, expected 'center'"
+
+
 def test_sheet_no_horizontal_overflow_across_widths(page, live_server_url):
     """View Sheet must not overflow horizontally at phone, tablet, or
     desktop widths. The Phase 6 art/school grid was the trigger for

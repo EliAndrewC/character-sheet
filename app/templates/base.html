@@ -17,24 +17,13 @@
             visibility: visible;
             transition-delay: 2000ms;
         }
-        /* Touch devices: show a "?" indicator and use tap-to-toggle */
+        /* Touch devices: no "?" indicator; tap-to-toggle (handled in JS at
+           the bottom of this file) reveals the tooltip in place for items
+           that have no roll/menu of their own. Roll-bearing items (skills,
+           attack, parry, etc.) get a "View rules text" entry in their
+           bottom menu instead - that lives in the diceRoller component. */
         @media (hover: none) {
             .tooltip-trigger { cursor: pointer; }
-            .tooltip-trigger::after {
-                content: "?";
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 1.1em; height: 1.1em;
-                font-size: 0.6rem;
-                font-weight: 700;
-                color: white;
-                background: #6ba3d6;
-                border-radius: 50%;
-                margin-left: 0.3em;
-                vertical-align: middle;
-                flex-shrink: 0;
-            }
             .tooltip-trigger:hover .tooltip-content { visibility: hidden; }
         }
         .tooltip-trigger.tooltip-active > .tooltip-content {
