@@ -2123,7 +2123,7 @@
                     <div class="text-xl font-bold">{{ character.honor }}</div>
                 </div>
                 {% if has_honor_perception %}
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 text-left">
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 max-w-full text-left">
                     <p class="font-medium mb-1">Perceived Honor:</p>
                     {% if 'virtue' in (character.advantages or []) %}
                     <p>Virtue: when others use Discern Honor on you, the random adjustment is always positive (you appear more honorable).</p>
@@ -2144,7 +2144,7 @@
                     <div class="text-xl font-bold">{{ character.rank }}</div>
                 </div>
                 {% if has_rank_tooltip %}
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 text-left">
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 max-w-full text-left">
                     {% if rank_awards %}
                     <div class="status-tooltip-grid mb-2">
                         <div class="text-right font-mono">{{ "%.1f"|format(rank_base) }}:</div>
@@ -2177,7 +2177,7 @@
                     <div class="text-xl font-bold">{{ character.recognition }}</div>
                 </div>
                 {% if has_recog_tooltip %}
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 text-left">
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 max-w-full text-left">
                     {% if recog_awards %}
                     <div class="status-tooltip-grid mb-2">
                         <div class="text-right font-mono">{{ "%.1f"|format(recog_base) }}:</div>
@@ -2207,7 +2207,7 @@
                     <div class="text-xl font-bold">{{ effective.stipend }} <span class="text-sm font-normal text-ink/50">koku/year</span></div>
                 </div>
                 {% if effective.stipend_modifiers %}
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 text-left">
+                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 max-w-full text-left">
                     <p class="font-medium mb-1">Stipend calculation:</p>
                     {% for m in effective.stipend_modifiers %}
                     <p>{{ m.source }}: {{ m.detail }}</p>
