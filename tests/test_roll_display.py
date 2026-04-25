@@ -113,6 +113,7 @@ class TestBaseRoll:
         data = make_character_data()
         result = compute_skill_roll("nonexistent_skill", data)
         assert result.rolled == 0
+        assert result.display == ""
 
     def test_advanced_untrained_penalty(self):
         """Advanced skill at 0 has a -10 flat penalty and an unskilled note."""

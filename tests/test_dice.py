@@ -915,6 +915,28 @@ class TestBuildAllRollFormulas:
         formulas = build_all_roll_formulas(char)
         assert formulas["skill:manipulation"]["adventure_raises_max_per_roll"] == 0
 
+    def test_skill_loop_skips_when_builder_returns_none(self, monkeypatch):
+        """Defensive guard in build_all_roll_formulas: if build_skill_formula
+        returns None for a skill_id, that skill is omitted from the result
+        rather than crashing. The branch is only reachable via a stub here -
+        the live builder always returns a formula for valid SKILLS keys -
+        but the guard exists so a future builder-side bailout won't crash
+        the sheet."""
+        from app.services import dice as dice_mod
+        real_builder = dice_mod.build_skill_formula
+
+        def stub(skill_id, character_data, party_members=None):
+            if skill_id == "bragging":
+                return None
+            return real_builder(skill_id, character_data, party_members=party_members)
+
+        monkeypatch.setattr(dice_mod, "build_skill_formula", stub)
+        char = make_character_data()
+        formulas = build_all_roll_formulas(char)
+        assert "skill:bragging" not in formulas
+        # Other skills still present.
+        assert "skill:etiquette" in formulas
+
     def test_wound_check_formula_present(self):
         char = make_character_data()
         formulas = build_all_roll_formulas(char)
@@ -1440,6 +1462,25 @@ class TestSchoolAbilities:
         # to 10 with the extra rolled die converting to kept -> 10k5.
         assert formulas["wound_check"]["rolled"] == 10
         assert formulas["wound_check"]["kept"] == 5
+
+    def test_shosuro_actor_wound_check_kept_overflow_adds_flat(self):
+        # When pre-cap kept exceeds 10, every overflow kept die converts to a
+        # +2 flat bonus. Push wound_check past the kept cap by combining a
+        # high Water ring with Shosuro Actor acting bonus rolled dice.
+        # Pre-cap: rolled = Water(8) + 1 + 1(1st Dan) + 5(acting) = 15;
+        # kept = 8. apply_dice_caps moves 5 rolled overflow into kept (=13),
+        # then clamps kept to 10 with flat += 2*3 = 6.
+        char = make_character_data(
+            school="shosuro_actor",
+            knacks={"athletics": 1, "discern_honor": 1, "pontificate": 1},
+            skills={"acting": 5},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 8, "Void": 2},
+        )
+        wc = build_wound_check_formula(char)
+        assert wc["rolled"] == 10
+        assert wc["kept"] == 10
+        assert wc["flat"] == 6
+        assert any("above 10k10" in s for s in wc["bonus_sources"])
 
     # --- Shosuro Actor 5th Dan: flag set on non-initiative formulas ---
     def test_shosuro_5th_dan_flag_on_attack(self):
