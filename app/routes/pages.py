@@ -28,6 +28,7 @@ from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.rolls import compute_skill_roll
 from app.services.status import compute_effective_status
+from app.services.versions import compute_version_diff
 from app.services.xp import calculate_total_xp, calculate_xp_breakdown, validate_character
 
 router = APIRouter()
@@ -684,6 +685,16 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         .all()
     )
 
+    # Draft-vs-published preview for the version-history block. Only
+    # editors see version history at all, and the diff exposes draft
+    # state, so gate on viewer_can_edit too. Returns [] when nothing
+    # has actually changed (e.g. only filtered noise).
+    draft_diff = None
+    if viewer_can_edit and character.has_unpublished_changes:
+        draft_diff = compute_version_diff(
+            character.published_state or {}, character.to_dict(),
+        )
+
     return _templates().TemplateResponse(
         request=request,
         name="character/sheet.html",
@@ -708,6 +719,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "viewer_is_logged_in": user is not None,
             "login_url_for_return_to_sheet": f"/auth/login?return_to=/characters/{char_id}",
             "versions": versions,
+            "draft_diff": draft_diff,
             "owner_display_name": (owner.display_name or owner.discord_name) if owner else character.player_name,
             "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
             "advantage_details": character.advantage_details or {},

@@ -254,8 +254,18 @@ class Character(Base):
         if not self.is_published or self.published_state is None:
             return False
         current = self.to_dict()
-        # Skip metadata fields; compare only game-relevant content
-        skip = {"id", "created_at", "updated_at", "owner_discord_id", "editor_discord_ids"}
+        # Skip metadata fields; compare only game-relevant content. Session
+        # state (wounds, void, action dice, precepts pool) is mutated by
+        # /track every time the player takes damage, rolls dice, or spends
+        # void; it must not flip the character to "modified". Same for
+        # google_sheet_id, which is stamped by the Sheets export and is
+        # pure metadata.
+        skip = {"id", "created_at", "updated_at", "owner_discord_id",
+                "editor_discord_ids",
+                "current_light_wounds", "current_serious_wounds",
+                "current_void_points", "current_temp_void_points",
+                "action_dice", "precepts_pool",
+                "google_sheet_id"}
         # Default values for keys that may be absent from older snapshots
         defaults = {"campaign_advantages": [], "campaign_disadvantages": [],
                     "advantage_details": {},

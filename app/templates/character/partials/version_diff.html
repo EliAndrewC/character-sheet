@@ -1,0 +1,47 @@
+{# Drill-down panel for a single version. Loaded via HTMX from
+   GET /characters/{id}/versions/{vid}/diff. The parent row carries the
+   Alpine state and the toggle button; this partial just renders the
+   computed entry list grouped by category.
+
+   The entries come from compute_version_diff() in services/versions.py
+   as a flat list of {category, label, before, after, kind} dicts. We
+   use Jinja groupby to bucket them - groupby preserves insertion order,
+   so the canonical category ordering established in DIFF_CATEGORIES is
+   what the user sees here. #}
+<div class="mt-2 bg-white rounded border border-ink/10 p-3 text-sm"
+     data-version-diff="{{ version.id }}">
+    {% if not entries %}
+    <p class="text-ink/50 italic">No content changes between v{{ prev.version_number }} and v{{ version.version_number }}.</p>
+    {% else %}
+    {% for category, items in entries|groupby('category') %}
+    <div class="mb-3 last:mb-0" data-diff-category="{{ category }}">
+        <h4 class="text-xs font-bold uppercase tracking-wide text-ink/60 mb-1">{{ category }}</h4>
+        <ul class="space-y-1 ml-1">
+            {% for entry in items %}
+            <li data-diff-kind="{{ entry.kind }}" class="text-ink/80 wrap-anywhere">
+                {%- if entry.kind == "add" -%}
+                <span class="text-green-700 font-semibold">+</span>
+                <span class="font-medium">{{ entry.label }}</span>
+                    {%- if entry.after is not none -%}
+                        : {{ entry.after }}
+                    {%- endif -%}
+                {%- elif entry.kind == "remove" -%}
+                <span class="text-red-700 font-semibold">-</span>
+                <span class="font-medium">{{ entry.label }}</span>
+                    {%- if entry.before is not none -%}
+                        : {{ entry.before }}
+                    {%- endif -%}
+                {%- elif entry.kind == "section_updated" -%}
+                <span class="font-medium">{{ entry.label }}:</span>
+                <span class="text-ink/60 italic">{{ entry.after }}</span>
+                {%- else -%}{# change #}
+                <span class="font-medium">{{ entry.label }}:</span>
+                {{ entry.before }} <span aria-hidden="true">→</span> {{ entry.after }}
+                {%- endif -%}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>

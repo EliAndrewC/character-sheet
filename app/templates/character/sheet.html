@@ -681,6 +681,7 @@
                     this.save();
                 },
                 clearPreceptsPool() {
+                    if (!this.canEdit) return;
                     this.preceptsPool = [];
                     // Clear any stale dice from the last roll's animation so
                     // the tray is empty when the Roll Pool button reappears.
@@ -747,6 +748,7 @@
                     this.actionMenuOpen = this.actionMenuOpen === i ? null : i;
                 },
                 spendActionDie(i) {
+                    if (!this.canEdit) return;
                     if (this.actionDice[i]) {
                         this.actionDice[i].spent = true;
                         // Manual spend has no known action context.
@@ -756,6 +758,7 @@
                     }
                 },
                 unspendActionDie(i) {
+                    if (!this.canEdit) return;
                     if (this.actionDice[i]) {
                         this.actionDice[i].spent = false;
                         delete this.actionDice[i].spent_by;
@@ -768,7 +771,11 @@
                 // When ``isAthletics`` is falsy (default), any die flagged
                 // ``athletics_only`` is skipped - those dice may only be
                 // spent on athletics actions (Togashi special ability).
+                // Non-editors get -1 so the auto-spend caller gracefully
+                // skips the spent-die annotation downstream; the action
+                // menu / modal flow they triggered still proceeds normally.
                 spendLowestUnspentActionDie(spentBy, isAthletics = false) {
+                    if (!this.canEdit) return -1;
                     for (let i = 0; i < this.actionDice.length; i++) {
                         const d = this.actionDice[i];
                         if (d.spent) continue;
@@ -783,8 +790,10 @@
                 // Mark a specific die (by index) spent with an initial label.
                 // Used by the per-die action menu so the user can pick which
                 // die pays for an action instead of auto-spending the lowest.
-                // Returns true on success.
+                // Returns true on success. Non-editor path returns false so
+                // the per-die-spent index is left at -1 in the dice roller.
                 spendSpecificActionDie(i, spentBy) {
+                    if (!this.canEdit) return false;
                     const d = this.actionDice[i];
                     if (!d || d.spent) return false;
                     d.spent = true;
@@ -794,6 +803,7 @@
                     return true;
                 },
                 annotateActionDie(i, spentBy) {
+                    if (!this.canEdit) return;
                     if (i < 0 || !this.actionDice[i]) return;
                     if (spentBy) {
                         this.actionDice[i].spent_by = spentBy;
@@ -1630,9 +1640,11 @@
                 {% include 'character/partials/read_only_roll_banner.html' %}
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide">Actions</h3>
+                    {% if viewer_can_edit %}
                     <button type="button" @click="clearActionDice()"
                             data-action="clear-action-dice"
                             class="text-xs text-ink/50 hover:text-accent">Clear</button>
+                    {% endif %}
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <template x-for="(die, i) in actionDice" :key="i">
@@ -1681,12 +1693,14 @@
                             <div x-show="actionMenuOpen === i" x-cloak
                                  @click.outside="if (actionMenuOpen === i) { actionMenuOpen = null; actionMenuHoverRow = null; }"
                                  class="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm whitespace-nowrap min-w-[200px]">
+                                {% if viewer_can_edit %}
                                 <template x-if="die.spent">
                                     <button type="button"
                                             @click="unspendActionDie(i)"
                                             data-action="action-die-unspent"
                                             class="block w-full text-left px-3 py-2 hover:bg-parchment">Mark as unspent</button>
                                 </template>
+                                {% endif %}
                                 {% if school_abilities.get('kakita_phase_zero') %}
                                 {# Kakita Phase-0 dice may only be spent on an
                                    iaijutsu attack. Everything else (Roll
@@ -1700,10 +1714,12 @@
                                                 data-action-die-menu-item="iaijutsu-attack"
                                                 @click="window._diceRoller?.rollForActionDie('knack:iaijutsu:attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
                                                 class="block w-full text-left px-3 py-2 hover:bg-parchment">Iaijutsu Attack</button>
+                                        {% if viewer_can_edit %}
                                         <button type="button"
                                                 @click="spendActionDie(i)"
                                                 data-action="action-die-spent"
                                                 class="block w-full text-left px-3 py-2 hover:bg-parchment border-t border-ink/10 text-ink/60">Mark as spent</button>
+                                        {% endif %}
                                     </div>
                                 </template>
                                 {% endif %}
@@ -1896,10 +1912,12 @@
                                         </template>
                                         {% endif %}
                                         {# ── MANUAL ── #}
+                                        {% if viewer_can_edit %}
                                         <button type="button"
                                                 @click="spendActionDie(i)"
                                                 data-action="action-die-spent"
                                                 class="block w-full text-left px-3 py-2 hover:bg-parchment border-t border-ink/10 text-ink/60">Mark as spent</button>
+                                        {% endif %}
                                     </div>
                                 </template>
                             </div>
@@ -1967,11 +1985,13 @@
                             ({{ school_abilities.get('priest_precepts_pool_size', 0) }} dice)
                         </span>
                     </h3>
+                    {% if viewer_can_edit %}
                     <button type="button"
                             x-show="preceptsPool.length > 0"
                             @click="clearPreceptsPool()"
                             data-action="clear-precepts-pool"
                             class="text-xs text-ink/50 hover:text-accent">Clear</button>
+                    {% endif %}
                 </div>
                 <button type="button"
                         x-show="preceptsPool.length === 0"
@@ -2529,7 +2549,7 @@
     {% if viewer_can_edit and versions %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
              x-data="{
-                open: false,
+                open: {{ 'true' if draft_diff else 'false' }},
                 revertModal: false,
                 revertVersionId: null,
                 revertVersionNum: null,
@@ -2579,37 +2599,107 @@
             <span class="text-sm font-normal text-ink/50">({{ versions|length }})</span>
         </h2>
         <div x-show="open" x-cloak class="space-y-2 mt-4">
-            {% for v in versions %}
-            <div class="flex items-start justify-between text-sm bg-parchment rounded p-3">
-                <div class="flex-1 min-w-0">
-                    <span class="font-bold">v{{ v.version_number }}</span>
-                    <span class="text-ink/50 ml-2">{{ v.created_at.strftime('%Y-%m-%d %H:%M') if v.created_at else '' }}</span>
-                    {% if v.author_discord_id and v.author_discord_id in player_names %}
-                    <span class="text-ink/50 ml-1">by {{ player_names[v.author_discord_id] }}</span>
-                    {% endif %}
-                    <template x-if="editingSummary !== {{ v.id }}">
-                        <p class="text-ink/70 mt-1 cursor-pointer hover:text-ink"
-                           @click='startEditSummary({{ v.id }}, {{ v.summary|tojson }})'>{{ v.summary }}</p>
-                    </template>
-                    <template x-if="editingSummary === {{ v.id }}">
-                        <div class="mt-1 flex gap-2">
-                            <input type="text" x-model="editSummaryText"
-                                   class="flex-1 text-sm border border-ink/20 rounded px-2 py-1 bg-white"
-                                   @keydown.enter="saveEditSummary({{ v.id }})"
-                                   @keydown.escape="editingSummary = null">
-                            <button @click="saveEditSummary({{ v.id }})"
-                                    class="text-xs bg-accent text-parchment px-2 py-1 rounded">Save</button>
-                            <button @click="editingSummary = null"
-                                    class="text-xs bg-ink/10 px-2 py-1 rounded">Cancel</button>
-                        </div>
-                    </template>
+            {# Draft-changes preview. Visually distinct from the v# rows
+               below (blue accent matching the top-of-sheet "Draft changes"
+               banner) so it reads as a separate, in-flight thing rather
+               than a numbered version. Only rendered when the route
+               passed in a non-empty draft_diff - that helper already
+               filters session-state noise that has_unpublished_changes
+               also ignores, but the two paths share compute_version_diff
+               so they stay in sync. #}
+            {% if draft_diff %}
+            <div data-draft-diff
+                 class="bg-blue-50 border-l-4 border-blue-400 rounded p-3 text-sm">
+                <h3 class="text-sm font-bold text-blue-900 mb-2">Draft changes (not yet applied)</h3>
+                {% for category, items in draft_diff|groupby('category') %}
+                <div class="mb-2 last:mb-0" data-draft-diff-category="{{ category }}">
+                    <h4 class="text-xs font-bold uppercase tracking-wide text-blue-800/80 mb-1">{{ category }}</h4>
+                    <ul class="space-y-1 ml-1">
+                        {% for entry in items %}
+                        <li data-diff-kind="{{ entry.kind }}" class="text-ink/80 wrap-anywhere">
+                            {%- if entry.kind == "add" -%}
+                            <span class="text-green-700 font-semibold">+</span>
+                            <span class="font-medium">{{ entry.label }}</span>
+                                {%- if entry.after is not none -%}
+                                    : {{ entry.after }}
+                                {%- endif -%}
+                            {%- elif entry.kind == "remove" -%}
+                            <span class="text-red-700 font-semibold">-</span>
+                            <span class="font-medium">{{ entry.label }}</span>
+                                {%- if entry.before is not none -%}
+                                    : {{ entry.before }}
+                                {%- endif -%}
+                            {%- elif entry.kind == "section_updated" -%}
+                            <span class="font-medium">{{ entry.label }}:</span>
+                            <span class="text-ink/60 italic">{{ entry.after }}</span>
+                            {%- else -%}{# change #}
+                            <span class="font-medium">{{ entry.label }}:</span>
+                            {{ entry.before }} <span aria-hidden="true">→</span> {{ entry.after }}
+                            {%- endif -%}
+                        </li>
+                        {% endfor %}
+                    </ul>
                 </div>
-                {% if v.version_number != versions[0].version_number %}
-                <button type="button"
-                        @click="openRevert({{ v.id }}, {{ v.version_number }})"
-                        class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded ml-2 shrink-0">
-                    Revert
-                </button>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% for v in versions %}
+            {# Each version row owns its own diffOpen state so the
+               drill-down can be toggled independently per row. The HTMX
+               request fires once on the first click; subsequent clicks
+               just toggle visibility against the cached partial. #}
+            <div x-data="{ diffOpen: false }" data-version-row="{{ v.id }}">
+                <div class="flex items-start justify-between text-sm bg-parchment rounded p-3">
+                    <div class="flex-1 min-w-0">
+                        <span class="font-bold">v{{ v.version_number }}</span>
+                        <span class="text-ink/50 ml-2">{{ v.created_at.strftime('%Y-%m-%d %H:%M') if v.created_at else '' }}</span>
+                        {% if v.author_discord_id and v.author_discord_id in player_names %}
+                        <span class="text-ink/50 ml-1">by {{ player_names[v.author_discord_id] }}</span>
+                        {% endif %}
+                        <template x-if="editingSummary !== {{ v.id }}">
+                            <p class="text-ink/70 mt-1 cursor-pointer hover:text-ink"
+                               @click='startEditSummary({{ v.id }}, {{ v.summary|tojson }})'>{{ v.summary }}</p>
+                        </template>
+                        <template x-if="editingSummary === {{ v.id }}">
+                            <div class="mt-1 flex gap-2">
+                                <input type="text" x-model="editSummaryText"
+                                       class="flex-1 text-sm border border-ink/20 rounded px-2 py-1 bg-white"
+                                       @keydown.enter="saveEditSummary({{ v.id }})"
+                                       @keydown.escape="editingSummary = null">
+                                <button @click="saveEditSummary({{ v.id }})"
+                                        class="text-xs bg-accent text-parchment px-2 py-1 rounded">Save</button>
+                                <button @click="editingSummary = null"
+                                        class="text-xs bg-ink/10 px-2 py-1 rounded">Cancel</button>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="flex flex-col items-end gap-1 ml-2 shrink-0">
+                        {% if v.version_number > 1 %}
+                        <button type="button"
+                                data-action="show-changes"
+                                hx-get="/characters/{{ character.id }}/versions/{{ v.id }}/diff"
+                                hx-target="#version-diff-{{ v.id }}"
+                                hx-swap="innerHTML"
+                                hx-trigger="click once"
+                                @click="diffOpen = !diffOpen"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded whitespace-nowrap"
+                                x-text="diffOpen ? 'Hide changes' : 'Show changes'">
+                            Show changes
+                        </button>
+                        {% endif %}
+                        {% if v.version_number != versions[0].version_number %}
+                        <button type="button"
+                                @click="openRevert({{ v.id }}, {{ v.version_number }})"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">
+                            Revert
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if v.version_number > 1 %}
+                <div id="version-diff-{{ v.id }}"
+                     x-show="diffOpen" x-cloak
+                     data-version-diff-target="{{ v.id }}"></div>
                 {% endif %}
             </div>
             {% endfor %}
@@ -4955,6 +5045,18 @@
                 <div x-show="phase === 'done'" x-cloak class="space-y-3">
                     {# Formula header (e.g. "10k7 + 11") #}
                     <div class="text-base font-mono font-bold text-ink/80" x-text="formulaText"></div>
+
+                    {# Read-only banner (non-editors only). Unlike the attack
+                       and WC modals which always show this, the dice-roller
+                       modal handles skill/ring/knack rolls where VP and
+                       other resources are chosen up-front via the roll
+                       menu - so we only show the banner if the non-editor
+                       actually consumed something. The condition is also
+                       reactive to post-roll spends (raises, conviction,
+                       priest pool, etc). #}
+                    <div x-show="_resourcesSpentForBanner()" x-cloak>
+                        {% include 'character/partials/read_only_roll_banner.html' %}
+                    </div>
 
                     {# Inline dice list (sorted ascending), kept ones bold, unkept struck through #}
                     <div class="text-sm">
@@ -7460,6 +7562,23 @@
                 }
 
                 this.phase = 'done';
+            },
+
+            // True iff this roll has consumed any character-state resource
+            // for which a non-editor's "spend" wouldn't really persist. Drives
+            // the read-only banner inside the dice-roller result panel: the
+            // banner only matters if there was something to "not persist".
+            // Editors never see it regardless (the partial gates server-side
+            // on viewer_can_edit).
+            _resourcesSpentForBanner() {
+                if (!this.formula) return false;
+                if (this.formula.void_spent || this.formula.ow_spent) return true;
+                if (this.raisesSpentThisRoll || this.togashiRaisesSpentThisRoll) return true;
+                if (this.convictionSpentThisRoll || this.mirumotoPointsSpentThisRoll) return true;
+                if (this.luckyUsedThisRoll || this.togashiRerollUsed) return true;
+                if (Object.values(this.priestAllySpentThisRoll || {}).some(n => n > 0)) return true;
+                if ((this.preceptsPoolSwapBonuses || []).length > 0) return true;
+                return false;
             },
 
             // 3rd Dan free raises: spending and undo

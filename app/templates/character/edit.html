@@ -1459,7 +1459,19 @@ function characterForm() {
             this._saving = false;
             this._dirty = false;
             this._savePromise = null;
+            this._saveRetryTimer = null;
             this._charId = {{ character.id }};
+
+            // Warn before navigating away with unsaved or failed-to-save
+            // changes still buffered. Only the presence of returnValue is
+            // honored by modern browsers; the dialog text itself is
+            // browser-controlled.
+            window.addEventListener('beforeunload', (ev) => {
+                if (this._dirty || (this.saveStatus || '').startsWith('Save failed')) {
+                    ev.preventDefault();
+                    ev.returnValue = '';
+                }
+            });
 
             this.$watch('rings', () => this.markDirty(), { deep: true });
             this.$watch('skills', () => this.markDirty(), { deep: true });
@@ -1527,6 +1539,34 @@ function characterForm() {
             this._saveTimeout = setTimeout(() => this.doSave(), 1500);
         },
 
+        _scheduleSaveRetry() {
+            // Periodic retry while there are unsaved changes that failed
+            // with a retryable error. Idempotent: a second call before
+            // the first fires is a no-op. Cleared on a successful save
+            // or on a terminal 4xx so we don't hammer a real failure.
+            if (this._saveRetryTimer) return;
+            const ms = (typeof window !== 'undefined' && window.__testSaveRetryMs) || 30000;
+            this._saveRetryTimer = setTimeout(() => {
+                this._saveRetryTimer = null;
+                if (this._saving) {
+                    // Save in flight; let _runSave's tail decide what
+                    // to do once it lands and reschedule from there.
+                    this._scheduleSaveRetry();
+                    return;
+                }
+                if (this._dirty) {
+                    this.doSave();
+                }
+            }, ms);
+        },
+
+        _clearSaveRetry() {
+            if (this._saveRetryTimer) {
+                clearTimeout(this._saveRetryTimer);
+                this._saveRetryTimer = null;
+            }
+        },
+
         doSave() {
             // Returns a promise that resolves when this save (and only this
             // save) finishes. ``flushPendingSave`` relies on this - calling
@@ -1543,6 +1583,10 @@ function characterForm() {
         },
 
         async _runSave() {
+            // Tracks whether this attempt failed in a way that warrants
+            // automatic retry (5xx / network blip) vs a terminal error
+            // (4xx) that keeps coming back if we hammer the server.
+            let retryable = false;
             try {
                 const body = {
                     name: document.querySelector('input[name="name"]')?.value || this.school || 'New Character',
@@ -1579,16 +1623,38 @@ function characterForm() {
 
                 if (resp.ok) {
                     this.saveStatus = 'Saved';
+                    this._clearSaveRetry();
                     setTimeout(() => { if (this.saveStatus === 'Saved') this.saveStatus = ''; }, 2000);
+                } else if (resp.status >= 400 && resp.status < 500) {
+                    // 4xx: validation failure, auth lost, etc. Retrying
+                    // the same payload won't help - surface the status
+                    // and let the user act.
+                    this.saveStatus = 'Save failed (' + resp.status + ')';
+                    this._clearSaveRetry();
                 } else {
-                    this.saveStatus = 'Save failed';
+                    // 5xx: server-side hiccup (deploy, restart, transient
+                    // glitch). Re-flag dirty and retry on a timer.
+                    this.saveStatus = 'Save failed - retrying';
+                    this._dirty = true;
+                    retryable = true;
                 }
             } catch (e) {
-                this.saveStatus = 'Save failed';
+                // Network error / fetch threw (offline, CORS, abort).
+                // Treat as retryable - the same payload will likely
+                // succeed once connectivity returns.
+                this.saveStatus = 'Save failed - retrying';
+                this._dirty = true;
+                retryable = true;
             }
             this._saving = false;
             this._savePromise = null;
-            if (this._dirty) this.debounceSave();
+            if (retryable) {
+                this._scheduleSaveRetry();
+            } else if (this._dirty) {
+                // Edits landed during the in-flight save; debounce a
+                // fresh attempt against the latest form state.
+                this.debounceSave();
+            }
         },
 
         async flushPendingSave() {

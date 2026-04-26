@@ -24,19 +24,33 @@ def get_admin_ids() -> List[str]:
     return _get_list_from_env("ADMIN_DISCORD_IDS")
 
 
-def get_test_login_tokens() -> Dict[str, str]:
-    """Parse TEST_LOGIN_TOKENS env var into {token: discord_id} mapping.
+def get_magic_login_tokens() -> Dict[str, str]:
+    """Parse MAGIC_LOGIN_TOKENS env var into {token: discord_id} mapping.
 
-    Format: ``uuid1:discord_id,uuid2:discord_id``
+    Format: ``uuid1:discord_id,uuid2:discord_id``. Used by the
+    ``/auth/magic-login/{token}`` route to bypass Discord OAuth for
+    pre-seeded users (test users plus any campaign player who needs a
+    backup login link). The env var is sensitive - tokens act as
+    bearer credentials, so they live in ``.env`` and Fly secrets only.
+
+    Backward compat: also reads the legacy ``TEST_LOGIN_TOKENS`` var so
+    a deploy that hasn't migrated its Fly secret yet keeps working.
+    Entries from both vars are merged; duplicates favor MAGIC_LOGIN_TOKENS.
     """
-    val = os.environ.get("TEST_LOGIN_TOKENS", "")
     result: Dict[str, str] = {}
-    for entry in val.split(","):
-        entry = entry.strip()
-        if ":" in entry:
-            token, discord_id = entry.split(":", 1)
-            result[token.strip()] = discord_id.strip()
+    for var in ("TEST_LOGIN_TOKENS", "MAGIC_LOGIN_TOKENS"):
+        val = os.environ.get(var, "")
+        for entry in val.split(","):
+            entry = entry.strip()
+            if ":" in entry:
+                token, discord_id = entry.split(":", 1)
+                result[token.strip()] = discord_id.strip()
     return result
+
+
+# Backward-compat alias - tests / external callers that imported the old
+# name keep working. New code should call ``get_magic_login_tokens``.
+get_test_login_tokens = get_magic_login_tokens
 
 
 def is_whitelisted(discord_id: str) -> bool:

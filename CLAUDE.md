@@ -29,7 +29,7 @@ playwright install-deps chromium
 A `.env` file (gitignored) holds credentials for deployment and external services:
 
 - `FLY_API_TOKEN` - Fly.io API token for deployments
-- `TEST_LOGIN_TOKENS` - UUID-to-discord-id mapping for test user login (format: `uuid:discord_id,uuid:discord_id`)
+- `MAGIC_LOGIN_TOKENS` - UUID-to-discord-id mapping for backup login URLs (format: `uuid:discord_id,uuid:discord_id`). Covers test users plus any campaign player who needs a Discord-bypass link. The legacy name `TEST_LOGIN_TOKENS` is still read for backward compat.
 - `GOOGLE_CLIENT_ID` - Google OAuth 2.0 client ID (for Google Sheets export)
 - `GOOGLE_CLIENT_SECRET` - Google OAuth 2.0 client secret
 
@@ -40,7 +40,7 @@ The following are stored as **Fly secrets** (not in `.env`):
 - `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` - Discord OAuth credentials
 - `DISCORD_WHITELIST_IDS` - comma-separated Discord IDs allowed to log in
 - `ADMIN_DISCORD_IDS` - comma-separated Discord IDs with GM/admin privileges
-- `TEST_LOGIN_TOKENS` - also set as a Fly secret (same value as in `.env`)
+- `MAGIC_LOGIN_TOKENS` - also set as a Fly secret (same value as in `.env`)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - also set as Fly secrets (same values as in `.env`)
 - `S3_BACKUP_BUCKET` - S3 bucket name for database backups (e.g. `l7r-character-sheet-backups`)
 - `S3_BACKUP_REGION` - AWS region (default: `us-east-1`)
@@ -307,12 +307,14 @@ Key files:
 
 S3 key format: `backups/l7r-YYYY-MM-DDTHH-MM-SSZ.db`. If `S3_BACKUP_BUCKET` is not set, backups are silently skipped (safe for local dev).
 
-## Test Users
+## Magic-Login URLs
 
-Two non-admin test users ("Test User 1" and "Test User 2") are pre-seeded on startup for testing the site as a regular player. Log in via secret URLs:
+Some pre-seeded users have a magic-login URL that bypasses Discord OAuth - the two non-admin test users ("Test User 1" and "Test User 2") and any campaign player who needs a backup login (e.g. someone whose Discord access is broken). Log in via:
 
 ```
-https://l7r-character-sheet.fly.dev/auth/test-login/<uuid>
+https://l7r-character-sheet.fly.dev/auth/magic-login/<uuid>
 ```
 
-The UUIDs are stored in the `TEST_LOGIN_TOKENS` Fly secret and in `.env`. The route pattern is public; only the UUID tokens are secret. Test users are NOT admins - use them to test granting edit access, viewing as a non-GM, etc.
+(The legacy path `https://l7r-character-sheet.fly.dev/auth/test-login/<uuid>` still works as an alias.) The UUIDs are stored in the `MAGIC_LOGIN_TOKENS` Fly secret and in `.env` (one `<uuid>:<discord_id>` entry per user, comma-separated). The route pattern is public; only the UUID tokens are secret. Magic-login users keep whatever permission level their Discord ID has - test users are NOT admins, but a magic-login UUID for an admin's discord_id signs in WITH admin privileges, so treat the secret accordingly.
+
+To add a new entry: generate a UUID (`python3 -c "import uuid; print(uuid.uuid4())"`), append `<uuid>:<discord_id>` to `MAGIC_LOGIN_TOKENS` in `.env`, and update the Fly secret (`fly secrets set MAGIC_LOGIN_TOKENS="..."`). The discord_id must already exist in the `users` table; pre-seeded campaign players (`CAMPAIGN_PLAYERS` in `app/game_data.py`) qualify automatically.

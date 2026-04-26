@@ -152,6 +152,67 @@ class TestPublishStatus:
         assert c.has_unpublished_changes is False
         assert c.publish_status == "published"
 
+    # ----------------------------------------------------------------------
+    # Mutable session state must not flip a published character to
+    # "modified". /track writes wounds, void, action dice, etc. to the
+    # row but never updates published_state - and these aren't really
+    # stat-level changes worth versioning.
+    # ----------------------------------------------------------------------
+
+    def _published(self, db, **kwargs):
+        kwargs.setdefault("school", "akodo_bushi")
+        c = Character(name="Sessioned", is_published=True, **kwargs)
+        db.add(c)
+        db.flush()
+        c.published_state = c.to_dict()
+        # Sanity: clean state right after publish.
+        assert c.has_unpublished_changes is False
+        return c
+
+    def test_taking_light_wounds_does_not_flip_to_modified(self, db):
+        c = self._published(db)
+        c.current_light_wounds = 7
+        assert c.has_unpublished_changes is False
+        assert c.publish_status == "published"
+
+    def test_taking_serious_wounds_does_not_flip_to_modified(self, db):
+        c = self._published(db)
+        c.current_serious_wounds = 2
+        assert c.has_unpublished_changes is False
+
+    def test_spending_void_does_not_flip_to_modified(self, db):
+        c = self._published(db, ring_void=4)
+        c.current_void_points = 2
+        c.current_temp_void_points = 1
+        assert c.has_unpublished_changes is False
+
+    def test_rolling_action_dice_does_not_flip_to_modified(self, db):
+        c = self._published(db)
+        c.action_dice = [{"value": 7, "spent": False}, {"value": 3, "spent": True}]
+        assert c.has_unpublished_changes is False
+
+    def test_priest_precepts_pool_change_does_not_flip_to_modified(self, db):
+        c = self._published(db, school="priest",
+                            knacks={"conviction": 3, "otherworldliness": 3, "pontificate": 3})
+        c.precepts_pool = [{"value": 9}, {"value": 6}, {"value": 4}]
+        assert c.has_unpublished_changes is False
+
+    def test_google_sheet_id_change_does_not_flip_to_modified(self, db):
+        # Exporting to Google Sheets stamps google_sheet_id. That's pure
+        # export metadata, not a stat change.
+        c = self._published(db)
+        c.google_sheet_id = "1AbCdEf-spreadsheet-id"
+        assert c.has_unpublished_changes is False
+
+    def test_real_stat_change_still_flips_to_modified(self, db):
+        # Regression guard: with the expanded skip set we still need to
+        # detect actual gameplay changes. A skill bump must still trip
+        # has_unpublished_changes.
+        c = self._published(db)
+        c.skills = {"bragging": 2}
+        assert c.has_unpublished_changes is True
+        assert c.publish_status == "modified"
+
 
 class TestCharacterDB:
     def test_create_and_query(self, db):
