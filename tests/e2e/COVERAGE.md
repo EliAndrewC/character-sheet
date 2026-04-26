@@ -1231,6 +1231,8 @@ Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pyt
 - [x] Homepage no horizontal overflow at phone width → `test_responsive.py::test_homepage_no_horizontal_overflow`
 - [x] Hamburger visible on phone, nav items hidden → `test_responsive.py::test_hamburger_visible_on_phone`
 - [x] Hamburger toggle shows/hides nav items → `test_responsive.py::test_hamburger_toggle_shows_nav`
+- [x] Nav dropdown stays hidden on mobile during pre-Alpine FOUC window → `test_responsive.py::test_nav_dropdown_hidden_on_mobile_before_alpine_init`
+- [x] Nav dropdown stays visible on desktop pre-Alpine (no regression) → `test_responsive.py::test_nav_dropdown_visible_on_desktop_before_alpine_init`
 - [x] Nav visible without hamburger on desktop → `test_responsive.py::test_nav_visible_without_hamburger_on_desktop`
 - [x] No zero-width truncated labels on editor → `test_responsive.py::test_no_zero_width_labels_on_editor`
 - [x] No zero-width truncated labels on sheet → `test_responsive.py::test_no_zero_width_labels_on_sheet`

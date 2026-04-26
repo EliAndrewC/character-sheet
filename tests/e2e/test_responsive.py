@@ -318,6 +318,65 @@ def test_hamburger_toggle_shows_nav(page, live_server_url):
     assert not page.locator('nav button:text("New Character")').is_visible()
 
 
+def _stub_alpine_route(ctx):
+    """Make alpine.min.js return an empty body, so Alpine never initializes
+    on the next navigation. The element classes / data-* attrs stay in the
+    DOM exactly as the server sent them, which is what a real user sees in
+    the brief window between HTML parse and Alpine boot."""
+    ctx.route(
+        "**/static/js/alpine.min.js",
+        lambda route: route.fulfill(status=200, body="", content_type="application/javascript"),
+    )
+
+
+def test_nav_dropdown_hidden_on_mobile_before_alpine_init(browser, live_server_url):
+    """The nav dropdown (New Character / username / Admin / Logout) must be
+    hidden on mobile during the pre-Alpine FOUC window. Without the static
+    `hidden` class on the dropdown, mobile users briefly see the menu flash
+    open as the page is still loading."""
+    ctx = browser.new_context(
+        viewport={"width": 375, "height": 700},
+        is_mobile=True,
+        has_touch=True,
+        extra_http_headers={"X-Test-User": "183026066498125825:eliandrewc"},
+    )
+    try:
+        _stub_alpine_route(ctx)
+        p = ctx.new_page()
+        p.goto(live_server_url)
+        p.wait_for_load_state("networkidle")
+        # The "New Character" button lives inside the dropdown - if the
+        # dropdown is still visible during FOUC it'll be visible too.
+        nc = p.locator('nav button:text("New Character")')
+        assert not nc.is_visible(), (
+            "New Character button (inside the nav dropdown) is visible on "
+            "mobile before Alpine init - the dropdown is FOUC-ing open."
+        )
+    finally:
+        ctx.close()
+
+
+def test_nav_dropdown_visible_on_desktop_before_alpine_init(browser, live_server_url):
+    """The mobile-FOUC fix must NOT regress desktop: the nav stays visible
+    even when Alpine has not yet initialized."""
+    ctx = browser.new_context(
+        viewport={"width": 1280, "height": 720},
+        extra_http_headers={"X-Test-User": "183026066498125825:eliandrewc"},
+    )
+    try:
+        _stub_alpine_route(ctx)
+        p = ctx.new_page()
+        p.goto(live_server_url)
+        p.wait_for_load_state("networkidle")
+        nc = p.locator('nav button:text("New Character")')
+        assert nc.is_visible(), (
+            "New Character button must be visible on desktop pre-Alpine; "
+            "the static `sm:flex` class should override the static `hidden`."
+        )
+    finally:
+        ctx.close()
+
+
 def test_nav_visible_without_hamburger_on_desktop(page, live_server_url):
     """At desktop width the nav items are always visible without a hamburger."""
     page.set_viewport_size({"width": 1280, "height": 720})
