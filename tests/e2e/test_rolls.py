@@ -718,6 +718,96 @@ def test_kind_eye_alternative_totals_on_tact_and_sincerity(page, live_server_url
     assert "on open rolls with servants and the mistreated" in sincerity_text
 
 
+def test_alternative_totals_render_number_first_with_all_of_the_above(page, live_server_url):
+    """Alternative totals show '<number> <label>' (number first), and when there
+    are 2+ alternatives a final 'if all of the above' line sums every conditional
+    bonus on top of the base total."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "AltTotals")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_bragging", 1)
+
+    # Higher Purpose (+5 alt) targeting bragging.
+    page.check('input[name="adv_higher_purpose"]')
+    page.wait_for_selector('input[placeholder="What is your cause?"]', timeout=3000)
+    page.fill('input[placeholder="What is your cause?"]', "Restore the family")
+    hp_label = page.locator('input[name="adv_higher_purpose"]').locator('xpath=ancestor::div[1]').locator('label.inline-flex', has_text="Bragging")
+    hp_label.locator('input[type="checkbox"]').check()
+
+    # Specialization (+10 alt) targeting bragging.
+    page.check('input[name="adv_specialization"]')
+    page.wait_for_selector('input[placeholder="What specialization?"]', timeout=3000)
+    page.fill('input[placeholder="What specialization?"]', "Eligible bachelors")
+    sp_select = page.locator('input[name="adv_specialization"]').locator('xpath=ancestor::div[1]').locator('select')
+    sp_select.select_option(value="bragging")
+
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Alt totals setup")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_for_roll_result(page)
+
+    modal = page.locator('[data-modal="dice-roller"]')
+    text = modal.text_content() or ""
+    assert "Alternative totals" in text
+
+    # Read the base total then verify each alt row renders the expected sum and
+    # that the number appears BEFORE the label (no ":" between them anymore).
+    # Total starts with the kept-dice value plus any flat bonuses (e.g. Fierce
+    # gives bragging a free raise -> +5 baseline). We don't hardcode the base;
+    # we read it off the modal and compare.
+    base_total = int(page.evaluate("document.querySelector('[data-modal=\"dice-roller\"] [data-base-total]')?.textContent?.trim() || window._diceRoller?.baseTotal || 0"))
+    # Fallback: read baseTotal via Alpine since data-base-total may not exist.
+    if base_total == 0:
+        base_total = int(page.evaluate(
+            "Alpine.$data(document.querySelector('[data-modal=\"dice-roller\"]')).baseTotal"
+        ))
+
+    alt_rows = modal.locator('.border-t.border-ink\\/10 > div.text-sm')
+    assert alt_rows.count() == 3, f"expected 3 alt rows (HP, Spec, all-of-the-above), got {alt_rows.count()}"
+
+    hp_row = alt_rows.filter(has_text="Higher Purpose").first.text_content().strip()
+    sp_row = alt_rows.filter(has_text="Specialization").first.text_content().strip()
+    all_row = alt_rows.filter(has_text="if all of the above").first.text_content().strip()
+
+    # Number-first ordering: row starts with the digit, not with "if".
+    assert hp_row.split()[0].isdigit(), f"HP row should start with a number, got: {hp_row!r}"
+    assert sp_row.split()[0].isdigit(), f"Spec row should start with a number, got: {sp_row!r}"
+
+    hp_num = int(hp_row.split()[0])
+    sp_num = int(sp_row.split()[0])
+    all_num = int(all_row.split()[0])
+    assert hp_num == base_total + 5
+    assert sp_num == base_total + 10
+    assert all_num == base_total + 15  # +5 (HP) + +10 (Spec)
+
+
+def test_alternative_totals_no_all_of_the_above_when_only_one(page, live_server_url):
+    """With a single alternative total, the 'if all of the above' line does not appear."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "OneAlt")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_tact", 1)
+    page.check('input[name="adv_kind_eye"]')  # one alt on tact
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "One alt setup")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+
+    page.locator('[data-roll-key="skill:tact"]').click()
+    _wait_for_roll_result(page)
+    text = page.locator('[data-modal="dice-roller"]').text_content() or ""
+    assert "Alternative totals" in text
+    assert "for servants and the mistreated" in text
+    assert "if all of the above" not in text
+
+
 def test_spend_raise_button_visible_for_applicable_skill(page, live_server_url):
     """The 'Spend 3rd Dan Free Raise' button appears on the roll modal for
     skills in the 3rd Dan applicable_to list."""

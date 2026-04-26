@@ -76,6 +76,40 @@ def test_edit_no_horizontal_overflow(page, live_server_url):
     _assert_no_horizontal_overflow(page)
 
 
+def test_edit_basics_section_contains_its_controls(page, live_server_url):
+    """The Basics section's white card must visually contain its controls
+    at narrow phone widths (320-360 px). CSS grid items default to
+    min-width: auto, so the longest <select> option (e.g. a player or
+    gaming-group name) and the input + icon buttons row used to push
+    the column track wider than the section, leaving the Player /
+    Gaming Group dropdowns and the name-explanation icon button
+    bleeding past the white card's right edge."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "BasicsBounds")
+    edit_url = sheet_url + "/edit"
+    for width in (320, 360, 375):
+        page.set_viewport_size({"width": width, "height": 667})
+        page.goto(edit_url)
+        page.wait_for_selector('input[name="name"]')
+        bleed = page.evaluate("""() => {
+            const sec = [...document.querySelectorAll('section')]
+                .find(s => s.querySelector('h2')?.textContent?.includes('Basics'));
+            if (!sec) return [{tag: 'NONE', reason: 'no Basics section'}];
+            const r = sec.getBoundingClientRect();
+            const cs = getComputedStyle(sec);
+            const innerRight = r.right - parseFloat(cs.paddingRight);
+            const out = [];
+            sec.querySelectorAll('input, select, button').forEach(el => {
+                const er = el.getBoundingClientRect();
+                if (er.width === 0) return;
+                if (er.right > innerRight + 0.5) {
+                    out.push({tag: el.tagName, right: Math.round(er.right), w: Math.round(er.width)});
+                }
+            });
+            return out;
+        }""")
+        assert bleed == [], f"At width {width}px, Basics section controls overflow: {bleed}"
+
+
 def test_homepage_no_horizontal_overflow(page, live_server_url):
     """The homepage has no horizontal scrollbar at phone width."""
     page.set_viewport_size(PHONE)
@@ -331,3 +365,223 @@ def test_no_zero_width_labels_on_sheet(page, live_server_url):
     page.goto(sheet_url)
     page.wait_for_load_state("networkidle")
     _check_no_zero_width_truncated(page)
+
+
+# ---------------------------------------------------------------------------
+# Mobile rules-text expand toggles on the editor
+#
+# On phones the desktop hover tooltip turns into an awkward tap-to-toggle
+# that fights the checkbox / +/- controls in the same row. The editor
+# replaces it under <sm with a chevron button at the right of each row;
+# tapping the chevron expands a rules-text panel below the row, leaving
+# the form controls undisturbed.
+# ---------------------------------------------------------------------------
+
+
+def test_edit_advantage_chevron_expands_rules_text_on_phone(page, live_server_url):
+    """Tapping the chevron on the Charming advantage row at phone width
+    expands the rules text panel; tapping again collapses it. The SVG
+    rotates 180 degrees while expanded."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "AdvChev")
+    page.set_viewport_size(PHONE)
+    page.goto(sheet_url + "/edit")
+    page.wait_for_selector('input[name="adv_charming"]')
+
+    chevron = page.locator('[data-testid="adv-chevron-charming"]')
+    panel = page.locator('[data-testid="adv-rules-charming"]')
+    svg = chevron.locator('svg')
+
+    assert chevron.is_visible(), "chevron should be visible at phone width"
+    assert not panel.is_visible(), "rules panel should be collapsed initially"
+    assert "rotate-180" not in (svg.get_attribute("class") or "")
+
+    chevron.click()
+    panel.wait_for(state="visible", timeout=2000)
+    panel_text = (panel.text_content() or "").strip()
+    assert "free raise on etiquette" in panel_text.lower(), (
+        f"expected Charming rules text, got {panel_text!r}"
+    )
+    assert "rotate-180" in (svg.get_attribute("class") or "")
+
+    chevron.click()
+    panel.wait_for(state="hidden", timeout=2000)
+    assert "rotate-180" not in (svg.get_attribute("class") or "")
+
+
+def test_edit_advantage_chevron_does_not_toggle_checkbox(page, live_server_url):
+    """Clicking the chevron must not flip the underlying checkbox.
+    The label still toggles the checkbox on its own click - that's fine -
+    but the chevron lives outside the label and must not bubble into it."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "AdvChevCB")
+    page.set_viewport_size(PHONE)
+    page.goto(sheet_url + "/edit")
+    page.wait_for_selector('input[name="adv_charming"]')
+
+    cb = page.locator('input[name="adv_charming"]')
+    chevron = page.locator('[data-testid="adv-chevron-charming"]')
+    initial = cb.is_checked()
+
+    for _ in range(3):
+        chevron.click()
+        page.wait_for_timeout(50)
+        assert cb.is_checked() == initial, (
+            "Chevron click flipped the checkbox; it must only toggle the rules panel"
+        )
+
+
+def test_edit_disadvantage_chevron_expands_rules_text_on_phone(page, live_server_url):
+    """Same chevron pattern works for disadvantage rows."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "DisChev")
+    page.set_viewport_size(PHONE)
+    page.goto(sheet_url + "/edit")
+    page.wait_for_selector('input[name="dis_vain"]')
+
+    chevron = page.locator('[data-testid="dis-chevron-vain"]')
+    panel = page.locator('[data-testid="dis-rules-vain"]')
+
+    assert chevron.is_visible()
+    assert not panel.is_visible()
+    chevron.click()
+    panel.wait_for(state="visible", timeout=2000)
+    assert (panel.text_content() or "").strip() != ""
+
+
+def test_edit_campaign_advantage_chevron_expands_rules_text_on_phone(page, live_server_url):
+    """Same chevron pattern works for the Wasp Campaign advantages
+    section. We don't need a parallel test for campaign disadvantages -
+    the markup in that section is identical to campaign advantages."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "CampChev")
+    page.set_viewport_size(PHONE)
+    page.goto(sheet_url + "/edit")
+    page.wait_for_load_state("networkidle")
+
+    chevron = page.locator('[data-testid^="camp-adv-chevron-"]').first
+    aid = (chevron.get_attribute("data-testid") or "").removeprefix("camp-adv-chevron-")
+    panel = page.locator(f'[data-testid="camp-adv-rules-{aid}"]')
+
+    chevron.scroll_into_view_if_needed()
+    assert chevron.is_visible()
+    assert not panel.is_visible()
+    chevron.click()
+    panel.wait_for(state="visible", timeout=2000)
+    assert (panel.text_content() or "").strip() != ""
+
+
+def test_edit_skill_row_mobile_layout(page, live_server_url):
+    """At phone width, the skill row stacks name + controls into column 1,
+    puts the roll display in column 2, and adds a chevron column 3.
+    The XP-cost label is hidden on mobile."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "SkillMobile")
+    page.set_viewport_size(PHONE)
+    page.goto(sheet_url + "/edit")
+    page.wait_for_selector('[data-testid="skill-chevron-bragging"]')
+
+    layout = page.evaluate("""() => {
+        const row = document.querySelector('[data-testid="skill-chevron-bragging"]')
+                            .closest('.editor-skill-row');
+        const r = (sel) => {
+            const el = row.querySelector(sel);
+            if (!el) return null;
+            const b = el.getBoundingClientRect();
+            return {x: b.x, y: b.y, width: b.width, height: b.height};
+        };
+        const xp = row.querySelector('.editor-skill-row__xp');
+        return {
+            display: getComputedStyle(row).display,
+            name: r('.editor-skill-row__name'),
+            ctrls: r('.editor-skill-row__ctrls'),
+            roll: r('.editor-skill-row__roll'),
+            chev: r('.editor-skill-row__chevron'),
+            xp_display: xp ? getComputedStyle(xp).display : null,
+        };
+    }""")
+
+    assert layout["display"] == "grid", f"expected grid layout on phone, got {layout['display']}"
+    # Name and controls share column 1: same x, different y (controls below name).
+    assert layout["name"]["x"] == layout["ctrls"]["x"], (
+        f"name x={layout['name']['x']} should equal ctrls x={layout['ctrls']['x']}"
+    )
+    assert layout["ctrls"]["y"] > layout["name"]["y"] + 4, (
+        f"ctrls (y={layout['ctrls']['y']}) should sit below name (y={layout['name']['y']})"
+    )
+    # Roll display sits in column 2: x is to the right of name's right edge.
+    name_right = layout["name"]["x"] + layout["name"]["width"]
+    assert layout["roll"]["x"] >= name_right, (
+        f"roll (x={layout['roll']['x']}) should start to the right of name (right={name_right})"
+    )
+    # Chevron in column 3: to the right of the roll's right edge.
+    roll_right = layout["roll"]["x"] + layout["roll"]["width"]
+    assert layout["chev"]["x"] >= roll_right - 1, (
+        f"chevron (x={layout['chev']['x']}) should sit right of roll (right={roll_right})"
+    )
+    # XP-cost label hidden on mobile.
+    assert layout["xp_display"] == "none", (
+        f"XP-cost label should be display:none on phone, got {layout['xp_display']!r}"
+    )
+
+
+def test_edit_skill_row_desktop_layout_unchanged(page, live_server_url):
+    """At desktop width the skill row keeps the original single-line flex
+    layout: name, controls, XP label, roll display all on the same y line.
+    The chevron is hidden via sm:hidden."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "SkillDesk")
+    page.set_viewport_size({"width": 1280, "height": 720})
+    page.goto(sheet_url + "/edit")
+    page.wait_for_selector('.editor-skill-row')
+
+    layout = page.evaluate("""() => {
+        const row = document.querySelector('.editor-skill-row');
+        const r = (sel) => {
+            const el = row.querySelector(sel);
+            if (!el) return null;
+            const b = el.getBoundingClientRect();
+            return {x: b.x, y: b.y, width: b.width};
+        };
+        const chev = row.querySelector('.editor-skill-row__chevron');
+        const xp = row.querySelector('.editor-skill-row__xp');
+        return {
+            display: getComputedStyle(row).display,
+            name: r('.editor-skill-row__name'),
+            ctrls: r('.editor-skill-row__ctrls'),
+            xp: r('.editor-skill-row__xp'),
+            roll: r('.editor-skill-row__roll'),
+            chev_display: chev ? getComputedStyle(chev).display : null,
+            xp_display: xp ? getComputedStyle(xp).display : null,
+        };
+    }""")
+
+    assert layout["display"] == "flex", f"expected flex on desktop, got {layout['display']}"
+    assert layout["chev_display"] == "none", "chevron must be hidden on desktop"
+    assert layout["xp_display"] != "none", "XP label must be visible on desktop"
+    # All four visible elements line up on roughly the same y (within 8px).
+    ys = [layout[k]["y"] for k in ("name", "ctrls", "xp", "roll")]
+    spread = max(ys) - min(ys)
+    assert spread < 8, (
+        f"name/ctrls/xp/roll should sit on one line on desktop; y spread = {spread}"
+    )
+
+
+def test_edit_chevron_hidden_on_desktop(page, live_server_url):
+    """All editor row chevrons collapse to display:none at sm and up.
+    Tested across one advantage row and one skill row to cover both
+    sm:hidden uses (utility class on advantage chevrons, named-area
+    grid track on skill chevrons)."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "DeskChevHidden")
+    page.set_viewport_size({"width": 1280, "height": 720})
+    page.goto(sheet_url + "/edit")
+    page.wait_for_selector('input[name="adv_charming"]')
+
+    states = page.evaluate("""() => {
+        const adv = document.querySelector('[data-testid="adv-chevron-charming"]');
+        const skill = document.querySelector('[data-testid="skill-chevron-bragging"]');
+        return {
+            adv_display: adv ? getComputedStyle(adv).display : null,
+            skill_display: skill ? getComputedStyle(skill).display : null,
+        };
+    }""")
+    assert states["adv_display"] == "none", (
+        f"advantage chevron should be hidden on desktop, got {states['adv_display']!r}"
+    )
+    assert states["skill_display"] == "none", (
+        f"skill chevron should be hidden on desktop, got {states['skill_display']!r}"
+    )

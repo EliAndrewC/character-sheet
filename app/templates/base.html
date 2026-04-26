@@ -167,6 +167,42 @@
             .skill-row--has-modifiers > .skill-row__roll { grid-area: roll; }
         }
 
+        /* ── Editor rows (advantages, disadvantages, skills): on mobile,
+              the tap-to-toggle tooltip on a checkbox-bearing row would flip
+              the checkbox AND the tooltip with a single tap. Hide the
+              tooltip-content under sm so taps only flip the form control;
+              the chevron toggle on each row reveals the rules text instead. */
+        @media (max-width: 639px) {
+            .editor-row .tooltip-content,
+            .editor-skill-row .tooltip-content { display: none !important; }
+        }
+
+        /* ── Editor skill rows: flex on desktop (current layout), grid on
+              mobile with name + controls stacked in column 1, roll in
+              column 2, chevron in column 3; XP-cost label hidden. */
+        .editor-skill-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        @media (max-width: 639px) {
+            .editor-skill-row {
+                display: grid;
+                grid-template-columns: 6rem minmax(0, 1fr) auto;
+                grid-template-areas:
+                    "name  roll chevron"
+                    "ctrls roll chevron";
+                column-gap: 0.5rem;
+                row-gap: 0.125rem;
+                align-items: center;
+            }
+            .editor-skill-row__name    { grid-area: name; }
+            .editor-skill-row__ctrls   { grid-area: ctrls; }
+            .editor-skill-row__roll    { grid-area: roll; align-self: center; word-break: break-word; }
+            .editor-skill-row__chevron { grid-area: chevron; }
+            .editor-skill-row__xp      { display: none; }
+        }
+
         /* ── Rings: diamond layout ── */
         .rings-diamond {
             position: relative;
@@ -373,23 +409,66 @@
         <a href="/privacy" class="hover:text-ink/70">Privacy</a>
     </footer>
     <script>
-    // Tooltip tap-to-toggle for touch devices (hover: none).
-    // Desktop (hover: hover) is untouched - CSS :hover handles it.
-    if (window.matchMedia('(hover: none)').matches) {
+    // Tooltip click-toggle.
+    //   - Touch (hover: none): every .tooltip-trigger taps to open/close.
+    //   - Desktop (hover: hover): only triggers marked data-tap-toggle, in
+    //     addition to the CSS-driven 2000ms hover behavior.
+    // Triggers marked data-tooltip-clamp also have their tooltip-content
+    // shifted horizontally on open/hover/resize so it never overflows the
+    // viewport (avoids surprise horizontal scroll on narrow screens).
+    (function() {
+        var isTouch = window.matchMedia('(hover: none)').matches;
+
+        function clampTooltip(trigger) {
+            var tooltip = trigger.querySelector(':scope > .tooltip-content');
+            if (!tooltip) return;
+            tooltip.style.left = '';
+            var tRect = trigger.getBoundingClientRect();
+            var tipRect = tooltip.getBoundingClientRect();
+            var vw = window.innerWidth || document.documentElement.clientWidth;
+            var margin = 8;
+            var desired = Math.max(margin, Math.min(tRect.left, vw - margin - tipRect.width));
+            var offset = desired - tRect.left;
+            if (Math.abs(offset) > 0.5) tooltip.style.left = offset + 'px';
+        }
+
         document.addEventListener('click', function(e) {
             var trigger = e.target.closest('.tooltip-trigger');
             if (trigger) {
+                if (!isTouch && !trigger.hasAttribute('data-tap-toggle')) return;
                 document.querySelectorAll('.tooltip-trigger.tooltip-active').forEach(function(el) {
                     if (el !== trigger) el.classList.remove('tooltip-active');
                 });
                 trigger.classList.toggle('tooltip-active');
+                if (trigger.classList.contains('tooltip-active') && trigger.hasAttribute('data-tooltip-clamp')) {
+                    clampTooltip(trigger);
+                }
             } else {
                 document.querySelectorAll('.tooltip-trigger.tooltip-active').forEach(function(el) {
-                    el.classList.remove('tooltip-active');
+                    if (isTouch || el.hasAttribute('data-tap-toggle')) {
+                        el.classList.remove('tooltip-active');
+                    }
                 });
             }
         });
-    }
+
+        document.addEventListener('mouseenter', function(e) {
+            var t = e.target;
+            if (t && t.nodeType === 1 && t.matches && t.matches('.tooltip-trigger[data-tooltip-clamp]')) {
+                clampTooltip(t);
+            }
+        }, true);
+
+        function clampAll() {
+            document.querySelectorAll('.tooltip-trigger[data-tooltip-clamp]').forEach(clampTooltip);
+        }
+        window.addEventListener('resize', clampAll);
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', clampAll);
+        } else {
+            clampAll();
+        }
+    })();
     </script>
 </body>
 </html>

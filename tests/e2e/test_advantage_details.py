@@ -62,8 +62,13 @@ def test_higher_purpose_skill_checkboxes(page, live_server_url):
     _go_to_editor(page, live_server_url)
     page.check('input[name="adv_higher_purpose"]')
     page.wait_for_timeout(300)
-    # Should see skill checkboxes (at least one)
-    assert page.locator('input[name="adv_higher_purpose"]').locator('..').locator('..').locator('input[type="checkbox"]').count() > 1
+    # Walk up to the editor-row wrapper (ancestor of the label, chevron,
+    # and the conditional skill-checkbox detail panel) and count its
+    # nested skill checkboxes. Should have at least the skill multi-select.
+    row = page.locator('input[name="adv_higher_purpose"]').locator(
+        'xpath=ancestor::div[contains(@class, "editor-row")][1]'
+    )
+    assert row.locator('input[type="checkbox"]').count() > 1
 
 
 def test_specialization_shows_dropdown(page, live_server_url):

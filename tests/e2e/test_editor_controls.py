@@ -461,6 +461,23 @@ def test_campaign_disadvantage_tooltip_has_full_rules_text(page, live_server_url
     assert "•" in text  # bullet character preserved
 
 
+def test_editor_skill_tooltip_has_canonical_rules_text(page, live_server_url):
+    """Skill tooltip on the edit page renders the canonical rules_text, not the short description.
+
+    The view sheet has long shown skill.rules_text in tooltips; the editor used
+    to show only the short skill.description. Both pages must now match exactly.
+    """
+    _go_to_editor(page, live_server_url)
+    tip = page.locator('input[name="skill_bragging"]').locator('xpath=ancestor::div[contains(@class, "tooltip-trigger")][1]').locator('.tooltip-content')
+    text = (tip.text_content() or "").lower()
+    # Canonical rules_text from rules/02-skills.md - the "make an open bragging
+    # roll" phrase appears only in rules_text, not in the short description.
+    assert "make an open bragging roll" in text
+    # Second paragraph from rules_text — proves whitespace-pre-line preserved
+    # the paragraph break.
+    assert "contested bragging roll" in text
+
+
 # --- Skill XP costs ---
 
 def test_basic_skill_xp_cost(page, live_server_url):
