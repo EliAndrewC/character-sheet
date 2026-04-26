@@ -136,36 +136,75 @@ def _roll_initiative_and_close_modal(p):
     p.wait_for_timeout(150)
 
 
-def test_anon_rolls_initiative_no_persist(page, page_anon, live_server_url):
-    """Anon rolls initiative: action dice appear locally, action-dice-section
-    becomes visible, banner visible inside it, refresh clears everything."""
+def test_anon_init_roll_does_not_change_action_dice_display(
+    page, page_anon, live_server_url
+):
+    """A non-editor's initiative roll does NOT add action dice to the
+    sheet's action-dice-section. Whatever the editor's persisted dice
+    state was, that's what the section shows - the non-editor's roll
+    can't make dice appear or disappear from the displayed sheet.
+
+    This test covers the empty-baseline case: editor never rolled
+    initiative, server has actionDice=[]. The non-editor rolls
+    initiative, sees the modal animate, closes it; the action-dice
+    section remains hidden because actionDice is still []."""
     sheet_url = _published_sheet_url(page, live_server_url)
 
     _disable_dice_animations(page_anon)
     page_anon.goto(sheet_url)
     page_anon.wait_for_selector("h1")
 
-    # Before rolling: no action dice, action-dice-section hidden.
     assert page_anon.evaluate("window._trackingBridge.actionDice.length") == 0
     section = page_anon.locator('[data-testid="action-dice-section"]')
     assert not section.is_visible()
 
     _roll_initiative_and_close_modal(page_anon)
 
-    # After rolling: dice present in Alpine state, section visible, and
-    # its internal read-only banner is now visible too.
-    assert page_anon.evaluate("window._trackingBridge.actionDice.length") > 0
-    assert section.is_visible()
-    section_banner = section.locator('[data-testid="readonly-roll-banner"]')
-    assert section_banner.count() == 1
-    assert section_banner.first.is_visible()
-
-    # Refresh: server never received anything, so the reloaded sheet has
-    # no action dice.
-    page_anon.reload()
-    page_anon.wait_for_selector("h1")
+    # The roll modal played and closed, but the bridge actionDice and
+    # the action-dice-section are unchanged.
     assert page_anon.evaluate("window._trackingBridge.actionDice.length") == 0
-    assert not page_anon.locator('[data-testid="action-dice-section"]').is_visible()
+    assert not section.is_visible()
+
+
+def test_anon_init_roll_preserves_editor_action_dice(
+    page, page_anon, live_server_url
+):
+    """Covers the seeded-baseline case: an editor previously rolled
+    initiative so the server has persisted action dice. A non-editor
+    visiting the sheet sees those dice. If they roll initiative
+    themselves, the dice the editor rolled stay exactly where they
+    were - the non-editor's roll can't replace or clear them."""
+    sheet_url = _published_sheet_url(page, live_server_url)
+
+    # Editor rolls initiative so the server has a non-empty actionDice.
+    _disable_dice_animations(page)
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    _roll_initiative_and_close_modal(page)
+    seeded_dice = page.evaluate("window._trackingBridge.actionDice")
+    assert len(seeded_dice) > 0
+
+    # Non-editor sees those dice.
+    _disable_dice_animations(page_anon)
+    page_anon.goto(sheet_url)
+    page_anon.wait_for_selector("h1")
+    pre_roll_dice = page_anon.evaluate("window._trackingBridge.actionDice")
+    assert len(pre_roll_dice) == len(seeded_dice)
+    section = page_anon.locator('[data-testid="action-dice-section"]')
+    assert section.is_visible()
+
+    # Non-editor rolls initiative themselves. The modal opens and
+    # animates, but the bridge's actionDice array does not change -
+    # the editor's seeded dice remain visible on the sheet.
+    _roll_initiative_and_close_modal(page_anon)
+
+    post_roll_dice = page_anon.evaluate("window._trackingBridge.actionDice")
+    # Same dice (same values, same length) as before the non-editor roll.
+    assert len(post_roll_dice) == len(seeded_dice)
+    for before, after in zip(seeded_dice, post_roll_dice):
+        assert before["value"] == after["value"]
+        assert bool(before.get("spent")) == bool(after.get("spent"))
+    assert section.is_visible()
 
 
 # ---------------------------------------------------------------------------
@@ -195,15 +234,13 @@ def _published_with_vp(page, live_server_url, *, temp_vp=0):
     return url, starting_vp
 
 
-def test_non_editor_spends_vp_on_attack_no_persist(
+def test_non_editor_spends_vp_on_attack_does_not_change_vp(
     page, page_nonadmin, live_server_url
 ):
-    """Non-editor spends 2 VP on an attack roll: VP decrements locally,
-    banner is visible during the result, refresh restores the original VP.
-
-    Plan calls this 'spend 2 VP on a skill roll'. Uses the attack modal
-    because it has an explicit VP +/- selector that makes the spend
-    easy to drive from Playwright."""
+    """Non-editor selects 2 VP on an attack roll. The roll executes
+    with the +10 (5 per VP) reflected in the result, but the sheet's
+    displayed voidPoints count stays anchored to the persisted value
+    throughout. Banner is visible during the modal."""
     sheet_url, starting_vp = _published_with_vp(page, live_server_url)
     assert starting_vp >= 2, "default akodo_bushi should start with 2 VP"
 
@@ -212,14 +249,10 @@ def test_non_editor_spends_vp_on_attack_no_persist(
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
 
-    # Open the attack modal.
     page_nonadmin.locator('[data-roll-key="attack"]').click()
     page_nonadmin.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
-
-    # Banner must be visible inside the attack modal (Phase 2 placement).
     modal = page_nonadmin.locator('[data-modal="attack"]')
     banner = modal.locator('[data-testid="readonly-roll-banner"]')
-    assert banner.count() == 1
     assert banner.first.is_visible()
 
     # Select 2 VP via the pre-roll +/- control.
@@ -227,9 +260,12 @@ def test_non_editor_spends_vp_on_attack_no_persist(
     plus.click()
     plus.click()
     page_nonadmin.wait_for_timeout(100)
-    assert page_nonadmin.evaluate("window.Alpine.$data(document.querySelector('[data-modal=\"attack\"]')).atkVoidSelected") == 2
+    assert page_nonadmin.evaluate(
+        "window.Alpine.$data(document.querySelector('[data-modal=\"attack\"]')).atkVoidSelected"
+    ) == 2
 
-    # Roll the attack.
+    # Roll the attack. The attack-roll computation should reflect the
+    # 2 VP spend (each adds +5 to the roll total).
     modal.locator('[data-action="roll-attack"]').click()
     page_nonadmin.wait_for_function("""() => {
         const el = document.querySelector('[data-modal="attack"]');
@@ -237,12 +273,12 @@ def test_non_editor_spends_vp_on_attack_no_persist(
         return data && data.atkPhase === 'result';
     }""", timeout=10000)
 
-    # Locally, voidPoints decremented by 2.
-    assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp - 2
-    # Banner still visible on the result.
+    # The bridge's voidPoints did NOT decrement - non-editors get the
+    # roll-effect simulation but never the cost.
+    assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
     assert banner.first.is_visible()
 
-    # Refresh: nothing persisted. VP back to starting value.
+    # Refresh confirms the persisted value also stayed put.
     page_nonadmin.reload()
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
@@ -411,6 +447,81 @@ def test_non_editor_banked_bonus_mark_spent_button_hidden(
         "non-editor must not receive the banked-bonus 'Mark spent' "
         "button in the page source"
     )
+
+
+def test_non_editor_mantis_posture_section_hidden_with_no_history(
+    page, page_nonadmin, live_server_url
+):
+    """Mantis Wave-Treader's Posture tracker section is empty wedge
+    for a non-editor when no posture has been declared yet (buttons
+    are gated, current line is x-show'd off, accumulator likewise).
+    Suppress the entire section in that case so the sheet doesn't
+    show a 'Posture' header floating above whitespace. Editors still
+    see it so they can pick a posture."""
+    sheet_url = _publish_with_knacks(
+        page, live_server_url,
+        name="MantisNoHist", school="mantis_wave_treader",
+        knack_overrides={},
+    )
+    # Editor regression: tracker rendered.
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    assert page.locator(
+        '[data-testid="mantis-posture-tracker"]'
+    ).count() == 1
+
+    # Non-editor: no posture data on the server, so section is
+    # absent from the DOM entirely.
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+    assert page_nonadmin.locator(
+        '[data-testid="mantis-posture-tracker"]'
+    ).count() == 0
+
+
+def test_non_editor_mantis_posture_section_shown_with_history(
+    page, page_nonadmin, live_server_url
+):
+    """Once a posture has been recorded server-side (editor clicked
+    a posture button, persisted via /track), the section renders
+    for non-editors so they can read the live state. The buttons
+    stay hidden but the current posture line, bonuses, and
+    accumulator are visible."""
+    sheet_url = _publish_with_knacks(
+        page, live_server_url,
+        name="MantisWithHist", school="mantis_wave_treader",
+        knack_overrides={},
+    )
+    # Editor picks an offensive posture so server adventure_state
+    # gets non-empty mantis_posture_history.
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    page.locator('[data-action="mantis-posture-offensive"]').click()
+    page.wait_for_function(
+        "() => window._trackingBridge.posturePhase === 2"
+    )
+
+    # Non-editor reload: section is back, current posture visible,
+    # buttons still hidden.
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+    assert page_nonadmin.locator(
+        '[data-testid="mantis-posture-tracker"]'
+    ).count() == 1
+    current = page_nonadmin.locator(
+        '[data-testid="mantis-current-posture"]'
+    )
+    assert current.is_visible()
+    text = current.text_content()
+    assert "Phase 1" in text
+    assert "offensive" in text.lower()
+    # Buttons remain editor-only even when the section is shown.
+    assert page_nonadmin.locator(
+        '[data-action="mantis-posture-offensive"]'
+    ).count() == 0
+    assert page_nonadmin.locator(
+        '[data-action="mantis-posture-defensive"]'
+    ).count() == 0
 
 
 # Note: per-adventure counter abilities (adventure_raises, conviction,
@@ -664,33 +775,28 @@ def _seed_light_wounds(page, live_server_url, light_wounds):
     return url
 
 
-def test_non_editor_rolls_wc_takes_serious_no_persist(
+def test_non_editor_rolls_wc_does_not_change_displayed_counts(
     page, page_nonadmin, live_server_url
 ):
-    """Non-editor with LW>0 opens the WC modal, rolls, picks Take 1
-    Serious. LW→0, SW→1 locally. Banner visible inside WC modal.
-    Refresh restores original LW and SW=0."""
+    """Non-editor with LW>0 walks through a WC roll all the way to
+    Take Serious. None of the displayed counters move - the sheet
+    stays anchored to the persisted server values throughout the
+    walk-through. The banner is visible during the modal."""
     sheet_url = _seed_light_wounds(page, live_server_url, light_wounds=1)
-    # Baseline server state (as seen by non-editor).
     _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.lightWounds") == 1
     assert page_nonadmin.evaluate("window._trackingBridge.seriousWounds") == 0
 
-    # Open the WC modal via the un-gated WC button.
-    wc_btn = page_nonadmin.locator('[data-action="roll-wound-check"]')
-    assert wc_btn.is_visible()
-    wc_btn.click()
+    # Open the WC modal via the always-visible WC button.
+    page_nonadmin.locator('[data-action="roll-wound-check"]').click()
     page_nonadmin.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=5000)
-
-    # Banner visible inside the WC modal (Phase 2 placement).
     modal = page_nonadmin.locator('[data-modal="wound-check"]')
     banner = modal.locator('[data-testid="readonly-roll-banner"]')
-    assert banner.count() == 1
     assert banner.first.is_visible()
 
-    # Trigger the roll. With LW=1 the pass probability is virtually 1.
+    # Roll. With LW=1 pass probability is essentially 1.
     page_nonadmin.locator('[data-action="roll-wound-check-go"]').click()
     page_nonadmin.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -702,75 +808,284 @@ def test_non_editor_rolls_wc_takes_serious_no_persist(
     }""", timeout=10000)
     assert "PASSED" in modal.text_content()
 
-    # Take 1 Serious Wound. Drives lwTakeSeriousAndReset via Alpine,
-    # which calls this.save() — shimmed for non-editors.
+    # Click Take 1 Serious. For an editor this would mutate
+    # lightWounds and seriousWounds locally; for a non-editor it
+    # must close the modal without touching either.
     modal.locator('button:text("Take 1 Serious Wound")').click()
     page_nonadmin.wait_for_timeout(300)
-    assert page_nonadmin.evaluate("window._trackingBridge.lightWounds") == 0
-    assert page_nonadmin.evaluate("window._trackingBridge.seriousWounds") == 1
+    assert page_nonadmin.evaluate("window._trackingBridge.lightWounds") == 1
+    assert page_nonadmin.evaluate("window._trackingBridge.seriousWounds") == 0
 
-    # Refresh: nothing persisted, original LW and SW.
+    # Refresh: nothing persisted (defense in depth).
     page_nonadmin.reload()
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.lightWounds") == 1
     assert page_nonadmin.evaluate("window._trackingBridge.seriousWounds") == 0
 
 
-def test_non_editor_spends_temp_vp_no_persist(
+def test_non_editor_lw_plus_does_not_change_displayed_lw(
     page, page_nonadmin, live_server_url
 ):
-    """Non-editor decrements temp VP via the tracking panel's - button,
-    refresh restores the seeded value.
+    """Non-editor on a 0-LW character clicks LW + and enters '43'.
+    The LW + modal opens, accepts the input, and dispatches the WC
+    modal which then runs against TN=43. Throughout, the sheet's
+    displayed lightWounds stays anchored at 0."""
+    sheet_url = _published_sheet_url(page, live_server_url)
+    _disable_dice_animations(page_nonadmin)
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+    assert page_nonadmin.evaluate("window._trackingBridge.lightWounds") == 0
 
-    The tracking-panel +/- buttons were the specific Jinja gate un-gated
-    in Phase 3. akodo_bushi (the default school used by
-    _published_sheet_url) already has has_temp_void=True because it
-    carries the feint knack; seed current_temp_void_points via the
-    admin's save, then have the non-editor drive the - button."""
-    sheet_url, _ = _published_with_vp(page, live_server_url, temp_vp=3)
-    assert page.evaluate("window._trackingBridge.tempVoidPoints") == 3
+    page_nonadmin.locator('[data-action="lw-plus"]').click()
+    page_nonadmin.wait_for_selector('input[placeholder="Amount"]', timeout=3000)
+    page_nonadmin.locator('input[placeholder="Amount"]').fill("43")
+    page_nonadmin.locator('input[placeholder="Amount"]').locator('..').locator(
+        'button', has_text="Add"
+    ).click()
+    # Sheet's displayed counter must not have moved.
+    page_nonadmin.wait_for_timeout(150)
+    assert page_nonadmin.evaluate("window._trackingBridge.lightWounds") == 0
+
+    # The WC modal opens with the entered amount as the TN to beat.
+    page_nonadmin.wait_for_selector(
+        '[data-modal="wound-check"]', state='visible', timeout=5000,
+    )
+    modal = page_nonadmin.locator('[data-modal="wound-check"]')
+    assert page_nonadmin.evaluate(
+        "window._diceRoller.wcLightWounds"
+    ) == 43
+
+    # Banner is visible in the WC modal.
+    assert modal.locator(
+        '[data-testid="readonly-roll-banner"]'
+    ).first.is_visible()
+
+
+def test_non_editor_lw_minus_button_disabled(
+    page, page_nonadmin, live_server_url
+):
+    """The LW - button stays in the DOM (so the layout doesn't shift
+    when toggling viewer / editor) but is disabled for non-editors,
+    even when LW > 0. Editors still see it enabled."""
+    sheet_url = _seed_light_wounds(page, live_server_url, light_wounds=2)
+
+    # Editor: button enabled (because LW > 0).
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    assert page.locator(
+        '[data-action="lw-minus"]'
+    ).is_enabled()
+
+    # Non-editor: button rendered but disabled regardless of LW count.
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+    minus = page_nonadmin.locator('[data-action="lw-minus"]')
+    assert minus.count() == 1
+    assert minus.is_visible()
+    assert not minus.is_enabled()
+
+
+def test_non_editor_mirumoto_parry_does_not_grant_temp_vp(
+    page, page_nonadmin, live_server_url
+):
+    """Mirumoto Bushi auto-grants 1 temp VP after every parry roll.
+    For an editor that adds 1 to tempVoidPoints; for a non-editor
+    we do the parry walk-through but skip the auto-grant - their
+    temp VP count stays at the persisted value."""
+    sheet_url = _publish_with_knacks(
+        page, live_server_url,
+        name="MirumotoNonEditor", school="mirumoto_bushi",
+        knack_overrides={},
+    )
+    _disable_dice_animations(page_nonadmin)
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+    starting_temp = page_nonadmin.evaluate(
+        "window._trackingBridge.tempVoidPoints"
+    )
+
+    # Parry uses a small menu - click "Roll Parry" inside it.
+    page_nonadmin.locator('[data-roll-key="parry"]').click()
+    page_nonadmin.wait_for_selector(
+        '[data-parry-menu]', state='visible', timeout=5000,
+    )
+    page_nonadmin.locator(
+        '[data-parry-menu] button:has-text("Roll Parry")'
+    ).first.click()
+    page_nonadmin.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+
+    # Mirumoto's auto-grant must NOT have fired for the non-editor.
+    assert page_nonadmin.evaluate(
+        "window._trackingBridge.tempVoidPoints"
+    ) == starting_temp
+
+
+def test_non_editor_akodo_wc_vp_raise_does_not_change_vp(
+    page, page_nonadmin, live_server_url
+):
+    """Akodo bushi's 4th Dan 'spend VP for free raise after seeing
+    the wound check' is a post-roll VP spend in the WC modal. For a
+    non-editor: the +5 still applies to wcRollTotal so the result
+    reflects the spend, but bridge voidPoints stays at the
+    persisted value."""
+    # 4th Dan akodo so the post-roll VP free-raise is granted; seed
+    # VP via the admin's save shim and LW via the LW + modal so the
+    # WC modal has something to roll against.
+    sheet_url = _publish_with_knacks(
+        page, live_server_url,
+        name="Akodo4thDanReader", school="akodo_bushi",
+        knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+    )
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    page.evaluate(
+        "async () => {"
+        "  const t = window._trackingBridge;"
+        "  t.voidPoints = t.voidMax;"
+        "  await t.save();"
+        "}"
+    )
+    page.wait_for_timeout(150)
+    starting_vp = page.evaluate("window._trackingBridge.voidPoints")
+    assert starting_vp >= 1, "expected non-zero VP after seeding"
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="New total"]', timeout=3000)
+    page.locator('input[placeholder="New total"]').fill("20")
+    page.locator('button:text-is("Set")').last.click()
+    page.wait_for_timeout(300)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    if wc_modal.count() > 0 and wc_modal.is_visible():
+        wc_modal.locator('button', has_text="×").first.click()
+        page.wait_for_timeout(150)
 
     _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
-    assert page_nonadmin.evaluate("window._trackingBridge.tempVoidPoints") == 3
+    assert page_nonadmin.evaluate(
+        "window._trackingBridge.voidPoints"
+    ) == starting_vp
 
-    minus_btn = page_nonadmin.locator('[data-action="temp-vp-minus"]')
-    minus_btn.click()
-    minus_btn.click()
-    page_nonadmin.wait_for_timeout(100)
-    assert page_nonadmin.evaluate("window._trackingBridge.tempVoidPoints") == 1
+    # Roll the wound check.
+    page_nonadmin.locator('[data-action="roll-wound-check"]').click()
+    page_nonadmin.wait_for_selector(
+        '[data-modal="wound-check"]', state='visible', timeout=5000,
+    )
+    page_nonadmin.locator('[data-action="roll-wound-check-go"]').click()
+    page_nonadmin.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
 
-    # Refresh: tempVoidPoints back to the seeded 3.
-    page_nonadmin.reload()
+    pre_spend_total = page_nonadmin.evaluate(
+        "window._diceRoller.wcRollTotal"
+    )
+
+    # Click "Spend VP (+5)" in the post-roll discretionary panel.
+    spend_btn = page_nonadmin.locator(
+        '[data-modal="wound-check"] button:has-text("Spend VP (+5)")'
+    ).first
+    spend_btn.click()
+    page_nonadmin.wait_for_timeout(150)
+
+    # The roll total reflects the +5 (modal-local effect preserved).
+    assert page_nonadmin.evaluate(
+        "window._diceRoller.wcRollTotal"
+    ) == pre_spend_total + 5
+
+    # But the bridge's voidPoints did not move.
+    assert page_nonadmin.evaluate(
+        "window._trackingBridge.voidPoints"
+    ) == starting_vp
+
+
+def test_non_editor_sw_vp_temp_vp_buttons_hidden(
+    page, page_nonadmin, live_server_url
+):
+    """Serious Wounds, Void Points, and Temp Void +/- buttons are
+    bookkeeping for non-editors - clicking them would only flip
+    local Alpine state since the save shim swallows the POST. Hide
+    them. The label and current count still render so the viewer
+    can read the state."""
+    sheet_url, _ = _published_with_vp(page, live_server_url, temp_vp=3)
+
+    # Match the leaf row (label + counter), not its ancestor section.
+    row_selector = 'div.flex.items-center.justify-between.gap-4'
+
+    # Editor regression: all six counter buttons render.
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    sw_row = page.locator(row_selector).filter(has_text="Serious Wounds").first
+    assert sw_row.locator('button:text-is("-")').count() == 1
+    assert sw_row.locator('button:text-is("+")').count() == 1
+    vp_row = page.locator(row_selector).filter(has_text="Void Points").first
+    assert vp_row.locator('button:text-is("-")').count() == 1
+    assert vp_row.locator('button:text-is("+")').count() == 1
+    tempvp_row = page.locator('[data-testid="temp-void-row"]')
+    assert tempvp_row.locator('[data-action="temp-vp-minus"]').count() == 1
+    assert tempvp_row.locator('[data-action="temp-vp-plus"]').count() == 1
+
+    # Non-editor: every counter button gone, state labels still
+    # rendered.
+    page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
-    assert page_nonadmin.evaluate("window._trackingBridge.tempVoidPoints") == 3
+    sw_row_n = page_nonadmin.locator(row_selector).filter(
+        has_text="Serious Wounds"
+    ).first
+    assert sw_row_n.locator('button:text-is("-")').count() == 0
+    assert sw_row_n.locator('button:text-is("+")').count() == 0
+    vp_row_n = page_nonadmin.locator(row_selector).filter(
+        has_text="Void Points"
+    ).first
+    assert vp_row_n.locator('button:text-is("-")').count() == 0
+    assert vp_row_n.locator('button:text-is("+")').count() == 0
+    tempvp_row_n = page_nonadmin.locator('[data-testid="temp-void-row"]')
+    assert tempvp_row_n.locator('[data-action="temp-vp-minus"]').count() == 0
+    assert tempvp_row_n.locator('[data-action="temp-vp-plus"]').count() == 0
+    # Counts still visible.
+    assert page_nonadmin.evaluate(
+        "window._trackingBridge.tempVoidPoints"
+    ) == 3
 
 
-def test_anon_spends_action_die_no_persist(page, page_anon, live_server_url):
-    """Anon rolls initiative → opens per-die menu → marks first die spent.
-    Locally the die flips to spent; after refresh it is not spent (server
-    state never heard about it)."""
+def test_anon_cannot_clear_seeded_action_dice(
+    page, page_anon, live_server_url
+):
+    """Belt-and-braces companion to the init-roll preservation test:
+    even the explicit Clear button on the action-dice section must
+    not remove an editor's seeded dice when clicked by a non-editor."""
     sheet_url = _published_sheet_url(page, live_server_url)
+
+    # Editor rolls initiative to seed action dice on the server.
+    _disable_dice_animations(page)
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    _roll_initiative_and_close_modal(page)
+    seeded_count = len(page.evaluate("window._trackingBridge.actionDice"))
+    assert seeded_count > 0
 
     _disable_dice_animations(page_anon)
     page_anon.goto(sheet_url)
     page_anon.wait_for_selector("h1")
+    section = page_anon.locator('[data-testid="action-dice-section"]')
+    assert section.is_visible()
 
-    _roll_initiative_and_close_modal(page_anon)
+    # Non-editor clicks the Clear button.
+    page_anon.locator('[data-action="clear-action-dice"]').click()
+    page_anon.wait_for_timeout(150)
 
-    # Click the first die to open its per-die menu, then click "Mark as spent".
-    first_die = page_anon.locator(
-        '[data-testid="action-dice-section"] [data-action="action-die"]'
-    ).first
-    first_die.click()
-    page_anon.locator('[data-action="action-die-spent"]').first.click()
-    page_anon.wait_for_timeout(100)
-
-    # Local Alpine state flipped.
-    assert page_anon.evaluate("window._trackingBridge.actionDice[0].spent") is True
-
-    # Refresh: nothing persisted, so there are no dice at all.
-    page_anon.reload()
-    page_anon.wait_for_selector("h1")
-    assert page_anon.evaluate("window._trackingBridge.actionDice.length") == 0
+    # Bridge still has the editor's dice; section still visible.
+    assert page_anon.evaluate(
+        "window._trackingBridge.actionDice.length"
+    ) == seeded_count
+    assert section.is_visible()

@@ -76,6 +76,10 @@ class TestSkills:
             assert isinstance(skill.is_advanced, bool)
             assert skill.description
             assert skill.roll_description
+            # Every skill carries the canonical upstream rules text. The
+            # short ``description`` stays as a fallback, but the sheet UI
+            # is now expected to surface ``rules_text``.
+            assert skill.rules_text, f"{sid} is missing rules_text"
 
     def test_social_skills_use_air(self):
         for skill in SKILLS.values():

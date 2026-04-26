@@ -90,6 +90,12 @@ def test_skill_tap_opens_menu_with_view_rules_text(page, live_server_url):
     # we copied in. Substring match keeps the test resilient if the rules
     # text gets slightly reworded.
     assert "Etiquette" in body
+    # Modal should show the upstream canonical rules text (not the old
+    # one-line summary). This phrase is the opening of the rules block in
+    # rules/02-skills.md and exercises the rules_text field.
+    assert "Protocol is extremely important" in body, (
+        f"Expected canonical etiquette rules text in modal, got: {body[:200]!r}"
+    )
     # Close out so we don't pollute later assertions on the same page.
     modal.locator('[data-action="close-rules-modal"]').click()
     modal.wait_for(state="hidden")

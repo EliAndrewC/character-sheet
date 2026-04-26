@@ -450,6 +450,46 @@ class TestSkillFormula:
         assert any(alt["extra_flat"] == 10 for alt in f.alternatives)
         assert f.flat == 0
 
+    def test_acting_sneaking_is_conditional_alternative(self):
+        """Acting→Sneaking only applies on 'blending into a crowd' rolls,
+        so the dice formula must surface it as an alternatives entry
+        labeled 'when blending into a crowd' rather than baking it into
+        flat. Sincerity and Intimidation, which still get the
+        unconditional acting synergy, are covered separately."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"sneaking": 2, "acting": 3},
+        )
+        f = build_skill_formula("sneaking", char)
+        assert f.flat == 0, "acting bonus must not be in flat for sneaking"
+        # 3 * 5 = 15 free raises bonus, conditional.
+        matching = [
+            alt for alt in f.alternatives
+            if alt["label"] == "when blending into a crowd"
+            and alt["extra_flat"] == 15
+        ]
+        assert matching, (
+            f"expected an alternatives entry for blending in; got {f.alternatives}"
+        )
+
+    def test_acting_still_unconditional_on_sincerity_and_intimidation(self):
+        """Regression: only Sneaking gets the conditional treatment.
+        Sincerity and Intimidation continue to bake the Acting bonus
+        into flat as before."""
+        for skill in ("sincerity", "intimidation"):
+            char = make_character_data(
+                school="",
+                knacks={},
+                skills={skill: 2, "acting": 2},
+                honor=1.0,  # avoid sincerity's open-roll honor mucking the count
+            )
+            f = build_skill_formula(skill, char)
+            assert any(
+                "Acting" in b["label"] and b["amount"] == 10
+                for b in f.bonuses
+            ), f"{skill}: expected Acting bonus baked into flat, got {f.bonuses}"
+
     def test_sincerity_honor_is_conditional_alternative(self):
         char = make_character_data(
             school="",

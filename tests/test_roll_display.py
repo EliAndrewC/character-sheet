@@ -277,10 +277,18 @@ class TestSkillSynergies:
         assert result.flat_bonus >= 10
         assert "Acting" in result.tooltip
 
-    def test_acting_boosts_sneaking(self):
+    def test_acting_boosts_sneaking_only_when_blending_in(self):
+        """Acting→Sneaking is L7R-conditional: the free raises apply only
+        on 'blending into a crowd' rolls, not on 'remaining unseen' rolls.
+        So the synergy lives in tooltip_lines as a conditional note and
+        does NOT inflate the dice formula's flat_bonus."""
         data = make_character_data(skills={"sneaking": 1, "acting": 3})
         result = compute_skill_roll("sneaking", data)
-        assert result.flat_bonus >= 15
+        # No bake-in to the flat bonus.
+        assert result.flat_bonus == 0
+        # But the conditional note is present in the tooltip / parenthetical.
+        joined = result.tooltip
+        assert "+15 for blending in" in joined
 
 
 class TestHigherPurpose:

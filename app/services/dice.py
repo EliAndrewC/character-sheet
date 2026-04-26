@@ -392,11 +392,18 @@ def build_skill_formula(
         if skill_id in boosted:
             source_rank = skills.get(source_id, 0)
             if source_rank > 0:
-                _add_flat_bonus(
-                    formula,
-                    SKILLS[source_id].name,
-                    source_rank * per_rank * FREE_RAISE_VALUE,
-                )
+                amount = source_rank * per_rank * FREE_RAISE_VALUE
+                # Acting → Sneaking is conditional (blending into a crowd
+                # only), so it surfaces as an alternatives row that the
+                # roll-result modal renders as an alternate-total scenario
+                # rather than baking into the unconditional flat bonus.
+                if skill_id == "sneaking" and source_id == "acting":
+                    formula.alternatives.append({
+                        "label": "when blending into a crowd",
+                        "extra_flat": amount,
+                    })
+                else:
+                    _add_flat_bonus(formula, SKILLS[source_id].name, amount)
 
     # --- Priest 2nd Dan: free raise on Honor bonus rolls (bragging, precepts, open sincerity) ---
     if school_id == "priest" and dan >= 2 and skill_id in ("bragging", "precepts", "sincerity"):

@@ -1204,11 +1204,13 @@ Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pyt
 - [x] No zero-width truncated labels on editor → `test_responsive.py::test_no_zero_width_labels_on_editor`
 - [x] No zero-width truncated labels on sheet → `test_responsive.py::test_no_zero_width_labels_on_sheet`
 - [x] Dan badge text stays horizontally centered when wrapped at phone width → `test_responsive.py::test_dan_badge_text_centered`
-- [x] Skill tap on touch opens menu with View rules text option that opens rules modal → `test_mobile_rules_text.py::test_skill_tap_opens_menu_with_view_rules_text`
+- [x] Skill tap on touch opens menu with View rules text option that opens rules modal showing the canonical upstream rules text → `test_mobile_rules_text.py::test_skill_tap_opens_menu_with_view_rules_text`
 - [x] Attack tap on touch opens menu with Roll Attack and View rules text rows → `test_mobile_rules_text.py::test_attack_tap_opens_menu_with_roll_and_view_rules`
 - [x] Parry menu on touch includes appended View rules text row → `test_mobile_rules_text.py::test_parry_menu_includes_view_rules_text_on_touch`
 - [x] Advantage tap toggles inline tooltip via tap-to-toggle (no menu) → `test_mobile_rules_text.py::test_advantage_tap_shows_inline_tooltip`
 - [x] No "?" indicator on touch tooltip-trigger ::after pseudo → `test_mobile_rules_text.py::test_no_question_mark_after_pseudo_element`
+- [x] Skill row with many roll modifiers stacks roll text below name+pips on phone → `test_responsive.py::test_skill_row_stacks_long_modifiers_on_phone`
+- [x] Skill rows stay single-line three-column at desktop width regardless of modifiers → `test_responsive.py::test_skill_row_stays_three_column_on_desktop`
 
 ---
 
@@ -1422,31 +1424,61 @@ builds the infrastructure; Phases 2-7 un-gate each roll category.
 
 ### Phase 2 - action dice
 
-- [x] Anon rolls initiative → action dice panel visible locally, banner
-      visible inside it, refresh clears everything (no /track POST) ->
-      `test_readonly_rolls.py::test_anon_rolls_initiative_no_persist`
-- [x] Anon opens per-die menu + marks a die spent → local state flips,
-      refresh has no dice at all ->
-      `test_readonly_rolls.py::test_anon_spends_action_die_no_persist`
+- [x] Anon rolls initiative on a sheet with no persisted action dice:
+      the dice modal animates and closes, but the action-dice-section
+      stays hidden; the bridge's actionDice array remains empty ->
+      `test_readonly_rolls.py::test_anon_init_roll_does_not_change_action_dice_display`
+- [x] Anon rolls initiative on a sheet where the editor previously
+      rolled initiative: those persisted dice stay visible exactly
+      as they were; the non-editor's roll cannot replace or clear
+      them ->
+      `test_readonly_rolls.py::test_anon_init_roll_preserves_editor_action_dice`
+- [x] Anon clicks the action-dice section's Clear button: nothing
+      happens; the editor's seeded dice are preserved ->
+      `test_readonly_rolls.py::test_anon_cannot_clear_seeded_action_dice`
 - [x] Server regression: /track 403s on action_dice field specifically
       for a non-editor (backend last line of defense) ->
       `tests/test_routes.py::TestTrackState::test_track_rejects_non_editor_action_dice`
 
 ### Phase 3 - void points
 
-- [x] Non-editor spends 2 VP on an attack roll: VP decrements locally,
-      banner visible on result, refresh restores original VP ->
-      `test_readonly_rolls.py::test_non_editor_spends_vp_on_attack_no_persist`
-- [x] Non-editor decrements temp VP via the tracking panel's - button,
-      refresh restores the seeded value ->
-      `test_readonly_rolls.py::test_non_editor_spends_temp_vp_no_persist`
+- [x] Non-editor selects 2 VP on an attack roll. The roll executes
+      with the +10 reflected (modal-local computation preserved) but
+      the bridge's voidPoints stays at the persisted value -
+      simulation works, costs don't apply ->
+      `test_readonly_rolls.py::test_non_editor_spends_vp_on_attack_does_not_change_vp`
+- [x] Tracking-section Serious Wounds, Void Points, and Temp Void +/-
+      buttons absent from non-editor DOM (sheet-state mutations are
+      editor-only); the labels and counts still render. Editor
+      regression: all six counter buttons render ->
+      `test_readonly_rolls.py::test_non_editor_sw_vp_temp_vp_buttons_hidden`
+- [x] Mirumoto Bushi auto-grants 1 temp VP after every parry. For a
+      non-editor: the parry walks through but the auto-grant is
+      gated on canEdit, so tempVoidPoints stays at the persisted
+      value ->
+      `test_readonly_rolls.py::test_non_editor_mirumoto_parry_does_not_grant_temp_vp`
+- [x] Akodo 4th Dan 'spend VP for free raise after seeing the WC':
+      non-editor seeing this option sees the +5 applied to
+      wcRollTotal but bridge voidPoints stays put ->
+      `test_readonly_rolls.py::test_non_editor_akodo_wc_vp_raise_does_not_change_vp`
 
 ### Phase 4 - wound checks + wounds
 
-- [x] Non-editor with LW>0 opens the WC modal, rolls, takes 1 serious:
-      LW→0, SW→1 locally; banner visible in WC modal; refresh restores
-      original LW and SW=0 ->
-      `test_readonly_rolls.py::test_non_editor_rolls_wc_takes_serious_no_persist`
+- [x] Non-editor with LW>0 walks through the WC modal, rolls, picks
+      Take Serious. The displayed lightWounds and seriousWounds stay
+      anchored at the persisted server values throughout - the modal
+      is informational only for non-editors. Banner visible inside
+      the WC modal ->
+      `test_readonly_rolls.py::test_non_editor_rolls_wc_does_not_change_displayed_counts`
+- [x] Non-editor on a 0-LW character clicks LW + and enters '43'.
+      The WC modal opens with TN=43 (`wcLightWounds` reflects the
+      entered amount via event detail), but the sheet's displayed
+      lightWounds stays at 0 - no mutation of the bridge state ->
+      `test_readonly_rolls.py::test_non_editor_lw_plus_does_not_change_displayed_lw`
+- [x] LW - button stays in the DOM for non-editors but is disabled
+      regardless of LW count (so layout doesn't shift between
+      viewer / editor); editors see it enabled when LW > 0 ->
+      `test_readonly_rolls.py::test_non_editor_lw_minus_button_disabled`
 
 ### Phase 5 - per-adventure consumables
 
@@ -1469,6 +1501,14 @@ builds the infrastructure; Phases 2-7 un-gate each roll category.
 - [x] Reset Per-Adventure Abilities button absent from non-editor DOM
       (Principle 6: hide no-op controls) ->
       `test_readonly_rolls.py::test_reset_per_adventure_button_hidden_for_non_editor`
+- [x] Mantis Wave-Treader Posture section absent from non-editor DOM
+      when no posture has been declared yet (would be a 'Posture'
+      header floating above whitespace). Editors still see it ->
+      `test_readonly_rolls.py::test_non_editor_mantis_posture_section_hidden_with_no_history`
+- [x] Mantis Wave-Treader Posture section reappears for non-editors
+      once history is recorded; current-posture line visible, buttons
+      still hidden ->
+      `test_readonly_rolls.py::test_non_editor_mantis_posture_section_shown_with_history`
 
 ### Phase 6 - priest precepts pool (own priest)
 
