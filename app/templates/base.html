@@ -425,7 +425,12 @@
             tooltip.style.left = '';
             var tRect = trigger.getBoundingClientRect();
             var tipRect = tooltip.getBoundingClientRect();
-            var vw = window.innerWidth || document.documentElement.clientWidth;
+            // Use the layout-viewport width, not window.innerWidth.  When the
+            // tooltip itself overflows the viewport (which is the very thing
+            // we're trying to fix), window.innerWidth on mobile reports the
+            // post-overflow document width, leaving the clamp math short and
+            // the tooltip still hanging past the screen edge.
+            var vw = document.documentElement.clientWidth || window.innerWidth;
             var margin = 8;
             var desired = Math.max(margin, Math.min(tRect.left, vw - margin - tipRect.width));
             var offset = desired - tRect.left;

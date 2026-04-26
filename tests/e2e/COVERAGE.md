@@ -862,6 +862,7 @@ The three failures were:
 - [x] Click on icon toggles tooltip on desktop (no 2000ms hover wait) → `test_name_explanation.py::test_sheet_explanation_tooltip_click_toggles_on_desktop`
 - [x] Click outside closes an open name-explanation tooltip → `test_name_explanation.py::test_sheet_explanation_tooltip_click_outside_closes`
 - [x] Tooltip is clamped within the viewport on a phone viewport (no horizontal overflow) → `test_name_explanation.py::test_sheet_explanation_tooltip_does_not_overflow_on_mobile`
+- [x] Tooltip is clamped under real mobile emulation (innerWidth grows post-overflow; clamp must read clientWidth) → `test_name_explanation.py::test_sheet_explanation_tooltip_does_not_overflow_in_mobile_emulation`
 
 ## Character Editor — School Selection
 
