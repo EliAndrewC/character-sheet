@@ -155,6 +155,88 @@ def test_dan_badge_text_centered(page, live_server_url):
     assert text_align == "center", f"Dan badge text-align is {text_align!r}, expected 'center'"
 
 
+def _create_character_with_modifier_loaded_skill(page, live_server_url):
+    """Create a character whose bragging row has multiple roll modifiers
+    (Fierce + raised Honor) so it earns the `skill-row--has-modifiers`
+    class. Etiquette is added unmodified (no Charming, no honor bonus on
+    that skill) so the test has a clean single-modifier-free row to
+    compare against."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "RowLayout")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_bragging", 1)
+    click_plus(page, "skill_etiquette", 1)
+    page.check('input[name="adv_fierce"]')
+    click_plus(page, "honor", 4)  # raise honor so the +Honor modifier kicks in
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Row Layout setup")
+    return page.url
+
+
+def test_skill_row_stacks_long_modifiers_on_phone(page, live_server_url):
+    """A skill row with several roll modifiers (e.g. Bragging on a
+    Fierce + high-honor Akodo) becomes too wide to fit one line on a
+    phone. The grid layout flips that row to a 2-column layout where
+    the parenthetical roll text spans a second row, while the name
+    column keeps its width so other rows still line up."""
+    sheet_url = _create_character_with_modifier_loaded_skill(page, live_server_url)
+    page.set_viewport_size(PHONE)
+    page.goto(sheet_url)
+    page.wait_for_load_state("networkidle")
+
+    bragging = page.locator('[data-roll-key="skill:bragging"]')
+    bragging.scroll_into_view_if_needed()
+    # Verify the renderer chose to flag this as a multi-modifier row.
+    assert "skill-row--has-modifiers" in (bragging.get_attribute("class") or "")
+
+    # Roll text should sit below the name (different y), not beside it.
+    name_box = bragging.locator(".skill-row__name").bounding_box()
+    roll_box = bragging.locator(".skill-row__roll").bounding_box()
+    assert name_box and roll_box
+    assert roll_box["y"] > name_box["y"] + 4, (
+        f"Bragging roll ({roll_box}) should wrap below name ({name_box}) on phone"
+    )
+
+    # A simple no-modifier row should stay single-line at the same width.
+    etiquette = page.locator('[data-roll-key="skill:etiquette"]')
+    etiquette.scroll_into_view_if_needed()
+    assert "skill-row--has-modifiers" not in (etiquette.get_attribute("class") or "")
+    e_name_box = etiquette.locator(".skill-row__name").bounding_box()
+    e_roll_box = etiquette.locator(".skill-row__roll").bounding_box()
+    assert e_name_box and e_roll_box
+    # Same row when single-line: tops within ~4px of each other.
+    assert abs(e_roll_box["y"] - e_name_box["y"]) < 8, (
+        f"Etiquette roll ({e_roll_box}) should sit on the same line as its name ({e_name_box})"
+    )
+
+    # Name column lines up across rows: same x and same width.
+    assert name_box["x"] == e_name_box["x"]
+    assert name_box["width"] == e_name_box["width"]
+
+
+def test_skill_row_stays_three_column_on_desktop(page, live_server_url):
+    """At desktop width every skill row sits on a single line in a
+    three-column grid (name | pips | roll), regardless of how many roll
+    modifiers it carries."""
+    sheet_url = _create_character_with_modifier_loaded_skill(page, live_server_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    page.goto(sheet_url)
+    page.wait_for_load_state("networkidle")
+
+    for sid in ("bragging", "etiquette"):
+        row = page.locator(f'[data-roll-key="skill:{sid}"]')
+        row.scroll_into_view_if_needed()
+        n = row.locator(".skill-row__name").bounding_box()
+        r = row.locator(".skill-row__roll").bounding_box()
+        assert n and r
+        # Same row when desktop 3-column: tops within ~4px of each other.
+        assert abs(r["y"] - n["y"]) < 8, (
+            f"{sid} desktop layout should be one line (name {n}, roll {r})"
+        )
+
+
 def test_sheet_no_horizontal_overflow_across_widths(page, live_server_url):
     """View Sheet must not overflow horizontally at phone, tablet, or
     desktop widths. The Phase 6 art/school grid was the trigger for

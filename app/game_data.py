@@ -220,6 +220,12 @@ class Skill:
     is_advanced: bool
     description: str
     roll_description: str
+    # Full canonical rules text from upstream rules/02-skills.md. Hard
+    # paragraph wraps from the source markdown are normalized so the text
+    # reflows; paragraph breaks are preserved as `\n\n` and rendered with
+    # `whitespace-pre-line`. ASCII tables (heraldry, manipulation) are
+    # converted to bullet lists so they read cleanly on narrow screens.
+    rules_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -284,6 +290,22 @@ _SKILLS_LIST: List[Skill] = [
             "Bonus equals twice your Recognition plus twice your Honor."
         ),
         roll_description="Roll Bragging + Air. Bonus: +2x Recognition + 2x Honor.",
+        rules_text=(
+            "Make an open bragging roll whenever you want to convince someone "
+            "that you're very talented or well qualified in some area. This can "
+            "represent bragging about either your skill in general or one of "
+            "your specific accomplishments. Either way, you receive a bonus of "
+            "twice your character's Recognition plus twice your character's "
+            "Honor."
+            "\n\n"
+            "When you argue with another character about who is better at "
+            "something, make a contested bragging roll. Sum the Honor and "
+            "Recognition scores of each character and give the character with "
+            "the higher total an additional bonus equal to twice the "
+            "difference. When bragging on behalf of someone else, use your "
+            "Honor and their Recognition. GMs are always encouraged to also "
+            "assign free raises to either side based on the circumstances."
+        ),
     ),
     Skill(
         id="etiquette",
@@ -295,6 +317,13 @@ _SKILLS_LIST: List[Skill] = [
             "Open roll for formal situations and first impressions."
         ),
         roll_description="Roll Etiquette + Air.",
+        rules_text=(
+            "Protocol is extremely important in Rokugan, particularly for "
+            "encounters which are formal and/or with people you've just met. "
+            "In these situations, make an open etiquette roll to act suitably "
+            "genteel. GMs will often use this as the basis for the first "
+            "impression your characters make on an NPC."
+        ),
     ),
     Skill(
         id="intimidation",
@@ -307,6 +336,18 @@ _SKILLS_LIST: List[Skill] = [
             "determine the degree of success."
         ),
         roll_description="Roll Intimidation + Air. GM sets hidden thresholds.",
+        rules_text=(
+            "Make an open intimidation roll when you wish to either make overt "
+            "threats or be implicitly menacing. This can represent either "
+            "direct threat of physical violence or more subtle consequences. "
+            "For example, when interrogating a particular NPC, the GM might "
+            "decide that a roll of 25 will unsettle the them, a roll of 40 "
+            "will make them very concerned, and a roll of 55 will really shake "
+            "them up. GMs should decide these figures in advanced based on the "
+            "circumstances, but without telling players the final numbers. "
+            "This is an exception to the general rule that players get to know "
+            "their TNs."
+        ),
     ),
     Skill(
         id="sincerity",
@@ -322,6 +363,14 @@ _SKILLS_LIST: List[Skill] = [
             "Roll Sincerity + Air. Contested vs Interrogation when lying. "
             "Bonus: +2x Honor on open rolls."
         ),
+        rules_text=(
+            "The most common use of this skill is to lie; in this case it is "
+            "rolled contested against interrogation. However, you also make an "
+            "open roll when making a statement of commitment or convincing "
+            "argument which depends on an NPC believing that you're sincere. "
+            "You receive a bonus of twice your honor to all open sincerity "
+            "rolls."
+        ),
     ),
     Skill(
         id="sneaking",
@@ -335,6 +384,16 @@ _SKILLS_LIST: List[Skill] = [
         roll_description=(
             "Roll Sneaking + Air. Open to be unremarkable; contested vs Investigation to stay hidden."
         ),
+        rules_text=(
+            "Your character might occasionally wish to go somewhere without "
+            "being remembered or perhaps without being seen at all. Make an "
+            "open roll when your character has minor interactions with NPCs "
+            "but doesn't wish to be remembered; the greater the roll the more "
+            "unremarkable and forgettable the encounter. Roll this contested "
+            "against the investigation of potential observers when trying to "
+            "remain completely hidden. In either case GMs should often grant "
+            "situational free raises to either side."
+        ),
     ),
     Skill(
         id="tact",
@@ -346,6 +405,16 @@ _SKILLS_LIST: List[Skill] = [
             "Open roll before saying something offensive. Contested vs manipulation."
         ),
         roll_description="Roll Tact + Air. Contested vs Manipulation.",
+        rules_text=(
+            "Sometimes you have to speak unpleasant truths and/or say things "
+            "which might not be well received. Make an open tact roll before "
+            "saying something which you know might offend someone. If you say "
+            "something which inadvertently irritates an NPC, the GM may let "
+            "you say something to recover and then call for a tact roll with a "
+            "TN based on the emotions of the NPC and how well you improvised. "
+            "You also use tact in contested rolls against the manipulation "
+            "skill."
+        ),
     ),
 
     # --- Social Skills (Advanced, rolled with Air) ---
@@ -363,6 +432,15 @@ _SKILLS_LIST: List[Skill] = [
             "Roll Acting + Air. Grants 1 free raise per rank on sincerity, intimidation, sneaking. "
             "Contested vs Interrogation for impersonation."
         ),
+        rules_text=(
+            "The main use of acting is helping your basic skills; you receive "
+            "one free raise on all sincerity, intimidation, and sneaking rolls "
+            "which are used to blend into crowds for every point of acting "
+            "your character has. However, less scrupulous characters can also "
+            "use it to pretend to be from another social class. In this case, "
+            "roll acting contested against the interrogation of anyone "
+            "speaking to the character using it."
+        ),
     ),
     Skill(
         id="interrogation",
@@ -378,6 +456,29 @@ _SKILLS_LIST: List[Skill] = [
             "Roll Interrogation + Air. Contested vs Sincerity. "
             "10+ excess reveals concealment; 20+ excess reveals motivations."
         ),
+        rules_text=(
+            "Roll this contested against the sincerity of an NPC when you "
+            "wish to detect whether they're lying. If you are speaking to them "
+            "casually rather than grilling them, they get 4 free raises. If "
+            "instead you are clearly interrogating them but they are telling a "
+            "lie which they believe you are incapable of proving wrong, they "
+            "get 2 free raises. GMs are also encouraged to assign situational "
+            "free raises to the interrogator when the other person is scared, "
+            "feels guilty, etc."
+            "\n\n"
+            "This skill is rolled once for each line of questioning. When you "
+            "ask questions that get closer to the truth and continue to force "
+            "the other side to lie, you receive free raises. Conversely, when "
+            "the liar manages to steer the conversation to things which they "
+            "have ready answers for or don't have to lie at all, they receive "
+            "free raises."
+            "\n\n"
+            "Exceeding the opposing sincerity roll tells you whether the other "
+            "person is lying. Exceeding it by at least 10 tells you whether "
+            "they're concealing information even if they're not lying "
+            "outright. Exceeding it by at least 20 lets you perceive their "
+            "specific motivations whether they're lying or not."
+        ),
     ),
     Skill(
         id="manipulation",
@@ -392,6 +493,33 @@ _SKILLS_LIST: List[Skill] = [
         roll_description=(
             "Roll Manipulation + Air. Contested vs Tact. "
             "Success forces acknowledgment/retraction/apology based on margin."
+        ),
+        rules_text=(
+            "Roll this skill contested against another character's tact when "
+            "you wish to demand an explanation for something that character "
+            "said. This can involve twisting their words to seem insulting, or "
+            "even make it look like they're saying something they didn't "
+            "intend to. After declaring exactly what you are responding to and "
+            "how your character is reacting, roll this contested against the "
+            "other person's tact. GMs are encouraged to assign free raises to "
+            "either side based on the circumstances. Success varies based on "
+            "the amount your roll exceeded theirs, according to the following "
+            "table:"
+            "\n\n"
+            "• Delta <10: They are forced to admit you have a point, but "
+            "may restate their own."
+            "\n"
+            "• Delta 10-20: They must alter their original statement to "
+            "respond to what you said."
+            "\n"
+            "• Delta 20-30: They must retract their original argument "
+            "but may make a different one."
+            "\n"
+            "• Delta 30-40: They must retract their statement and "
+            "concede that you're right."
+            "\n"
+            "• Delta 40-50: They must apologize to you for what they "
+            "said or look bad."
         ),
     ),
 
@@ -409,6 +537,20 @@ _SKILLS_LIST: List[Skill] = [
         roll_description=(
             "Roll Culture + Water. Free raises on gift purchases = Commerce skill."
         ),
+        rules_text=(
+            "Being cultured is very important to the samurai caste. This "
+            "ranges from knowing which arts and fashions are in style to being "
+            "well versed in literature and drama. Make open rolls to discuss "
+            "or make decisions about anything covered by this skill."
+            "\n\n"
+            "This includes buying gifts; rolling this skill allows you to "
+            "purchase gifts specifically tailored to the recipient, which can "
+            "both impress them as well as save you money. Make an open roll "
+            "when buying a gift and give yourself a number of free raises "
+            "equal to your commerce. You are able to buy an equivalently good "
+            "gift by spending X% less, where X is your roll minus 25 (minimum "
+            "0)."
+        ),
     ),
     Skill(
         id="heraldry",
@@ -421,6 +563,41 @@ _SKILLS_LIST: List[Skill] = [
         ),
         roll_description=(
             "Roll Heraldry + Water. TN 15-75 modified by familiarity, research, Recognition."
+        ),
+        rules_text=(
+            "When dealing with any House, it pays to know the local politics, "
+            "especially alliances and feuds between its officials. GMs should "
+            "take the question being asked and assign a base TN according to "
+            "the chart below, with three potential modifications to the TN:"
+            "\n"
+            "• up to +/- 20 based on how familiar the PCs are with the "
+            "House"
+            "\n"
+            "• up to -20 if the PCs are able to conduct specific research "
+            "about a target"
+            "\n"
+            "• +/- 5 for each point of Recognition below/above normal for "
+            "the target's station"
+            "\n\n"
+            "Information gained by TN:"
+            "\n"
+            "• TN 15: domain size, wealth, neighbors"
+            "\n"
+            "• TN 25: basic history, political and military alliances"
+            "\n"
+            "• TN 35: top officials (Ministers, Councilors, Governors), "
+            "major lineages"
+            "\n"
+            "• TN 45: major officials (Provincial Ministers, County "
+            "Magistrates), lineage politics"
+            "\n"
+            "• TN 55: noteworthy minor officials, sub-branches within "
+            "lineages, major merchant houses"
+            "\n"
+            "• TN 65: unremarkable minor officials, relationships between "
+            "specific extended families"
+            "\n"
+            "• TN 75: inconspicuous samurai not assigned to any post"
         ),
     ),
     Skill(
@@ -436,6 +613,13 @@ _SKILLS_LIST: List[Skill] = [
         roll_description=(
             "Roll Investigation + Water. GM does NOT reveal TN (special exception)."
         ),
+        rules_text=(
+            "Finding criminals often requires many skills, from looking for "
+            "clues to identifying forgeries to breaking codes to following "
+            "tracks of a fleeing suspect. Rolls you make with this skill have "
+            "TNs, but the GM will not reveal them; this is an exception to "
+            "the rule that TNs are known to players."
+        ),
     ),
     Skill(
         id="law",
@@ -448,6 +632,15 @@ _SKILLS_LIST: List[Skill] = [
             "Can compel NPC compliance."
         ),
         roll_description="Roll Law + Water. Open/contested for legality arguments.",
+        rules_text=(
+            "Rokugani law gives enormous discretion to magistrate, so what "
+            "you're forbidden or permitted do often depends on whether you "
+            "can convince NPCs that your actions are legitimate. Conversely, "
+            "you may try to compel NPCs to take some action by claiming that "
+            "it's legally mandated. Either way, make open rolls for "
+            "information and unopposed arguments, and make contested rolls "
+            "when debating law with another character."
+        ),
     ),
     Skill(
         id="precepts",
@@ -460,6 +653,15 @@ _SKILLS_LIST: List[Skill] = [
             "Bonus equals twice your Honor."
         ),
         roll_description="Roll Precepts + Water. Bonus: +2x Honor.",
+        rules_text=(
+            "Samurai live and die by what they believe to be right, and their "
+            "sense of morality is based on a thousand years of writings on "
+            "ethical living. Use this to argue that your position is the most "
+            "righteous by citing tenants of bushido, sayings of Shinsei, etc. "
+            "Make open rolls when your argument is unopposed and contested "
+            "rolls when someone argues against you. You receive a bonus of "
+            "twice your honor to all precepts rolls."
+        ),
     ),
     Skill(
         id="strategy",
@@ -472,6 +674,14 @@ _SKILLS_LIST: List[Skill] = [
             "Contested for battles and games."
         ),
         roll_description="Roll Strategy + Water. Contested for battles/games.",
+        rules_text=(
+            "This skill grants an understanding of tactics as well as how to "
+            "actually command forces of troops, police, etc. It also gives a "
+            "working knowledge of bandits, mercenaries, and creatures from "
+            "the Shadowlands. Finally, it's used for games of skill such as "
+            "shogi or go. Roll this contested when engaged in a game or "
+            "battle or when arguing against someone, and roll open otherwise."
+        ),
     ),
 
     # --- Knowledge Skills (Advanced, rolled with Water) ---
@@ -483,6 +693,14 @@ _SKILLS_LIST: List[Skill] = [
         is_advanced=True,
         description="Money, taxes, business. Open or contested.",
         roll_description="Roll Commerce + Water. Open/contested.",
+        rules_text=(
+            "Most samurai have only the vaguest notion of how money even "
+            "works; their needs are provided for by their daimyo. This skill "
+            "grants an understanding of how money, taxes, and businesses all "
+            "function and interact. Roll this open for information or to make "
+            "an unopposed argument, and contested if someone argues against "
+            "you."
+        ),
     ),
     Skill(
         id="history",
@@ -499,6 +717,19 @@ _SKILLS_LIST: List[Skill] = [
             "Roll History + Water. Grants 1 free raise/rank on culture, law, strategy. "
             "Free raises on heraldry (cap 25 total). Open/contested for examples."
         ),
+        rules_text=(
+            "With over 1,000 years of history, you'll rarely encounter "
+            "situations in Rokugan which haven't happened before. Make an "
+            "open roll with this skill to cite a historical example in an "
+            "unopposed argument, and roll contested when someone argues "
+            "against you."
+            "\n\n"
+            "This also aids your basic skills; you receive one free raise on "
+            "all culture, law, and strategy rolls for every point of history "
+            "your character has. You also receive these free raises on "
+            "heraldry rolls, but these free raises on heraldry may not raise "
+            "your total above 25."
+        ),
     ),
     Skill(
         id="underworld",
@@ -511,6 +742,14 @@ _SKILLS_LIST: List[Skill] = [
             "Open or contested."
         ),
         roll_description="Roll Underworld + Water. Open/contested.",
+        rules_text=(
+            "Bandits, smugglers, bloodspeakers, opium dens, gambling houses, "
+            "and even ninja are rife throughout Rokugan. This skill grants "
+            "understanding of how these groups function and how they interact "
+            "with one another. This skill is rolled open for information and "
+            "unopposed arguments, and rolled contested when someone debates "
+            "you."
+        ),
     ),
 ]
 

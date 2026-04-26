@@ -301,8 +301,15 @@ def compute_skill_roll(
                 raises = source_rank * per_rank
                 amount = raises * FREE_RAISE_VALUE
                 source_name = SKILLS[source_id].name
-                result.flat_bonus += amount
-                bonus_parts.append((amount, f"+{amount} from {source_name}"))
+                # Acting → Sneaking is conditional: the free raises only
+                # apply on "blending into a crowd" rolls, not on
+                # "remaining unseen" rolls. So it lives in tooltip_lines
+                # as a note rather than baked into flat_bonus.
+                if skill_id == "sneaking" and source_id == "acting":
+                    bonus_parts.append((0, f"+{amount} for blending in"))
+                else:
+                    result.flat_bonus += amount
+                    bonus_parts.append((amount, f"+{amount} from {source_name}"))
 
     # --- Honor bonus ---
     # Sincerity's honor bonus only applies on open rolls, so it's shown as a

@@ -136,6 +136,37 @@
             gap: 0 0.5em;
         }
 
+        /* ── Skill rows on the character sheet ──
+           Three columns: name | pips | roll-text. The name column has a
+           fixed width matching the old `w-24 sm:w-32` flex layout so rows
+           line up vertically.
+           When a row carries the `--has-modifiers` modifier (the roll text
+           includes a long parenthetical breakdown) AND the viewport is
+           narrow, we drop to a 2-column grid and stack the roll text on
+           its own line spanning both columns. The name column keeps its
+           width so simple and complex rows still line up. */
+        .skill-row {
+            display: grid;
+            grid-template-columns: 6rem auto 1fr;
+            align-items: center;
+            column-gap: 0.75rem;
+        }
+        @media (min-width: 640px) {
+            .skill-row { grid-template-columns: 8rem auto 1fr; }
+        }
+        @media (max-width: 639px) {
+            .skill-row--has-modifiers {
+                grid-template-columns: 6rem 1fr;
+                grid-template-areas:
+                    "name pips"
+                    "roll roll";
+                row-gap: 0.125rem;
+            }
+            .skill-row--has-modifiers > .skill-row__name { grid-area: name; }
+            .skill-row--has-modifiers > .skill-row__pips { grid-area: pips; justify-self: start; }
+            .skill-row--has-modifiers > .skill-row__roll { grid-area: roll; }
+        }
+
         /* ── Rings: diamond layout ── */
         .rings-diamond {
             position: relative;

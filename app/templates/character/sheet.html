@@ -627,6 +627,16 @@
                     // a list of dice objects ``{value, athletics_only?, mantis_4th_dan?}``
                     // so callers can persist the Togashi athletics-only die
                     // and the Mantis 4th Dan bonus die.
+                    //
+                    // Read-only Roll Mode: non-editors get nothing here.
+                    // Their initiative roll plays the dice-modal animation
+                    // (so they can see what they rolled) but the action
+                    // dice section on the sheet stays anchored at whatever
+                    // the editor's persisted state was - empty if the
+                    // editor hasn't rolled yet, or the editor's actual
+                    // dice if they have. A non-editor cannot make dice
+                    // appear or disappear from the sheet display.
+                    if (!this.canEdit) return;
                     this.resetMantisRound();
                     this.actionDice = (dice || []).map(d => {
                         if (typeof d === 'number') return {value: d, spent: false};
@@ -636,13 +646,12 @@
                         return entry;
                     });
                     this.actionMenuOpen = null;
-                    // Kakita 5th Dan is once per combat round; rolling
-                    // initiative is the round boundary, so clear the flag.
                     this.kakita5thDanUsed = false;
                     delete this.adventureState.kakita_5th_dan_used;
                     this.save();
                 },
                 clearActionDice() {
+                    if (!this.canEdit) return;
                     this.actionDice = [];
                     this.actionMenuOpen = null;
                     this.resetMantisRound();
@@ -706,6 +715,7 @@
                     }));
                 },
                 selectPosture(type) {
+                    if (!this.canEdit) return;
                     if (this.posturePhase > 10) return;
                     if (type !== 'offensive' && type !== 'defensive') return;
                     this.postureHistory = [...this.postureHistory, type];
@@ -719,6 +729,10 @@
                     // Zeros the Mantis per-round posture tracker and any
                     // per-round accumulators set by Mantis abilities. The
                     // caller is responsible for calling save().
+                    // Non-editors: posture display stays anchored to the
+                    // persisted server state, just like every other sheet
+                    // counter.
+                    if (!this.canEdit) return;
                     this.posturePhase = 1;
                     this.postureHistory = [];
                     this.offensive3rdDanAccum = 0;
@@ -818,6 +832,7 @@
                     // Mantis 4th Dan bonus die if available, otherwise the
                     // highest-value unspent regular action die, and
                     // accumulates +X on subsequent attack / damage rolls.
+                    if (!this.canEdit) return false;
                     if (!amount) return false;
                     const idx = this._pickMantis3rdDanDie();
                     if (idx < 0) return false;
@@ -833,6 +848,7 @@
                     // Called from the Tracking-section button. Same die-
                     // selection rule as the offensive counterpart; accumulates
                     // +X on subsequent wound checks and on the displayed TN.
+                    if (!this.canEdit) return false;
                     if (!amount) return false;
                     const idx = this._pickMantis3rdDanDie();
                     if (idx < 0) return false;
@@ -883,6 +899,7 @@
                     // Called from the per-die action menu. Spends the clicked
                     // die and accumulates +X on the chosen posture's rolls
                     // (attack/damage for offensive, parry/WC for defensive).
+                    if (!this.canEdit) return false;
                     if (!amount) return false;
                     const d = this.actionDice[i];
                     if (!d || d.spent) return false;
@@ -906,6 +923,12 @@
                 },
 
                 saveBankedBonuses() {
+                    // Read-only Roll Mode: skip banked-bonus state writes
+                    // entirely for non-editors. They can walk through any
+                    // ability that BANKS a bonus during a roll, but the
+                    // banked array stays anchored to whatever the server
+                    // had so the tracking-section display doesn't grow.
+                    if (!this.canEdit) return;
                     // Persist unspent Akodo banked bonuses and other banked state to adventureState
                     const unspent = this.akodoBankedBonuses.filter(b => !b.spent).map(b => b.amount);
                     this.adventureState.akodo_banked_bonuses = unspent.length > 0 ? unspent : undefined;
@@ -926,6 +949,12 @@
 
                 getCount(id) { return this.adventureState[id + '_used'] || 0; },
                 setCount(id, val) {
+                    // Read-only Roll Mode: non-editors cannot mutate the
+                    // adventureState pool counts. Persistent state stays
+                    // anchored at the server value; the modal flow that
+                    // calls this still proceeds normally because it
+                    // doesn't depend on the post-call read.
+                    if (!this.canEdit) return;
                     this.adventureState[id + '_used'] = val;
                     this.save();
                     // Notify the dice roller (separate Alpine scope) so its
@@ -933,9 +962,14 @@
                     window.dispatchEvent(new CustomEvent('adventure-state-changed'));
                 },
                 getToggle(id) { return !!this.adventureState[id]; },
-                setToggle(id, val) { this.adventureState[id] = val; this.save(); },
+                setToggle(id, val) {
+                    if (!this.canEdit) return;
+                    this.adventureState[id] = val;
+                    this.save();
+                },
 
                 resetAbility(id) {
+                    if (!this.canEdit) return;
                     const ability = (this.perAdventure || []).find(a => a.id === id);
                     if (!ability) return;
                     if (ability.type === 'counter') this.adventureState[id + '_used'] = 0;
@@ -1043,40 +1077,49 @@
                 lwSetValue: '',
 
                 lwTakeSeriousAndReset() {
-                    this.seriousWounds += this.lwSeriousCount;
-                    this.lightWounds = 0;
+                    if (this.canEdit) {
+                        this.seriousWounds += this.lwSeriousCount;
+                        this.lightWounds = 0;
+                    }
                     this.lwPlusModal = false;
                     this.lwSeriousCount = 1;
                     this.save();
                 },
                 lwAddToTotal() {
                     const add = parseInt(this.lwAddAmount) || 0;
-                    if (add > 0) { this.lightWounds += add; }
+                    if (add > 0 && this.canEdit) { this.lightWounds += add; }
                     this.lwPlusModal = false;
                     this.lwAddAmount = '';
                     this.save();
-                    if (this.lightWounds > 0) {
-                        window.dispatchEvent(new CustomEvent('open-wound-check'));
+                    // For editors the WC modal reads the post-mutation
+                    // lightWounds; for non-editors we pass the entered
+                    // amount via event detail so the WC roll runs against
+                    // it without ever touching the displayed counter.
+                    const wcLW = this.canEdit ? this.lightWounds : add;
+                    if (wcLW > 0) {
+                        window.dispatchEvent(new CustomEvent('open-wound-check', { detail: { amount: wcLW } }));
                     }
                 },
                 lwSetToTotal() {
                     const val = parseInt(this.lwNewTotal);
-                    if (!isNaN(val) && val >= 0) { this.lightWounds = val; }
+                    const valid = !isNaN(val) && val >= 0;
+                    if (valid && this.canEdit) { this.lightWounds = val; }
                     this.lwPlusModal = false;
                     this.lwNewTotal = '';
                     this.save();
-                    if (this.lightWounds > 0) {
-                        window.dispatchEvent(new CustomEvent('open-wound-check'));
+                    const wcLW = this.canEdit ? this.lightWounds : (valid ? val : 0);
+                    if (wcLW > 0) {
+                        window.dispatchEvent(new CustomEvent('open-wound-check', { detail: { amount: wcLW } }));
                     }
                 },
                 lwResetToZero() {
-                    this.lightWounds = 0;
+                    if (this.canEdit) { this.lightWounds = 0; }
                     this.lwMinusMenu = false;
                     this.save();
                 },
                 lwSetViaModal() {
                     const val = parseInt(this.lwSetValue);
-                    if (!isNaN(val) && val >= 0) { this.lightWounds = val; }
+                    if (!isNaN(val) && val >= 0 && this.canEdit) { this.lightWounds = val; }
                     this.lwSetModal = false;
                     this.lwMinusMenu = false;
                     this.lwSetValue = '';
@@ -1103,9 +1146,9 @@
                             WC
                         </button>
                         <button @click="lwMinusMenu = !lwMinusMenu"
-                                :disabled="lightWounds <= 0"
+                                :disabled="!canEdit || lightWounds <= 0"
                                 data-action="lw-minus"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
                         <span class="text-lg font-bold w-8 text-center" x-text="lightWounds"></span>
                         <button @click="lwPlusModal = true"
                                 data-action="lw-plus"
@@ -1199,12 +1242,16 @@
             <div class="flex items-center justify-between gap-4">
                 <div class="text-sm text-ink/60">Serious Wounds</div>
                 <div class="flex items-center gap-2">
+                    {% if viewer_can_edit %}
                     <button @click="seriousWounds = Math.max(0, seriousWounds - 1); save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } }))"
                             :disabled="seriousWounds <= 0"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                    {% endif %}
                     <span class="text-lg font-bold w-8 text-center" x-text="seriousWounds"></span>
+                    {% if viewer_can_edit %}
                     <button @click="seriousWounds++; save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } }))"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                    {% endif %}
                 </div>
             </div>
             <div class="flex items-center justify-between gap-4">
@@ -1218,27 +1265,35 @@
                     {% endif %}
                 </div>
                 <div class="flex items-center gap-2">
+                    {% if viewer_can_edit %}
                     <button @click="voidPoints = Math.max(0, voidPoints - 1); save()"
                             :disabled="voidPoints <= 0"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                    {% endif %}
                     <span class="text-lg font-bold w-8 text-center" x-text="voidPoints"></span>
+                    {% if viewer_can_edit %}
                     <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); save()"
                             :disabled="voidPoints >= voidMax"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">+</button>
+                    {% endif %}
                 </div>
             </div>
             {% if has_temp_void %}
             <div class="flex items-center justify-between gap-4" data-testid="temp-void-row">
                 <div class="text-sm text-ink/60">Temp Void</div>
                 <div class="flex items-center gap-2">
+                    {% if viewer_can_edit %}
                     <button @click="tempVoidPoints = Math.max(0, tempVoidPoints - 1); save()"
                             :disabled="tempVoidPoints <= 0"
                             data-action="temp-vp-minus"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                    {% endif %}
                     <span class="text-lg font-bold w-8 text-center" x-text="tempVoidPoints"></span>
+                    {% if viewer_can_edit %}
                     <button @click="tempVoidPoints++; save()"
                             data-action="temp-vp-plus"
                             class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
@@ -1266,15 +1321,19 @@
             <div class="flex items-center justify-between gap-4 mt-2 pt-2 border-t border-ink/10">
                 <div class="text-sm text-ink/60">3rd Dan Points <span class="text-xs">(per round)</span></div>
                 <div class="flex items-center gap-2">
+                    {% if viewer_can_edit %}
                     <button @click="mirumotoRoundPoints = Math.max(0, mirumotoRoundPoints - 1)"
                             :disabled="mirumotoRoundPoints <= 0"
                             class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                    {% endif %}
                     <span class="text-lg font-bold w-6 text-center" x-text="mirumotoRoundPoints"></span>
+                    {% if viewer_can_edit %}
                     <button @click="mirumotoRoundPoints = Math.min(mirumotoRoundPointsMax, mirumotoRoundPoints + 1)"
                             :disabled="mirumotoRoundPoints >= mirumotoRoundPointsMax"
                             class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
                     <button @click="mirumotoRoundPoints = mirumotoRoundPointsMax"
                             class="text-xs text-accent hover:underline ml-1">Reset</button>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
@@ -1450,7 +1509,7 @@
                     <input type="number" x-model.number="kuniLW" min="0" placeholder="LW taken"
                            class="w-20 border rounded px-2 py-1 text-sm text-center">
                     <button type="button"
-                            @click="const t = window._trackingBridge; if (t && kuniLW > 0) { const extra = Math.floor(kuniLW / 2); t.lightWounds += extra; t.save(); } reflected = true;"
+                            @click="const t = window._trackingBridge; if (t && kuniLW > 0 && t.canEdit) { const extra = Math.floor(kuniLW / 2); t.lightWounds += extra; t.save(); } reflected = true;"
                             :disabled="kuniLW <= 0"
                             class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                         Reflect
@@ -1462,7 +1521,14 @@
                 </div>
             </div>
             {% endif %}
-            {% if school_abilities.get('mantis_posture_tracking') %}
+            {# Mantis posture: only show the section to non-editors when
+               there's already history to display. Otherwise the header is
+               an empty wedge that doesn't tell them anything. Non-editors
+               can't mutate postureHistory (the buttons inside are
+               viewer_can_edit-gated), so the server-rendered adventure_state
+               is authoritative for the visibility decision. #}
+            {% set _mantis_posture_history = (adventure_state or {}).get('mantis_posture_history') %}
+            {% if school_abilities.get('mantis_posture_tracking') and (viewer_can_edit or _mantis_posture_history) %}
             <div class="mt-2 pt-2 border-t border-ink/10" data-testid="mantis-posture-tracker">
                 <div class="text-sm text-ink/60 mb-1">Posture</div>
                 {% if viewer_can_edit %}
@@ -2257,26 +2323,27 @@
                 {% for sid, skill in skills.items() %}
                 {% if skill.category == cat and skill.is_advanced == advanced %}
                 {% set rank = char_skills.get(sid, 0) %}
-                <div class="flex items-center gap-3 py-1 tooltip-trigger relative {{ 'opacity-60' if rank == 0 else '' }} cursor-pointer hover:bg-parchment/50 rounded px-1 -mx-1"
+                {% set roll = skill_rolls.get(sid) %}
+                {% set has_modifiers = roll and roll.tooltip_lines|length > 1 %}
+                <div class="skill-row{% if has_modifiers %} skill-row--has-modifiers{% endif %} py-1 tooltip-trigger relative {{ 'opacity-60' if rank == 0 else '' }} cursor-pointer hover:bg-parchment/50 rounded px-1 -mx-1"
                      data-roll-key="skill:{{ sid }}">
-                    <span class="w-24 sm:w-32 shrink-0 text-sm font-medium truncate">{{ skill.name }}</span>
-                    <div class="flex gap-0.5">
+                    <span class="skill-row__name text-sm font-medium truncate">{{ skill.name }}</span>
+                    <div class="skill-row__pips flex gap-0.5">
                         {% for i in range(1, 6) %}
                         <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= rank else 'border-ink/30' }}"></div>
                         {% endfor %}
                     </div>
-                    {% if sid in skill_rolls %}
-                    {% set roll = skill_rolls[sid] %}
-                    <span class="text-xs text-accent font-medium ml-2">
+                    {% if roll %}
+                    <span class="skill-row__roll text-xs text-accent font-medium">
                         {{ roll.display }}
-                        {% if roll.tooltip_lines|length > 1 %}
+                        {% if has_modifiers %}
                         ({{ roll.parenthetical }})
                         {% endif %}
                     </span>
                     {% endif %}
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                         <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
-                        <p>{{ skill.description }}</p>
+                        <div class="whitespace-pre-line">{{ skill.rules_text or skill.description }}</div>
                     </div>
                 </div>
                 {% endif %}
@@ -3160,13 +3227,13 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <button type="button"
                                         x-show="(window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
-                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) { t.tempVoidPoints--; src = 'temp'; } else if ((t.voidPoints || 0) > 0) { t.voidPoints--; src = 'regular'; } else { t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); src = 'worldliness'; } wcPostRollVpSources.push(src); t.save(); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; wcMargin = wcRollTotal - wcLightWounds;"
+                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) src = 'temp'; else if ((t.voidPoints || 0) > 0) src = 'regular'; else src = 'worldliness'; if (t.canEdit) { if (src === 'temp') t.tempVoidPoints--; else if (src === 'regular') t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); t.save(); } wcPostRollVpSources.push(src); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; wcMargin = wcRollTotal - wcLightWounds;"
                                         class="bg-green-700 hover:bg-green-800 text-white px-3 py-1.5 rounded text-sm font-medium">
                                     Spend VP (+5)
                                 </button>
                                 <button type="button"
                                         x-show="wcPostRollVpSpent > 0"
-                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; wcMargin = wcRollTotal - wcLightWounds; }"
+                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (t.canEdit) { if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); } wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; wcMargin = wcRollTotal - wcLightWounds; }"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
                                     Undo VP
                                 </button>
@@ -3257,13 +3324,13 @@
                                 {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each #}
                                 <button type="button"
                                         x-show="voidSpendConfig.wc_vp_free_raise && (window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
-                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) { t.tempVoidPoints--; src = 'temp'; } else if ((t.voidPoints || 0) > 0) { t.voidPoints--; src = 'regular'; } else { t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); src = 'worldliness'; } wcPostRollVpSources.push(src); t.save(); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; }"
+                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) src = 'temp'; else if ((t.voidPoints || 0) > 0) src = 'regular'; else src = 'worldliness'; if (t.canEdit) { if (src === 'temp') t.tempVoidPoints--; else if (src === 'regular') t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); t.save(); } wcPostRollVpSources.push(src); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; }"
                                         class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium">
                                     Spend VP (+5)
                                 </button>
                                 <button type="button"
                                         x-show="wcPostRollVpSpent > 0"
-                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
+                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (t.canEdit) { if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); } wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
                                     Undo VP
                                 </button>
@@ -3332,7 +3399,7 @@
                                    :max="Math.floor(wcLightWounds / 10) || 1"
                                    class="w-16 border rounded px-2 py-1 text-sm text-center">
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t && akodoReflectVP > 0 && (t.anyVPAvailable?.() || 0) >= akodoReflectVP) { for (let i = 0; i < akodoReflectVP; i++) { if ((t.tempVoidPoints || 0) > 0) t.tempVoidPoints--; else if ((t.voidPoints || 0) > 0) t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); } t.save(); } akodoReflectVP = 0;"
+                                    @click="const t = window._trackingBridge; if (t && akodoReflectVP > 0 && (t.anyVPAvailable?.() || 0) >= akodoReflectVP && t.canEdit) { for (let i = 0; i < akodoReflectVP; i++) { if ((t.tempVoidPoints || 0) > 0) t.tempVoidPoints--; else if ((t.voidPoints || 0) > 0) t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); } t.save(); } akodoReflectVP = 0;"
                                     :disabled="akodoReflectVP <= 0"
                                     class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm font-medium disabled:opacity-30">
                                 Reflect <span x-text="(akodoReflectVP || 0) * 10"></span> LW
@@ -4143,13 +4210,13 @@
                         <div x-show="schoolAbilities.mirumoto_round_points && ((window._trackingBridge?.mirumotoRoundPoints || 0) > 0 || mirumotoPointsSpentThisRoll > 0)" x-cloak class="mt-2 pt-2 border-t border-green-200">
                             <div class="flex items-center gap-2 text-sm">
                                 <button type="button"
-                                        @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { t.mirumotoRoundPoints--; mirumotoPointsSpentThisRoll++; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState(); }"
+                                        @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { if (t.canEdit) { t.mirumotoRoundPoints--; } mirumotoPointsSpentThisRoll++; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState(); }"
                                         :disabled="(window._trackingBridge?.mirumotoRoundPoints || 0) <= 0"
                                         class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
                                     Spend 3rd Dan Point (+2)
                                 </button>
                                 <button type="button"
-                                        @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { t.mirumotoRoundPoints++; mirumotoPointsSpentThisRoll--; atkRollTotal -= 2; baseTotal -= 2; _atkUpdateHitState(); }"
+                                        @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { if (t.canEdit) { t.mirumotoRoundPoints++; } mirumotoPointsSpentThisRoll--; atkRollTotal -= 2; baseTotal -= 2; _atkUpdateHitState(); }"
                                         :disabled="mirumotoPointsSpentThisRoll <= 0"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
                                     Undo
@@ -4211,7 +4278,7 @@
                         <div x-show="schoolAbilities.courtier_temp_vp_on_hit" x-cloak
                              class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
+                                    @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
                                     class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
                                 Gain 1 temp VP (Courtier 4th Dan - once per target)
                             </button>
@@ -4346,13 +4413,13 @@
                              class="mt-2 pt-2 border-t border-red-200">
                             <div class="flex items-center gap-2 text-sm">
                                 <button type="button"
-                                        @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { t.mirumotoRoundPoints--; mirumotoPointsSpentThisRoll++; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState(); }"
+                                        @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { if (t.canEdit) { t.mirumotoRoundPoints--; } mirumotoPointsSpentThisRoll++; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState(); }"
                                         :disabled="(window._trackingBridge?.mirumotoRoundPoints || 0) <= 0"
                                         class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
                                     Spend 3rd Dan Point (+2)
                                 </button>
                                 <button type="button"
-                                        @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { t.mirumotoRoundPoints++; mirumotoPointsSpentThisRoll--; atkRollTotal -= 2; baseTotal -= 2; _atkUpdateHitState(); }"
+                                        @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { if (t.canEdit) { t.mirumotoRoundPoints++; } mirumotoPointsSpentThisRoll--; atkRollTotal -= 2; baseTotal -= 2; _atkUpdateHitState(); }"
                                         :disabled="mirumotoPointsSpentThisRoll <= 0"
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
                                     Undo
@@ -5245,13 +5312,13 @@
                          class="bg-parchment rounded p-2 text-sm">
                         <div class="flex items-center gap-2">
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { t.mirumotoRoundPoints--; mirumotoPointsSpentThisRoll++; baseTotal += 2; }"
+                                    @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { if (t.canEdit) { t.mirumotoRoundPoints--; } mirumotoPointsSpentThisRoll++; baseTotal += 2; }"
                                     :disabled="(window._trackingBridge?.mirumotoRoundPoints || 0) <= 0"
                                     class="bg-accent hover:bg-red-900 text-parchment px-3 py-1 rounded text-sm disabled:opacity-30">
                                 Spend 3rd Dan Point (+2)
                             </button>
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { t.mirumotoRoundPoints++; mirumotoPointsSpentThisRoll--; baseTotal -= 2; }"
+                                    @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { if (t.canEdit) { t.mirumotoRoundPoints++; } mirumotoPointsSpentThisRoll--; baseTotal -= 2; }"
                                     :disabled="mirumotoPointsSpentThisRoll <= 0"
                                     class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1 rounded text-sm disabled:opacity-30">
                                 Undo
@@ -5333,12 +5400,12 @@
                         <div class="font-medium mb-1">Akodo Feint - Temp VP</div>
                         <div class="flex gap-2">
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t) { t.tempVoidPoints += 4; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
+                                    @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 4; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
                                     class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
                                 Succeeded (+4 temp VP)
                             </button>
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t) { t.tempVoidPoints += 1; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
+                                    @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
                                     class="bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded text-xs">
                                 Failed (+1 temp VP)
                             </button>
@@ -5389,7 +5456,7 @@
                     <div x-show="phase === 'done' && currentRollKey === 'skill:manipulation' && schoolAbilities.courtier_temp_vp_on_hit" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <button type="button"
-                                @click="const t = window._trackingBridge; if (t) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
+                                @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
                                 class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
                             Gain 1 temp VP (Courtier 4th Dan - once per target)
                         </button>
@@ -5790,10 +5857,14 @@
 
             // Pools that were already full are skipped so the initiative
             // modal doesn't show a "refreshed" message when nothing changed.
+            // For non-editors this is a no-op: their pools don't deplete in
+            // the first place (the spend handlers are gated on canEdit), so
+            // there's nothing to refresh and no informational message to
+            // surface in the initiative modal.
             _resetPerRoundAbilities() {
                 const messages = [];
                 const t = window._trackingBridge;
-                if (!t) return messages;
+                if (!t || !t.canEdit) return messages;
                 if (this.schoolAbilities.mirumoto_round_points) {
                     const max = t.mirumotoRoundPointsMax || 0;
                     if ((t.mirumotoRoundPoints || 0) < max) {
@@ -6374,7 +6445,7 @@
                     }
                 });
 
-                window.addEventListener('open-wound-check', () => this.openWoundCheckModal());
+                window.addEventListener('open-wound-check', (e) => this.openWoundCheckModal(e?.detail?.amount));
                 window._diceRoller = this;
                 // Share akodoBankedBonuses with the tracking bridge so both components use the same array
                 if (window._trackingBridge) {
@@ -7159,6 +7230,11 @@
             deductVoidPoints(option) {
                 const t = window._trackingBridge;
                 if (!t) return;
+                // Read-only Roll Mode: non-editors get no bridge mutations
+                // from VP spends. The roll-modal's local +5/raise/etc.
+                // computation happens in the caller before this hook fires,
+                // so the displayed roll total still reflects the spend.
+                if (!t.canEdit) return;
                 const nonTempSpent = (option.fromRegular || 0) + (option.fromWorldliness || 0);
                 if (option.fromTemp > 0) t.tempVoidPoints -= option.fromTemp;
                 if (option.fromRegular > 0) t.voidPoints -= option.fromRegular;
@@ -7183,7 +7259,7 @@
                     for (let i = 0; i < totalSpent; i++) {
                         this.matsuBankedWcBonuses.push({ amount: perVp, spent: false });
                     }
-                    window._trackingBridge?.saveBankedBonuses();
+                    t.saveBankedBonuses();
                 }
                 t.save();
             },
@@ -7323,7 +7399,10 @@
                     const t = window._trackingBridge;
                     const key = this.currentRollKey;
                     // Mirumoto Special: gain 1 temp VP after any parry roll
-                    if (key === 'parry' && this.schoolAbilities.mirumoto_temp_vp_on_parry && t) {
+                    // (editor-only: a non-editor walking through the parry
+                    // sees the roll compute, but the auto-grant doesn't
+                    // touch the displayed VP count).
+                    if (key === 'parry' && this.schoolAbilities.mirumoto_temp_vp_on_parry && t && t.canEdit) {
                         t.tempVoidPoints += 1;
                         t.save();
                     }
@@ -7339,7 +7418,7 @@
                     // math on later rolls this round.
                     if ((key === 'parry' || key === 'athletics:parry')
                             && this.schoolAbilities.shinjo_3rd_dan_parry_decrement > 0
-                            && t) {
+                            && t && t.canEdit) {
                         const dec = this.schoolAbilities.shinjo_3rd_dan_parry_decrement;
                         (t.actionDice || []).forEach(d => {
                             if (!d.spent) d.value = (d.value || 0) - dec;
@@ -7347,24 +7426,24 @@
                         t.save();
                     }
                     // Hiruma 3rd Dan: bank 2*attack for next attack and damage after parry (stacks)
-                    if (key === 'parry' && this.schoolAbilities.hiruma_post_parry_bonus) {
+                    if (key === 'parry' && this.schoolAbilities.hiruma_post_parry_bonus && t?.canEdit) {
                         this.hirumaBankedAttackBonus += this.schoolAbilities.hiruma_post_parry_amount || 0;
-                        if (window._trackingBridge) window._trackingBridge.hirumaBankedAttackBonus = this.hirumaBankedAttackBonus;
-                        window._trackingBridge?.saveBankedBonuses();
+                        if (t) t.hirumaBankedAttackBonus = this.hirumaBankedAttackBonus;
+                        t?.saveBankedBonuses();
                     }
                     // Akodo Special: feint roll triggers temp VP (success/failure decided by user)
                     // Ide Special: feint triggers TN reduction
                     // These are handled in the result display via buttons (see template below)
                     // Non-Akodo feint schools: auto-grant 1 temp VP on feint
-                    if (key === 'knack:feint' && this.schoolAbilities.feint_temp_vp && t) {
+                    if (key === 'knack:feint' && this.schoolAbilities.feint_temp_vp && t && t.canEdit) {
                         t.tempVoidPoints += 1;
                         t.save();
                     }
                     // Bayushi 4th Dan: auto-bank +5 for a future attack after feint
-                    if (this.schoolAbilities.bayushi_post_feint_raise) {
+                    if (this.schoolAbilities.bayushi_post_feint_raise && t?.canEdit) {
                         this.bayushiBankedFeintRaise += 5;
-                        if (window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = this.bayushiBankedFeintRaise;
-                        window._trackingBridge?.saveBankedBonuses();
+                        if (t) t.bayushiBankedFeintRaise = this.bayushiBankedFeintRaise;
+                        t?.saveBankedBonuses();
                     }
 
                     // If this roll auto-spent an action die (parry/feint),
@@ -8045,14 +8124,18 @@
             duelApplyOpponentDamage() {
                 const dmg = parseInt(this.duelOpponentDamage || '0');
                 const t = window._trackingBridge;
-                if (t) {
+                if (t && t.canEdit) {
                     t.lightWounds += dmg;
                     t.save();
                 }
-                // Close duel modal and open wound check modal
+                // Close duel modal and open wound check modal. Editors see
+                // the WC modal pre-populated with their new (post-mutation)
+                // LW; non-editors see it pre-populated with the dmg amount
+                // so the WC roll runs against that scenario without ever
+                // touching the displayed LW.
                 this.duelOpen = false;
                 this.wcIsStrike = true;
-                this.wcLightWounds = t ? t.lightWounds : dmg;
+                this.wcLightWounds = (t && t.canEdit) ? t.lightWounds : dmg;
                 this.wcVoidSelected = 0;
                 this.wcPhase = 'pre';
                 this.wcRaisesSpent = 0;
@@ -9161,14 +9244,22 @@
 
             // --- Wound Check ---
 
-            openWoundCheckModal() {
+            openWoundCheckModal(amountOverride) {
                 const t = window._trackingBridge;
-                if (!t || t.lightWounds <= 0) return;
+                if (!t) return;
+                // For non-editors the LW + flow passes the entered amount
+                // via event detail so the WC roll runs against that value
+                // without mutating the bridge's lightWounds (which would
+                // otherwise change the sheet's displayed count). Editors
+                // pass undefined and we read t.lightWounds directly.
+                const lw = (typeof amountOverride === 'number' && amountOverride > 0)
+                    ? amountOverride : t.lightWounds;
+                if (lw <= 0) return;
                 try {
                     this.wcProbs = JSON.parse(document.getElementById('wound-check-probs')?.textContent || '{}');
                 } catch (e) { this.wcProbs = {}; }
                 const formula = this.formulas['wound_check'];
-                this.wcLightWounds = t.lightWounds;
+                this.wcLightWounds = lw;
                 this.wcVoidSelected = 0;
                 this.wcDaidojiCounterattack = false;
                 this.wcIsStrike = false;
@@ -9517,46 +9608,57 @@
             applyWoundCheckFailure() {
                 const t = window._trackingBridge;
                 if (!t || this.wcResultApplied) return;
-                const swGained = this.wcSeriousWounds;
-                t.seriousWounds += swGained;
-                t.lightWounds = 0;
-                // Yogo Warden: gain 1 temp VP per serious wound taken
-                if (this.schoolAbilities.yogo_temp_vp_on_sw && swGained > 0) {
-                    t.tempVoidPoints += swGained;
+                // Non-editors: the WC walk-through is informational only -
+                // never mutate the bridge's lightWounds / seriousWounds /
+                // tempVoidPoints. The save shim already rejects the POST,
+                // but we also want the displayed counters on the sheet to
+                // stay anchored at the persisted values throughout.
+                if (t.canEdit) {
+                    const swGained = this.wcSeriousWounds;
+                    t.seriousWounds += swGained;
+                    t.lightWounds = 0;
+                    // Yogo Warden: gain 1 temp VP per serious wound taken
+                    if (this.schoolAbilities.yogo_temp_vp_on_sw && swGained > 0) {
+                        t.tempVoidPoints += swGained;
+                    }
+                    t.save();
+                    window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                 }
-                t.save();
-                window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                 this.wcResultApplied = true;
             },
 
             wcKeepLightWounds() {
-                // Passed - player chooses to keep their light wounds
-                // Isawa Duelist 5th Dan: bank wound check excess for future wound check
-                if (this.schoolAbilities.isawa_bank_wc_excess && this.wcPassed && this.wcMargin > 0) {
-                    this.bankedWcExcess.push({ amount: this.wcMargin, spent: false });
+                // Passed - player chooses to keep their light wounds.
+                // Non-editors get no banked-bonus side effects (those would
+                // bloat the priest/ally's adventureState without permission).
+                const t = window._trackingBridge;
+                if (t?.canEdit) {
+                    if (this.schoolAbilities.isawa_bank_wc_excess && this.wcPassed && this.wcMargin > 0) {
+                        this.bankedWcExcess.push({ amount: this.wcMargin, spent: false });
+                    }
+                    if (this.schoolAbilities.akodo_wc_attack_bonus && this.wcPassed && this.wcMargin > 0) {
+                        const bonus = Math.floor(this.wcMargin / 5) * (this.schoolAbilities.akodo_attack_skill || 0);
+                        if (bonus > 0) t.akodoBankedBonuses.push({ amount: bonus, spent: false });
+                    }
+                    if (t.saveBankedBonuses) t.saveBankedBonuses();
                 }
-                // Akodo 3rd Dan: bank floor(margin/5) * attack_skill as individual bonus
-                if (this.schoolAbilities.akodo_wc_attack_bonus && this.wcPassed && this.wcMargin > 0) {
-                    const bonus = Math.floor(this.wcMargin / 5) * (this.schoolAbilities.akodo_attack_skill || 0);
-                    if (bonus > 0) window._trackingBridge.akodoBankedBonuses.push({ amount: bonus, spent: false });
-                }
-                // Persist banked bonuses
-                if (window._trackingBridge?.saveBankedBonuses) window._trackingBridge.saveBankedBonuses();
                 this.wcModalOpen = false;
             },
 
             wcTakeSeriousAndReset() {
-                // Passed - player chooses to take 1 serious, reset light to 0
+                // Passed - player chooses to take 1 serious, reset light to 0.
+                // Non-editors: no mutation of the displayed sheet state.
                 const t = window._trackingBridge;
                 if (!t) return;
-                t.seriousWounds += 1;
-                // Yogo Warden: gain 1 temp VP per serious wound taken
-                if (this.schoolAbilities.yogo_temp_vp_on_sw) {
-                    t.tempVoidPoints += 1;
+                if (t.canEdit) {
+                    t.seriousWounds += 1;
+                    if (this.schoolAbilities.yogo_temp_vp_on_sw) {
+                        t.tempVoidPoints += 1;
+                    }
+                    t.lightWounds = 0;
+                    t.save();
+                    window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                 }
-                t.lightWounds = 0;
-                t.save();
-                window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                 this.wcModalOpen = false;
             },
 
