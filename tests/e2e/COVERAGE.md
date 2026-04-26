@@ -855,14 +855,14 @@ The three failures were:
 - [x] Save persists the explanation (survives page reload) → `test_name_explanation.py::test_save_persists_and_reloads`
 - [x] Icon switches to accent color once an explanation is saved → `test_name_explanation.py::test_icon_highlights_when_explanation_exists`
 
-## Character Sheet — Name Explanation Tooltip (sheet.html)
+## Character Sheet — Name Explanation Modal (sheet.html)
 
-- [x] Tooltip marker rendered + carries the explanation text → `test_name_explanation.py::test_sheet_shows_tooltip_icon_when_explanation_exists`
-- [x] No tooltip marker when the explanation is empty → `test_name_explanation.py::test_sheet_has_no_tooltip_icon_without_explanation`
-- [x] Click on icon toggles tooltip on desktop (no 2000ms hover wait) → `test_name_explanation.py::test_sheet_explanation_tooltip_click_toggles_on_desktop`
-- [x] Click outside closes an open name-explanation tooltip → `test_name_explanation.py::test_sheet_explanation_tooltip_click_outside_closes`
-- [x] Tooltip is clamped within the viewport on a phone viewport (no horizontal overflow) → `test_name_explanation.py::test_sheet_explanation_tooltip_does_not_overflow_on_mobile`
-- [x] Tooltip is clamped under real mobile emulation (innerWidth grows post-overflow; clamp must read clientWidth) → `test_name_explanation.py::test_sheet_explanation_tooltip_does_not_overflow_in_mobile_emulation`
+- [x] Icon marker rendered + carries the explanation text in the modal subtree → `test_name_explanation.py::test_sheet_shows_tooltip_icon_when_explanation_exists`
+- [x] No icon marker when the explanation is empty → `test_name_explanation.py::test_sheet_has_no_tooltip_icon_without_explanation`
+- [x] Clicking the icon opens a modal showing the explanation → `test_name_explanation.py::test_sheet_explanation_modal_opens_and_shows_text`
+- [x] Modal close (×) button dismisses the modal → `test_name_explanation.py::test_sheet_explanation_modal_closes_on_close_button`
+- [x] Clicking the modal's dimmed backdrop dismisses the modal → `test_name_explanation.py::test_sheet_explanation_modal_closes_on_backdrop_click`
+- [x] Pressing Escape dismisses the modal → `test_name_explanation.py::test_sheet_explanation_modal_closes_on_escape`
 
 ## Character Editor — School Selection
 

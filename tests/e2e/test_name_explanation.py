@@ -154,125 +154,52 @@ def _make_character_with_explanation(page, live_server_url, name, explanation):
     page.wait_for_selector('[data-testid="name-explanation-tooltip"]', timeout=5000)
 
 
-def test_sheet_explanation_tooltip_click_toggles_on_desktop(page, live_server_url):
-    """Clicking the icon on desktop opens (and re-clicking closes) the tooltip,
-    without waiting for the 2000ms hover delay."""
+def test_sheet_explanation_modal_opens_and_shows_text(page, live_server_url):
+    """Clicking the name-explanation icon opens a modal containing the saved
+    explanation text. The modal is the same on desktop and mobile."""
     _make_character_with_explanation(
-        page, live_server_url, "DesktopClick", "A name to remember."
+        page, live_server_url, "ModalOpens", "A name to remember."
     )
-    trigger = page.locator('[data-testid="name-explanation-tooltip"]')
-    tip = trigger.locator('.tooltip-content')
-    # Initially hidden (CSS visibility:hidden).
-    assert tip.evaluate("el => getComputedStyle(el).visibility") == "hidden"
-    # Click opens immediately - no 2000ms wait.
-    trigger.dispatch_event("click")
-    page.wait_for_timeout(50)
-    assert trigger.evaluate("el => el.classList.contains('tooltip-active')")
-    assert tip.evaluate("el => getComputedStyle(el).visibility") == "visible"
-    # Click again closes.
-    trigger.dispatch_event("click")
-    page.wait_for_timeout(50)
-    assert not trigger.evaluate("el => el.classList.contains('tooltip-active')")
+    modal = page.locator('[data-modal="name-explanation-display"]')
+    assert modal.evaluate("el => getComputedStyle(el).display") == "none"
+    page.locator('[data-action="open-name-explanation"]').click()
+    modal.wait_for(state="visible", timeout=2000)
+    assert "A name to remember." in (modal.text_content() or "")
 
 
-def test_sheet_explanation_tooltip_click_outside_closes(page, live_server_url):
-    """Clicking outside the icon closes an open name-explanation tooltip."""
+def test_sheet_explanation_modal_closes_on_close_button(page, live_server_url):
+    """Clicking the modal's × button closes it."""
     _make_character_with_explanation(
-        page, live_server_url, "ClickAway", "Some explanation."
+        page, live_server_url, "ModalClose", "Some explanation."
     )
-    trigger = page.locator('[data-testid="name-explanation-tooltip"]')
-    trigger.dispatch_event("click")
-    page.wait_for_timeout(50)
-    assert trigger.evaluate("el => el.classList.contains('tooltip-active')")
-    # Click somewhere else on the page.
-    page.locator('body').dispatch_event("click")
-    page.wait_for_timeout(50)
-    assert not trigger.evaluate("el => el.classList.contains('tooltip-active')")
+    page.locator('[data-action="open-name-explanation"]').click()
+    modal = page.locator('[data-modal="name-explanation-display"]')
+    modal.wait_for(state="visible", timeout=2000)
+    page.locator('[data-action="close-name-explanation"]').click()
+    modal.wait_for(state="hidden", timeout=2000)
 
 
-def test_sheet_explanation_tooltip_does_not_overflow_on_mobile(page, live_server_url):
-    """At a phone-sized viewport, opening the explanation tooltip never makes
-    the page horizontally scrollable - the tooltip is shifted left so its
-    right edge fits within the viewport."""
-    long_text = (
-        "This name has a long explanation that would normally make a "
-        "fixed-width tooltip overflow far past the right edge of a narrow "
-        "phone viewport. Repeated. " * 4
+def test_sheet_explanation_modal_closes_on_backdrop_click(page, live_server_url):
+    """Clicking the dimmed backdrop (outside the modal panel) closes the modal."""
+    _make_character_with_explanation(
+        page, live_server_url, "ModalBackdrop", "Some explanation."
     )
-    _make_character_with_explanation(page, live_server_url, "MobileOverflow", long_text)
-    page.set_viewport_size({"width": 380, "height": 800})
-    page.wait_for_timeout(100)
-    trigger = page.locator('[data-testid="name-explanation-tooltip"]')
-    trigger.scroll_into_view_if_needed()
-    trigger.dispatch_event("click")
-    page.wait_for_timeout(100)
-    # Tooltip is open.
-    assert trigger.evaluate("el => el.classList.contains('tooltip-active')")
-    tip = trigger.locator('.tooltip-content')
-    assert tip.evaluate("el => getComputedStyle(el).visibility") == "visible"
-    # Tooltip's bounding rect is fully within the layout viewport (with small
-    # margin tolerance for sub-pixel rounding). Use clientWidth, not
-    # window.innerWidth - on mobile, innerWidth grows to match the document's
-    # post-overflow scrollWidth, which masks the very bug this test guards.
-    rect = tip.bounding_box()
-    vw = page.evaluate("document.documentElement.clientWidth")
-    assert rect is not None
-    assert rect["x"] >= -1, f"tooltip overflows left: x={rect['x']}"
-    assert rect["x"] + rect["width"] <= vw + 1, (
-        f"tooltip overflows right: x+w={rect['x'] + rect['width']}, vw={vw}"
-    )
-    # The page should not have horizontal scroll caused by the tooltip.
-    page_scroll_w = page.evaluate("document.documentElement.scrollWidth")
-    client_w = page.evaluate("document.documentElement.clientWidth")
-    assert page_scroll_w <= client_w + 1, (
-        f"page is horizontally scrollable: scrollWidth={page_scroll_w}, clientWidth={client_w}"
-    )
+    page.locator('[data-action="open-name-explanation"]').click()
+    modal = page.locator('[data-modal="name-explanation-display"]')
+    modal.wait_for(state="visible", timeout=2000)
+    # Click on the backdrop element itself, not its inner panel.
+    box = modal.bounding_box()
+    page.mouse.click(box["x"] + 5, box["y"] + 5)
+    modal.wait_for(state="hidden", timeout=2000)
 
 
-def test_sheet_explanation_tooltip_does_not_overflow_in_mobile_emulation(
-    browser, live_server_url, page
-):
-    """The same overflow check as above, but in a real mobile-emulation
-    context (is_mobile=True, has_touch=True). On mobile, an absolutely-
-    positioned tooltip that overflows the layout viewport pushes
-    document.scrollWidth - and ``window.innerWidth`` - past the visual
-    viewport. The clamp logic must not read innerWidth in that state, or
-    it computes too small a shift and the tooltip stays clipped.
-
-    Reproduces the live-site regression where the name-explanation
-    tooltip drifted past the screen edge on a real phone even though
-    desktop-mode clicktests were green."""
-    long_text = (
-        "This name has a long explanation that would normally make a "
-        "fixed-width tooltip overflow far past the right edge of a narrow "
-        "phone viewport. Repeated. " * 4
+def test_sheet_explanation_modal_closes_on_escape(page, live_server_url):
+    """Pressing Escape closes the modal."""
+    _make_character_with_explanation(
+        page, live_server_url, "ModalEscape", "Some explanation."
     )
-    # Set up the character (and grab the sheet URL) in the default
-    # desktop-style page fixture, which has the auth bypass header.
-    _make_character_with_explanation(page, live_server_url, "MobileEmuOverflow", long_text)
-    sheet_url = page.url
-
-    mobile_ctx = browser.new_context(
-        viewport={"width": 375, "height": 800},
-        is_mobile=True,
-        has_touch=True,
-        extra_http_headers={"X-Test-User": "183026066498125825:eliandrewc"},
-    )
-    try:
-        mp = mobile_ctx.new_page()
-        mp.goto(sheet_url)
-        mp.wait_for_load_state("networkidle")
-        trigger = mp.locator('[data-testid="name-explanation-tooltip"]')
-        trigger.tap()
-        mp.wait_for_timeout(200)
-        tip = trigger.locator('.tooltip-content')
-        assert tip.evaluate("el => getComputedStyle(el).visibility") == "visible"
-        rect = tip.bounding_box()
-        vw = mp.evaluate("document.documentElement.clientWidth")
-        assert rect is not None
-        assert rect["x"] >= -1, f"tooltip overflows left: x={rect['x']}"
-        assert rect["x"] + rect["width"] <= vw + 1, (
-            f"tooltip overflows right: x+w={rect['x'] + rect['width']}, vw={vw}"
-        )
-    finally:
-        mobile_ctx.close()
+    page.locator('[data-action="open-name-explanation"]').click()
+    modal = page.locator('[data-modal="name-explanation-display"]')
+    modal.wait_for(state="visible", timeout=2000)
+    page.keyboard.press("Escape")
+    modal.wait_for(state="hidden", timeout=2000)
