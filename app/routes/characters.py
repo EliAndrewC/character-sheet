@@ -15,7 +15,7 @@ from app.models import Character, CharacterVersion, GamingGroup, User
 from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids, get_all_editors
 from app.services.rolls import compute_dan
 from app.services.sanitize import sanitize_sections
-from app.services.versions import publish_character, revert_character
+from app.services.versions import compute_version_diff, publish_character, revert_character
 from app.services.xp import calculate_total_xp
 
 router = APIRouter(prefix="/characters")
@@ -840,6 +840,63 @@ def get_versions(
             for v in versions
         ]
     })
+
+
+@router.get("/{char_id}/versions/{version_id}/diff", response_class=HTMLResponse)
+def get_version_diff(
+    request: Request, char_id: int, version_id: int, db: Session = Depends(get_db)
+):
+    """HTMX partial showing what changed between this version and the prior one.
+
+    Editor-only - the version-history block on the sheet is already
+    gated by ``viewer_can_edit``, but we duplicate the gate here so a
+    non-editor can't poke the endpoint directly.
+
+    Returns 404 for the very first version (no prior to diff against).
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"], character.owner_discord_id, all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    version = db.query(CharacterVersion).filter(
+        CharacterVersion.id == version_id,
+        CharacterVersion.character_id == char_id,
+    ).first()
+    if not version:
+        return JSONResponse({"error": "Version not found"}, status_code=404)
+
+    if version.version_number <= 1:
+        return JSONResponse({"error": "No prior version"}, status_code=404)
+
+    prev = db.query(CharacterVersion).filter(
+        CharacterVersion.character_id == char_id,
+        CharacterVersion.version_number == version.version_number - 1,
+    ).first()
+    if not prev:
+        # Defensive: a version_number gap (e.g. row deleted) shouldn't
+        # 500 the drill-down. Treat it like "no prior to diff against".
+        return JSONResponse({"error": "Prior version missing"}, status_code=404)
+
+    entries = compute_version_diff(prev.state or {}, version.state or {})
+    return _templates().TemplateResponse(
+        request=request,
+        name="character/partials/version_diff.html",
+        context={"entries": entries, "version": version, "prev": prev},
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,9 @@
 
 import pytest
 from app.models import Character, CharacterVersion
-from app.services.versions import compute_diff_summary, publish_character, revert_character
+from app.services.versions import (
+    compute_diff_summary, compute_version_diff, publish_character, revert_character,
+)
 
 
 class TestCharacterVersionModel:
@@ -371,3 +373,469 @@ class TestPreceptsPoolDanDrop:
         # Revert back to v1 (dan 2). Pool must clear.
         revert_character(char, v1.id, db)
         assert char.precepts_pool == []
+
+
+class TestComputeVersionDiff:
+    """The structured diff used by the version-history drill-down UI.
+
+    These tests pin the per-category emit rules; the partial template
+    uses ``{% for cat, items in entries|groupby('category') %}`` so the
+    list shape (flat list of category-tagged dicts) is part of the
+    contract.
+    """
+
+    @staticmethod
+    def _by_category(entries, category):
+        return [e for e in entries if e["category"] == category]
+
+    def test_empty_when_states_equal(self):
+        state = {"name": "Akodo", "rings": {"Air": 3}, "skills": {"bragging": 2}}
+        assert compute_version_diff(state, state) == []
+
+    def test_empty_when_prev_state_is_empty(self):
+        # First version of a character: caller short-circuits, but the
+        # function shouldn't crash.
+        assert compute_version_diff({}, {"name": "x"}) == []
+        assert compute_version_diff(None, {"name": "x"}) == []
+
+    def test_basics_name_change(self):
+        entries = compute_version_diff({"name": "Old"}, {"name": "New"})
+        basics = self._by_category(entries, "Basics")
+        assert any(e["label"] == "Name" and e["before"] == "Old" and e["after"] == "New"
+                   for e in basics)
+
+    def test_basics_player_name_change_renders_empty_when_unset(self):
+        entries = compute_version_diff({"player_name": ""}, {"player_name": "Alice"})
+        basics = self._by_category(entries, "Basics")
+        match = next(e for e in basics if e["label"] == "Player name")
+        assert match["before"] == "(empty)" and match["after"] == "Alice"
+
+    def test_name_explanation_surfaces_as_section_updated(self):
+        entries = compute_version_diff(
+            {"name_explanation": "old reason"},
+            {"name_explanation": "new reason"},
+        )
+        match = next(e for e in entries if e["label"] == "Name explanation")
+        assert match["kind"] == "section_updated"
+        assert match["after"] == "updated"
+        # Crucially, the actual prose isn't dumped into the diff.
+        assert "old reason" not in str(match) and "new reason" not in str(match)
+
+    def test_school_change_renders_display_names(self):
+        entries = compute_version_diff(
+            {"school": ""}, {"school": "akodo_bushi"},
+        )
+        match = next(e for e in entries if e["label"] == "School")
+        assert match["before"] == "none"
+        assert match["after"] == "Akodo Bushi"
+
+    def test_school_ring_choice_suppressed_when_school_changes(self):
+        # School change implies a different ring choice; the school line
+        # already covers that, so a separate ring-choice line would be
+        # duplicate noise.
+        entries = compute_version_diff(
+            {"school": "akodo_bushi", "school_ring_choice": "Earth"},
+            {"school": "kakita_duelist", "school_ring_choice": "Air"},
+        )
+        labels = {e["label"] for e in entries}
+        assert "School" in labels
+        assert "School ring" not in labels
+
+    def test_school_ring_choice_emitted_when_school_unchanged(self):
+        entries = compute_version_diff(
+            {"school": "shiba_bushi", "school_ring_choice": "Air"},
+            {"school": "shiba_bushi", "school_ring_choice": "Fire"},
+        )
+        match = next(e for e in entries if e["label"] == "School ring")
+        assert match["before"] == "Air" and match["after"] == "Fire"
+
+    def test_rings_up_and_down(self):
+        entries = compute_version_diff(
+            {"rings": {"Air": 2, "Fire": 4}},
+            {"rings": {"Air": 4, "Fire": 3}},
+        )
+        rings = self._by_category(entries, "Rings")
+        air = next(e for e in rings if e["label"] == "Air")
+        fire = next(e for e in rings if e["label"] == "Fire")
+        assert air["before"] == 2 and air["after"] == 4
+        assert fire["before"] == 4 and fire["after"] == 3
+
+    def test_attack_parry_change(self):
+        entries = compute_version_diff(
+            {"attack": 2, "parry": 1}, {"attack": 3, "parry": 1},
+        )
+        combat = self._by_category(entries, "Combat")
+        assert any(e["label"] == "Attack" and e["before"] == 2 and e["after"] == 3
+                   for e in combat)
+
+    def test_first_dan_choices_are_set_semantics(self):
+        # Reordering the same skills emits no diff line.
+        entries = compute_version_diff(
+            {"technique_choices": {"first_dan_choices": ["bragging", "etiquette"]}},
+            {"technique_choices": {"first_dan_choices": ["etiquette", "bragging"]}},
+        )
+        assert not any(e["label"] == "1st Dan choices" for e in entries)
+
+    def test_first_dan_choices_emit_on_set_change(self):
+        entries = compute_version_diff(
+            {"technique_choices": {"first_dan_choices": ["bragging"]}},
+            {"technique_choices": {"first_dan_choices": ["bragging", "etiquette"]}},
+        )
+        match = next(e for e in entries if e["label"] == "1st Dan choices")
+        assert match["before"] == "Bragging" and match["after"] == "Bragging, Etiquette"
+
+    def test_second_dan_choice_change(self):
+        entries = compute_version_diff(
+            {"technique_choices": {"second_dan_choice": "bragging"}},
+            {"technique_choices": {"second_dan_choice": "etiquette"}},
+        )
+        match = next(e for e in entries if e["label"] == "2nd Dan choice")
+        assert match["before"] == "Bragging" and match["after"] == "Etiquette"
+
+    def test_skills_add_remove_change(self):
+        entries = compute_version_diff(
+            {"skills": {"bragging": 2, "etiquette": 1}},
+            {"skills": {"bragging": 3, "tact": 1}},
+        )
+        skills = self._by_category(entries, "Skills")
+        names = {e["label"]: e for e in skills}
+        assert names["Bragging"]["kind"] == "change"
+        assert names["Bragging"]["before"] == 2 and names["Bragging"]["after"] == 3
+        assert names["Etiquette"]["kind"] == "remove"
+        assert names["Tact"]["kind"] == "add" and names["Tact"]["after"] == 1
+
+    def test_knack_unchanged_skipped(self):
+        # When two knacks are present and one is unchanged, the loop
+        # ``continue`` for the unchanged one and only emits the changed.
+        prev = {"knacks": {"double_attack": 1, "feint": 1}}
+        new = {"knacks": {"double_attack": 1, "feint": 2}}
+        knacks = self._by_category(compute_version_diff(prev, new), "Knacks")
+        labels = [e["label"] for e in knacks if e["label"] != "Dan"]
+        assert labels == ["Feint"]
+
+    def test_knack_removed(self):
+        prev = {"knacks": {"double_attack": 2, "feint": 1, "iaijutsu": 1}}
+        new = {"knacks": {"double_attack": 0, "feint": 1, "iaijutsu": 1}}
+        match = next(e for e in compute_version_diff(prev, new)
+                     if e["category"] == "Knacks" and e["label"] != "Dan")
+        assert match["kind"] == "remove"
+
+    def test_unknown_knack_id_falls_back_to_label_case(self):
+        entries = compute_version_diff(
+            {"knacks": {}}, {"knacks": {"made_up_knack": 1}},
+        )
+        match = next(e for e in entries if e["category"] == "Knacks")
+        assert match["label"] == "Made Up Knack"
+
+    def test_unknown_advantage_details_id_falls_back_to_label(self):
+        # An advantage id that exists in neither ADVANTAGES nor any of
+        # the campaign tables should still produce a sensible label
+        # rather than crashing.
+        entries = compute_version_diff(
+            {"advantages": ["mystery_id"], "advantage_details": {"mystery_id": {"text": "a"}}},
+            {"advantages": ["mystery_id"], "advantage_details": {"mystery_id": {"text": "b"}}},
+        )
+        match = next(e for e in entries if "details" in e["label"])
+        assert match["label"].startswith("Mystery Id")
+
+    def test_award_with_recognition_only_renders_only_that_part(self):
+        prev = {"rank_recognition_awards": []}
+        new = {"rank_recognition_awards": [{
+            "id": "y", "rank_delta": 0, "recognition_delta": 1.0,
+            "source": "Famous deed",
+        }]}
+        match = next(e for e in compute_version_diff(prev, new)
+                     if e["category"] == "Awards")
+        # Only recognition was changed, so the rank delta line must not appear.
+        assert "rank" not in (match["after"] or "")
+        assert "+1.0 recognition" in (match["after"] or "")
+
+    def test_award_without_source_renders_id_fallback_label(self):
+        prev = {"rank_recognition_awards": []}
+        new = {"rank_recognition_awards": [{
+            "id": "abcdef1234", "rank_delta": 0.5, "recognition_delta": 0,
+            "source": "",
+        }]}
+        match = next(e for e in compute_version_diff(prev, new)
+                     if e["category"] == "Awards")
+        assert match["label"] == "Award abcdef12"
+
+    def test_award_with_no_deltas_falls_back_to_type_string(self):
+        # A reputation-style award (no numeric rank/rec deltas) still
+        # needs SOMETHING in the after-text. Tests the type fallback.
+        prev = {"rank_recognition_awards": []}
+        new = {"rank_recognition_awards": [{
+            "id": "rep1", "type": "reputation",
+            "rank_delta": 0, "recognition_delta": 0,
+            "source": "Bandit lord vendetta",
+        }]}
+        match = next(e for e in compute_version_diff(prev, new)
+                     if e["category"] == "Awards")
+        assert match["after"] == "reputation"
+
+    def test_knacks_promotion_dan(self):
+        # Bumping the lowest school knack from 1 to 2 promotes Akodo to 2nd Dan.
+        old = {"knacks": {"double_attack": 1, "feint": 1, "iaijutsu": 1}}
+        new = {"knacks": {"double_attack": 2, "feint": 2, "iaijutsu": 2}}
+        entries = compute_version_diff(old, new)
+        knacks = self._by_category(entries, "Knacks")
+        dan_line = next(e for e in knacks if e["label"] == "Dan")
+        assert dan_line["before"] == "1st" and dan_line["after"] == "2nd"
+
+    def test_advantages_added_and_removed(self):
+        entries = compute_version_diff(
+            {"advantages": ["fierce"]},
+            {"advantages": ["charming"]},
+        )
+        advs = self._by_category(entries, "Advantages")
+        kinds = {e["kind"] for e in advs}
+        assert kinds == {"add", "remove"}
+        labels = {e["label"] for e in advs}
+        assert any("Charming" in l for l in labels)
+        assert any("Fierce" in l for l in labels)
+
+    def test_advantages_reordered_returns_empty(self):
+        entries = compute_version_diff(
+            {"advantages": ["fierce", "charming"]},
+            {"advantages": ["charming", "fierce"]},
+        )
+        assert entries == []
+
+    def test_campaign_advantage_added(self):
+        entries = compute_version_diff(
+            {"campaign_advantages": []},
+            {"campaign_advantages": ["wasp_friend"]},
+        )
+        match = next(e for e in entries if "campaign advantage" in e["label"].lower())
+        assert match["category"] == "Advantages"
+        assert match["kind"] == "add"
+
+    def test_advantage_details_updated_on_persistent_advantage(self):
+        entries = compute_version_diff(
+            {"advantages": ["higher_purpose"],
+             "advantage_details": {"higher_purpose": {"text": "old"}}},
+            {"advantages": ["higher_purpose"],
+             "advantage_details": {"higher_purpose": {"text": "new"}}},
+        )
+        match = next(e for e in entries if e["label"].startswith("Higher Purpose"))
+        assert match["kind"] == "section_updated"
+
+    def test_advantage_details_not_emitted_for_newly_added_advantage(self):
+        # The "add" line covers the introduction; a second "details
+        # updated" line would be redundant. The function rule is to only
+        # emit details when the advantage exists on BOTH sides.
+        entries = compute_version_diff(
+            {"advantages": [], "advantage_details": {}},
+            {"advantages": ["higher_purpose"],
+             "advantage_details": {"higher_purpose": {"text": "x"}}},
+        )
+        labels = [e["label"] for e in entries]
+        assert any(l.startswith("Added advantage") for l in labels)
+        assert not any("details" in l for l in labels)
+
+    def test_disadvantage_removed(self):
+        entries = compute_version_diff(
+            {"disadvantages": ["bad_reputation"]},
+            {"disadvantages": []},
+        )
+        match = next(e for e in entries if "disadvantage" in e["label"].lower())
+        assert match["category"] == "Disadvantages"
+        assert match["kind"] == "remove"
+
+    def test_status_int_honor_renders_as_string(self):
+        # Older or imported snapshots may store honor as int (2) rather
+        # than float (2.0). The formatter falls back to str() and
+        # produces a sensible "2" rather than crashing.
+        entries = compute_version_diff(
+            {"honor": 2}, {"honor": 3},
+        )
+        match = next(e for e in entries if e["label"] == "Honor")
+        assert match["before"] == "2" and match["after"] == "3"
+
+    def test_status_floats_format_with_one_decimal(self):
+        entries = compute_version_diff(
+            {"honor": 2.0}, {"honor": 3.5},
+        )
+        match = next(e for e in entries if e["label"] == "Honor")
+        assert match["before"] == "2.0" and match["after"] == "3.5"
+
+    def test_rank_locked_toggle(self):
+        entries = compute_version_diff(
+            {"rank_locked": True}, {"rank_locked": False},
+        )
+        match = next(e for e in entries if e["label"] == "Rank locked")
+        assert match["before"] == "yes" and match["after"] == "no"
+
+    def test_xp_change(self):
+        entries = compute_version_diff(
+            {"starting_xp": 150, "earned_xp": 50},
+            {"starting_xp": 150, "earned_xp": 75},
+        )
+        xp = self._by_category(entries, "XP")
+        labels = {e["label"]: e for e in xp}
+        assert "Earned XP" in labels and labels["Earned XP"]["before"] == 50
+
+    def test_award_added_includes_source_text(self):
+        entries = compute_version_diff(
+            {"rank_recognition_awards": []},
+            {"rank_recognition_awards": [{
+                "id": "abc-123-def",
+                "rank_delta": 0.5,
+                "recognition_delta": 0,
+                "source": "Defeated bandit lord",
+            }]},
+        )
+        match = next(e for e in entries if e["category"] == "Awards")
+        # Source text is the human label.
+        assert match["label"] == "Defeated bandit lord"
+        assert match["kind"] == "add"
+        assert "+0.5 rank" in (match["after"] or "")
+
+    def test_award_source_only_edit_emits_nothing(self):
+        # Editing the freeform source text does NOT trigger a version
+        # diff entry - mirrors award_deltas_for_diff behavior.
+        prev = {"rank_recognition_awards": [{
+            "id": "x", "rank_delta": 0.5, "recognition_delta": 0,
+            "source": "old reason",
+        }]}
+        new = {"rank_recognition_awards": [{
+            "id": "x", "rank_delta": 0.5, "recognition_delta": 0,
+            "source": "new reason",
+        }]}
+        assert compute_version_diff(prev, new) == []
+
+    def test_award_delta_change_emits_change_entry(self):
+        prev = {"rank_recognition_awards": [{
+            "id": "x", "rank_delta": 0.5, "recognition_delta": 0, "source": "s",
+        }]}
+        new = {"rank_recognition_awards": [{
+            "id": "x", "rank_delta": 1.0, "recognition_delta": 0, "source": "s",
+        }]}
+        match = next(e for e in compute_version_diff(prev, new)
+                     if e["category"] == "Awards")
+        assert match["kind"] == "change"
+
+    def test_award_removed(self):
+        prev = {"rank_recognition_awards": [{
+            "id": "x", "rank_delta": 0.5, "recognition_delta": 0, "source": "Old award",
+        }]}
+        new = {"rank_recognition_awards": []}
+        match = next(e for e in compute_version_diff(prev, new)
+                     if e["category"] == "Awards")
+        assert match["kind"] == "remove"
+        assert match["label"] == "Old award"
+
+    def test_notes_change_renders_as_content_updated(self):
+        entries = compute_version_diff(
+            {"notes": "old"}, {"notes": "new"},
+        )
+        match = next(e for e in entries if e["label"] == "Notes")
+        assert match["category"] == "Sections"
+        assert match["kind"] == "section_updated"
+        # No raw text in the diff.
+        assert "old" not in str(match) and "new" not in str(match)
+
+    def test_section_added(self):
+        entries = compute_version_diff(
+            {"sections": []},
+            {"sections": [{"label": "Backstory", "html": "<p>x</p>"}]},
+        )
+        match = next(e for e in entries if e["label"] == "Backstory")
+        assert match["category"] == "Sections" and match["kind"] == "add"
+
+    def test_section_removed(self):
+        entries = compute_version_diff(
+            {"sections": [{"label": "Allies", "html": "<p>x</p>"}]},
+            {"sections": []},
+        )
+        match = next(e for e in entries if e["label"] == "Allies")
+        assert match["kind"] == "remove"
+
+    def test_section_html_only_change(self):
+        entries = compute_version_diff(
+            {"sections": [{"label": "Backstory", "html": "<p>old</p>"}]},
+            {"sections": [{"label": "Backstory", "html": "<p>new</p>"}]},
+        )
+        match = next(e for e in entries if e["label"] == "Backstory")
+        assert match["kind"] == "section_updated"
+        # Body text isn't dumped.
+        assert "old" not in str(match) and "new" not in str(match)
+
+    def test_session_state_filtered_out(self):
+        # Mutable per-session fields must never appear in a version diff.
+        prev = {"current_light_wounds": 0, "current_void_points": 3,
+                "action_dice": [], "precepts_pool": [],
+                "adventure_state": {}}
+        new = {"current_light_wounds": 5, "current_void_points": 0,
+               "action_dice": [{"value": 7, "spent": False}],
+               "precepts_pool": [{"value": 9}],
+               "adventure_state": {"lucky_used": True}}
+        assert compute_version_diff(prev, new) == []
+
+    def test_metadata_fields_filtered_out(self):
+        prev = {"id": 1, "created_at": "old", "updated_at": "old",
+                "owner_discord_id": "a", "google_sheet_id": "x"}
+        new = {"id": 1, "created_at": "old", "updated_at": "new",
+               "owner_discord_id": "b", "google_sheet_id": "y"}
+        assert compute_version_diff(prev, new) == []
+
+    def test_missing_prev_field_treats_new_entries_as_added(self):
+        # An older snapshot lacks the ``sections`` key entirely. Every
+        # entry in the new sections list should appear as an "add".
+        entries = compute_version_diff(
+            {"name": "x"},
+            {"name": "x", "sections": [
+                {"label": "Backstory", "html": "<p>...</p>"},
+                {"label": "Allies", "html": "<p>...</p>"},
+            ]},
+        )
+        secs = [e for e in entries if e["category"] == "Sections"]
+        assert {e["label"] for e in secs} == {"Backstory", "Allies"}
+        assert all(e["kind"] == "add" for e in secs)
+
+    def test_unknown_skill_id_falls_back_to_label_case(self):
+        # An imported character may carry skill ids the codebase doesn't
+        # know about (typo, removed skill). The function shouldn't crash;
+        # it falls back to a Title-Case label.
+        entries = compute_version_diff(
+            {"skills": {"made_up_skill": 1}},
+            {"skills": {"made_up_skill": 2}},
+        )
+        match = next(e for e in entries if e["category"] == "Skills")
+        assert match["label"] == "Made Up Skill"
+
+    def test_categories_are_in_stable_order(self):
+        # The template renders categories via Jinja groupby, which is
+        # insertion-order. Ensure entries land in the canonical order
+        # regardless of the order the input fields happen to be in.
+        from app.services.versions import DIFF_CATEGORIES
+        prev = {
+            "earned_xp": 0,
+            "rings": {"Air": 2}, "skills": {}, "advantages": [],
+            "honor": 1.0, "name": "x", "attack": 1,
+            "knacks": {}, "disadvantages": [], "sections": [],
+        }
+        new = {
+            "earned_xp": 5,                        # XP
+            "rings": {"Air": 3},                   # Rings
+            "skills": {"bragging": 1},             # Skills
+            "advantages": ["fierce"],              # Advantages
+            "honor": 2.0,                          # Status
+            "name": "y",                           # Basics
+            "attack": 2,                           # Combat
+            "knacks": {"double_attack": 1},        # Knacks
+            "disadvantages": ["bad_reputation"],   # Disadvantages
+            "sections": [{"label": "Notes",
+                          "html": "<p>x</p>"}],    # Sections
+        }
+        entries = compute_version_diff(prev, new)
+        seen = []
+        for e in entries:
+            if not seen or seen[-1] != e["category"]:
+                seen.append(e["category"])
+        # `seen` must be a subsequence of DIFF_CATEGORIES.
+        idx = -1
+        for cat in seen:
+            new_idx = DIFF_CATEGORIES.index(cat)
+            assert new_idx > idx, f"{cat} out of order in {seen}"
+            idx = new_idx

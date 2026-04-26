@@ -12,9 +12,9 @@ from sqlalchemy.orm import Session
 
 from app.game_data import (
     ADVANTAGES, CAMPAIGN_ADVANTAGES, CAMPAIGN_DISADVANTAGES,
-    DISADVANTAGES, SKILLS, SCHOOL_KNACKS,
+    DISADVANTAGES, SCHOOLS, SKILLS, SCHOOL_KNACKS,
 )
-from app.models import Character, CharacterVersion
+from app.models import Character, CharacterVersion, award_deltas_for_diff
 from app.services.rolls import compute_dan
 
 
@@ -160,6 +160,386 @@ def compute_diff_summary(old_state: Dict[str, Any], new_state: Dict[str, Any]) -
         diffs.append(f"Earned XP changed from {old_xp} to {new_xp}")
 
     return diffs
+
+
+# ---------------------------------------------------------------------------
+# Structured diff for the version-history drill-down
+# ---------------------------------------------------------------------------
+
+# Category buckets used for grouping in the UI partial. Order matters - the
+# template renders categories in this order. Listed roughly head-to-toe on
+# a character sheet.
+DIFF_CATEGORIES = (
+    "Basics",
+    "Rings",
+    "Combat",
+    "Skills",
+    "Knacks",
+    "Advantages",
+    "Disadvantages",
+    "Status",
+    "XP",
+    "Awards",
+    "Sections",
+)
+
+# Display ordering for the four core rings + Void.
+_RING_ORDER = ("Air", "Fire", "Earth", "Water", "Void")
+
+# Ordinal suffix for Dan-promotion lines.
+_DAN_ORDINAL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th"}
+
+
+def _ordinal(n: int) -> str:
+    return _DAN_ORDINAL.get(n, f"{n}th")
+
+
+def _entry(category: str, label: str, before: Any, after: Any, kind: str) -> Dict[str, Any]:
+    """Construct a DiffEntry dict.
+
+    ``kind`` is one of ``change``, ``add``, ``remove``, ``section_updated``.
+    ``before`` / ``after`` are pre-formatted strings (or None for adds /
+    removes / opaque updates) - the template renders them as-is.
+    """
+    return {
+        "category": category,
+        "label": label,
+        "before": before,
+        "after": after,
+        "kind": kind,
+    }
+
+
+def _fmt_number(val: Any) -> str:
+    """Render a value the way the user expects to see it on the sheet.
+
+    Floats keep one decimal so 2.0 doesn't collapse to "2"; ints render
+    bare. Strings pass through. Everything else falls back to ``str``.
+    """
+    if isinstance(val, bool):  # bool is a subclass of int - check first
+        return "yes" if val else "no"
+    if isinstance(val, float):
+        return f"{val:.1f}"
+    return str(val)
+
+
+def compute_version_diff(
+    prev_state: Optional[Dict[str, Any]],
+    new_state: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Compute a structured diff between two character state snapshots.
+
+    Returns a flat list of DiffEntry dicts (see ``_entry``) in stable
+    category order, suitable for ``{% for cat, items in entries|groupby('category') %}``
+    in a Jinja partial. The publish-path summary uses
+    ``compute_diff_summary`` instead - that function returns flat strings
+    and is load-bearing for the auto-summary, so this lives alongside it
+    rather than replacing it.
+
+    Pass ``prev_state=None`` (or an empty dict) only for the very first
+    version - the function returns ``[]`` rather than crashing, but
+    callers should normally short-circuit on v1 themselves.
+    """
+    if not prev_state:
+        return []
+
+    entries: List[Dict[str, Any]] = []
+
+    # ---- Basics ----------------------------------------------------------
+    for field, label in (("name", "Name"), ("player_name", "Player name")):
+        before = prev_state.get(field, "")
+        after = new_state.get(field, "")
+        if before != after:
+            entries.append(_entry("Basics", label, before or "(empty)",
+                                  after or "(empty)", "change"))
+
+    # name_explanation is freeform prose; surface only the fact-of-change.
+    if prev_state.get("name_explanation", "") != new_state.get("name_explanation", ""):
+        entries.append(_entry("Basics", "Name explanation",
+                              None, "updated", "section_updated"))
+
+    old_school = prev_state.get("school", "")
+    new_school = new_state.get("school", "")
+    if old_school != new_school:
+        before_label = SCHOOLS[old_school].name if old_school in SCHOOLS else (
+            _label(old_school) if old_school else "none"
+        )
+        after_label = SCHOOLS[new_school].name if new_school in SCHOOLS else (
+            _label(new_school) if new_school else "none"
+        )
+        entries.append(_entry("Basics", "School", before_label, after_label, "change"))
+    else:
+        # Only emit a school-ring-choice change when the school itself
+        # didn't change - otherwise the school line already covers it.
+        old_choice = prev_state.get("school_ring_choice", "")
+        new_choice = new_state.get("school_ring_choice", "")
+        if old_choice != new_choice:
+            entries.append(_entry("Basics", "School ring",
+                                  old_choice or "none", new_choice or "none", "change"))
+
+    # ---- Rings -----------------------------------------------------------
+    old_rings = prev_state.get("rings", {}) or {}
+    new_rings = new_state.get("rings", {}) or {}
+    for ring in _RING_ORDER:
+        before = old_rings.get(ring, 2)
+        after = new_rings.get(ring, 2)
+        if before != after:
+            entries.append(_entry("Rings", ring, before, after, "change"))
+
+    # ---- Combat (attack, parry, technique_choices) -----------------------
+    for field, label in (("attack", "Attack"), ("parry", "Parry")):
+        before = prev_state.get(field, 1)
+        after = new_state.get(field, 1)
+        if before != after:
+            entries.append(_entry("Combat", label, before, after, "change"))
+
+    old_tech = prev_state.get("technique_choices", {}) or {}
+    new_tech = new_state.get("technique_choices", {}) or {}
+    # 1st Dan choices: order is presentational, treat as a set.
+    old_first = set(old_tech.get("first_dan_choices") or [])
+    new_first = set(new_tech.get("first_dan_choices") or [])
+    if old_first != new_first:
+        entries.append(_entry(
+            "Combat", "1st Dan choices",
+            ", ".join(sorted(_skill_name(s) for s in old_first)) or "none",
+            ", ".join(sorted(_skill_name(s) for s in new_first)) or "none",
+            "change",
+        ))
+    old_second = old_tech.get("second_dan_choice") or ""
+    new_second = new_tech.get("second_dan_choice") or ""
+    if old_second != new_second:
+        entries.append(_entry(
+            "Combat", "2nd Dan choice",
+            _skill_name(old_second) if old_second else "none",
+            _skill_name(new_second) if new_second else "none",
+            "change",
+        ))
+
+    # ---- Skills ----------------------------------------------------------
+    old_skills = prev_state.get("skills", {}) or {}
+    new_skills = new_state.get("skills", {}) or {}
+    for sid in sorted(set(old_skills) | set(new_skills)):
+        before = old_skills.get(sid, 0)
+        after = new_skills.get(sid, 0)
+        if before == after:
+            continue
+        name = _skill_name(sid)
+        if before == 0:
+            entries.append(_entry("Skills", name, None, after, "add"))
+        elif after == 0:
+            entries.append(_entry("Skills", name, before, None, "remove"))
+        else:
+            entries.append(_entry("Skills", name, before, after, "change"))
+
+    # ---- Knacks ----------------------------------------------------------
+    old_knacks = prev_state.get("knacks", {}) or {}
+    new_knacks = new_state.get("knacks", {}) or {}
+    for kid in sorted(set(old_knacks) | set(new_knacks)):
+        before = old_knacks.get(kid, 0)
+        after = new_knacks.get(kid, 0)
+        if before == after:
+            continue
+        knack = SCHOOL_KNACKS.get(kid)
+        name = knack.name if knack else _label(kid)
+        if before == 0:
+            entries.append(_entry("Knacks", name, None, after, "add"))
+        elif after == 0:
+            entries.append(_entry("Knacks", name, before, None, "remove"))
+        else:
+            entries.append(_entry("Knacks", name, before, after, "change"))
+
+    # Dan promotion (Dan = lowest school knack rank).
+    old_dan = compute_dan(old_knacks) if old_knacks else 0
+    new_dan = compute_dan(new_knacks) if new_knacks else 0
+    if new_dan > old_dan:
+        entries.append(_entry(
+            "Knacks", "Dan", _ordinal(old_dan) if old_dan else "none",
+            _ordinal(new_dan), "change",
+        ))
+
+    # ---- Advantages / Disadvantages --------------------------------------
+    _diff_id_list(entries, prev_state, new_state, "advantages",
+                  "Advantages", "advantage", ADVANTAGES)
+    _diff_id_list(entries, prev_state, new_state, "campaign_advantages",
+                  "Advantages", "campaign advantage", CAMPAIGN_ADVANTAGES)
+    _diff_id_list(entries, prev_state, new_state, "disadvantages",
+                  "Disadvantages", "disadvantage", DISADVANTAGES)
+    _diff_id_list(entries, prev_state, new_state, "campaign_disadvantages",
+                  "Disadvantages", "campaign disadvantage", CAMPAIGN_DISADVANTAGES)
+
+    # advantage_details: surface only when the advantage still exists on
+    # both sides AND the per-advantage detail dict actually changed. New
+    # advantages already produce an "add" line above; their initial detail
+    # text would be redundant noise.
+    old_details = prev_state.get("advantage_details", {}) or {}
+    new_details = new_state.get("advantage_details", {}) or {}
+    persistent = (
+        (set(prev_state.get("advantages") or []) | set(prev_state.get("campaign_advantages") or [])
+         | set(prev_state.get("disadvantages") or []) | set(prev_state.get("campaign_disadvantages") or []))
+        & (set(new_state.get("advantages") or []) | set(new_state.get("campaign_advantages") or [])
+           | set(new_state.get("disadvantages") or []) | set(new_state.get("campaign_disadvantages") or []))
+    )
+    for aid in sorted(persistent):
+        if old_details.get(aid) != new_details.get(aid):
+            name = _adv_or_dis_name(aid)
+            entries.append(_entry("Advantages", f"{name} details",
+                                  None, "updated", "section_updated"))
+
+    # ---- Status (honor, rank, recognition, locks) ------------------------
+    for field, label, default in (
+        ("honor", "Honor", 1.0),
+        ("rank", "Rank", 7.5),
+        ("recognition", "Recognition", 7.5),
+    ):
+        before = prev_state.get(field, default)
+        after = new_state.get(field, default)
+        if before != after:
+            entries.append(_entry("Status", label, _fmt_number(before),
+                                  _fmt_number(after), "change"))
+
+    for field, label, default in (
+        ("rank_locked", "Rank locked", False),
+        ("recognition_halved", "Recognition halved", False),
+    ):
+        before = prev_state.get(field, default)
+        after = new_state.get(field, default)
+        if before != after:
+            entries.append(_entry("Status", label, _fmt_number(before),
+                                  _fmt_number(after), "change"))
+
+    # ---- XP --------------------------------------------------------------
+    for field, label, default in (
+        ("starting_xp", "Starting XP", 150),
+        ("earned_xp", "Earned XP", 0),
+    ):
+        before = prev_state.get(field, default)
+        after = new_state.get(field, default)
+        if before != after:
+            entries.append(_entry("XP", label, before, after, "change"))
+
+    # ---- Awards ----------------------------------------------------------
+    # award_deltas_for_diff strips the freeform ``source`` text so a
+    # source-only edit doesn't show up as a phantom diff. We separately
+    # render the source on added awards because that text IS the human
+    # label for the award.
+    old_awards = prev_state.get("rank_recognition_awards", []) or []
+    new_awards = new_state.get("rank_recognition_awards", []) or []
+    old_award_keys = {a.get("id"): a for a in old_awards if a.get("id")}
+    new_award_keys = {a.get("id"): a for a in new_awards if a.get("id")}
+    old_norm = {a["id"]: a for a in award_deltas_for_diff(old_awards) if a.get("id")}
+    new_norm = {a["id"]: a for a in award_deltas_for_diff(new_awards) if a.get("id")}
+    for aid in new_norm:
+        if aid not in old_norm:
+            full = new_award_keys.get(aid, {})
+            entries.append(_entry(
+                "Awards", _award_label(full),
+                None, _award_after_text(full), "add",
+            ))
+    for aid in old_norm:
+        if aid not in new_norm:
+            full = old_award_keys.get(aid, {})
+            entries.append(_entry(
+                "Awards", _award_label(full),
+                _award_after_text(full), None, "remove",
+            ))
+    for aid, new_n in new_norm.items():
+        if aid in old_norm and old_norm[aid] != new_n:
+            full_old = old_award_keys.get(aid, {})
+            full_new = new_award_keys.get(aid, {})
+            entries.append(_entry(
+                "Awards", _award_label(full_new or full_old),
+                _award_after_text(full_old), _award_after_text(full_new),
+                "change",
+            ))
+
+    # ---- Sections (notes + rich-text sections) ---------------------------
+    if prev_state.get("notes", "") != new_state.get("notes", ""):
+        entries.append(_entry("Sections", "Notes",
+                              None, "updated", "section_updated"))
+
+    old_sections = prev_state.get("sections", []) or []
+    new_sections = new_state.get("sections", []) or []
+    old_by_label = {s.get("label", ""): s for s in old_sections}
+    new_by_label = {s.get("label", ""): s for s in new_sections}
+    for label in sorted(set(new_by_label) - set(old_by_label)):
+        entries.append(_entry("Sections", label or "(unnamed)",
+                              None, "added", "add"))
+    for label in sorted(set(old_by_label) - set(new_by_label)):
+        entries.append(_entry("Sections", label or "(unnamed)",
+                              "present", None, "remove"))
+    for label in sorted(set(old_by_label) & set(new_by_label)):
+        if old_by_label[label].get("html", "") != new_by_label[label].get("html", ""):
+            entries.append(_entry("Sections", label or "(unnamed)",
+                                  None, "section content updated", "section_updated"))
+
+    return entries
+
+
+def _skill_name(sid: str) -> str:
+    skill = SKILLS.get(sid)
+    return skill.name if skill else _label(sid)
+
+
+def _adv_or_dis_name(aid: str) -> str:
+    """Resolve an advantage- or disadvantage-style id to its display name.
+
+    Used for the ``advantage_details`` "details updated" line, where the
+    id might land in any of the four collections (advantages,
+    disadvantages, or their campaign variants).
+    """
+    for table in (ADVANTAGES, CAMPAIGN_ADVANTAGES, DISADVANTAGES, CAMPAIGN_DISADVANTAGES):
+        item = table.get(aid)
+        if item:
+            return item.name
+    return _label(aid)
+
+
+def _diff_id_list(
+    entries: List[Dict[str, Any]],
+    prev_state: Dict[str, Any],
+    new_state: Dict[str, Any],
+    state_key: str,
+    category: str,
+    label_word: str,
+    name_table: Dict[str, Any],
+) -> None:
+    """Emit add/remove entries for an id-list field (advantages etc.)."""
+    old_ids = set(prev_state.get(state_key) or [])
+    new_ids = set(new_state.get(state_key) or [])
+    for aid in sorted(new_ids - old_ids):
+        item = name_table.get(aid)
+        name = item.name if item else _label(aid)
+        entries.append(_entry(category, f"Added {label_word}: {name}",
+                              None, name, "add"))
+    for aid in sorted(old_ids - new_ids):
+        item = name_table.get(aid)
+        name = item.name if item else _label(aid)
+        entries.append(_entry(category, f"Removed {label_word}: {name}",
+                              name, None, "remove"))
+
+
+def _award_label(award: Dict[str, Any]) -> str:
+    """Short header for an award entry. Falls back to the id snippet so a
+    malformed award without a source still renders something."""
+    src = (award.get("source") or "").strip()
+    if src:
+        return src
+    aid = award.get("id") or ""
+    return f"Award {aid[:8]}" if aid else "Award"
+
+
+def _award_after_text(award: Dict[str, Any]) -> str:
+    """Compact summary of an award's deltas, e.g. ``+0.5 rank, +1.0 recognition``."""
+    parts: List[str] = []
+    rd = award.get("rank_delta", 0) or 0
+    re = award.get("recognition_delta", 0) or 0
+    if rd:
+        parts.append(f"{rd:+.1f} rank")
+    if re:
+        parts.append(f"{re:+.1f} recognition")
+    if not parts:
+        return award.get("type", "award")
+    return ", ".join(parts)
 
 
 def publish_character(

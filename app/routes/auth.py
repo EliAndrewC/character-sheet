@@ -150,19 +150,25 @@ async def callback(request: Request, code: str = "", state: str = "", db: DBSess
     return response
 
 
+@router.get("/magic-login/{token}")
 @router.get("/test-login/{token}")
-def test_login(token: str, db: DBSession = Depends(get_db)):
-    """Secret-URL login for test users. Token is a UUID stored as a Fly secret."""
-    from app.services.auth import get_test_login_tokens
+def magic_login(token: str, db: DBSession = Depends(get_db)):
+    """Secret-URL login for pre-seeded users (test users plus any
+    campaign player who needs a backup login). Token is a UUID stored
+    as a Fly secret in ``MAGIC_LOGIN_TOKENS`` (or the legacy
+    ``TEST_LOGIN_TOKENS``). Both ``/auth/magic-login/{token}`` and
+    ``/auth/test-login/{token}`` map to this handler so old links
+    keep working after the rename."""
+    from app.services.auth import get_magic_login_tokens
 
-    tokens = get_test_login_tokens()
+    tokens = get_magic_login_tokens()
     discord_id = tokens.get(token)
     if not discord_id:
         return HTMLResponse("Invalid token.", status_code=403)
 
     user = db.query(User).filter(User.discord_id == discord_id).first()
     if not user:
-        return HTMLResponse("Test user not found.", status_code=404)
+        return HTMLResponse("User not found.", status_code=404)
 
     session_id = secrets.token_urlsafe(32)
     auth_session = AuthSession(session_id=session_id, discord_id=discord_id)

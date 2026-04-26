@@ -207,6 +207,103 @@ def test_anon_init_roll_preserves_editor_action_dice(
     assert section.is_visible()
 
 
+def test_non_editor_action_die_menu_lacks_mark_spent_buttons(
+    page, page_anon, live_server_url
+):
+    """A non-editor can open the per-die action menu on an action die
+    seeded by an editor. Other menu options (Roll Attack, Parry, etc.)
+    are visible, but the bookkeeping 'Mark as spent' / 'Mark as unspent'
+    buttons are absent - those are pure state-mutators with no roll
+    component, so per Principle 6 they're editor-only."""
+    sheet_url = _published_sheet_url(page, live_server_url)
+
+    # Editor rolls initiative so a non-editor has dice to interact with.
+    _disable_dice_animations(page)
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    _roll_initiative_and_close_modal(page)
+    assert len(page.evaluate("window._trackingBridge.actionDice")) > 0
+
+    # Editor regression: the menu still has the Mark as spent button.
+    page.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"]'
+    ).first.click()
+    assert page.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die-spent"]'
+    ).count() >= 1
+    # Close the menu before continuing.
+    page.evaluate("window._trackingBridge.actionMenuOpen = null")
+
+    # Non-editor: same setup, click the first die, assert menu has the
+    # roll-action options but not the spent / unspent buttons.
+    _disable_dice_animations(page_anon)
+    page_anon.goto(sheet_url)
+    page_anon.wait_for_selector("h1")
+    page_anon.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"]'
+    ).first.click()
+    page_anon.wait_for_timeout(150)
+
+    section = page_anon.locator('[data-testid="action-dice-section"]')
+    assert section.locator(
+        '[data-action="action-die-spent"]'
+    ).count() == 0
+    assert section.locator(
+        '[data-action="action-die-unspent"]'
+    ).count() == 0
+    # The other menu options are still there; Roll Attack is the most
+    # universally available one for a default akodo character. The
+    # template renders one menu per die, so the attribute count
+    # tracks the number of dice rather than visible-menu count.
+    assert section.locator(
+        '[data-action-die-menu-item="attack"]'
+    ).count() >= 1
+
+
+def test_non_editor_action_die_menu_action_does_not_spend_die(
+    page, page_anon, live_server_url
+):
+    """A non-editor picks 'Roll Attack' from a die's per-die action menu.
+    The attack modal opens normally and rolling proceeds. But the action
+    die that 'paid' for the action stays unspent - non-editors can walk
+    through the action without consuming the editor's die."""
+    sheet_url = _published_sheet_url(page, live_server_url)
+
+    # Editor seeds action dice.
+    _disable_dice_animations(page)
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    _roll_initiative_and_close_modal(page)
+    seeded = page.evaluate("window._trackingBridge.actionDice")
+    assert len(seeded) > 0
+    assert all(not d.get("spent") for d in seeded)
+
+    # Non-editor picks Roll Attack from the first die's menu.
+    _disable_dice_animations(page_anon)
+    page_anon.goto(sheet_url)
+    page_anon.wait_for_selector("h1")
+    page_anon.locator(
+        '[data-testid="action-dice-section"] [data-action="action-die"]'
+    ).first.click()
+    page_anon.wait_for_timeout(150)
+    page_anon.locator(
+        '[data-testid="action-dice-section"] '
+        '[data-action-die-menu-item="attack"]'
+    ).first.click()
+    # Attack modal opens.
+    page_anon.wait_for_selector(
+        '[data-modal="attack"]', state='visible', timeout=5000,
+    )
+
+    # The bridge's actionDice still shows everything as unspent - the
+    # die that "paid" for the attack didn't actually get consumed.
+    post_dice = page_anon.evaluate("window._trackingBridge.actionDice")
+    assert len(post_dice) == len(seeded)
+    assert all(not d.get("spent") for d in post_dice), (
+        f"non-editor Roll Attack should not spend any die; got {post_dice}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Phase 3: void points (regular + temp)
 # ---------------------------------------------------------------------------
@@ -282,6 +379,81 @@ def test_non_editor_spends_vp_on_attack_does_not_change_vp(
     page_nonadmin.reload()
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
+
+
+def test_non_editor_skill_roll_no_vp_no_banner(
+    page, page_nonadmin, live_server_url
+):
+    """Skill rolls go through the generic dice-roller modal. Unlike
+    attack/WC modals (which always show the banner because their
+    inline VP toggle is meaningful even at zero), the dice-roller
+    modal only shows the banner when the non-editor actually consumed
+    something - they chose VPs up-front via the roll menu, so a plain
+    "Roll" with no spend doesn't need the warning."""
+    sheet_url, _ = _published_with_vp(page, live_server_url)
+    _disable_dice_animations(page_nonadmin)
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+
+    # Open the bragging row's menu and pick the plain "Roll Bragging".
+    page_nonadmin.locator('[data-roll-key="skill:bragging"]').click()
+    page_nonadmin.wait_for_selector(
+        '[data-roll-menu="root"]', state='visible', timeout=3000,
+    )
+    page_nonadmin.locator(
+        '[data-roll-menu="root"] button:has-text("Roll Bragging")'
+    ).first.click()
+    page_nonadmin.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+
+    modal = page_nonadmin.locator('[data-modal="dice-roller"]')
+    banners = modal.locator('[data-testid="readonly-roll-banner"]')
+    assert banners.count() == 1, "banner partial should be in DOM for non-editors"
+    assert not banners.first.is_visible(), (
+        "no VP/raises spent => banner should be x-show'd off"
+    )
+
+
+def test_non_editor_skill_roll_with_vp_shows_banner(
+    page, page_nonadmin, live_server_url
+):
+    """Once the non-editor picks a 'Spend N void' option from the roll
+    menu, the dice-roller modal must show the banner so they know the
+    spend isn't really happening."""
+    sheet_url, _ = _published_with_vp(page, live_server_url)
+    _disable_dice_animations(page_nonadmin)
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+
+    # Open the bragging row's menu and pick "Spend 1 void point".
+    page_nonadmin.locator('[data-roll-key="skill:bragging"]').click()
+    page_nonadmin.wait_for_selector(
+        '[data-roll-menu="root"]', state='visible', timeout=3000,
+    )
+    page_nonadmin.locator(
+        '[data-roll-menu="root"] button:has-text("Spend 1 void point")'
+    ).first.click()
+    page_nonadmin.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+
+    modal = page_nonadmin.locator('[data-modal="dice-roller"]')
+    banner = modal.locator('[data-testid="readonly-roll-banner"]')
+    assert banner.count() == 1
+    assert banner.first.is_visible(), (
+        "VP was 'spent' => banner should appear inside the modal"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1058,12 +1230,13 @@ def test_non_editor_sw_vp_temp_vp_buttons_hidden(
     ) == 3
 
 
-def test_anon_cannot_clear_seeded_action_dice(
+def test_action_dice_clear_button_editor_only(
     page, page_anon, live_server_url
 ):
-    """Belt-and-braces companion to the init-roll preservation test:
-    even the explicit Clear button on the action-dice section must
-    not remove an editor's seeded dice when clicked by a non-editor."""
+    """The Clear button on the action-dice section is editor-only:
+    a non-editor never sees it (sheet-state mutators that aren't part
+    of a roll flow follow Principle 6). The editor's view still has
+    it for clearing the round."""
     sheet_url = _published_sheet_url(page, live_server_url)
 
     # Editor rolls initiative to seed action dice on the server.
@@ -1071,21 +1244,17 @@ def test_anon_cannot_clear_seeded_action_dice(
     page.goto(sheet_url)
     page.wait_for_selector("h1")
     _roll_initiative_and_close_modal(page)
-    seeded_count = len(page.evaluate("window._trackingBridge.actionDice"))
-    assert seeded_count > 0
+    assert len(page.evaluate("window._trackingBridge.actionDice")) > 0
 
+    # Editor regression: Clear button is rendered.
+    assert page.locator('[data-action="clear-action-dice"]').count() == 1
+
+    # Non-editor: section is visible, but no Clear button in the DOM.
     _disable_dice_animations(page_anon)
     page_anon.goto(sheet_url)
     page_anon.wait_for_selector("h1")
     section = page_anon.locator('[data-testid="action-dice-section"]')
     assert section.is_visible()
-
-    # Non-editor clicks the Clear button.
-    page_anon.locator('[data-action="clear-action-dice"]').click()
-    page_anon.wait_for_timeout(150)
-
-    # Bridge still has the editor's dice; section still visible.
-    assert page_anon.evaluate(
-        "window._trackingBridge.actionDice.length"
-    ) == seeded_count
-    assert section.is_visible()
+    assert page_anon.locator(
+        '[data-action="clear-action-dice"]'
+    ).count() == 0

@@ -993,6 +993,9 @@ The three failures were:
 
 - [x] Changes auto-save and persist → `test_edit_character.py::test_edit_auto_saves`
 - [x] Save status shows "Saved" → `test_editor_controls.py::test_save_status_indicator`
+- [x] 5xx failures retry until save succeeds → `test_autosave_retry.py::test_5xx_failure_retries_until_save_succeeds`
+- [x] 4xx failures are terminal, no retry → `test_autosave_retry.py::test_4xx_failure_is_terminal_no_retry`
+- [x] beforeunload warns when save failed → `test_autosave_retry.py::test_beforeunload_warns_when_save_failed`
 
 ## Character Editor — Apply Changes Modal
 
@@ -1140,6 +1143,16 @@ The three failures were:
 - [x] Revert not shown on latest → `test_sheet_display.py::test_revert_not_shown_on_latest`
 - [x] Revert modal with reason → `test_publish_revert.py::test_revert_with_reason`
 - [x] Revert reloads with old data → `test_publish_revert.py::test_revert_with_reason`
+- [x] Show changes button hidden on first version → `test_version_diff.py::test_show_changes_button_hidden_on_first_version`
+- [x] Show changes loads diff partial via HTMX → `test_version_diff.py::test_show_changes_loads_diff_partial`
+- [x] Diff entries grouped by category headers → `test_version_diff.py::test_show_changes_groups_by_category`
+- [x] Rich-text section change shown as content updated → `test_version_diff.py::test_show_changes_section_edit_renders_as_content_updated`
+- [x] Toggle collapses on second click → `test_version_diff.py::test_show_changes_collapses_on_second_click`
+- [x] Diff endpoint 403 for non-editor → `test_version_diff.py::test_diff_endpoint_returns_403_for_non_editor`
+- [x] Diff endpoint 404 for first version → `test_version_diff.py::test_diff_endpoint_returns_404_for_first_version`
+- [x] Draft-changes preview block hidden when no unpublished changes → `test_version_diff.py::test_draft_diff_hidden_when_no_unpublished_changes`
+- [x] Draft-changes preview block visible with categories after editing → `test_version_diff.py::test_draft_diff_visible_after_editing_without_apply`
+- [x] Draft-changes preview block has distinct (blue) styling → `test_version_diff.py::test_draft_diff_has_distinct_visual_styling`
 
 ## Character Sheet — View as Non-Editor
 
@@ -1433,9 +1446,20 @@ builds the infrastructure; Phases 2-7 un-gate each roll category.
       as they were; the non-editor's roll cannot replace or clear
       them ->
       `test_readonly_rolls.py::test_anon_init_roll_preserves_editor_action_dice`
-- [x] Anon clicks the action-dice section's Clear button: nothing
-      happens; the editor's seeded dice are preserved ->
-      `test_readonly_rolls.py::test_anon_cannot_clear_seeded_action_dice`
+- [x] Action-dice section's Clear button is hidden for non-editors
+      (sheet-state mutator with no roll component); editor regression:
+      Clear button still rendered for the owner ->
+      `test_readonly_rolls.py::test_action_dice_clear_button_editor_only`
+- [x] Non-editor opens the per-die action menu on a seeded action
+      die: 'Mark as spent' / 'Mark as unspent' buttons are absent
+      (pure-bookkeeping mutators, editor-only). Other roll-action
+      options (Roll Attack, Parry, etc.) still render. Editor
+      regression: Mark as spent IS present for the owner ->
+      `test_readonly_rolls.py::test_non_editor_action_die_menu_lacks_mark_spent_buttons`
+- [x] Non-editor picks 'Roll Attack' from a per-die menu: the attack
+      modal opens, but the bridge's actionDice array stays untouched
+      - the die that 'paid' for the attack does not get marked spent ->
+      `test_readonly_rolls.py::test_non_editor_action_die_menu_action_does_not_spend_die`
 - [x] Server regression: /track 403s on action_dice field specifically
       for a non-editor (backend last line of defense) ->
       `tests/test_routes.py::TestTrackState::test_track_rejects_non_editor_action_dice`
@@ -1461,6 +1485,16 @@ builds the infrastructure; Phases 2-7 un-gate each roll category.
       non-editor seeing this option sees the +5 applied to
       wcRollTotal but bridge voidPoints stays put ->
       `test_readonly_rolls.py::test_non_editor_akodo_wc_vp_raise_does_not_change_vp`
+- [x] Skill roll via the generic dice-roller modal with NO VP spent:
+      banner partial is in the DOM (non-editor) but x-show'd off, so
+      no warning clutters a roll where nothing was 'spent' ->
+      `test_readonly_rolls.py::test_non_editor_skill_roll_no_vp_no_banner`
+- [x] Skill roll with 'Spend 1 void point' chosen from the roll menu:
+      banner is visible inside the dice-roller modal so the non-editor
+      knows the spend isn't real. Reactive to post-roll spends too
+      (raises / conviction / priest pool) via the
+      `_resourcesSpentForBanner` getter ->
+      `test_readonly_rolls.py::test_non_editor_skill_roll_with_vp_shows_banner`
 
 ### Phase 4 - wound checks + wounds
 
