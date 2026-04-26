@@ -859,6 +859,9 @@ The three failures were:
 
 - [x] Tooltip marker rendered + carries the explanation text → `test_name_explanation.py::test_sheet_shows_tooltip_icon_when_explanation_exists`
 - [x] No tooltip marker when the explanation is empty → `test_name_explanation.py::test_sheet_has_no_tooltip_icon_without_explanation`
+- [x] Click on icon toggles tooltip on desktop (no 2000ms hover wait) → `test_name_explanation.py::test_sheet_explanation_tooltip_click_toggles_on_desktop`
+- [x] Click outside closes an open name-explanation tooltip → `test_name_explanation.py::test_sheet_explanation_tooltip_click_outside_closes`
+- [x] Tooltip is clamped within the viewport on a phone viewport (no horizontal overflow) → `test_name_explanation.py::test_sheet_explanation_tooltip_does_not_overflow_on_mobile`
 
 ## Character Editor — School Selection
 
@@ -959,6 +962,7 @@ The three failures were:
 - [x] Campaign disadvantage toggles XP → `test_editor_controls.py::test_campaign_disadvantage_toggles_xp`
 - [x] Campaign advantage tooltip renders full rules text → `test_editor_controls.py::test_campaign_advantage_tooltip_has_full_rules_text`
 - [x] Campaign disadvantage tooltip renders full rules text (with bullets) → `test_editor_controls.py::test_campaign_disadvantage_tooltip_has_full_rules_text`
+- [x] Skill tooltip on edit page renders canonical rules_text (matches view sheet) → `test_editor_controls.py::test_editor_skill_tooltip_has_canonical_rules_text`
 
 ## Character Editor — Exclusive Pairs
 
@@ -1107,6 +1111,8 @@ The three failures were:
 - [x] Kind Eye +20 note on Tact and Sincerity → `test_skill_rolls_display.py::test_kind_eye_note_on_tact_and_sincerity`
 - [x] Sincerity's Honor bonus labelled "on open rolls" → `test_skill_rolls_display.py::test_sincerity_honor_says_on_open_rolls`
 - [x] Kind Eye "Alternative totals" rows in dice modal (Tact + Sincerity) → `test_rolls.py::test_kind_eye_alternative_totals_on_tact_and_sincerity`
+- [x] Alternative totals render number-first and append "if all of the above" when 2+ alts → `test_rolls.py::test_alternative_totals_render_number_first_with_all_of_the_above`
+- [x] No "if all of the above" line when only one alternative total → `test_rolls.py::test_alternative_totals_no_all_of_the_above_when_only_one`
 
 ## Character Sheet — Advantages & Disadvantages Display
 
@@ -1213,6 +1219,14 @@ Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pyt
 
 - [x] Sheet page no horizontal overflow at phone width → `test_responsive.py::test_sheet_no_horizontal_overflow`
 - [x] Edit page no horizontal overflow at phone width → `test_responsive.py::test_edit_no_horizontal_overflow`
+- [x] Edit page Basics section visually contains its inputs/selects/buttons at 320-375 px → `test_responsive.py::test_edit_basics_section_contains_its_controls`
+- [x] Edit page advantage row chevron expands rules text on phone → `test_responsive.py::test_edit_advantage_chevron_expands_rules_text_on_phone`
+- [x] Edit page advantage chevron does not toggle the checkbox → `test_responsive.py::test_edit_advantage_chevron_does_not_toggle_checkbox`
+- [x] Edit page disadvantage row chevron expands rules text on phone → `test_responsive.py::test_edit_disadvantage_chevron_expands_rules_text_on_phone`
+- [x] Edit page campaign-advantage row chevron expands rules text on phone → `test_responsive.py::test_edit_campaign_advantage_chevron_expands_rules_text_on_phone`
+- [x] Edit page skill row uses 2-info-cols + chevron grid layout on phone → `test_responsive.py::test_edit_skill_row_mobile_layout`
+- [x] Edit page skill row stays single-line flex on desktop → `test_responsive.py::test_edit_skill_row_desktop_layout_unchanged`
+- [x] Edit page chevrons hidden on desktop (advantage + skill) → `test_responsive.py::test_edit_chevron_hidden_on_desktop`
 - [x] Homepage no horizontal overflow at phone width → `test_responsive.py::test_homepage_no_horizontal_overflow`
 - [x] Hamburger visible on phone, nav items hidden → `test_responsive.py::test_hamburger_visible_on_phone`
 - [x] Hamburger toggle shows/hides nav items → `test_responsive.py::test_hamburger_toggle_shows_nav`

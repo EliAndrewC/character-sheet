@@ -3,6 +3,59 @@
 {% block title %}L7R - Edit {{ character.name }}{% endblock %}
 
 {% block content %}
+{# ── Skill row macro ──
+   Used four times below (social/knowledge × basic/advanced). Renders the
+   editor-skill-row layout: name, +/- counter, XP-cost label (hidden on
+   mobile), live roll display, mobile-only chevron toggle, desktop hover
+   tooltip, and a mobile-only expand panel sibling that surfaces the
+   canonical rules text without colliding with the form controls.
+   `costs` selects between BASIC_COSTS / ADVANCED_COSTS for the +/- titles;
+   `is_advanced_arg` is the literal "true"/"false" passed into
+   skillXpLabel(). #}
+{% macro skill_row(sid, skill, is_advanced) -%}
+{% set costs = "ADVANCED_COSTS" if is_advanced else "BASIC_COSTS" %}
+{% set is_advanced_arg = "true" if is_advanced else "false" %}
+<div x-data="{ expanded: false }">
+    <div class="editor-skill-row tooltip-trigger relative">
+        <label class="editor-skill-row__name w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
+        <div class="editor-skill-row__ctrls flex items-center gap-1">
+            <button type="button"
+                    @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
+                    :disabled="skills.{{ sid }} <= 0"
+                    :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + {{ costs }}[skills.{{ sid }}] + ' XP)'"
+                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+            <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
+            <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
+            <button type="button"
+                    @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
+                    :disabled="skills.{{ sid }} >= 5"
+                    :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + {{ costs }}[skills.{{ sid }}+1] + ' XP)'"
+                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+        </div>
+        <span class="editor-skill-row__xp text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', {{ is_advanced_arg }})"></span>
+        <span class="editor-skill-row__roll text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
+        <button type="button"
+                class="editor-skill-row__chevron sm:hidden shrink-0 p-1 text-ink/60 hover:text-ink"
+                data-testid="skill-chevron-{{ sid }}"
+                @click="expanded = !expanded"
+                :aria-label="expanded ? 'Hide rules' : 'Show rules'"
+                :aria-expanded="expanded.toString()">
+            <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+        </button>
+        <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
+            <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
+            <div class="whitespace-pre-line">{{ skill.rules_text or skill.description }}</div>
+        </div>
+    </div>
+    <div x-show="expanded" x-cloak
+         class="sm:hidden mt-2 text-sm text-ink/80 whitespace-pre-line"
+         data-testid="skill-rules-{{ sid }}">
+        {{ skill.rules_text or skill.description }}
+    </div>
+</div>
+{%- endmacro %}
 <link href="/static/css/quill.snow.css" rel="stylesheet">
 <script src="/static/js/quill.js"></script>
 <style>
@@ -223,7 +276,7 @@
         <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
             <h2 class="text-xl font-bold mb-4 text-accent">Basics</h2>
             <div class="grid gap-4 sm:grid-cols-2">
-                <div>
+                <div class="min-w-0">
                     <label class="block text-sm font-medium mb-1">Character Name</label>
                     <div class="flex gap-2">
                         <input type="text" name="name" required value="{{ character.name }}"
@@ -259,7 +312,7 @@
                         </button>
                     </div>
                 </div>
-                <div>
+                <div class="min-w-0">
                     <label class="block text-sm font-medium mb-1">Player</label>
                     {% if viewer_is_admin %}
                     <select name="owner_discord_id" @change="markDirty()"
@@ -275,7 +328,7 @@
                     <span class="text-lg">{{ character.player_name or '' }}</span>
                     {% endif %}
                 </div>
-                <div>
+                <div class="min-w-0">
                     <label class="block text-sm font-medium mb-1">Gaming Group</label>
                     <select name="gaming_group_id" data-test="gaming-group-select"
                             @change="setGroup($event.target.value)"
@@ -289,7 +342,7 @@
                     <p class="text-xs text-ink/50 mt-1">Saves instantly. Doesn't create a new version.</p>
                 </div>
                 <input type="hidden" name="starting_xp" value="150">
-                <div>
+                <div class="min-w-0">
                     <label class="block text-sm font-medium mb-1">Earned XP</label>
                     <input type="number" name="earned_xp" value="{{ character.earned_xp }}" min="0"
                            x-model.number="earnedXp"
@@ -763,30 +816,7 @@
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "social" and not skill.is_advanced %}
-                        <div class="flex items-center gap-3 tooltip-trigger relative">
-                            <label class="w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
-                            <div class="flex items-center gap-1">
-                                <button type="button"
-                                        @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
-                                        :disabled="skills.{{ sid }} <= 0"
-                                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + BASIC_COSTS[skills.{{ sid }}] + ' XP)'"
-                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
-                                <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
-                                <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
-                                <button type="button"
-                                        @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
-                                        :disabled="skills.{{ sid }} >= 5"
-                                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + BASIC_COSTS[skills.{{ sid }}+1] + ' XP)'"
-                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
-                            </div>
-                            <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', false)"></span>
-                            <span class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
-                                <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
-                                <p>{{ skill.description }}</p>
-                                <p class="mt-1 text-gold">{{ skill.roll_description }}</p>
-                            </div>
-                        </div>
+                        {{ skill_row(sid, skill, false) }}
                         {% endif %}
                         {% endfor %}
                     </div>
@@ -798,30 +828,7 @@
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "social" and skill.is_advanced %}
-                        <div class="flex items-center gap-3 tooltip-trigger relative">
-                            <label class="w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
-                            <div class="flex items-center gap-1">
-                                <button type="button"
-                                        @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
-                                        :disabled="skills.{{ sid }} <= 0"
-                                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + ADVANCED_COSTS[skills.{{ sid }}] + ' XP)'"
-                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
-                                <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
-                                <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
-                                <button type="button"
-                                        @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
-                                        :disabled="skills.{{ sid }} >= 5"
-                                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + ADVANCED_COSTS[skills.{{ sid }}+1] + ' XP)'"
-                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
-                            </div>
-                            <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', true)"></span>
-                            <span class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
-                                <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
-                                <p>{{ skill.description }}</p>
-                                <p class="mt-1 text-gold">{{ skill.roll_description }}</p>
-                            </div>
-                        </div>
+                        {{ skill_row(sid, skill, true) }}
                         {% endif %}
                         {% endfor %}
                     </div>
@@ -833,30 +840,7 @@
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "knowledge" and not skill.is_advanced %}
-                        <div class="flex items-center gap-3 tooltip-trigger relative">
-                            <label class="w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
-                            <div class="flex items-center gap-1">
-                                <button type="button"
-                                        @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
-                                        :disabled="skills.{{ sid }} <= 0"
-                                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + BASIC_COSTS[skills.{{ sid }}] + ' XP)'"
-                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
-                                <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
-                                <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
-                                <button type="button"
-                                        @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
-                                        :disabled="skills.{{ sid }} >= 5"
-                                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + BASIC_COSTS[skills.{{ sid }}+1] + ' XP)'"
-                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
-                            </div>
-                            <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', false)"></span>
-                            <span class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
-                                <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
-                                <p>{{ skill.description }}</p>
-                                <p class="mt-1 text-gold">{{ skill.roll_description }}</p>
-                            </div>
-                        </div>
+                        {{ skill_row(sid, skill, false) }}
                         {% endif %}
                         {% endfor %}
                     </div>
@@ -868,30 +852,7 @@
                     <div class="grid gap-2">
                         {% for sid, skill in skills.items() %}
                         {% if skill.category == "knowledge" and skill.is_advanced %}
-                        <div class="flex items-center gap-3 tooltip-trigger relative">
-                            <label class="w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
-                            <div class="flex items-center gap-1">
-                                <button type="button"
-                                        @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
-                                        :disabled="skills.{{ sid }} <= 0"
-                                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + ADVANCED_COSTS[skills.{{ sid }}] + ' XP)'"
-                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
-                                <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
-                                <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
-                                <button type="button"
-                                        @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
-                                        :disabled="skills.{{ sid }} >= 5"
-                                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + ADVANCED_COSTS[skills.{{ sid }}+1] + ' XP)'"
-                                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
-                            </div>
-                            <span class="text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', true)"></span>
-                            <span class="text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs">
-                                <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
-                                <p>{{ skill.description }}</p>
-                                <p class="mt-1 text-gold">{{ skill.roll_description }}</p>
-                            </div>
-                        </div>
+                        {{ skill_row(sid, skill, true) }}
                         {% endif %}
                         {% endfor %}
                     </div>
@@ -907,20 +868,38 @@
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Advantages (cost XP)</h3>
                     <div class="space-y-1">
                         {% for aid, adv in advantages.items() %}
-                        <div>
-                            <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
-                                <input type="checkbox" name="adv_{{ aid }}"
-                                       x-model="advantages.{{ aid }}"
-                                       {{ 'checked' if aid in (character.advantages or []) else '' }}
-                                       :disabled="{% if aid == 'wealthy' %}true{% elif aid == 'poor' %}true{% else %}exclusionReason('{{ aid }}') !== null{% endif %}"
-                                       class="rounded text-accent">
-                                <span>{{ adv.name }}</span>
-                                <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
-                                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
-                                     x-text='exclusionReason("{{ aid }}") || {{ adv.description|tojson }}'>
-                                    {{ adv.description }}
-                                </div>
-                            </label>
+                        <div x-data="{ expanded: false }" class="editor-row">
+                            <div class="flex items-center gap-2">
+                                <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer flex-1 min-w-0">
+                                    <input type="checkbox" name="adv_{{ aid }}"
+                                           x-model="advantages.{{ aid }}"
+                                           {{ 'checked' if aid in (character.advantages or []) else '' }}
+                                           :disabled="{% if aid == 'wealthy' %}true{% elif aid == 'poor' %}true{% else %}exclusionReason('{{ aid }}') !== null{% endif %}"
+                                           class="rounded text-accent">
+                                    <span>{{ adv.name }}</span>
+                                    <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
+                                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
+                                         x-text='exclusionReason("{{ aid }}") || {{ adv.description|tojson }}'>
+                                        {{ adv.description }}
+                                    </div>
+                                </label>
+                                <button type="button"
+                                        class="sm:hidden shrink-0 p-1 text-ink/60 hover:text-ink"
+                                        data-testid="adv-chevron-{{ aid }}"
+                                        @click="expanded = !expanded"
+                                        :aria-label="expanded ? 'Hide rules' : 'Show rules'"
+                                        :aria-expanded="expanded.toString()">
+                                    <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div x-show="expanded" x-cloak
+                                 class="sm:hidden mt-1 ml-6 text-sm text-ink/80 whitespace-pre-line"
+                                 data-testid="adv-rules-{{ aid }}"
+                                 x-text='exclusionReason("{{ aid }}") || {{ adv.description|tojson }}'>
+                                {{ adv.description }}
+                            </div>
                             {% if aid in advantage_detail_fields %}
                             {% set df = advantage_detail_fields[aid] %}
                             <div x-show="advantages.{{ aid }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1"
@@ -971,20 +950,38 @@
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Disadvantages (give XP)</h3>
                     <div class="space-y-1">
                         {% for did, dis in disadvantages.items() %}
-                        <div>
-                            <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
-                                <input type="checkbox" name="dis_{{ did }}"
-                                       x-model="disadvantages.{{ did }}"
-                                       {{ 'checked' if did in (character.disadvantages or []) else '' }}
-                                       :disabled="{% if did == 'poor' %}true{% else %}exclusionReason('{{ did }}') !== null{% endif %}"
-                                       class="rounded text-accent">
-                                <span>{{ dis.name }}</span>
-                                <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
-                                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
-                                     x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
-                                    {{ dis.description }}
-                                </div>
-                            </label>
+                        <div x-data="{ expanded: false }" class="editor-row">
+                            <div class="flex items-center gap-2">
+                                <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer flex-1 min-w-0">
+                                    <input type="checkbox" name="dis_{{ did }}"
+                                           x-model="disadvantages.{{ did }}"
+                                           {{ 'checked' if did in (character.disadvantages or []) else '' }}
+                                           :disabled="{% if did == 'poor' %}true{% else %}exclusionReason('{{ did }}') !== null{% endif %}"
+                                           class="rounded text-accent">
+                                    <span>{{ dis.name }}</span>
+                                    <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
+                                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
+                                         x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
+                                        {{ dis.description }}
+                                    </div>
+                                </label>
+                                <button type="button"
+                                        class="sm:hidden shrink-0 p-1 text-ink/60 hover:text-ink"
+                                        data-testid="dis-chevron-{{ did }}"
+                                        @click="expanded = !expanded"
+                                        :aria-label="expanded ? 'Hide rules' : 'Show rules'"
+                                        :aria-expanded="expanded.toString()">
+                                    <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div x-show="expanded" x-cloak
+                                 class="sm:hidden mt-1 ml-6 text-sm text-ink/80 whitespace-pre-line"
+                                 data-testid="dis-rules-{{ did }}"
+                                 x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
+                                {{ dis.description }}
+                            </div>
                             {% if did in advantage_detail_fields %}
                             {% set df = advantage_detail_fields[did] %}
                             <div x-show="disadvantages.{{ did }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1"
@@ -1021,19 +1018,39 @@
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Campaign Advantages</h3>
                     <div class="space-y-1">
                         {% for aid, adv in campaign_advantages.items() %}
-                        <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
-                            <input type="checkbox" name="camp_adv_{{ aid }}"
-                                   x-model="campaignAdvantages.{{ aid }}"
-                                   @change="markDirty()"
-                                   :disabled="exclusionReason('{{ aid }}') !== null"
-                                   class="rounded text-accent">
-                            <span>{{ adv.name }}</span>
-                            <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
+                        <div x-data="{ expanded: false }" class="editor-row">
+                            <div class="flex items-center gap-2">
+                                <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer flex-1 min-w-0">
+                                    <input type="checkbox" name="camp_adv_{{ aid }}"
+                                           x-model="campaignAdvantages.{{ aid }}"
+                                           @change="markDirty()"
+                                           :disabled="exclusionReason('{{ aid }}') !== null"
+                                           class="rounded text-accent">
+                                    <span>{{ adv.name }}</span>
+                                    <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
+                                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
+                                         x-text='exclusionReason("{{ aid }}") || {{ adv.description|tojson }}'>
+                                        {{ adv.description }}
+                                    </div>
+                                </label>
+                                <button type="button"
+                                        class="sm:hidden shrink-0 p-1 text-ink/60 hover:text-ink"
+                                        data-testid="camp-adv-chevron-{{ aid }}"
+                                        @click="expanded = !expanded"
+                                        :aria-label="expanded ? 'Hide rules' : 'Show rules'"
+                                        :aria-expanded="expanded.toString()">
+                                    <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div x-show="expanded" x-cloak
+                                 class="sm:hidden mt-1 ml-6 text-sm text-ink/80 whitespace-pre-line"
+                                 data-testid="camp-adv-rules-{{ aid }}"
                                  x-text='exclusionReason("{{ aid }}") || {{ adv.description|tojson }}'>
                                 {{ adv.description }}
                             </div>
-                        </label>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -1041,19 +1058,39 @@
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Campaign Disadvantages</h3>
                     <div class="space-y-1">
                         {% for did, dis in campaign_disadvantages.items() %}
-                        <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer">
-                            <input type="checkbox" name="camp_dis_{{ did }}"
-                                   x-model="campaignDisadvantages.{{ did }}"
-                                   @change="markDirty()"
-                                   :disabled="exclusionReason('{{ did }}') !== null"
-                                   class="rounded text-accent">
-                            <span>{{ dis.name }}</span>
-                            <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
+                        <div x-data="{ expanded: false }" class="editor-row">
+                            <div class="flex items-center gap-2">
+                                <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer flex-1 min-w-0">
+                                    <input type="checkbox" name="camp_dis_{{ did }}"
+                                           x-model="campaignDisadvantages.{{ did }}"
+                                           @change="markDirty()"
+                                           :disabled="exclusionReason('{{ did }}') !== null"
+                                           class="rounded text-accent">
+                                    <span>{{ dis.name }}</span>
+                                    <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
+                                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
+                                         x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
+                                        {{ dis.description }}
+                                    </div>
+                                </label>
+                                <button type="button"
+                                        class="sm:hidden shrink-0 p-1 text-ink/60 hover:text-ink"
+                                        data-testid="camp-dis-chevron-{{ did }}"
+                                        @click="expanded = !expanded"
+                                        :aria-label="expanded ? 'Hide rules' : 'Show rules'"
+                                        :aria-expanded="expanded.toString()">
+                                    <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div x-show="expanded" x-cloak
+                                 class="sm:hidden mt-1 ml-6 text-sm text-ink/80 whitespace-pre-line"
+                                 data-testid="camp-dis-rules-{{ did }}"
                                  x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
                                 {{ dis.description }}
                             </div>
-                        </label>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>

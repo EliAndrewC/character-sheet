@@ -140,3 +140,88 @@ def test_sheet_has_no_tooltip_icon_without_explanation(page, live_server_url):
     apply_changes(page, "initial")
     # On the sheet, the marker element should not exist.
     assert page.locator('[data-testid="name-explanation-tooltip"]').count() == 0
+
+
+def _make_character_with_explanation(page, live_server_url, name, explanation):
+    _go_to_editor(page, live_server_url)
+    page.fill('input[name="name"]', name)
+    select_school(page, "akodo_bushi")
+    _open_explanation_modal(page)
+    page.locator('[data-field="name-explanation-text"]').fill(explanation)
+    page.locator('[data-action="save-explanation"]').click()
+    page.wait_for_selector('[data-modal="name-explanation"]', state="hidden", timeout=3000)
+    apply_changes(page, "set explanation")
+    page.wait_for_selector('[data-testid="name-explanation-tooltip"]', timeout=5000)
+
+
+def test_sheet_explanation_tooltip_click_toggles_on_desktop(page, live_server_url):
+    """Clicking the icon on desktop opens (and re-clicking closes) the tooltip,
+    without waiting for the 2000ms hover delay."""
+    _make_character_with_explanation(
+        page, live_server_url, "DesktopClick", "A name to remember."
+    )
+    trigger = page.locator('[data-testid="name-explanation-tooltip"]')
+    tip = trigger.locator('.tooltip-content')
+    # Initially hidden (CSS visibility:hidden).
+    assert tip.evaluate("el => getComputedStyle(el).visibility") == "hidden"
+    # Click opens immediately - no 2000ms wait.
+    trigger.dispatch_event("click")
+    page.wait_for_timeout(50)
+    assert trigger.evaluate("el => el.classList.contains('tooltip-active')")
+    assert tip.evaluate("el => getComputedStyle(el).visibility") == "visible"
+    # Click again closes.
+    trigger.dispatch_event("click")
+    page.wait_for_timeout(50)
+    assert not trigger.evaluate("el => el.classList.contains('tooltip-active')")
+
+
+def test_sheet_explanation_tooltip_click_outside_closes(page, live_server_url):
+    """Clicking outside the icon closes an open name-explanation tooltip."""
+    _make_character_with_explanation(
+        page, live_server_url, "ClickAway", "Some explanation."
+    )
+    trigger = page.locator('[data-testid="name-explanation-tooltip"]')
+    trigger.dispatch_event("click")
+    page.wait_for_timeout(50)
+    assert trigger.evaluate("el => el.classList.contains('tooltip-active')")
+    # Click somewhere else on the page.
+    page.locator('body').dispatch_event("click")
+    page.wait_for_timeout(50)
+    assert not trigger.evaluate("el => el.classList.contains('tooltip-active')")
+
+
+def test_sheet_explanation_tooltip_does_not_overflow_on_mobile(page, live_server_url):
+    """At a phone-sized viewport, opening the explanation tooltip never makes
+    the page horizontally scrollable - the tooltip is shifted left so its
+    right edge fits within the viewport."""
+    long_text = (
+        "This name has a long explanation that would normally make a "
+        "fixed-width tooltip overflow far past the right edge of a narrow "
+        "phone viewport. Repeated. " * 4
+    )
+    _make_character_with_explanation(page, live_server_url, "MobileOverflow", long_text)
+    page.set_viewport_size({"width": 380, "height": 800})
+    page.wait_for_timeout(100)
+    trigger = page.locator('[data-testid="name-explanation-tooltip"]')
+    trigger.scroll_into_view_if_needed()
+    trigger.dispatch_event("click")
+    page.wait_for_timeout(100)
+    # Tooltip is open.
+    assert trigger.evaluate("el => el.classList.contains('tooltip-active')")
+    tip = trigger.locator('.tooltip-content')
+    assert tip.evaluate("el => getComputedStyle(el).visibility") == "visible"
+    # Tooltip's bounding rect is fully within the viewport (with small margin
+    # tolerance for sub-pixel rounding).
+    rect = tip.bounding_box()
+    vw = page.evaluate("window.innerWidth")
+    assert rect is not None
+    assert rect["x"] >= -1, f"tooltip overflows left: x={rect['x']}"
+    assert rect["x"] + rect["width"] <= vw + 1, (
+        f"tooltip overflows right: x+w={rect['x'] + rect['width']}, vw={vw}"
+    )
+    # The page should not have horizontal scroll caused by the tooltip.
+    page_scroll_w = page.evaluate("document.documentElement.scrollWidth")
+    client_w = page.evaluate("document.documentElement.clientWidth")
+    assert page_scroll_w <= client_w + 1, (
+        f"page is horizontally scrollable: scrollWidth={page_scroll_w}, clientWidth={client_w}"
+    )
