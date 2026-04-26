@@ -473,6 +473,46 @@ class TestSkillFormula:
             f"expected an alternatives entry for blending in; got {f.alternatives}"
         )
 
+    def test_history_heraldry_is_conditional_alternative(self):
+        """History→Heraldry only applies to questions about places,
+        families, and institutions - not specific individuals - so the
+        dice formula must surface it as an alternatives entry rather
+        than baking it into flat. Culture/Law/Strategy, which still get
+        the unconditional history synergy, are covered separately."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"heraldry": 2, "history": 3},
+        )
+        f = build_skill_formula("heraldry", char)
+        assert f.flat == 0, "history bonus must not be in flat for heraldry"
+        matching = [
+            alt for alt in f.alternatives
+            if alt["label"] == "for places and families and institutions"
+            and alt["extra_flat"] == 15
+        ]
+        assert matching, (
+            f"expected an alternatives entry for places/families/institutions; "
+            f"got {f.alternatives}"
+        )
+
+    def test_history_still_unconditional_on_culture_law_strategy(self):
+        """Regression: only Heraldry gets the conditional treatment.
+        Culture/Law/Strategy continue to bake the History bonus into
+        flat as before."""
+        for skill in ("culture", "law", "strategy"):
+            char = make_character_data(
+                school="",
+                knacks={},
+                skills={skill: 2, "history": 2},
+                honor=1.0,
+            )
+            f = build_skill_formula(skill, char)
+            assert any(
+                "History" in b["label"] and b["amount"] == 10
+                for b in f.bonuses
+            ), f"expected unconditional History bonus on {skill}; got {f.bonuses}"
+
     def test_acting_still_unconditional_on_sincerity_and_intimidation(self):
         """Regression: only Sneaking gets the conditional treatment.
         Sincerity and Intimidation continue to bake the Acting bonus

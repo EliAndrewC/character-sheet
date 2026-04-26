@@ -100,8 +100,10 @@ _CAMPAIGN_ADVANTAGE_CONDITIONAL_SKILL_BONUSES = {
 _DISCERNING_BONUSES = {"interrogation": 1, "investigation": 2}
 
 # Skill synergies: skill_id -> (boosted_skills, raises_per_rank)
+# Some entries are conditional and surfaced as a note rather than baked into
+# flat_bonus: see the special cases in compute_skill_roll's synergy loop.
 _SKILL_SYNERGIES = {
-    "history": (["culture", "law", "strategy"], 1),
+    "history": (["culture", "law", "strategy", "heraldry"], 1),
     "acting": (["sincerity", "intimidation", "sneaking"], 1),
 }
 
@@ -303,10 +305,15 @@ def compute_skill_roll(
                 source_name = SKILLS[source_id].name
                 # Acting → Sneaking is conditional: the free raises only
                 # apply on "blending into a crowd" rolls, not on
-                # "remaining unseen" rolls. So it lives in tooltip_lines
-                # as a note rather than baked into flat_bonus.
+                # "remaining unseen" rolls. History → Heraldry is similarly
+                # conditional: the raises only apply to questions about
+                # places, families, and institutions - not specific
+                # individuals. Both live in tooltip_lines as a conditional
+                # note rather than baked into flat_bonus.
                 if skill_id == "sneaking" and source_id == "acting":
                     bonus_parts.append((0, f"+{amount} for blending in"))
+                elif skill_id == "heraldry" and source_id == "history":
+                    bonus_parts.append((0, f"+{amount} for non-individuals"))
                 else:
                     result.flat_bonus += amount
                     bonus_parts.append((amount, f"+{amount} from {source_name}"))

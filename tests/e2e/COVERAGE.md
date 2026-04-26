@@ -957,6 +957,8 @@ The three failures were:
 - [x] Poor disabled → `test_editor_controls.py::test_poor_disadvantage_disabled`
 - [x] Campaign advantage toggles XP → `test_editor_controls.py::test_campaign_advantage_toggles_xp`
 - [x] Campaign disadvantage toggles XP → `test_editor_controls.py::test_campaign_disadvantage_toggles_xp`
+- [x] Campaign advantage tooltip renders full rules text → `test_editor_controls.py::test_campaign_advantage_tooltip_has_full_rules_text`
+- [x] Campaign disadvantage tooltip renders full rules text (with bullets) → `test_editor_controls.py::test_campaign_disadvantage_tooltip_has_full_rules_text`
 
 ## Character Editor — Exclusive Pairs
 
@@ -1097,6 +1099,7 @@ The three failures were:
 - [x] Worldly on Commerce → `test_skill_rolls_display.py::test_worldly_bonus_on_commerce`
 - [x] History synergy on Culture → `test_skill_rolls_display.py::test_history_synergy_on_culture`
 - [x] Acting synergy on Sincerity → `test_skill_rolls_display.py::test_acting_synergy_on_sincerity`
+- [x] History → Heraldry synergy is conditional ("for non-individuals") → `test_skill_rolls_display.py::test_history_heraldry_synergy_is_conditional_on_sheet`
 - [x] Recognition bonus on Bragging → `test_skill_rolls_display.py::test_recognition_bonus_on_bragging`
 - [x] Transparent note on Sincerity → `test_skill_rolls_display.py::test_transparent_note_on_sincerity`
 - [x] Unkempt note on Culture → `test_skill_rolls_display.py::test_unkempt_note_on_culture`

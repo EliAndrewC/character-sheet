@@ -839,9 +839,14 @@ def profile(request: Request, db: Session = Depends(get_db)):
         UserModel.discord_id == user["discord_id"]
     ).first()
 
-    # All other registered users (for grant/revoke UI)
-    all_users = db.query(UserModel).order_by(UserModel.discord_name).all()
-    other_users = [u for u in all_users if u.discord_id != user["discord_id"]]
+    # All other registered users (for grant/revoke UI), alphabetized by
+    # the name actually shown to the viewer (display_name with a fallback
+    # to discord_name) so the list reads in the same order as the labels.
+    all_users = db.query(UserModel).all()
+    other_users = sorted(
+        (u for u in all_users if u.discord_id != user["discord_id"]),
+        key=lambda u: (u.display_name or u.discord_name or "").casefold(),
+    )
 
     admin_ids = get_admin_ids()
     granted_ids = set(user_obj.granted_account_ids or [])

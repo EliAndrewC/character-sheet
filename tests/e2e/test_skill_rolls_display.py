@@ -80,6 +80,14 @@ def test_acting_synergy_on_sincerity(page, live_server_url):
     assert "Acting" in page.text_content("body")
 
 
+def test_history_heraldry_synergy_is_conditional_on_sheet(page, live_server_url):
+    """History→Heraldry surfaces as a conditional 'for non-individuals'
+    note next to the heraldry roll, not as a flat baked-in bonus."""
+    _create_char_with_skills(page, live_server_url,
+                              skills={"heraldry": 1, "history": 2}, name="HisHer Syn")
+    assert "for non-individuals" in page.text_content("body")
+
+
 def test_recognition_bonus_on_bragging(page, live_server_url):
     _create_char_with_skills(page, live_server_url,
                               skills={"bragging": 1}, name="Recog Brag")

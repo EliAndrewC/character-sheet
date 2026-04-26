@@ -559,45 +559,36 @@ _SKILLS_LIST: List[Skill] = [
         category="knowledge",
         is_advanced=False,
         description=(
-            "TN-based (15-75) modified by familiarity, research, and Recognition."
+            "TN-based (25-95) modified by familiarity, research, and Recognition."
         ),
         roll_description=(
-            "Roll Heraldry + Water. TN 15-75 modified by familiarity, research, Recognition."
+            "Roll Heraldry + Water. TN 25-95 modified by familiarity, research, Recognition."
         ),
         rules_text=(
             "When dealing with any House, it pays to know the local politics, "
             "especially alliances and feuds between its officials. GMs should "
             "take the question being asked and assign a base TN according to "
             "the chart below, with three potential modifications to the TN:"
-            "\n"
-            "• up to +/- 20 based on how familiar the PCs are with the "
-            "House"
-            "\n"
-            "• up to -20 if the PCs are able to conduct specific research "
+            "\n• up to +/- 20 based on how familiar the PCs are with the House"
+            "\n• up to -20 if the PCs are able to conduct specific research "
             "about a target"
-            "\n"
-            "• +/- 5 for each point of Recognition below/above normal for "
+            "\n• +/- 5 for each point of Recognition below/above normal for "
             "the target's station"
             "\n\n"
             "Information gained by TN:"
-            "\n"
-            "• TN 15: domain size, wealth, neighbors"
-            "\n"
-            "• TN 25: basic history, political and military alliances"
-            "\n"
-            "• TN 35: top officials (Ministers, Councilors, Governors), "
-            "major lineages"
-            "\n"
-            "• TN 45: major officials (Provincial Ministers, County "
-            "Magistrates), lineage politics"
-            "\n"
-            "• TN 55: noteworthy minor officials, sub-branches within "
-            "lineages, major merchant houses"
-            "\n"
-            "• TN 65: unremarkable minor officials, relationships between "
-            "specific extended families"
-            "\n"
-            "• TN 75: inconspicuous samurai not assigned to any post"
+            "\n• TN 25: domain size, wealth, neighbors"
+            "\n• TN 35: basic history, political and military alliances"
+            "\n• TN 45: internal lineage and ministry politics"
+            "\n• TN 55: individual top officials - chancellors and ministers "
+            "and their families"
+            "\n• TN 65: provinces and governors, lineage sub-branches, major "
+            "merchant houses"
+            "\n• TN 75: provincial politics within the provincial ministries "
+            "and lineages"
+            "\n• TN 85: counties, county politics, county magistrates, and "
+            "their relationships"
+            "\n• TN 95: small local stories and institutions, samurai without "
+            "noteworthy posts"
         ),
     ),
     Skill(
@@ -710,12 +701,13 @@ _SKILLS_LIST: List[Skill] = [
         is_advanced=True,
         description=(
             "Grants 1 free raise per rank on culture, law, and strategy rolls. "
-            "Grants free raises on heraldry (cap 25 total). "
+            "Also grants free raises on heraldry rolls about places, families, "
+            "and institutions (not specific individuals). "
             "Open or contested for citing historical examples."
         ),
         roll_description=(
             "Roll History + Water. Grants 1 free raise/rank on culture, law, strategy. "
-            "Free raises on heraldry (cap 25 total). Open/contested for examples."
+            "Also heraldry (places/families/institutions only). Open/contested for examples."
         ),
         rules_text=(
             "With over 1,000 years of history, you'll rarely encounter "
@@ -727,8 +719,9 @@ _SKILLS_LIST: List[Skill] = [
             "This also aids your basic skills; you receive one free raise on "
             "all culture, law, and strategy rolls for every point of history "
             "your character has. You also receive these free raises on "
-            "heraldry rolls, but these free raises on heraldry may not raise "
-            "your total above 25."
+            "heraldry rolls, but these free raises on heraldry only apply to "
+            "your knowledge of places and families and institutions rather "
+            "than specific individuals."
         ),
     ),
     Skill(
@@ -2687,58 +2680,152 @@ for _sid, _school in SCHOOLS.items():
 # CAMPAIGN ADVANTAGES & DISADVANTAGES (Wasp Bounty Hunters)
 # ---------------------------------------------------------------------------
 
+_FAMILY_RECKONING_INTRO = (
+    "In the recent past, a large bounty was collected with many Wasp samurai working in "
+    "conjunction, and things got... messy."
+    "\n\n"
+    "Powerful nobles from another clan are seething, both family and allies of those slain. "
+    "No blood feud has been declared yet, and since the bounty was theoretically legitimate "
+    "there may never be one. However, each PC had at least one extended family member "
+    "present, and thus the PCs are likely to face the wrath of those seeking vengeance at "
+    "some point in the campaign. This will all be true regardless of whether anyone takes "
+    "Family Reckoning advantage or disadvantage."
+    "\n\n"
+    "Everyone in the party is considered to have 1.0 higher recognition for the purpose of "
+    "being recognized for each party member who takes Family Reckoning."
+)
+
+_FAMILY_RECKONING_OUTRO = (
+    "The specifics of the event will be determined after every PC in the group decides "
+    "whether they are taking the advantage, the disadvantage, or neither, as the group's "
+    "collective decisions will influence how good or bad this matter looks for the Wasp "
+    "as a whole."
+)
+
+_MINOR_CLAN_INTRO = (
+    "As a member of the Three Man Alliance, you have strong connections to the other minor "
+    "clans of southeast Rokugan. You have a significant ally of note from the {clan} clan, "
+    "who owes you a debt of gratitude and has written you an impressive letter of "
+    "introduction. All members of that clan treat you as having 3.0 higher Rank and "
+    "Recognition."
+)
+
 _CAMPAIGN_ADVANTAGES_LIST: List[Advantage] = [
     Advantage(
         "family_reckoning_righteous_sting",
         "Family Reckoning: Righteous Sting",
         5,
-        "Your family's actions during the Wasp clan's founding are remembered favorably. "
-        "Your Rank is considered 2.0 higher, and the Rank of your entire party is considered "
-        "1.0 higher when dealing with those who know this history.",
+        _FAMILY_RECKONING_INTRO
+        + "\n\n"
+        "If a PC takes the Family Reckoning: Righteous Sting advantage:"
+        "\n• Their own extended family member who was present is known to have acted "
+        "honorably. You may speak of your kin's contributions proudly and with no trace of "
+        "shame, and NPCs will not direct any disapproval towards you personally."
+        "\n• This unfortunate event, in general, is a bit less embarrassing for the Wasp, "
+        "and NPCs are more likely to be sympathetic to the Wasp about the whole affair."
+        "\n• Your own Rank is considered 2.0 higher, and the Rank of every other member of "
+        "your party is considered 1.0 higher."
+        "\n\n"
+        + _FAMILY_RECKONING_OUTRO,
     ),
     Advantage(
         "highest_regard",
         "Highest Regard",
         4,
-        "You carry a written letter of introduction from a notable Wasp figure. Your Rank and "
-        "Recognition are considered 2.0 higher when dealing with Wasp clan members. You get "
-        "4 free raises on bragging and intimidation rolls with Wasp (2 free raises with others).",
+        "Your service to the Wasp clan has been formally recognized, and you carry a "
+        "written letter of introduction from your lineage's chancellor explaining to anyone "
+        "who reads it that your clan holds you in its highest regard."
+        "\n\n"
+        "Your Rank and Recognition are treated as 2.0 higher when dealing with other Wasp "
+        "samurai. You receive 4 free raises on bragging and intimidation rolls when dealing "
+        "with other Wasp samurai, and 2 free raises to these rolls for all other samurai.",
     ),
     Advantage(
         "household_wealth",
         "Household Wealth",
         4,
-        "Replaces Wealthy. Your base stipend rank is 10 instead of the campaign default of 4, "
-        "giving you 100 koku/year. If you are a Merchant or Shosuro Actor, your stipend rank "
-        "is 15 (225 koku/year).",
+        "Due to the Wasp clan's small size and large expenses, the PCs in this campaign "
+        "automatically have the Poor disadvantage, for which they receive no bonus XP. As "
+        "such, no one may take the Wealthy advantage, which this Household wealth advantage "
+        "replaces. This means that without this advantage:"
+        "\n• Despite all PCs starting the campaign at the seventh rank, your stipends are "
+        "those of fourth rank samurai i.e. 16 koku per year."
+        "\n• Everyone begins the campaign with the 4 koku of that stipend which was recently "
+        "disbursed to you on the spring equinox."
+        "\n• Your stipends are distributed 25% at a time on the solstices and equinoxes of "
+        "each year, so you will receive another 4 koku on the summer solstice."
+        "\n\n"
+        "With this advantage, your own household has significant holdings (probably "
+        "\"authority over many households\", i.e. owning land and taxing its tenant farmers, "
+        "though you may choose a different income source such as a successful family "
+        "business). Your total income from a combination of your stipend and family assets "
+        "is that of a tenth rank samurai, i.e. 100 koku per year. You therefore begin the "
+        "campaign with 25 koku and expect to gain another 25 koku per season (next disbursed "
+        "around the summer solstice)."
+        "\n\n"
+        "If you are a Merchant or Shosuro Actor at 4th Dan or above, your stipend rank is "
+        "15 (225 koku/year) instead.",
     ),
     Advantage(
         "minor_clan_major_ally_sparrow",
         "Minor Clan Major Ally: Sparrow",
         2,
-        "Your Rank and Recognition are considered 3.0 higher when dealing with Sparrow clan "
-        "members. You can call on Sparrow allies to delay legal proceedings or investigations.",
+        _MINOR_CLAN_INTRO.format(clan="Sparrow")
+        + "\n\n"
+        "Sparrow: the Suzume family was founded by well-connected Crane courtiers who were "
+        "highly influential in the Imperial courts. While some courtiers are formidable in "
+        "their ability to push through the agenda of an ally, others specialize in impeding "
+        "the progress of the objectives of their rivals. The progenitors of the Sparrow "
+        "clan are cut from that cloth, and while their small clan lacks the power to affect "
+        "large-scale change, they are quite capable of delaying almost any proceeding, "
+        "tying up those who wish to move forward with their own goals."
+        "\n\n"
+        "If the PCs are ever in a position where they face unpleasant official sanction "
+        "from some matter in which they have become entangled, they may call upon their "
+        "Sparrow allies to postpone the fallout for some period of time.",
     ),
     Advantage(
         "minor_clan_major_ally_fox",
         "Minor Clan Major Ally: Fox",
         4,
-        "Your Rank and Recognition are considered 3.0 higher when dealing with Fox clan members. "
-        "You have access to Fox shugenja specialists who may assist with spiritual matters.",
+        _MINOR_CLAN_INTRO.format(clan="Fox")
+        + "\n\n"
+        "Fox: the Kitsune are a small family, barely 3,000 samurai in size. (Compare to the "
+        "median house in the Empire having ~5,000 samurai.) However, they have an even "
+        "higher rate of shugenja than the Phoenix clan, with more than half a dozen wielders "
+        "of magic in the current generation. As such, while most daimyo must call upon "
+        "allies in a neighboring domain if they wish to consult with a shugenja, you may do "
+        "so any time they require a specialist in dealing with the elemental kami.",
     ),
     Advantage(
         "minor_clan_major_ally_mantis",
         "Minor Clan Major Ally: Mantis",
         6,
-        "Your Rank and Recognition are considered 3.0 higher when dealing with Mantis clan members. "
-        "You have access to discreet Mantis warriors who can be called upon for assistance.",
+        _MINOR_CLAN_INTRO.format(clan="Mantis")
+        + "\n\n"
+        "Mantis: the Shione family is not part of the Three Man Alliance, but they have "
+        "significant business interests in the region due to their recent sugarcane riches. "
+        "The Silken Syrup Consortium may be said to have been founded by smugglers and "
+        "pirates, but they have outfits throughout this quadrant of the Empire, staffed by "
+        "fierce warriors who protect their assets."
+        "\n\n"
+        "Due to past favors done to this powerful syndicate, you may call upon the local "
+        "Mantis anytime you require a small but dedicated group of warriors who will "
+        "participate in a violent encounter without requiring payment. Perhaps most "
+        "importantly, these are men who can generally be relied upon to be discreet, "
+        "neither asking questions about their mission nor being bothered by the particulars "
+        "remaining secret.",
     ),
     Advantage(
         "streetwise",
         "Streetwise",
         5,
-        "You get a free raise on etiquette, law, intimidation, and underworld rolls when they "
-        "are related to your authority as a bounty hunter.",
+        "Before being assigned to your current post, you spent enough time learning the "
+        "ways of bounty hunting from more seasoned bounty hunters."
+        "\n\n"
+        "When making rolls relating to anything involving your authority as Imperial bounty "
+        "hunters, you get a free raise on etiquette, law, intimidation, and underworld "
+        "rolls.",
     ),
 ]
 
@@ -2749,46 +2836,121 @@ _CAMPAIGN_DISADVANTAGES_LIST: List[Disadvantage] = [
         "crane_indebted",
         "Crane-indebted",
         4,
-        "You owe a debt to Crane patrons who supported the Wasp clan. You are expected to "
-        "act in their interests when called upon. Failure to honor this obligation results "
-        "in gaining the Bad Reputation disadvantage.",
+        "Your household owes a great deal to the Crane patrons who helped create the Wasp "
+        "clan and who have continued to support it politically. This is not a debt measured "
+        "in coin, but rather in obligation. As a prominent member of your household, it may "
+        "fall to you to repay the favors which have been so beneficial to your household, "
+        "which are likely what landed you this prestigious post in the first place!"
+        "\n\n"
+        "From time to time, you may receive a request from a member of the Crane clan. They "
+        "may direct you to prioritize a certain bounty, or to make sure to stop and "
+        "interrogate a particular traveler in relation to a different bounty, or to take "
+        "some other action as part of the fulfillment of your duties. This will surely "
+        "involve some version of advancing Crane interests in a way which likely require "
+        "you to perform actions which are not technically illegal but which might give "
+        "pause to an especially scrupulous samurai."
+        "\n\n"
+        "Failing to satisfy these requests will result in a loss of face for your "
+        "household. The particulars will determine the specifics, but you should expect "
+        "something like the following:"
+        "\n• The first failure will likely result in a Bad Reputation for yourself."
+        "\n• The second failure will likely result in something like a Bad Reputation for "
+        "the entire party. (Sadly, one's actions do tend to reflect on their companions.)"
+        "\n• Further cases may involve more severe consequences, as circumstances warrant.",
     ),
     Disadvantage(
         "family_reckoning_venomous_sting",
         "Family Reckoning: Venomous Sting",
         5,
-        "Your family's actions during the Wasp clan's founding are remembered unfavorably. "
-        "Your Rank is considered 2.0 lower, and the Rank of your entire party is considered "
-        "1.0 lower when dealing with those who know this history.",
+        _FAMILY_RECKONING_INTRO
+        + "\n\n"
+        "If a PC takes the Family Reckoning: Venomous Sting disadvantage:"
+        "\n• Their own extended family member who was present is known to have acted "
+        "questionably and have personally contributed for things being so messy. NPCs may "
+        "direct their disapproval towards you personally and demand to know whether you "
+        "approve of the actions of your kin."
+        "\n• This unfortunate event, in general, is a bit more shameful for the Wasp, and "
+        "NPCs are more likely to be sympathetic towards your enemies if and when they come "
+        "for their revenge."
+        "\n• Your own Rank is considered 2.0 lower, and the Rank of every other member of "
+        "your party is considered 1.0 lower."
+        "\n\n"
+        + _FAMILY_RECKONING_OUTRO,
     ),
     Disadvantage(
         "imperial_disdain",
         "Imperial Disdain",
         2,
-        "You do not gain Recognition bonuses from bragging when dealing with those serving in "
-        "Imperial posts. Additionally, the Rank of your entire party is considered 1.0 lower "
-        "when dealing with Imperial post holders.",
+        "You've acquired a reputation as a troublemaker due to some past bounty collections "
+        "which caused headaches for various Imperial magistrates."
+        "\n• You gain no Recognition bonuses to your bragging rolls in the eyes of anyone "
+        "with an Imperial post."
+        "\n• Anyone with an Imperial post treats everyone in your party as having 1.0 less "
+        "Rank.",
     ),
     Disadvantage(
         "lion_enmity",
         "Lion Enmity",
         4,
-        "You have earned the enmity of the Lion clan. You suffer a -10 penalty to all rolls "
-        "when dealing with the Zenji house, and a -5 penalty with other Matsu families.",
+        "Due to deeds performed while pursuing one or more bounties on Lion clan samurai, "
+        "you are considered a hated enemy of the Zenji house which borders the Wasp clan. "
+        "Your actions may or may not have been perfectly legitimate, but the Matsu consider "
+        "you to have acted disgracefully. For those who know of your past (mis)-deeds:"
+        "\n• The open and contested rolls of everyone in the party are considered 10 lower "
+        "in the eyes of anyone from the Zenji house."
+        "\n• The open and contested rolls of everyone in the party are considered 5 lower "
+        "in the eyes of anyone from a different house of the Matsu family.",
     ),
     Disadvantage(
         "peasantborn",
         "Peasantborn",
         2,
-        "You are never considered to have peer standing with samurai-born characters. You face "
-        "restrictions on dueling, making arrests, and initiating violence against samurai.",
+        "In his years as a ronin serving as an Imperial bounty hunter, Tsuruchi accumulated "
+        "many peasant allies and contacts. Wave men helping him collect bounties, "
+        "informants directing him to sheltered fugitives, and eventually mercenaries who "
+        "fought alongside him to retake Hachinaga Keep. At the founding of the Wasp clan, "
+        "Tsuruchi invoked his authority as daimyo to elevate many of these peasants to the "
+        "samurai caste."
+        "\n\n"
+        "You are the child of one of those distinguished peasants who proved themselves "
+        "worthy, though you had already been born when this occurred. While you carry the "
+        "full legal rights and privileges accorded to a samurai of your legal rank, anytime "
+        "a government official must compare the merits of two people of accordant "
+        "standing, you will never be considered to be of peer standing with any "
+        "samurai-born person. See the Doctrine of Three Steps for a full explanation, but "
+        "this basically means:"
+        "\n• Even proper challenges to a duel may be dismissed."
+        "\n• You cannot personally arrest or detain a suspect in an investigation (though "
+        "you may assist others who are doing so)."
+        "\n• You may not be the first one to act in violence when confronting a fugitive "
+        "(though you may defend yourself and participate once a battle has begun).",
     ),
     Disadvantage(
         "scorpion_advocate",
         "Scorpion Advocate",
         2,
-        "A Scorpion contact has leverage over you and periodically directs you to thwart Wasp "
-        "bounty hunters who are acting dishonorably or outside the bounds of their authority.",
+        "The Scorpion clan has strong opinions about the developing norms surrounding Wasp "
+        "bounty hunters. Specifically, they strongly prefer that the Wasp remain honest and "
+        "unflinchingly focused on pursuing justice, rather than stooping to dishonorable "
+        "tactics such as using the law to harass the political enemies of the wealthy and "
+        "powerful."
+        "\n\n"
+        "Some consider this a surprising point of contention for the famously underhanded "
+        "Scorpion clan. However, some have noted that the Scorpion already have their own "
+        "specialists who enact vengeance against their clan's enemies, while they often "
+        "lack the means to openly pursue legitimate grievances against those who have "
+        "wronged them. Thus, while the Scorpion clan's encouragement for the Wasp to "
+        "remain righteous appears quite sincere, a cynic might consider it to be motivated "
+        "more by self-interest than their sense of honor."
+        "\n\n"
+        "Regardless, your character has a strong connection with the ancestral Scorpion "
+        "cousins of the Shin lineage, especially in the neighboring Kyo house. Those "
+        "contacts will occasionally direct you to thwart the actions of one of your fellow "
+        "Wasp bounty hunters whose past and planned actions are particularly egregious. "
+        "Failing to do so will not result in any personal loss of face for you, but such "
+        "requests are the \"last chance\" given before the Scorpion take matters into "
+        "their own hands, which may result in embarrassment for the Wasp clan as a whole "
+        "throughout the region.",
     ),
 ]
 

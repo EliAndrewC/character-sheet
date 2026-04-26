@@ -290,6 +290,18 @@ class TestSkillSynergies:
         joined = result.tooltip
         assert "+15 for blending in" in joined
 
+    def test_history_boosts_heraldry_only_for_non_individuals(self):
+        """History→Heraldry is L7R-conditional: the free raises apply only
+        to questions about places, families, and institutions - not to
+        identifying specific individuals. So the synergy lives in
+        tooltip_lines as a conditional note and does NOT inflate
+        flat_bonus."""
+        data = make_character_data(skills={"heraldry": 1, "history": 3})
+        result = compute_skill_roll("heraldry", data)
+        assert result.flat_bonus == 0
+        joined = result.tooltip
+        assert "+15 for non-individuals" in joined
+
 
 class TestHigherPurpose:
     def test_higher_purpose_bonus_on_selected_skill(self):

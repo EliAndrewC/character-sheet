@@ -394,12 +394,19 @@ def build_skill_formula(
             if source_rank > 0:
                 amount = source_rank * per_rank * FREE_RAISE_VALUE
                 # Acting → Sneaking is conditional (blending into a crowd
-                # only), so it surfaces as an alternatives row that the
-                # roll-result modal renders as an alternate-total scenario
-                # rather than baking into the unconditional flat bonus.
+                # only); History → Heraldry is conditional (places, families,
+                # and institutions only - not specific individuals). Both
+                # surface as alternatives rows that the roll-result modal
+                # renders as alternate-total scenarios rather than baking
+                # into the unconditional flat bonus.
                 if skill_id == "sneaking" and source_id == "acting":
                     formula.alternatives.append({
                         "label": "when blending into a crowd",
+                        "extra_flat": amount,
+                    })
+                elif skill_id == "heraldry" and source_id == "history":
+                    formula.alternatives.append({
+                        "label": "for places and families and institutions",
                         "extra_flat": amount,
                     })
                 else:
