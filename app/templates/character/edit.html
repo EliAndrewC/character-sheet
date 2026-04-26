@@ -1029,7 +1029,7 @@
                                    class="rounded text-accent">
                             <span>{{ adv.name }}</span>
                             <span class="text-xs text-ink/50 ml-auto">{{ adv.xp_cost }} XP</span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
+                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
                                  x-text='exclusionReason("{{ aid }}") || {{ adv.description|tojson }}'>
                                 {{ adv.description }}
                             </div>
@@ -1049,7 +1049,7 @@
                                    class="rounded text-accent">
                             <span>{{ dis.name }}</span>
                             <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs"
+                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
                                  x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
                                 {{ dis.description }}
                             </div>

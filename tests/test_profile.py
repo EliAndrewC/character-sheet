@@ -37,6 +37,27 @@ class TestProfilePage:
         resp = client.get("/profile")
         assert "Other Player" in resp.text
 
+    def test_profile_lists_other_users_alphabetically(self, client):
+        """Character Edit Access should list players in alphabetical
+        order by their displayed name (case-insensitive), so the list
+        reads in the same order as the labels next to each checkbox."""
+        _seed_user(client, "183026066498125825", "self", "Self")
+        _seed_user(client, "111", "zeb", "zebulon")
+        _seed_user(client, "222", "alice", "Alice")
+        _seed_user(client, "333", "bob_d", "bob")
+        # No display_name => falls back to discord_name. Place between
+        # Alice and bob alphabetically.
+        _seed_user(client, "444", "amir", "")
+        resp = client.get("/profile")
+        assert resp.status_code == 200
+        body = resp.text
+        # All four names appear, in this order.
+        positions = [body.find(label) for label in ("Alice", "amir", "bob", "zebulon")]
+        assert all(p >= 0 for p in positions), positions
+        assert positions == sorted(positions), (
+            f"expected alphabetical order, got positions {positions}"
+        )
+
     def test_profile_shows_admin_badge(self, client):
         # The test user IS the admin (from conftest env)
         _seed_user(client, "183026066498125825", "testplayer")

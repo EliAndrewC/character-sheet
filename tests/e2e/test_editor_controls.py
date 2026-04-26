@@ -442,6 +442,25 @@ def test_campaign_disadvantage_toggles_xp(page, live_server_url):
     assert budget_after > budget_before
 
 
+def test_campaign_advantage_tooltip_has_full_rules_text(page, live_server_url):
+    """Streetwise tooltip renders the full campaign rules text, not the old summary."""
+    _go_to_editor(page, live_server_url)
+    tip = page.locator('label:has(input[name="camp_adv_streetwise"]) .tooltip-content')
+    text = (tip.text_content() or "").lower()
+    assert "before being assigned to your current post" in text
+    assert "etiquette, law, intimidation, and underworld" in text
+
+
+def test_campaign_disadvantage_tooltip_has_full_rules_text(page, live_server_url):
+    """Crane-indebted tooltip renders the full campaign rules text, including the bullets."""
+    _go_to_editor(page, live_server_url)
+    tip = page.locator('label:has(input[name="camp_dis_crane_indebted"]) .tooltip-content')
+    text = (tip.text_content() or "").lower()
+    assert "your household owes a great deal to the crane patrons" in text
+    assert "bad reputation" in text
+    assert "•" in text  # bullet character preserved
+
+
 # --- Skill XP costs ---
 
 def test_basic_skill_xp_cost(page, live_server_url):
