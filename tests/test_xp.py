@@ -5,6 +5,7 @@ import pytest
 from app.services.xp import (
     calculate_advantage_xp,
     calculate_disadvantage_xp,
+    calculate_foreign_knack_xp,
     calculate_honor_xp,
     calculate_knack_xp,
     calculate_rank_xp,
@@ -14,6 +15,7 @@ from app.services.xp import (
     calculate_total_xp,
     calculate_xp_breakdown,
     calculate_available_xp,
+    foreign_knack_xp_items,
     validate_character,
 )
 from tests.conftest import make_character_data
@@ -161,6 +163,121 @@ class TestKnackXP:
         knacks = {"double_attack": 2, "feint": 2, "iaijutsu": 2}
         # 3 knacks each 4 XP = 12
         assert calculate_knack_xp(knacks) == 12
+
+
+class TestForeignKnackXP:
+    """Foreign knacks cost a flat 10 XP at rank 1, then standard advanced costs."""
+
+    def test_no_foreign_knacks_zero(self):
+        assert calculate_foreign_knack_xp({}) == 0
+
+    def test_one_foreign_at_rank_1_costs_10(self):
+        assert calculate_foreign_knack_xp({"feint": 1}) == 10
+
+    def test_one_foreign_at_rank_2_costs_14(self):
+        # 10 (premium) + 4 (rank 2)
+        assert calculate_foreign_knack_xp({"feint": 2}) == 14
+
+    def test_one_foreign_at_rank_3_costs_20(self):
+        # 10 + 4 + 6
+        assert calculate_foreign_knack_xp({"feint": 3}) == 20
+
+    def test_one_foreign_at_rank_5_costs_38(self):
+        # 10 + 4 + 6 + 8 + 10
+        assert calculate_foreign_knack_xp({"feint": 5}) == 38
+
+    def test_two_foreign_knacks_independent_premiums(self):
+        assert calculate_foreign_knack_xp({"feint": 1, "athletics": 1}) == 20
+
+    def test_rank_zero_entries_ignored(self):
+        # Editor removes zero-rank entries entirely; defensively, a 0 must
+        # not contribute to the cost if some other code path leaves one in.
+        assert calculate_foreign_knack_xp({"feint": 0}) == 0
+
+    def test_xp_items_first_row_is_premium(self):
+        items = foreign_knack_xp_items({"feint": 3})
+        assert len(items) == 3
+        assert items[0] == {"xp": 10, "label": "Feint", "from_val": 0, "to_val": 1}
+        assert items[1] == {"xp": 4, "label": "Feint", "from_val": 1, "to_val": 2}
+        assert items[2] == {"xp": 6, "label": "Feint", "from_val": 2, "to_val": 3}
+
+    def test_breakdown_section_present_and_summed(self):
+        char = {
+            "school": "akodo_bushi",
+            "school_ring_choice": "Water",
+            "rings": {"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+            "knacks": {"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            "foreign_knacks": {"athletics": 2},
+        }
+        breakdown = calculate_xp_breakdown(char)
+        assert "foreign_knacks" in breakdown
+        assert breakdown["foreign_knacks"]["total"] == 14
+        assert breakdown["foreign_knacks"]["label"] == "Foreign school knacks"
+
+    def test_total_xp_includes_foreign(self):
+        char = {
+            "school": "akodo_bushi",
+            "school_ring_choice": "Water",
+            "rings": {"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+            "knacks": {"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            "foreign_knacks": {"athletics": 1},
+        }
+        result = calculate_total_xp(char)
+        assert result["foreign_knacks"] == 10
+        # Grand total includes the 10 XP foreign premium.
+        assert result["total"] >= 10
+
+    def test_breakdown_empty_when_no_foreign(self):
+        char = make_character_data()
+        breakdown = calculate_xp_breakdown(char)
+        assert breakdown["foreign_knacks"]["total"] == 0
+        assert breakdown["foreign_knacks"]["rows"] == []
+
+
+class TestForeignKnackValidation:
+    """Validator rules for foreign_knacks."""
+
+    def _ok_akodo(self, **overrides):
+        return make_character_data(**overrides)
+
+    def test_valid_foreign_knack_passes(self):
+        char = self._ok_akodo(foreign_knacks={"athletics": 1})
+        errors = validate_character(char)
+        assert all("foreign" not in e.lower() for e in errors)
+
+    def test_supernatural_foreign_rejected(self):
+        char = self._ok_akodo(foreign_knacks={"commune": 1})
+        errors = validate_character(char)
+        assert any("commune" in e and "supernatural" in e for e in errors)
+
+    def test_unknown_foreign_id_rejected(self):
+        char = self._ok_akodo(foreign_knacks={"not_a_knack": 1})
+        errors = validate_character(char)
+        assert any("Unknown foreign knack" in e for e in errors)
+
+    def test_own_school_knack_as_foreign_rejected(self):
+        # Akodo's school knacks include feint; rejecting feint here keeps
+        # native vs foreign mutually exclusive.
+        char = self._ok_akodo(foreign_knacks={"feint": 1})
+        errors = validate_character(char)
+        assert any("feint" in e and "school's knack list" in e for e in errors)
+
+    def test_foreign_rank_below_one_rejected(self):
+        char = self._ok_akodo(foreign_knacks={"athletics": 0})
+        errors = validate_character(char)
+        assert any("must be at least 1" in e for e in errors)
+
+    def test_foreign_rank_above_max_rejected(self):
+        char = self._ok_akodo(foreign_knacks={"athletics": 6})
+        errors = validate_character(char)
+        assert any("exceeds maximum" in e and "athletics" in e for e in errors)
+
+    def test_unknown_native_knacks_check_unaffected_by_foreign(self):
+        # Foreign knacks must not feed into the "Unknown knacks for {school}"
+        # check on native knacks - that error stays scoped to the native dict.
+        char = self._ok_akodo(foreign_knacks={"athletics": 1, "commune": 1})
+        errors = validate_character(char)
+        assert not any("Unknown knacks for Akodo" in e for e in errors)
 
 
 class TestHonorXP:

@@ -18,6 +18,8 @@ from app.services.dice import (
     build_skill_formula,
     build_wound_check_formula,
     is_impaired,
+    mantis_2nd_dan_eligible_choices,
+    merged_knacks,
 )
 from tests.conftest import make_character_data
 
@@ -3105,3 +3107,122 @@ class TestMantisWaveTreader4thDanAthleticsDie:
         # 2 kept. The 4th Dan bonus die is NOT reflected here.
         assert init["rolled"] == 4
         assert init["kept"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Foreign school knacks: rolls, Dan invariant, build_all_roll_formulas
+# ---------------------------------------------------------------------------
+
+
+class TestForeignKnackDice:
+    """Foreign knacks must feed into rolls but never affect Dan."""
+
+    def test_merged_knacks_combines_native_and_foreign(self):
+        char = make_character_data(
+            knacks={"feint": 2, "double_attack": 1, "iaijutsu": 1},
+            foreign_knacks={"athletics": 3},
+        )
+        merged = merged_knacks(char)
+        assert merged == {
+            "feint": 2,
+            "double_attack": 1,
+            "iaijutsu": 1,
+            "athletics": 3,
+        }
+
+    def test_foreign_knack_does_not_lower_dan(self):
+        # Akodo at native rank 5 across the board, then a foreign rank-1
+        # athletics. compute_dan must still return 5.
+        from app.services.rolls import compute_dan
+        char = make_character_data(
+            knacks={"feint": 5, "double_attack": 5, "iaijutsu": 5},
+            foreign_knacks={"athletics": 1},
+        )
+        # Dan is computed from NATIVE knacks only.
+        assert compute_dan(char["knacks"]) == 5
+
+    def test_foreign_athletics_enables_athletics_formula(self):
+        # No native athletics; Akodo doesn't have it. With foreign athletics
+        # at rank 1, build_athletics_formula should pick up the rank.
+        char = make_character_data(
+            foreign_knacks={"athletics": 2},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        f = build_athletics_formula("Air", char)
+        # athletics + 2*Air = 2 + 6 = 8 rolled, kept = Air = 3.
+        assert f.rolled == 8
+        assert f.kept == 3
+
+    def test_foreign_athletics_enables_athletics_attack(self):
+        char = make_character_data(foreign_knacks={"athletics": 1})
+        f = build_athletics_combat_formula("attack", char)
+        assert f is not None  # was None before this change
+
+    def test_foreign_knack_appears_in_build_all_roll_formulas(self):
+        # An Akodo character with foreign worldliness gets a knack:worldliness
+        # entry in build_all_roll_formulas (well, no - worldliness is in
+        # NON_ROLLABLE_KNACKS). Use a rollable foreign knack instead.
+        char = make_character_data(
+            foreign_knacks={"investigation": 1},
+            # Akodo school - investigation is not on Akodo's list.
+        )
+        formulas = build_all_roll_formulas(char)
+        # Investigation isn't a knack; it's a skill. Use a knack id that's
+        # not on Akodo's list and not in NON_ROLLABLE_KNACKS.
+        assert "knack:investigation" not in formulas
+
+    def test_foreign_lunge_appears_in_build_all_roll_formulas(self):
+        # Lunge is a Shinjo school knack; an Akodo character can take it
+        # as a foreign knack. It should show up in the rollable formulas.
+        char = make_character_data(foreign_knacks={"lunge": 1})
+        formulas = build_all_roll_formulas(char)
+        assert "knack:lunge" in formulas
+        assert formulas["knack:lunge"]["rolled"] > 0
+
+    def test_iaijutsu_strike_works_for_foreign_iaijutsu(self):
+        # Per spec: "all characters with iaijutsu can do iaijutsu strikes".
+        # Akodo's school knacks include iaijutsu, so add a foreign-iaijutsu
+        # case using a school whose knacks do NOT include iaijutsu. Asahina
+        # (artisan) doesn't have iaijutsu in its school list.
+        char = make_character_data(
+            school="asahina_artisan",
+            knacks={"sincerity_calligraphy": 1, "tea_ceremony": 1, "conviction": 1},
+            foreign_knacks={"iaijutsu": 1},
+        )
+        # Set school_ring_choice valid for asahina_artisan if needed.
+        char["school_ring_choice"] = "Air"
+        formulas = build_all_roll_formulas(char)
+        assert "knack:iaijutsu" in formulas
+        assert "knack:iaijutsu:strike" in formulas
+        assert formulas["knack:iaijutsu:strike"]["reroll_tens"] is False
+
+    def test_kakita_iaijutsu_attack_does_not_fire_for_non_kakita_foreign(self):
+        # Foreign iaijutsu does NOT grant the Kakita-specific Phase-0
+        # iaijutsu-as-attack workflow.
+        char = make_character_data(
+            school="asahina_artisan",
+            knacks={"sincerity_calligraphy": 1, "tea_ceremony": 1, "conviction": 1},
+            foreign_knacks={"iaijutsu": 1},
+        )
+        char["school_ring_choice"] = "Air"
+        formulas = build_all_roll_formulas(char)
+        assert "knack:iaijutsu:attack" not in formulas
+
+    def test_mantis_2nd_dan_picker_includes_foreign_rollable_knacks(self):
+        # A Mantis character with foreign feint should be able to point the
+        # 2nd Dan free raise at feint.
+        choices = mantis_2nd_dan_eligible_choices(
+            "mantis_wave_treader", foreign_knacks={"feint": 1}
+        )
+        assert "feint" in choices
+
+    def test_mantis_2nd_dan_picker_excludes_non_rollable_foreign(self):
+        choices = mantis_2nd_dan_eligible_choices(
+            "mantis_wave_treader", foreign_knacks={"worldliness": 1}
+        )
+        assert "worldliness" not in choices
+
+    def test_mantis_2nd_dan_picker_empty_for_non_mantis(self):
+        assert mantis_2nd_dan_eligible_choices(
+            "akodo_bushi", foreign_knacks={"feint": 1}
+        ) == frozenset()

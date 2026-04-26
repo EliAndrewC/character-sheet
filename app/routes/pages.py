@@ -20,6 +20,7 @@ from app.game_data import (
     SKILLS,
     SCHOOL_KNACKS,
     SPELLS_BY_ELEMENT,
+    SUPERNATURAL_KNACK_IDS,
     Ring,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
@@ -138,6 +139,16 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             knack_data = SCHOOL_KNACKS.get(knack_id)
             rank = character.knacks.get(knack_id, 1) if character.knacks else 1
             char_knacks[knack_id] = {"data": knack_data, "rank": rank}
+
+    # Foreign school knacks the character has acquired separately. Listed
+    # below the native ones on the sheet, with distinct styling and a per-knack
+    # note in the rules-text disclosure.
+    char_foreign_knacks = {}
+    for knack_id, rank in (character.foreign_knacks or {}).items():
+        knack_data = SCHOOL_KNACKS.get(knack_id)
+        if knack_data is None:
+            continue
+        char_foreign_knacks[knack_id] = {"data": knack_data, "rank": rank}
 
     # Dan = lowest school knack
     knack_ranks = [char_knacks[k]["rank"] for k in char_knacks] if char_knacks else [0]
@@ -328,11 +339,13 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     # Spendable knacks: conviction, otherworldliness, worldliness.
     # Conviction and otherworldliness both give 2X points per day (X = rank);
     # worldliness pool is X. Conviction is marked per_day so the tracker
-    # shows a dedicated "reset" button.
+    # shows a dedicated "reset" button. Foreign-knack copies grant the same
+    # pool ("if you take Worldliness, you get the Worldliness pool").
     for knack_id in ("conviction", "otherworldliness", "worldliness"):
-        if knack_id in char_knacks:
-            knack_rank = char_knacks[knack_id]["rank"]
-            knack_name = char_knacks[knack_id]["data"].name
+        info = char_knacks.get(knack_id) or char_foreign_knacks.get(knack_id)
+        if info:
+            knack_rank = info["rank"]
+            knack_name = info["data"].name
             pool_max = knack_rank * 2 if knack_id in ("otherworldliness", "conviction") else knack_rank
             entry = {
                 "id": knack_id,
@@ -370,7 +383,12 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     else:
         void_max = min(ring_vals)
         void_spend_cap = void_max
-    worldliness_max = char_knacks["worldliness"]["rank"] if "worldliness" in char_knacks else 0
+    if "worldliness" in char_knacks:
+        worldliness_max = char_knacks["worldliness"]["rank"]
+    elif "worldliness" in char_foreign_knacks:
+        worldliness_max = char_foreign_knacks["worldliness"]["rank"]
+    else:
+        worldliness_max = 0
     # Mirumoto 5th Dan: VP provides +10 on combat rolls (in addition to +1k1)
     mirumoto_5th_dan_bonus = 10 if character.school == "mirumoto_bushi" and dan >= 5 else 0
     # Akodo 4th Dan: VP on wound checks also gives a free raise (+5 each)
@@ -711,6 +729,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "campaign_disadvantages": CAMPAIGN_DISADVANTAGES,
             "school_knacks": SCHOOL_KNACKS,
             "char_knacks": char_knacks,
+            "char_foreign_knacks": char_foreign_knacks,
             "dan": dan,
             "spells_by_element": SPELLS_BY_ELEMENT,
             "effective": effective,
@@ -809,6 +828,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "disadvantages": DISADVANTAGES,
             "school_knacks": SCHOOL_KNACKS,
             "knacks": knacks,
+            "supernatural_knack_ids": sorted(SUPERNATURAL_KNACK_IDS),
             "technique_bonuses": SCHOOL_TECHNIQUE_BONUSES,
             "campaign_advantages": CAMPAIGN_ADVANTAGES,
             "campaign_disadvantages": CAMPAIGN_DISADVANTAGES,

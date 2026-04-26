@@ -119,6 +119,7 @@ def _build_overview_rows(
     dan: int,
     effective: Any,
     skill_rolls: dict,
+    char_foreign_knacks: Optional[dict] = None,
 ) -> List[List[dict]]:
     """Build rows for the main 'Character Sheet' tab."""
     rows: List[List[dict]] = []
@@ -226,6 +227,23 @@ def _build_overview_rows(
                 _str_cell(info["data"].ring or "", **bg),
                 _num_cell(info["rank"], **bg),
             ])
+
+    # --- Foreign School Knacks (only if any) ---
+    if char_foreign_knacks:
+        rows.append([])
+        rows.append([
+            _str_cell("Foreign School Knack", **_header_fmt()),
+            _str_cell("Ring", **_header_fmt()),
+            _str_cell("Rank", **_header_fmt()),
+        ])
+        for i, (kid, info) in enumerate(char_foreign_knacks.items()):
+            if info.get("data"):
+                bg = _row_bg(i)
+                rows.append([
+                    _str_cell(info["data"].name, **bg),
+                    _str_cell(info["data"].ring or "", **bg),
+                    _num_cell(info["rank"], **bg),
+                ])
 
     rows.append([])
 
@@ -403,11 +421,19 @@ def _build_xp_rows(
 
     section_keys = [
         "rings", "school_knacks", "skills", "combat_skills",
-        "advantages", "honor_rank_recognition", "disadvantages",
+        "advantages", "honor_rank_recognition", "foreign_knacks",
+        "disadvantages",
     ]
 
     for key in section_keys:
-        section = xp_breakdown[key]
+        section = xp_breakdown.get(key)
+        if section is None:
+            # Older callers may pass a breakdown that predates this section.
+            continue
+        # Foreign knacks: skip the section entirely when the character has
+        # none, mirroring the View Sheet's conditional rendering.
+        if key == "foreign_knacks" and not section.get("rows"):
+            continue
         rows.append([
             _str_cell(section["label"], **_subheader_fmt()),
             _blank_cell(**_subheader_fmt()),
@@ -622,6 +648,7 @@ def create_spreadsheet(
     effective,
     skill_rolls: dict,
     existing_sheet_id: Optional[str] = None,
+    char_foreign_knacks: Optional[dict] = None,
 ) -> str:
     """Create or update a formatted Google Sheet and return its URL.
 
@@ -651,6 +678,7 @@ def create_spreadsheet(
     # Build row data for each tab
     overview_rows = _build_overview_rows(
         character, char_dict, school, char_knacks, dan, effective, skill_rolls,
+        char_foreign_knacks=char_foreign_knacks,
     )
     skills_rows = _build_skills_rows(char_dict, skill_rolls)
     adv_rows = _build_advantages_rows(char_dict, character.advantage_details or {})

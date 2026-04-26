@@ -187,6 +187,13 @@ async def google_callback(
             rank = character.knacks.get(knack_id, 1) if character.knacks else 1
             char_knacks[knack_id] = {"data": knack_data, "rank": rank}
 
+    char_foreign_knacks = {}
+    for knack_id, rank in (character.foreign_knacks or {}).items():
+        knack_data = SCHOOL_KNACKS.get(knack_id)
+        if knack_data is None:
+            continue
+        char_foreign_knacks[knack_id] = {"data": knack_data, "rank": rank}
+
     knack_ranks = [char_knacks[k]["rank"] for k in char_knacks] if char_knacks else [0]
     dan = min(knack_ranks) if knack_ranks else 0
 
@@ -205,6 +212,7 @@ async def google_callback(
             access_token, character, char_dict, school, char_knacks,
             dan, xp_breakdown, effective, skill_rolls,
             existing_sheet_id=character.google_sheet_id,
+            char_foreign_knacks=char_foreign_knacks,
         )
     except Exception:
         log.exception("Google Sheets API failed for character %s", char_id)

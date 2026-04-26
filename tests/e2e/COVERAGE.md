@@ -1597,6 +1597,24 @@ Phase 8 runs the full regression suite as the exit gate.
 
 ---
 
+## Foreign School Knacks (edit.html, sheet.html)
+
+- [x] Foreign School Knacks section heading + verbatim description text on edit page → `test_foreign_knacks.py::test_section_visible_on_edit_page`
+- [x] Picker excludes own school's knacks, supernatural knacks, and already-taken → `test_foreign_knacks.py::test_picker_options_exclude_own_school_supernatural_and_taken`
+- [x] Picker default is the disabled "Select another school knack" placeholder → `test_foreign_knacks.py::test_picker_placeholder_is_default_and_disabled`
+- [x] "Never mind" option dismisses the picker without persisting any change → `test_foreign_knacks.py::test_never_mind_dismisses_without_change`
+- [x] Selecting a knack adds the row at rank 1 with +/- toggle visible → `test_foreign_knacks.py::test_pick_adds_row_at_rank_1`
+- [x] Decrementing rank-1 removes the foreign-knack entry entirely → `test_foreign_knacks.py::test_decrement_to_zero_removes_row`
+- [x] Editor's gross XP increases by 10 on the rank-1 premium → `test_foreign_knacks.py::test_xp_summary_reflects_10_xp_premium`
+- [x] Sheet's Foreign-knacks XP card hidden when empty, appears at value 10 after add → `test_foreign_knacks.py::test_xp_summary_card_appears_only_when_present`
+- [x] Expanding the Foreign-knacks XP card lists the 10 XP 0->1 premium row → `test_foreign_knacks.py::test_xp_card_expansion_shows_premium_row`
+- [x] Sheet renders foreign knacks under their own heading with 'foreign' badge → `test_foreign_knacks.py::test_foreign_knack_listed_distinctly_on_sheet`
+- [x] Foreign-knack rules-text disclosure shows the 'foreign / learned outside your school' preface → `test_foreign_knacks.py::test_foreign_knack_tooltip_includes_foreign_note`
+- [x] Foreign athletics rank 1 enables athletics roll buttons on the sheet → `test_foreign_knacks.py::test_foreign_athletics_enables_athletics_roll_on_sheet`
+- [x] Foreign worldliness grants the per-adventure Worldliness pool → `test_foreign_knacks.py::test_foreign_worldliness_grants_pool`
+
+---
+
 ## Coverage Summary
 
 **Covered:** ~280 test functions across 32 test files

@@ -134,6 +134,11 @@ class Character(Base):
     # Variable collections as JSON
     skills: Mapped[Optional[Dict[str, int]]] = mapped_column(JSON, default=dict)
     knacks: Mapped[Optional[Dict[str, int]]] = mapped_column(JSON, default=dict)
+    # Non-supernatural school knacks purchased from OTHER schools. The 0->1
+    # raise costs a flat 10 XP premium; rank 2..5 cost the normal 2 * new_rank.
+    # Stored separately from `knacks` so that compute_dan() and the
+    # "school knacks must match the school" validator stay correct.
+    foreign_knacks: Mapped[Optional[Dict[str, int]]] = mapped_column(JSON, default=dict)
     advantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
     disadvantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
     campaign_advantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
@@ -337,6 +342,7 @@ class Character(Base):
             "parry": self.parry,
             "skills": self.skills or {},
             "knacks": self.knacks or {},
+            "foreign_knacks": self.foreign_knacks or {},
             "advantages": self.advantages or [],
             "disadvantages": self.disadvantages or [],
             "campaign_advantages": self.campaign_advantages or [],
@@ -388,6 +394,7 @@ class Character(Base):
             parry=data.get("parry", 1),
             skills=data.get("skills", {}),
             knacks=data.get("knacks", {}),
+            foreign_knacks=data.get("foreign_knacks", {}),
             advantages=data.get("advantages", []),
             disadvantages=data.get("disadvantages", []),
             campaign_advantages=data.get("campaign_advantages", []),

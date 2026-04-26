@@ -74,13 +74,16 @@ NON_ROLLABLE_KNACKS = frozenset({
 _MANTIS_2ND_DAN_COMBAT_ROLLS = frozenset({"attack", "damage", "parry", "wound_check"})
 
 
-def mantis_2nd_dan_eligible_choices(school_id: str) -> frozenset:
+def mantis_2nd_dan_eligible_choices(
+    school_id: str, foreign_knacks: Optional[Dict[str, int]] = None,
+) -> frozenset:
     """Return the set of valid roll-type ids the Mantis 2nd Dan free raise
     may target for a character of the given school.
 
-    Includes: all SKILLS ids, the school's rollable knacks (NON_ROLLABLE_KNACKS
-    filtered out - so no worldliness), and the combat rolls in
-    _MANTIS_2ND_DAN_COMBAT_ROLLS. Initiative is never eligible.
+    Includes: all SKILLS ids, the school's rollable knacks AND any rollable
+    foreign school knacks (NON_ROLLABLE_KNACKS filtered out - so no
+    worldliness), and the combat rolls in _MANTIS_2ND_DAN_COMBAT_ROLLS.
+    Initiative is never eligible.
 
     Returns an empty frozenset for non-Mantis schools.
     """
@@ -92,7 +95,23 @@ def mantis_2nd_dan_eligible_choices(school_id: str) -> frozenset:
         for kid in school.school_knacks:
             if kid not in NON_ROLLABLE_KNACKS:
                 knack_ids.add(kid)
+    for kid in (foreign_knacks or {}).keys():
+        if kid not in NON_ROLLABLE_KNACKS:
+            knack_ids.add(kid)
     return frozenset(set(SKILLS.keys()) | knack_ids | set(_MANTIS_2ND_DAN_COMBAT_ROLLS))
+
+
+def merged_knacks(character_data: dict) -> Dict[str, int]:
+    """Native + foreign knacks merged for ring/skill-style rank lookups.
+
+    NEVER use this for Dan computation: foreign knacks must not influence Dan.
+    For per-rank lookups (athletics, conviction, worldliness, etc.) and for
+    enumerating which knacks a character can roll (`build_all_roll_formulas`),
+    the merged view is what callers want.
+    """
+    out = dict(character_data.get("foreign_knacks") or {})
+    out.update(character_data.get("knacks") or {})
+    return out
 
 
 @dataclass
@@ -498,8 +517,9 @@ def build_knack_formula(
     if knack_def is None:
         return None
 
-    knacks = character_data.get("knacks", {}) or {}
-    rank = knacks.get(knack_id, 0)
+    native_knacks = character_data.get("knacks", {}) or {}
+    all_knacks = merged_knacks(character_data)
+    rank = all_knacks.get(knack_id, 0)
     if rank <= 0:
         return None
 
@@ -526,7 +546,7 @@ def build_knack_formula(
     ring_val = rings.get(ring_name, 2)
 
     school_id = character_data.get("school", "")
-    dan = compute_dan(knacks) if knacks else 0
+    dan = compute_dan(native_knacks) if native_knacks else 0
 
     # Shugenja 5th Dan: non-Void rings +1 for commune and spellcasting
     if (school_id == "shugenja" and dan >= 5
@@ -543,7 +563,7 @@ def build_knack_formula(
     )
 
     tech_choices = character_data.get("technique_choices") or {}
-    _apply_school_technique_bonus(formula, knack_id, school_id, knacks, tech_choices)
+    _apply_school_technique_bonus(formula, knack_id, school_id, native_knacks, tech_choices)
 
     # Courtier 5th Dan: +Air to all TN and contested rolls
     if school_id == "courtier" and dan >= 5:
@@ -668,8 +688,9 @@ def build_athletics_formula(
         return None
     rings = character_data.get("rings", {})
     ring_val = rings.get(ring_name, 2)
-    knacks = character_data.get("knacks", {}) or {}
-    athletics_rank = knacks.get("athletics", 0)
+    native_knacks = character_data.get("knacks", {}) or {}
+    all_knacks = merged_knacks(character_data)
+    athletics_rank = all_knacks.get("athletics", 0)
 
     formula = RollFormula(
         label=f"Athletics ({ring_name})",
@@ -681,7 +702,7 @@ def build_athletics_formula(
 
     school_id = character_data.get("school", "")
     tech_choices = character_data.get("technique_choices") or {}
-    _apply_school_technique_bonus(formula, "athletics", school_id, knacks, tech_choices)
+    _apply_school_technique_bonus(formula, "athletics", school_id, native_knacks, tech_choices)
 
     _finalize_caps(formula)
     return formula
@@ -705,8 +726,9 @@ def build_athletics_combat_formula(
     """
     if which not in ("attack", "parry"):
         return None
-    knacks = character_data.get("knacks", {}) or {}
-    athletics_rank = knacks.get("athletics", 0)
+    native_knacks = character_data.get("knacks", {}) or {}
+    all_knacks = merged_knacks(character_data)
+    athletics_rank = all_knacks.get("athletics", 0)
     if athletics_rank <= 0:
         return None
     ring_name = "Fire" if which == "attack" else "Air"
@@ -723,10 +745,10 @@ def build_athletics_combat_formula(
 
     school_id = character_data.get("school", "")
     tech_choices = character_data.get("technique_choices") or {}
-    _apply_school_technique_bonus(formula, "athletics", school_id, knacks, tech_choices)
-    _apply_school_technique_bonus(formula, which, school_id, knacks, tech_choices)
+    _apply_school_technique_bonus(formula, "athletics", school_id, native_knacks, tech_choices)
+    _apply_school_technique_bonus(formula, which, school_id, native_knacks, tech_choices)
 
-    dan = compute_dan(knacks) if knacks else 0
+    dan = compute_dan(native_knacks) if native_knacks else 0
 
     if school_id == "kitsuki_magistrate" and which == "attack":
         water_val = rings.get("Water", 2)
@@ -1128,20 +1150,29 @@ def build_all_roll_formulas(
     # (Double Attack, Counterattack, Lunge, Feint) even though the sheet
     # displays those knacks at rank 1.
     school = SCHOOLS.get(school_id)
+    foreign_knacks_data = character_data.get("foreign_knacks") or {}
     knack_char_data = character_data
+    rollable_knack_ids: List[str] = []
     if school is not None:
         normalized_knacks = dict(character_data.get("knacks") or {})
         for knack_id in school.school_knacks:
             if knack_id not in normalized_knacks:
                 normalized_knacks[knack_id] = 1
         knack_char_data = {**character_data, "knacks": normalized_knacks}
-        for knack_id in school.school_knacks:
-            if knack_id in NON_ROLLABLE_KNACKS:
-                continue
-            formula = build_knack_formula(knack_id, knack_char_data)
-            if formula is not None:
-                d = _annotate_third_dan(f"knack:{knack_id}", formula.to_dict())
-                out[f"knack:{knack_id}"] = _annotate_attack_type(f"knack:{knack_id}", d)
+        rollable_knack_ids.extend(school.school_knacks)
+    # Append foreign knacks (every non-supernatural knack is foreign-eligible
+    # and thus also rollable when present at rank >= 1). De-dupe defensively
+    # in case the same id ends up in both columns through a future code path.
+    for kid in foreign_knacks_data.keys():
+        if kid not in rollable_knack_ids:
+            rollable_knack_ids.append(kid)
+    for knack_id in rollable_knack_ids:
+        if knack_id in NON_ROLLABLE_KNACKS:
+            continue
+        formula = build_knack_formula(knack_id, knack_char_data)
+        if formula is not None:
+            d = _annotate_third_dan(f"knack:{knack_id}", formula.to_dict())
+            out[f"knack:{knack_id}"] = _annotate_attack_type(f"knack:{knack_id}", d)
 
     # Iaijutsu knack: stamp damage metadata so the duel modal can use it.
     # Iaijutsu is NOT in ATTACK_TYPE_KEYS (it uses the roll menu, not
@@ -1159,8 +1190,10 @@ def build_all_roll_formulas(
         out["knack:iaijutsu"]["damage_extra_kept"] = damage_extra_kept
         out["knack:iaijutsu"]["damage_bonus_sources"] = iai_sources
 
-    # Iaijutsu strike variant (10s never rerolled during the strike)
-    if school is not None and "iaijutsu" in school.school_knacks:
+    # Iaijutsu strike variant (10s never rerolled during the strike). Anyone
+    # with iaijutsu - native or foreign - can perform the strike; only the
+    # Kakita-specific iaijutsu-as-attack workflow below stays school-gated.
+    if "knack:iaijutsu" in out:
         base_formula = build_knack_formula("iaijutsu", knack_char_data)
         if base_formula is not None:
             strike = base_formula.to_dict()
