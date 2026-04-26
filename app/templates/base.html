@@ -316,9 +316,14 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
             </button>
-            {# Nav items: horizontal on sm+, vertical dropdown on mobile #}
-            <div :class="navOpen ? 'flex' : 'hidden'"
-                 class="sm:flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3
+            {# Nav items: horizontal on sm+, vertical dropdown on mobile.
+               `hidden sm:flex` is the static default so the dropdown stays
+               collapsed during the pre-Alpine FOUC window on mobile (sm:flex
+               wins on desktop because Tailwind orders responsive variants
+               after unprefixed). When navOpen flips to true, `!flex` (display:
+               flex !important) overrides the `hidden`. #}
+            <div :class="{'!flex': navOpen}"
+                 class="hidden sm:flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3
                         absolute sm:static top-full right-0 bg-ink sm:bg-transparent
                         p-4 sm:p-0 rounded-b-lg sm:rounded-none shadow-lg sm:shadow-none z-50 min-w-[160px]">
                 {% if request.state.user %}
