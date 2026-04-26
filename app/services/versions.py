@@ -98,6 +98,26 @@ def compute_diff_summary(old_state: Dict[str, Any], new_state: Dict[str, Any]) -
         ordinal = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th"}.get(new_dan, f"{new_dan}th")
         diffs.append(f"Became {ordinal} Dan")
 
+    # Foreign school knacks
+    old_foreign = old_state.get("foreign_knacks", {}) or {}
+    new_foreign = new_state.get("foreign_knacks", {}) or {}
+    all_foreign_ids = set(old_foreign.keys()) | set(new_foreign.keys())
+    for kid in sorted(all_foreign_ids):
+        old_val = old_foreign.get(kid, 0)
+        new_val = new_foreign.get(kid, 0)
+        if old_val == new_val:
+            continue
+        knack_def = SCHOOL_KNACKS.get(kid)
+        name = knack_def.name if knack_def else _label(kid)
+        if old_val == 0:
+            diffs.append(f"Added foreign knack: {name}")
+        elif new_val == 0:
+            diffs.append(f"Removed foreign knack: {name}")
+        else:
+            diffs.append(
+                f"Foreign knack {name} changed from {old_val} to {new_val}"
+            )
+
     # Honor / Rank / Recognition
     for field, label in [("honor", "Honor"), ("rank", "Rank"), ("recognition", "Recognition")]:
         old_val = old_state.get(field, 1.0)

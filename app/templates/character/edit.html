@@ -1097,6 +1097,68 @@
             </div>
         </section>
 
+        <!-- FOREIGN SCHOOL KNACKS -->
+        <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
+                 x-data="{ pickerOpen: false, pickerChoice: '' }">
+            <h2 class="text-xl font-bold mb-4 text-accent">Foreign School Knacks</h2>
+            <p class="text-sm text-ink/70 mb-3">
+                You may purchase non-supernatural school knacks from other schools.
+                Raising a school knack from outside your school from 0 to 1 costs 10 XP,
+                and after that costs the normal amount of twice the value you are
+                raising the knack to.
+            </p>
+
+            <div class="grid gap-3" x-show="Object.keys(foreignKnacks).length > 0" x-cloak>
+                <template x-for="kid in Object.keys(foreignKnacks)" :key="'fk-' + kid">
+                    <div class="flex items-center gap-3"
+                         :data-testid="'foreign-knack-row-' + kid">
+                        <span class="w-28 sm:w-40 shrink-0 text-sm font-medium italic truncate"
+                              x-text="KNACK_NAMES[kid] || kid"></span>
+                        <div class="flex items-center gap-1">
+                            <button type="button"
+                                    @click="decrementForeignKnack(kid)"
+                                    :title="foreignKnackDecrementTitle(kid)"
+                                    :data-testid="'foreign-knack-minus-' + kid"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">-</button>
+                            <span class="w-8 text-center font-bold text-lg" x-text="foreignKnacks[kid]"></span>
+                            <input type="hidden" :name="'foreign_knack_' + kid" :value="foreignKnacks[kid]">
+                            <button type="button"
+                                    @click="foreignKnacks[kid] = Math.min(5, foreignKnacks[kid] + 1)"
+                                    :disabled="foreignKnacks[kid] >= 5"
+                                    :title="foreignKnacks[kid] >= 5 ? '' : 'Raise to ' + (foreignKnacks[kid]+1) + ' (' + ADVANCED_COSTS[foreignKnacks[kid]+1] + ' XP)'"
+                                    :data-testid="'foreign-knack-plus-' + kid"
+                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                        </div>
+                        <span class="text-xs text-ink/50" x-text="foreignKnackTotalCost(foreignKnacks[kid]) + ' XP'"></span>
+                    </div>
+                </template>
+            </div>
+
+            <div class="mt-4">
+                <button type="button"
+                        x-show="!pickerOpen"
+                        @click="pickerOpen = true; pickerChoice = ''"
+                        :disabled="eligibleForeignKnacks().length === 0"
+                        :class="eligibleForeignKnacks().length === 0 ? 'bg-ink/30 cursor-not-allowed' : 'bg-accent hover:bg-red-900'"
+                        data-testid="add-foreign-knack-btn"
+                        class="text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                    Add foreign school knack
+                </button>
+                <div x-show="pickerOpen" x-cloak class="flex items-center gap-2">
+                    <select x-model="pickerChoice"
+                            @change="onForeignKnackPicked()"
+                            data-testid="foreign-knack-select"
+                            class="border border-ink/20 rounded px-2 py-1 text-sm bg-parchment">
+                        <option value="" disabled>Select another school knack</option>
+                        <template x-for="kid in eligibleForeignKnacks()" :key="'pick-' + kid">
+                            <option :value="kid" x-text="KNACK_NAMES[kid] || kid"></option>
+                        </template>
+                        <option value="__cancel__">Never mind</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
         <!-- SECTIONS (rich-text panels: Notes, Backstory, Allies, etc.) -->
         <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
             <div class="flex items-center justify-between mb-4">
@@ -1311,6 +1373,10 @@ const KNACK_NAMES = {
     {% endfor %}
 };
 
+// Knacks that are NOT eligible to be taken as foreign school knacks.
+// Mirrors SUPERNATURAL_KNACK_IDS in app/game_data.py.
+const SUPERNATURAL_KNACK_IDS = new Set({{ supernatural_knack_ids | tojson }});
+
 // Skill display names (used by the Mantis 2nd Dan picker, etc.)
 const SKILL_NAMES = {
     {% for sid, skill in skills.items() %}
@@ -1408,6 +1474,7 @@ function characterForm() {
             {% endfor %}
         },
         knacks: {{ (character.knacks or {}) | tojson }},
+        foreignKnacks: {{ (character.foreign_knacks or {}) | tojson }},
         advantages: {
             {% for aid in advantages %}
             {{ aid }}: {{ 'true' if aid in (character.advantages or []) else 'false' }},
@@ -1518,6 +1585,7 @@ function characterForm() {
                 this.enforceFourthDanRing();
                 this.markDirty();
             }, { deep: true });
+            this.$watch('foreignKnacks', () => this.markDirty(), { deep: true });
             this.$watch('attack', () => this.markDirty());
             this.$watch('parry', () => this.markDirty());
             this.$watch('honor', () => this.markDirty());
@@ -1636,6 +1704,7 @@ function characterForm() {
                     parry: this.parry,
                     skills: Object.fromEntries(Object.entries(this.skills).filter(([k, v]) => v > 0)),
                     knacks: this.knacks,
+                    foreign_knacks: this.foreignKnacks,
                     advantages: Object.keys(this.advantages).filter(k => this.advantages[k]),
                     disadvantages: Object.keys(this.disadvantages).filter(k => this.disadvantages[k]),
                     campaign_advantages: Object.keys(this.campaignAdvantages).filter(k => this.campaignAdvantages[k]),
@@ -2077,6 +2146,58 @@ function characterForm() {
             return totalKnackCost(rank);
         },
 
+        // --- Foreign school knacks ---
+        // 0->1 costs a flat 10 XP premium, 2..5 use the standard ADVANCED_COSTS.
+        // Mirrors calculate_foreign_knack_xp in app/services/xp.py.
+        foreignKnackTotalCost(rank) {
+            if (rank <= 0) return 0;
+            let cost = 10;
+            for (let r = 2; r <= rank; r++) cost += ADVANCED_COSTS[r];
+            return cost;
+        },
+
+        foreignKnackDecrementTitle(kid) {
+            const r = this.foreignKnacks[kid];
+            if (r <= 1) return 'Remove ' + (KNACK_NAMES[kid] || kid) + ' (refund 10 XP)';
+            return 'Lower to ' + (r - 1) + ' (refund ' + ADVANCED_COSTS[r] + ' XP)';
+        },
+
+        decrementForeignKnack(kid) {
+            const r = this.foreignKnacks[kid] || 0;
+            if (r <= 1) {
+                // Removing the foreign knack entirely: matches the spec
+                // "decreasing back down to zero makes it disappear".
+                delete this.foreignKnacks[kid];
+                // Force Alpine reactivity on the deleted key.
+                this.foreignKnacks = { ...this.foreignKnacks };
+            } else {
+                this.foreignKnacks[kid] = r - 1;
+            }
+        },
+
+        eligibleForeignKnacks() {
+            const own = new Set(Object.keys(this.knacks || {}));
+            const taken = new Set(Object.keys(this.foreignKnacks || {}));
+            const supernatural = SUPERNATURAL_KNACK_IDS;
+            return Object.keys(KNACK_NAMES)
+                .filter(kid => !own.has(kid) && !taken.has(kid) && !supernatural.has(kid))
+                .sort((a, b) => (KNACK_NAMES[a] || a).localeCompare(KNACK_NAMES[b] || b));
+        },
+
+        onForeignKnackPicked() {
+            const kid = this.pickerChoice;
+            this.pickerChoice = '';
+            if (!kid || kid === '__cancel__') {
+                // "Never mind" - dismiss without persisting anything.
+                this.pickerOpen = false;
+                return;
+            }
+            this.foreignKnacks[kid] = 1;
+            // Force Alpine reactivity on a newly added key.
+            this.foreignKnacks = { ...this.foreignKnacks };
+            this.pickerOpen = false;
+        },
+
         // --- Skill Roll Display ---
         skillRollDisplay(skillId) {
             const rank = this.skills[skillId] || 0;
@@ -2200,6 +2321,14 @@ function characterForm() {
             return cost;
         },
 
+        totalForeignKnackXp() {
+            let cost = 0;
+            for (const [kid, rank] of Object.entries(this.foreignKnacks || {})) {
+                cost += this.foreignKnackTotalCost(rank);
+            }
+            return cost;
+        },
+
         combatSkillXp(rank) {
             // Advanced cost for ranks above 1
             let cost = 0;
@@ -2275,6 +2404,7 @@ function characterForm() {
 
         grossSpent() {
             return this.totalRingXp() + this.totalSkillXp() + this.totalKnackXp()
+                 + this.totalForeignKnackXp()
                  + this.totalCombatSkillXp() + this.honorXp() + this.rankXp()
                  + this.recognitionXp() + this.totalAdvXp() + this.totalCampaignAdvXp();
         },

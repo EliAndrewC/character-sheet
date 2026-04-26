@@ -38,6 +38,7 @@ from app.game_data import (
     SCHOOLS,
     SKILL_MAX,
     SKILLS,
+    SUPERNATURAL_KNACK_IDS,
     max_recognition,
     ring_raise_cost,
     skill_raise_cost,
@@ -110,6 +111,29 @@ def calculate_knack_xp(knacks: Dict[str, int]) -> int:
         if rank <= 1:
             continue
         # Sum advanced costs from rank 2 up to target rank
+        for new_rank in range(2, min(rank, KNACK_MAX) + 1):
+            xp += KNACK_COSTS[new_rank]
+    return xp
+
+
+# Flat 0->1 premium for buying a non-supernatural school knack from a school
+# other than your own. Ranks 2..5 use the standard KNACK_COSTS table.
+FOREIGN_KNACK_PREMIUM = 10
+
+
+def calculate_foreign_knack_xp(foreign_knacks: Dict[str, int]) -> int:
+    """Return total XP spent on foreign school knacks.
+
+    Unlike native school knacks (which start at rank 1 for free), foreign
+    knacks cost a one-time ``FOREIGN_KNACK_PREMIUM`` (10 XP) to acquire at
+    rank 1.  Subsequent ranks use the standard ``KNACK_COSTS`` table, so a
+    foreign knack at rank 5 costs 10 + 4 + 6 + 8 + 10 = 38 XP.
+    """
+    xp = 0
+    for knack_id, rank in foreign_knacks.items():
+        if rank <= 0:
+            continue
+        xp += FOREIGN_KNACK_PREMIUM
         for new_rank in range(2, min(rank, KNACK_MAX) + 1):
             xp += KNACK_COSTS[new_rank]
     return xp
@@ -302,6 +326,31 @@ def school_knack_xp_items(knacks: Dict[str, int]) -> List[dict]:
     return items
 
 
+def foreign_knack_xp_items(foreign_knacks: Dict[str, int]) -> List[dict]:
+    """One item per foreign-knack raise. The 0->1 row is the 10 XP premium."""
+    items: List[dict] = []
+    for knack_id, rank in foreign_knacks.items():
+        if rank <= 0:
+            continue
+        knack_def = SCHOOL_KNACKS.get(knack_id)
+        label = knack_def.name if knack_def else knack_id
+        items.append({
+            "xp": FOREIGN_KNACK_PREMIUM,
+            "label": label,
+            "from_val": 0,
+            "to_val": 1,
+        })
+        for new_rank in range(2, min(rank, KNACK_MAX) + 1):
+            items.append({
+                "xp": KNACK_COSTS[new_rank],
+                "label": label,
+                "from_val": new_rank - 1,
+                "to_val": new_rank,
+            })
+    items.sort(key=lambda i: (i["from_val"], i["label"]))
+    return items
+
+
 def skill_xp_items(skills: Dict[str, int]) -> dict:
     """Per-skill items split into ``basic`` and ``advanced`` lists."""
     basic_items: List[dict] = []
@@ -460,12 +509,14 @@ def calculate_xp_breakdown(character_data: dict) -> dict:
     """
     school_ring = character_data.get("school_ring_choice", "")
     knack_data = character_data.get("knacks", {})
+    foreign_knack_data = character_data.get("foreign_knacks", {})
     dan = compute_dan(knack_data) if knack_data else 0
 
     rings_list = ring_xp_items(
         character_data.get("rings", {}), school_ring, dan=dan,
     )
     knacks_list = school_knack_xp_items(knack_data)
+    foreign_knacks_list = foreign_knack_xp_items(foreign_knack_data)
     skills_split = skill_xp_items(character_data.get("skills", {}))
     combat_list = combat_skill_xp_items(
         attack=character_data.get("attack", COMBAT_SKILL_START),
@@ -489,6 +540,7 @@ def calculate_xp_breakdown(character_data: dict) -> dict:
 
     rings_total = sum(i["xp"] for i in rings_list)
     knacks_total = sum(i["xp"] for i in knacks_list)
+    foreign_knacks_total = sum(i["xp"] for i in foreign_knacks_list)
     skills_total = (
         sum(i["xp"] for i in skills_split["basic"])
         + sum(i["xp"] for i in skills_split["advanced"])
@@ -499,8 +551,8 @@ def calculate_xp_breakdown(character_data: dict) -> dict:
     hrr_total = sum(i["xp"] for i in hrr_list if not i.get("note"))
 
     grand_total = (
-        rings_total + knacks_total + skills_total + combat_total
-        + adv_total + dis_total + hrr_total
+        rings_total + knacks_total + foreign_knacks_total + skills_total
+        + combat_total + adv_total + dis_total + hrr_total
     )
 
     return {
@@ -513,6 +565,11 @@ def calculate_xp_breakdown(character_data: dict) -> dict:
             "label": "School Knacks",
             "total": knacks_total,
             "rows": knacks_list,
+        },
+        "foreign_knacks": {
+            "label": "Foreign school knacks",
+            "total": foreign_knacks_total,
+            "rows": foreign_knacks_list,
         },
         "skills": {
             "label": "Skills",
@@ -580,6 +637,9 @@ def calculate_total_xp(character_data: dict) -> dict:
     rings = calculate_ring_xp(character_data.get("rings", {}), school_ring, dan=dan)
     skills = calculate_skill_xp(character_data.get("skills", {}))
     knacks = calculate_knack_xp(knack_data)
+    foreign_knacks = calculate_foreign_knack_xp(
+        character_data.get("foreign_knacks", {}),
+    )
     combat_skills = calculate_combat_skill_xp(
         attack=character_data.get("attack", COMBAT_SKILL_START),
         parry=character_data.get("parry", COMBAT_SKILL_START),
@@ -609,7 +669,8 @@ def calculate_total_xp(character_data: dict) -> dict:
     )
 
     total = (
-        rings + skills + knacks + combat_skills + honor + rank + recognition
+        rings + skills + knacks + foreign_knacks + combat_skills
+        + honor + rank + recognition
         + advantages + disadvantages + campaign_advs + campaign_dises
     )
 
@@ -617,6 +678,7 @@ def calculate_total_xp(character_data: dict) -> dict:
         "rings": rings,
         "skills": skills,
         "knacks": knacks,
+        "foreign_knacks": foreign_knacks,
         "combat_skills": combat_skills,
         "honor": honor,
         "rank": rank,
@@ -730,6 +792,34 @@ def validate_character(character_data: dict) -> List[str]:
             errors.append(
                 f"Unknown knacks for {school.name}: "
                 f"{', '.join(sorted(extra))}."
+            )
+
+    # -- Foreign knacks --
+    foreign_knacks = character_data.get("foreign_knacks", {}) or {}
+    own_knack_ids = set(school.school_knacks) if school is not None else set()
+    for knack_id, rank in foreign_knacks.items():
+        if knack_id not in SCHOOL_KNACKS:
+            errors.append(f"Unknown foreign knack '{knack_id}'.")
+            continue
+        if knack_id in SUPERNATURAL_KNACK_IDS:
+            errors.append(
+                f"Foreign knack '{knack_id}' is supernatural and cannot be "
+                f"taken as a foreign knack."
+            )
+        if knack_id in own_knack_ids:
+            errors.append(
+                f"Foreign knack '{knack_id}' is already on your school's "
+                f"knack list and cannot also be taken as foreign."
+            )
+        if rank < 1:
+            errors.append(
+                f"Foreign knack '{knack_id}' ({rank}) must be at least 1; "
+                f"to remove a foreign knack, drop it from the list entirely."
+            )
+        if rank > KNACK_MAX:
+            errors.append(
+                f"Foreign knack '{knack_id}' ({rank}) exceeds maximum "
+                f"({KNACK_MAX})."
             )
 
     # -- Honor --

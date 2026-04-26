@@ -1116,6 +1116,39 @@ _KNACKS_LIST: List[SchoolKnack] = [
 
 SCHOOL_KNACKS: Dict[str, SchoolKnack] = {k.id: k for k in _KNACKS_LIST}
 
+# Knacks that are NOT eligible to be taken as foreign school knacks. Their
+# mechanical effects depend on training that's only available within their home
+# schools (spell-casting, taint detection, the Tattooed Order's tattoos, etc.).
+SUPERNATURAL_KNACK_IDS: frozenset = frozenset({
+    "absorb_void",
+    "commune",
+    "detect_taint",
+    "dragon_tattoo",
+    "spellcasting",
+})
+
+
+def eligible_foreign_knack_ids(school_id: str, taken_foreign_ids) -> List[str]:
+    """Return the sorted list of knack ids the character may add as foreign knacks.
+
+    Excludes:
+      - the character's own school's three knacks (already free at rank 1),
+      - every supernatural knack (not learnable outside its home school),
+      - any foreign knack already on the character (no duplicates).
+    Sorted by display name for stable picker ordering.
+    """
+    school = SCHOOLS.get(school_id) if school_id else None
+    own = set(school.school_knacks) if school else set()
+    taken = set(taken_foreign_ids or [])
+    candidates = [
+        kid for kid in SCHOOL_KNACKS
+        if kid not in own
+        and kid not in taken
+        and kid not in SUPERNATURAL_KNACK_IDS
+    ]
+    candidates.sort(key=lambda kid: SCHOOL_KNACKS[kid].name)
+    return candidates
+
 
 # ---------------------------------------------------------------------------
 # SCHOOLS

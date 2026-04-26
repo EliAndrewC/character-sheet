@@ -85,6 +85,7 @@ def _migrate_add_columns():
         ("art_source", "TEXT", "NULL"),
         ("art_prompt", "TEXT", "NULL"),
         ("name_explanation", "TEXT", "''"),
+        ("foreign_knacks", "TEXT", "'{}'"),
     ]
 
     # Migration bodies below are defensive first-run-on-old-schema branches.

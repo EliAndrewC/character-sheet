@@ -733,15 +733,16 @@ def test_alternative_totals_render_number_first_with_all_of_the_above(page, live
     page.check('input[name="adv_higher_purpose"]')
     page.wait_for_selector('input[placeholder="What is your cause?"]', timeout=3000)
     page.fill('input[placeholder="What is your cause?"]', "Restore the family")
-    hp_label = page.locator('input[name="adv_higher_purpose"]').locator('xpath=ancestor::div[1]').locator('label.inline-flex', has_text="Bragging")
-    hp_label.locator('input[type="checkbox"]').check()
+    # Find the multi-skill checkbox row inside the higher_purpose editor-row.
+    hp_row = page.locator('input[name="adv_higher_purpose"]').locator('xpath=ancestor::div[contains(@class,"editor-row")][1]')
+    hp_row.locator('label.inline-flex', has_text="Bragging").locator('input[type="checkbox"]').check()
 
     # Specialization (+10 alt) targeting bragging.
     page.check('input[name="adv_specialization"]')
     page.wait_for_selector('input[placeholder="What specialization?"]', timeout=3000)
     page.fill('input[placeholder="What specialization?"]', "Eligible bachelors")
-    sp_select = page.locator('input[name="adv_specialization"]').locator('xpath=ancestor::div[1]').locator('select')
-    sp_select.select_option(value="bragging")
+    sp_row = page.locator('input[name="adv_specialization"]').locator('xpath=ancestor::div[contains(@class,"editor-row")][1]')
+    sp_row.locator('select').select_option(value="bragging")
 
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Alt totals setup")

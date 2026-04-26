@@ -37,6 +37,7 @@ def _parse_form_to_dict(form_data: dict) -> dict:
         "rings": {},
         "skills": {},
         "knacks": {},
+        "foreign_knacks": {},
         "advantages": [],
         "disadvantages": [],
         "honor": float(form_data.get("honor", 1.0)),
@@ -70,6 +71,19 @@ def _parse_form_to_dict(form_data: dict) -> dict:
             key = f"knack_{knack_id}"
             val = int(form_data.get(key, 1))
             data["knacks"][knack_id] = max(1, val)  # minimum 1
+
+    # Foreign school knacks (non-supernatural knacks from other schools).
+    # The legacy form-POST path is rarely used (autosave is JSON), but keep
+    # it parity-compatible. Only entries with rank >= 1 are stored.
+    for knack_id in SCHOOL_KNACKS:
+        key = f"foreign_knack_{knack_id}"
+        if key in form_data:
+            try:
+                val = int(form_data.get(key, 0))
+            except (TypeError, ValueError):
+                val = 0
+            if val >= 1:
+                data["foreign_knacks"][knack_id] = val
 
     # Advantages / Disadvantages (checkboxes)
     for adv_id in ADVANTAGES:
@@ -156,6 +170,7 @@ async def update_character(
     character.parry = data["parry"]
     character.skills = data["skills"]
     character.knacks = data["knacks"]
+    character.foreign_knacks = data.get("foreign_knacks", {}) or {}
     character.advantages = data["advantages"]
     character.disadvantages = data["disadvantages"]
     character.honor = data["honor"]
@@ -457,6 +472,20 @@ async def autosave_character(
         character.skills = body["skills"]
     if "knacks" in body:
         character.knacks = body["knacks"]
+    if "foreign_knacks" in body:
+        # Coerce ranks to ints; drop entries with rank < 1 so removal via
+        # decrement-to-zero on the editor is honored.
+        raw = body.get("foreign_knacks") or {}
+        cleaned: dict = {}
+        if isinstance(raw, dict):
+            for kid, rank in raw.items():
+                try:
+                    r = int(rank)
+                except (TypeError, ValueError):
+                    continue
+                if r >= 1:
+                    cleaned[kid] = r
+        character.foreign_knacks = cleaned
     if "advantages" in body:
         character.advantages = body["advantages"]
     if "campaign_advantages" in body:
@@ -477,7 +506,16 @@ async def autosave_character(
             val = choices.get("mantis_2nd_dan_free_raise")
             if val not in (None, ""):
                 school_id = body.get("school") or character.school
-                eligible = mantis_2nd_dan_eligible_choices(school_id)
+                # Foreign rollable knacks are valid targets too. Read foreign
+                # knacks from the incoming body if present, otherwise from the
+                # persisted character so we don't reject an existing valid
+                # selection during a partial save.
+                fk = (
+                    body.get("foreign_knacks")
+                    if "foreign_knacks" in body
+                    else (character.foreign_knacks or {})
+                )
+                eligible = mantis_2nd_dan_eligible_choices(school_id, fk)
                 if val not in eligible:
                     return JSONResponse(
                         {"error": f"Invalid mantis_2nd_dan_free_raise choice: {val!r}"},
@@ -1048,6 +1086,7 @@ async def xp_calc_partial(request: Request):
         "parry": data["parry"],
         "skills": data["skills"],
         "knacks": data["knacks"],
+        "foreign_knacks": data.get("foreign_knacks", {}),
         "advantages": data["advantages"],
         "disadvantages": data["disadvantages"],
         "honor": data["honor"],
