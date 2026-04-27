@@ -608,6 +608,23 @@ The three failures were:
 - [ ] 3rd Dan applicable skills (school disabled) -> `test_school_abilities.py::test_shugenja_3rd_dan_applicable_skills` (skipped)
 - [ ] Ring bonus display (school disabled) -> `test_school_abilities.py::test_shugenja_ring_bonus_display` (skipped)
 
+### Suzume Overseer
+
+The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merchants - their school techniques are literally those other schools' techniques applied without claim. The 4th Dan is intentionally omitted (contested-roll bonuses for higher skill aren't in our system).
+
+- [x] Special: post-roll VP spending banner visible (shared with Merchant) -> `test_school_abilities.py::test_suzume_post_roll_vp_buttons_visible`
+- [x] Special: pre-roll menu has no VP options -> `test_school_abilities.py::test_suzume_pre_roll_menu_has_no_vp_options`
+- [x] 1st Dan: extra die on precepts -> `test_school_abilities.py::test_suzume_1st_dan_extra_die_on_precepts`
+- [x] 1st Dan: extra die on wound check -> `test_school_abilities.py::test_suzume_1st_dan_extra_die_on_wound_check`
+- [x] 2nd Dan: flexible picker visible at Dan 2, persists choice, applies +5 -> `test_school_abilities.py::test_suzume_2nd_dan_picker_visible_and_saves`
+- [x] 3rd Dan: spend raise on sincerity (precepts-driven adventure pool) -> `test_school_abilities.py::test_suzume_3rd_dan_precepts_raises`
+- [x] 5th Dan: always-TN skill input (shared with Doji 5th Dan) -> `test_school_abilities.py::test_suzume_5th_dan_always_tn_skill_input`
+- [x] 5th Dan: sometimes-TN skill checkbox -> `test_school_abilities.py::test_suzume_5th_dan_sometimes_tn_skill_checkbox`
+- [x] 5th Dan: never-TN skill no input -> `test_school_abilities.py::test_suzume_5th_dan_never_tn_skill_no_input`
+- [x] 5th Dan: attack auto-bonus from TN -> `test_school_abilities.py::test_suzume_5th_dan_attack_auto_bonus`
+- [x] 5th Dan: wound check auto-bonus from light wounds -> `test_school_abilities.py::test_suzume_5th_dan_wound_check_auto_bonus`
+- [x] School ring is fixed Water (no dropdown) -> `test_school_rings.py::test_suzume_overseer_fixed_water`
+
 ### Togashi
 
 - [x] 4th Dan heal SW button works -> `test_school_abilities.py::test_togashi_heal_sw_button_works`

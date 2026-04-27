@@ -128,6 +128,10 @@ _SCHOOL_ALIASES: Dict[str, str] = {
     "shinsei monk": "brotherhood_of_shinsei_monk",
     "brotherhood monk": "brotherhood_of_shinsei_monk",
     "monk": "brotherhood_of_shinsei_monk",
+    # Sparrow
+    "sparrow": "suzume_overseer",
+    "sparrow overseer": "suzume_overseer",
+    "suzume": "suzume_overseer",
 }
 
 

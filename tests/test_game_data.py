@@ -122,7 +122,7 @@ class TestSkills:
 
 class TestSchools:
     def test_school_count(self):
-        assert len(SCHOOLS) == 27
+        assert len(SCHOOLS) == 28
 
     def test_all_schools_have_three_knacks(self):
         for sid, school in SCHOOLS.items():
@@ -131,10 +131,16 @@ class TestSchools:
             )
 
     def test_all_schools_have_five_techniques(self):
+        # Suzume Overseer is documented to omit its 4th Dan: contested-roll
+        # bonuses for higher skill aren't in our system. Every other school
+        # has all five Dan techniques.
         for sid, school in SCHOOLS.items():
-            assert set(school.techniques.keys()) == {1, 2, 3, 4, 5}, (
-                f"{school.name} techniques: {list(school.techniques.keys())}"
-            )
+            if sid == "suzume_overseer":
+                assert set(school.techniques.keys()) == {1, 2, 3, 5}
+            else:
+                assert set(school.techniques.keys()) == {1, 2, 3, 4, 5}, (
+                    f"{school.name} techniques: {list(school.techniques.keys())}"
+                )
 
     def test_all_school_knacks_exist(self):
         for sid, school in SCHOOLS.items():
