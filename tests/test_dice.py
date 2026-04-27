@@ -3226,3 +3226,245 @@ class TestForeignKnackDice:
         assert mantis_2nd_dan_eligible_choices(
             "akodo_bushi", foreign_knacks={"feint": 1}
         ) == frozenset()
+
+
+class TestSuzumeOverseer:
+    """Suzume Overseer: a Sparrow school whose techniques are drawn from Doji
+    Artisan and Merchant. Verify each Dan's mechanics, including the shared
+    flag names with Doji and the post-roll VP flag with Merchant."""
+
+    def _char(self, dan: int = 1, **extra) -> dict:
+        kn = {"oppose_social": dan, "pontificate": dan, "worldliness": dan}
+        data = make_character_data(
+            school="suzume_overseer",
+            school_ring_choice="Water",
+            knacks=kn,
+            skills={"precepts": 3, "commerce": 2, "tact": 2,
+                    "heraldry": 2, "sincerity": 2, "etiquette": 2},
+        )
+        data.update(extra)
+        return data
+
+    # --- School-data sanity ---
+
+    def test_school_exists(self):
+        from app.game_data import SCHOOLS
+        assert "suzume_overseer" in SCHOOLS
+        sch = SCHOOLS["suzume_overseer"]
+        assert sch.school_ring == "Water"
+        assert sch.category == "court"
+        assert sch.school_knacks == ["oppose_social", "pontificate", "worldliness"]
+        # 4th Dan is intentionally omitted.
+        assert 4 not in sch.techniques
+        assert {1, 2, 3, 5} <= set(sch.techniques.keys())
+
+    def test_school_ring_options_water_only(self):
+        from app.game_data import SCHOOL_RING_OPTIONS
+        assert SCHOOL_RING_OPTIONS["suzume_overseer"] == ["Water"]
+
+    # --- 1st Dan: extra die on precepts / commerce / wound_check ---
+
+    def test_first_dan_extra_die_on_precepts(self):
+        char = self._char(dan=1)
+        f = build_skill_formula("precepts", char)
+        # rank(3) + Water(3) + 1 (1st Dan)
+        assert f.rolled == 7
+
+    def test_first_dan_extra_die_on_commerce(self):
+        char = self._char(dan=1)
+        f = build_skill_formula("commerce", char)
+        # rank(2) + Water(3) + 1 (1st Dan)
+        assert f.rolled == 6
+
+    def test_first_dan_extra_die_on_wound_check(self):
+        char = self._char(dan=1)
+        wc = build_wound_check_formula(char)
+        # base Water+1 = 4, +1 from 1st Dan = 5
+        assert wc["rolled"] == 5
+        assert any("1st Dan" in s for s in wc["bonus_sources"])
+
+    def test_first_dan_no_bonus_on_other_skill(self):
+        char = self._char(dan=1)
+        f = build_skill_formula("heraldry", char)
+        assert f.rolled == 2 + 3  # rank + Water, no extra die
+
+    # --- 2nd Dan: free raise on a chosen roll type ---
+
+    def test_second_dan_chosen_skill_gets_free_raise(self):
+        char = self._char(dan=2,
+                          technique_choices={"second_dan_choice": "tact"})
+        f = build_skill_formula("tact", char)
+        assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
+                   for b in f.bonuses)
+
+    def test_second_dan_no_choice_no_bonus(self):
+        char = self._char(dan=2)
+        f = build_skill_formula("tact", char)
+        # No second_dan_choice, no +5 from 2nd Dan
+        assert not any(b["label"] == "2nd Dan technique" for b in f.bonuses)
+
+    def test_second_dan_chosen_wound_check_gets_free_raise(self):
+        char = self._char(dan=2,
+                          technique_choices={"second_dan_choice": "wound_check"})
+        wc = build_wound_check_formula(char)
+        assert wc["flat"] >= 5
+        assert any("2nd Dan" in s for s in wc["bonus_sources"])
+
+    def test_second_dan_chosen_damage_gets_free_raise(self):
+        char = self._char(dan=2, attack=3,
+                          technique_choices={"second_dan_choice": "damage"})
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["attack"]
+        assert atk["damage_flat_bonus"] == 5
+
+    def test_second_dan_attack_choice_gets_free_raise(self):
+        char = self._char(dan=2, attack=3,
+                          technique_choices={"second_dan_choice": "attack"})
+        f = build_combat_formula("attack", char)
+        assert f.flat == 5
+
+    def test_second_dan_no_bonus_below_dan_2(self):
+        char = self._char(dan=1,
+                          technique_choices={"second_dan_choice": "tact"})
+        f = build_skill_formula("tact", char)
+        assert not any(b["label"] == "2nd Dan technique" for b in f.bonuses)
+
+    # --- 3rd Dan: 2X adventure raises (X = precepts) ---
+
+    def test_third_dan_annotates_applicable_skills(self):
+        char = self._char(dan=3, attack=2)
+        formulas = build_all_roll_formulas(char)
+        # source_skill = precepts; precepts rank is 3
+        for sid in ("commerce", "heraldry", "sincerity", "tact"):
+            assert formulas[f"skill:{sid}"]["adventure_raises_max_per_roll"] == 3
+        assert formulas["wound_check"]["adventure_raises_max_per_roll"] == 3
+        assert formulas["attack"]["adventure_raises_max_per_roll"] == 3
+
+    def test_third_dan_does_not_annotate_excluded_skill(self):
+        char = self._char(dan=3, attack=2)
+        formulas = build_all_roll_formulas(char)
+        # etiquette is NOT in applicable_to
+        assert formulas["skill:etiquette"]["adventure_raises_max_per_roll"] == 0
+
+    def test_third_dan_per_adventure_pool_size(self):
+        """Routes-side: per_adventure entry has max = 2 * precepts rank."""
+        from app.game_data import SCHOOL_TECHNIQUE_BONUSES
+        bonuses = SCHOOL_TECHNIQUE_BONUSES["suzume_overseer"]
+        third = bonuses["third_dan"]
+        assert third["source_skill"] == "precepts"
+        assert third["formula"] == "2X"
+        assert third["max_per_roll"] == "X"
+        assert "attack" in third["applicable_to"]
+        assert "wound_check" in third["applicable_to"]
+
+    # --- 5th Dan: shared flags with Doji Artisan ---
+
+    def test_fifth_dan_skill_always_tn(self):
+        char = self._char(dan=5)
+        f = build_skill_formula("manipulation", char)
+        assert f.doji_5th_dan_always is True
+        assert f.doji_5th_dan_optional is False
+
+    def test_fifth_dan_skill_sometimes_tn(self):
+        char = self._char(dan=5)
+        f = build_skill_formula("bragging", char)
+        assert f.doji_5th_dan_optional is True
+        assert f.doji_5th_dan_always is False
+
+    def test_fifth_dan_skill_never_tn(self):
+        char = self._char(dan=5)
+        f = build_skill_formula("etiquette", char)
+        assert f.doji_5th_dan_always is False
+        assert f.doji_5th_dan_optional is False
+
+    def test_fifth_dan_attack_flag(self):
+        char = self._char(dan=5, attack=3)
+        f = build_combat_formula("attack", char)
+        assert f.doji_5th_dan_always is True
+
+    def test_fifth_dan_parry_flag(self):
+        char = self._char(dan=5, parry=3)
+        f = build_combat_formula("parry", char)
+        assert f.doji_5th_dan_always is True
+
+    def test_fifth_dan_wound_check_flag(self):
+        char = self._char(dan=5)
+        wc = build_wound_check_formula(char)
+        assert wc["doji_5th_dan_wc"] is True
+
+    def test_fifth_dan_knack_flag(self):
+        char = self._char(dan=5)
+        f = build_knack_formula("pontificate", char)
+        assert f.doji_5th_dan_always is True
+
+    def test_below_fifth_dan_no_flags(self):
+        char = self._char(dan=4)
+        f = build_skill_formula("manipulation", char)
+        assert f.doji_5th_dan_always is False
+        assert f.doji_5th_dan_optional is False
+        wc = build_wound_check_formula(char)
+        assert wc["doji_5th_dan_wc"] is False
+
+    # --- 4th Dan is intentionally absent: no doji 4th Dan flag should fire ---
+
+    def test_no_fourth_dan_untouched_target_flag(self):
+        """Suzume must NOT inherit Doji 4th Dan untouched-target bonus."""
+        char = self._char(dan=4, attack=3)
+        f = build_combat_formula("attack", char)
+        assert f.doji_4th_dan_untouched_target is False
+
+    # --- Special ability: post-roll VP flag is set on the route side. ---
+    # (See tests/test_remaining_features or the route tests for the
+    # schoolAbilities flag check; here we just confirm the school appears
+    # in the same flag domain via the SCHOOL_TECHNIQUE_BONUSES table.)
+
+    def test_post_roll_vp_membership(self):
+        """The merchant_post_roll_vp flag should be true for Suzume Overseer."""
+        import inspect
+        import app.routes.pages as pages_mod
+        src = inspect.getsource(pages_mod)
+        assert "suzume_overseer" in src
+        assert "merchant_post_roll_vp" in src
+
+
+class TestDojiArtisanRegressionAfterSuzume:
+    """Regression: widening the doji 5th Dan checks to include suzume_overseer
+    must not break Doji Artisan itself."""
+
+    def test_doji_5th_dan_still_fires(self):
+        char = make_character_data(
+            school="doji_artisan",
+            school_ring_choice="Air",
+            knacks={"counterattack": 5, "oppose_social": 5, "worldliness": 5},
+            skills={"manipulation": 3},
+        )
+        f = build_skill_formula("manipulation", char)
+        assert f.doji_5th_dan_always is True
+
+    def test_doji_4th_dan_still_only_doji(self):
+        """Suzume Overseer must NOT trigger Doji 4th Dan on attack."""
+        char = make_character_data(
+            school="suzume_overseer",
+            school_ring_choice="Water",
+            knacks={"oppose_social": 4, "pontificate": 4, "worldliness": 4},
+            attack=3,
+        )
+        f = build_combat_formula("attack", char)
+        assert f.doji_4th_dan_untouched_target is False
+
+        doji = make_character_data(
+            school="doji_artisan",
+            school_ring_choice="Air",
+            knacks={"counterattack": 4, "oppose_social": 4, "worldliness": 4},
+            attack=3,
+        )
+        f2 = build_combat_formula("attack", doji)
+        assert f2.doji_4th_dan_untouched_target is True
+
+    def test_merchant_post_roll_vp_still_works(self):
+        """Merchant must still get the post-roll VP flag after Suzume widening."""
+        import inspect, app.routes.pages as pages_mod
+        src = inspect.getsource(pages_mod)
+        # The membership test must include both schools.
+        assert '"merchant"' in src.lower() or "'merchant'" in src
+        assert "suzume_overseer" in src

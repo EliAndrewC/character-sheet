@@ -9577,3 +9577,219 @@ def test_mantis_wc_probability_all_three_stack(page, live_server_url):
             && txt.includes('+1 from Mantis 3rd Dan (defensive)');
     }""", timeout=10000)
 
+
+# ===========================================================================
+# Suzume Overseer (Sparrow): a sister-school of Doji Artisan and Merchant
+# whose techniques are literally those other schools' techniques.
+# 1st Dan: extra die on precepts/commerce/wound_check.
+# 2nd Dan: free raise on chosen roll type (flexible picker).
+# 3rd Dan: 2X adventure raises (X = precepts).
+# 4th Dan: out of scope.
+# 5th Dan: same as Doji 5th Dan (X-10)/5 bonus.
+# Special: same as Merchant (post-roll VP).
+# ===========================================================================
+
+
+def _make_suzume(page, live_server_url, name, dan=1, **kwargs):
+    """Create a Suzume Overseer at the given Dan with optional skill overrides."""
+    knack_overrides = {"oppose_social": dan, "pontificate": dan, "worldliness": dan}
+    _create_char(
+        page, live_server_url, name, "suzume_overseer",
+        knack_overrides=knack_overrides,
+        **kwargs,
+    )
+
+
+@pytest.mark.school_abilities
+def test_suzume_post_roll_vp_buttons_visible(page, live_server_url):
+    """Suzume Overseer sees post-roll VP spending note (shared with Merchant)."""
+    _make_suzume(page, live_server_url, "SuzumeVP", skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    assert page.locator('text="Merchant Special: spend VP after seeing the roll."').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_suzume_pre_roll_menu_has_no_vp_options(page, live_server_url):
+    """Suzume pre-roll: VP options are hidden (post-roll VP supersedes them)."""
+    _make_suzume(page, live_server_url, "SuzumeNoPreVP", skill_overrides={"bragging": 1})
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(400)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
+    if menu.is_visible():
+        text = menu.text_content()
+        assert "Spend 1 void point" not in text
+        assert "Spend 2 void points" not in text
+
+
+@pytest.mark.school_abilities
+def test_suzume_1st_dan_extra_die_on_precepts(page, live_server_url):
+    """Suzume 1st Dan: rolling precepts shows +1 rolled die."""
+    _make_suzume(page, live_server_url, "Suzume1Pre", skill_overrides={"precepts": 1})
+    f = _get_formula(page, "skill:precepts")
+    # rank(1) + Water(3) + 1 (1st Dan) = 5
+    assert f["rolled"] == 5
+
+
+@pytest.mark.school_abilities
+def test_suzume_1st_dan_extra_die_on_wound_check(page, live_server_url):
+    """Suzume 1st Dan: wound check gets +1 rolled die labeled 1st Dan."""
+    _make_suzume(page, live_server_url, "Suzume1WC")
+    wc = _get_formula(page, "wound_check")
+    # Water=3 -> base 4k3; 1st Dan +1 -> 5k3
+    assert wc["rolled"] == 5
+    assert wc["kept"] == 3
+    assert any("1st Dan" in s for s in wc.get("bonus_sources", []))
+
+
+@pytest.mark.school_abilities
+def test_suzume_2nd_dan_picker_visible_and_saves(page, live_server_url):
+    """Editor UI: the flexible 2nd Dan picker appears at Dan>=2 and saves."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Suzume2Picker")
+    select_school(page, "suzume_overseer")
+    # Picker is hidden at Dan 1.
+    picker = page.locator('[data-testid="flex-2nd-dan-picker"]')
+    assert not picker.is_visible()
+    # Raise all three school knacks to 2 to reach Dan 2.
+    click_plus(page, "knack_oppose_social", 1)
+    click_plus(page, "knack_pontificate", 1)
+    click_plus(page, "knack_worldliness", 1)
+    page.wait_for_timeout(200)
+    assert picker.is_visible()
+    select = page.locator('[data-testid="flex-2nd-dan-select"]')
+    option_values = select.evaluate("el => Array.from(el.querySelectorAll('option')).map(o => o.value)")
+    for needed in ("attack", "damage", "parry", "wound_check", "tact", "bragging"):
+        assert needed in option_values, f"option {needed!r} missing from picker"
+    assert "initiative" not in option_values
+    assert "worldliness" not in option_values
+    select.select_option("tact")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Suzume 2nd Dan picker")
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    # tact has Honor bonus on top of the 2nd Dan free raise; verify the +5
+    # appears in the breakdown via the bonus list.
+    f = _get_formula(page, "skill:tact")
+    assert any(b.get("label") == "2nd Dan technique" and b.get("amount") == 5
+               for b in f.get("bonuses", []))
+
+
+@pytest.mark.school_abilities
+def test_suzume_3rd_dan_precepts_raises(page, live_server_url):
+    """Suzume at 3rd Dan: rolling sincerity (in applicable_to) shows Spend button."""
+    _make_suzume(page, live_server_url, "Suzume3", dan=3,
+                 skill_overrides={"precepts": 1, "sincerity": 1})
+    _roll_via_menu_or_direct(page, "skill:sincerity")
+    assert page.locator('[data-action="spend-raise"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_suzume_5th_dan_always_tn_skill_input(page, live_server_url):
+    """Suzume 5th Dan: always-TN skills show Doji-style input directly."""
+    _make_suzume(page, live_server_url, "Suzume5Always", dan=5,
+                 skill_overrides={"manipulation": 1})
+    _roll_via_menu_or_direct(page, "skill:manipulation")
+    base = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return d.baseTotal;
+        }
+        return 0;
+    }""")
+    always_section = page.locator('[data-testid="doji-5th-always"]')
+    assert always_section.is_visible()
+    assert not page.locator('[data-testid="doji-5th-optional"]').is_visible()
+    opponent_input = always_section.locator('input[x-model\\.number="dojiOpponentResult"]')
+    opponent_input.fill("30")
+    page.wait_for_timeout(300)
+    result = always_section.text_content()
+    assert "Adjusted total" in result
+    expected_adjusted = base + 4  # floor((30-10)/5)
+    assert str(expected_adjusted) in result
+
+
+@pytest.mark.school_abilities
+def test_suzume_5th_dan_sometimes_tn_skill_checkbox(page, live_server_url):
+    """Suzume 5th Dan: sometimes-TN skills show checkbox + input on check."""
+    _make_suzume(page, live_server_url, "Suzume5Sometimes", dan=5,
+                 skill_overrides={"bragging": 1})
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    optional_section = page.locator('[data-testid="doji-5th-optional"]')
+    assert optional_section.is_visible()
+    assert not page.locator('[data-testid="doji-5th-always"]').is_visible()
+    checkbox = optional_section.locator('input[x-model="dojiTnRollApplied"]')
+    assert checkbox.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_suzume_5th_dan_never_tn_skill_no_input(page, live_server_url):
+    """Suzume 5th Dan: never-TN skills show no Doji input or checkbox."""
+    _make_suzume(page, live_server_url, "Suzume5Never", dan=5,
+                 skill_overrides={"etiquette": 1})
+    _roll_via_menu_or_direct(page, "skill:etiquette")
+    assert not page.locator('[data-testid="doji-5th-always"]').is_visible()
+    assert not page.locator('[data-testid="doji-5th-optional"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_suzume_5th_dan_attack_auto_bonus(page, live_server_url):
+    """Suzume 5th Dan: attack rolls auto-apply bonus from TN."""
+    _make_suzume(page, live_server_url, "Suzume5Atk", dan=5)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    modal = page.locator('[data-modal="attack"]')
+    pre_text = modal.text_content()
+    assert "Doji 5th Dan" in pre_text
+    modal.locator('[data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+    bonus = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return d.formula?.doji_5th_dan_bonus || 0;
+        }
+        return 0;
+    }""")
+    assert bonus == 2  # floor((20-10)/5)
+
+
+@pytest.mark.school_abilities
+def test_suzume_5th_dan_wound_check_auto_bonus(page, live_server_url):
+    """Suzume 5th Dan: wound check auto-applies bonus from light wounds."""
+    _make_suzume(page, live_server_url, "Suzume5WC", dan=5)
+    _set_light_wounds(page, 30)
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openWoundCheckModal === 'function') {
+                d.openWoundCheckModal();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_timeout(300)
+    modal = page.locator('[data-modal="wound-check"]')
+    pre_text = modal.text_content()
+    assert "Doji 5th Dan" in pre_text
+    modal.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    bonus = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return d.formula?.doji_5th_dan_bonus || 0;
+        }
+        return 0;
+    }""")
+    assert bonus == 4  # floor((30-10)/5)
+

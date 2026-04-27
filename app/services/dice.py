@@ -348,8 +348,10 @@ def build_skill_formula(
         elif skill_id not in _5TH_DAN_TN_NEVER:
             formula.courtier_5th_dan_optional = air_val
 
-    # Doji Artisan 5th Dan: bonus = floor((TN - 10) / 5) on TN/contested rolls
-    if school_id == "doji_artisan" and dan >= 5:
+    # Doji Artisan 5th Dan: bonus = floor((TN - 10) / 5) on TN/contested rolls.
+    # Shared with Suzume Overseer (Sparrow Suzume use Doji Artisan techniques
+    # in-fiction without claiming them); flag names retain the "doji_" prefix.
+    if school_id in ("doji_artisan", "suzume_overseer") and dan >= 5:
         if skill_id in _5TH_DAN_TN_ALWAYS:
             formula.doji_5th_dan_always = True
         elif skill_id not in _5TH_DAN_TN_NEVER:
@@ -570,8 +572,9 @@ def build_knack_formula(
         air_val = rings.get("Air", 2)
         _add_flat_bonus(formula, "Courtier 5th Dan", air_val)
 
-    # Doji Artisan 5th Dan: knacks are always TN/contested
-    if school_id == "doji_artisan" and dan >= 5:
+    # Doji Artisan 5th Dan: knacks are always TN/contested.
+    # Shared with Suzume Overseer (see comment in build_skill_formula).
+    if school_id in ("doji_artisan", "suzume_overseer") and dan >= 5:
         formula.doji_5th_dan_always = True
 
     # Doji Artisan 4th Dan: "untouched target" bonus on any attack-variant
@@ -648,8 +651,9 @@ def build_combat_formula(
         air_val = rings.get("Air", 2)
         _add_flat_bonus(formula, "Courtier 5th Dan", air_val)
 
-    # Doji Artisan 5th Dan: flag for client-side bonus (TN known from attack modal)
-    if school_id == "doji_artisan" and dan >= 5:
+    # Doji Artisan 5th Dan: flag for client-side bonus (TN known from attack modal).
+    # Shared with Suzume Overseer (see comment in build_skill_formula).
+    if school_id in ("doji_artisan", "suzume_overseer") and dan >= 5:
         formula.doji_5th_dan_always = True
 
     # Doji Artisan 4th Dan: flag for client-side "target has not attacked me
@@ -767,7 +771,8 @@ def build_athletics_combat_formula(
         air_val = rings.get("Air", 2)
         _add_flat_bonus(formula, "Courtier 5th Dan", air_val)
 
-    if school_id == "doji_artisan" and dan >= 5:
+    # Shared with Suzume Overseer (see comment in build_skill_formula).
+    if school_id in ("doji_artisan", "suzume_overseer") and dan >= 5:
         formula.doji_5th_dan_always = True
 
     # Doji Artisan 4th Dan: also applies when attacking via athletics.
@@ -830,6 +835,18 @@ def build_wound_check_formula(character_data: dict) -> dict:
             flat += FREE_RAISE_VALUE
             bonus_sources.append("+5 from 2nd Dan")
 
+    # Flexible 2nd Dan free raise (Ide Diplomat, Isawa Ishi, Shugenja, Suzume
+    # Overseer): if the player picked wound_check as their target, +5 flat.
+    if (
+        dan >= 2
+        and "second_dan_free_raise" in bonuses
+        and bonuses.get("second_dan_free_raise") is None
+    ):
+        tech_choices_wc = character_data.get("technique_choices") or {}
+        if tech_choices_wc.get("second_dan_choice") == "wound_check":
+            flat += FREE_RAISE_VALUE
+            bonus_sources.append("+5 from 2nd Dan")
+
     # Shosuro Actor: +acting_rank rolled dice on wound checks
     if school_id == "shosuro_actor":
         skills = character_data.get("skills", {}) or {}
@@ -865,8 +882,9 @@ def build_wound_check_formula(character_data: dict) -> dict:
     # Bayushi Bushi 5th Dan: halve light wounds for serious wound calculation
     bayushi_5th_dan_half_lw = school_id == "bayushi_bushi" and dan >= 5
 
-    # Doji Artisan 5th Dan: flag for client-side bonus (TN = light wounds)
-    doji_5th_dan_wc = school_id == "doji_artisan" and dan >= 5
+    # Doji Artisan 5th Dan: flag for client-side bonus (TN = light wounds).
+    # Shared with Suzume Overseer (see comment in build_skill_formula).
+    doji_5th_dan_wc = school_id in ("doji_artisan", "suzume_overseer") and dan >= 5
 
     # Shosuro Actor 5th Dan: add sum of lowest 3 dice to roll (post-roll)
     shosuro_5th_dan = school_id == "shosuro_actor" and dan >= 5
@@ -1065,6 +1083,20 @@ def build_all_roll_formulas(
         and dan >= 2
         and (character_data.get("technique_choices") or {}).get(
             "mantis_2nd_dan_free_raise"
+        ) == "damage"
+    ):
+        damage_flat_bonus += FREE_RAISE_VALUE
+        damage_bonus_sources.append("+5 from 2nd Dan (damage)")
+
+    # Flexible 2nd Dan free raise (Ide Diplomat, Isawa Ishi, Shugenja, Suzume
+    # Overseer): if the player picked damage as their target, +5 flat.
+    _flex_bonuses = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
+    if (
+        dan >= 2
+        and "second_dan_free_raise" in _flex_bonuses
+        and _flex_bonuses.get("second_dan_free_raise") is None
+        and (character_data.get("technique_choices") or {}).get(
+            "second_dan_choice"
         ) == "damage"
     ):
         damage_flat_bonus += FREE_RAISE_VALUE

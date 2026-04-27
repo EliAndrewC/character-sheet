@@ -70,3 +70,12 @@ def test_changing_multi_to_fixed_hides_dropdown(page, live_server_url):
     select_school(page, "akodo_bushi")  # fixed ring (Water)
     page.wait_for_timeout(500)
     assert not page.locator('text="Choose School Ring"').is_visible()
+
+
+def test_suzume_overseer_fixed_water(page, live_server_url):
+    """Suzume Overseer has a fixed Water school ring (no dropdown)."""
+    _go_to_editor(page, live_server_url)
+    select_school(page, "suzume_overseer")
+    val = page.locator('input[name="school_ring_choice"]').input_value()
+    assert val == "Water"
+    assert not page.locator('text="Choose School Ring"').is_visible()

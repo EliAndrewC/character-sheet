@@ -430,6 +430,41 @@
                 </select>
             </div>
 
+            <!-- Generic flexible 2nd Dan free raise picker for schools whose
+                 2nd Dan is "free raise on a roll type of your choice":
+                 Ide Diplomat, Isawa Ishi, Shugenja, Suzume Overseer.
+                 Persists into techniqueChoices.second_dan_choice; the same
+                 set of eligible roll types as the Mantis picker (skills,
+                 own school knacks, attack/parry/wound_check/damage). -->
+            <div x-show="FLEXIBLE_2ND_DAN_SCHOOLS.has(school) && currentDan() >= 2"
+                 x-cloak class="mt-3 p-3 bg-white/60 border border-accent/20 rounded"
+                 data-testid="flex-2nd-dan-picker">
+                <label class="block text-sm font-medium mb-1">
+                    2nd Dan free raise - pick one roll type
+                </label>
+                <select x-model="techniqueChoices.second_dan_choice"
+                        @change="markDirty()"
+                        data-testid="flex-2nd-dan-select"
+                        class="border rounded px-3 py-2 text-sm w-full sm:w-auto">
+                    <option value="">(none selected)</option>
+                    <optgroup label="Combat rolls">
+                        <template x-for="id in MANTIS_2ND_DAN_COMBAT_ROLLS" :key="'fc'+id">
+                            <option :value="id" x-text="MANTIS_2ND_DAN_LABELS[id]"></option>
+                        </template>
+                    </optgroup>
+                    <optgroup label="School knacks">
+                        <template x-for="kid in mantisEligibleKnacks()" :key="'fk'+kid">
+                            <option :value="kid" x-text="KNACK_NAMES[kid] || kid"></option>
+                        </template>
+                    </optgroup>
+                    <optgroup label="Skills">
+                        <template x-for="sid in MANTIS_2ND_DAN_SKILL_IDS" :key="'fs'+sid">
+                            <option :value="sid" x-text="SKILL_NAMES[sid] || sid"></option>
+                        </template>
+                    </optgroup>
+                </select>
+            </div>
+
             <!-- Hidden field for resolved school ring choice (updated by Alpine when school has fixed ring) -->
             <input type="hidden" name="school_ring_choice" x-model="schoolRingChoice">
         </section>
@@ -1403,6 +1438,14 @@ const MANTIS_2ND_DAN_SKILL_IDS = Object.keys(SKILL_NAMES).sort(
 );
 const MANTIS_NON_ROLLABLE_KNACKS = new Set([
     'discern_honor', 'worldliness', 'otherworldliness', 'conviction',
+]);
+
+// Schools whose 2nd Dan reads "free raise on a roll type of your choice"
+// (writes to techniqueChoices.second_dan_choice rather than the Mantis-
+// specific key). Mirrors entries in SCHOOL_TECHNIQUE_BONUSES whose
+// second_dan_free_raise is None.
+const FLEXIBLE_2ND_DAN_SCHOOLS = new Set([
+    'ide_diplomat', 'isawa_ishi', 'shugenja', 'suzume_overseer',
 ]);
 
 // Skill -> Ring mapping

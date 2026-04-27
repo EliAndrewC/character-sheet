@@ -498,8 +498,11 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "togashi_daily_athletics_raises": character.school == "togashi_ise_zumi" and dan >= 3,
         "togashi_daily_raises_max": 4 * (char_dict.get("skills") or {}).get("precepts", 0) if character.school == "togashi_ise_zumi" and dan >= 3 else 0,
         "togashi_daily_raises_per_roll": (char_dict.get("skills") or {}).get("precepts", 0) if character.school == "togashi_ise_zumi" and dan >= 3 else 0,
-        # Merchant Special: spend VP after seeing roll
-        "merchant_post_roll_vp": character.school == "merchant",
+        # Merchant Special: spend VP after seeing roll.
+        # Suzume Overseer shares this special ability - in-fiction, the Suzume
+        # family of the Sparrow clan use Doji Artisan and Merchant techniques
+        # without claiming them as their own.
+        "merchant_post_roll_vp": character.school in ("merchant", "suzume_overseer"),
         # Merchant 5th Dan: once-per-roll selective reroll, subject to sum >= 5*(X-1)
         "merchant_5th_dan_reroll": character.school == "merchant" and dan >= 5,
         # Shiba 5th Dan: lower opponent TN after parry (display note)

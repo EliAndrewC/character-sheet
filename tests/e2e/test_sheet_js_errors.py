@@ -19,6 +19,7 @@ SCHOOLS_TO_TEST = [
     "isawa_ishi",            # spellcaster, absorb_void/kharmic_spin knacks
     "kakita_duelist",        # duelist, initiative Phase 0 ability
     "mantis_wave_treader",   # bushi, "Any" ring (all five), worldliness knack
+    "suzume_overseer",       # court, no 4th Dan technique, shares Doji+Merchant flags
 ]
 
 

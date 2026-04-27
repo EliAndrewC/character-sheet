@@ -1920,6 +1920,40 @@ _SCHOOLS_LIST: List[School] = [
     ),
 
     School(
+        id="suzume_overseer",
+        name="Suzume Overseer",
+        school_ring=Ring.WATER.value,
+        category="court",
+        # The Suzume family of the Sparrow clan is drawn from Crane clan
+        # Doji Artisans and merchants - their school techniques are literally
+        # those other schools' techniques applied without claim.
+        special_ability=(
+            "You may spend void points after you see the results of your "
+            "initial roll."
+        ),
+        school_knacks=["oppose_social", "pontificate", "worldliness"],
+        techniques={
+            1: "Roll one extra die on precepts, commerce, and wound check rolls.",
+            2: "You get a free raise on a type of roll of your choice.",
+            3: (
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your precepts skill, which may be applied to the following "
+                "rolls: commerce, heraldry, sincerity, tact, attack, and "
+                "wound checks. You may not spend more than X of these free "
+                "raises on a single roll."
+            ),
+            # 4th Dan intentionally omitted: contested-roll bonuses for higher
+            # skill aren't in our system, and the ring-raise half is shared
+            # with Merchant 4th Dan which we also don't expose here.
+            5: (
+                "When making any TN or contested roll, you receive a bonus "
+                "equal to (X-10) / 5 where X is the TN or result of your "
+                "opponent's contested roll."
+            ),
+        },
+    ),
+
+    School(
         id="shosuro_actor",
         name="Shosuro Actor",
         school_ring=Ring.AIR.value,
@@ -2635,6 +2669,19 @@ SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
             "source_skill": "sincerity",
             "applicable_to": [
                 "acting", "heraldry", "sincerity", "sneaking",
+                "attack", "wound_check",
+            ],
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
+    },
+    "suzume_overseer": {
+        "first_dan_extra_die": ["precepts", "commerce", "wound_check"],
+        "second_dan_free_raise": None,  # flexible: player picks at Dan 2
+        "third_dan": {
+            "source_skill": "precepts",
+            "applicable_to": [
+                "commerce", "heraldry", "sincerity", "tact",
                 "attack", "wound_check",
             ],
             "formula": "2X",
