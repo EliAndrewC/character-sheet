@@ -11,7 +11,7 @@
 
 > Once per target per combat round or conversation, you may substitute your School Ring in place of the usual ring when making a roll involving that target.
 
-**Status:** Server-side foundation (Phase 7), skill-roll submenu (Phase 8), and Attack/Wound-Check modal checkboxes (Phase 9) complete; parry menu pending Phase 10; final exclusion sweep + importer integration pending Phase 11.
+**Status:** Fully implemented across server + UI (Phases 7-11). Iaijutsu rolls and equal-value swaps are excluded server-side via `_attach_kitsune_swaps`; UI gates are defensive. The importer recognizes `third_dan_skill_choices` in source documents.
 
 Scope decisions:
 - Usage is **not tracked** - attack rolls etc. carry no target identity, so the once-per-target-per-round limit is enforced by player honor.
@@ -55,6 +55,35 @@ When the user rolls with the checkbox checked, `rollAttack` and `rollWoundCheck`
 iaijutsu rolls intentionally bypass the Attack modal (Kitsune lacks the Kakita-specific `knack:iaijutsu:attack` formula), so the iaijutsu exclusion happens upstream in formula construction rather than via UI gating.
 
 **Clicktests:** 7 cases — attack-modal checkbox visible + swaps prob table, attack hidden when ring values equal, iaijutsu knack roll has no swap, WC modal checkbox visible + swaps prob table, WC hidden when school ring is Water (default), attack swap annotation, WC swap annotation.
+
+### Phase 10: Parry top-level menu entries
+
+The parry roll menu (`rollMenuHasParry` template) gains a `kitsune-parry-swap-block` containing two extra top-level entries — "Roll Parry ({SchoolRing})" and "Predeclared {SchoolRing}-Parry (+5)" — each with its own VP submenu mirroring the existing Air parry entries. Visibility gate: `formulas.parry.kitsune_swap` is attached AND `kitsune_swap.kept > parry.kept` (i.e., the swap is an upgrade). The `kept > kept` check covers both the spec's "school ring isn't Air" requirement (server already excludes equal-value swaps) and the "school ring's value > Air's value" requirement (downgrade swaps don't appear).
+
+The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason, useKitsuneSwap)`. The swap is applied before the +5 stacks. The Roll-swap entry uses the existing `executeRoll(key, voidSpent, option, owSpent, useKitsuneSwap=true)` from Phase 8.
+
+**Clicktests:** 6 cases — block visible when school ring higher than Air, hidden when school ring IS Air, hidden when values equal, swap-Roll formula correctness, predeclared-swap with +5, void-submenu under swap entry.
+
+### Phase 11: Polish + importer
+
+**Iaijutsu exclusion sweep:** every UI surface (skill submenu, attack-modal checkbox, WC-modal checkbox, parry submenu) gates on the formula's `kitsune_swap` sub-dict, which `_attach_kitsune_swaps` server-side never attaches to iaijutsu paths (`knack:iaijutsu`, `knack:iaijutsu:strike`, `knack:iaijutsu:attack`). The iaijutsu duel modal is a separate self-contained flow with no Kitsune UI.
+
+**Equal-ring suppression sweep:** `_diff_or_none` server-side returns None when the swap's rolled/kept matches the original's, so equal-value swaps are never attached. Confirmed working for the edge case Air=Water=3 with school ring Water.
+
+**Importer integration:** the LLM extraction schema (`app/services/import_schema.py`) gained a `third_dan_skill_choices: List[str]` field with a Kitsune-specific description. `app/services/import_validate.py::_resolve_technique_choices` resolves the source-stated skill names against the SKILLS catalog, dropping iaijutsu (rules-excluded — surfaces a "iaijutsu is not eligible" reason) and unknown names ("unknown skill name" reason). Stub payloads in `app/services/import_llm.py` updated to keep schema consistent. Existing `Fox` / `Fox Warden` / `Kitsune` school-name aliases (Phase 1) continue to resolve to `kitsune_warden`.
+
+**Unit tests:**
+- `test_dice.py::TestKitsuneWarden::test_special_ability_never_offered_on_iaijutsu_paths`
+- `test_dice.py::TestKitsuneWarden::test_special_ability_no_op_when_school_ring_value_equals_default_ring_value`
+- `test_import_validate.py::test_kitsune_warden_third_dan_skill_choices_resolved`
+- `test_import_validate.py::test_kitsune_warden_third_dan_drops_iaijutsu_with_warning`
+- `test_import_validate.py::test_kitsune_warden_third_dan_unknown_skill_dropped`
+- `test_import_validate.py::test_kitsune_warden_third_dan_empty_omits_key`
+
+**Clicktests:**
+- `test_iaijutsu_duel.py::test_kitsune_warden_iaijutsu_duel_offers_no_special_ability_swap`
+- `test_iaijutsu_duel.py::test_kitsune_warden_iaijutsu_strike_has_no_swap_in_roll_menu`
+- `test_school_abilities.py::test_kitsune_skill_submenu_hidden_when_air_equals_water_in_value`
 
 ---
 

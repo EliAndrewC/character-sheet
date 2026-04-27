@@ -3106,6 +3106,72 @@
                             </template>
                         </div>
                     </div>
+                    {# Kitsune Warden Special Ability parry entries.
+                       Visible when the parry formula carries a kitsune_swap
+                       AND the swap is an UPGRADE (kept > kept). The user's
+                       spec calls out that downgrade swaps shouldn't clutter
+                       the menu; the gate `kitsune_swap.kept > kept` covers
+                       both "school ring isn't Air" (would have same kept
+                       only if values match, which kitsune_swap excludes
+                       upstream) and "school ring's value > Air's value"
+                       (the upgrade requirement). Each entry has its own
+                       VP submenu mirroring the existing Air parry entries. #}
+                    <template x-if="formulas[rollMenuKey]?.kitsune_swap
+                                    && formulas[rollMenuKey]?.kitsune_swap?.kept > (formulas[rollMenuKey]?.kept || 0)">
+                        <div data-testid="kitsune-parry-swap-block" class="border-t border-ink/10 pt-1 mt-1">
+                            <div class="px-4 py-1 text-xs text-ink/50">
+                                Kitsune Warden:
+                                <span x-text="formulas[rollMenuKey].kitsune_swap.kitsune_swap_to_ring"></span>
+                                instead of <span x-text="formulas[rollMenuKey].kitsune_swap.kitsune_swap_from_ring"></span>
+                            </div>
+                            <div class="relative"
+                                 @mouseenter="parryHoverRow = 'kitsune-roll'"
+                                 @mouseleave="parryHoverRow = null">
+                                <button type="button"
+                                        data-testid="kitsune-parry-swap-roll"
+                                        @click="executeRoll(rollMenuKey, 0, null, 0, true)"
+                                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                                    <span>Roll Parry (<span x-text="formulas[rollMenuKey].kitsune_swap.kitsune_swap_to_ring"></span>)</span>
+                                    <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                </button>
+                                <div x-show="parryHoverRow === 'kitsune-roll' && rollMenuOptions.length > 0"
+                                     x-cloak
+                                     data-parry-void-submenu="kitsune-roll"
+                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                    <template x-for="opt in rollMenuOptions" :key="'kpr'+opt.count">
+                                        <button type="button"
+                                                @click="executeRoll(rollMenuKey, opt.count, opt, 0, true)"
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                            <span x-text="opt.label"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+                            <div class="relative"
+                                 @mouseenter="parryHoverRow = 'kitsune-predeclared'"
+                                 @mouseleave="parryHoverRow = null">
+                                <button type="button"
+                                        data-testid="kitsune-parry-swap-predeclared"
+                                        @click="executeRollWithExtraFlat(rollMenuKey, 0, null, 5, 'predeclared parry', true)"
+                                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                                    <span>Predeclared <span x-text="formulas[rollMenuKey].kitsune_swap.kitsune_swap_to_ring"></span>-Parry <span class="text-xs text-ink/50">(+5)</span></span>
+                                    <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                </button>
+                                <div x-show="parryHoverRow === 'kitsune-predeclared' && rollMenuOptions.length > 0"
+                                     x-cloak
+                                     data-parry-void-submenu="kitsune-predeclared"
+                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                    <template x-for="opt in rollMenuOptions" :key="'kpp'+opt.count">
+                                        <button type="button"
+                                                @click="executeRollWithExtraFlat(rollMenuKey, opt.count, opt, 5, 'predeclared parry', true)"
+                                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                            <span x-text="opt.label + ' + predeclared (+5)'"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                     {# Athletics parry: only appears when the parry menu is
                        for the regular ``parry`` key, an athletics:parry
                        formula exists, AND the school treats athletics as a
@@ -3248,20 +3314,23 @@
                     </div>
 
                     {# Kitsune Warden Special Ability: swap the wound-check
-                       ring (Water) for the school ring. Visible only when
+                       ring (Water) for the school ring. Rendered only when
                        the formula carries kitsune_swap. Iaijutsu strikes
-                       are excluded by the formula builder (no kitsune_swap
-                       attached). #}
-                    <label x-show="formulas.wound_check?.kitsune_swap && !wcIsStrike" x-cloak
-                           class="flex items-center gap-2 text-sm bg-parchment rounded p-2 cursor-pointer">
-                        <input type="checkbox" x-model="wcKitsuneSwap"
-                               data-testid="kitsune-wc-ring-swap">
-                        <span>
-                            Use Kitsune Warden Special Ability
-                            (roll with <span class="font-bold" x-text="formulas.wound_check?.kitsune_swap?.kitsune_swap_to_ring"></span>
-                            instead of <span x-text="formulas.wound_check?.kitsune_swap?.kitsune_swap_from_ring"></span>)
-                        </span>
-                    </label>
+                       are excluded by the formula builder. template x-if
+                       keeps the input out of the DOM entirely for non-
+                       Kitsune characters so the existing Daidoji
+                       counterattack-checkbox test isn't ambiguous. #}
+                    <template x-if="formulas.wound_check?.kitsune_swap && !wcIsStrike">
+                        <label class="flex items-center gap-2 text-sm bg-parchment rounded p-2 cursor-pointer">
+                            <input type="checkbox" x-model="wcKitsuneSwap"
+                                   data-testid="kitsune-wc-ring-swap">
+                            <span>
+                                Use Kitsune Warden Special Ability
+                                (roll with <span class="font-bold" x-text="formulas.wound_check?.kitsune_swap?.kitsune_swap_to_ring"></span>
+                                instead of <span x-text="formulas.wound_check?.kitsune_swap?.kitsune_swap_from_ring"></span>)
+                            </span>
+                        </label>
+                    </template>
 
                     {# Probability table #}
                     <div class="overflow-x-auto">
@@ -4114,21 +4183,24 @@
                     </div>
 
                     {# Kitsune Warden Special Ability: swap the attack ring
-                       for the school ring. Visible only when the formula
+                       for the school ring. Rendered only when the formula
                        carries a kitsune_swap sub-dict (i.e., school ring
                        value differs from Fire and the variant is not
-                       iaijutsu). Toggling re-renders the probability table
-                       from atkProbs[atkKey].kitsune_swap. #}
-                    <label x-show="atkFormula?.kitsune_swap" x-cloak
-                           class="flex items-center gap-2 text-sm bg-parchment rounded p-2 cursor-pointer">
-                        <input type="checkbox" x-model="atkKitsuneSwap"
-                               data-testid="kitsune-attack-ring-swap">
-                        <span>
-                            Use Kitsune Warden Special Ability
-                            (roll with <span class="font-bold" x-text="atkFormula?.kitsune_swap?.kitsune_swap_to_ring"></span>
-                            instead of <span x-text="atkFormula?.kitsune_swap?.kitsune_swap_from_ring"></span>)
-                        </span>
-                    </label>
+                       iaijutsu); template x-if removes the input from the
+                       DOM entirely for non-Kitsune characters so generic
+                       'input[type=checkbox]' selectors in other tests
+                       aren't ambiguous. #}
+                    <template x-if="atkFormula?.kitsune_swap">
+                        <label class="flex items-center gap-2 text-sm bg-parchment rounded p-2 cursor-pointer">
+                            <input type="checkbox" x-model="atkKitsuneSwap"
+                                   data-testid="kitsune-attack-ring-swap">
+                            <span>
+                                Use Kitsune Warden Special Ability
+                                (roll with <span class="font-bold" x-text="atkFormula?.kitsune_swap?.kitsune_swap_to_ring"></span>
+                                instead of <span x-text="atkFormula?.kitsune_swap?.kitsune_swap_from_ring"></span>)
+                            </span>
+                        </label>
+                    </template>
 
                     {# Probability table #}
                     <div class="overflow-x-auto">
@@ -7374,7 +7446,7 @@
                 return text;
             },
 
-            executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason) {
+            executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason, useKitsuneSwap = false) {
                 this.rollMenuOpen = false;
                 this.parryHoverRow = null;
                 if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
@@ -7392,6 +7464,15 @@
                 this.mirumotoPointsSpentThisRoll = 0;
                 this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
+                // Kitsune Warden Special Ability swap (Phase 10): predeclared
+                // parry path. Apply the swap before the predeclared +5 stacks.
+                if (useKitsuneSwap && f.kitsune_swap) {
+                    f.rolled = f.kitsune_swap.rolled;
+                    f.kept = f.kitsune_swap.kept;
+                    f.label = f.kitsune_swap.label;
+                    f.kitsune_swap_from_ring = f.kitsune_swap.kitsune_swap_from_ring;
+                    f.kitsune_swap_to_ring = f.kitsune_swap.kitsune_swap_to_ring;
+                }
                 f.flat += extraFlat;
                 f.bonuses = [...(f.bonuses || []), { label: reason, amount: extraFlat }];
                 this._captureShinjoParryDieValue(f);

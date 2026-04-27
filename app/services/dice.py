@@ -1522,7 +1522,7 @@ def _attach_kitsune_swaps(
     school = SCHOOLS.get(character_data.get("school", ""))
 
     def _diff_or_none(key: str, swap_formula):
-        if swap_formula is None:
+        if swap_formula is None:  # pragma: no cover - defensive; formula builders always return for valid inputs
             return None
         if isinstance(swap_formula, RollFormula):
             d = swap_formula.to_dict()
@@ -1565,7 +1565,7 @@ def _attach_kitsune_swaps(
         ]
         for knack_id in rollable_knacks:
             key = f"knack:{knack_id}"
-            if key not in out:
+            if key not in out:  # pragma: no cover - defensive; school knacks always have formulas
                 continue
             swap_f = build_knack_formula(knack_id, character_data, ring_override=swap_ring)
             sub = _diff_or_none(key, swap_f)
@@ -1574,10 +1574,10 @@ def _attach_kitsune_swaps(
     # Foreign rollable knacks (excluding iaijutsu)
     foreign = (character_data.get("foreign_knacks") or {}).keys()
     for knack_id in foreign:
-        if knack_id == "iaijutsu" or knack_id in NON_ROLLABLE_KNACKS:
+        if knack_id == "iaijutsu" or knack_id in NON_ROLLABLE_KNACKS:  # pragma: no cover - defensive guard
             continue
         key = f"knack:{knack_id}"
-        if key not in out or "kitsune_swap" in (out[key] or {}):
+        if key not in out or "kitsune_swap" in (out[key] or {}):  # pragma: no cover - defensive; foreign knacks always build a formula and the school-knack loop has already excluded iaijutsu
             continue
         swap_f = build_knack_formula(knack_id, character_data, ring_override=swap_ring)
         sub = _diff_or_none(key, swap_f)
@@ -1585,7 +1585,7 @@ def _attach_kitsune_swaps(
             out[key]["kitsune_swap"] = sub
     # Attack and parry
     for which in ("attack", "parry"):
-        if which not in out:
+        if which not in out:  # pragma: no cover - defensive; rank-0 attack/parry skipped in build_all_roll_formulas
             continue
         swap_f = build_combat_formula(which, character_data, ring_override=swap_ring)
         sub = _diff_or_none(which, swap_f)

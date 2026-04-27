@@ -100,9 +100,15 @@ class ExtractedCharacter(BaseModel):
 
     # --- Technique choices --------------------------------------------
     # Only for schools with player-choosable 1st / 2nd Dan techniques
-    # (isawa_ishi, ide_diplomat, priest, shugenja - see game_data).
+    # (isawa_ishi, ide_diplomat, priest, shugenja, kitsune_warden,
+    # suzume_overseer - see game_data).
     first_dan_choices: List[str] = Field(default_factory=list)
     second_dan_choice: Optional[str] = None
+    # Kitsune Warden 3rd Dan: three player-chosen skills the adventure
+    # raises pool can also be applied to (in addition to the always-on
+    # attack and wound check). Skill names as written; iaijutsu is dropped
+    # by the resolver.
+    third_dan_skill_choices: List[str] = Field(default_factory=list)
 
     # --- Honor / Rank / Recognition -----------------------------------
     honor: Optional[float] = None
@@ -244,6 +250,14 @@ GEMINI_RESPONSE_SCHEMA: Dict[str, Any] = {
                            "Empty list if not applicable.",
         },
         "second_dan_choice": {"type": "STRING", "nullable": True},
+        "third_dan_skill_choices": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"},
+            "description": "Kitsune Warden 3rd Dan: skill names (as "
+                           "written) chosen as the three additional "
+                           "applicable_to entries. Iaijutsu is excluded "
+                           "and will be dropped by the resolver.",
+        },
 
         # Honor / Rank / Recognition
         "honor":       {"type": "NUMBER", "nullable": True},

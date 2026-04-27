@@ -201,6 +201,13 @@ class TestForeignKnackXP:
         assert items[1] == {"xp": 4, "label": "Feint", "from_val": 1, "to_val": 2}
         assert items[2] == {"xp": 6, "label": "Feint", "from_val": 2, "to_val": 3}
 
+    def test_xp_items_skips_rank_zero(self):
+        """A foreign knack at rank 0 contributes no items (defensive guard)."""
+        items = foreign_knack_xp_items({"feint": 0, "athletics": 2})
+        # feint at 0 produces nothing; athletics at 2 produces 2 rows.
+        assert len(items) == 2
+        assert all(item["label"] == "Athletics" for item in items)
+
     def test_breakdown_section_present_and_summed(self):
         char = {
             "school": "akodo_bushi",

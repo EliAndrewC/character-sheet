@@ -224,6 +224,44 @@ class TestKitsuneWarden:
         assert "substitute your School Ring" in school.special_ability
 
 
+class TestEligibleForeignKnackIds:
+    """Coverage for eligible_foreign_knack_ids - excludes own school
+    knacks, supernatural knacks, and any already-taken foreign ids."""
+
+    def test_excludes_own_school_knacks(self):
+        from app.game_data import eligible_foreign_knack_ids
+        ids = eligible_foreign_knack_ids("akodo_bushi", [])
+        akodo = SCHOOLS["akodo_bushi"]
+        for own_kid in akodo.school_knacks:
+            assert own_kid not in ids
+
+    def test_excludes_supernatural_knacks(self):
+        from app.game_data import eligible_foreign_knack_ids, SUPERNATURAL_KNACK_IDS
+        ids = eligible_foreign_knack_ids("akodo_bushi", [])
+        for sup_kid in SUPERNATURAL_KNACK_IDS:
+            assert sup_kid not in ids
+
+    def test_excludes_already_taken_foreign_ids(self):
+        from app.game_data import eligible_foreign_knack_ids
+        ids = eligible_foreign_knack_ids("akodo_bushi", ["athletics"])
+        assert "athletics" not in ids
+
+    def test_returns_sorted_by_display_name(self):
+        from app.game_data import eligible_foreign_knack_ids
+        ids = eligible_foreign_knack_ids("akodo_bushi", [])
+        names = [SCHOOL_KNACKS[k].name for k in ids]
+        assert names == sorted(names)
+
+    def test_empty_school_id_returns_full_eligible_pool(self):
+        """When school_id is empty (e.g. before school selection), only
+        supernatural knacks are excluded."""
+        from app.game_data import eligible_foreign_knack_ids, SUPERNATURAL_KNACK_IDS
+        ids = eligible_foreign_knack_ids("", [])
+        assert "athletics" in ids  # non-supernatural, no own-school filter
+        for sup_kid in SUPERNATURAL_KNACK_IDS:
+            assert sup_kid not in ids
+
+
 class TestSchoolKnacks:
     def test_knack_count(self):
         assert len(SCHOOL_KNACKS) == 20

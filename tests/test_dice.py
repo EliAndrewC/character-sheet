@@ -4009,3 +4009,103 @@ class TestKitsuneWarden:
         char = self._swap_char()
         f = build_skill_formula("bragging", char, ring_override="Water")
         assert f.label == "Bragging (Water)"
+
+    # --- Phase 11 polish: iaijutsu exclusion + equal-ring suppression sweeps ---
+
+    def test_special_ability_never_offered_on_iaijutsu_paths(self):
+        """The post-pass _attach_kitsune_swaps must NOT attach kitsune_swap
+        to any iaijutsu-related formula key (knack:iaijutsu and the
+        Kakita-specific knack:iaijutsu:strike / :attack variants)."""
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+            skills={"precepts": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        for key in formulas:
+            if "iaijutsu" in key:
+                assert "kitsune_swap" not in formulas[key], \
+                    f"{key} should NOT have kitsune_swap; got {formulas[key].get('kitsune_swap')}"
+
+    def test_special_ability_no_op_when_school_ring_value_equals_default_ring_value(self):
+        """When the school ring's value equals an in-scope formula's
+        natural ring's value, the swap is a no-op identity and the
+        kitsune_swap sub-dict is not attached."""
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+            # Water and Air both at 3 - bragging (Air) -> swap to Water
+            # would not change rolled/kept.
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+            skills={"bragging": 2},
+            parry=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        # Bragging is Air (value 3), school ring is Water (value 3): equal,
+        # no swap.
+        assert formulas["skill:bragging"].get("kitsune_swap") is None
+        # Parry is Air (value 3), school ring is Water (value 3): equal,
+        # no swap.
+        assert formulas["parry"].get("kitsune_swap") is None
+        # Attack is Fire (value 2), school ring is Water (value 3):
+        # different value, swap attached.
+        assert formulas["attack"].get("kitsune_swap") is not None
+
+    def test_wound_check_kitsune_swap_attaches_when_school_ring_differs_from_water(self):
+        """Coverage: the WC kitsune_swap attach branch fires for school
+        ring != Water (e.g. Earth). Default WC uses Water; swap uses Earth."""
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Earth",
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+            rings={"Air": 2, "Fire": 2, "Earth": 3, "Water": 2, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        wc_swap = formulas["wound_check"].get("kitsune_swap")
+        assert wc_swap is not None
+        assert wc_swap["kitsune_swap_to_ring"] == "Earth"
+        assert wc_swap["kitsune_swap_from_ring"] == "Water"
+        # rolled = Earth+1 = 4, kept = Earth = 3
+        assert wc_swap["rolled"] == 4
+        assert wc_swap["kept"] == 3
+
+    def test_kitsune_swap_attaches_to_foreign_rollable_knacks(self):
+        """Coverage: a Kitsune with a foreign rollable knack (athletics)
+        gets kitsune_swap attached on the foreign-knack formula too."""
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+            foreign_knacks={"athletics": 1},
+        )
+        formulas = build_all_roll_formulas(char)
+        # Athletics knack's natural ring is Earth (value 2). Swap to Water
+        # (value 4) gives rolled = 1 + 4 = 5, kept = 4.
+        ath_swap = formulas["knack:athletics"].get("kitsune_swap")
+        assert ath_swap is not None
+        assert ath_swap["kitsune_swap_from_ring"] == "Earth"
+        assert ath_swap["kitsune_swap_to_ring"] == "Water"
+        assert ath_swap["rolled"] == 5
+        assert ath_swap["kept"] == 4
+
+    def test_attack_bonus_sources_includes_kitsune_first_dan_pick(self):
+        """Coverage: when Kitsune Warden picks 'attack' as one of the
+        three 1st Dan picks, the attack-modal pre-roll panel's
+        bonus_sources list includes the +1-rolled-die annotation."""
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+            attack=2,
+            technique_choices={"first_dan_choices": ["attack"]},
+        )
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["attack"]
+        assert any("1st Dan" in s for s in (atk.get("bonus_sources") or [])), \
+            f"Expected '+1 rolled die from 1st Dan' in attack bonus_sources, got {atk.get('bonus_sources')}"
+

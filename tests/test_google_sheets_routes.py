@@ -500,3 +500,92 @@ class TestApiFailureAtCallback:
             )
         assert resp.status_code == 303
         assert "sheets_error=api_failed" in resp.headers["location"]
+
+
+class TestCallbackForeignKnacks:
+    """The export route iterates the character's foreign_knacks dict to
+    build char_foreign_knacks. Coverage for the legitimate-knack and
+    skip-unknown-knack branches in that loop."""
+
+    @patch("app.routes.google_sheets.create_spreadsheet")
+    @patch("app.routes.google_sheets.httpx.AsyncClient")
+    def test_export_with_legitimate_foreign_knack(self, mock_client_cls, mock_create, client):
+        """Foreign knack with a known id is built into char_foreign_knacks."""
+        char_id = _create_character(client)
+        session = client._test_session_factory()
+        try:
+            char = session.query(Character).filter(Character.id == char_id).first()
+            char.foreign_knacks = {"athletics": 2}
+            session.commit()
+        finally:
+            session.close()
+
+        state = "test-state"
+        client.cookies.set("google_oauth_state", state)
+        client.cookies.set("google_export_char_id", str(char_id))
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"access_token": "fake-token"}
+        mock_http = AsyncMock()
+        mock_http.post.return_value = mock_response
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_http
+        mock_create.return_value = "https://docs.google.com/spreadsheets/d/foreign1/edit"
+
+        with patch.dict(os.environ, {
+            "GOOGLE_CLIENT_ID": "test-id",
+            "GOOGLE_CLIENT_SECRET": "test-secret",
+        }):
+            resp = client.get(
+                f"/auth/google/callback?code=valid-code&state={state}",
+                follow_redirects=False,
+            )
+        assert resp.status_code == 303
+        mock_create.assert_called_once()
+        call_kwargs = mock_create.call_args.kwargs
+        assert "athletics" in (call_kwargs.get("char_foreign_knacks") or {})
+
+    @patch("app.routes.google_sheets.create_spreadsheet")
+    @patch("app.routes.google_sheets.httpx.AsyncClient")
+    def test_export_skips_unknown_foreign_knack_id(self, mock_client_cls, mock_create, client):
+        """An unknown foreign-knack id (e.g. obsolete fixture) is silently
+        skipped without crashing the export."""
+        char_id = _create_character(client)
+        session = client._test_session_factory()
+        try:
+            char = session.query(Character).filter(Character.id == char_id).first()
+            char.foreign_knacks = {"obsolete_knack_id": 1, "athletics": 1}
+            session.commit()
+        finally:
+            session.close()
+
+        state = "test-state"
+        client.cookies.set("google_oauth_state", state)
+        client.cookies.set("google_export_char_id", str(char_id))
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"access_token": "fake-token"}
+        mock_http = AsyncMock()
+        mock_http.post.return_value = mock_response
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_http
+        mock_create.return_value = "https://docs.google.com/spreadsheets/d/foreign2/edit"
+
+        with patch.dict(os.environ, {
+            "GOOGLE_CLIENT_ID": "test-id",
+            "GOOGLE_CLIENT_SECRET": "test-secret",
+        }):
+            resp = client.get(
+                f"/auth/google/callback?code=valid-code&state={state}",
+                follow_redirects=False,
+            )
+        assert resp.status_code == 303
+        mock_create.assert_called_once()
+        call_kwargs = mock_create.call_args.kwargs
+        cfk = call_kwargs.get("char_foreign_knacks") or {}
+        assert "athletics" in cfk
+        assert "obsolete_knack_id" not in cfk

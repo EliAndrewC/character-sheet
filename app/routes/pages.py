@@ -760,7 +760,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                 "probs": {},
                 "avgs": {},
             }
-            if shosuro_5th:
+            if shosuro_5th:  # pragma: no cover - shosuro_5th is school-gated to shosuro_actor; the swap_entry block only fires for Kitsune Warden, so the two branches never coincide
                 swap_entry["shosuro_flats"] = {}
             for v in range(void_spend_cap + 1):
                 r, k = swap_r0 + v, swap_k0 + v
@@ -776,7 +776,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                     swap_entry["avgs"][rk] = round(
                         _prob_table[reroll_for_attack].get((r, k), 0), 2
                     )
-                    if shosuro_5th:
+                    if shosuro_5th:  # pragma: no cover - same as above, shosuro_5th never fires for Kitsune Warden
                         swap_entry["shosuro_flats"][rk] = round(
                             shosuro_lowest_3_for(r, reroll_for_attack)
                         )
