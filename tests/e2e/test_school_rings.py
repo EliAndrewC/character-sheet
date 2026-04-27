@@ -79,3 +79,22 @@ def test_suzume_overseer_fixed_water(page, live_server_url):
     val = page.locator('input[name="school_ring_choice"]').input_value()
     assert val == "Water"
     assert not page.locator('text="Choose School Ring"').is_visible()
+
+
+def test_kitsune_warden_any_non_void_dropdown_options(page, live_server_url):
+    """Kitsune Warden's 'any non-Void' ring picker offers Air/Fire/Earth/Water,
+    not Void, and the choice persists in school_ring_choice."""
+    _go_to_editor(page, live_server_url)
+    select_school(page, "kitsune_warden")
+    page.wait_for_timeout(500)
+    dropdown = page.locator('text="Choose School Ring"').locator('..').locator('select')
+    options = [o.strip() for o in dropdown.locator('option').all_text_contents()]
+    assert "Air" in options
+    assert "Fire" in options
+    assert "Earth" in options
+    assert "Water" in options
+    assert "Void" not in options
+    dropdown.select_option("Fire")
+    page.wait_for_timeout(300)
+    val = page.locator('input[name="school_ring_choice"]').input_value()
+    assert val == "Fire"

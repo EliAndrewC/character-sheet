@@ -1,7 +1,7 @@
 """E2E: School-specific ability UI - buttons, banked bonuses, display notes."""
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character, dismiss_wc_modal
+from tests.e2e.helpers import select_school, click_plus, click_minus, apply_changes, start_new_character, dismiss_wc_modal
 
 pytestmark = [pytest.mark.rolls]
 
@@ -623,6 +623,133 @@ def test_ide_feint_banks_tn_reduce(page, live_server_url):
     assert sa.get("ide_feint_tn_reduce") is True
     _roll_via_menu_or_direct(page, "knack:feint")
     assert page.locator('button:has-text("Bank -10 TN on target")').is_visible()
+def test_kitsune_1st_dan_three_picker_dropdowns_visible_at_dan_1(page, live_server_url):
+    """Kitsune Warden 1st Dan: edit page renders three pick dropdowns."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    select_school(page, "kitsune_warden")
+    page.wait_for_selector('[data-testid="kitsune-1st-dan-picker"]', state="visible", timeout=5000)
+    picker = page.locator('[data-testid="kitsune-1st-dan-picker"]')
+    assert picker.locator('select').count() == 3
+    for slot in (0, 1, 2):
+        assert page.locator(f'[data-testid="kitsune-1st-dan-slot-{slot}"]').is_visible()
+
+
+def test_kitsune_1st_dan_picker_includes_iaijutsu_option(page, live_server_url):
+    """Iaijutsu IS eligible for the Kitsune 1st Dan picker (regression guard:
+    the special ability and 3rd Dan picker exclude iaijutsu, but 1st Dan does
+    not)."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    select_school(page, "kitsune_warden")
+    page.wait_for_selector('[data-testid="kitsune-1st-dan-slot-0"]', state="visible", timeout=5000)
+    options = page.locator('[data-testid="kitsune-1st-dan-slot-0"] option').all_text_contents()
+    assert any("Iaijutsu" in o for o in options), \
+        f"Expected 'Iaijutsu' option in slot 0; got: {options}"
+
+
+def test_kitsune_1st_dan_picks_distinct_no_duplicates(page, live_server_url):
+    """Selecting a value in slot 0 disables the same option in slots 1 and 2."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    select_school(page, "kitsune_warden")
+    page.wait_for_selector('[data-testid="kitsune-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.locator('[data-testid="kitsune-1st-dan-slot-0"]').select_option("attack")
+    page.wait_for_timeout(300)
+    # Now "Attack" should be disabled in slots 1 and 2.
+    for slot in (1, 2):
+        disabled_attr = page.locator(
+            f'[data-testid="kitsune-1st-dan-slot-{slot}"] option[value="attack"]'
+        ).get_attribute("disabled")
+        assert disabled_attr is not None, f"Expected attack option disabled in slot {slot}"
+
+
+def test_kitsune_1st_dan_pick_extra_die_applied_to_roll(page, live_server_url):
+    """Picking 'bragging' as a 1st Dan choice grants +1 rolled die on the
+    bragging skill formula (verified end-to-end through the sheet's embedded
+    formula JSON)."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "KitsuneFirstDanRoll")
+    select_school(page, "kitsune_warden")
+    # Need a non-zero bragging skill to see the bonus reflected in rolled.
+    click_plus(page, "skill_bragging", 2)
+    page.wait_for_selector('[data-testid="kitsune-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.locator('[data-testid="kitsune-1st-dan-slot-0"]').select_option("bragging")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Pick bragging for 1st Dan")
+    # Now on the sheet. Bragging rolls Air (default 2). rank 2 + Air 2 + 1 = 5.
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    f = page.evaluate("""() => {
+        const el = document.getElementById('roll-formulas');
+        const data = JSON.parse(el.textContent || '{}');
+        return data['skill:bragging'] || null;
+    }""")
+    assert f is not None
+    assert f["rolled"] == 5, f"Expected rolled=5 (rank 2 + Air 2 + 1), got {f['rolled']}"
+
+
+def test_kitsune_1st_dan_picks_persist_across_reload(page, live_server_url):
+    """The three-pick selection survives a page reload."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "KitsunePersist")
+    select_school(page, "kitsune_warden")
+    page.wait_for_selector('[data-testid="kitsune-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.locator('[data-testid="kitsune-1st-dan-slot-0"]').select_option("attack")
+    page.wait_for_timeout(200)
+    page.locator('[data-testid="kitsune-1st-dan-slot-1"]').select_option("wound_check")
+    page.wait_for_timeout(200)
+    page.locator('[data-testid="kitsune-1st-dan-slot-2"]').select_option("initiative")
+    # Sanity-check the in-memory model captured the picks before the save fires.
+    in_memory_picks = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.techniqueChoices) return d.techniqueChoices.first_dan_choices || null;
+        }
+        return null;
+    }""")
+    assert in_memory_picks == ["attack", "wound_check", "initiative"], \
+        f"Picker did not write to techniqueChoices.first_dan_choices: {in_memory_picks}"
+    # Force a flush of the autosave debounce so the picks reach the server
+    # before reload. waiting on the "Saved" indicator is unreliable here:
+    # select_school fires its own "Saved" cycle, and the picks-driven save
+    # may not have fired yet by the time we check.
+    page.evaluate("""async () => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.flushPendingSave === 'function') {
+                await d.flushPendingSave();
+                return;
+            }
+        }
+    }""")
+    page.reload()
+    page.wait_for_selector('[data-testid="kitsune-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.wait_for_timeout(300)  # let template x-for finish rendering options
+    saved_picks = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.techniqueChoices) return d.techniqueChoices.first_dan_choices || null;
+        }
+        return null;
+    }""")
+    assert saved_picks == ["attack", "wound_check", "initiative"], \
+        f"Picks did not survive reload: {saved_picks}"
+    # And the dropdowns themselves should reflect the saved picks.
+    assert page.locator('[data-testid="kitsune-1st-dan-slot-0"]').input_value() == "attack"
+    assert page.locator('[data-testid="kitsune-1st-dan-slot-1"]').input_value() == "wound_check"
+    assert page.locator('[data-testid="kitsune-1st-dan-slot-2"]').input_value() == "initiative"
+
+
 def test_isawa_ishi_1st_dan_skill_selection(page, live_server_url):
     """Isawa Ishi 1st Dan: technique_choices apply +1 rolled die to chosen skills."""
     _create_char(page, live_server_url, "IsawaIshi1", "isawa_ishi",
@@ -9642,6 +9769,48 @@ def test_suzume_1st_dan_extra_die_on_wound_check(page, live_server_url):
 
 
 @pytest.mark.school_abilities
+def test_kitsune_2nd_dan_picker_visible_and_saves(page, live_server_url):
+    """Editor UI: Kitsune Warden uses the shared flexible-2nd-Dan picker.
+    Picker hidden at Dan 1, visible at Dan 2, picks save and apply +5."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Kitsune2Picker")
+    select_school(page, "kitsune_warden")
+    # Pick a school ring so the school ring choice is set.
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    # Picker is hidden at Dan 1.
+    picker = page.locator('[data-testid="flex-2nd-dan-picker"]')
+    assert not picker.is_visible()
+    # Raise all three school knacks to 2 to reach Dan 2.
+    click_plus(page, "knack_absorb_void", 1)
+    click_plus(page, "knack_commune", 1)
+    click_plus(page, "knack_iaijutsu", 1)
+    page.wait_for_timeout(200)
+    assert picker.is_visible()
+    # Need a non-zero bragging skill so the 2nd Dan +5 actually shows up
+    # on a roll formula we can inspect.
+    click_plus(page, "skill_bragging", 2)
+    select = page.locator('[data-testid="flex-2nd-dan-select"]')
+    select.select_option("bragging")
+    page.evaluate("""async () => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.flushPendingSave === 'function') {
+                await d.flushPendingSave();
+                return;
+            }
+        }
+    }""")
+    apply_changes(page, "Kitsune 2nd Dan picker")
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    f = _get_formula(page, "skill:bragging")
+    assert any(b.get("label") == "2nd Dan technique" and b.get("amount") == 5
+               for b in f.get("bonuses", []))
+
+
+@pytest.mark.school_abilities
 def test_suzume_2nd_dan_picker_visible_and_saves(page, live_server_url):
     """Editor UI: the flexible 2nd Dan picker appears at Dan>=2 and saves."""
     page.goto(live_server_url)
@@ -9792,4 +9961,876 @@ def test_suzume_5th_dan_wound_check_auto_bonus(page, live_server_url):
         return 0;
     }""")
     assert bonus == 4  # floor((30-10)/5)
+
+
+# ---------------------------------------------------------------------------
+# Kitsune Warden 3rd Dan — adventure raises with player-chosen applicable skills
+# ---------------------------------------------------------------------------
+
+
+def _make_kitsune(page, live_server_url, name, dan=1, picks=None, **kwargs):
+    """Create a Kitsune Warden at the given Dan with optional 3rd Dan
+    skill picks. Picks live in technique_choices.third_dan_skill_choices."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, "kitsune_warden")
+    # Pick a fixed school ring so the character is well-defined.
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    page.wait_for_timeout(200)
+    # Set knack ranks directly on the Alpine model. click_plus drops clicks
+    # under autosave reflow when ramping multiple knacks to high ranks.
+    if dan > 1:
+        page.evaluate(f"""() => {{
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {{
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.knacks) {{
+                    d.knacks.absorb_void = {dan};
+                    d.knacks.commune = {dan};
+                    d.knacks.iaijutsu = {dan};
+                    return;
+                }}
+            }}
+        }}""")
+        page.wait_for_timeout(200)
+    for sid, rank in (kwargs.get("skill_overrides") or {}).items():
+        click_plus(page, f"skill_{sid}", rank)
+    # Drain any in-flight autosave from clicks BEFORE we write
+    # technique_choices via the API, otherwise the frontend's stale
+    # techniqueChoices state would clobber our picks on the next save.
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.evaluate("""async () => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.flushPendingSave === 'function') {
+                await d.flushPendingSave();
+                return;
+            }
+        }
+    }""")
+    if picks is not None:
+        # Use the autosave API directly; this is the persisted state apply
+        # will read. After the API call we sync the frontend Alpine model
+        # with what the server now has, so a subsequent save (during apply)
+        # doesn't overwrite our picks with the empty front-end value.
+        char_id = _extract_char_id(page)
+        _set_technique_choices(page, char_id, {"third_dan_skill_choices": picks})
+        page.evaluate(f"""() => {{
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {{
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.techniqueChoices !== undefined) {{
+                    d.techniqueChoices = Object.assign(
+                        {{}}, d.techniqueChoices,
+                        {{third_dan_skill_choices: {picks!r}}}
+                    );
+                    return;
+                }}
+            }}
+        }}""")
+    apply_changes(page, "Kitsune setup")
+
+
+@pytest.mark.school_abilities
+def test_kitsune_3rd_dan_skill_picker_excludes_iaijutsu(page, live_server_url):
+    """Editor: the 3rd Dan picker does NOT offer iaijutsu as an option."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    click_plus(page, "knack_absorb_void", 2)
+    click_plus(page, "knack_commune", 2)
+    click_plus(page, "knack_iaijutsu", 2)
+    page.wait_for_timeout(200)
+    page.wait_for_selector('[data-testid="kitsune-3rd-dan-picker"]', state="visible", timeout=5000)
+    options = page.locator('[data-testid="kitsune-3rd-dan-slot-0"] option').all_text_contents()
+    assert all("Iaijutsu" not in o for o in options), \
+        f"Iaijutsu should NOT be in 3rd Dan picker options; got: {options}"
+
+
+@pytest.mark.school_abilities
+def test_kitsune_3rd_dan_chosen_skill_offers_raise_button(page, live_server_url):
+    """Picking 'bragging' as a 3rd Dan applicable skill exposes the
+    Spend-raise button when rolling bragging."""
+    _make_kitsune(page, live_server_url, "K3Bragg", dan=3,
+                  picks=["bragging", "tact", "sincerity"],
+                  skill_overrides={"precepts": 1, "bragging": 1})
+    # Sanity-check: the formula has the 3rd Dan annotation, and the
+    # adventure-raises pool is non-zero. If either is wrong, the spend
+    # button won't render and the assertion below will fail mysteriously.
+    formula_max = page.evaluate("""() => {
+        const el = document.getElementById('roll-formulas');
+        const data = JSON.parse(el.textContent || '{}');
+        return data['skill:bragging']?.adventure_raises_max_per_roll || 0;
+    }""")
+    pool = page.evaluate("""() => {
+        const el = document.getElementById('adventure-raises-config');
+        return JSON.parse(el.textContent || '{}');
+    }""")
+    assert formula_max == 1, f"Expected adventure_raises_max_per_roll=1, got {formula_max}"
+    assert pool.get("available", 0) > 0, f"Expected non-zero adventure-raises pool, got {pool}"
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    assert page.locator('[data-action="spend-raise"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_3rd_dan_unpicked_skill_no_raise_button(page, live_server_url):
+    """A skill NOT in the player's three picks does NOT show the
+    Spend-raise button (etiquette unpicked)."""
+    _make_kitsune(page, live_server_url, "K3Etiq", dan=3,
+                  picks=["bragging", "tact", "sincerity"],
+                  skill_overrides={"precepts": 1, "etiquette": 1})
+    _roll_via_menu_or_direct(page, "skill:etiquette")
+    assert not page.locator('[data-action="spend-raise"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_3rd_dan_attack_always_offers_raise(page, live_server_url):
+    """Attack is in the always-on applicable_to list - even with no
+    skill picks, the attack-modal annotates 3rd Dan adventure raises."""
+    _make_kitsune(page, live_server_url, "K3Atk", dan=3,
+                  picks=[],
+                  skill_overrides={"precepts": 1})
+    # Verify the attack formula is annotated with the 3rd Dan max-per-roll
+    # cap (attack is always-on regardless of picks). The attack-modal's
+    # "Spend Free Raise (+5)" button has no data-action attribute, so we
+    # check the annotation on the formula directly.
+    formula_max = page.evaluate("""() => {
+        const el = document.getElementById('roll-formulas');
+        const data = JSON.parse(el.textContent || '{}');
+        return data['attack']?.adventure_raises_max_per_roll || 0;
+    }""")
+    assert formula_max == 1, f"Expected attack annotated with max=1, got {formula_max}"
+    _open_attack_modal_and_roll(page, "attack")
+    # The "Spend Free Raise (+5)" button is in the attack-modal post-roll
+    # panel, gated on atkFormula.adventure_raises_max_per_roll > 0. The
+    # modal renders two copies of the button (one per layout breakpoint);
+    # we just need at least one to be visible.
+    modal = page.locator('[data-modal="attack"]')
+    spend_btns = modal.locator('button:text-is("Spend Free Raise (+5)")')
+    assert spend_btns.first.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_3rd_dan_wound_check_always_offers_raise(page, live_server_url):
+    """Wound check is always-on applicable_to. A Dan 3 Kitsune with no
+    skill picks still gets the WC formula annotated, and the modal's
+    wcMaxRaisesPerRoll / wcHasDiscretionary state is non-zero so the
+    spend-raise button can render in the FAILED branch."""
+    _make_kitsune(page, live_server_url, "K3WC", dan=3, picks=[],
+                  skill_overrides={"precepts": 1})
+    formula_max = page.evaluate("""() => {
+        const el = document.getElementById('roll-formulas');
+        const data = JSON.parse(el.textContent || '{}');
+        return data['wound_check']?.adventure_raises_max_per_roll || 0;
+    }""")
+    assert formula_max == 1, f"Expected wound_check annotated with max=1, got {formula_max}"
+    _set_light_wounds(page, 3)
+    _roll_wound_check(page)
+    state = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') {
+                return {
+                    wcMaxRaisesPerRoll: d.wcMaxRaisesPerRoll,
+                    wcHasDiscretionary: d.wcHasDiscretionary,
+                };
+            }
+        }
+        return null;
+    }""")
+    # Non-zero raises-per-roll cap and discretionary flag means the modal
+    # is wired up to surface the spend button (the button itself only
+    # renders inside the FAILED branch by existing template design, so
+    # we verify the underlying state rather than the visible button).
+    assert state is not None
+    assert state["wcMaxRaisesPerRoll"] >= 1
+    assert state["wcHasDiscretionary"] is True
+
+
+@pytest.mark.school_abilities
+def test_kitsune_3rd_dan_per_adventure_counter_visible(page, live_server_url):
+    """The Tracking section shows the '3rd Dan Free Raises (Precepts)'
+    counter for a Dan 3 Kitsune with non-zero precepts."""
+    _make_kitsune(page, live_server_url, "K3Counter", dan=3, picks=[],
+                  skill_overrides={"precepts": 2})
+    counter_label = page.locator('text="3rd Dan Free Raises (Precepts)"')
+    assert counter_label.is_visible()
+
+
+# ---------------------------------------------------------------------------
+# Kitsune Warden 4th Dan — ring raise + 10-dice athletics floor
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.school_abilities
+def test_kitsune_4th_dan_athletics_roll_shows_10_dice_floor(page, live_server_url):
+    """At Dan 4, the bare athletics formula's rolled count is at least 10
+    (the (2*Ring)k(Ring) floor). With Air ring 2, base = 4 rolled; floor
+    raises it to 10. Kept stays at 2."""
+    _make_kitsune(page, live_server_url, "K4Floor", dan=4)
+    # Read the athletics:Air formula from the embedded JSON on the sheet.
+    f = page.evaluate("""() => {
+        const el = document.getElementById('roll-formulas');
+        const data = JSON.parse(el.textContent || '{}');
+        return data['athletics:Air'] || null;
+    }""")
+    assert f is not None
+    assert f["rolled"] == 10, f"Expected 10-dice floor on Air athletics, got {f['rolled']}"
+    assert f["kept"] == 2, f"Expected kept=2 (Air ring), got {f['kept']}"
+
+
+@pytest.mark.school_abilities
+def test_kitsune_below_4th_dan_athletics_uses_normal_formula(page, live_server_url):
+    """At Dan 3, no athletics floor: Air 2 -> 4k2."""
+    _make_kitsune(page, live_server_url, "K3NoFloor", dan=3)
+    f = page.evaluate("""() => {
+        const el = document.getElementById('roll-formulas');
+        const data = JSON.parse(el.textContent || '{}');
+        return data['athletics:Air'] || null;
+    }""")
+    assert f is not None
+    assert f["rolled"] == 4, f"Expected normal 4 rolled at Dan 3, got {f['rolled']}"
+
+
+@pytest.mark.school_abilities
+def test_kitsune_4th_dan_athletics_attack_hidden_without_athletics_knack(page, live_server_url):
+    """A Dan 4 Kitsune with no athletics knack does NOT see athletics-attack
+    in the attack-roll menu. Existing baseline: only Togashi Ise Zumi
+    surfaces athletics-attack/parry as standard variants; Kitsune is not
+    in that group."""
+    _make_kitsune(page, live_server_url, "K4NoAth", dan=4)
+    # Click Attack to open the roll menu (or modal if no choice menu fires).
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_timeout(300)
+    # If the chooser appears, "Athletics Attack" should NOT be there.
+    # If the attack modal opens directly, that already implies no chooser.
+    choice_menu = page.locator('[data-attack-choice-menu]')
+    if choice_menu.count() > 0 and choice_menu.is_visible():
+        athletics_choice = choice_menu.locator('[data-attack-choice="athletics_attack"]')
+        assert not athletics_choice.is_visible(), \
+            "Kitsune Warden should NOT show 'Athletics Attack' in the attack menu"
+
+
+@pytest.mark.school_abilities
+def test_kitsune_4th_dan_school_ring_auto_raise_for_water_choice(page, live_server_url):
+    """Reaching 4th Dan auto-raises the player-chosen school ring (Water for
+    this character) from 3 to 4. Mirrors test_fourth_dan_auto_raises_school_ring
+    but for an "any non-Void" school."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    page.wait_for_timeout(300)
+    # Sanity check: Alpine sees Water as the school ring.
+    state = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.getSchoolRing === 'function') {
+                return {schoolRing: d.getSchoolRing(), waterVal: d.rings?.Water,
+                        dan: d.currentDan(), knacks: {...d.knacks}};
+            }
+        }
+        return null;
+    }""")
+    assert state and state["schoolRing"] == "Water", f"schoolRing not Water: {state}"
+    # Water starts at 3 once the ring choice is made (dan 1 -> minVal 3).
+    assert page.locator('input[name="ring_water"]').input_value() == "3"
+    # Raise all three knacks to 4 directly via Alpine state - click_plus
+    # drops clicks under heavy session load, and we just want to drive Dan
+    # to 4 to observe enforceFourthDanRing.
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.knacks) {
+                d.knacks.absorb_void = 4;
+                d.knacks.commune = 4;
+                d.knacks.iaijutsu = 4;
+                return;
+            }
+        }
+    }""")
+    page.wait_for_timeout(300)
+    state2 = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.getSchoolRing === 'function') {
+                return {schoolRing: d.getSchoolRing(), waterVal: d.rings?.Water,
+                        dan: d.currentDan(), knacks: {...d.knacks}};
+            }
+        }
+        return null;
+    }""")
+    assert state2 and state2["dan"] == 4, f"Expected Dan 4 after knack clicks: {state2}"
+    assert page.locator('input[name="ring_water"]').input_value() == "4"
+
+
+# ---------------------------------------------------------------------------
+# Kitsune Warden Special Ability — skill-roll dropdown submenu (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+def _make_kitsune_with_ring_setup(page, live_server_url, name, school_ring="Water"):
+    """Create a Kitsune Warden with the given school ring chosen and a
+    high non-default ring value (Water ring 4, others 2). With Water as
+    school ring, Air-default skills (e.g. bragging) get a meaningful
+    swap (4 vs 2)."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option(school_ring)
+    page.wait_for_timeout(200)
+    # Raise the school ring to 4 (3 -> 4 with 1 click). Mantis non-school
+    # rings stay at 2.
+    if school_ring == "Water":
+        click_plus(page, "ring_water", 1)  # 3 -> 4
+    elif school_ring == "Air":
+        click_plus(page, "ring_air", 1)
+    elif school_ring == "Earth":
+        click_plus(page, "ring_earth", 1)
+    elif school_ring == "Fire":
+        click_plus(page, "ring_fire", 1)
+    # Give the character some skill ranks so the rolls succeed.
+    click_plus(page, "skill_bragging", 2)  # Air skill
+    click_plus(page, "skill_etiquette", 2)  # Air skill
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.evaluate("""async () => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.flushPendingSave === 'function') {
+                await d.flushPendingSave();
+                return;
+            }
+        }
+    }""")
+    apply_changes(page, "Kitsune swap setup")
+
+
+@pytest.mark.school_abilities
+def test_kitsune_skill_submenu_visible_when_school_ring_higher_than_skill_ring(page, live_server_url):
+    """With school ring Water (4) and skill bragging on Air (2), the
+    swap submenu block appears in the skill click menu."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K8Visible", "Water")
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    block = page.locator('[data-testid="kitsune-skill-swap-block"]')
+    assert block.is_visible()
+    # The label calls out Water vs Air.
+    text = block.text_content()
+    assert "Water" in text
+    assert "Air" in text
+
+
+@pytest.mark.school_abilities
+def test_kitsune_skill_submenu_hidden_when_skill_already_uses_school_ring(page, live_server_url):
+    """A Water-ring skill (sincerity is Air... pick Etiquette which is
+    Air. Use precepts which is Water.) When the natural ring matches
+    the school ring, no swap option is offered (the swap would be a
+    no-op identity). Use precepts on a Water-ring Kitsune."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K8Same", "Water")
+    # precepts is a Water skill. With school ring Water, swap is identity.
+    # Click precepts and confirm no swap block.
+    page.locator('[data-roll-key="skill:precepts"]').click()
+    page.wait_for_timeout(300)
+    block = page.locator('[data-testid="kitsune-skill-swap-block"]')
+    assert not block.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_skill_submenu_hidden_when_ring_values_equal(page, live_server_url):
+    """If school ring's value equals natural ring's value (e.g. Water=2,
+    Air=2), the swap is suppressed even though the rings differ."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "K8EqualVal")
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    page.wait_for_timeout(200)
+    # Don't raise Water -> stays at 3. Air also at 2. Bragging is Air.
+    # Hmm, Water=3 vs Air=2 differ. To make values equal, lower Water to 2.
+    # Actually school ring's floor is 3 below 4th Dan, so we can't go lower.
+    # Compromise: set Water=3 and Earth=3 (raise Earth to 3 manually).
+    # Use a Water skill (precepts default Water=3) vs Earth swap (3): same.
+    # ...this is getting hairy. The unit tests already verify the
+    # equal-value-no-swap case at the formula level. Here we just need a
+    # case where the e2e UI suppresses. Use the rolling state.
+    click_plus(page, "ring_earth", 1)  # 2 -> 3, equal to Water (3)
+    click_plus(page, "skill_history", 2)  # Earth-default skill
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Equal-val test")
+    page.locator('[data-roll-key="skill:history"]').click()
+    page.wait_for_timeout(300)
+    # history is Earth (rank 2 + Earth 3 = 5 rolled, 3 kept). Swap to
+    # Water (3) gives identical 5/3 = swap suppressed.
+    block = page.locator('[data-testid="kitsune-skill-swap-block"]')
+    assert not block.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_skill_submenu_hidden_for_iaijutsu(page, live_server_url):
+    """Iaijutsu knack rolls do not offer the swap (rules-excluded)."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K8Iai", "Water")
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.wait_for_timeout(300)
+    block = page.locator('[data-testid="kitsune-skill-swap-block"]')
+    assert not block.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_skill_swap_uses_school_ring_in_roll_formula(page, live_server_url):
+    """Clicking the swap button rolls bragging with Water (4) instead of
+    Air (2) - rolled count goes from 4 (rank 2 + Air 2) to 6 (rank 2 +
+    Water 4), kept from 2 to 4."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K8Roll", "Water")
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-kitsune-swap-roll]').click()
+    # Wait for roll result.
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    # Read the rolled formula dimensions.
+    f = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return {
+                rolled: d.formula?.rolled, kept: d.formula?.kept,
+                from: d.formula?.kitsune_swap_from_ring,
+                to: d.formula?.kitsune_swap_to_ring,
+            };
+        }
+        return null;
+    }""")
+    assert f is not None
+    assert f["rolled"] == 6
+    assert f["kept"] == 4
+    assert f["from"] == "Air"
+    assert f["to"] == "Water"
+
+
+@pytest.mark.school_abilities
+def test_kitsune_skill_swap_results_panel_shows_special_ability_annotation(page, live_server_url):
+    """The roll result panel shows the 'Kitsune Warden Special Ability'
+    annotation when the swap was used."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K8Annot", "Water")
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-kitsune-swap-roll]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    annotation = page.locator('[data-testid="kitsune-swap-result-annotation"]')
+    assert annotation.is_visible()
+    text = annotation.text_content()
+    assert "Water" in text
+    assert "Air" in text
+
+
+@pytest.mark.school_abilities
+def test_kitsune_skill_swap_no_annotation_without_swap(page, live_server_url):
+    """Without the swap, the annotation does NOT appear (regression
+    guard)."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K8NoAnnot", "Water")
+    # Bypass the menu and call executeRoll directly without useKitsuneSwap.
+    page.evaluate("""() => {
+        if (window._diceRoller) window._diceRoller.executeRoll('skill:bragging', 0, null);
+    }""")
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    annotation = page.locator('[data-testid="kitsune-swap-result-annotation"]')
+    assert not annotation.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_skill_swap_with_void_spend_carries_through(page, live_server_url):
+    """When the player picks 'Spend 1 Void Point (using Water)' from the
+    swap block, the roll uses Water AND adds +1 void die. Final formula:
+    rolled 6+1=7, kept 4+1=5."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K8VoidSwap", "Water")
+    # Need a void point to spend. Default Void ring is 2, so VP max = 2.
+    page.evaluate("window._trackingBridge.voidPoints = 1; window._trackingBridge.save && window._trackingBridge.save();")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-kitsune-swap-vp="1"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    f = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return {
+                rolled: d.formula?.rolled, kept: d.formula?.kept,
+                voidSpent: d.formula?.void_spent,
+                to: d.formula?.kitsune_swap_to_ring,
+            };
+        }
+        return null;
+    }""")
+    assert f is not None
+    assert f["rolled"] == 7  # 6 (swap) + 1 (VP)
+    assert f["kept"] == 5  # 4 + 1
+    assert f["voidSpent"] == 1
+    assert f["to"] == "Water"
+
+
+# ---------------------------------------------------------------------------
+# Kitsune Warden Special Ability — Attack & Wound Check modal checkboxes (Phase 9)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.school_abilities
+def test_kitsune_attack_modal_checkbox_visible_and_swaps_probability_table(page, live_server_url):
+    """The attack-modal checkbox is visible for Kitsune Warden when school
+    ring's value differs from Fire (default). Toggling re-renders the
+    probability table from the swap-baseline rolled/kept."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K9AtkVis", "Water")
+    # Open the attack modal.
+    _open_attack_modal_and_roll_pre_only = lambda: page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openAttackModal === 'function') {
+                d.openAttackModal('attack');
+                return;
+            }
+        }
+    }""")
+    _open_attack_modal_and_roll_pre_only()
+    page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=10000)
+    checkbox = page.locator('[data-testid="kitsune-attack-ring-swap"]')
+    assert checkbox.is_visible()
+    # Read the prob-table's first row "Attack Roll" cell (void=0).
+    modal = page.locator('[data-modal="attack"]')
+    # Default: rank 1 + Fire 2 = 3 rolled, 2 kept -> "3k2"
+    table_default = modal.locator('table').first
+    cells = table_default.locator('tbody tr').first.locator('td')
+    default_text = cells.nth(1).text_content().strip()
+    assert default_text == "3k2"
+    # Toggle the swap on -> Water (4) instead of Fire (2): rank 1 + Water 4 = 5k4
+    checkbox.check()
+    page.wait_for_timeout(200)
+    swap_text = cells.nth(1).text_content().strip()
+    assert swap_text == "5k4"
+
+
+@pytest.mark.school_abilities
+def test_kitsune_attack_modal_checkbox_hidden_when_ring_values_equal(page, live_server_url):
+    """When the school ring's value equals the attack-default ring's value,
+    the formula has no kitsune_swap (server gates equal-value swaps), so
+    the checkbox is hidden."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "K9AtkEqual")
+    select_school(page, "kitsune_warden")
+    # Pick Water but leave Water at 3 (default for school ring) and Fire at 2.
+    # Lower Water back if needed... actually with school ring Water, floor is 3,
+    # so Water=3 vs Fire=2 differ. To make values equal we need Water=2 - not
+    # possible. Use a different approach: pick Air as school ring, Air=3 (auto),
+    # Fire=2. Air vs Fire = different values. Hmm.
+    # Workaround: pick Fire as school ring -> Fire=3. Then attack rolls Fire=3.
+    # No swap (school ring IS Fire = default). Test that checkbox is hidden.
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Fire")
+    page.wait_for_timeout(200)
+    apply_changes(page, "Fire ring")
+    # Open attack modal.
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openAttackModal === 'function') {
+                d.openAttackModal('attack');
+                return;
+            }
+        }
+    }""")
+    page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=10000)
+    checkbox = page.locator('[data-testid="kitsune-attack-ring-swap"]')
+    assert not checkbox.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_attack_modal_checkbox_hidden_for_iaijutsu_attack(page, live_server_url):
+    """The iaijutsu attack variant has no kitsune_swap (rules-excluded),
+    so the modal checkbox does NOT appear when atkKey is the iaijutsu
+    attack key. Kitsune Warden has iaijutsu as a school knack, so this
+    case applies in practice."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K9AtkIai", "Water")
+    # Open the iaijutsu attack modal directly. Kitsune doesn't have the
+    # Kakita-specific knack:iaijutsu:attack key (that's only attached for
+    # Kakita), so for non-Kakita iaijutsu we'd open knack:iaijutsu via the
+    # regular roll menu - which routes through the basic roll modal, NOT
+    # the attack modal. So this test verifies a Kakita-specific code path
+    # doesn't surface for Kitsune. Instead, we just confirm that the
+    # formula for a Kitsune iaijutsu knack roll has no kitsune_swap.
+    has_swap = page.evaluate("""() => {
+        const el = document.getElementById('roll-formulas');
+        const data = JSON.parse(el.textContent || '{}');
+        return !!data['knack:iaijutsu']?.kitsune_swap;
+    }""")
+    assert has_swap is False
+
+
+@pytest.mark.school_abilities
+def test_kitsune_wc_modal_checkbox_visible_and_swaps_probability_table(page, live_server_url):
+    """The WC-modal checkbox is visible when school ring's value differs
+    from Water. Toggling re-renders the WC probability table."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "K9WCVis")
+    select_school(page, "kitsune_warden")
+    # Pick Earth so school ring (Earth, value 3 once auto-set) differs from
+    # WC default (Water, 2). Default WC = Water+1 rolled = 3, Water = 2 kept.
+    # With swap, WC uses Earth+1 = 4 rolled, Earth = 3 kept.
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Earth")
+    page.wait_for_timeout(300)
+    # Wait for Earth to be auto-raised to 3 by enforceFourthDanRing (or
+    # at least by onSchoolRingChange). If the test uses select_option
+    # without a wait, the apply_changes can fire before Alpine settles.
+    page.wait_for_function(
+        "() => document.querySelector('input[name=\"ring_earth\"]')?.value === '3'",
+        timeout=5000,
+    )
+    # When Kitsune Warden is selected, edit.html's onSchoolChange defaults
+    # the schoolRingChoice to Water and bumps Water to 3 (the school-ring
+    # floor). Picking Earth via the dropdown re-routes the school ring but
+    # leaves Water at 3 - which would make Water and Earth tied at 3 and
+    # collapse the WC swap to a no-op. Lower Water to 2 explicitly so the
+    # WC swap (Water 2 -> Earth 3) is non-trivial.
+    click_minus(page, "ring_water", 1)
+    page.wait_for_function(
+        "() => document.querySelector('input[name=\"ring_water\"]')?.value === '2'",
+        timeout=5000,
+    )
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.evaluate("""async () => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.flushPendingSave === 'function') {
+                await d.flushPendingSave();
+                return;
+            }
+        }
+    }""")
+    apply_changes(page, "Earth ring")
+    # Set light wounds and open WC modal.
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        if (t) { t.lightWounds = 5; t.save(); }
+    }""")
+    page.wait_for_timeout(200)
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openWoundCheckModal === 'function') {
+                d.openWoundCheckModal();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_selector('[data-modal="wound-check"]', state="visible", timeout=10000)
+    # Sanity-check that the formula has kitsune_swap attached.
+    swap_data = page.evaluate("""() => {
+        const el = document.getElementById('roll-formulas');
+        const data = JSON.parse(el.textContent || '{}');
+        const sa = JSON.parse(document.getElementById('school-abilities')?.textContent || '{}');
+        return {
+            wc_rolled: data['wound_check']?.rolled,
+            wc_kept: data['wound_check']?.kept,
+            wc_swap: data['wound_check']?.kitsune_swap || null,
+            kitsune_school_ring: sa.kitsune_warden_school_ring,
+            kitsune_swap_avail: sa.kitsune_warden_ring_swap_available,
+            url: window.location.href,
+        };
+    }""")
+    assert swap_data["wc_swap"] is not None, f"WC formula has no kitsune_swap: {swap_data}"
+    checkbox = page.locator('[data-testid="kitsune-wc-ring-swap"]')
+    assert checkbox.is_visible()
+    # Probability of pass at void=0, default (Water 2): rolled=3, kept=2.
+    # Probability of pass at void=0, swap (Earth 3): rolled=4, kept=3.
+    # Just confirm toggling changes the percentage rendered.
+    modal = page.locator('[data-modal="wound-check"]')
+    table = modal.locator('table').first
+    cells_default = table.locator('tbody tr').first.locator('td')
+    default_pass = cells_default.nth(1).text_content().strip()
+    checkbox.check()
+    page.wait_for_timeout(200)
+    swap_pass = cells_default.nth(1).text_content().strip()
+    assert default_pass != swap_pass, \
+        f"Toggling the swap checkbox did not change the pass percentage: {default_pass}"
+
+
+@pytest.mark.school_abilities
+def test_kitsune_wc_modal_checkbox_hidden_when_school_ring_is_water(page, live_server_url):
+    """When school ring is Water (the WC default ring), the swap is a
+    no-op identity so the checkbox is hidden."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K9WCWater", "Water")
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        if (t) { t.lightWounds = 5; t.save(); }
+    }""")
+    page.wait_for_timeout(200)
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openWoundCheckModal === 'function') {
+                d.openWoundCheckModal();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_selector('[data-modal="wound-check"]', state="visible", timeout=10000)
+    checkbox = page.locator('[data-testid="kitsune-wc-ring-swap"]')
+    assert not checkbox.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_attack_modal_swap_persists_into_roll_results_annotation(page, live_server_url):
+    """After rolling with the swap checkbox checked, the result panel
+    shows the Kitsune annotation."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K9AtkAnnot", "Water")
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openAttackModal === 'function') {
+                d.openAttackModal('attack');
+                return;
+            }
+        }
+    }""")
+    page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=10000)
+    page.locator('[data-testid="kitsune-attack-ring-swap"]').check()
+    page.wait_for_timeout(200)
+    # Force a low TN so the roll resolves quickly.
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'pre') { d.atkTN = 5; d.atkParrySkill = 1; return; }
+        }
+    }""")
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    annotation = page.locator('[data-testid="kitsune-attack-swap-annotation"]')
+    assert annotation.is_visible()
+    text = annotation.text_content()
+    assert "Water" in text
+    assert "Fire" in text
+
+
+@pytest.mark.school_abilities
+def test_kitsune_wc_modal_swap_persists_into_roll_results_annotation(page, live_server_url):
+    """After rolling WC with swap checked, the result panel shows the
+    Kitsune annotation."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "K9WCAnnot")
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Earth")
+    page.wait_for_function(
+        "() => document.querySelector('input[name=\"ring_earth\"]')?.value === '3'",
+        timeout=5000,
+    )
+    # Lower Water back to 2 (onSchoolChange seeded Water=3 because Water is
+    # the default for variable-ring schools); see the visibility test for
+    # the same workaround.
+    click_minus(page, "ring_water", 1)
+    page.wait_for_function(
+        "() => document.querySelector('input[name=\"ring_water\"]')?.value === '2'",
+        timeout=5000,
+    )
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.evaluate("""async () => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.flushPendingSave === 'function') {
+                await d.flushPendingSave();
+                return;
+            }
+        }
+    }""")
+    apply_changes(page, "Earth ring")
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        if (t) { t.lightWounds = 3; t.save(); }
+    }""")
+    page.wait_for_timeout(200)
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.openWoundCheckModal === 'function') {
+                d.openWoundCheckModal();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_selector('[data-modal="wound-check"]', state="visible", timeout=10000)
+    page.locator('[data-testid="kitsune-wc-ring-swap"]').check()
+    page.wait_for_timeout(200)
+    page.locator('[data-modal="wound-check"] [data-action="roll-wound-check-go"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    annotation = page.locator('[data-testid="kitsune-wc-swap-annotation"]')
+    assert annotation.is_visible()
+    text = annotation.text_content()
+    assert "Earth" in text
+    assert "Water" in text
 

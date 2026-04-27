@@ -356,6 +356,50 @@ The three failures were:
 - [x] 5th Dan section disappears when the Actions-panel Clear wipes all action dice -> `test_school_abilities.py::test_kakita_5th_dan_section_disappears_when_action_dice_cleared`
 - [x] 5th Dan used flag persists through a page reload via adventureState -> `test_school_abilities.py::test_kakita_5th_dan_used_flag_persists_through_reload`
 
+### Kitsune Warden
+
+- [x] Selecting Kitsune Warden renders canonical rules text and "any non-Void" ring picker -> `test_school_selection.py::test_kitsune_warden_selection_renders_rules_text`
+- [x] "Any non-Void" ring dropdown offers Air/Fire/Earth/Water (no Void) and persists choice -> `test_school_rings.py::test_kitsune_warden_any_non_void_dropdown_options`
+- [x] 1st Dan three-pick picker dropdowns visible at Dan 1 -> `test_school_abilities.py::test_kitsune_1st_dan_three_picker_dropdowns_visible_at_dan_1`
+- [x] 1st Dan picker includes iaijutsu option -> `test_school_abilities.py::test_kitsune_1st_dan_picker_includes_iaijutsu_option`
+- [x] 1st Dan picks distinct (no duplicates) -> `test_school_abilities.py::test_kitsune_1st_dan_picks_distinct_no_duplicates`
+- [x] 1st Dan pick extra die applied to roll -> `test_school_abilities.py::test_kitsune_1st_dan_pick_extra_die_applied_to_roll`
+- [x] 1st Dan picks persist across reload -> `test_school_abilities.py::test_kitsune_1st_dan_picks_persist_across_reload`
+- [x] 2nd Dan flexible-free-raise picker visible and saves -> `test_school_abilities.py::test_kitsune_2nd_dan_picker_visible_and_saves`
+- [x] 3rd Dan skill picker excludes iaijutsu -> `test_school_abilities.py::test_kitsune_3rd_dan_skill_picker_excludes_iaijutsu`
+- [x] 3rd Dan chosen skill offers raise button -> `test_school_abilities.py::test_kitsune_3rd_dan_chosen_skill_offers_raise_button`
+- [x] 3rd Dan unpicked skill no raise button -> `test_school_abilities.py::test_kitsune_3rd_dan_unpicked_skill_no_raise_button`
+- [x] 3rd Dan attack always offers raise -> `test_school_abilities.py::test_kitsune_3rd_dan_attack_always_offers_raise`
+- [x] 3rd Dan wound check formula annotated even with no picks -> `test_school_abilities.py::test_kitsune_3rd_dan_wound_check_always_offers_raise`
+- [x] 3rd Dan per-adventure counter visible -> `test_school_abilities.py::test_kitsune_3rd_dan_per_adventure_counter_visible`
+- [x] 4th Dan athletics roll shows 10-dice floor -> `test_school_abilities.py::test_kitsune_4th_dan_athletics_roll_shows_10_dice_floor`
+- [x] Below 4th Dan athletics uses normal formula -> `test_school_abilities.py::test_kitsune_below_4th_dan_athletics_uses_normal_formula`
+- [x] 4th Dan athletics-attack hidden without athletics knack -> `test_school_abilities.py::test_kitsune_4th_dan_athletics_attack_hidden_without_athletics_knack`
+- [x] 4th Dan school ring auto-raised on hitting Dan 4 (any non-Void) -> `test_school_abilities.py::test_kitsune_4th_dan_school_ring_auto_raise_for_water_choice`
+- [x] Special Ability skill submenu visible when school ring higher than skill ring -> `test_school_abilities.py::test_kitsune_skill_submenu_visible_when_school_ring_higher_than_skill_ring`
+- [x] Special Ability skill submenu hidden when skill already uses school ring -> `test_school_abilities.py::test_kitsune_skill_submenu_hidden_when_skill_already_uses_school_ring`
+- [x] Special Ability skill submenu hidden when ring values equal -> `test_school_abilities.py::test_kitsune_skill_submenu_hidden_when_ring_values_equal`
+- [x] Special Ability skill submenu hidden for iaijutsu -> `test_school_abilities.py::test_kitsune_skill_submenu_hidden_for_iaijutsu`
+- [x] Special Ability skill swap uses school ring in roll formula -> `test_school_abilities.py::test_kitsune_skill_swap_uses_school_ring_in_roll_formula`
+- [x] Special Ability skill swap result panel shows annotation -> `test_school_abilities.py::test_kitsune_skill_swap_results_panel_shows_special_ability_annotation`
+- [x] Special Ability annotation hidden when no swap used (regression) -> `test_school_abilities.py::test_kitsune_skill_swap_no_annotation_without_swap`
+- [x] Special Ability skill swap with void spend carries through -> `test_school_abilities.py::test_kitsune_skill_swap_with_void_spend_carries_through`
+- [x] Special Ability attack-modal checkbox visible and swaps probability table -> `test_school_abilities.py::test_kitsune_attack_modal_checkbox_visible_and_swaps_probability_table`
+- [x] Special Ability attack-modal checkbox hidden when ring values equal (school ring = Fire = default) -> `test_school_abilities.py::test_kitsune_attack_modal_checkbox_hidden_when_ring_values_equal`
+- [x] Special Ability iaijutsu knack roll has no kitsune_swap -> `test_school_abilities.py::test_kitsune_attack_modal_checkbox_hidden_for_iaijutsu_attack`
+- [x] Special Ability wound-check modal checkbox visible and swaps probability table -> `test_school_abilities.py::test_kitsune_wc_modal_checkbox_visible_and_swaps_probability_table`
+- [x] Special Ability wound-check checkbox hidden when school ring is Water (default) -> `test_school_abilities.py::test_kitsune_wc_modal_checkbox_hidden_when_school_ring_is_water`
+- [x] Special Ability attack-modal swap persists into roll-results annotation -> `test_school_abilities.py::test_kitsune_attack_modal_swap_persists_into_roll_results_annotation`
+- [x] Special Ability wound-check modal swap persists into roll-results annotation -> `test_school_abilities.py::test_kitsune_wc_modal_swap_persists_into_roll_results_annotation`
+- [ ] Special Ability parry menu shows four entries when school ring higher than Air (Phase 10)
+- [ ] Special Ability parry menu shows two entries when school ring is Air (Phase 10)
+- [ ] Special Ability parry menu shows two entries when school ring value equals Air value (Phase 10)
+- [ ] Special Ability parry school-ring entry uses school ring in formula (Phase 10)
+- [ ] Special Ability parry predeclared school-ring entry includes +5 (Phase 10)
+- [ ] Special Ability parry school-ring void submenu works (Phase 10)
+- [ ] Iaijutsu duel offers no Special Ability swap (Phase 11)
+- [ ] Special Ability skill submenu hidden when Air equals Water in value (Phase 11)
+
 ### Kitsuki
 
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_kitsuki_1st_dan_behavioral`

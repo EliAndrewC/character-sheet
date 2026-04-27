@@ -148,6 +148,13 @@ class RollFormula:
     shosuro_5th_dan: bool = False
     is_damage_roll: bool = False
     otherworldliness_capacity: int = 0
+    # Kitsune Warden Special Ability: the ring this formula was originally
+    # going to use before the player substituted their school ring.
+    # ``kitsune_swap_to_ring`` is the ring actually rolled. Both empty
+    # strings when no swap is in effect; the UI uses these to render the
+    # "rolled with X instead of Y" annotation.
+    kitsune_swap_from_ring: str = ""
+    kitsune_swap_to_ring: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -284,6 +291,7 @@ def build_skill_formula(
     skill_id: str,
     character_data: dict,
     party_members: Optional[List[dict]] = None,
+    ring_override: Optional[str] = None,
 ) -> Optional[RollFormula]:
     """Build a roll formula for a skill, skilled or unskilled.
 
@@ -291,6 +299,12 @@ def build_skill_formula(
     penalty, 10s don't reroll, and the formula is flagged as unskilled. All
     other bonuses (school techniques, advantages, synergies, honor,
     recognition, etc.) apply identically to skilled rolls.
+
+    ``ring_override`` lets the caller substitute a different ring for the
+    skill's natural one - powering Kitsune Warden's Special Ability swap.
+    When set, the formula's rolled/kept counts use the override ring's
+    value, the label reflects the swap, and a metadata flag records it
+    for the UI breakdown.
     """
     skill_def = SKILLS.get(skill_id)
     if skill_def is None:
@@ -308,6 +322,14 @@ def build_skill_formula(
         ring_name = "Water"
     else:
         ring_name = skill_def.ring.value
+    # Kitsune Warden Special Ability override: the caller (UI) opted in to
+    # substitute the school ring. Iaijutsu is excluded by the rules but
+    # iaijutsu lives in SCHOOL_KNACKS, not SKILLS, so this branch never
+    # affects it.
+    swapped_from_ring: Optional[str] = None
+    if ring_override and ring_override in {r.value for r in Ring} and ring_override != ring_name:
+        swapped_from_ring = ring_name
+        ring_name = ring_override
     ring_val = rings.get(ring_name, 2)
 
     if unskilled:
@@ -334,6 +356,10 @@ def build_skill_formula(
             otherworldliness_capacity=max(0, 5 - rank) if not skill_def.is_advanced else 0,
             **_reroll_fields(character_data),
         )
+
+    if swapped_from_ring:
+        formula.kitsune_swap_from_ring = swapped_from_ring
+        formula.kitsune_swap_to_ring = ring_name
 
     knacks = character_data.get("knacks", {}) or {}
     tech_choices = character_data.get("technique_choices") or {}
@@ -512,9 +538,19 @@ def build_skill_formula(
 
 
 def build_knack_formula(
-    knack_id: str, character_data: dict
+    knack_id: str,
+    character_data: dict,
+    ring_override: Optional[str] = None,
 ) -> Optional[RollFormula]:
-    """Build a roll formula for a school knack the character has at rank >= 1."""
+    """Build a roll formula for a school knack the character has at rank >= 1.
+
+    ``ring_override`` powers Kitsune Warden's Special Ability swap. The
+    iaijutsu knack is excluded by the rules; passing ``ring_override`` for
+    iaijutsu raises ValueError as a defense-in-depth check (the UI never
+    offers the swap on iaijutsu).
+    """
+    if knack_id == "iaijutsu" and ring_override:
+        raise ValueError("ring_override is not supported on iaijutsu")
     knack_def = SCHOOL_KNACKS.get(knack_id)
     if knack_def is None:
         return None
@@ -545,6 +581,10 @@ def build_knack_formula(
         # Knacks without a ring (e.g. passive) — use the lowest ring as a placeholder.
         # In practice these aren't typically rolled; the formula is best-effort.
         ring_name = "Earth"
+    swapped_from_ring: Optional[str] = None
+    if ring_override and ring_override in {r.value for r in Ring} and ring_override != ring_name:
+        swapped_from_ring = ring_name
+        ring_name = ring_override
     ring_val = rings.get(ring_name, 2)
 
     school_id = character_data.get("school", "")
@@ -563,6 +603,9 @@ def build_knack_formula(
         flat=0,
         **_reroll_fields(character_data),
     )
+    if swapped_from_ring:
+        formula.kitsune_swap_from_ring = swapped_from_ring
+        formula.kitsune_swap_to_ring = ring_name
 
     tech_choices = character_data.get("technique_choices") or {}
     _apply_school_technique_bonus(formula, knack_id, school_id, native_knacks, tech_choices)
@@ -603,9 +646,14 @@ def build_knack_formula(
 
 
 def build_combat_formula(
-    which: str, character_data: dict
+    which: str, character_data: dict, ring_override: Optional[str] = None
 ) -> Optional[RollFormula]:
-    """Build a roll formula for ``attack`` or ``parry``."""
+    """Build a roll formula for ``attack`` or ``parry``.
+
+    ``ring_override`` powers Kitsune Warden's Special Ability swap. When
+    set to a different ring than the attack/parry default (Fire / Air),
+    the formula uses the override ring's value for both rolled and kept.
+    """
     if which not in ("attack", "parry"):
         return None
     rank = character_data.get(which, 1)
@@ -613,6 +661,10 @@ def build_combat_formula(
         return None
     rings = character_data.get("rings", {})
     ring_name = "Fire" if which == "attack" else "Air"
+    swapped_from_ring: Optional[str] = None
+    if ring_override and ring_override in {r.value for r in Ring} and ring_override != ring_name:
+        swapped_from_ring = ring_name
+        ring_name = ring_override
     ring_val = rings.get(ring_name, 2)
 
     formula = RollFormula(
@@ -622,6 +674,9 @@ def build_combat_formula(
         flat=0,
         **_reroll_fields(character_data),
     )
+    if swapped_from_ring:
+        formula.kitsune_swap_from_ring = swapped_from_ring
+        formula.kitsune_swap_to_ring = ring_name
 
     school_id = character_data.get("school", "")
     knacks = character_data.get("knacks", {}) or {}
@@ -708,6 +763,14 @@ def build_athletics_formula(
     tech_choices = character_data.get("technique_choices") or {}
     _apply_school_technique_bonus(formula, "athletics", school_id, native_knacks, tech_choices)
 
+    # Kitsune Warden 4th Dan: roll at least 10 dice on athletics actions
+    # (i.e. when this formula's rolled count is below 10). Rolled count
+    # only - kept count is untouched. Same shape as Ikoma Bard's
+    # ikoma_10_dice_floor flag, just applied here instead of on damage.
+    dan = compute_dan(native_knacks) if native_knacks else 0
+    if school_id == "kitsune_warden" and dan >= 4 and formula.rolled < 10:
+        formula.rolled = 10
+
     _finalize_caps(formula)
     return formula
 
@@ -788,11 +851,19 @@ def build_athletics_combat_formula(
     if school_id == "kakita_duelist" and dan >= 3 and which == "attack":
         formula.kakita_3rd_dan_defender_phase_bonus = True
 
+    # Kitsune Warden 4th Dan: physical-action rolls (athletics-attack /
+    # athletics-parry) get the same 10-dice floor as the bare athletics
+    # formula. Rolled count only.
+    if school_id == "kitsune_warden" and dan >= 4 and formula.rolled < 10:
+        formula.rolled = 10
+
     _finalize_caps(formula)
     return formula
 
 
-def build_wound_check_formula(character_data: dict) -> dict:
+def build_wound_check_formula(
+    character_data: dict, ring_override: Optional[str] = None
+) -> dict:
     """Build the wound check roll formula.
 
     Base: (Water+1) rolled, Water kept.  School techniques may add an extra
@@ -802,11 +873,20 @@ def build_wound_check_formula(character_data: dict) -> dict:
     Wound checks ALWAYS reroll 10s (the ``reroll_tens`` flag is True
     regardless of Impaired status - being Impaired does not suppress rerolls
     on wound checks).
+
+    ``ring_override`` powers Kitsune Warden's Special Ability swap. When
+    set to a different ring, the formula uses that ring's value in place
+    of Water for both rolled and kept counts.
     """
     rings = character_data.get("rings", {})
-    water = rings.get("Water", 2)
-    rolled = water + 1
-    kept = water
+    swapped_from_ring: Optional[str] = None
+    wc_ring_name = "Water"
+    if ring_override and ring_override in {r.value for r in Ring} and ring_override != "Water":
+        swapped_from_ring = "Water"
+        wc_ring_name = ring_override
+    base_ring_val = rings.get(wc_ring_name, 2)
+    rolled = base_ring_val + 1
+    kept = base_ring_val
     flat = 0
 
     school_id = character_data.get("school", "")
@@ -819,6 +899,20 @@ def build_wound_check_formula(character_data: dict) -> dict:
     # 1st Dan: extra rolled die on wound_check
     if dan >= 1 and bonuses.get("first_dan_extra_die"):
         if "wound_check" in (bonuses["first_dan_extra_die"] or []):
+            rolled += 1
+            bonus_sources.append("+1 rolled die from 1st Dan")
+
+    # Flexible 1st Dan (Kitsune Warden, Isawa Ishi, Priest, Shugenja): if the
+    # player picked wound_check as one of their picks, +1 rolled die.
+    if (
+        dan >= 1
+        and "first_dan_extra_die" in bonuses
+        and bonuses.get("first_dan_extra_die") is None
+    ):
+        chosen_1st = (character_data.get("technique_choices") or {}).get(
+            "first_dan_choices"
+        ) or []
+        if "wound_check" in chosen_1st:
             rolled += 1
             bonus_sources.append("+1 rolled die from 1st Dan")
 
@@ -835,8 +929,9 @@ def build_wound_check_formula(character_data: dict) -> dict:
             flat += FREE_RAISE_VALUE
             bonus_sources.append("+5 from 2nd Dan")
 
-    # Flexible 2nd Dan free raise (Ide Diplomat, Isawa Ishi, Shugenja, Suzume
-    # Overseer): if the player picked wound_check as their target, +5 flat.
+    # Flexible 2nd Dan free raise (Ide Diplomat, Isawa Ishi, Kitsune Warden,
+    # Shugenja, Suzume Overseer): if the player picked wound_check as their
+    # target, +5 flat.
     if (
         dan >= 2
         and "second_dan_free_raise" in bonuses
@@ -900,7 +995,7 @@ def build_wound_check_formula(character_data: dict) -> dict:
         bonus_sources.append(f"+{overflow_flat} from extra dice above 10k10")
 
     return {
-        "label": "Wound Check",
+        "label": f"Wound Check ({wc_ring_name})" if swapped_from_ring else "Wound Check",
         "rolled": rolled,
         "kept": kept,
         "flat": flat,
@@ -914,6 +1009,8 @@ def build_wound_check_formula(character_data: dict) -> dict:
         "bayushi_5th_dan_half_lw": bayushi_5th_dan_half_lw,
         "doji_5th_dan_wc": doji_5th_dan_wc,
         "shosuro_5th_dan": shosuro_5th_dan,
+        "kitsune_swap_from_ring": swapped_from_ring or "",
+        "kitsune_swap_to_ring": wc_ring_name if swapped_from_ring else "",
     }
 
 
@@ -950,6 +1047,19 @@ def build_initiative_formula(character_data: dict) -> Optional[dict]:
     # 1st Dan extra die on initiative (Shinjo, Kakita, Hiruma, Togashi)
     if dan >= 1 and "initiative" in (bonuses.get("first_dan_extra_die") or []):
         base_rolled += 1
+
+    # Flexible 1st Dan (Kitsune Warden et al.): initiative is eligible if the
+    # player picked it.
+    if (
+        dan >= 1
+        and "first_dan_extra_die" in bonuses
+        and bonuses.get("first_dan_extra_die") is None
+    ):
+        chosen_1st = (character_data.get("technique_choices") or {}).get(
+            "first_dan_choices"
+        ) or []
+        if "initiative" in chosen_1st:
+            base_rolled += 1
 
     # Kakita Duelist: 10s on initiative are Phase 0
     kakita_phase_zero = school_id == "kakita_duelist"
@@ -1036,6 +1146,18 @@ def build_all_roll_formulas(
             # "attack", etc.  We'll match against the formula key's
             # trailing component (e.g. "skill:bragging" → "bragging").
             third_dan_applicable = set(t3["applicable_to"])
+            # Kitsune Warden 3rd Dan extension: applicable_to is the
+            # always-on list (e.g. ["attack", "wound_check"]) and the
+            # player picks `applicable_to_choices_count` extra skills via
+            # technique_choices.third_dan_skill_choices. Iaijutsu is never
+            # eligible (UI excludes it; this is a defense-in-depth drop).
+            if t3.get("applicable_to_choices_count"):
+                player_picks = (character_data.get("technique_choices") or {}).get(
+                    "third_dan_skill_choices"
+                ) or []
+                for pick in player_picks:
+                    if pick and pick != "iaijutsu":
+                        third_dan_applicable.add(pick)
 
     def _annotate_third_dan(key: str, formula_dict: dict) -> dict:
         """Stamp ``adventure_raises_max_per_roll`` on applicable formulas."""
@@ -1071,6 +1193,20 @@ def build_all_roll_formulas(
         damage_extra_rolled += 1
         damage_bonus_sources.append("+1 rolled die from 1st Dan")
 
+    # Flexible 1st Dan (Kitsune Warden et al.): +1 rolled die on damage if
+    # picked by the player.
+    _flex_1st = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
+    if (
+        dan >= 1
+        and "first_dan_extra_die" in _flex_1st
+        and _flex_1st.get("first_dan_extra_die") is None
+        and "damage" in (
+            (character_data.get("technique_choices") or {}).get("first_dan_choices") or []
+        )
+    ):
+        damage_extra_rolled += 1
+        damage_bonus_sources.append("+1 rolled die from 1st Dan")
+
     # Brotherhood of Shinsei: +1 rolled +1 kept on unarmed damage (1st Dan)
     if school_id == "brotherhood_of_shinsei_monk" and dan >= 1:
         damage_extra_rolled += 1
@@ -1088,8 +1224,9 @@ def build_all_roll_formulas(
         damage_flat_bonus += FREE_RAISE_VALUE
         damage_bonus_sources.append("+5 from 2nd Dan (damage)")
 
-    # Flexible 2nd Dan free raise (Ide Diplomat, Isawa Ishi, Shugenja, Suzume
-    # Overseer): if the player picked damage as their target, +5 flat.
+    # Flexible 2nd Dan free raise (Ide Diplomat, Isawa Ishi, Kitsune Warden,
+    # Shugenja, Suzume Overseer): if the player picked damage as their
+    # target, +5 flat.
     _flex_bonuses = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
     if (
         dan >= 2
@@ -1144,6 +1281,18 @@ def build_all_roll_formulas(
             tech_bonuses_here = SCHOOL_TECHNIQUE_BONUSES.get(school_id, {})
             first_dan_list = tech_bonuses_here.get("first_dan_extra_die") or []
             if dan >= 1 and bare in first_dan_list:
+                bonus_sources.append("+1 rolled die from 1st Dan")
+            # Flexible 1st Dan (Kitsune Warden et al.) - same display label.
+            if (
+                dan >= 1
+                and "first_dan_extra_die" in tech_bonuses_here
+                and tech_bonuses_here.get("first_dan_extra_die") is None
+                and bare in (
+                    (character_data.get("technique_choices") or {}).get(
+                        "first_dan_choices"
+                    ) or []
+                )
+            ):
                 bonus_sources.append("+1 rolled die from 1st Dan")
             if school_id == "shosuro_actor":
                 char_skills = character_data.get("skills", {}) or {}
@@ -1344,4 +1493,107 @@ def build_all_roll_formulas(
     wc_formula = build_wound_check_formula(character_data)
     out["wound_check"] = _annotate_third_dan("wound_check", wc_formula)
 
+    # Kitsune Warden Special Ability: for the in-scope formulas (skills,
+    # rollable knacks excluding iaijutsu, attack, parry, wound_check),
+    # attach a compact ``kitsune_swap`` sub-dict containing the rolled/
+    # kept/label values that would result from the school-ring swap. The
+    # client uses this when the player picks the swap option in the roll
+    # menu (Phase 8 onward). Only attached when the swap is meaningful
+    # (the override ring's value differs from the default ring's value);
+    # otherwise the UI suppresses the option anyway.
+    if school_id == "kitsune_warden":
+        swap_ring = character_data.get("school_ring_choice", "")
+        if swap_ring in {r.value for r in Ring} and swap_ring != "Void":
+            _attach_kitsune_swaps(out, character_data, swap_ring)
+
     return out
+
+
+def _attach_kitsune_swaps(
+    out: dict, character_data: dict, swap_ring: str
+) -> None:
+    """For each Kitsune-eligible formula in ``out``, build a swap-ring
+    variant and attach the relevant fields as a compact sub-dict.
+
+    Only fires when the swap actually changes the rolled/kept counts (the
+    override ring's value differs from the natural ring's value); equal-
+    value swaps are skipped, matching the UI's gate."""
+    skills = character_data.get("skills") or {}
+    school = SCHOOLS.get(character_data.get("school", ""))
+
+    def _diff_or_none(key: str, swap_formula):
+        if swap_formula is None:
+            return None
+        if isinstance(swap_formula, RollFormula):
+            d = swap_formula.to_dict()
+        else:
+            d = dict(swap_formula)
+        original = out.get(key) or {}
+        if d["rolled"] == original.get("rolled") and d["kept"] == original.get("kept"):
+            return None
+        return {
+            "rolled": d["rolled"],
+            "kept": d["kept"],
+            "label": d.get("label", ""),
+            "kitsune_swap_from_ring": d.get("kitsune_swap_from_ring", ""),
+            "kitsune_swap_to_ring": d.get("kitsune_swap_to_ring", ""),
+        }
+
+    # Skills
+    for skill_id in skills.keys():
+        key = f"skill:{skill_id}"
+        if key not in out:
+            continue
+        swap_f = build_skill_formula(skill_id, character_data, ring_override=swap_ring)
+        sub = _diff_or_none(key, swap_f)
+        if sub:
+            out[key]["kitsune_swap"] = sub
+    # Cover skills the character may not have ranked but still has a formula for
+    for key in list(out.keys()):
+        if not key.startswith("skill:") or "kitsune_swap" in (out[key] or {}):
+            continue
+        skill_id = key.split(":", 1)[1]
+        swap_f = build_skill_formula(skill_id, character_data, ring_override=swap_ring)
+        sub = _diff_or_none(key, swap_f)
+        if sub:
+            out[key]["kitsune_swap"] = sub
+    # Knacks (excluding iaijutsu and any non-rollable knacks)
+    if school is not None:
+        rollable_knacks = [
+            kid for kid in school.school_knacks
+            if kid not in NON_ROLLABLE_KNACKS and kid != "iaijutsu"
+        ]
+        for knack_id in rollable_knacks:
+            key = f"knack:{knack_id}"
+            if key not in out:
+                continue
+            swap_f = build_knack_formula(knack_id, character_data, ring_override=swap_ring)
+            sub = _diff_or_none(key, swap_f)
+            if sub:
+                out[key]["kitsune_swap"] = sub
+    # Foreign rollable knacks (excluding iaijutsu)
+    foreign = (character_data.get("foreign_knacks") or {}).keys()
+    for knack_id in foreign:
+        if knack_id == "iaijutsu" or knack_id in NON_ROLLABLE_KNACKS:
+            continue
+        key = f"knack:{knack_id}"
+        if key not in out or "kitsune_swap" in (out[key] or {}):
+            continue
+        swap_f = build_knack_formula(knack_id, character_data, ring_override=swap_ring)
+        sub = _diff_or_none(key, swap_f)
+        if sub:
+            out[key]["kitsune_swap"] = sub
+    # Attack and parry
+    for which in ("attack", "parry"):
+        if which not in out:
+            continue
+        swap_f = build_combat_formula(which, character_data, ring_override=swap_ring)
+        sub = _diff_or_none(which, swap_f)
+        if sub:
+            out[which]["kitsune_swap"] = sub
+    # Wound check
+    if "wound_check" in out:
+        swap_wc = build_wound_check_formula(character_data, ring_override=swap_ring)
+        sub = _diff_or_none("wound_check", swap_wc)
+        if sub:
+            out["wound_check"]["kitsune_swap"] = sub
