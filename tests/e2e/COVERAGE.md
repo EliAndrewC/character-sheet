@@ -1226,6 +1226,7 @@ Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pyt
 - [x] Edit page disadvantage row chevron expands rules text on phone → `test_responsive.py::test_edit_disadvantage_chevron_expands_rules_text_on_phone`
 - [x] Edit page campaign-advantage row chevron expands rules text on phone → `test_responsive.py::test_edit_campaign_advantage_chevron_expands_rules_text_on_phone`
 - [x] Edit page skill row uses 2-info-cols + chevron grid layout on phone → `test_responsive.py::test_edit_skill_row_mobile_layout`
+- [x] Edit page skill row name + pips + chevron pin to top of row when roll text is tall on phone → `test_responsive.py::test_edit_skill_row_mobile_long_roll_pins_name_ctrls_top`
 - [x] Edit page skill row stays single-line flex on desktop → `test_responsive.py::test_edit_skill_row_desktop_layout_unchanged`
 - [x] Edit page chevrons hidden on desktop (advantage + skill) → `test_responsive.py::test_edit_chevron_hidden_on_desktop`
 - [x] Homepage no horizontal overflow at phone width → `test_responsive.py::test_homepage_no_horizontal_overflow`

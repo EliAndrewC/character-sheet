@@ -579,6 +579,53 @@ def test_edit_skill_row_mobile_layout(page, live_server_url):
     )
 
 
+def test_edit_skill_row_mobile_long_roll_pins_name_ctrls_top(page, live_server_url):
+    """When the roll-bonuses text is long enough to wrap and make the right
+    column taller than the name+ctrls stack, the name and pip controls must
+    pin to the top of the row (and the chevron too) rather than vertically
+    centering against the tall roll cell."""
+    sheet_url = _create_character_then_phone(page, live_server_url, "SkillTallRoll")
+    page.set_viewport_size(PHONE)
+    page.goto(sheet_url + "/edit")
+    page.wait_for_selector('[data-testid="skill-chevron-bragging"]')
+
+    layout = page.evaluate("""() => {
+        const row = document.querySelector('[data-testid="skill-chevron-bragging"]')
+                            .closest('.editor-skill-row');
+        // Force the roll cell to be much taller than the name/ctrls stack.
+        const roll = row.querySelector('.editor-skill-row__roll');
+        roll.style.minHeight = '200px';
+        const r = (sel) => {
+            const el = sel === 'row' ? row : row.querySelector(sel);
+            const b = el.getBoundingClientRect();
+            return {y: b.y, height: b.height};
+        };
+        return {
+            row: r('row'),
+            name: r('.editor-skill-row__name'),
+            ctrls: r('.editor-skill-row__ctrls'),
+            chev: r('.editor-skill-row__chevron'),
+        };
+    }""")
+
+    # Name should sit at the very top of the row (within a few px).
+    assert layout["name"]["y"] - layout["row"]["y"] < 8, (
+        f"name y={layout['name']['y']} should pin to row top y={layout['row']['y']}; "
+        f"delta={layout['name']['y'] - layout['row']['y']}"
+    )
+    # Ctrls should sit just below the name, not floating in the middle of the row.
+    name_bottom = layout["name"]["y"] + layout["name"]["height"]
+    assert layout["ctrls"]["y"] - name_bottom < 8, (
+        f"ctrls y={layout['ctrls']['y']} should sit just below name bottom={name_bottom}; "
+        f"delta={layout['ctrls']['y'] - name_bottom}"
+    )
+    # Chevron should also pin to the top of the row.
+    assert layout["chev"]["y"] - layout["row"]["y"] < 8, (
+        f"chevron y={layout['chev']['y']} should pin to row top y={layout['row']['y']}; "
+        f"delta={layout['chev']['y'] - layout['row']['y']}"
+    )
+
+
 def test_edit_skill_row_desktop_layout_unchanged(page, live_server_url):
     """At desktop width the skill row keeps the original single-line flex
     layout: name, controls, XP label, roll display all on the same y line.

@@ -17,20 +17,22 @@
 {% set is_advanced_arg = "true" if is_advanced else "false" %}
 <div x-data="{ expanded: false }">
     <div class="editor-skill-row tooltip-trigger relative">
-        <label class="editor-skill-row__name w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
-        <div class="editor-skill-row__ctrls flex items-center gap-1">
-            <button type="button"
-                    @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
-                    :disabled="skills.{{ sid }} <= 0"
-                    :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + {{ costs }}[skills.{{ sid }}] + ' XP)'"
-                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
-            <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
-            <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
-            <button type="button"
-                    @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
-                    :disabled="skills.{{ sid }} >= 5"
-                    :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + {{ costs }}[skills.{{ sid }}+1] + ' XP)'"
-                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+        <div class="editor-skill-row__name-ctrls">
+            <label class="editor-skill-row__name w-24 sm:w-32 shrink-0 text-sm font-medium cursor-help truncate">{{ skill.name }}</label>
+            <div class="editor-skill-row__ctrls flex items-center gap-1">
+                <button type="button"
+                        @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
+                        :disabled="skills.{{ sid }} <= 0"
+                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + {{ costs }}[skills.{{ sid }}] + ' XP)'"
+                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
+                <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
+                <button type="button"
+                        @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
+                        :disabled="skills.{{ sid }} >= 5"
+                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + {{ costs }}[skills.{{ sid }}+1] + ' XP)'"
+                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+            </div>
         </div>
         <span class="editor-skill-row__xp text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', {{ is_advanced_arg }})"></span>
         <span class="editor-skill-row__roll text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
