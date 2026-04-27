@@ -132,6 +132,10 @@ _SCHOOL_ALIASES: Dict[str, str] = {
     "sparrow": "suzume_overseer",
     "sparrow overseer": "suzume_overseer",
     "suzume": "suzume_overseer",
+    # Fox
+    "fox": "kitsune_warden",
+    "fox warden": "kitsune_warden",
+    "kitsune": "kitsune_warden",
 }
 
 

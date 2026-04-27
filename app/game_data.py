@@ -1462,6 +1462,44 @@ _SCHOOLS_LIST: List[School] = [
         },
     ),
 
+    School(
+        id="kitsune_warden",
+        name="Kitsune Warden",
+        school_ring="any non-Void",
+        category="bushi",
+        special_ability=(
+            "Once per target per combat round or conversation, you may "
+            "substitute your School Ring in place of the usual ring when "
+            "making a roll involving that target."
+        ),
+        school_knacks=["absorb_void", "commune", "iaijutsu"],
+        techniques={
+            1: "Roll one extra die on three rolls of your choice.",
+            2: "You get a free raise on a type of roll of your choice.",
+            3: (
+                "Each adventure you get 2X free raises, where X is equal to "
+                "your precepts skill, which may be applied to the following "
+                "rolls: attack, wound checks, and three skills of your "
+                "choice. You may not spend more than X of these free raises "
+                "on a single roll.\n"
+                "You may also perform priest rituals at the cost of one "
+                "free raise per ritual."
+            ),
+            4: (
+                "Raise your current and maximum School Ring by 1. Raising "
+                "your School Ring now costs 5 fewer XP.\n"
+                "When you would roll fewer than 10 dice on athletics actions "
+                "(i.e. when you roll (2 * Ring)k(Ring) for physical "
+                "actions), roll 10 dice instead."
+            ),
+            5: (
+                "Select a spell from the shugenja spell list from your "
+                "School Ring's element. Gain a modified version of that "
+                "spell."
+            ),
+        },
+    ),
+
     # =================== COUNTERATTACK SCHOOLS ====================
 
     School(
@@ -2539,6 +2577,26 @@ SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
         "first_dan_extra_die": ["initiative", "athletics", "wound_check"],
         "second_dan_free_raise": None,  # flexible, player picks at Dan 2 (Phase 3)
         # 3rd Dan: non-standard (spend action die for per-round attack/damage or wc/TN bonus)
+    },
+    "kitsune_warden": {
+        # 1st Dan: three player-chosen extra-dice picks
+        # (technique_choices.first_dan_choices: List[str]).
+        "first_dan_extra_die": None,
+        # 2nd Dan: flexible free raise
+        # (technique_choices.second_dan_choice).
+        "second_dan_free_raise": None,
+        # 3rd Dan: 2X precepts free raises per adventure, applicable to
+        # attack + wound check + three player-chosen skills (stored at
+        # technique_choices.third_dan_skill_choices). The picker excludes
+        # iaijutsu; _annotate_third_dan also drops iaijutsu defensively if
+        # it sneaks in via a crafted POST.
+        "third_dan": {
+            "source_skill": "precepts",
+            "applicable_to": ["attack", "wound_check"],
+            "applicable_to_choices_count": 3,
+            "formula": "2X",
+            "max_per_roll": "X",
+        },
     },
 
     # =================== COUNTERATTACK SCHOOLS ====================

@@ -122,7 +122,7 @@ class TestSkills:
 
 class TestSchools:
     def test_school_count(self):
-        assert len(SCHOOLS) == 28
+        assert len(SCHOOLS) == 29
 
     def test_all_schools_have_three_knacks(self):
         for sid, school in SCHOOLS.items():
@@ -187,6 +187,41 @@ class TestMantisWaveTreader:
         assert school.school_knacks == ["athletics", "iaijutsu", "worldliness"]
         for kid in school.school_knacks:
             assert kid in SCHOOL_KNACKS
+
+
+class TestKitsuneWarden:
+    def test_school_registered(self):
+        assert "kitsune_warden" in SCHOOLS
+        school = SCHOOLS["kitsune_warden"]
+        assert school.name == "Kitsune Warden"
+        assert school.category == "bushi"
+        assert school.school_ring == "any non-Void"
+
+    def test_ring_options_excludes_void(self):
+        options = SCHOOL_RING_OPTIONS["kitsune_warden"]
+        assert set(options) == {"Air", "Fire", "Earth", "Water"}
+
+    def test_in_bushi_half_of_bushi_nonbushi(self):
+        bushi_label, bushi_schools = SCHOOLS_BUSHI_NONBUSHI[0]
+        assert bushi_label == "Bushi Schools"
+        assert "kitsune_warden" in {s.id for s in bushi_schools}
+
+    def test_school_knacks_are_absorb_void_commune_iaijutsu(self):
+        school = SCHOOLS["kitsune_warden"]
+        assert school.school_knacks == ["absorb_void", "commune", "iaijutsu"]
+        for kid in school.school_knacks:
+            assert kid in SCHOOL_KNACKS
+
+    def test_all_five_techniques_populated(self):
+        school = SCHOOLS["kitsune_warden"]
+        assert set(school.techniques.keys()) == {1, 2, 3, 4, 5}
+        for dan, text in school.techniques.items():
+            assert text and text.strip(), f"Dan {dan} technique is empty"
+
+    def test_special_ability_text_contains_canonical_phrase(self):
+        school = SCHOOLS["kitsune_warden"]
+        assert "Once per target per combat round or conversation" in school.special_ability
+        assert "substitute your School Ring" in school.special_ability
 
 
 class TestSchoolKnacks:

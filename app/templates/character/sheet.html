@@ -3029,6 +3029,37 @@
                     </div>
                 </div>
             </template>
+            {# Kitsune Warden Special Ability swap entries. Visible when the
+               server attached a kitsune_swap sub-dict on the formula
+               (i.e., the school ring's value differs from the natural
+               ring's, the skill is in scope, and is not iaijutsu). The
+               entries mirror the main Roll button + each VP option, but
+               with the school ring substituted for the natural one. #}
+            <template x-if="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker
+                            && !rollMenuHasParry && !rollMenuHasAttackChoice
+                            && !rollMenuHasMobileAttack
+                            && formulas[rollMenuKey]?.kitsune_swap">
+                <div class="border-t border-ink/10 mt-1 pt-1" data-testid="kitsune-skill-swap-block">
+                    <div class="px-4 py-1 text-xs text-ink/50">
+                        Kitsune Warden: <span x-text="formulas[rollMenuKey].kitsune_swap.kitsune_swap_to_ring"></span>
+                        instead of <span x-text="formulas[rollMenuKey].kitsune_swap.kitsune_swap_from_ring"></span>
+                    </div>
+                    <button type="button"
+                            data-kitsune-swap-roll
+                            @click="executeRoll(rollMenuKey, 0, null, 0, true)"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
+                        Roll <span x-text="formulas[rollMenuKey].kitsune_swap.label"></span>
+                    </button>
+                    <template x-for="opt in rollMenuOptions" :key="'krs'+opt.count">
+                        <button type="button"
+                                :data-kitsune-swap-vp="opt.count"
+                                @click="executeRoll(rollMenuKey, opt.count, opt, 0, true)"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                            <span x-text="opt.label + ' (using ' + formulas[rollMenuKey].kitsune_swap.kitsune_swap_to_ring + ')'"></span>
+                        </button>
+                    </template>
+                </div>
+            </template>
             <template x-if="rollMenuHasParry">
                 <div data-parry-menu>
                     <div class="relative"
@@ -3216,6 +3247,22 @@
                         Shosuro 5th Dan: sum of lowest 3 dice is added to each roll (some dice may be counted twice). The probabilities below include this bonus.
                     </div>
 
+                    {# Kitsune Warden Special Ability: swap the wound-check
+                       ring (Water) for the school ring. Visible only when
+                       the formula carries kitsune_swap. Iaijutsu strikes
+                       are excluded by the formula builder (no kitsune_swap
+                       attached). #}
+                    <label x-show="formulas.wound_check?.kitsune_swap && !wcIsStrike" x-cloak
+                           class="flex items-center gap-2 text-sm bg-parchment rounded p-2 cursor-pointer">
+                        <input type="checkbox" x-model="wcKitsuneSwap"
+                               data-testid="kitsune-wc-ring-swap">
+                        <span>
+                            Use Kitsune Warden Special Ability
+                            (roll with <span class="font-bold" x-text="formulas.wound_check?.kitsune_swap?.kitsune_swap_to_ring"></span>
+                            instead of <span x-text="formulas.wound_check?.kitsune_swap?.kitsune_swap_from_ring"></span>)
+                        </span>
+                    </label>
+
                     {# Probability table #}
                     <div class="overflow-x-auto">
                         <table class="text-sm w-full">
@@ -3315,6 +3362,14 @@
 
                 {# ── RESULT: pass/fail + discretionary bonuses ── #}
                 <div x-show="wcPhase === 'result'" x-cloak class="space-y-3">
+                    {# Kitsune Warden Special Ability annotation #}
+                    <div x-show="formula?.kitsune_swap_to_ring" x-cloak
+                         data-testid="kitsune-wc-swap-annotation"
+                         class="text-xs italic text-accent">
+                        Kitsune Warden Special Ability: rolled with
+                        <span class="font-bold" x-text="formula?.kitsune_swap_to_ring"></span>
+                        instead of <span x-text="formula?.kitsune_swap_from_ring"></span>.
+                    </div>
                     {# Roll summary #}
                     <div class="text-sm">
                         <span class="text-ink/60">Dice:</span>
@@ -4058,6 +4113,23 @@
                         Shosuro 5th Dan: sum of lowest 3 dice is added to each roll (some dice may be counted twice). The averages below include this bonus.
                     </div>
 
+                    {# Kitsune Warden Special Ability: swap the attack ring
+                       for the school ring. Visible only when the formula
+                       carries a kitsune_swap sub-dict (i.e., school ring
+                       value differs from Fire and the variant is not
+                       iaijutsu). Toggling re-renders the probability table
+                       from atkProbs[atkKey].kitsune_swap. #}
+                    <label x-show="atkFormula?.kitsune_swap" x-cloak
+                           class="flex items-center gap-2 text-sm bg-parchment rounded p-2 cursor-pointer">
+                        <input type="checkbox" x-model="atkKitsuneSwap"
+                               data-testid="kitsune-attack-ring-swap">
+                        <span>
+                            Use Kitsune Warden Special Ability
+                            (roll with <span class="font-bold" x-text="atkFormula?.kitsune_swap?.kitsune_swap_to_ring"></span>
+                            instead of <span x-text="atkFormula?.kitsune_swap?.kitsune_swap_from_ring"></span>)
+                        </span>
+                    </label>
+
                     {# Probability table #}
                     <div class="overflow-x-auto">
                         <table class="text-sm w-full">
@@ -4076,7 +4148,7 @@
                                         :class="v === atkVoidSelected ? 'bg-accent/10 font-medium' : ''">
                                         <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
                                         <td class="text-right py-1 px-2 font-mono text-xs text-ink/70"
-                                            x-text="(atkProbs[atkKey]?.void_keys?.[String(v)] || '').replace(',', 'k')"></td>
+                                            x-text="((atkKitsuneSwap && atkProbs[atkKey]?.kitsune_swap?.void_keys?.[String(v)]) || atkProbs[atkKey]?.void_keys?.[String(v)] || '').replace(',', 'k')"></td>
                                         <td class="text-right py-1 px-2 text-green-700"
                                             x-text="Math.round(atkHitChance(v) * 100) + '%'"></td>
                                         <td class="text-right py-1 px-2"
@@ -4121,6 +4193,14 @@
 
                 {# ── ATTACK RESULT ── #}
                 <div x-show="atkPhase === 'result'" x-cloak class="space-y-3">
+                    {# Kitsune Warden Special Ability annotation #}
+                    <div x-show="formula?.kitsune_swap_to_ring" x-cloak
+                         data-testid="kitsune-attack-swap-annotation"
+                         class="text-xs italic text-accent">
+                        Kitsune Warden Special Ability: rolled with
+                        <span class="font-bold" x-text="formula?.kitsune_swap_to_ring"></span>
+                        instead of <span x-text="formula?.kitsune_swap_from_ring"></span>.
+                    </div>
                     <div class="text-sm">
                         <span class="text-ink/60">Dice:</span>
                         <template x-for="(d, i) in finalDice" :key="'atk'+i">
@@ -5124,6 +5204,15 @@
                 <div x-show="phase === 'done'" x-cloak class="space-y-3">
                     {# Formula header (e.g. "10k7 + 11") #}
                     <div class="text-base font-mono font-bold text-ink/80" x-text="formulaText"></div>
+
+                    {# Kitsune Warden Special Ability annotation #}
+                    <div x-show="formula && formula.kitsune_swap_to_ring" x-cloak
+                         data-testid="kitsune-swap-result-annotation"
+                         class="text-xs italic text-accent">
+                        Kitsune Warden Special Ability: rolled with
+                        <span class="font-bold" x-text="formula?.kitsune_swap_to_ring"></span>
+                        instead of <span x-text="formula?.kitsune_swap_from_ring"></span>.
+                    </div>
 
                     {# Read-only banner (non-editors only). Unlike the attack
                        and WC modals which always show this, the dice-roller
@@ -6336,6 +6425,11 @@
             atkKey: '',
             atkFormula: null,
             atkProbs: {},
+            // Kitsune Warden Special Ability: when checked in the attack
+            // modal, the roll uses the school ring instead of the formula's
+            // natural ring. Toggling the box recomputes the probability
+            // table from atkProbs[atkKey].kitsune_swap.
+            atkKitsuneSwap: false,
             atkDamageAvgs: {},
             atkTN: 20,
             atkWeaponRolled: {{ 1 if character.school == 'brotherhood_of_shinsei_monk' else (4 if school and school.category in ('bushi', 'counterattack', 'duelist', 'investigator') else 3) }},
@@ -6430,6 +6524,9 @@
             wcModalOpen: false,
             wcPhase: 'pre',  // 'pre' | 'rolling' | 'result'
             wcProbs: {},
+            // Kitsune Warden Special Ability: when checked in the WC modal,
+            // the wound-check roll uses the school ring instead of Water.
+            wcKitsuneSwap: false,
             wcVoidSelected: 0,
             wcIsStrike: false,
             wcLightWounds: 0,
@@ -7330,7 +7427,7 @@
                 this.runRoll();
             },
 
-            executeRoll(key, voidSpent, option, owSpent = 0) {
+            executeRoll(key, voidSpent, option, owSpent = 0, useKitsuneSwap = false) {
                 this.rollMenuOpen = false;
                 this.owHoverRow = null;
                 this.parryHoverRow = null;
@@ -7349,6 +7446,16 @@
                 this.mirumotoPointsSpentThisRoll = 0;
                 this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
+                // Kitsune Warden Special Ability: the user opted in to roll
+                // with the school ring instead of the formula's natural
+                // ring. Apply the server-precomputed swap dimensions.
+                if (useKitsuneSwap && f.kitsune_swap) {
+                    f.rolled = f.kitsune_swap.rolled;
+                    f.kept = f.kitsune_swap.kept;
+                    f.label = f.kitsune_swap.label;
+                    f.kitsune_swap_from_ring = f.kitsune_swap.kitsune_swap_from_ring;
+                    f.kitsune_swap_to_ring = f.kitsune_swap.kitsune_swap_to_ring;
+                }
                 this.perRoundResetMessages = f.is_initiative
                     ? this._resetPerRoundAbilities() : [];
                 this._captureShinjoParryDieValue(f);
@@ -8402,6 +8509,9 @@
                 // immediately after calling openAttackModal.
                 this.atkForceAttackerPhase = null;
                 this.atkKakitaInterrupt = false;
+                // Reset Kitsune Warden Special Ability swap on every modal
+                // open so a previous attack's selection doesn't leak.
+                this.atkKitsuneSwap = false;
                 // Athletics-attack TN = 5 + 10*parry; regular TN = 5 + 5*parry.
                 // Reset atkTN to a sane default if the previous value isn't one of
                 // the new variant's dropdown options (so the <select> isn't blank).
@@ -8828,8 +8938,19 @@
                 return this.atkKakitaDefenderPhase === 0;
             },
 
+            // Returns either the default attack-probs entry for the current
+            // atkKey or its Kitsune-swap variant, depending on the modal
+            // checkbox. Centralised so atkHitChance / atkAvgAttackRoll /
+            // table render all see the same source.
+            _atkProbsForCurrent() {
+                const base = this.atkProbs[this.atkKey];
+                if (!base) return null;
+                if (this.atkKitsuneSwap && base.kitsune_swap) return base.kitsune_swap;
+                return base;
+            },
+
             atkHitChance(voidCount) {
-                const probs = this.atkProbs[this.atkKey];
+                const probs = this._atkProbsForCurrent();
                 if (!probs) return 0;
                 const rk = probs.void_keys?.[String(voidCount)];
                 if (!rk || !probs.probs?.[rk]) return 0;
@@ -8849,7 +8970,7 @@
             },
 
             atkAvgAttackRoll(voidCount) {
-                const probs = this.atkProbs[this.atkKey];
+                const probs = this._atkProbsForCurrent();
                 if (!probs) return 0;
                 const rk = probs.void_keys?.[String(voidCount)];
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
@@ -9052,6 +9173,16 @@
                 }
                 const voidCount = this.atkVoidSelected;
                 const formula = { ...this.formulas[this.atkKey] };
+                // Kitsune Warden Special Ability: when the modal checkbox
+                // is checked, swap the formula's natural ring for the
+                // school ring before any further bonuses stack.
+                if (this.atkKitsuneSwap && formula.kitsune_swap) {
+                    formula.rolled = formula.kitsune_swap.rolled;
+                    formula.kept = formula.kitsune_swap.kept;
+                    formula.label = formula.kitsune_swap.label;
+                    formula.kitsune_swap_from_ring = formula.kitsune_swap.kitsune_swap_from_ring;
+                    formula.kitsune_swap_to_ring = formula.kitsune_swap.kitsune_swap_to_ring;
+                }
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
@@ -9470,6 +9601,8 @@
                 this.wcPhase = 'pre';
                 this.wcRaisesSpent = 0;
                 this.wcResultApplied = false;
+                // Reset Kitsune Warden Special Ability swap on each open.
+                this.wcKitsuneSwap = false;
                 this.wcMaxRaisesPerRoll = formula?.adventure_raises_max_per_roll || 0;
                 const raisesUsed = t.getCount ? t.getCount('adventure_raises') : 0;
                 const raisesAvail = Math.max(0, (this.advRaisesConfig.available || 0) - raisesUsed);
@@ -9488,13 +9621,21 @@
             },
 
             wcProbRow(voidCount) {
-                // Compute probability breakdown for a given void spend
+                // Compute probability breakdown for a given void spend.
+                // The Kitsune Warden Special Ability swap (when checked)
+                // routes the lookup through wcProbs.kitsune_swap which has
+                // a parallel set of probs/void_keys precomputed from the
+                // school-ring baseline. Iaijutsu strikes don't accept the
+                // swap (no kitsune_swap key in the formula) so the swap
+                // path silently no-ops there.
                 const p = this.wcProbs;
                 if (!p || !p.probs) return null;
-                const reroll = this.wcIsStrike ? p.probs_no_reroll : p.probs;
-                const key = this.wcIsStrike ? p.void_keys?.['0'] : p.void_keys?.[String(voidCount)];
-                if (!key || !reroll?.[key]) return null;
-                const probs = reroll[key];
+                const useSwap = this.wcKitsuneSwap && p.kitsune_swap && !this.wcIsStrike;
+                const probsTable = useSwap ? p.kitsune_swap.probs : (this.wcIsStrike ? p.probs_no_reroll : p.probs);
+                const voidKeys = useSwap ? p.kitsune_swap.void_keys : p.void_keys;
+                const key = this.wcIsStrike ? p.void_keys?.['0'] : voidKeys?.[String(voidCount)];
+                if (!key || !probsTable?.[key]) return null;
+                const probs = probsTable[key];
                 const daidojiBonus = this.wcDaidojiCounterattack && this.daidojiCounterattackData
                     ? this.daidojiCounterattackData.bonus : 0;
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
@@ -9549,6 +9690,17 @@
             async rollWoundCheck() {
                 const voidCount = this.wcIsStrike ? 0 : this.wcVoidSelected;
                 const formula = { ...this.formulas['wound_check'] };
+                // Kitsune Warden Special Ability: swap the WC ring (Water)
+                // for the school ring when the modal checkbox is checked.
+                // Iaijutsu strikes (wcIsStrike) bypass this - the formula
+                // builder doesn't attach kitsune_swap on iaijutsu paths.
+                if (this.wcKitsuneSwap && formula.kitsune_swap && !this.wcIsStrike) {
+                    formula.rolled = formula.kitsune_swap.rolled;
+                    formula.kept = formula.kitsune_swap.kept;
+                    formula.label = formula.kitsune_swap.label;
+                    formula.kitsune_swap_from_ring = formula.kitsune_swap.kitsune_swap_from_ring;
+                    formula.kitsune_swap_to_ring = formula.kitsune_swap.kitsune_swap_to_ring;
+                }
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};

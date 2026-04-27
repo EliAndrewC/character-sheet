@@ -458,6 +458,29 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "otaku_trade_dice_for_sw": character.school == "otaku_bushi" and dan >= 5,
         # Ikoma 4th Dan: 10-dice floor on damage for unparried attacks without extra kept
         "ikoma_10_dice_floor": character.school == "ikoma_bard" and dan >= 4,
+        # Kitsune Warden 4th Dan: 10-dice floor on athletics rolls (the
+        # (2*Ring)k(Ring) formula and athletics-attack/parry combat formulas).
+        # Rolled count only - kept stays at the ring value. Wired up in
+        # build_athletics_formula and build_athletics_combat_formula in
+        # services/dice.py; the flag here is for the View Sheet's display
+        # note. Same shape as Ikoma's ikoma_10_dice_floor.
+        "kitsune_athletics_10_dice_floor": character.school == "kitsune_warden" and dan >= 4,
+        # Kitsune Warden Special Ability: "Once per target per combat round
+        # or conversation, you may substitute your School Ring in place of
+        # the usual ring when making a roll involving that target."
+        # Available iff the school matches AND the player has chosen a
+        # school ring (the swap is meaningless without one). Usage is NOT
+        # tracked - attack rolls etc. carry no target identity, so the
+        # once-per-target limit is enforced by player honor, not the sheet.
+        "kitsune_warden_ring_swap_available": (
+            character.school == "kitsune_warden" and bool(character.school_ring_choice)
+        ),
+        # The school ring (string: "Air", "Fire", "Earth", or "Water") for
+        # templates that need to label the swap target. Empty string when
+        # the player has not picked a ring yet.
+        "kitsune_warden_school_ring": (
+            character.school_ring_choice or "" if character.school == "kitsune_warden" else ""
+        ),
         # Mirumoto 4th Dan: failed parries vs double attacks preserve auto SW; vs regular halve reduction
         "mirumoto_parry_modifier": character.school == "mirumoto_bushi" and dan >= 4,
         # Isawa Duelist 5th Dan: bank wound check excess for future wound check
@@ -659,6 +682,33 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         if k > 10: k = 10
         wc_probs["void_keys"][str(v)] = f"{r},{k}"
 
+    # Kitsune Warden Special Ability swap variant for the WC modal: a
+    # parallel set of probs / void_keys driven from the swap baseline. The
+    # client switches between the default and swap dicts when the user
+    # toggles the modal checkbox.
+    wc_swap = wc_formula.get("kitsune_swap")
+    if wc_swap:
+        swap_base_r = wc_swap["rolled"]
+        swap_base_k = wc_swap["kept"]
+        swap_dict = {
+            "flat": wc_flat,
+            "rolled_base": swap_base_r,
+            "kept_base": swap_base_k,
+            "probs": {},
+            "void_keys": {},
+        }
+        for v in range(void_spend_cap + 1):
+            r, k = swap_base_r + v, swap_base_k + v
+            if r > 10: k += r - 10; r = 10
+            if k > 10: k = 10
+            key = f"{r},{k}"
+            swap_dict["void_keys"][str(v)] = key
+            if key not in swap_dict["probs"]:
+                swap_dict["probs"][key] = [
+                    round(_prob_table[True][r, k, x], 4) for x in range(max_target)
+                ]
+        wc_probs["kitsune_swap"] = swap_dict
+
     # Compute attack probability slices for each attack-type formula
     attack_probs = {}
     reroll_for_attack = not is_impaired_now
@@ -691,6 +741,46 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                         shosuro_lowest_3_for(r, reroll_for_attack)
                     )
         attack_probs[key] = ap
+
+        # Kitsune Warden Special Ability swap variant for the Attack modal.
+        # When the formula carries a kitsune_swap sub-dict, attach a
+        # parallel probs/avgs/void_keys entry computed from the swapped
+        # baseline. The client uses this when the modal checkbox is
+        # checked. iaijutsu attacks intentionally don't have kitsune_swap
+        # (build_all_roll_formulas excludes them), so this branch silently
+        # skips for iaijutsu attack rolls.
+        atk_swap = formula.get("kitsune_swap")
+        if atk_swap:
+            swap_r0 = atk_swap["rolled"]
+            swap_k0 = atk_swap["kept"]
+            swap_entry = {
+                "flat": flat,
+                "void_cap": void_spend_cap,
+                "void_keys": {},
+                "probs": {},
+                "avgs": {},
+            }
+            if shosuro_5th:
+                swap_entry["shosuro_flats"] = {}
+            for v in range(void_spend_cap + 1):
+                r, k = swap_r0 + v, swap_k0 + v
+                if r > 10: k += r - 10; r = 10
+                if k > 10: k = 10
+                rk = f"{r},{k}"
+                swap_entry["void_keys"][str(v)] = rk
+                if rk not in swap_entry["probs"]:
+                    swap_entry["probs"][rk] = [
+                        round(_prob_table[reroll_for_attack][r, k, x], 4)
+                        for x in range(151)
+                    ]
+                    swap_entry["avgs"][rk] = round(
+                        _prob_table[reroll_for_attack].get((r, k), 0), 2
+                    )
+                    if shosuro_5th:
+                        swap_entry["shosuro_flats"][rk] = round(
+                            shosuro_lowest_3_for(r, reroll_for_attack)
+                        )
+            ap["kitsune_swap"] = swap_entry
 
     # Damage average lookup table: avg of NkM with reroll-10s for reasonable combos
     damage_avgs = {}

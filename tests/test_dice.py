@@ -3468,3 +3468,544 @@ class TestDojiArtisanRegressionAfterSuzume:
         # The membership test must include both schools.
         assert '"merchant"' in src.lower() or "'merchant'" in src
         assert "suzume_overseer" in src
+
+
+class TestKitsuneWarden:
+    """Kitsune Warden 1st Dan: 'Roll one extra die on three rolls of your
+    choice.' Player picks 3 from skills + rollable knacks (iaijutsu IS
+    eligible) + attack/parry/wound_check/damage/initiative. Picks live in
+    technique_choices.first_dan_choices."""
+
+    def _char(self, dan: int = 1, picks=None, **extra) -> dict:
+        kn = {"absorb_void": dan, "commune": dan, "iaijutsu": dan}
+        tech_choices = {}
+        if picks is not None:
+            tech_choices["first_dan_choices"] = picks
+        data = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks=kn,
+            skills={"precepts": 3, "bragging": 2, "etiquette": 2,
+                    "sincerity": 2, "tact": 2, "athletics": 1},
+            technique_choices=tech_choices,
+        )
+        data.update(extra)
+        return data
+
+    # --- Single-pick coverage on each roll-type branch ---
+
+    def test_first_dan_one_pick_grants_extra_die_on_chosen_skill(self):
+        char = self._char(dan=1, picks=["bragging"])
+        f = build_skill_formula("bragging", char)
+        # rank(2) + Air(2) + 1 (1st Dan)
+        assert f.rolled == 5
+
+    def test_first_dan_no_bonus_on_unpicked_skill(self):
+        char = self._char(dan=1, picks=["bragging"])
+        f = build_skill_formula("etiquette", char)
+        # rank(2) + Air(2), no extra die
+        assert f.rolled == 4
+
+    def test_first_dan_three_picks_each_grant_extra_die(self):
+        char = self._char(dan=1, picks=["bragging", "etiquette", "sincerity"])
+        for sid in ("bragging", "etiquette", "sincerity"):
+            f = build_skill_formula(sid, char)
+            assert f.rolled == 5, f"{sid} did not get +1 rolled die"
+        # Unpicked skill stays at base.
+        assert build_skill_formula("tact", char).rolled == 4
+
+    def test_first_dan_no_bonus_below_dan_1(self):
+        # All knacks at 0 = Dan 0 means 1st Dan technique should not fire.
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks={"absorb_void": 0, "commune": 0, "iaijutsu": 0},
+            skills={"bragging": 2},
+            technique_choices={"first_dan_choices": ["bragging"]},
+        )
+        f = build_skill_formula("bragging", char)
+        assert f.rolled == 4  # 2 + 2, no 1st Dan
+
+    def test_first_dan_pick_on_wound_check_applies_via_wc_formula(self):
+        char = self._char(dan=1, picks=["wound_check"])
+        wc = build_wound_check_formula(char)
+        # base = Earth(2) + 2 (default) = 4, plus 1 from 1st Dan
+        assert wc["rolled"] == 5
+        assert any("1st Dan" in s for s in wc["bonus_sources"])
+
+    def test_first_dan_pick_on_damage_applies_in_damage_formula(self):
+        char = self._char(dan=1, picks=["damage"], attack=3)
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["attack"]
+        assert atk["damage_extra_rolled"] >= 1
+        assert any("1st Dan" in s for s in atk["damage_bonus_sources"])
+
+    def test_first_dan_pick_on_initiative_applies_in_initiative_formula(self):
+        char_no = self._char(dan=1, picks=["bragging"])
+        char_yes = self._char(dan=1, picks=["initiative"])
+        f_no = build_initiative_formula(char_no)
+        f_yes = build_initiative_formula(char_yes)
+        # Picking initiative grants exactly +1 rolled die.
+        assert f_yes["rolled"] == f_no["rolled"] + 1
+
+    def test_first_dan_pick_on_attack_applies_in_combat_formula(self):
+        char = self._char(dan=1, picks=["attack"], attack=3)
+        f = build_combat_formula("attack", char)
+        # rank(3) + Fire(2) + 1 = 6
+        assert f.rolled == 6
+
+    def test_first_dan_pick_on_parry_applies_in_combat_formula(self):
+        char = self._char(dan=1, picks=["parry"], parry=3)
+        f = build_combat_formula("parry", char)
+        # rank(3) + Air(2) + 1 = 6
+        assert f.rolled == 6
+
+    def test_first_dan_pick_on_knack_applies_extra_die(self):
+        char = self._char(dan=1, picks=["commune"])
+        f = build_knack_formula("commune", char)
+        # commune rolls Earth. rank(1) + Earth(2) + 1 = 4
+        assert f.rolled == 4
+
+    def test_first_dan_pick_on_iaijutsu_knack_applies_extra_die(self):
+        """Regression guard: iaijutsu IS eligible for 1st Dan picks even
+        though it is excluded from the special ability and the 3rd Dan picker."""
+        char = self._char(dan=1, picks=["iaijutsu"])
+        f = build_knack_formula("iaijutsu", char)
+        # iaijutsu rolls Fire by default. rank(1) + Fire(2) + 1 = 4
+        assert f.rolled == 4
+
+    def test_first_dan_picks_persist_through_technique_choices(self):
+        """The picks survive the round-trip from technique_choices to
+        formula construction."""
+        char = self._char(dan=1, picks=["bragging", "tact", "wound_check"])
+        # bragging picked
+        assert build_skill_formula("bragging", char).rolled == 5
+        # tact picked
+        assert build_skill_formula("tact", char).rolled == 5
+        # wound_check picked
+        assert build_wound_check_formula(char)["rolled"] == 5
+        # etiquette NOT picked
+        assert build_skill_formula("etiquette", char).rolled == 4
+
+    def test_first_dan_empty_picks_no_bonus(self):
+        char = self._char(dan=1, picks=[])
+        assert build_skill_formula("bragging", char).rolled == 4  # 2 + 2
+
+    def test_first_dan_no_technique_choices_no_bonus(self):
+        char = self._char(dan=1)  # picks=None -> no first_dan_choices
+        assert build_skill_formula("bragging", char).rolled == 4  # 2 + 2
+
+    # --- 2nd Dan: free raise on a chosen roll type (flexible-2nd-Dan branch
+    # shared with Ide / Isawa Ishi / Shugenja / Suzume Overseer). ---
+
+    def _char_dan2(self, second_dan_choice=None, **extra):
+        kn = {"absorb_void": 2, "commune": 2, "iaijutsu": 2}
+        tech_choices = {}
+        if second_dan_choice is not None:
+            tech_choices["second_dan_choice"] = second_dan_choice
+        data = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks=kn,
+            skills={"precepts": 3, "bragging": 2, "tact": 2, "etiquette": 2},
+            technique_choices=tech_choices,
+        )
+        data.update(extra)
+        return data
+
+    def test_second_dan_chosen_skill_gets_free_raise(self):
+        char = self._char_dan2(second_dan_choice="tact")
+        f = build_skill_formula("tact", char)
+        assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
+                   for b in f.bonuses)
+
+    def test_second_dan_no_choice_no_bonus(self):
+        char = self._char_dan2()  # No second_dan_choice
+        f = build_skill_formula("tact", char)
+        assert not any(b["label"] == "2nd Dan technique" for b in f.bonuses)
+
+    def test_second_dan_chosen_wound_check_gets_free_raise(self):
+        char = self._char_dan2(second_dan_choice="wound_check")
+        wc = build_wound_check_formula(char)
+        assert wc["flat"] >= 5
+        assert any("2nd Dan" in s for s in wc["bonus_sources"])
+
+    def test_second_dan_chosen_damage_gets_free_raise(self):
+        char = self._char_dan2(second_dan_choice="damage", attack=3)
+        formulas = build_all_roll_formulas(char)
+        atk = formulas["attack"]
+        assert atk["damage_flat_bonus"] == 5
+
+    def test_second_dan_attack_choice_gets_free_raise(self):
+        char = self._char_dan2(second_dan_choice="attack", attack=3)
+        f = build_combat_formula("attack", char)
+        assert f.flat == 5
+
+    def test_second_dan_no_bonus_below_dan_2(self):
+        # Dan 1 - second_dan_choice is set but should be ignored.
+        char = self._char(dan=1, technique_choices={"second_dan_choice": "tact"})
+        f = build_skill_formula("tact", char)
+        assert not any(b["label"] == "2nd Dan technique" for b in f.bonuses)
+
+    # --- 3rd Dan: 2X precepts adventure raises (X = precepts), applicable to
+    # attack + wound check + three player-chosen skills. Iaijutsu is not
+    # eligible. ---
+
+    def _char_dan3(self, picks=None, **extra):
+        kn = {"absorb_void": 3, "commune": 3, "iaijutsu": 3}
+        tech_choices = {}
+        if picks is not None:
+            tech_choices["third_dan_skill_choices"] = picks
+        data = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks=kn,
+            skills={"precepts": 3, "bragging": 2, "tact": 2,
+                    "etiquette": 2, "sincerity": 2, "sneaking": 2},
+            technique_choices=tech_choices,
+        )
+        data.update(extra)
+        return data
+
+    def test_third_dan_annotates_attack_always(self):
+        char = self._char_dan3(picks=[], attack=2)
+        formulas = build_all_roll_formulas(char)
+        # Attack is in the always-on applicable_to list; precepts rank = 3.
+        assert formulas["attack"]["adventure_raises_max_per_roll"] == 3
+
+    def test_third_dan_annotates_wound_check_always(self):
+        char = self._char_dan3(picks=[])
+        formulas = build_all_roll_formulas(char)
+        assert formulas["wound_check"]["adventure_raises_max_per_roll"] == 3
+
+    def test_third_dan_annotates_chosen_skill(self):
+        char = self._char_dan3(picks=["bragging", "tact", "sincerity"])
+        formulas = build_all_roll_formulas(char)
+        for sid in ("bragging", "tact", "sincerity"):
+            assert formulas[f"skill:{sid}"]["adventure_raises_max_per_roll"] == 3, \
+                f"{sid} should be eligible for 3rd Dan adventure raises"
+
+    def test_third_dan_does_not_annotate_unpicked_skill(self):
+        char = self._char_dan3(picks=["bragging", "tact", "sincerity"])
+        formulas = build_all_roll_formulas(char)
+        # etiquette is NOT picked.
+        assert formulas["skill:etiquette"]["adventure_raises_max_per_roll"] == 0
+
+    def test_third_dan_iaijutsu_never_eligible_even_if_smuggled_into_choices(self):
+        # Defense-in-depth: a crafted POST that puts "iaijutsu" in
+        # third_dan_skill_choices must NOT enable the iaijutsu knack roll
+        # for adventure raises (the UI excludes iaijutsu, but the server
+        # drops it too).
+        char = self._char_dan3(picks=["bragging", "iaijutsu", "tact"])
+        formulas = build_all_roll_formulas(char)
+        assert formulas["knack:iaijutsu"]["adventure_raises_max_per_roll"] == 0
+
+    def test_third_dan_per_adventure_pool_size_is_2x_precepts(self):
+        """The per-adventure counter (built by routes/pages.py) reads
+        2 * source_skill from the third_dan dict. Confirm Kitsune's
+        third_dan entry produces a pool of 2X where X = precepts rank.
+        Counter-wiring is a routes-side concern; this test asserts the
+        contract dice.py and routes/pages.py share."""
+        from app.game_data import SCHOOL_TECHNIQUE_BONUSES
+        tb = SCHOOL_TECHNIQUE_BONUSES["kitsune_warden"]["third_dan"]
+        assert tb["source_skill"] == "precepts"
+        assert tb["formula"] == "2X"
+        assert tb["max_per_roll"] == "X"
+        # With precepts rank 3, the per-adventure pool would be 2*3 = 6.
+        char = self._char_dan3(picks=["bragging"])
+        precepts = char["skills"]["precepts"]
+        assert 2 * precepts == 6
+
+    def test_third_dan_max_per_roll_is_x(self):
+        # The per-roll cap stamped on each applicable formula equals the
+        # source skill rank (precepts = 3 in our fixture).
+        char = self._char_dan3(picks=["bragging"])
+        formulas = build_all_roll_formulas(char)
+        assert formulas["skill:bragging"]["adventure_raises_max_per_roll"] == 3
+        assert formulas["attack"]["adventure_raises_max_per_roll"] == 3
+        assert formulas["wound_check"]["adventure_raises_max_per_roll"] == 3
+
+    def test_third_dan_no_bonus_below_dan_3(self):
+        # Below Dan 3, the 3rd Dan annotations should not fire.
+        kn = {"absorb_void": 2, "commune": 2, "iaijutsu": 2}
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks=kn,
+            skills={"precepts": 3, "bragging": 2},
+            technique_choices={"third_dan_skill_choices": ["bragging"]},
+            attack=2,
+        )
+        formulas = build_all_roll_formulas(char)
+        assert formulas["attack"]["adventure_raises_max_per_roll"] == 0
+        assert formulas["wound_check"]["adventure_raises_max_per_roll"] == 0
+        assert formulas["skill:bragging"]["adventure_raises_max_per_roll"] == 0
+
+    def test_third_dan_no_picks_only_attack_and_wound_check(self):
+        # When the player hasn't picked any skills yet, only attack and
+        # wound_check are eligible (the always-on entries).
+        char = self._char_dan3(picks=None, attack=2)
+        formulas = build_all_roll_formulas(char)
+        assert formulas["attack"]["adventure_raises_max_per_roll"] == 3
+        assert formulas["wound_check"]["adventure_raises_max_per_roll"] == 3
+        assert formulas["skill:bragging"]["adventure_raises_max_per_roll"] == 0
+
+    # --- 4th Dan: ring raise + 5 XP discount + 10-dice athletics floor ---
+
+    def _char_dan4(self, school_ring="Water", **extra):
+        kn = {"absorb_void": 4, "commune": 4, "iaijutsu": 4}
+        rings = {"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2}
+        # 4th Dan auto-raises school ring to 4 (free).
+        rings[school_ring] = 4
+        data = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice=school_ring,
+            knacks=kn,
+            rings=rings,
+            skills={"precepts": 1},
+        )
+        data.update(extra)
+        return data
+
+    def test_4th_dan_school_ring_xp_discount_5_off(self):
+        """At Dan 4 the school ring raise from 4 to 5 costs 5*5 - 5 = 20."""
+        from app.services.xp import calculate_ring_xp
+        rings = {"Air": 2, "Fire": 2, "Earth": 2, "Water": 5, "Void": 2}
+        # Dan 3 (no discount): 5*4 + 5*5 = 45
+        assert calculate_ring_xp(rings, "Water", dan=3) == 45
+        # Dan 4: rank 4 free + (5*5 - 5) = 20
+        assert calculate_ring_xp(rings, "Water", dan=4) == 20
+
+    def test_4th_dan_athletics_floor_raises_rolled_to_10_when_below(self):
+        """6k3 -> 10k3 (rolled raised, kept untouched)."""
+        char = self._char_dan4(school_ring="Water")  # Water=4 at Dan 4
+        f = build_athletics_formula("Air", char)  # Air=2, rolled = 4
+        # Without floor: 2*2 + 0 = 4 rolled. With Kitsune 4th Dan floor: 10.
+        assert f.rolled == 10
+        assert f.kept == 2  # kept count unchanged
+
+    def test_4th_dan_athletics_floor_does_not_lower_above_10_dice(self):
+        """A formula already at 12k4 stays 12k4 (no change)."""
+        # School ring = Water raised to 4 at Dan 4. Athletics on Water = 8 rolled.
+        # Add an athletics knack rank to push above 10.
+        kn = {"absorb_void": 4, "commune": 4, "iaijutsu": 4}
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks=kn,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 6, "Void": 2},
+            foreign_knacks={"athletics": 1},
+        )
+        # Athletics on Water: 2*6 + 1 = 13 rolled, 6 kept (post-cap).
+        f = build_athletics_formula("Water", char)
+        # 13 rolled is above 10, so the floor doesn't lower it.
+        # Then the dice cap (max 10 rolled, max 10 kept) applies via _finalize_caps.
+        assert f.rolled == 10  # capped, but NOT because of the floor
+        # If we had ring 4 athletics 0: rolled would be 8, raised to 10 by the floor.
+        char2 = self._char_dan4(school_ring="Water")
+        f2 = build_athletics_formula("Water", char2)
+        # Water=4 at Dan 4: rolled = 2*4 + 0 = 8. Floor raises to 10.
+        assert f2.rolled == 10
+
+    def test_4th_dan_athletics_floor_does_not_change_kept_count(self):
+        """When the floor raises rolled to 10, kept stays at the ring value."""
+        char = self._char_dan4(school_ring="Water")
+        # Air ring is 2 - 2*2 = 4 rolled (below 10).
+        f = build_athletics_formula("Air", char)
+        assert f.kept == 2
+        # Earth ring is also 2.
+        f2 = build_athletics_formula("Earth", char)
+        assert f2.kept == 2
+
+    def test_4th_dan_athletics_combat_floor_applies_to_athletics_attack(self):
+        """athletics-as-attack also gets the 10-dice floor."""
+        kn = {"absorb_void": 4, "commune": 4, "iaijutsu": 4}
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks=kn,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+            foreign_knacks={"athletics": 1},
+            attack=1,
+        )
+        # athletics-attack on Fire = ring + athletics = 2 + 1 = 3 rolled, 2 kept.
+        f = build_athletics_combat_formula("attack", char)
+        assert f.rolled == 10
+        assert f.kept == 2
+
+    def test_4th_dan_athletics_combat_floor_applies_to_athletics_parry(self):
+        """athletics-as-parry also gets the 10-dice floor."""
+        kn = {"absorb_void": 4, "commune": 4, "iaijutsu": 4}
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks=kn,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+            foreign_knacks={"athletics": 1},
+            parry=1,
+        )
+        f = build_athletics_combat_formula("parry", char)
+        assert f.rolled == 10
+        assert f.kept == 2
+
+    def test_below_4th_dan_no_athletics_floor(self):
+        """At Dan 3 the floor does not apply."""
+        kn = {"absorb_void": 3, "commune": 3, "iaijutsu": 3}
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks=kn,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        f = build_athletics_formula("Air", char)
+        # Air=2: 2*2+0 = 4 rolled. Floor not applied.
+        assert f.rolled == 4
+
+    def test_4th_dan_athletics_floor_only_for_kitsune(self):
+        """Other 4th Dan schools do not get the athletics floor."""
+        kn = {"oppose_social": 4, "pontificate": 4, "worldliness": 4}
+        char = make_character_data(
+            school="suzume_overseer",
+            school_ring_choice="Water",
+            knacks=kn,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+        )
+        f = build_athletics_formula("Air", char)
+        assert f.rolled == 4  # not raised to 10
+
+    # --- Special Ability foundation: server-side ring_override ---
+    # The UI surfaces the swap in Phases 8-10; this phase confirms the
+    # formula builders honor an opt-in ``ring_override`` on the in-scope
+    # roll types and reject it on the out-of-scope ones.
+
+    def _swap_char(self, **extra):
+        """Kitsune Warden Dan 1, school ring Water (4 because we're going
+        to bump rings non-uniformly to give the swap something to do)."""
+        kn = {"absorb_void": 1, "commune": 1, "iaijutsu": 1}
+        data = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks=kn,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+            skills={"bragging": 2, "precepts": 2},
+        )
+        data.update(extra)
+        return data
+
+    def test_skill_roll_with_ring_override_uses_override_ring(self):
+        char = self._swap_char()
+        # Bragging is normally Air (rank 2 + Air 2 = 4 rolled, 2 kept).
+        # Override to Water (4): 2 + 4 = 6 rolled, 4 kept.
+        f = build_skill_formula("bragging", char, ring_override="Water")
+        assert f.rolled == 6
+        assert f.kept == 4
+        assert f.kitsune_swap_from_ring == "Air"
+        assert f.kitsune_swap_to_ring == "Water"
+        assert "(Water)" in f.label
+
+    def test_skill_roll_no_override_no_swap_metadata(self):
+        char = self._swap_char()
+        f = build_skill_formula("bragging", char)
+        assert f.kitsune_swap_from_ring == ""
+        assert f.kitsune_swap_to_ring == ""
+
+    def test_skill_roll_override_to_same_ring_no_swap(self):
+        """If override ring == default ring, no swap is recorded."""
+        char = self._swap_char()
+        # Bragging is naturally Air; override Air -> no-op.
+        f = build_skill_formula("bragging", char, ring_override="Air")
+        assert f.kitsune_swap_from_ring == ""
+        assert f.kitsune_swap_to_ring == ""
+
+    def test_skill_roll_override_invalid_ring_ignored(self):
+        """Garbage ring names don't crash; the default ring is used."""
+        char = self._swap_char()
+        f = build_skill_formula("bragging", char, ring_override="NotARing")
+        assert f.kitsune_swap_from_ring == ""
+
+    def test_knack_roll_with_ring_override_uses_override_ring(self):
+        char = self._swap_char()
+        # Commune rolls Earth by default (rank 1 + Earth 2 = 3).
+        # Override to Water (4): 1 + 4 = 5 rolled, 4 kept.
+        f = build_knack_formula("commune", char, ring_override="Water")
+        assert f.rolled == 5
+        assert f.kept == 4
+        assert f.kitsune_swap_from_ring == "Earth"
+        assert f.kitsune_swap_to_ring == "Water"
+
+    def test_iaijutsu_attack_rejects_ring_override(self):
+        """build_knack_formula raises ValueError when ring_override is
+        passed for iaijutsu (defense in depth - the UI never offers it)."""
+        import pytest as _pytest
+        char = self._swap_char()
+        with _pytest.raises(ValueError):
+            build_knack_formula("iaijutsu", char, ring_override="Water")
+        # Without override, the call works as usual.
+        f = build_knack_formula("iaijutsu", char)
+        assert f is not None
+
+    def test_attack_roll_with_ring_override_uses_override_ring(self):
+        char = self._swap_char(attack=3)
+        # Attack default ring is Fire (rank 3 + Fire 2 = 5 rolled, 2 kept).
+        # Override to Water (4): 3 + 4 = 7 rolled, 4 kept.
+        f = build_combat_formula("attack", char, ring_override="Water")
+        assert f.rolled == 7
+        assert f.kept == 4
+        assert f.kitsune_swap_from_ring == "Fire"
+        assert f.kitsune_swap_to_ring == "Water"
+
+    def test_parry_roll_with_ring_override_uses_override_ring(self):
+        char = self._swap_char(parry=3)
+        # Parry default ring is Air (rank 3 + Air 2 = 5 rolled, 2 kept).
+        # Override to Water (4): 3 + 4 = 7 rolled, 4 kept.
+        f = build_combat_formula("parry", char, ring_override="Water")
+        assert f.rolled == 7
+        assert f.kept == 4
+        assert f.kitsune_swap_from_ring == "Air"
+        assert f.kitsune_swap_to_ring == "Water"
+
+    def test_wound_check_with_ring_override_uses_override_ring(self):
+        char = self._swap_char()
+        # Default: Water+1 = 5 rolled, Water = 4 kept (Water=4 here).
+        # Override to Air (2): 2+1 = 3 rolled, 2 kept.
+        wc = build_wound_check_formula(char, ring_override="Air")
+        assert wc["rolled"] == 3
+        assert wc["kept"] == 2
+        assert wc["kitsune_swap_from_ring"] == "Water"
+        assert wc["kitsune_swap_to_ring"] == "Air"
+        assert "(Air)" in wc["label"]
+
+    def test_wound_check_no_override_no_swap_metadata(self):
+        char = self._swap_char()
+        wc = build_wound_check_formula(char)
+        assert wc["kitsune_swap_from_ring"] == ""
+        assert wc["kitsune_swap_to_ring"] == ""
+
+    def test_damage_formula_does_not_accept_ring_override(self):
+        """Damage formulas don't have a ring to swap, and the rules
+        explicitly exclude damage from the special ability. Out-of-scope
+        builders don't expose a ring_override parameter."""
+        import inspect
+        # The damage block lives inside build_all_roll_formulas; that
+        # function's signature must not have a ring_override param.
+        sig = inspect.signature(build_all_roll_formulas)
+        assert "ring_override" not in sig.parameters
+
+    def test_initiative_formula_does_not_accept_ring_override(self):
+        import inspect
+        sig = inspect.signature(build_initiative_formula)
+        assert "ring_override" not in sig.parameters
+
+    def test_athletics_formula_does_not_accept_ring_override(self):
+        import inspect
+        sig = inspect.signature(build_athletics_formula)
+        assert "ring_override" not in sig.parameters
+        sig2 = inspect.signature(build_athletics_combat_formula)
+        assert "ring_override" not in sig2.parameters
+
+    def test_ring_override_breakdown_labels_swapped_ring(self):
+        """The formula's label reflects the swap (e.g. 'Bragging (Water)'
+        instead of 'Bragging (Air)') so the UI can render the annotation."""
+        char = self._swap_char()
+        f = build_skill_formula("bragging", char, ring_override="Water")
+        assert f.label == "Bragging (Water)"

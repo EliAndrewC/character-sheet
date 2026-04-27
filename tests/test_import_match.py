@@ -27,6 +27,7 @@ from app.services.import_match import (
     ("kakita duelist", "kakita_duelist"),
     ("  KAKITA   DUELIST  ", "kakita_duelist"),
     ("Hida Bushi", "hida_bushi"),
+    ("Kitsune Warden", "kitsune_warden"),
 ])
 def test_schools_exact_match(query: str, expected_id: str) -> None:
     sid, conf = match_school(query)
@@ -44,6 +45,9 @@ def test_schools_exact_match(query: str, expected_id: str) -> None:
     ("Battle Maiden", "otaku_bushi"),
     ("Unicorn Diplomat", "ide_diplomat"),
     ("Shinsei Monk", "brotherhood_of_shinsei_monk"),
+    ("Fox", "kitsune_warden"),
+    ("Fox Warden", "kitsune_warden"),
+    ("Kitsune", "kitsune_warden"),
 ])
 def test_schools_aliased_match(query: str, expected_id: str) -> None:
     sid, conf = match_school(query)

@@ -87,3 +87,17 @@ def test_non_priest_special_ability_has_no_external_link(page, live_server_url):
     select_school(page, "akodo_bushi")
     page.wait_for_selector("#school-details :text('Special Ability')", timeout=10000)
     assert page.locator('#school-details a[href*="priest-rituals"]').count() == 0
+
+
+def test_kitsune_warden_selection_renders_rules_text(page, live_server_url):
+    """Selecting Kitsune Warden shows its canonical rules text and the
+    'any non-Void' ring picker."""
+    _go_to_editor(page, live_server_url)
+    select_school(page, "kitsune_warden")
+    page.wait_for_selector("#school-details :text('Special Ability')", timeout=10000)
+    details = page.text_content("#school-details")
+    assert "Once per target per combat round or conversation" in details
+    assert "substitute your School Ring" in details
+    assert "1st Dan" in details
+    assert "5th Dan" in details
+    assert page.locator('text="Choose School Ring"').is_visible()

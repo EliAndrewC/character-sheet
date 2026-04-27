@@ -430,9 +430,88 @@
                 </select>
             </div>
 
+            <!-- Kitsune Warden 1st Dan picker: three player-chosen rolls
+                 each get +1 rolled die. Eligible: skills, rollable knacks
+                 (iaijutsu IS eligible here), and 5 combat roll types
+                 (attack/damage/initiative/parry/wound_check). The three
+                 picks must be distinct (each dropdown filters out the
+                 other two slots' selections). Persists into
+                 techniqueChoices.first_dan_choices. -->
+            <div x-show="school === 'kitsune_warden' && currentDan() >= 1"
+                 x-cloak class="mt-3 p-3 bg-white/60 border border-accent/20 rounded"
+                 data-testid="kitsune-1st-dan-picker">
+                <label class="block text-sm font-medium mb-2">
+                    1st Dan extra die - pick three roll types
+                </label>
+                <div class="grid gap-2 sm:grid-cols-3">
+                    <template x-for="slot in [0, 1, 2]" :key="'k1d-slot-'+slot">
+                        <select :data-testid="'kitsune-1st-dan-slot-' + slot"
+                                x-effect="$nextTick(() => $el.value = (techniqueChoices.first_dan_choices || [])[slot] || '')"
+                                @change="setKitsune1stDanChoice(slot, $event.target.value)"
+                                class="border rounded px-3 py-2 text-sm w-full">
+                            <option value="">(none selected)</option>
+                            <optgroup label="Combat rolls">
+                                <template x-for="id in KITSUNE_1ST_DAN_COMBAT_ROLLS" :key="'k1c'+id+slot">
+                                    <option :value="id"
+                                            :disabled="kitsune1stDanIsTakenInOtherSlot(slot, id)"
+                                            x-text="KITSUNE_1ST_DAN_LABELS[id]"></option>
+                                </template>
+                            </optgroup>
+                            <optgroup label="School knacks">
+                                <template x-for="kid in kitsune1stDanEligibleKnacks()" :key="'k1k'+kid+slot">
+                                    <option :value="kid"
+                                            :disabled="kitsune1stDanIsTakenInOtherSlot(slot, kid)"
+                                            x-text="KNACK_NAMES[kid] || kid"></option>
+                                </template>
+                            </optgroup>
+                            <optgroup label="Skills">
+                                <template x-for="sid in MANTIS_2ND_DAN_SKILL_IDS" :key="'k1s'+sid+slot">
+                                    <option :value="sid"
+                                            :disabled="kitsune1stDanIsTakenInOtherSlot(slot, sid)"
+                                            x-text="SKILL_NAMES[sid] || sid"></option>
+                                </template>
+                            </optgroup>
+                        </select>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Kitsune Warden 3rd Dan picker: three player-chosen skills
+                 add to the always-on applicable_to list (attack, wound_check)
+                 for adventure free raises. Iaijutsu is excluded; only skills
+                 from the SKILLS table are eligible (not knacks, not combat-
+                 roll-types). Picks must be distinct. Persists into
+                 techniqueChoices.third_dan_skill_choices. -->
+            <div x-show="school === 'kitsune_warden' && currentDan() >= 3"
+                 x-cloak class="mt-3 p-3 bg-white/60 border border-accent/20 rounded"
+                 data-testid="kitsune-3rd-dan-picker">
+                <label class="block text-sm font-medium mb-2">
+                    3rd Dan adventure raises - pick three additional skills
+                </label>
+                <p class="text-xs text-ink/60 mb-2">
+                    Attack and wound check rolls always qualify. Pick three
+                    skills (iaijutsu is not eligible) to add to the list.
+                </p>
+                <div class="grid gap-2 sm:grid-cols-3">
+                    <template x-for="slot in [0, 1, 2]" :key="'k3d-slot-'+slot">
+                        <select :data-testid="'kitsune-3rd-dan-slot-' + slot"
+                                x-effect="$nextTick(() => $el.value = (techniqueChoices.third_dan_skill_choices || [])[slot] || '')"
+                                @change="setKitsune3rdDanChoice(slot, $event.target.value)"
+                                class="border rounded px-3 py-2 text-sm w-full">
+                            <option value="">(none selected)</option>
+                            <template x-for="sid in KITSUNE_3RD_DAN_SKILL_IDS" :key="'k3s'+sid+slot">
+                                <option :value="sid"
+                                        :disabled="kitsune3rdDanIsTakenInOtherSlot(slot, sid)"
+                                        x-text="SKILL_NAMES[sid] || sid"></option>
+                            </template>
+                        </select>
+                    </template>
+                </div>
+            </div>
+
             <!-- Generic flexible 2nd Dan free raise picker for schools whose
                  2nd Dan is "free raise on a roll type of your choice":
-                 Ide Diplomat, Isawa Ishi, Shugenja, Suzume Overseer.
+                 Ide Diplomat, Isawa Ishi, Kitsune Warden, Shugenja, Suzume Overseer.
                  Persists into techniqueChoices.second_dan_choice; the same
                  set of eligible roll types as the Mantis picker (skills,
                  own school knacks, attack/parry/wound_check/damage). -->
@@ -1445,8 +1524,33 @@ const MANTIS_NON_ROLLABLE_KNACKS = new Set([
 // specific key). Mirrors entries in SCHOOL_TECHNIQUE_BONUSES whose
 // second_dan_free_raise is None.
 const FLEXIBLE_2ND_DAN_SCHOOLS = new Set([
-    'ide_diplomat', 'isawa_ishi', 'shugenja', 'suzume_overseer',
+    'ide_diplomat', 'isawa_ishi', 'kitsune_warden', 'shugenja', 'suzume_overseer',
 ]);
+
+// Kitsune Warden 1st Dan picker: "Roll one extra die on three rolls of your
+// choice." Eligible: every skill, every rollable school/foreign knack
+// (including iaijutsu - unlike the 3rd Dan picker and special ability), and
+// the five combat roll types listed below. Persists into
+// techniqueChoices.first_dan_choices (List[str], up to 3 distinct entries).
+const KITSUNE_1ST_DAN_COMBAT_ROLLS = [
+    'attack', 'damage', 'initiative', 'parry', 'wound_check',
+];
+const KITSUNE_1ST_DAN_LABELS = {
+    'attack': 'Attack',
+    'damage': 'Damage',
+    'initiative': 'Initiative',
+    'parry': 'Parry',
+    'wound_check': 'Wound Check',
+};
+
+// Kitsune Warden 3rd Dan picker: "three skills of your choice" added to the
+// always-on attack + wound_check applicable_to list. SKILLS table only -
+// knacks and combat-roll-types are NOT eligible. Iaijutsu is explicitly
+// excluded (the 3rd Dan and special ability both bar iaijutsu, while the
+// 1st Dan picker does not). Persists into techniqueChoices.third_dan_skill_choices.
+const KITSUNE_3RD_DAN_SKILL_IDS = MANTIS_2ND_DAN_SKILL_IDS.filter(
+    sid => sid !== 'iaijutsu'
+);
 
 // Skill -> Ring mapping
 const SKILL_RINGS = {
@@ -2185,6 +2289,61 @@ function characterForm() {
             return Object.keys(this.knacks || {}).filter(
                 kid => !MANTIS_NON_ROLLABLE_KNACKS.has(kid)
             );
+        },
+
+        // Kitsune Warden 1st Dan picker helpers. The three picks live in
+        // techniqueChoices.first_dan_choices as a List[str] of length up
+        // to 3; missing slots stay empty strings until the player picks.
+        kitsune1stDanEligibleKnacks() {
+            // Same filter as Mantis (passive knacks excluded), but iaijutsu
+            // is explicitly included - the rules text "three rolls of your
+            // choice" has no exclusion language for iaijutsu, only the
+            // 3rd Dan and special ability do.
+            const own = Object.keys(this.knacks || {});
+            const foreign = Object.keys(this.foreignKnacks || {});
+            const all = [...new Set([...own, ...foreign])];
+            return all.filter(kid => !MANTIS_NON_ROLLABLE_KNACKS.has(kid));
+        },
+        kitsune1stDanIsTakenInOtherSlot(slot, value) {
+            if (!value) return false;
+            const picks = this.techniqueChoices.first_dan_choices || [];
+            for (let i = 0; i < picks.length; i++) {
+                if (i !== slot && picks[i] === value) return true;
+            }
+            return false;
+        },
+        setKitsune1stDanChoice(slot, value) {
+            // Ensure techniqueChoices.first_dan_choices exists as a 3-slot
+            // array. Stored as List[str] in technique_choices; empty string
+            // marks "no pick" so length is stable for the template loop.
+            const picks = (this.techniqueChoices.first_dan_choices || []).slice();
+            while (picks.length < 3) picks.push('');
+            picks[slot] = value;
+            // Server-side dice.py treats an empty string as no-op (no
+            // skill/knack/roll-type id matches ""), so storing empty slots
+            // is safe. Trim trailing empties for tidiness.
+            while (picks.length > 0 && picks[picks.length - 1] === '') picks.pop();
+            this.techniqueChoices.first_dan_choices = picks;
+            this.markDirty();
+        },
+
+        // Kitsune Warden 3rd Dan picker helpers. Mirror of the 1st Dan
+        // helpers but with a SKILLS-only option pool (iaijutsu excluded).
+        kitsune3rdDanIsTakenInOtherSlot(slot, value) {
+            if (!value) return false;
+            const picks = this.techniqueChoices.third_dan_skill_choices || [];
+            for (let i = 0; i < picks.length; i++) {
+                if (i !== slot && picks[i] === value) return true;
+            }
+            return false;
+        },
+        setKitsune3rdDanChoice(slot, value) {
+            const picks = (this.techniqueChoices.third_dan_skill_choices || []).slice();
+            while (picks.length < 3) picks.push('');
+            picks[slot] = value;
+            while (picks.length > 0 && picks[picks.length - 1] === '') picks.pop();
+            this.techniqueChoices.third_dan_skill_choices = picks;
+            this.markDirty();
         },
 
         totalKnackCostSingle(rank) {
