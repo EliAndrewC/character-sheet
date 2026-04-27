@@ -198,6 +198,56 @@ class TestOverviewRows:
 # Skills tab tests
 # ---------------------------------------------------------------------------
 
+class TestForeignKnackRows:
+    """The Character Sheet tab has a 'Foreign School Knacks' section that
+    renders only when the character has foreign knacks. Coverage for the
+    foreign-knack iteration in _build_overview_rows."""
+
+    def test_foreign_knacks_section_appears(self):
+        data = make_character_data()
+        char = _FakeCharacter(data)
+        school = SCHOOLS.get("akodo_bushi")
+        knacks = _make_knacks("akodo_bushi", data["knacks"])
+        effective = compute_effective_status(data)
+        ath_data = SCHOOL_KNACKS.get("athletics")
+        foreign = {"athletics": {"data": ath_data, "rank": 2}}
+        rows = _build_overview_rows(
+            char, data, school, knacks, 1, effective, {},
+            char_foreign_knacks=foreign,
+        )
+        # Find the "Foreign School Knack" header row.
+        header_idx = None
+        for i, row in enumerate(rows):
+            if row and row[0].get("userEnteredValue", {}).get("stringValue") == "Foreign School Knack":
+                header_idx = i
+                break
+        assert header_idx is not None
+        # Next row is the Athletics entry: name, ring, rank.
+        athletics_row = rows[header_idx + 1]
+        assert athletics_row[0]["userEnteredValue"]["stringValue"] == ath_data.name
+        assert athletics_row[2]["userEnteredValue"]["numberValue"] == 2
+
+    def test_foreign_knack_with_missing_data_is_skipped(self):
+        """If a foreign knack entry has data=None (e.g. an obsolete id),
+        the row is skipped without 500ing the spreadsheet build."""
+        data = make_character_data()
+        char = _FakeCharacter(data)
+        school = SCHOOLS.get("akodo_bushi")
+        knacks = _make_knacks("akodo_bushi", data["knacks"])
+        effective = compute_effective_status(data)
+        foreign = {"obsolete_id": {"data": None, "rank": 2}}
+        rows = _build_overview_rows(
+            char, data, school, knacks, 1, effective, {},
+            char_foreign_knacks=foreign,
+        )
+        # Header still appears (the section is gated on the dict having
+        # any entries), but no body row for the obsolete id.
+        assert not any(
+            row and row[0].get("userEnteredValue", {}).get("stringValue") == "obsolete_id"
+            for row in rows
+        )
+
+
 class TestSkillsRows:
     def test_only_nonzero_skills(self):
         data = make_character_data(skills={"bragging": 2, "etiquette": 0, "culture": 3})

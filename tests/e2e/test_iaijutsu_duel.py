@@ -349,3 +349,63 @@ def test_duel_katana_weapon_default(page, live_server_url):
     _open_duel_modal(page)
     modal = page.locator('[data-modal="iaijutsu-duel"]')
     assert modal.locator('text="Weapon: Katana (4k2)"').is_visible()
+
+
+def test_kitsune_warden_iaijutsu_duel_offers_no_special_ability_swap(page, live_server_url):
+    """Regression guard: a Kitsune Warden opens the iaijutsu duel modal
+    and does NOT see any Kitsune Warden ring-swap UI inside it. Iaijutsu
+    is rules-excluded from the special ability; the duel modal's content
+    is independent from the Kitsune swap blocks/checkboxes added in
+    Phases 8-10."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "K11Duel")
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    page.wait_for_timeout(200)
+    # Bump Water to 4 so the swap WOULD be meaningful on non-iaijutsu
+    # rolls; this confirms the duel UI still doesn't surface it.
+    click_plus(page, "ring_water", 1)
+    page.wait_for_function(
+        "() => document.querySelector('input[name=\"ring_water\"]')?.value === '4'",
+        timeout=5000,
+    )
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Kitsune iaijutsu duel")
+    _wait_alpine(page)
+    _open_duel_modal(page)
+    modal = page.locator('[data-modal="iaijutsu-duel"]')
+    assert modal.is_visible()
+    # No Kitsune-swap UI elements anywhere inside the duel modal.
+    assert modal.locator('[data-testid="kitsune-skill-swap-block"]').count() == 0
+    assert modal.locator('[data-testid="kitsune-attack-ring-swap"]').count() == 0
+    assert modal.locator('[data-testid="kitsune-wc-ring-swap"]').count() == 0
+    assert modal.locator('[data-testid="kitsune-parry-swap-block"]').count() == 0
+
+
+def test_kitsune_warden_iaijutsu_strike_has_no_swap_in_roll_menu(page, live_server_url):
+    """The roll menu for Kitsune's iaijutsu knack offers Iaijutsu Duel and
+    Iaijutsu Strike but NO Kitsune-swap submenu (iaijutsu is rules-
+    excluded server-side via _attach_kitsune_swaps)."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "K11IaiStrike")
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    page.wait_for_timeout(200)
+    click_plus(page, "ring_water", 1)
+    page.wait_for_function(
+        "() => document.querySelector('input[name=\"ring_water\"]')?.value === '4'",
+        timeout=5000,
+    )
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Kitsune iaijutsu strike menu")
+    _wait_alpine(page)
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.wait_for_timeout(300)
+    # The Kitsune-skill-swap-block must NOT be present in this menu.
+    block = page.locator('[data-testid="kitsune-skill-swap-block"]')
+    assert not block.is_visible(), \
+        "Kitsune swap block should not appear on the iaijutsu knack roll menu"

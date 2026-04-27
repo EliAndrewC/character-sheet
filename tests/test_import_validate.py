@@ -347,6 +347,66 @@ def test_technique_choice_aliased_skill_is_ambiguity() -> None:
     assert any(a.kind == "technique_choice" for a in report.ambiguities)
 
 
+def test_kitsune_warden_third_dan_skill_choices_resolved() -> None:
+    """Kitsune Warden 3rd Dan: source-stated skill names resolve to
+    SKILL ids and persist into technique_choices.third_dan_skill_choices."""
+    payload = _canonical_payload()
+    payload["third_dan_skill_choices"] = ["Bragging", "Sincerity", "Tact"]
+    data, _report = _run(payload)
+    assert data["technique_choices"]["third_dan_skill_choices"] == [
+        "bragging", "sincerity", "tact",
+    ]
+
+
+def test_kitsune_warden_third_dan_drops_iaijutsu_with_warning() -> None:
+    """Iaijutsu in third_dan_skill_choices is dropped (rules-excluded)
+    and surfaces a DroppedEntry with that reason in the import report."""
+    payload = _canonical_payload()
+    payload["third_dan_skill_choices"] = ["Bragging", "Iaijutsu", "Tact"]
+    data, report = _run(payload)
+    # iaijutsu dropped; the other two persist.
+    assert data["technique_choices"]["third_dan_skill_choices"] == [
+        "bragging", "tact",
+    ]
+    assert any(
+        d.kind == "technique_choice" and d.name_as_written == "Iaijutsu"
+        and "iaijutsu" in (d.reason or "").lower()
+        for d in report.dropped
+    )
+
+
+def test_kitsune_warden_third_dan_unknown_skill_dropped() -> None:
+    """Unknown skill names in third_dan_skill_choices are dropped."""
+    payload = _canonical_payload()
+    payload["third_dan_skill_choices"] = ["Bragging", "Underwater Basketry"]
+    data, report = _run(payload)
+    assert data["technique_choices"]["third_dan_skill_choices"] == ["bragging"]
+    assert any(
+        d.kind == "technique_choice" and d.name_as_written == "Underwater Basketry"
+        for d in report.dropped
+    )
+
+
+def test_kitsune_warden_third_dan_empty_omits_key() -> None:
+    """When no third_dan_skill_choices are extracted, the key is NOT
+    written to technique_choices (existing semantics for first_dan_choices
+    and second_dan_choice)."""
+    payload = _canonical_payload()
+    # Default empty list - third_dan_skill_choices is the schema default.
+    data, _report = _run(payload)
+    assert "third_dan_skill_choices" not in data.get("technique_choices", {})
+
+
+def test_kitsune_warden_third_dan_aliased_skill_creates_ambiguity() -> None:
+    """An aliased/fuzzy match in third_dan_skill_choices resolves but is
+    flagged in report.ambiguities."""
+    payload = _canonical_payload()
+    payload["third_dan_skill_choices"] = ["Lore"]  # alias -> history
+    data, report = _run(payload)
+    assert data["technique_choices"]["third_dan_skill_choices"] == ["history"]
+    assert any(a.kind == "technique_choice" for a in report.ambiguities)
+
+
 def test_technique_choice_second_dan_aliased_match_recorded() -> None:
     """Aliased resolution of second_dan_choice also lands in ambiguities."""
     payload = _canonical_payload()

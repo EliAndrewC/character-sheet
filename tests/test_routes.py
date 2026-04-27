@@ -1696,6 +1696,170 @@ class TestUpdateCharacter:
         resp = client.post("/characters/999", data=form)
         assert resp.status_code == 404
 
+    def test_form_post_persists_foreign_knack_field(self, client):
+        """Coverage for the legacy form-POST path: a `foreign_knack_X`
+        field with rank>=1 persists into character.foreign_knacks."""
+        cid = _seed_character(client, name="ForeignForm")
+        form = make_character_form()
+        form["foreign_knack_athletics"] = "2"
+        resp = client.post(f"/characters/{cid}", data=form, follow_redirects=False)
+        assert resp.status_code == 303
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.foreign_knacks == {"athletics": 2}
+
+    def test_form_post_drops_foreign_knack_with_rank_zero(self, client):
+        """A foreign_knack_X with rank<1 is dropped (not persisted)."""
+        cid = _seed_character(client, name="ForeignZeroRank")
+        form = make_character_form()
+        form["foreign_knack_athletics"] = "0"
+        resp = client.post(f"/characters/{cid}", data=form, follow_redirects=False)
+        assert resp.status_code == 303
+        char = query_db(client).filter(Character.id == cid).first()
+        assert "athletics" not in (char.foreign_knacks or {})
+
+    def test_form_post_treats_non_int_foreign_knack_as_zero(self, client):
+        """A garbled foreign_knack_X value (e.g. 'abc') is silently zeroed."""
+        cid = _seed_character(client, name="ForeignBadInt")
+        form = make_character_form()
+        form["foreign_knack_athletics"] = "not-a-number"
+        resp = client.post(f"/characters/{cid}", data=form, follow_redirects=False)
+        assert resp.status_code == 303
+        char = query_db(client).filter(Character.id == cid).first()
+        assert "athletics" not in (char.foreign_knacks or {})
+
+    def test_autosave_persists_foreign_knacks(self, client):
+        """API autosave path: foreign_knacks dict in body is cleaned and
+        persisted; entries with rank<1 or non-int rank are dropped."""
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        client.post(f"/characters/{cid}/autosave", json={
+            "foreign_knacks": {
+                "athletics": 2,
+                "feint": 0,            # dropped (rank < 1)
+                "double_attack": "bad",  # dropped (non-int)
+                "lunge": "3",          # coerced to 3
+            },
+        })
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.foreign_knacks == {"athletics": 2, "lunge": 3}
+
+
+class TestVersionDiffEndpoint:
+    """Coverage for /characters/{id}/versions/{vid}/diff (lines 895-933)."""
+
+    def _make_char_with_versions(self, client):
+        cid = _seed_character(
+            client, name="DiffTest", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        session = client._test_session_factory()
+        try:
+            session.add_all([
+                CharacterVersion(
+                    character_id=cid, version_number=1,
+                    state={"name": "v1", "rings": {"Air": 2}},
+                    summary="Initial",
+                ),
+                CharacterVersion(
+                    character_id=cid, version_number=2,
+                    state={"name": "v2", "rings": {"Air": 3}},
+                    summary="Bumped Air",
+                ),
+            ])
+            session.commit()
+            v2 = session.query(CharacterVersion).filter_by(
+                character_id=cid, version_number=2,
+            ).first()
+            return cid, v2.id
+        finally:
+            session.close()
+
+    def test_diff_renders_for_editor(self, client):
+        cid, v2_id = self._make_char_with_versions(client)
+        resp = client.get(f"/characters/{cid}/versions/{v2_id}/diff")
+        assert resp.status_code == 200
+
+    def test_diff_returns_401_when_unauthenticated(self, client, engine):
+        """An anonymous client (no X-Test-User header) gets 401."""
+        from fastapi.testclient import TestClient
+        from app.main import app
+        from app.database import get_db
+        from sqlalchemy.orm import sessionmaker
+        cid, v2_id = self._make_char_with_versions(client)
+        SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+        def _override_db():
+            session = SessionLocal()
+            try:
+                yield session
+            finally:
+                session.close()
+        original_db = app.dependency_overrides.get(get_db)
+        app.dependency_overrides[get_db] = _override_db
+        try:
+            with TestClient(app) as anon:
+                resp = anon.get(f"/characters/{cid}/versions/{v2_id}/diff")
+                assert resp.status_code == 401
+        finally:
+            if original_db:
+                app.dependency_overrides[get_db] = original_db
+            else:
+                app.dependency_overrides.pop(get_db, None)
+
+    def test_diff_404_for_unknown_character(self, client):
+        resp = client.get("/characters/9999/versions/1/diff")
+        assert resp.status_code == 404
+
+    def test_diff_403_for_non_editor(self, client):
+        """A logged-in user who isn't the owner / editor gets 403."""
+        cid, v2_id = self._make_char_with_versions(client)
+        # Override the auth header to an unrelated whitelisted discord id.
+        resp = client.get(
+            f"/characters/{cid}/versions/{v2_id}/diff",
+            headers={"X-Test-User": "test_user_2:nonowner"},
+        )
+        assert resp.status_code == 403
+
+    def test_diff_404_for_unknown_version(self, client):
+        cid, _v2_id = self._make_char_with_versions(client)
+        resp = client.get(f"/characters/{cid}/versions/99999/diff")
+        assert resp.status_code == 404
+
+    def test_diff_404_for_first_version_no_prior(self, client):
+        """version_number == 1 has no prior to diff against -> 404."""
+        cid, _v2_id = self._make_char_with_versions(client)
+        session = client._test_session_factory()
+        try:
+            v1 = session.query(CharacterVersion).filter_by(
+                character_id=cid, version_number=1,
+            ).first()
+            v1_id = v1.id
+        finally:
+            session.close()
+        resp = client.get(f"/characters/{cid}/versions/{v1_id}/diff")
+        assert resp.status_code == 404
+
+    def test_diff_404_when_prior_version_row_missing(self, client):
+        """If version_number is e.g. 3 but version 2 was deleted, the
+        prior-version lookup returns None and the route 404s rather
+        than 500ing."""
+        cid = _seed_character(client, name="DiffGap")
+        session = client._test_session_factory()
+        try:
+            session.add(CharacterVersion(
+                character_id=cid, version_number=3,
+                state={"name": "v3"}, summary="Out-of-order",
+            ))
+            session.commit()
+            v3 = session.query(CharacterVersion).filter_by(
+                character_id=cid, version_number=3,
+            ).first()
+            v3_id = v3.id
+        finally:
+            session.close()
+        resp = client.get(f"/characters/{cid}/versions/{v3_id}/diff")
+        assert resp.status_code == 404
+
 
 class TestDeleteCharacter:
     def test_delete_removes_character(self, client):
@@ -4353,3 +4517,126 @@ class TestReadOnlyRollBannerContext:
             c._cleanup[1].close()
             from app.main import app
             app.dependency_overrides.clear()
+
+
+class TestSheetForeignKnackHandling:
+    """Coverage for char_foreign_knacks construction in pages.py and
+    google_sheets.py (lookup-by-id, skip unknown), plus the worldliness-
+    as-foreign-knack branch in pages.py."""
+
+    def test_sheet_drops_unknown_foreign_knack_id(self, client):
+        """An unknown foreign-knack id (e.g. left over from a deleted
+        knack) doesn't 500 the sheet; the lookup returns None and the
+        loop's continue branch fires."""
+        cid = _seed_character(
+            client, name="ForeignUnknown", school="akodo_bushi",
+            school_ring_choice="Water", ring_water=3,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            foreign_knacks={"not_a_real_knack_id": 2, "athletics": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # The legitimate foreign knack still renders.
+        assert "Athletics" in resp.text or "athletics" in resp.text
+
+    def test_sheet_uses_foreign_worldliness_for_void_max(self, client):
+        """A character with worldliness as a foreign knack (not school)
+        has the worldliness pool sized to the foreign rank."""
+        import json, re
+        cid = _seed_character(
+            client, name="ForeignWld", school="akodo_bushi",
+            school_ring_choice="Water", ring_water=3,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            foreign_knacks={"worldliness": 3},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # void-spend-config encodes the worldliness max.
+        m = re.search(
+            r'id="void-spend-config">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        cfg = json.loads(m.group(1))
+        # worldliness rank 3 -> worldliness_max 3 (foreign-knack branch).
+        assert cfg.get("worldliness_max") == 3
+
+
+class TestKitsuneWardenSwapProbs:
+    """Phase 9 attack_probs / wc_probs swap variants are computed by
+    routes/pages.py and embedded into the sheet HTML. These tests
+    exercise the route to confirm the kitsune_swap sub-dicts are present
+    on the right keys for a Kitsune Warden character."""
+
+    def _read_json_script(self, client, cid: int, dom_id: str):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(rf'id="{dom_id}">(.*?)</script>', resp.text, re.DOTALL)
+        assert m is not None, f"Could not find script id={dom_id} on sheet"
+        return json.loads(m.group(1))
+
+    def test_attack_probs_includes_kitsune_swap_for_kitsune_warden(self, client):
+        cid = _seed_character(
+            client, name="KAtkProbs", school="kitsune_warden",
+            school_ring_choice="Water",
+            ring_water=4, ring_air=2, ring_fire=2, ring_earth=2, ring_void=2,
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+            attack=2, parry=2,
+        )
+        ap = self._read_json_script(client, cid, "attack-probs")
+        assert "attack" in ap
+        assert "kitsune_swap" in ap["attack"], \
+            f"Expected kitsune_swap on attack_probs[attack]; keys: {list(ap['attack'].keys())}"
+        swap = ap["attack"]["kitsune_swap"]
+        assert "void_keys" in swap and "probs" in swap and "avgs" in swap
+        # Default: rank 2 + Fire 2 = 4 rolled, 2 kept -> "4,2"
+        # Swap to Water 4: rank 2 + Water 4 = 6 rolled, 4 kept -> "6,4"
+        assert ap["attack"]["void_keys"]["0"] == "4,2"
+        assert swap["void_keys"]["0"] == "6,4"
+
+    def test_wc_probs_includes_kitsune_swap_for_kitsune_warden_non_water(self, client):
+        cid = _seed_character(
+            client, name="KWcProbs", school="kitsune_warden",
+            school_ring_choice="Earth",
+            ring_water=2, ring_earth=3, ring_air=2, ring_fire=2, ring_void=2,
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+        )
+        wp = self._read_json_script(client, cid, "wound-check-probs")
+        assert "kitsune_swap" in wp, \
+            f"Expected kitsune_swap on wc_probs; keys: {list(wp.keys())}"
+        swap = wp["kitsune_swap"]
+        # Default WC: Water+1 = 3 rolled, Water = 2 kept.
+        # Swap to Earth: Earth+1 = 4 rolled, Earth = 3 kept.
+        assert wp["void_keys"]["0"] == "3,2"
+        assert swap["void_keys"]["0"] == "4,3"
+
+    def test_non_kitsune_attack_probs_has_no_kitsune_swap(self, client):
+        cid = _seed_character(
+            client, name="AkodoNoSwap", school="akodo_bushi",
+            school_ring_choice="Water", ring_water=3,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            attack=2,
+        )
+        ap = self._read_json_script(client, cid, "attack-probs")
+        assert "kitsune_swap" not in ap.get("attack", {})
+
+    def test_non_kitsune_wc_probs_has_no_kitsune_swap(self, client):
+        cid = _seed_character(
+            client, name="AkodoNoSwapWC", school="akodo_bushi",
+            school_ring_choice="Water", ring_water=3,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        wp = self._read_json_script(client, cid, "wound-check-probs")
+        assert "kitsune_swap" not in wp
+
+    def test_wc_probs_no_swap_when_school_ring_is_water(self, client):
+        """Equal-value gate at the formula level cascades: WC with school
+        ring Water has no kitsune_swap (identity swap)."""
+        cid = _seed_character(
+            client, name="KWcWaterRing", school="kitsune_warden",
+            school_ring_choice="Water", ring_water=3,
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+        )
+        wp = self._read_json_script(client, cid, "wound-check-probs")
+        assert "kitsune_swap" not in wp

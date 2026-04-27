@@ -10834,3 +10834,219 @@ def test_kitsune_wc_modal_swap_persists_into_roll_results_annotation(page, live_
     assert "Earth" in text
     assert "Water" in text
 
+
+# ---------------------------------------------------------------------------
+# Kitsune Warden Special Ability — Parry top-level menu entries (Phase 10)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.school_abilities
+def test_kitsune_parry_menu_shows_swap_block_when_school_ring_higher_than_air(page, live_server_url):
+    """A Dan-1 Kitsune with Water ring raised to 4 (and Air at 2) sees the
+    Kitsune-parry-swap-block in the parry menu."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K10ParryHigh", "Water")
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_timeout(300)
+    block = page.locator('[data-testid="kitsune-parry-swap-block"]')
+    assert block.is_visible()
+    # Both swap entries visible inside the block.
+    assert block.locator('[data-testid="kitsune-parry-swap-roll"]').is_visible()
+    assert block.locator('[data-testid="kitsune-parry-swap-predeclared"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_parry_menu_no_swap_block_when_school_ring_is_air(page, live_server_url):
+    """When school ring is Air (the parry default), no swap to offer."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K10ParryAir", "Air")
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_timeout(300)
+    block = page.locator('[data-testid="kitsune-parry-swap-block"]')
+    assert not block.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_parry_menu_no_swap_block_when_school_ring_value_equals_air_value(page, live_server_url):
+    """If school ring's value equals Air's value (e.g. both at 2), no
+    meaningful swap so no block."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "K10ParryEqual")
+    select_school(page, "kitsune_warden")
+    # Pick Earth, leave Earth at 3 (auto-set), then bump Air to 3 too.
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Earth")
+    page.wait_for_function(
+        "() => document.querySelector('input[name=\"ring_earth\"]')?.value === '3'",
+        timeout=5000,
+    )
+    # Lower Water to 2 (was bumped to 3 by school-default), so we don't
+    # contaminate the Earth-vs-Air comparison.
+    click_minus(page, "ring_water", 1)
+    # Bump Air to 3 to match Earth's value.
+    click_plus(page, "ring_air", 1)
+    page.wait_for_function(
+        "() => document.querySelector('input[name=\"ring_air\"]')?.value === '3'",
+        timeout=5000,
+    )
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Equal Air-Earth")
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_timeout(300)
+    block = page.locator('[data-testid="kitsune-parry-swap-block"]')
+    assert not block.is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_parry_school_ring_entry_uses_school_ring_in_formula(page, live_server_url):
+    """Clicking the swap-Roll entry rolls parry with the school ring's
+    rolled/kept dimensions and stamps the swap-metadata on the formula."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K10ParryRoll", "Water")
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-testid="kitsune-parry-swap-roll"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    f = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return {
+                rolled: d.formula?.rolled, kept: d.formula?.kept,
+                from: d.formula?.kitsune_swap_from_ring,
+                to: d.formula?.kitsune_swap_to_ring,
+            };
+        }
+        return null;
+    }""")
+    assert f is not None
+    # Parry default: rank 1 + Air 2 = 3 rolled, 2 kept. Swap to Water 4: 1+4=5 rolled, 4 kept.
+    assert f["rolled"] == 5
+    assert f["kept"] == 4
+    assert f["from"] == "Air"
+    assert f["to"] == "Water"
+
+
+@pytest.mark.school_abilities
+def test_kitsune_parry_predeclared_school_ring_entry_includes_plus_5(page, live_server_url):
+    """The predeclared swap entry adds +5 flat AND uses the swapped ring."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K10ParryPre", "Water")
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_timeout(300)
+    page.locator('[data-testid="kitsune-parry-swap-predeclared"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    f = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return {
+                rolled: d.formula?.rolled, kept: d.formula?.kept,
+                flat: d.formula?.flat, to: d.formula?.kitsune_swap_to_ring,
+                bonuses: d.formula?.bonuses,
+            };
+        }
+        return null;
+    }""")
+    assert f is not None
+    assert f["rolled"] == 5  # swap rolled
+    assert f["kept"] == 4  # swap kept
+    assert f["flat"] == 5  # predeclared +5
+    assert f["to"] == "Water"
+    assert any(b.get("label") == "predeclared parry" and b.get("amount") == 5
+               for b in (f["bonuses"] or []))
+
+
+@pytest.mark.school_abilities
+def test_kitsune_parry_swap_with_void_spend_carries_through(page, live_server_url):
+    """Void-submenu under the swap entry: rolls parry with school ring + VP."""
+    _make_kitsune_with_ring_setup(page, live_server_url, "K10ParryVoid", "Water")
+    # Need a void point to spend.
+    page.evaluate("window._trackingBridge.voidPoints = 1; window._trackingBridge.save && window._trackingBridge.save();")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_timeout(300)
+    # Hover the swap-roll entry to surface its VP submenu, then click the
+    # +1 VP option. Use a JS hover to reliably trigger Alpine's @mouseenter.
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.parryHoverRow !== undefined) { d.parryHoverRow = 'kitsune-roll'; return; }
+        }
+    }""")
+    page.wait_for_timeout(200)
+    submenu = page.locator('[data-parry-void-submenu="kitsune-roll"]')
+    submenu.locator('button').first.click()  # +1 VP option
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    f = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return {
+                rolled: d.formula?.rolled, kept: d.formula?.kept,
+                voidSpent: d.formula?.void_spent,
+                to: d.formula?.kitsune_swap_to_ring,
+            };
+        }
+        return null;
+    }""")
+    assert f is not None
+    # Swap rolled=5, kept=4. +1 VP -> rolled=6, kept=5.
+    assert f["rolled"] == 6
+    assert f["kept"] == 5
+    assert f["voidSpent"] == 1
+    assert f["to"] == "Water"
+
+
+# ---------------------------------------------------------------------------
+# Kitsune Warden Special Ability — Phase 11 polish (iaijutsu + equal-value)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.school_abilities
+def test_kitsune_skill_submenu_hidden_when_air_equals_water_in_value(page, live_server_url):
+    """Equal-value edge case: Air=3 and Water=3 with school ring Water,
+    bragging is Air. The swap is identity (rolled/kept unchanged), so the
+    skill submenu does NOT show."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "K11Equal")
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    page.wait_for_timeout(200)
+    # Water is now 3 (school ring floor). Bump Air to 3 too.
+    click_plus(page, "ring_air", 1)
+    page.wait_for_function(
+        "() => document.querySelector('input[name=\"ring_air\"]')?.value === '3'",
+        timeout=5000,
+    )
+    click_plus(page, "skill_bragging", 2)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Equal Air-Water")
+    # Open the bragging click menu and confirm no swap block.
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(300)
+    block = page.locator('[data-testid="kitsune-skill-swap-block"]')
+    assert not block.is_visible(), \
+        "Swap block must NOT show when Air's value equals Water's value"
+

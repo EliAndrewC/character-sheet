@@ -73,6 +73,41 @@ class TestDiffSummary:
         diffs = compute_diff_summary(old, new)
         assert any("Lucky" in d for d in diffs)
 
+    def test_foreign_knack_added(self):
+        old = {"foreign_knacks": {}}
+        new = {"foreign_knacks": {"athletics": 2}}
+        diffs = compute_diff_summary(old, new)
+        assert any("Added foreign knack: Athletics" in d for d in diffs)
+
+    def test_foreign_knack_removed(self):
+        old = {"foreign_knacks": {"athletics": 2}}
+        new = {"foreign_knacks": {}}
+        diffs = compute_diff_summary(old, new)
+        assert any("Removed foreign knack: Athletics" in d for d in diffs)
+
+    def test_foreign_knack_rank_changed(self):
+        old = {"foreign_knacks": {"athletics": 1}}
+        new = {"foreign_knacks": {"athletics": 3}}
+        diffs = compute_diff_summary(old, new)
+        assert any(
+            "Foreign knack Athletics" in d and "1" in d and "3" in d
+            for d in diffs
+        )
+
+    def test_foreign_knack_unchanged_emits_nothing(self):
+        old = {"foreign_knacks": {"athletics": 2}}
+        new = {"foreign_knacks": {"athletics": 2}}
+        diffs = compute_diff_summary(old, new)
+        assert not any("foreign knack" in d.lower() for d in diffs)
+
+    def test_foreign_knack_unknown_id_uses_label_fallback(self):
+        """If a foreign-knack id has no SCHOOL_KNACKS entry (e.g. from
+        an obsolete fixture), the label falls back to the prettified id."""
+        old = {"foreign_knacks": {}}
+        new = {"foreign_knacks": {"made_up_knack": 1}}
+        diffs = compute_diff_summary(old, new)
+        assert any("Made Up Knack" in d or "made_up_knack" in d for d in diffs)
+
     def test_disadvantage_removed(self):
         old = {"disadvantages": ["proud"]}
         new = {"disadvantages": []}

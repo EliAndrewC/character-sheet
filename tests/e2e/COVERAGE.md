@@ -391,14 +391,15 @@ The three failures were:
 - [x] Special Ability wound-check checkbox hidden when school ring is Water (default) -> `test_school_abilities.py::test_kitsune_wc_modal_checkbox_hidden_when_school_ring_is_water`
 - [x] Special Ability attack-modal swap persists into roll-results annotation -> `test_school_abilities.py::test_kitsune_attack_modal_swap_persists_into_roll_results_annotation`
 - [x] Special Ability wound-check modal swap persists into roll-results annotation -> `test_school_abilities.py::test_kitsune_wc_modal_swap_persists_into_roll_results_annotation`
-- [ ] Special Ability parry menu shows four entries when school ring higher than Air (Phase 10)
-- [ ] Special Ability parry menu shows two entries when school ring is Air (Phase 10)
-- [ ] Special Ability parry menu shows two entries when school ring value equals Air value (Phase 10)
-- [ ] Special Ability parry school-ring entry uses school ring in formula (Phase 10)
-- [ ] Special Ability parry predeclared school-ring entry includes +5 (Phase 10)
-- [ ] Special Ability parry school-ring void submenu works (Phase 10)
-- [ ] Iaijutsu duel offers no Special Ability swap (Phase 11)
-- [ ] Special Ability skill submenu hidden when Air equals Water in value (Phase 11)
+- [x] Special Ability parry swap block visible when school ring higher than Air -> `test_school_abilities.py::test_kitsune_parry_menu_shows_swap_block_when_school_ring_higher_than_air`
+- [x] Special Ability parry swap block hidden when school ring is Air -> `test_school_abilities.py::test_kitsune_parry_menu_no_swap_block_when_school_ring_is_air`
+- [x] Special Ability parry swap block hidden when school ring value equals Air value -> `test_school_abilities.py::test_kitsune_parry_menu_no_swap_block_when_school_ring_value_equals_air_value`
+- [x] Special Ability parry school-ring entry uses school ring in formula -> `test_school_abilities.py::test_kitsune_parry_school_ring_entry_uses_school_ring_in_formula`
+- [x] Special Ability parry predeclared school-ring entry includes +5 -> `test_school_abilities.py::test_kitsune_parry_predeclared_school_ring_entry_includes_plus_5`
+- [x] Special Ability parry swap with void spend carries through -> `test_school_abilities.py::test_kitsune_parry_swap_with_void_spend_carries_through`
+- [x] Iaijutsu duel offers no Special Ability swap -> `test_iaijutsu_duel.py::test_kitsune_warden_iaijutsu_duel_offers_no_special_ability_swap`
+- [x] Iaijutsu strike roll menu has no swap submenu -> `test_iaijutsu_duel.py::test_kitsune_warden_iaijutsu_strike_has_no_swap_in_roll_menu`
+- [x] Special Ability skill submenu hidden when Air equals Water in value -> `test_school_abilities.py::test_kitsune_skill_submenu_hidden_when_air_equals_water_in_value`
 
 ### Kitsuki
 

@@ -355,6 +355,41 @@ def _normalise_technique_choices(
                 reason="unknown skill name",
             ))
 
+    # Kitsune Warden 3rd Dan: resolve the three player-chosen skills.
+    # Iaijutsu is dropped explicitly (rules-excluded) - and iaijutsu lives
+    # in SCHOOL_KNACKS not SKILLS, so we check for the iaijutsu knack alias
+    # first and report the rules-specific reason. Unknown names (not a
+    # skill, not a knack) are dropped with the generic "unknown" reason.
+    resolved_third: List[str] = []
+    for raw_name in extracted.third_dan_skill_choices or []:
+        knack_id, _kc = match_knack(raw_name)
+        if knack_id == "iaijutsu":
+            report.dropped.append(DroppedEntry(
+                kind="technique_choice",
+                name_as_written=raw_name,
+                reason="iaijutsu is not eligible for Kitsune Warden 3rd Dan",
+            ))
+            continue
+        skill_id, confidence = match_skill(raw_name)
+        if skill_id is None:
+            report.dropped.append(DroppedEntry(
+                kind="technique_choice",
+                name_as_written=raw_name,
+                reason="unknown skill name",
+            ))
+            continue
+        if confidence in (ALIASED, FUZZY):
+            report.ambiguities.append(AmbiguityEntry(
+                kind="technique_choice",
+                name_as_written=raw_name,
+                resolved_id=skill_id,
+                confidence=confidence,
+            ))
+        if skill_id not in resolved_third:
+            resolved_third.append(skill_id)
+    if resolved_third:
+        choices["third_dan_skill_choices"] = resolved_third
+
     return choices
 
 
