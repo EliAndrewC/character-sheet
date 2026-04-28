@@ -172,11 +172,47 @@ def compute_skill_roll(
             result.rolled += 1
             bonus_parts.append((0, "+1 rolled die from 1st Dan"))
 
+    # Flexible 1st Dan (Kitsune Warden, Isawa Ishi, Priest, Shugenja):
+    # the player picks which rolls get the extra die via
+    # technique_choices.first_dan_choices.
+    technique_choices = character_data.get("technique_choices") or {}
+    if (
+        dan >= 1
+        and "first_dan_extra_die" in bonuses
+        and bonuses.get("first_dan_extra_die") is None
+    ):
+        chosen_1st = technique_choices.get("first_dan_choices") or []
+        if skill_id in chosen_1st:
+            result.rolled += 1
+            bonus_parts.append((0, "+1 rolled die from 1st Dan"))
+
     # 2nd Dan: free raise = +5
     if dan >= 2 and bonuses.get("second_dan_free_raise"):
         if skill_id == bonuses["second_dan_free_raise"]:
             result.flat_bonus += FREE_RAISE_VALUE
             bonus_parts.append((FREE_RAISE_VALUE, "+5 from 2nd Dan"))
+
+    # Flexible 2nd Dan (Kitsune Warden, Ide Diplomat, Isawa Ishi, Shugenja,
+    # Suzume Overseer): the player's chosen roll type lives in
+    # technique_choices.second_dan_choice.
+    if (
+        dan >= 2
+        and "second_dan_free_raise" in bonuses
+        and bonuses.get("second_dan_free_raise") is None
+    ):
+        if technique_choices.get("second_dan_choice") == skill_id:
+            result.flat_bonus += FREE_RAISE_VALUE
+            bonus_parts.append((FREE_RAISE_VALUE, "+5 from 2nd Dan"))
+
+    # Mantis Wave-Treader 2nd Dan: flexible-with-its-own-key. Same shape as
+    # the generic flexible 2nd Dan but writes to a school-specific key.
+    if (
+        dan >= 2
+        and school_id == "mantis_wave_treader"
+        and technique_choices.get("mantis_2nd_dan_free_raise") == skill_id
+    ):
+        result.flat_bonus += FREE_RAISE_VALUE
+        bonus_parts.append((FREE_RAISE_VALUE, "+5 from 2nd Dan"))
 
     # Priest 2nd Dan (self): free raise on Honor-bonus rolls
     # (bragging, precepts; sincerity only on open rolls).
@@ -354,7 +390,15 @@ def compute_skill_roll(
     # --- 3rd Dan: adventure free raises (not added to flat_bonus, shown separately) ---
     if dan >= 3 and bonuses.get("third_dan"):
         t3 = bonuses["third_dan"]
-        if skill_id in t3["applicable_to"]:
+        applicable = set(t3["applicable_to"])
+        # Kitsune Warden 3rd Dan: extend with player-chosen skills
+        # (technique_choices.third_dan_skill_choices). Iaijutsu is dropped
+        # defensively even if it sneaks into the picks.
+        if t3.get("applicable_to_choices_count"):
+            for pick in (technique_choices.get("third_dan_skill_choices") or []):
+                if pick and pick != "iaijutsu":
+                    applicable.add(pick)
+        if skill_id in applicable:
             source_rank = skills.get(t3["source_skill"], 0)
             available = 2 * source_rank
             max_per_roll = source_rank

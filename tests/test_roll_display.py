@@ -806,3 +806,119 @@ class TestParryAttackRule:
         data = make_character_data(attack=3, parry=3)
         errors = validate_character(data)
         assert not any("parry" in e.lower() for e in errors)
+
+
+class TestKitsuneWardenSheetDisplay:
+    """View Sheet display: Kitsune Warden's flexible 1st/2nd Dan picks
+    AND 3rd Dan player-chosen applicable skills must surface in the
+    skill row's roll display + tooltip, not just on the roll modal."""
+
+    def _kitsune(self, dan=1, picks=None, second=None, third_picks=None):
+        kn = {"absorb_void": dan, "commune": dan, "iaijutsu": dan}
+        tc = {}
+        if picks is not None:
+            tc["first_dan_choices"] = picks
+        if second is not None:
+            tc["second_dan_choice"] = second
+        if third_picks is not None:
+            tc["third_dan_skill_choices"] = third_picks
+        return make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks=kn,
+            skills={"bragging": 2, "etiquette": 2, "tact": 2, "precepts": 3},
+            technique_choices=tc,
+        )
+
+    def test_first_dan_pick_shows_extra_die_in_skill_display(self):
+        """rolled count includes the +1 die and the tooltip mentions 1st Dan."""
+        char = self._kitsune(dan=1, picks=["bragging"])
+        result = compute_skill_roll("bragging", char)
+        # Bragging is Air. rank 2 + Air 2 + 1 (1st Dan) = 5 rolled, 2 kept.
+        assert result.rolled == 5
+        assert result.kept == 2
+        assert "1st Dan" in result.tooltip
+
+    def test_first_dan_unpicked_skill_no_extra_die(self):
+        char = self._kitsune(dan=1, picks=["bragging"])
+        result = compute_skill_roll("etiquette", char)
+        # etiquette is Air, rank 2 + Air 2 = 4 rolled, no extra die.
+        assert result.rolled == 4
+        assert "1st Dan" not in result.tooltip
+
+    def test_second_dan_pick_shows_plus_5_flat(self):
+        char = self._kitsune(dan=2, second="bragging")
+        result = compute_skill_roll("bragging", char)
+        assert result.flat_bonus >= 5
+        assert "2nd Dan" in result.tooltip
+
+    def test_second_dan_unpicked_skill_no_flat(self):
+        char = self._kitsune(dan=2, second="bragging")
+        result = compute_skill_roll("etiquette", char)
+        # No 2nd Dan annotation on a non-picked skill (etiquette has no
+        # other +5 sources by default).
+        assert "2nd Dan" not in result.tooltip
+
+    def test_third_dan_picks_show_adventure_raises(self):
+        """A 3rd-Dan-picked skill (e.g. bragging) shows the adventure
+        free-raise pool in the tooltip and via adventure_raises_*."""
+        char = self._kitsune(
+            dan=3, third_picks=["bragging", "tact", "etiquette"],
+        )
+        result = compute_skill_roll("bragging", char)
+        # precepts rank 3 -> 6 raises available, 3 max per roll.
+        assert result.adventure_raises_available == 6
+        assert result.adventure_raises_max_per_roll == 3
+        assert "free raises/adventure from 3rd Dan" in result.tooltip
+
+    def test_third_dan_unpicked_skill_no_adventure_raises(self):
+        char = self._kitsune(
+            dan=3, third_picks=["bragging", "tact", "etiquette"],
+        )
+        # sincerity is NOT in the picks.
+        result = compute_skill_roll("sincerity", char)
+        assert result.adventure_raises_available == 0
+        assert "3rd Dan" not in result.tooltip
+
+    def test_third_dan_picks_iaijutsu_dropped_defensively(self):
+        """Even if iaijutsu sneaks into third_dan_skill_choices, it does
+        not enable adventure raises on the iaijutsu knack roll. (Only
+        skills surface here, but we verify the gate stays tight.)"""
+        char = self._kitsune(
+            dan=3, third_picks=["iaijutsu", "tact", "etiquette"],
+        )
+        # tact and etiquette annotated...
+        for sid in ("tact", "etiquette"):
+            r = compute_skill_roll(sid, char)
+            assert r.adventure_raises_available == 6, f"{sid} should be eligible"
+        # ...but bragging (not picked) is not.
+        r = compute_skill_roll("bragging", char)
+        assert r.adventure_raises_available == 0
+
+    def test_dan_2_with_first_dan_pick_stacks(self):
+        """A Dan 2 Kitsune with picks for both 1st and 2nd Dan on
+        bragging stacks: +1 die AND +5 flat."""
+        char = self._kitsune(dan=2, picks=["bragging"], second="bragging")
+        result = compute_skill_roll("bragging", char)
+        assert result.rolled == 5  # rank 2 + Air 2 + 1
+        assert result.flat_bonus >= 5
+        assert "1st Dan" in result.tooltip
+        assert "2nd Dan" in result.tooltip
+
+
+class TestMantisWaveTreader2ndDanSheetDisplay:
+    """Mantis Wave-Treader's 2nd Dan free raise (player's pick) was also
+    missing from the View Sheet. Now surfaces alongside the Kitsune /
+    other-flexible branches."""
+
+    def test_mantis_2nd_dan_chosen_skill_shows_plus_5(self):
+        char = make_character_data(
+            school="mantis_wave_treader",
+            school_ring_choice="Water",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+            skills={"bragging": 2},
+            technique_choices={"mantis_2nd_dan_free_raise": "bragging"},
+        )
+        result = compute_skill_roll("bragging", char)
+        assert result.flat_bonus >= 5
+        assert "2nd Dan" in result.tooltip
