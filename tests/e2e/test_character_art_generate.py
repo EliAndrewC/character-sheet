@@ -175,3 +175,68 @@ def test_generation_happy_path_in_place_crop_and_save(page, live_server_url):
     page.locator('[data-action="save-headshot"]').click()
     page.wait_for_url("**/edit?art_saved=1")
     page.wait_for_selector('[data-testid="art-saved-banner"]')
+
+
+def test_re_generation_after_prompt_edit_loads_new_image(page, live_server_url):
+    """After a successful first generation, editing the prompt textarea
+    and clicking Generate again must load the freshly generated image.
+
+    Regression for the bug where the staging_id-keyed image URL is
+    reused across regenerations: without a cache-buster the <img> src
+    string is identical to the prior render so the browser keeps the
+    previous bytes and the user thinks their prompt edits were ignored.
+    """
+    edit_url = _create_character(page, live_server_url, "RegenEdit")
+    char_id = edit_url.split("/characters/")[1].split("/")[0]
+    page.goto(f"{live_server_url}/characters/{char_id}/art/generate/options?gender=female")
+    page.wait_for_selector('[data-testid="age-input"]')
+    page.locator('[data-action="create-prompt"]').click()
+    page.wait_for_url("**/art/generate/review/**")
+
+    # Default mad-libs prompt has "Wasp" in it - first gen returns wasp.png.
+    page.locator('[data-action="generate-art"]').click()
+    page.wait_for_selector(
+        '[data-testid="art-gen-crop-section"]', state="visible", timeout=10_000,
+    )
+    page.wait_for_selector('.cropper-container', timeout=5_000)
+    first_src = page.locator('#art-gen-crop-target').get_attribute('src')
+    assert first_src, "first generation should set img.src"
+
+    # Swap the clan in the prompt so the stub returns scorpion.png second time.
+    textarea = page.locator('[data-testid="prompt-textarea"]')
+    edited = textarea.input_value().replace("Wasp", "Scorpion").replace("wasp", "scorpion")
+    assert "scorpion" in edited.lower() and "wasp" not in edited.lower(), (
+        f"edit must remove all 'wasp' tokens to flip the stub keyword; got: {edited!r}"
+    )
+    textarea.fill(edited)
+
+    page.locator('[data-action="generate-art"]').click()
+    # Wait for the second generation cycle to land back at state='succeeded'
+    # AND for the img.src to become a different non-empty string than before.
+    import json
+    first_src_json = json.dumps(first_src)
+    page.wait_for_function(
+        f"""() => {{
+            const el = document.querySelector('[data-testid="art-gen-review-page"]');
+            const data = window.Alpine && window.Alpine.$data(el);
+            if (!data || data.state !== 'succeeded') return false;
+            const img = document.querySelector('#art-gen-crop-target');
+            const cur = img && img.getAttribute('src');
+            return cur && cur !== {first_src_json};
+        }}""",
+        timeout=15_000,
+    )
+
+    second_src = page.locator('#art-gen-crop-target').get_attribute('src')
+    assert second_src != first_src, (
+        "second-generation img.src must differ from the first to force the "
+        f"browser to fetch the new bytes; got both: {first_src!r}"
+    )
+
+    # Old Cropper instance must be torn down before the new one is created -
+    # otherwise the user sees two cropper-container DIVs stacked on top of
+    # each other (the old one anchored to the previous image bytes).
+    assert page.locator('.cropper-container').count() == 1, (
+        "expected exactly one .cropper-container after re-generation; "
+        f"found {page.locator('.cropper-container').count()}"
+    )
