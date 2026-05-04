@@ -500,6 +500,43 @@ def test_advanced_skill_costs_more(page, live_server_url):
     assert spent_after - spent_before > 1  # Advanced cost 2 at rank 1
 
 
+def test_per_row_xp_labels_say_spent_not_just_xp(page, live_server_url):
+    """Editor per-row XP totals beside skills, school knacks, rings, and
+    Attack/Parry must read e.g. "15 XP spent" so players don't mistake the
+    running total for the cost of the next +1. Advantages/disadvantages are
+    per-item costs and stay as plain "N XP" / "+N XP"."""
+    _go_to_editor(page, live_server_url)
+    # Raise a sampling of fields so non-zero totals appear next to each row.
+    click_plus(page, "skill_bragging", 2)            # basic skill
+    click_plus(page, "ring_fire", 1)                 # ring 2 -> 3
+    click_plus(page, "attack", 1)                    # combat skill
+    click_plus(page, "knack_double_attack", 1)       # school knack 1 -> 2
+    page.wait_for_timeout(200)
+
+    body = page.text_content("body")
+    # All four updated rows should show "X XP spent" labels somewhere.
+    assert "XP spent" in body
+    # Spot-check specific rendered totals.
+    # Bragging at rank 2 (basic): 2 + 2 = 4 XP
+    assert "4 XP spent" in body
+    # Fire ring at rank 3 (school ring is Water for akodo, so Fire 2->3 costs
+    # 5 + 10 = 15 XP, but ringCost only counts above default 2: just 15).
+    assert "15 XP spent" in body
+    # Attack at rank 2 (advanced): 4 XP
+    # double_attack at rank 2 (advanced): 4 XP
+    # Both produce "4 XP spent" – already asserted.
+
+    # Advantages/disadvantages still use the bare "N XP" form.
+    # Find a "X XP" advantage label that is NOT followed by "spent". The
+    # standard Crab Hands advantage costs 3 XP for example.
+    import re
+    bare_xp_count = len(re.findall(r"\b\d+ XP(?!\s*spent)", body))
+    assert bare_xp_count > 0, (
+        "expected at least one advantage/disadvantage row to show plain "
+        "'N XP' (no 'spent')"
+    )
+
+
 # --- Mantis Wave-Treader school selection (Phase 1) ---
 
 def test_mantis_defaults_ring_to_void(page, live_server_url):

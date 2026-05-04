@@ -2160,15 +2160,19 @@
                  data-roll-key="attack">
                 <div class="flex items-center justify-between gap-4">
                     <span class="font-medium">Attack</span>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm text-ink/60">
+                            {{ _atk_rolled }}k{{ _atk_kept }}{% if _atk_flat %} + {{ _atk_flat }}{% endif %}
+                        </span>
                         <div class="flex gap-0.5">
                             {% for i in range(1, 6) %}
                             <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= character.attack else 'border-ink/30' }}"></div>
                             {% endfor %}
                         </div>
-                        <span class="text-sm text-ink/60">
-                            {{ _atk_rolled }}k{{ _atk_kept }}{% if _atk_flat %} + {{ _atk_flat }}{% endif %}
-                        </span>
+                        {# Invisible chevron-sized spacer so the pip group lines up
+                           with the school-knack pips below, which are followed by
+                           an expand chevron. #}
+                        <span aria-hidden="true" class="w-4 h-4 invisible"></span>
                     </div>
                 </div>
                 <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
@@ -2185,15 +2189,16 @@
                  data-roll-key="parry">
                 <div class="flex items-center justify-between gap-4">
                     <span class="font-medium">Parry</span>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm text-ink/60">
+                            {{ _par_rolled }}k{{ _par_kept }}{% if _par_flat %} + {{ _par_flat }}{% endif %}
+                        </span>
                         <div class="flex gap-0.5">
                             {% for i in range(1, 6) %}
                             <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= character.parry else 'border-ink/30' }}"></div>
                             {% endfor %}
                         </div>
-                        <span class="text-sm text-ink/60">
-                            {{ _par_rolled }}k{{ _par_kept }}{% if _par_flat %} + {{ _par_flat }}{% endif %}
-                        </span>
+                        <span aria-hidden="true" class="w-4 h-4 invisible"></span>
                     </div>
                 </div>
                 <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
@@ -2229,7 +2234,7 @@
                     </div>
                 </div>
                 <div x-show="expanded" x-cloak class="mt-2 text-sm text-ink/80 whitespace-pre-line">
-                    {{ info.data.rules_text or info.data.description }}
+                    {{ knack_rules_text_html(info.data) }}
                 </div>
             </div>
             {% endif %}
@@ -2273,7 +2278,7 @@
                         <p class="text-xs italic text-accent/80 mb-1">
                             This is a foreign school knack (learned outside your school).
                         </p>
-                        {{ info.data.rules_text or info.data.description }}
+                        {{ knack_rules_text_html(info.data) }}
                     </div>
                 </div>
                 {% endif %}

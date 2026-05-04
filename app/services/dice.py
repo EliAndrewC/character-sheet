@@ -413,6 +413,18 @@ def build_skill_formula(
                 "extra_flat": honor_bonus + kind_eye_flat,
             })
 
+    # --- Disadvantage conditional alternatives ---
+    # Unkempt: -10 to Culture rolls "in the eyes of those who judge the
+    # unkempt". Conditional, so it surfaces as an Alternative-totals row in
+    # the roll modal rather than being baked into the unconditional flat
+    # total. Mirrors the rolls.py note shown on the static View Sheet panel.
+    disadvantages = character_data.get("disadvantages", []) or []
+    if "unkempt" in disadvantages and skill_id == "culture":
+        formula.alternatives.append({
+            "label": "in the eyes of those who judge the unkempt",
+            "extra_flat": -10,
+        })
+
     # --- Campaign advantage bonuses (e.g. Highest Regard) ---
     campaign_advantages = character_data.get("campaign_advantages", []) or []
     for adv_id in campaign_advantages:

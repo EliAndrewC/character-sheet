@@ -406,6 +406,48 @@ class TestSkillFormula:
         assert not any(b["label"] == "Highest Regard" for b in f.bonuses)
         assert not any("Wasp" in alt.get("label", "") for alt in f.alternatives)
 
+    def test_unkempt_culture_is_minus10_alternative_not_flat(self):
+        """Unkempt's -10 to Culture is conditional ('in the eyes of those who
+        judge the unkempt') and must surface as an Alternative-totals row in
+        the roll modal, never baked into the unconditional flat total."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"culture": 2},
+            disadvantages=["unkempt"],
+        )
+        f = build_skill_formula("culture", char)
+        # The -10 must NOT be in the unconditional flat total
+        assert f.flat == 0
+        assert any(
+            alt["extra_flat"] == -10 and "unkempt" in alt["label"].lower()
+            for alt in f.alternatives
+        ), f"expected unkempt -10 alternative, got: {f.alternatives!r}"
+
+    def test_unkempt_no_alternative_on_other_skills(self):
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"etiquette": 1},
+            disadvantages=["unkempt"],
+        )
+        f = build_skill_formula("etiquette", char)
+        assert not any(
+            "unkempt" in alt.get("label", "").lower() for alt in f.alternatives
+        )
+
+    def test_unkempt_no_alternative_when_disadvantage_absent(self):
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"culture": 2},
+            disadvantages=[],
+        )
+        f = build_skill_formula("culture", char)
+        assert not any(
+            "unkempt" in alt.get("label", "").lower() for alt in f.alternatives
+        )
+
     def test_charming_advantage_adds_5_to_etiquette(self):
         char = make_character_data(
             skills={"etiquette": 1},
