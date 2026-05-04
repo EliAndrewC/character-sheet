@@ -123,6 +123,11 @@ function artReview(charId, stagingId) {
     },
 
     async generate() {
+      // Tear down any state from a prior successful generation so the
+      // user doesn't sit looking at the previous image (and its Cropper
+      // overlay) while the new one is still being produced.
+      if (this.cropper) { this.cropper.destroy(); this.cropper = null; }
+      this.imageUrl = '';
       this.state = 'generating';
       this.stage = 'Submitting…';
       this.errorMessage = '';
@@ -178,7 +183,12 @@ function artReview(charId, stagingId) {
     },
 
     _onSucceeded(body) {
-      this.imageUrl = body.image_url;
+      // The image URL is keyed by staging_id and reused across regenerations,
+      // so without a unique cache-buster the <img> src would be the same
+      // string as the previous render and the browser would keep showing
+      // the stale bytes - making prompt edits look like they were ignored.
+      const sep = body.image_url.includes('?') ? '&' : '?';
+      this.imageUrl = body.image_url + sep + '_=' + Date.now();
       this.saveUrl = body.save_url;
       this.aspectRatio = body.aspect_ratio || 0.75;
       if (body.default_bbox && body.default_bbox.length === 4) {

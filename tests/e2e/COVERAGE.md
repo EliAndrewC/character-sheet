@@ -1478,6 +1478,8 @@ JS-error sanity:
       and it's unit-tested via `TestReviewTemplateHasCropper`)
 - [x] Successful generation shows the generated art + Cropper on the SAME review page ->
       `test_character_art_generate.py::test_generation_happy_path_in_place_crop_and_save`
+- [x] Re-generation after a successful first generation: edited prompt produces a new image, img.src cache-busts, old Cropper is destroyed (regression: stale image after second Generate click) ->
+      `test_character_art_generate.py::test_re_generation_after_prompt_edit_loads_new_image`
 - [-] Failed generation shows the error + re-enables textarea for retry
       (route-level failure paths are covered by
       `test_art_routes.py::TestGenerateStatusEndpoint::test_failed_payload_includes_error_code_and_message`;
