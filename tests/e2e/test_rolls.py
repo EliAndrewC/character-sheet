@@ -688,6 +688,51 @@ def test_unskilled_advanced_skill_shows_minus_10_in_breakdown(page, live_server_
     assert "unskilled advanced penalty" in modal_text
 
 
+def test_unkempt_alternative_total_on_culture_and_edit_note(page, live_server_url):
+    """Unkempt's -10 to Culture must appear:
+       - in the Edit Sheet's live skill-roll parenthetical for Culture
+       - as an Alternative-totals row in the View Sheet roll-result modal
+       It must NOT be baked into the unconditional formula on either surface,
+       since the -10 only applies "in the eyes of those who judge the unkempt".
+    """
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "UnkemptCulture")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_culture", 2)
+    page.check('input[name="dis_unkempt"]')
+    page.wait_for_timeout(200)
+
+    # --- Edit Sheet: parenthetical includes the -10 unkempt note ---
+    edit_culture_row = page.locator(
+        '[x-text="skillRollDisplay(\'culture\')"]'
+    ).first
+    edit_text = edit_culture_row.text_content()
+    assert "in the eyes of those who judge the unkempt" in edit_text, (
+        f"expected unkempt note in edit-page culture roll display, got: {edit_text!r}"
+    )
+    # The dice formula portion must not have the -10 baked in. Culture is
+    # rank 2 + Earth 2 = 4k2 with no flat bonus, so the leading formula is
+    # just "4k2" - no " - 10".
+    formula = edit_text.split("(")[0].strip()
+    assert "- 10" not in formula and "-10" not in formula, (
+        f"unkempt -10 must stay conditional on the edit page; got formula: {formula!r}"
+    )
+
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Unkempt setup")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+
+    # --- View Sheet roll modal: Alternative totals row ---
+    page.locator('[data-roll-key="skill:culture"]').click()
+    _wait_for_roll_result(page)
+    modal_text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "Alternative totals" in modal_text
+    assert "in the eyes of those who judge the unkempt" in modal_text
+
+
 def test_kind_eye_alternative_totals_on_tact_and_sincerity(page, live_server_url):
     """Kind Eye surfaces the 'for servants and the mistreated' alt on Tact,
     and 'on open rolls with servants and the mistreated' on Sincerity."""

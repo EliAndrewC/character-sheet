@@ -572,7 +572,7 @@
                                     :title="knacks[kid] >= 5 ? '' : 'Raise to ' + (knacks[kid]+1) + ' (' + ADVANCED_COSTS[knacks[kid]+1] + ' XP)'"
                                     class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                         </div>
-                        <span class="text-xs text-ink/50" x-text="totalKnackCostSingle(knacks[kid]) + ' XP'"></span>
+                        <span class="text-xs text-ink/50" x-text="totalKnackCostSingle(knacks[kid]) + ' XP spent'"></span>
                     </div>
                 </template>
             </div>
@@ -599,7 +599,7 @@
                                 :title="rings.{{ ring }} >= ringMax('{{ ring }}') ? '' : 'Raise to ' + (rings.{{ ring }}+1) + ' (' + (5 * (rings.{{ ring }}+1)) + ' XP)'"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                     </div>
-                    <p class="text-xs text-ink/50 mt-1" x-text="ringCost('{{ ring }}') + ' XP'"></p>
+                    <p class="text-xs text-ink/50 mt-1" x-text="ringCost('{{ ring }}') + ' XP spent'"></p>
                 </div>
                 {% endfor %}
             </div>
@@ -628,7 +628,7 @@
                                 :title="attack >= 5 ? '' : 'Raise to ' + (attack+1) + ' (' + ADVANCED_COSTS[attack+1] + ' XP)'"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                     </div>
-                    <span class="text-xs text-ink/50" x-text="combatSkillXp(attack) + ' XP'"></span>
+                    <span class="text-xs text-ink/50" x-text="combatSkillXp(attack) + ' XP spent'"></span>
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                         <p class="font-medium mb-1">Attack (Fire)</p>
                         <p>Roll Attack + Fire to hit. TN to hit = 5 + 5 * defender's Parry. Extra damage die per 5 over TN.</p>
@@ -650,7 +650,7 @@
                                 :title="parry >= attack + 1 ? 'Parry cannot exceed Attack + 1' : (parry >= 5 ? '' : 'Raise to ' + (parry+1) + ' (' + ADVANCED_COSTS[parry+1] + ' XP)')"
                                 class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                     </div>
-                    <span class="text-xs text-ink/50" x-text="combatSkillXp(parry) + ' XP'"></span>
+                    <span class="text-xs text-ink/50" x-text="combatSkillXp(parry) + ' XP spent'"></span>
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                         <p class="font-medium mb-1">Parry (Air)</p>
                         <p>Roll Parry + Air to parry. TN to be hit = 5 + 5 * Parry. Declaring parry before attack roll grants a free raise.</p>
@@ -1245,7 +1245,7 @@
                                     :data-testid="'foreign-knack-plus-' + kid"
                                     class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
                         </div>
-                        <span class="text-xs text-ink/50" x-text="foreignKnackTotalCost(foreignKnacks[kid]) + ' XP'"></span>
+                        <span class="text-xs text-ink/50" x-text="foreignKnackTotalCost(foreignKnacks[kid]) + ' XP spent'"></span>
                     </div>
                 </template>
             </div>
@@ -2273,7 +2273,7 @@ function characterForm() {
         skillXpLabel(skillId, isAdvanced) {
             const rank = this.skills[skillId] || 0;
             if (rank === 0) return '';
-            return totalSkillCost(rank, isAdvanced) + ' XP';
+            return totalSkillCost(rank, isAdvanced) + ' XP spent';
         },
 
         currentDan() {
@@ -2470,6 +2470,13 @@ function characterForm() {
             // Conditional, so never added to flatBonus.
             if (this.advantages.kind_eye && (skillId === 'tact' || skillId === 'sincerity')) {
                 parts.push('+20 for servants and the mistreated');
+            }
+
+            // Unkempt: -10 to Culture in the eyes of those who judge the unkempt.
+            // Conditional, so never added to flatBonus - shown as an alternative
+            // total in the View Sheet roll modal.
+            if (this.disadvantages.unkempt && skillId === 'culture') {
+                parts.push('-10 in the eyes of those who judge the unkempt');
             }
 
             // Recognition bonus

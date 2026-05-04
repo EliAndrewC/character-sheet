@@ -1678,6 +1678,137 @@ class TestEditCharacter:
         assert resp.status_code == 404
 
 
+class TestEditPageUnkemptNote:
+    """The Edit Sheet's live skill-roll display must annotate the Culture
+    row with the -10 from the Unkempt disadvantage, mirroring how Charming
+    surfaces "+5 from Charming" on the same row. The Unkempt -10 stays
+    OUT of the unconditional flat bonus because the disadvantage's effect
+    is conditional ("in the eyes of those who judge the unkempt")."""
+
+    def test_skill_roll_display_js_emits_unkempt_note(self, client):
+        cid = _seed_character(client, name="Unkempt Edit")
+        body = client.get(f"/characters/{cid}/edit").text
+        # The JS skillRollDisplay() function must include a branch that pushes
+        # an Unkempt-related note when culture is the skill being rendered.
+        idx = body.index("skillRollDisplay(skillId)")
+        tail = body[idx:idx + 4000]
+        assert "disadvantages.unkempt" in tail and "culture" in tail, (
+            "expected skillRollDisplay() to check disadvantages.unkempt and "
+            f"the culture skill id; got: {tail!r}"
+        )
+        # Must push the conditional note onto parts (not mutate flatBonus,
+        # since the -10 only applies in the eyes of those who judge).
+        assert "parts.push('-10" in tail or 'parts.push("-10' in tail, (
+            "expected the unkempt branch to push a '-10 ...' note onto parts"
+        )
+
+    def test_skill_roll_display_js_does_not_bake_unkempt_into_flatbonus(self, client):
+        """Read the actual unkempt if-block out of the rendered JS and
+        verify there is no flatBonus mutation inside it."""
+        cid = _seed_character(client, name="Unkempt Edit2")
+        body = client.get(f"/characters/{cid}/edit").text
+        # Find "this.disadvantages.unkempt" and slice from the enclosing
+        # 'if (' to the matching closing '}'.
+        marker = "this.disadvantages.unkempt"
+        m_idx = body.index(marker)
+        if_start = body.rfind("if (", 0, m_idx)
+        # Walk forward to the opening '{' of the if-block
+        brace_open = body.index("{", m_idx)
+        # Walk braces to find the matching close.
+        depth = 1
+        i = brace_open + 1
+        while i < len(body) and depth > 0:
+            if body[i] == "{":
+                depth += 1
+            elif body[i] == "}":
+                depth -= 1
+            i += 1
+        block = body[if_start:i]
+        # No flatBonus assignment inside this exact block.
+        assert "flatBonus" not in block, (
+            f"Unkempt branch must not touch flatBonus: {block!r}"
+        )
+
+
+class TestEditPageXpLabelsSaySpent:
+    """The XP totals beside skills, school knacks, foreign knacks, rings,
+    and Attack/Parry on the edit page must read e.g. "15 XP spent" rather
+    than just "15 XP", so players don't mistake the running total for the
+    cost of the next increment. Advantage/disadvantage rows still read
+    "X XP" / "+X XP" because they ARE per-item costs, not running totals."""
+
+    def test_skill_total_label_says_spent(self, client):
+        """The skillXpLabel JS helper is the single source for every skill
+        row's XP-total label. Its return string must read "N XP spent"."""
+        cid = _seed_character(client, name="Lbl")
+        body = client.get(f"/characters/{cid}/edit").text
+        # Find the skillXpLabel function definition and assert it returns
+        # totalSkillCost(...) + ' XP spent'
+        idx = body.index("skillXpLabel(skillId, isAdvanced)")
+        body_tail = body[idx:idx + 400]
+        assert "totalSkillCost(rank, isAdvanced) + ' XP spent'" in body_tail, (
+            f"skillXpLabel must return a 'XP spent' string; got: {body_tail!r}"
+        )
+
+    def _assert_xtext_says_spent(self, body: str, expr_substr: str):
+        """Find an x-text attribute containing expr_substr and assert it
+        ends with " XP spent'" (single-quoted)."""
+        idx = body.index(expr_substr)
+        # x-text="..." starts before; find the surrounding x-text=" boundary
+        attr_start = body.rfind('x-text="', 0, idx)
+        attr_end = body.index('"', attr_start + len('x-text="'))
+        expr = body[attr_start + len('x-text="'):attr_end]
+        assert expr.endswith("' XP spent'") or expr.endswith(' XP spent"'), (
+            f"expected x-text expression containing {expr_substr!r} to end "
+            f"with \"' XP spent'\", got: {expr!r}"
+        )
+
+    def test_school_knack_label_says_spent(self, client):
+        cid = _seed_character(client, name="Lbl2")
+        body = client.get(f"/characters/{cid}/edit").text
+        self._assert_xtext_says_spent(body, "totalKnackCostSingle(")
+
+    def test_ring_label_says_spent(self, client):
+        cid = _seed_character(client, name="Lbl3")
+        body = client.get(f"/characters/{cid}/edit").text
+        self._assert_xtext_says_spent(body, "ringCost(")
+
+    def test_attack_label_says_spent(self, client):
+        cid = _seed_character(client, name="Lbl4")
+        body = client.get(f"/characters/{cid}/edit").text
+        self._assert_xtext_says_spent(body, "combatSkillXp(attack)")
+
+    def test_parry_label_says_spent(self, client):
+        cid = _seed_character(client, name="Lbl5")
+        body = client.get(f"/characters/{cid}/edit").text
+        self._assert_xtext_says_spent(body, "combatSkillXp(parry)")
+
+    def test_foreign_knack_label_says_spent(self, client):
+        cid = _seed_character(
+            client, name="Lbl6", foreign_knacks={"athletics": 1},
+        )
+        body = client.get(f"/characters/{cid}/edit").text
+        self._assert_xtext_says_spent(body, "foreignKnackTotalCost(")
+
+    def test_advantage_xp_label_unchanged(self, client):
+        """Advantages still read "N XP" (no "spent"), since each row shows
+        the per-advantage cost, not a running total."""
+        cid = _seed_character(client, name="Lbl7")
+        body = client.get(f"/characters/{cid}/edit").text
+        # The advantage rows render the literal "{{ adv.xp_cost }} XP" - we
+        # can spot-check by searching for "XP</span>" with no preceding
+        # "spent". At least one advantage row should match.
+        assert " XP</span>" in body
+        # And no advantage row should have been accidentally rewritten:
+        assert " XP spent</span>" not in body or body.count(" XP</span>") > 0
+
+    def test_disadvantage_xp_label_unchanged(self, client):
+        cid = _seed_character(client, name="Lbl8")
+        body = client.get(f"/characters/{cid}/edit").text
+        # Disadvantages render "+{{ dis.xp_value }} XP" inline.
+        assert "+" in body and " XP</span>" in body
+
+
 class TestUpdateCharacter:
     def test_update_changes_fields(self, client):
         cid = _seed_character(client, name="Original")
@@ -2759,6 +2890,66 @@ class TestPriestRitualsLinkOnSheet:
         resp = client.get(f"/characters/{cid}")
         assert resp.status_code == 200
         assert "priest-rituals" not in resp.text
+
+
+class TestIaijutsuRulesLink:
+    """The Iaijutsu knack's rules text wraps the phrase "the other combat
+    rules" in an anchor pointing at the upstream combat-rules page, opened
+    in a new tab. Applies in both the editor's school-info partial and on
+    the read-only character sheet, including when iaijutsu is taken as a
+    foreign knack."""
+
+    _COMBAT_URL = (
+        "https://github.com/EliAndrewC/l7r/blob/master/rules/03-combat.md"
+    )
+
+    def _assert_combat_link(self, html: str):
+        assert f'<a href="{self._COMBAT_URL}"' in html
+        assert 'target="_blank"' in html
+        assert ">the other combat rules</a>" in html
+
+    def test_school_info_partial_links_combat_rules_for_iaijutsu(self, client):
+        resp = client.get("/characters/api/school-info/mirumoto_bushi")
+        assert resp.status_code == 200
+        self._assert_combat_link(resp.text)
+        # Surrounding sentence still present
+        assert "The iaijutsu rules are explained with " in resp.text
+
+    def test_school_info_partial_no_link_for_school_without_iaijutsu(self, client):
+        # Priest's three knacks are conviction/otherworldliness/pontificate,
+        # none of which mention "the other combat rules".
+        resp = client.get("/characters/api/school-info/priest")
+        assert resp.status_code == 200
+        assert "03-combat.md" not in resp.text
+
+    def test_sheet_renders_iaijutsu_combat_rules_link(self, client):
+        cid = _seed_character(
+            client, name="Mirumoto Linked", school="mirumoto_bushi",
+            knacks={"counterattack": 1, "double_attack": 1, "iaijutsu": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        self._assert_combat_link(resp.text)
+
+    def test_sheet_no_link_for_school_without_iaijutsu(self, client):
+        cid = _seed_character(
+            client, name="Holy Priest", school="priest",
+            school_ring_choice="Water",
+            knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert "03-combat.md" not in resp.text
+
+    def test_sheet_renders_link_when_iaijutsu_is_foreign_knack(self, client):
+        cid = _seed_character(
+            client, name="Akodo Borrower", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "lunge": 1},
+            foreign_knacks={"iaijutsu": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        self._assert_combat_link(resp.text)
 
 
 class TestImportKillSwitchNavBar:

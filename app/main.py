@@ -149,6 +149,41 @@ def school_special_ability_html(school) -> Markup:
 templates.env.globals["school_special_ability_html"] = school_special_ability_html
 
 
+# Per-knack rules-link substitutions for the expanded rules-text panel. Same
+# pattern as _SPECIAL_ABILITY_LINKS above: when a knack's canonical rules text
+# refers to another rules section in the upstream L7R repo, wrap the named
+# phrase in a new-tab anchor.
+_KNACK_RULES_LINKS: dict[str, tuple[str, str]] = {
+    "iaijutsu": (
+        "the other combat rules",
+        "https://github.com/EliAndrewC/l7r/blob/master/rules/03-combat.md",
+    ),
+}
+
+
+def knack_rules_text_html(knack) -> Markup:
+    """Render a knack's expanded rules text as HTML, linkifying any phrase
+    that points at a rules section (currently just Iaijutsu's "the other
+    combat rules"). Falls back to the short description when rules_text is
+    empty, matching the prior template expression."""
+    text = (knack.rules_text or knack.description) or ""
+    link = _KNACK_RULES_LINKS.get(knack.id) if knack else None
+    if link:
+        phrase, url = link
+        before, sep, after = text.partition(phrase)
+        if sep:
+            return Markup(
+                f'{escape(before)}'
+                f'<a href="{escape(url)}" target="_blank" rel="noopener" '
+                f'class="text-accent hover:underline">{escape(sep)}</a>'
+                f'{escape(after)}'
+            )
+    return Markup(escape(text))
+
+
+templates.env.globals["knack_rules_text_html"] = knack_rules_text_html
+
+
 # ---------------------------------------------------------------------------
 # Auth middleware: sets request.state.user from session cookie or test bypass
 # ---------------------------------------------------------------------------

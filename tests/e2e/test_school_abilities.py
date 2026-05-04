@@ -978,6 +978,23 @@ def test_priest_sheet_links_to_rituals(page, live_server_url):
     assert link.count() == 1
     assert link.get_attribute("target") == "_blank"
     assert link.text_content().strip() == "all 10 rituals"
+
+
+def test_iaijutsu_knack_links_to_combat_rules(page, live_server_url):
+    """Expanding the Iaijutsu knack on the read-only sheet shows the
+    canonical rules text with "the other combat rules" wrapped in an
+    anchor that opens the upstream combat-rules page in a new tab."""
+    _create_char(page, live_server_url, "IaijutsuLink", "mirumoto_bushi")
+    iaijutsu_row = page.locator('div.bg-parchment', has_text="Iaijutsu").first
+    iaijutsu_row.click()
+    page.wait_for_timeout(300)
+    link = iaijutsu_row.locator(
+        'a[href="https://github.com/EliAndrewC/l7r/blob/master/'
+        'rules/03-combat.md"]'
+    )
+    assert link.count() == 1
+    assert link.get_attribute("target") == "_blank"
+    assert link.text_content().strip() == "the other combat rules"
 def test_shosuro_stipend_display(page, live_server_url):
     """Shosuro Actor: stipend display on character sheet."""
     _create_char(page, live_server_url, "ShosuroStipend", "shosuro_actor")

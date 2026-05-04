@@ -973,6 +973,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Parry cannot exceed attack + 1 → `test_combat_skills.py::test_parry_cannot_exceed_attack_plus_1`
 - [x] Attack cannot go below parry - 1 → `test_combat_skills.py::test_attack_cannot_lower_below_parry_minus_1`
 - [x] Combat skills persist through apply → `test_combat_skills.py::test_create_with_combat_skills_and_publish`
+- [x] Sheet attack/parry rows: roll formula left of pips, pips vertically aligned with knack pips below → `test_combat_skills.py::test_attack_parry_pips_align_with_knack_pips`
 - [x] XP updates on combat skill change → `test_live_xp.py::test_xp_updates_on_combat_skill_change`
 - [x] Attack min 1 (- disabled) → `test_editor_controls.py::test_attack_min_1`
 - [x] Attack max 5 (+ disabled) → `test_editor_controls.py::test_attack_max_5`
@@ -984,6 +985,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Skill + disabled at rank 5 → `test_editor_controls.py::test_skill_max_5`
 - [x] Basic skill XP increases spent → `test_editor_controls.py::test_basic_skill_xp_cost`
 - [x] Advanced skill costs more → `test_editor_controls.py::test_advanced_skill_costs_more`
+- [x] Per-row XP totals on skills, school knacks, rings, attack/parry read "N XP spent" (not "N XP"); advantages/disadvantages still read plain "N XP" → `test_editor_controls.py::test_per_row_xp_labels_say_spent_not_just_xp`
 
 ## Character Editor — Honor / Rank / Recognition
 
@@ -1174,6 +1176,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Kind Eye +20 note on Tact and Sincerity → `test_skill_rolls_display.py::test_kind_eye_note_on_tact_and_sincerity`
 - [x] Sincerity's Honor bonus labelled "on open rolls" → `test_skill_rolls_display.py::test_sincerity_honor_says_on_open_rolls`
 - [x] Kind Eye "Alternative totals" rows in dice modal (Tact + Sincerity) → `test_rolls.py::test_kind_eye_alternative_totals_on_tact_and_sincerity`
+- [x] Unkempt -10 to Culture: appears in edit-page parenthetical AND as an "Alternative totals" row in the View Sheet roll modal (never baked into flat formula) → `test_rolls.py::test_unkempt_alternative_total_on_culture_and_edit_note`
 - [x] Alternative totals render number-first and append "if all of the above" when 2+ alts → `test_rolls.py::test_alternative_totals_render_number_first_with_all_of_the_above`
 - [x] No "if all of the above" line when only one alternative total → `test_rolls.py::test_alternative_totals_no_all_of_the_above_when_only_one`
 
@@ -1189,6 +1192,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 ## Character Sheet — School Knacks
 
 - [x] Expanded view shows full upstream rules text → `test_sheet_display.py::test_school_knack_expanded_shows_full_rules`
+- [x] Iaijutsu knack expanded text wraps "the other combat rules" in a new-tab link to upstream rules → `test_school_abilities.py::test_iaijutsu_knack_links_to_combat_rules`
 
 ## Character Sheet — XP Summary
 
