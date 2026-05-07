@@ -23,6 +23,7 @@ from app.services.versions import (
     discard_draft_changes,
     publish_character,
     revert_character,
+    stringify_version_diff_entries,
 )
 from app.services.xp import calculate_total_xp
 
@@ -471,6 +472,18 @@ async def autosave_character(
         character.name = body["name"]
     if "name_explanation" in body:
         character.name_explanation = body["name_explanation"] or ""
+    if "age" in body:
+        # Coerce to int; treat blank/invalid as "unset" so the player can
+        # clear the field. Negative values are persisted but flagged by
+        # validate_character so the user sees the issue on the View Sheet.
+        raw = body.get("age")
+        if raw in (None, "", "null"):
+            character.age = None
+        else:
+            try:
+                character.age = int(raw)
+            except (TypeError, ValueError):
+                character.age = None
     if body.get("owner_discord_id"):
         # Only admins can reassign ownership
         from app.services.auth import is_admin
@@ -634,7 +647,14 @@ async def autosave_character(
         character.sections = sanitize_sections(body["sections"])
 
     db.commit()
-    return JSONResponse({"status": "saved"})
+    # Surface has_unpublished_changes so the editor can show / hide the
+    # Apply Changes and Discard Changes buttons based on whether the
+    # save actually moved the character away from the published state.
+    # Metadata-only edits (e.g. age) won't flip the flag.
+    return JSONResponse({
+        "status": "saved",
+        "has_unpublished_changes": character.has_unpublished_changes,
+    })
 
 
 @router.post("/{char_id}/set-group")
@@ -886,10 +906,16 @@ async def draft_diff_route(
 
     if not character.is_published:
         return JSONResponse({"lines": []})
-    lines = compute_diff_summary(
+    # Use the comprehensive structured diff (same one that powers the
+    # version-history drill-down) so the modal stays in sync with
+    # has_unpublished_changes. The older sparse compute_diff_summary
+    # missed fields like notes / sections / foreign_knacks, producing
+    # a confusing "(no changes)" message while the badge still showed
+    # "Draft changes".
+    entries = compute_version_diff(
         character.published_state or {}, character.to_dict(),
     )
-    return JSONResponse({"lines": lines})
+    return JSONResponse({"lines": stringify_version_diff_entries(entries)})
 
 
 @router.post("/{char_id}/revert/{version_id}")

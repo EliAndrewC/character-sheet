@@ -30,11 +30,13 @@ def test_no_banner_after_apply(page, live_server_url):
 
 
 def test_draft_changes_banner_after_edit(page, live_server_url):
-    """Banner shows 'Draft changes' after editing an applied character."""
+    """Banner shows 'Draft changes' after editing an applied character.
+    Edits a stat (XP) since name is metadata and doesn't trigger
+    draft state."""
     create_and_apply(page, live_server_url, "Banner After Edit")
     page.locator('a:text-is("Edit")').click()
     page.wait_for_selector('input[name="name"]')
-    page.fill('input[name="name"]', "Modified Name")
+    page.fill('input[name="earned_xp"]', "10")
     page.wait_for_selector('text="Saved"', timeout=5000)
     page.locator('button:text("View Sheet")').click()
     page.wait_for_selector("h1")
@@ -101,11 +103,12 @@ def test_homepage_draft_changes_badge(page, live_server_url):
     create_and_apply(page, live_server_url, "Will Modify Badge")
     page.locator('a:text-is("Edit")').click()
     page.wait_for_selector('input[name="name"]')
-    page.fill('input[name="name"]', "Modified Badge")
+    # Edit a stat - name is metadata and doesn't trigger draft state.
+    page.fill('input[name="earned_xp"]', "10")
     page.wait_for_selector('text="Saved"', timeout=5000)
     page.goto(live_server_url)
     # Find the card for our specific character
-    card = page.locator('a', has=page.locator('text="Modified Badge"'))
+    card = page.locator('a', has=page.locator('text="Will Modify Badge"'))
     assert card.locator('text="Draft changes"').is_visible()
 
 
@@ -117,12 +120,12 @@ def test_homepage_draft_changes_badge_does_not_truncate_name(page, live_server_u
     the bottom-right of the card so the name has the full row width.
     """
     long_name = "Akodo Tetsuko of the Eastern Provinces"
-    create_and_apply(page, live_server_url, "Akodo Tetsuko Initial")
+    create_and_apply(page, live_server_url, long_name)
     page.locator('a:text-is("Edit")').click()
     page.wait_for_selector('input[name="name"]')
-    # Edit the name to a long one so the modified badge appears AND the
-    # row width pressure on the homepage card is realistic.
-    page.fill('input[name="name"]', long_name)
+    # Edit a stat (not the name, which is metadata) so the modified badge
+    # appears. The long name was set during initial creation.
+    page.fill('input[name="earned_xp"]', "10")
     page.wait_for_selector('text="Saved"', timeout=5000)
     page.goto(live_server_url)
 

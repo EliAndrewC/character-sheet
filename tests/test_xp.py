@@ -514,6 +514,23 @@ class TestValidation:
         errors = validate_character(data)
         assert any("Missing" in e or "Unknown" in e for e in errors)
 
+    def test_unset_age_emits_validation_issue(self):
+        """Age is optional metadata, but the View Sheet flags an unset
+        age as a validation issue so the player remembers to set it."""
+        data = make_character_data(age=None)
+        errors = validate_character(data)
+        assert any("age" in e.lower() for e in errors)
+
+    def test_set_age_no_validation_issue(self):
+        data = make_character_data(age=42)
+        errors = validate_character(data)
+        assert not any("age" in e.lower() for e in errors)
+
+    def test_negative_age_emits_validation_issue(self):
+        data = make_character_data(age=-1)
+        errors = validate_character(data)
+        assert any("age" in e.lower() for e in errors)
+
     def test_recognition_halved_valid(self):
         data = make_character_data(
             recognition=3.5,

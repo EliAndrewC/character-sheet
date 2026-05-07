@@ -37,34 +37,36 @@ def test_apply_then_no_draft_banner(page, live_server_url):
 
 
 def test_revert_with_reason(page, live_server_url):
-    """Reverting shows a modal asking for a reason, then reloads with old data."""
-    _create_character(page, live_server_url, "Version 1 Name")
+    """Reverting shows a modal asking for a reason, then reloads with old data.
+    Uses Earned XP (a stat) to verify revert mechanic - name is metadata
+    now and lives outside the version system."""
+    _create_character(page, live_server_url, "Revert Test")
 
     # Apply v1
     apply_changes(page, "Initial character creation")
-    char_url = page.url
 
-    # Edit and apply v2
+    # Edit a stat and apply v2
     page.locator('a:text-is("Edit")').click()
     page.wait_for_selector('input[name="name"]')
-    page.fill('input[name="name"]', "Version 2 Name")
+    page.fill('input[name="earned_xp"]', "25")
     page.wait_for_selector('text="Saved"', timeout=5000)
-    apply_changes(page, "Updated name")
-
-    assert "Version 2 Name" in page.text_content("h1")
+    apply_changes(page, "Earned some XP")
 
     # Expand version history
     page.locator('text="Version History"').click()
 
-    # Click revert — fills in the modal reason
+    # Click revert - fills in the modal reason
     page.locator('button:text("Revert")').first.click()
     page.wait_for_selector('input[placeholder="..."]', timeout=3000)
     page.fill('input[placeholder="..."]', "testing revert")
     page.locator('div.fixed button:text("Revert")').click()
 
-    # Page should reload with v1 name
+    # Page reloads on the View Sheet; navigate back to the editor and check
+    # the stat reverted.
     page.wait_for_timeout(2000)
-    assert "Version 1 Name" in page.text_content("h1")
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('input[name="name"]')
+    assert page.locator('input[name="earned_xp"]').input_value() == "0"
 
 
 def test_version_history_collapsed_by_default(page, live_server_url):

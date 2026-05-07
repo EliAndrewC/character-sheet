@@ -831,6 +831,25 @@ class TestGenerateOptionsPage:
         )
         assert resp.status_code == 403
 
+    def test_age_input_prefills_from_character_age_when_set(self, client):
+        """Age field on the sheet is linked to the art generation form."""
+        char = _make_character(client, age=33)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=male"
+        )
+        assert resp.status_code == 200
+        assert b'value="33"' in resp.content
+        # The default 20 should NOT be the pre-filled value when age is set.
+        assert b'value="20"' not in resp.content
+
+    def test_age_input_falls_back_to_default_when_unset(self, client):
+        char = _make_character(client, age=None)
+        resp = client.get(
+            f"/characters/{char.id}/art/generate/options?gender=male"
+        )
+        assert resp.status_code == 200
+        assert b'value="20"' in resp.content
+
 
 class TestGenerateAssemble:
     def test_happy_path_stages_prompt_and_redirects(self, client):
@@ -859,6 +878,44 @@ class TestGenerateAssemble:
         assert "Wasp clan noble" in staged.prompt
         assert "He is approximately 30 years old." in staged.prompt
         assert "He is holding a katana." in staged.prompt
+
+    def test_assemble_persists_age_back_to_character(self, client):
+        """The Age field in the art form is bidirectionally linked to
+        Character.age - submitting an age via the art prompt builder
+        also updates the character's Age field on the sheet."""
+        char = _make_character(client, age=20)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/assemble",
+            data={
+                "gender": "male", "clan": "Wasp", "age": "37",
+                "holding": "", "expression": "",
+                "armor_choice": "", "armor_modifier": "",
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        # Reload the row.
+        session = client._test_session_factory()
+        fresh = session.query(Character).filter(Character.id == char.id).first()
+        assert fresh.age == 37
+
+    def test_assemble_invalid_age_does_not_overwrite_character(self, client):
+        """If the form bounces back due to an out-of-range age, don't
+        clobber the character's saved age with the invalid value."""
+        char = _make_character(client, age=25)
+        resp = client.post(
+            f"/characters/{char.id}/art/generate/assemble",
+            data={
+                "gender": "male", "clan": "Wasp", "age": "999",
+                "holding": "", "expression": "",
+                "armor_choice": "", "armor_modifier": "",
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        session = client._test_session_factory()
+        fresh = session.query(Character).filter(Character.id == char.id).first()
+        assert fresh.age == 25
 
     def test_armor_choice_passes_through_to_staged_prompt(self, client):
         char = _make_character(client)

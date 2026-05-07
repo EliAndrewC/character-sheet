@@ -100,6 +100,7 @@ def make_character_data(**overrides) -> dict:
         "campaign_disadvantages": [],
         "advantage_details": {},
         "specializations": [],
+        "age": 25,
         "earned_xp": 0,
         "starting_xp": 150,
     }

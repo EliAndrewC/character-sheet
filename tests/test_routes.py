@@ -747,6 +747,59 @@ class TestViewCharacter:
         resp = client.get("/characters/999")
         assert resp.status_code == 404
 
+    def test_view_sheet_renders_age_when_set(self, client):
+        cid = _seed_character(client, name="Aged", age=30)
+        body = client.get(f"/characters/{cid}").text
+        # Age appears next to the player name in the header.
+        assert "Age: 30" in body
+
+    def test_view_sheet_age_unset_shows_validation_issue(self, client):
+        cid = _seed_character(client, name="Unaged", age=None)
+        body = client.get(f"/characters/{cid}").text
+        # The Validation Issues block lists the unset age.
+        assert "Validation Issues" in body
+        assert "Age" in body
+
+    def test_edit_page_renders_age_input(self, client):
+        cid = _seed_character(client, name="EditAge", age=42)
+        body = client.get(f"/characters/{cid}/edit").text
+        # The Basics section gains an Age number input that's bound to
+        # the Alpine state and pre-fills with the current value.
+        assert 'name="age"' in body
+        assert 'value="42"' in body
+
+    def test_edit_page_age_input_is_narrow(self, client):
+        """Age is a 2-3 digit number; render it as a compact input
+        rather than a full-width text field."""
+        cid = _seed_character(client, name="NarrowAge", age=30)
+        body = client.get(f"/characters/{cid}/edit").text
+        idx = body.index('name="age"')
+        # Walk back to the start of the <input ...> tag and slice.
+        tag_start = body.rfind('<input', 0, idx)
+        tag_end = body.index('>', tag_start)
+        tag = body[tag_start:tag_end + 1]
+        # No w-full on the input itself - it should be a narrow class.
+        assert 'w-full' not in tag, (
+            f"Age input should be narrow, not w-full; got: {tag!r}"
+        )
+        # Width class is one of w-16 / w-20 / w-24 / w-28 (Tailwind).
+        assert any(f'w-{n}' in tag for n in ('16', '20', '24', '28', '32')), (
+            f"Age input should carry a narrow Tailwind width class; got: {tag!r}"
+        )
+
+    def test_edit_page_age_input_has_no_placeholder(self, client):
+        """The Age input is narrow (~96px) and the word "(optional)" doesn't
+        fit. The label already conveys what the field is, so no placeholder."""
+        cid = _seed_character(client, name="NoPlaceholder", age=None)
+        body = client.get(f"/characters/{cid}/edit").text
+        idx = body.index('name="age"')
+        tag_start = body.rfind('<input', 0, idx)
+        tag_end = body.index('>', tag_start)
+        tag = body[tag_start:tag_end + 1]
+        assert 'placeholder' not in tag, (
+            f"Age input must not carry a placeholder; got: {tag!r}"
+        )
+
     def test_view_renders_one_row_per_specialization(self, client):
         cid = _seed_character(
             client, name="MultiSpec",
@@ -2316,6 +2369,35 @@ class TestAutoSave:
         assert char.honor == 3.0
         assert char.name == "Original"  # unchanged
 
+    def test_autosave_persists_age(self, client):
+        cid = _seed_character(client, name="AgeAutoSave")
+        resp = client.post(
+            f"/characters/{cid}/autosave", json={"age": 42},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.age == 42
+
+    def test_autosave_age_can_be_cleared_back_to_none(self, client):
+        cid = _seed_character(client, name="AgeClear", age=30)
+        resp = client.post(
+            f"/characters/{cid}/autosave", json={"age": None},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.age is None
+
+    def test_autosave_garbled_age_treated_as_none(self, client):
+        """A non-int payload (e.g. browser quirk sending {"age": "abc"})
+        should clear rather than 500."""
+        cid = _seed_character(client, name="AgeBadInt", age=10)
+        resp = client.post(
+            f"/characters/{cid}/autosave", json={"age": "not-a-number"},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.age is None
+
     def test_autosave_persists_specializations_list(self, client):
         cid = _seed_character(client, name="Spec")
         resp = client.post(
@@ -3036,13 +3118,15 @@ class TestDiscardChangesRoute:
         # Publish to lock in the baseline.
         client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
 
-        # Edit the draft.
+        # Edit a stat AND a metadata field. Discard reverts the stat,
+        # leaves the metadata change in place (it never counted as a
+        # draft anyway).
         client.post(f"/characters/{cid}/autosave", json={
             "name": "Drafted Name",
             "honor": 4.0,
         })
         char = query_db(client).filter(Character.id == cid).first()
-        assert char.name == "Drafted Name"
+        assert char.honor == 4.0
         assert char.has_unpublished_changes
 
         resp = client.post(f"/characters/{cid}/discard")
@@ -3050,8 +3134,10 @@ class TestDiscardChangesRoute:
         assert resp.json()["status"] == "discarded"
 
         char = query_db(client).filter(Character.id == cid).first()
-        assert char.name == "Pre-Publish"
+        # Stat reverted to published state.
         assert char.honor == 1.0
+        # Metadata edit preserved (lives outside the version system).
+        assert char.name == "Drafted Name"
         assert not char.has_unpublished_changes
 
     def test_discard_does_not_create_a_new_version(self, client):
@@ -3093,15 +3179,15 @@ class TestDraftDiffRoute:
     def test_returns_diff_lines_for_modified_draft(self, client):
         cid = _seed_character(client, name="Original", is_published=False)
         client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
+        # Use a stat (honor) - name is metadata and isn't tracked by
+        # the version system anymore.
         client.post(f"/characters/{cid}/autosave",
-                    json={"name": "Modified", "honor": 3.0})
+                    json={"honor": 3.0})
         resp = client.get(f"/characters/{cid}/draft-diff")
         assert resp.status_code == 200
         data = resp.json()
         assert "lines" in data
         text = " ".join(data["lines"])
-        assert "Original" in text or "Modified" in text
-        # Honor change shows up too.
         assert "Honor" in text
 
     def test_returns_empty_when_no_unapplied_changes(self, client):
@@ -3110,6 +3196,57 @@ class TestDraftDiffRoute:
         resp = client.get(f"/characters/{cid}/draft-diff")
         assert resp.status_code == 200
         assert resp.json()["lines"] == []
+
+    def test_returns_diff_lines_for_notes_change(self, client):
+        """Regression: editing a field that ``has_unpublished_changes``
+        treats as significant but the older sparse ``compute_diff_summary``
+        didn't enumerate (notes, sections, name_explanation, foreign_knacks,
+        advantage_details, technique_choices, etc.) used to produce a
+        false-empty diff in the Discard modal even though the character
+        showed "Draft changes"."""
+        cid = _seed_character(client, name="Notes Only", is_published=False)
+        client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
+        # Notes is one of the fields the legacy summary skipped.
+        client.post(f"/characters/{cid}/autosave",
+                    json={"notes": "Something I added later."})
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.has_unpublished_changes
+        resp = client.get(f"/characters/{cid}/draft-diff")
+        assert resp.status_code == 200
+        lines = resp.json()["lines"]
+        # Some signal of the change must be present - the player should not
+        # see "(no changes since the last Apply Changes)" while the badge
+        # screams "Draft changes" at them.
+        assert lines, (
+            "Expected at least one diff line when the character is in the "
+            "modified state; got an empty list."
+        )
+
+    def test_diff_lines_track_has_unpublished_changes_for_misc_fields(self, client):
+        """A handful of the fields previously missing from the summary
+        each produce at least one diff line so the modal stays in sync
+        with the badge. Excludes metadata fields (name, name_explanation,
+        player_name, age) which are intentionally outside the version
+        system."""
+        for change in (
+            {"foreign_knacks": {"athletics": 2}},
+            {"sections": [{"label": "Backstory", "html": "<p>hi</p>"}]},
+            {"technique_choices": {"second_dan_choice": "bragging"}},
+        ):
+            cid = _seed_character(client, name=f"Field {list(change)[0]}",
+                                  is_published=False)
+            client.post(f"/characters/{cid}/publish",
+                        json={"summary": "Initial"})
+            client.post(f"/characters/{cid}/autosave", json=change)
+            char = query_db(client).filter(Character.id == cid).first()
+            assert char.has_unpublished_changes, (
+                f"has_unpublished_changes must flip for field {change!r}"
+            )
+            resp = client.get(f"/characters/{cid}/draft-diff")
+            assert resp.status_code == 200
+            assert resp.json()["lines"], (
+                f"Expected diff lines after editing {change!r}; got empty list"
+            )
 
     def test_404_for_unknown_character(self, client):
         resp = client.get("/characters/9999/draft-diff")
@@ -3215,13 +3352,14 @@ class TestUpdateVersionSummary:
 class TestRevert:
     def test_revert_to_previous_version(self, client):
         from app.models import CharacterVersion
-        cid = _seed_character(client, name="V1")
+        cid = _seed_character(client, name="V1", honor=1.0)
 
         # Publish v1
         client.post(f"/characters/{cid}/publish")
 
-        # Modify and publish v2
-        client.post(f"/characters/{cid}/autosave", json={"name": "V2"})
+        # Modify a stat and publish v2 (name is metadata, not subject to
+        # the version system, so use a stat to exercise revert).
+        client.post(f"/characters/{cid}/autosave", json={"honor": 4.5})
         client.post(f"/characters/{cid}/publish")
 
         # Get v1's id
@@ -3239,7 +3377,7 @@ class TestRevert:
         assert data["version_number"] == 3
 
         char = query_db(client).filter(Character.id == cid).first()
-        assert char.name == "V1"
+        assert char.honor == 1.0
 
 
 class TestVersionHistory:

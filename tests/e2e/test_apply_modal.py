@@ -25,12 +25,14 @@ def test_first_version_prepopulates(page, live_server_url):
 
 
 def test_subsequent_version_blank(page, live_server_url):
-    """Subsequent versions have blank description."""
+    """Subsequent versions have blank description.
+    Edits a stat (Earned XP) since name is metadata and doesn't put the
+    character into a draft state."""
     _go_to_new_editor(page, live_server_url)
     apply_changes(page, "First version")
     page.locator('a:text-is("Edit")').click()
     page.wait_for_selector('input[name="name"]')
-    page.fill('input[name="name"]', "Modified")
+    page.fill('input[name="earned_xp"]', "5")
     page.wait_for_selector('text="Saved"', timeout=5000)
     page.locator('[data-action="apply-changes"]').click()
     page.wait_for_selector('textarea[placeholder="Describe your changes..."]', timeout=3000)
@@ -105,6 +107,68 @@ def test_school_locked_after_publish(page, live_server_url):
     assert page.locator('text="School cannot be changed after character creation."').is_visible()
 
 
+def test_age_metadata_does_not_count_as_unapplied_changes(page, live_server_url):
+    """Age is metadata - changing it on a published character must NOT
+    flip the character to "unpublished changes" or surface in the
+    Discard modal's diff list. The Validation Issues block on the View
+    Sheet flags an unset age, which clears once the player sets it."""
+    _go_to_new_editor(page, live_server_url)
+    apply_changes(page, "Initial - no age")
+
+    # On the View Sheet, age unset -> validation issue.
+    body = page.text_content("body")
+    assert "Validation Issues" in body
+    assert "Age is not set" in body
+
+    # Re-enter the editor and set the age.
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="age"]', "28")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.wait_for_timeout(200)
+
+    # Apply / Discard buttons must NOT appear - age is not a stat.
+    assert not page.locator('[data-action="apply-changes"]').is_visible()
+    assert not page.locator('[data-action="discard-changes"]').is_visible()
+
+    # Reload and verify age persisted + validation issue cleared on View Sheet.
+    page.reload()
+    page.wait_for_selector('input[name="name"]')
+    assert page.locator('input[name="age"]').input_value() == "28"
+    page.locator('a:text-is("View Sheet"), [data-action="view-sheet"]').first.click()
+    page.wait_for_selector("h1")
+    body = page.text_content("body")
+    assert "Age: 28" in body
+    assert "Age is not set" not in body
+
+
+def test_apply_button_visible_on_revisit_of_never_applied_draft(page, live_server_url):
+    """Reload-the-editor case: a draft that was created but never had
+    Apply Changes clicked must STILL show the Apply button on subsequent
+    visits, otherwise the user can never make their first version.
+
+    Regression: ``has_unpublished_changes`` returns False for an
+    unpublished character (no ``published_state`` baseline to diff
+    against), so gating Apply solely on that flag hid the button on
+    page reload."""
+    _go_to_new_editor(page, live_server_url)
+    # Force the in-memory hasUnpublishedChanges flag back to false so we
+    # mirror what the page sees on a fresh GET of an unpublished draft
+    # (no autosave yet -> server says False -> Alpine inits False).
+    page.evaluate(
+        "Alpine.$data(document.querySelector('[x-data=\"characterForm()\"]')).hasUnpublishedChanges = false"
+    )
+    page.wait_for_timeout(150)
+    apply_btn = page.locator('[data-action="apply-changes"]')
+    assert apply_btn.is_visible(), (
+        "Apply Changes must remain visible for unpublished drafts even when "
+        "the server-side has_unpublished_changes flag is False"
+    )
+    # Discard, however, stays hidden - there's no published version to
+    # revert to.
+    assert not page.locator('[data-action="discard-changes"]').is_visible()
+
+
 def test_discard_button_hidden_for_never_applied_draft(page, live_server_url):
     """A draft that has never been Applied has nothing to revert to, so
     the Discard button must not appear. Apply still appears (so the
@@ -133,45 +197,47 @@ def test_neither_button_visible_when_no_unapplied_changes(page, live_server_url)
 def test_discard_full_flow_modal_diff_and_revert(page, live_server_url):
     """End-to-end Discard flow:
     1. Apply an initial version.
-    2. Make an edit; Apply + Discard buttons re-appear.
+    2. Make a stat edit; Apply + Discard buttons re-appear.
     3. Click Discard; modal opens with a diff line for the change.
-    4. Confirm; page reloads with the original state restored.
+    4. Confirm; page reloads with the stat reverted to the published value.
+
+    Uses Earned XP since name is metadata and doesn't trigger draft
+    state.
     """
     _go_to_new_editor(page, live_server_url)
     apply_changes(page, "Initial")
     page.locator('a:text-is("Edit")').click()
     page.wait_for_selector('input[name="name"]')
 
-    # Edit the name -> autosave -> both buttons appear.
-    page.fill('input[name="name"]', "Discard Me")
+    # Edit a stat -> autosave -> both buttons appear.
+    page.fill('input[name="earned_xp"]', "12")
     page.wait_for_selector('text="Saved"', timeout=5000)
     page.wait_for_timeout(200)
     assert page.locator('[data-action="apply-changes"]').is_visible()
     discard_btn = page.locator('[data-action="discard-changes"]')
     assert discard_btn.is_visible()
 
-    # Open modal -> diff line for the name change shows up.
+    # Open modal -> diff line for the change shows up.
     discard_btn.click()
     page.wait_for_selector('[data-modal="discard-changes"]', timeout=3000)
     page.wait_for_selector('[data-testid="discard-diff-lines"]', timeout=5000)
     diff_text = page.locator('[data-testid="discard-diff-lines"]').text_content()
-    # The summary is something like "Name changed from Modal Test to Discard Me"
-    assert "Discard Me" in diff_text
+    assert "Earned XP" in diff_text or "12" in diff_text
 
     # Cancel keeps the draft.
     page.locator('[data-action="cancel-discard"]').click()
     page.wait_for_timeout(150)
-    assert page.locator('input[name="name"]').input_value() == "Discard Me"
+    assert page.locator('input[name="earned_xp"]').input_value() == "12"
 
     # Re-open and confirm.
     discard_btn.click()
     page.wait_for_selector('[data-modal="discard-changes"]', timeout=3000)
     page.locator('[data-action="confirm-discard"]').click()
 
-    # Page reloads; name reverts to the published value.
+    # Page reloads; the stat reverts to the published value.
     page.wait_for_selector('input[name="name"]', timeout=10_000)
     page.wait_for_timeout(300)
-    assert page.locator('input[name="name"]').input_value() == "Modal Test"
+    assert page.locator('input[name="earned_xp"]').input_value() == "0"
     # Both action buttons are gone again.
     assert not page.locator('[data-action="apply-changes"]').is_visible()
     assert not page.locator('[data-action="discard-changes"]').is_visible()

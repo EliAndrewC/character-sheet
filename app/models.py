@@ -96,6 +96,18 @@ class CharacterVersion(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
+#: Free-form metadata fields. Edits to these do NOT flip the character
+#: into "unpublished changes" state, do NOT appear in revision-history
+#: diffs / Discard-Changes preview, and are NOT reverted by Discard /
+#: Revert. They live on the row but sit outside the version system.
+METADATA_FIELDS = frozenset({
+    "name",
+    "name_explanation",
+    "player_name",
+    "age",
+})
+
+
 class Character(Base):
     __tablename__ = "characters"
 
@@ -106,6 +118,11 @@ class Character(Base):
     # Displayed as a tooltip on the character sheet.
     name_explanation: Mapped[str] = mapped_column(String, default="")
     player_name: Mapped[str] = mapped_column(String, default="")
+    # Optional metadata. Surfaces in the editor and on the View Sheet,
+    # but is intentionally NOT a stat: changes don't flip the character
+    # into "unpublished changes" state, don't appear in revision-history
+    # diffs, and Discard / Revert don't touch it.
+    age: Mapped[Optional[int]] = mapped_column(default=None, nullable=True)
     owner_discord_id: Mapped[Optional[str]] = mapped_column(String, default=None)
     editor_discord_ids: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
 
@@ -275,7 +292,7 @@ class Character(Base):
                 "current_light_wounds", "current_serious_wounds",
                 "current_void_points", "current_temp_void_points",
                 "action_dice", "precepts_pool",
-                "google_sheet_id"}
+                "google_sheet_id"} | METADATA_FIELDS
         # Default values for keys that may be absent from older snapshots
         defaults = {"campaign_advantages": [], "campaign_disadvantages": [],
                     "advantage_details": {},
@@ -338,6 +355,7 @@ class Character(Base):
             "name": self.name,
             "name_explanation": self.name_explanation or "",
             "player_name": self.player_name,
+            "age": self.age,
             "owner_discord_id": self.owner_discord_id,
             "editor_discord_ids": self.editor_discord_ids or [],
             "school": self.school,
@@ -410,6 +428,7 @@ class Character(Base):
             name=data.get("name", ""),
             name_explanation=data.get("name_explanation", ""),
             player_name=data.get("player_name", ""),
+            age=data.get("age"),
             school=data.get("school", ""),
             school_ring_choice=data.get("school_ring_choice", ""),
             ring_air=rings.get("Air", data.get("ring_air", 2)),

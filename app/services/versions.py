@@ -27,17 +27,9 @@ def compute_diff_summary(old_state: Dict[str, Any], new_state: Dict[str, Any]) -
     """Compute a human-readable list of changes between two character states."""
     diffs: List[str] = []
 
-    # Name
-    old_name = old_state.get("name", "")
-    new_name = new_state.get("name", "")
-    if old_name != new_name:
-        diffs.append(f"Name changed from \"{old_name}\" to \"{new_name}\"")
-
-    # Player name
-    old_pn = old_state.get("player_name", "")
-    new_pn = new_state.get("player_name", "")
-    if old_pn != new_pn:
-        diffs.append(f"Player name changed to \"{new_pn}\"")
+    # Note: metadata fields (name, name_explanation, player_name, age) are
+    # intentionally excluded from this summary - they live outside the
+    # version system. See METADATA_FIELDS in app/models.py.
 
     # School
     old_school = old_state.get("school", "")
@@ -263,6 +255,40 @@ def _entry(category: str, label: str, before: Any, after: Any, kind: str) -> Dic
     }
 
 
+def stringify_version_diff_entries(entries: List[Dict[str, Any]]) -> List[str]:
+    """Convert structured ``compute_version_diff`` entries to a flat list
+    of human-readable lines.
+
+    Used by the Discard Changes modal to show the player exactly what
+    they're about to undo. Mirrors the wording the version-history
+    drill-down uses, just collapsed onto a single line per entry. Labels
+    that already encode their kind (e.g. ``Added advantage: Lucky``,
+    ``Removed specialization: Court Etiquette``) pass through unchanged;
+    plain change entries become ``"<label>: <before> -> <after>"``.
+    """
+    lines: List[str] = []
+    for e in entries:
+        kind = e.get("kind")
+        label = e.get("label") or ""
+        before = e.get("before")
+        after = e.get("after")
+        if kind in ("add", "remove"):
+            # Labels here are pre-baked sentences like
+            # "Added advantage: Lucky" / "Removed disadvantage: Proud" -
+            # use them as-is.
+            lines.append(label)
+        elif kind == "section_updated":
+            lines.append(f"{label} updated")
+        else:  # "change"
+            if before is None and after is None:
+                lines.append(label)
+            else:
+                b = "(empty)" if before in (None, "") else str(before)
+                a = "(empty)" if after in (None, "") else str(after)
+                lines.append(f"{label}: {b} -> {a}")
+    return lines
+
+
 def _fmt_number(val: Any) -> str:
     """Render a value the way the user expects to see it on the sheet.
 
@@ -299,17 +325,10 @@ def compute_version_diff(
     entries: List[Dict[str, Any]] = []
 
     # ---- Basics ----------------------------------------------------------
-    for field, label in (("name", "Name"), ("player_name", "Player name")):
-        before = prev_state.get(field, "")
-        after = new_state.get(field, "")
-        if before != after:
-            entries.append(_entry("Basics", label, before or "(empty)",
-                                  after or "(empty)", "change"))
-
-    # name_explanation is freeform prose; surface only the fact-of-change.
-    if prev_state.get("name_explanation", "") != new_state.get("name_explanation", ""):
-        entries.append(_entry("Basics", "Name explanation",
-                              None, "updated", "section_updated"))
+    # Metadata fields (name, name_explanation, player_name, age) live
+    # outside the version system - see METADATA_FIELDS in app/models.py.
+    # They're persisted and editable but never appear in the diff so they
+    # can't trigger Apply Changes / Discard Changes flows.
 
     old_school = prev_state.get("school", "")
     new_school = new_state.get("school", "")
@@ -409,6 +428,23 @@ def compute_version_diff(
             "Knacks", "Dan", _ordinal(old_dan) if old_dan else "none",
             _ordinal(new_dan), "change",
         ))
+
+    # ---- Foreign knacks --------------------------------------------------
+    old_foreign = prev_state.get("foreign_knacks", {}) or {}
+    new_foreign = new_state.get("foreign_knacks", {}) or {}
+    for kid in sorted(set(old_foreign) | set(new_foreign)):
+        before = old_foreign.get(kid, 0)
+        after = new_foreign.get(kid, 0)
+        if before == after:
+            continue
+        knack = SCHOOL_KNACKS.get(kid)
+        name = (knack.name if knack else _label(kid)) + " (foreign)"
+        if before == 0:
+            entries.append(_entry("Knacks", name, None, after, "add"))
+        elif after == 0:
+            entries.append(_entry("Knacks", name, before, None, "remove"))
+        else:
+            entries.append(_entry("Knacks", name, before, after, "change"))
 
     # ---- Advantages / Disadvantages --------------------------------------
     _diff_id_list(entries, prev_state, new_state, "advantages",
@@ -783,11 +819,11 @@ def _restore_character_from_state(character: Character, state: Dict[str, Any]):
     Mirrors ``Character.to_dict``'s set of snapshotted fields. Tracking
     state (current wounds/VP, adventure_state, action_dice, precepts_pool)
     is NOT in ``state`` and stays untouched - it's per-session, not
-    per-version.
+    per-version. Metadata fields (METADATA_FIELDS - name, name_explanation,
+    player_name, age) are also intentionally NOT restored: they live
+    outside the version system, so Discard / Revert preserves the player's
+    current values.
     """
-    character.name = state.get("name", character.name)
-    character.name_explanation = state.get("name_explanation", "")
-    character.player_name = state.get("player_name", "")
     character.school = state.get("school", "")
     character.school_ring_choice = state.get("school_ring_choice", "")
 
