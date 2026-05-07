@@ -3,7 +3,7 @@
 **School ID:** `kitsune_warden`
 **Category:** Bushi (carries iaijutsu, so bucketed with the Bushi schools).
 **School Ring:** Any non-Void (player picks at character creation; persists in `Character.school_ring_choice`).
-**School Knacks:** absorb_void, commune, iaijutsu.
+**School Knacks:** absorb_void, commune, iaijutsu. Absorb_void is non-rollable; per-adventure counter where each use regains 1 spent VP.
 
 ---
 

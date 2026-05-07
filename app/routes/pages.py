@@ -336,12 +336,13 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     if "unlucky" in disadvantages:
         per_adventure.append({"id": "unlucky_used", "name": "Unlucky (GM penalty)", "type": "toggle"})
 
-    # Spendable knacks: conviction, otherworldliness, worldliness.
+    # Spendable knacks: conviction, otherworldliness, worldliness, absorb_void.
     # Conviction and otherworldliness both give 2X points per day (X = rank);
-    # worldliness pool is X. Conviction is marked per_day so the tracker
-    # shows a dedicated "reset" button. Foreign-knack copies grant the same
-    # pool ("if you take Worldliness, you get the Worldliness pool").
-    for knack_id in ("conviction", "otherworldliness", "worldliness"):
+    # worldliness and absorb_void pools are X. Conviction is marked per_day so
+    # the tracker shows a dedicated "reset" button. Foreign-knack copies grant
+    # the same pool (e.g. "if you take Worldliness, you get the Worldliness
+    # pool") - absorb_void is supernatural so it can't be a foreign knack.
+    for knack_id in ("conviction", "otherworldliness", "worldliness", "absorb_void"):
         info = char_knacks.get(knack_id) or char_foreign_knacks.get(knack_id)
         if info:
             knack_rank = info["rank"]
@@ -932,6 +933,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "exclusive_pairs": EXCLUSIVE_PAIRS,
             "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
             "is_first_version": not character.is_published,
+            "has_unpublished_changes": character.has_unpublished_changes,
             "editor_list_text": editor_list_text,
         },
     )

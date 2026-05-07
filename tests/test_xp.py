@@ -354,6 +354,42 @@ class TestAdvantageXP:
         assert calculate_advantage_xp(["nonexistent"]) == 0
 
 
+class TestSpecializationXP:
+    """Specialization is the only advantage that may be taken multiple
+    times. Each entry costs 2 XP. ``calculate_advantage_xp`` accepts the
+    list of specializations alongside the regular advantages list."""
+
+    def test_zero_specializations_no_xp(self):
+        assert calculate_advantage_xp([], specializations=[]) == 0
+
+    def test_one_specialization_costs_2(self):
+        specs = [{"text": "Court", "skills": ["etiquette"]}]
+        assert calculate_advantage_xp([], specializations=specs) == 2
+
+    def test_two_specializations_costs_4(self):
+        specs = [
+            {"text": "Court", "skills": ["etiquette"]},
+            {"text": "Dueling", "skills": ["iaijutsu"]},
+        ]
+        assert calculate_advantage_xp([], specializations=specs) == 4
+
+    def test_specializations_combine_with_other_advantages(self):
+        specs = [{"text": "Court", "skills": ["etiquette"]}]
+        # Lucky (5) + Fierce (2) + Specialization (2) = 9
+        assert calculate_advantage_xp(
+            ["lucky", "fierce"], specializations=specs,
+        ) == 9
+
+    def test_legacy_specialization_in_advantages_does_not_double_count(self):
+        """Even if a stale 'specialization' string slips into the
+        advantages list, the new spec list is the sole source of truth -
+        the legacy entry must not add an extra 2 XP."""
+        # Pretend a caller forgot to strip the legacy flag.
+        specs = [{"text": "Court", "skills": ["etiquette"]}]
+        # Just specializations should cost 2.
+        assert calculate_advantage_xp(["specialization"], specializations=specs) == 2
+
+
 class TestDisadvantageXP:
     def test_no_disadvantages(self):
         assert calculate_disadvantage_xp([]) == 0
@@ -664,6 +700,44 @@ class TestXpBreakdown:
         assert "Streetwise" in labels
         # Total covers both
         assert section["total"] == sum(r["xp"] for r in section["rows"])
+
+    def test_advantage_rows_emit_one_per_specialization(self):
+        """Each Specialization is its own breakdown row showing its detail
+        text so the player can see exactly what the 2 XP went toward."""
+        data = make_character_data(
+            advantages=["lucky"],
+            specializations=[
+                {"text": "Court Etiquette", "skills": ["etiquette"]},
+                {"text": "Dueling Stance", "skills": ["iaijutsu"]},
+            ],
+        )
+        section = calculate_xp_breakdown(data)["advantages"]
+        labels = [r["label"] for r in section["rows"]]
+        assert "Lucky" in labels
+        # Each Specialization row carries the per-instance text in its label.
+        assert any("Court Etiquette" in lbl for lbl in labels)
+        assert any("Dueling Stance" in lbl for lbl in labels)
+        # 5 (Lucky) + 2 + 2 = 9
+        assert section["total"] == 9
+
+    def test_advantage_rows_no_specialization_row_when_empty(self):
+        data = make_character_data(advantages=["lucky"], specializations=[])
+        section = calculate_xp_breakdown(data)["advantages"]
+        assert all("Specialization" not in r["label"] for r in section["rows"])
+
+    def test_advantage_rows_skip_legacy_specialization_string_in_list(self):
+        """Even if a stale 'specialization' string slips into the
+        advantages list, advantage_items must skip it - the spec list
+        below is the sole source of truth."""
+        data = make_character_data(
+            advantages=["specialization"],  # stale flag
+            specializations=[{"text": "Court", "skills": ["etiquette"]}],
+        )
+        section = calculate_xp_breakdown(data)["advantages"]
+        labels = [r["label"] for r in section["rows"]]
+        # Only one row, and it carries the per-instance text.
+        assert labels == ["Specialization (Court)"]
+        assert section["total"] == 2
 
     def test_disadvantage_rows_merge_campaign(self):
         data = make_character_data(

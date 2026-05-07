@@ -71,15 +71,105 @@ def test_higher_purpose_skill_checkboxes(page, live_server_url):
     assert row.locator('input[type="checkbox"]').count() > 1
 
 
-def test_specialization_shows_dropdown(page, live_server_url):
-    """Specialization shows text field and single skill dropdown."""
+def test_specialization_full_lifecycle_multiple_rows_view_sheet_roll_modal(
+    page, live_server_url,
+):
+    """End-to-end multi-Specialization workflow:
+    1. Open editor, add two Specializations targeting different skills.
+    2. Apply changes; both rows appear in the View Sheet's advantages list.
+    3. Roll one of the matching skills; the modal shows the +10 alternative
+       carrying that spec's text. The other spec's skill is independent.
+    """
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "MultiSpec Lifecycle")
+    select_school(page, "akodo_bushi")
+    # Make sure both target skills have at least rank 1 so they're rollable
+    # and don't trigger unskilled penalties that would mask our assertions.
+    from tests.e2e.helpers import click_plus
+    click_plus(page, "skill_etiquette", 1)
+    click_plus(page, "skill_culture", 1)
+
+    # Add two Specializations.
+    add = page.locator('[data-testid="add-specialization"]')
+    add.click()
+    add.click()
+    page.wait_for_timeout(150)
+
+    row0 = page.locator('[data-testid="specialization-row-0"]')
+    row0.locator('input[type="text"]').fill("Court Etiquette")
+    row0.locator('select').select_option(value="etiquette")
+    row1 = page.locator('[data-testid="specialization-row-1"]')
+    row1.locator('input[type="text"]').fill("Tea Ceremony")
+    row1.locator('select').select_option(value="culture")
+    page.wait_for_timeout(150)
+
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Two specs")
+
+    # View Sheet renders one row per spec.
+    body = page.text_content("body")
+    assert "Court Etiquette" in body
+    assert "Tea Ceremony" in body
+    # Both rows labelled "Specialization" in the advantages list.
+    section_start = body.index("Advantages & Disadvantages")
+    section_end = body.index("XP Summary", section_start)
+    section = body[section_start:section_end]
+    assert section.count("Specialization") >= 2
+
+    # Roll the Etiquette skill; the +10 alternative carries the spec text.
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="skill:etiquette"]').click()
+    page.wait_for_function("""() => {
+        const d = window._diceRoller;
+        return d && d.phase === 'done';
+    }""", timeout=10_000)
+    modal = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "Alternative totals" in modal
+    assert "Court Etiquette" in modal
+    # The other spec doesn't apply on this skill.
+    assert "Tea Ceremony" not in modal
+
+
+def test_specialization_sub_section_lets_you_add_multiple_rows(page, live_server_url):
+    """Specialization is the only advantage that may be taken multiple times.
+    The editor has a dedicated sub-section with a + Add Specialization
+    button; each row is a text + single-skill dropdown that costs 2 XP."""
     _go_to_editor(page, live_server_url)
-    page.check('input[name="adv_specialization"]')
-    page.wait_for_selector('input[placeholder="What specialization?"]', timeout=3000)
-    assert page.locator('input[placeholder="What specialization?"]').is_visible()
-    # Should have a select dropdown for skill
-    select = page.locator('select', has=page.locator('option:text("Applied to which skill?")'))
-    assert select.is_visible()
+    section = page.locator('[data-testid="specializations-section"]')
+    assert section.is_visible()
+    # No rows initially.
+    assert section.locator('[data-testid^="specialization-row-"]').count() == 0
+    # The Specialization checkbox in the regular advantages grid is gone.
+    assert page.locator('input[name="adv_specialization"]').count() == 0
+
+    # Add two rows.
+    add_btn = page.locator('[data-testid="add-specialization"]')
+    add_btn.click()
+    add_btn.click()
+    page.wait_for_timeout(150)
+    assert section.locator('[data-testid^="specialization-row-"]').count() == 2
+
+    row0 = section.locator('[data-testid="specialization-row-0"]')
+    row0.locator('input[type="text"]').fill("Court Etiquette")
+    row0.locator('select').select_option(value="etiquette")
+    row1 = section.locator('[data-testid="specialization-row-1"]')
+    row1.locator('input[type="text"]').fill("Loyalty Speeches")
+    row1.locator('select').select_option(value="bragging")
+    page.wait_for_timeout(150)
+
+    # Each spec costs 2 XP.
+    grossSpent = int(page.text_content('[x-text="grossSpent()"]').strip())
+    assert grossSpent >= 4
+
+    # Remove the first row; XP drops by 2.
+    row0.locator('[data-testid="remove-specialization-0"]').click()
+    page.wait_for_timeout(150)
+    assert section.locator('[data-testid^="specialization-row-"]').count() == 1
+    grossSpent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
+    assert grossSpent_after == grossSpent - 2
 
 
 def test_dark_secret_shows_fields(page, live_server_url):

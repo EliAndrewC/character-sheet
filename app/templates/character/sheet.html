@@ -2066,16 +2066,38 @@
                                 title="This pool resets each day"
                                 class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded disabled:opacity-30">Reset</button>
                         {% endif %}
+                        {% if ability.id == 'absorb_void' %}
+                        {# Each use of Absorb Void regains 1 spent void point.
+                           Disabled when voidPoints is already at max (no spent
+                           VP to recover) so the button can't generate an
+                           inert use. setCount triggers the persist. #}
+                        <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); setCount('absorb_void', Math.min({{ ability.max }}, getCount('absorb_void') + 1))"
+                                :disabled="getCount('absorb_void') >= {{ ability.max }} || voidPoints >= voidMax"
+                                data-action="use-absorb-void"
+                                title="Use Absorb Void to regain 1 spent void point"
+                                class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                        {% else %}
                         <button @click="setCount('{{ ability.id }}', Math.min({{ ability.max }}, getCount('{{ ability.id }}') + 1))"
                                 :disabled="getCount('{{ ability.id }}') >= {{ ability.max }}"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
                         {% endif %}
+                        {% endif %}
                         <span class="text-sm font-bold w-16 text-center"
                               x-text="({{ ability.max }} - getCount('{{ ability.id }}')) + ' / {{ ability.max }}'"></span>
                         {% if viewer_can_edit %}
+                        {% if ability.id == 'absorb_void' %}
+                        {# Undo a prior use of Absorb Void: refund the use AND
+                           re-spend the void point that was regained. #}
+                        <button @click="voidPoints = Math.max(0, voidPoints - 1); setCount('absorb_void', Math.max(0, getCount('absorb_void') - 1))"
+                                :disabled="getCount('absorb_void') <= 0"
+                                data-action="undo-absorb-void"
+                                title="Undo: refund this use and re-spend the void point"
+                                class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
+                        {% else %}
                         <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
                                 :disabled="getCount('{{ ability.id }}') <= 0"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -2219,7 +2241,7 @@
                         <span class="font-medium">{{ info.data.name }}</span>
                     </div>
                     <div class="flex items-center gap-3">
-                        {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction'] %}
+                        {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction', 'absorb_void'] %}
                         <button type="button" data-roll-key="knack:{{ kid }}"
                                 class="text-base hover:scale-110 transition-transform">&#x1F3B2;</button>
                         {% endif %}
@@ -2260,7 +2282,7 @@
                             <span class="text-[10px] uppercase tracking-wide bg-accent/10 text-accent rounded px-1.5 py-0.5">foreign</span>
                         </div>
                         <div class="flex items-center gap-3">
-                            {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction'] %}
+                            {% if kid not in ['discern_honor', 'worldliness', 'otherworldliness', 'conviction', 'absorb_void'] %}
                             <button type="button" data-roll-key="knack:{{ kid }}"
                                     class="text-base hover:scale-110 transition-transform">&#x1F3B2;</button>
                             {% endif %}
@@ -2448,11 +2470,12 @@
     <!-- ADVANTAGES & DISADVANTAGES -->
     {% set all_advs = (character.advantages or []) + (character.campaign_advantages or []) %}
     {% set all_disadvs = (character.disadvantages or []) + (character.campaign_disadvantages or []) %}
-    {% if all_advs or all_disadvs %}
+    {% set char_specs = character.specializations or [] %}
+    {% if all_advs or all_disadvs or char_specs %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">Advantages & Disadvantages</h2>
         <div class="grid gap-6 md:grid-cols-2">
-            {% if all_advs %}
+            {% if all_advs or char_specs %}
             <div>
                 <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Advantages</h3>
                 {% for aid in all_advs %}
@@ -2476,6 +2499,23 @@
                     </div>
                 </div>
                 {% endif %}
+                {% endfor %}
+                {# Specialization can be taken multiple times; render one row per
+                   instance with its per-row sub-domain text + the chosen skill. #}
+                {% for spec in char_specs %}
+                {% set spec_skill = skills.get(spec.skills[0]) if spec.skills else none %}
+                <div class="mb-2 tooltip-trigger relative">
+                    <span class="text-sm font-medium cursor-help">Specialization</span>
+                    {% if spec.text %}
+                    <span class="text-sm text-ink/60">- {{ spec.text }}</span>
+                    {% endif %}
+                    {% if spec_skill %}
+                    <span class="text-xs text-ink/50">({{ spec_skill.name }})</span>
+                    {% endif %}
+                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line">
+                        {{ advantages['specialization'].description }}
+                    </div>
+                </div>
                 {% endfor %}
             </div>
             {% endif %}

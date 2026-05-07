@@ -67,6 +67,55 @@
     .ql-editor { min-height: 8rem; }
 </style>
 <div x-data="characterForm()" x-init="init()">
+    <!-- Discard Changes modal -->
+    <div x-show="showDiscardModal" x-cloak
+         data-modal="discard-changes"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+        <div class="bg-white rounded-lg shadow-xl px-8 py-6 max-w-lg w-full mx-4"
+             @click.outside="if(!discarding) showDiscardModal=false">
+            <template x-if="!discarding">
+                <div>
+                    <h3 class="text-lg font-bold mb-3">Discard Changes</h3>
+                    <p class="text-sm text-ink/70 mb-3">
+                        These unapplied changes will be undone:
+                    </p>
+                    <template x-if="discardLoading">
+                        <p class="text-sm text-ink/50 italic mb-3">Loading changes...</p>
+                    </template>
+                    <template x-if="!discardLoading && discardLines.length === 0">
+                        <p class="text-sm text-ink/60 italic mb-3">
+                            (no changes since the last Apply Changes)
+                        </p>
+                    </template>
+                    <template x-if="!discardLoading && discardLines.length > 0">
+                        <ul class="text-sm space-y-1 mb-4 list-disc list-inside max-h-64 overflow-y-auto"
+                            data-testid="discard-diff-lines">
+                            <template x-for="line in discardLines" :key="line">
+                                <li x-text="line"></li>
+                            </template>
+                        </ul>
+                    </template>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" @click="showDiscardModal = false"
+                                data-action="cancel-discard"
+                                class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
+                        <button type="button" @click="doDiscard()"
+                                :disabled="discardLoading"
+                                data-action="confirm-discard"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                            Confirm
+                        </button>
+                    </div>
+                </div>
+            </template>
+            <template x-if="discarding">
+                <div class="text-center">
+                    <div class="text-lg font-bold" x-text="discardMessage"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+
     <!-- Apply Changes modal -->
     <div x-show="showApplyModal" x-cloak
          class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
@@ -983,7 +1032,10 @@
                 <div>
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Advantages (cost XP)</h3>
                     <div class="space-y-1">
-                        {% for aid, adv in advantages.items() %}
+                        {# Specialization gets its own sub-section below the
+                           grid because it can be taken multiple times - skip
+                           it here so the grid stays a clean checkbox list. #}
+                        {% for aid, adv in advantages.items() if aid != 'specialization' %}
                         <div x-data="{ expanded: false }" class="editor-row">
                             <div class="flex items-center gap-2">
                                 <label class="flex items-center gap-2 text-sm tooltip-trigger relative cursor-pointer flex-1 min-w-0">
@@ -1060,6 +1112,58 @@
                             {% endif %}
                         </div>
                         {% endfor %}
+                    </div>
+
+                    {# Specializations sub-section - the only advantage that
+                       may be taken multiple times. Each row is a single skill
+                       picker + a free-text descriptor of the sub-domain, and
+                       costs 2 XP. Backed by Character.specializations
+                       (List[Dict]) and posted via a hidden specializations_json
+                       field plus the JSON autosave path. #}
+                    <div class="mt-4 pt-3 border-t border-ink/10"
+                         data-testid="specializations-section">
+                        <h4 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">
+                            Specialization (2 XP each)
+                        </h4>
+                        <p class="text-xs text-ink/60 mb-2">
+                            {{ advantages['specialization'].description }}
+                        </p>
+                        <input type="hidden" name="specializations_json"
+                               :value="JSON.stringify(specializations)"
+                               data-testid="specializations-json">
+                        <div class="space-y-2 mt-2">
+                            <template x-for="(spec, idx) in specializations" :key="idx">
+                                <div class="flex items-center gap-2"
+                                     :data-testid="'specialization-row-' + idx">
+                                    <input type="text"
+                                           placeholder="What specialization?"
+                                           x-model="spec.text"
+                                           @input="markDirty()"
+                                           :class="!(spec.text || '').trim() ? 'border-red-400 bg-red-50' : ''"
+                                           class="flex-1 text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
+                                    <select x-model="spec.skills[0]"
+                                            @change="markDirty()"
+                                            :class="!spec.skills[0] ? 'border-red-400 bg-red-50' : ''"
+                                            class="text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
+                                        <option value="">Applied to which skill?</option>
+                                        {% for sid, skill in skills.items() %}
+                                        <option value="{{ sid }}">{{ skill.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="button"
+                                            @click="specializations.splice(idx, 1); markDirty()"
+                                            :data-testid="'remove-specialization-' + idx"
+                                            title="Remove this specialization"
+                                            class="text-ink/50 hover:text-red-700 px-1">&times;</button>
+                                </div>
+                            </template>
+                        </div>
+                        <button type="button"
+                                @click="specializations.push({text: '', skills: ['']}); markDirty()"
+                                data-testid="add-specialization"
+                                class="mt-2 text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">
+                            + Add Specialization
+                        </button>
                     </div>
                 </div>
                 <div>
@@ -1427,7 +1531,20 @@
                         </div>
                         {% endif %}
                     </div>
-                    <button type="button" @click="openApplyModal()" data-action="apply-changes"
+                    {# Discard Changes is only available when (a) the
+                       character has been Applied at least once (so there's
+                       a published_state to revert to) AND (b) there are
+                       unapplied edits to discard. The Apply button shares
+                       the second condition. Both flags are client-reactive
+                       so the buttons appear the moment the user makes any
+                       change and disappear after Apply / Discard. #}
+                    <button type="button" x-show="isPublished && hasUnpublishedChanges" x-cloak
+                            @click="openDiscardModal()" data-action="discard-changes"
+                            class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base">
+                        Discard Changes
+                    </button>
+                    <button type="button" x-show="hasUnpublishedChanges" x-cloak
+                            @click="openApplyModal()" data-action="apply-changes"
                             :disabled="!school"
                             class="bg-accent hover:bg-red-900 text-parchment px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base disabled:opacity-40 disabled:cursor-not-allowed">
                         Apply Changes
@@ -1515,8 +1632,13 @@ const MANTIS_2ND_DAN_LABELS = {
 const MANTIS_2ND_DAN_SKILL_IDS = Object.keys(SKILL_NAMES).sort(
     (a, b) => SKILL_NAMES[a].localeCompare(SKILL_NAMES[b])
 );
+// Non-rollable knacks - excluded from every flexible 1st/2nd/3rd Dan picker
+// (Mantis 2nd Dan, Kitsune Warden 1st Dan, generic flexible 2nd Dan, etc.)
+// since none of them can earn an extra rolled die or a free raise. Absorb
+// Void is here because it's a per-adventure VP-restoration ability rather
+// than a roll. Mirrors NON_ROLLABLE_KNACKS in app/services/dice.py.
 const MANTIS_NON_ROLLABLE_KNACKS = new Set([
-    'discern_honor', 'worldliness', 'otherworldliness', 'conviction',
+    'discern_honor', 'worldliness', 'otherworldliness', 'conviction', 'absorb_void',
 ]);
 
 // Schools whose 2nd Dan reads "free raise on a roll type of your choice"
@@ -1580,11 +1702,13 @@ const TECHNIQUE_BONUSES = {
     {% endfor %}
 };
 
-// Advantage free raise mappings
+// Advantage free raise mappings. Each advantage here gives a flat +5 on
+// every listed skill. Asymmetric advantages (Discerning gives +5 on
+// interrogation but +10 on investigation) live in their own special-case
+// branches in skillRollDisplay() rather than this map.
 const ADVANTAGE_FREE_RAISES = {
     'charming': ['etiquette', 'culture'],
     'fierce': ['bragging', 'intimidation'],
-    'discerning': ['interrogation', 'investigation'],
     'genealogist': ['heraldry'],
     'tactician': ['strategy', 'history'],
     'worldly': ['commerce', 'underworld'],
@@ -1625,7 +1749,7 @@ function characterForm() {
         knacks: {{ (character.knacks or {}) | tojson }},
         foreignKnacks: {{ (character.foreign_knacks or {}) | tojson }},
         advantages: {
-            {% for aid in advantages %}
+            {% for aid in advantages if aid != 'specialization' %}
             {{ aid }}: {{ 'true' if aid in (character.advantages or []) else 'false' }},
             {% endfor %}
         },
@@ -1645,6 +1769,7 @@ function characterForm() {
             {% endfor %}
         },
         advantageDetails: {{ (character.advantage_details or {})|tojson }},
+        specializations: {{ (character.specializations or [])|tojson }},
         techniqueChoices: {{ (character.technique_choices or {})|tojson }},
         attack: {{ character.attack }},
         parry: {{ character.parry }},
@@ -1745,6 +1870,7 @@ function characterForm() {
             this.$watch('campaignAdvantages', () => this.markDirty(), { deep: true });
             this.$watch('campaignDisadvantages', () => this.markDirty(), { deep: true });
             this.$watch('advantageDetails', () => this.markDirty(), { deep: true });
+            this.$watch('specializations', () => this.markDirty(), { deep: true });
 
             // Reconcile 4th Dan school ring on initial load (legacy
             // characters that hit 4th Dan before this rule existed).
@@ -1859,6 +1985,7 @@ function characterForm() {
                     campaign_advantages: Object.keys(this.campaignAdvantages).filter(k => this.campaignAdvantages[k]),
                     campaign_disadvantages: Object.keys(this.campaignDisadvantages).filter(k => this.campaignDisadvantages[k]),
                     advantage_details: this.advantageDetails,
+                    specializations: this.specializations,
                     technique_choices: this.techniqueChoices,
                     honor: this.honor,
                     rank: this.rank,
@@ -1879,6 +2006,10 @@ function characterForm() {
                 if (resp.ok) {
                     this.saveStatus = 'Saved';
                     this._clearSaveRetry();
+                    // Any successful save means the draft now differs from
+                    // the published state, so the Apply / Discard buttons
+                    // become relevant.
+                    this.hasUnpublishedChanges = true;
                     setTimeout(() => { if (this.saveStatus === 'Saved') this.saveStatus = ''; }, 2000);
                 } else if (resp.status >= 400 && resp.status < 500) {
                     // 4xx: validation failure, auth lost, etc. Retrying
@@ -1944,6 +2075,17 @@ function characterForm() {
         publishMessage: '',
         showApplyModal: false,
         applySummary: '',
+        // Discard Changes UI state. Both buttons (Apply + Discard) ride
+        // hasUnpublishedChanges so they appear/disappear in lockstep as
+        // the user types. isPublished gates Discard alone since a never-
+        // applied draft has nothing to revert to.
+        showDiscardModal: false,
+        discarding: false,
+        discardLoading: false,
+        discardMessage: '',
+        discardLines: [],
+        hasUnpublishedChanges: {{ 'true' if has_unpublished_changes else 'false' }},
+        isPublished: {{ 'false' if is_first_version else 'true' }},
 
         // Hidden-draft visibility. Mirror the server-side flag so the banner
         // and the "Make Draft Visible" button can disappear instantly after
@@ -1969,6 +2111,49 @@ function characterForm() {
         openApplyModal() {
             this.applySummary = {{ 'true' if is_first_version else 'false' }} ? 'Initial character creation' : '';
             this.showApplyModal = true;
+        },
+
+        async openDiscardModal() {
+            this.showDiscardModal = true;
+            this.discardLines = [];
+            this.discardLoading = true;
+            // Make sure any in-flight autosave lands first so the diff
+            // we display matches what the user actually has on disk.
+            await this.flushPendingSave();
+            try {
+                const resp = await fetch(
+                    '/characters/' + this._charId + '/draft-diff',
+                );
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.discardLines = data.lines || [];
+                }
+            } finally {
+                this.discardLoading = false;
+            }
+        },
+
+        async doDiscard() {
+            this.discarding = true;
+            this.discardMessage = 'Discarding changes...';
+            try {
+                const resp = await fetch(
+                    '/characters/' + this._charId + '/discard',
+                    { method: 'POST' },
+                );
+                if (resp.ok) {
+                    this.discardMessage = 'Discarded. Reloading...';
+                    // Reload so the editor re-hydrates from the freshly
+                    // restored published state.
+                    window.location.reload();
+                } else {
+                    this.discardMessage = 'Failed to discard changes';
+                    this.discarding = false;
+                }
+            } catch (e) {
+                this.discardMessage = 'Failed to discard changes';
+                this.discarding = false;
+            }
         },
 
         async doApply() {
@@ -2438,6 +2623,18 @@ function characterForm() {
                 }
             }
 
+            // Discerning: +5 on interrogation, +10 on investigation. Mirrors
+            // _DISCERNING_BONUSES in app/services/rolls.py and dice.py.
+            if (this.advantages.discerning) {
+                if (skillId === 'interrogation') {
+                    flatBonus += 5;
+                    parts.push('+5 from Discerning');
+                } else if (skillId === 'investigation') {
+                    flatBonus += 10;
+                    parts.push('+10 from Discerning');
+                }
+            }
+
             // Skill synergies: free raises = +5 per rank
             for (const [sourceSkill, targetSkills] of Object.entries(SKILL_SYNERGIES)) {
                 if (targetSkills.includes(skillId)) {
@@ -2561,6 +2758,13 @@ function characterForm() {
             for (const [aid, checked] of Object.entries(this.advantages)) {
                 if (checked) cost += ADV_COSTS[aid] || 0;
             }
+            // Specializations: 2 XP per instance. Drop empty rows from the
+            // count so an in-progress "+ Add" doesn't briefly show a charge
+            // before the player picks a skill / types a name.
+            const specs = (this.specializations || []).filter(
+                s => s && (s.text || '').trim() && (s.skills || [])[0]
+            );
+            cost += specs.length * 2;
             return cost;
         },
 

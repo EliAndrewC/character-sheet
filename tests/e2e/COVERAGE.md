@@ -553,6 +553,7 @@ The three failures were:
 ### Priest
 
 - [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_priest_1st_dan_skill_selection`
+- [x] Pontificate is rolled with whichever of Water/Air is higher (badge advertises both, modal label uses the higher ring) -> `test_school_abilities.py::test_pontificate_picks_higher_of_water_and_air_in_roll_modal`
 - [ ] Special ability "all 10 rituals" link on character sheet -> `test_school_abilities.py::test_priest_sheet_links_to_rituals`
 - [ ] Special ability "all 10 rituals" link in school selection editor -> `test_school_selection.py::test_priest_special_ability_links_to_rituals`
 - [ ] Non-Priest school's special ability has no rituals link in editor -> `test_school_selection.py::test_non_priest_special_ability_has_no_external_link`
@@ -1052,7 +1053,8 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Higher Purpose: skill checkboxes appear → `test_advantage_details.py::test_higher_purpose_skill_checkboxes`
 - [x] Virtue: text field appears → `test_advantage_details.py::test_virtue_shows_text_field`
 - [x] Virtue: text shown on sheet → `test_advantage_details.py::test_virtue_shows_text_field`
-- [x] Specialization: text and dropdown appear → `test_advantage_details.py::test_specialization_shows_dropdown`
+- [x] Specialization sub-section: + Add / × remove buttons; multiple rows; each costs 2 XP → `test_advantage_details.py::test_specialization_sub_section_lets_you_add_multiple_rows`
+- [x] Specialization full lifecycle (multi-row in editor → View Sheet renders one row each → roll modal alt-total carries the matching spec's text) → `test_advantage_details.py::test_specialization_full_lifecycle_multiple_rows_view_sheet_roll_modal`
 - [x] Dark Secret: text and player dropdown appear → `test_advantage_details.py::test_dark_secret_shows_fields`
 - [x] Jealousy: text field appears → `test_advantage_details.py::test_jealousy_shows_text`
 - [x] Good Reputation: text field appears → `test_advantage_details.py::test_good_reputation_shows_text`
@@ -1082,6 +1084,9 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Cancel closes modal → `test_apply_modal.py::test_cancel_closes_modal`
 - [x] Apply redirects to sheet → `test_publish_revert.py::test_apply_redirects_to_view_sheet`
 - [x] No draft banner after apply → `test_publish_revert.py::test_apply_then_no_draft_banner`
+- [x] Discard Changes button hidden for never-applied draft (no published_state to revert to) → `test_apply_modal.py::test_discard_button_hidden_for_never_applied_draft`
+- [x] Neither Apply nor Discard button visible when there are no unapplied changes → `test_apply_modal.py::test_neither_button_visible_when_no_unapplied_changes`
+- [x] Discard full flow: edit -> click Discard -> modal lists diff lines -> Cancel keeps draft, Confirm reverts to published state and hides both buttons → `test_apply_modal.py::test_discard_full_flow_modal_diff_and_revert`
 
 ## Character Editor — Hidden Draft Visibility
 
@@ -1137,6 +1142,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Void points max enforced → `test_tracking_advanced.py::test_void_points_max_enforced`
 - [x] Wound - disabled at 0 → `test_tracking_advanced.py::test_wound_minus_disabled_at_zero`
 - [x] Per-adventure renders with JSON → `test_tracking.py::test_tracking_renders_with_per_adventure_abilities`
+- [x] Absorb Void: per-adventure counter (X uses where X = rank), each "use" regains 1 spent VP, button disabled at full VP, undo refunds the use AND re-spends the VP, no dice icon (not rollable) → `test_tracking.py::test_absorb_void_use_regains_one_spent_vp`
 - [x] Lucky toggle works → `test_tracking_advanced.py::test_lucky_toggle_works`
 - [x] Lucky toggle persists → `test_tracking_advanced.py::test_lucky_toggle_persists`
 - [x] Unlucky toggle shown → `test_sheet_advanced.py::test_unlucky_toggle`
@@ -1162,6 +1168,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Honor bonus on Bragging → `test_sheet_display.py::test_honor_bonus_on_bragging`
 - [x] Discerning on Investigation → `test_skill_rolls_display.py::test_discerning_bonus_on_investigation`
 - [x] Discerning on Interrogation → `test_skill_rolls_display.py::test_discerning_bonus_on_interrogation`
+- [x] Edit Sheet shows +5 from Discerning on Interrogation but +10 from Discerning on Investigation (regression: JS treated both as flat +5) → `test_skill_rolls_display.py::test_discerning_editor_shows_plus_5_on_interrogation_and_plus_10_on_investigation`
 - [x] Genealogist on Heraldry → `test_skill_rolls_display.py::test_genealogist_bonus_on_heraldry`
 - [x] Tactician on Strategy → `test_skill_rolls_display.py::test_tactician_bonus_on_strategy`
 - [x] Tactician on History → `test_skill_rolls_display.py::test_tactician_bonus_on_history`
@@ -1193,6 +1200,10 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 - [x] Expanded view shows full upstream rules text → `test_sheet_display.py::test_school_knack_expanded_shows_full_rules`
 - [x] Iaijutsu knack expanded text wraps "the other combat rules" in a new-tab link to upstream rules → `test_school_abilities.py::test_iaijutsu_knack_links_to_combat_rules`
+
+## Homepage — Card Layout
+
+- [x] "Draft changes" badge sits below the name row and right-aligned at the bottom of the card so the full character name has the entire top row → `test_banners.py::test_homepage_draft_changes_badge_does_not_truncate_name`
 
 ## Character Sheet — XP Summary
 

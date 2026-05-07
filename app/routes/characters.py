@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+import json
+
 from app.database import get_db
 from app.game_data import (
     ADVANTAGES, CAMPAIGN_ADVANTAGES, CAMPAIGN_DISADVANTAGES,
@@ -15,7 +17,13 @@ from app.models import Character, CharacterVersion, GamingGroup, User
 from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids, get_all_editors
 from app.services.rolls import compute_dan
 from app.services.sanitize import sanitize_sections
-from app.services.versions import compute_version_diff, publish_character, revert_character
+from app.services.versions import (
+    compute_diff_summary,
+    compute_version_diff,
+    discard_draft_changes,
+    publish_character,
+    revert_character,
+)
 from app.services.xp import calculate_total_xp
 
 router = APIRouter(prefix="/characters")
@@ -24,6 +32,31 @@ router = APIRouter(prefix="/characters")
 def _templates():
     from app.main import templates
     return templates
+
+
+def _sanitize_specializations(raw) -> list:
+    """Coerce a posted ``specializations`` payload into the canonical
+    ``List[Dict]`` shape, dropping garbage rows.
+
+    Drops entries with empty/whitespace text, missing skill, or an
+    unknown skill id. Always returns a list; coerces ``None`` and other
+    non-list inputs to ``[]``.
+    """
+    if not isinstance(raw, list):
+        return []
+    cleaned: list = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        text = (entry.get("text") or "").strip()
+        skills = entry.get("skills") or []
+        if not text or not isinstance(skills, list) or not skills:
+            continue
+        sid = skills[0]
+        if sid not in SKILLS:
+            continue
+        cleaned.append({"text": text, "skills": [sid]})
+    return cleaned
 
 
 def _parse_form_to_dict(form_data: dict) -> dict:
@@ -92,6 +125,17 @@ def _parse_form_to_dict(form_data: dict) -> dict:
     for dis_id in DISADVANTAGES:
         if form_data.get(f"dis_{dis_id}") == "on":
             data["disadvantages"].append(dis_id)
+
+    # Specializations: editor sends the full list as a hidden JSON field
+    # to mirror the autosave wire format. Missing field = empty list.
+    raw = form_data.get("specializations_json", "")
+    parsed = []
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError):
+            parsed = []
+    data["specializations"] = _sanitize_specializations(parsed)
 
     return data
 
@@ -173,6 +217,7 @@ async def update_character(
     character.foreign_knacks = data.get("foreign_knacks", {}) or {}
     character.advantages = data["advantages"]
     character.disadvantages = data["disadvantages"]
+    character.specializations = data["specializations"]
     character.honor = data["honor"]
     character.rank = data["rank"]
     character.rank_locked = data["rank_locked"]
@@ -496,6 +541,10 @@ async def autosave_character(
         character.disadvantages = body["disadvantages"]
     if "advantage_details" in body:
         character.advantage_details = body["advantage_details"]
+    if "specializations" in body:
+        character.specializations = _sanitize_specializations(
+            body["specializations"]
+        )
     if "technique_choices" in body:
         # Validate the Mantis 2nd Dan free-raise choice so a crafted POST
         # cannot persist initiative or a non-rollable knack. An empty/None
@@ -765,6 +814,82 @@ async def publish_character_route(
         "version_number": version.version_number,
         "summary": version.summary,
     })
+
+
+@router.post("/{char_id}/discard")
+async def discard_changes_route(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Roll back a draft's unapplied edits to the last published state.
+
+    No new version is created. Returns 409 when the character has never
+    been published (nothing to revert to); the editor's Discard button
+    is gated on ``is_published`` so a real user shouldn't hit that path.
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"],
+        character.owner_discord_id,
+        all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    did = discard_draft_changes(character, db)
+    if not did:
+        return JSONResponse(
+            {"error": "Character has no published version to discard to."},
+            status_code=409,
+        )
+    db.commit()
+    return JSONResponse({"status": "discarded"})
+
+
+@router.get("/{char_id}/draft-diff")
+async def draft_diff_route(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Return the list of human-readable diff lines between the draft
+    state and the last published state. Used by the Discard confirmation
+    modal so the user can see what they're about to undo. Empty list
+    when there are no unapplied changes."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"],
+        character.owner_discord_id,
+        all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    if not character.is_published:
+        return JSONResponse({"lines": []})
+    lines = compute_diff_summary(
+        character.published_state or {}, character.to_dict(),
+    )
+    return JSONResponse({"lines": lines})
 
 
 @router.post("/{char_id}/revert/{version_id}")

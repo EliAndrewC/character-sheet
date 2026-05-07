@@ -483,16 +483,57 @@ class TestSkillFormula:
             school="",
             knacks={},
             skills={"sneaking": 2},
-            advantages=["specialization"],
-            advantage_details={
-                "specialization": {"text": "rooftops", "skills": ["sneaking"]},
-            },
+            specializations=[
+                {"text": "rooftops", "skills": ["sneaking"]},
+            ],
         )
         f = build_skill_formula("sneaking", char)
         # Sneaking has no other bonuses by default
         assert any("Specialization" in alt["label"] for alt in f.alternatives)
         assert any(alt["extra_flat"] == 10 for alt in f.alternatives)
         assert f.flat == 0
+
+    def test_multiple_specializations_each_get_their_own_alternative(self):
+        """Specialization may be taken multiple times. When two of them
+        target the same skill (legal - different sub-domains), each one
+        surfaces as its own +10 alternative."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"culture": 2},
+            specializations=[
+                {"text": "Tea Ceremony", "skills": ["culture"]},
+                {"text": "Court Poetry", "skills": ["culture"]},
+            ],
+        )
+        f = build_skill_formula("culture", char)
+        spec_alts = [
+            a for a in f.alternatives if "Specialization" in a.get("label", "")
+        ]
+        assert len(spec_alts) == 2
+        # Each label surfaces its own per-instance text.
+        labels = {a["label"] for a in spec_alts}
+        assert any("Tea Ceremony" in lbl for lbl in labels)
+        assert any("Court Poetry" in lbl for lbl in labels)
+        for alt in spec_alts:
+            assert alt["extra_flat"] == 10
+        # Neither baked into the unconditional flat.
+        assert f.flat == 0
+
+    def test_specialization_only_emits_on_matching_skill(self):
+        """Specialization on Sneaking does not affect a Culture roll."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"culture": 2},
+            specializations=[
+                {"text": "rooftops", "skills": ["sneaking"]},
+            ],
+        )
+        f = build_skill_formula("culture", char)
+        assert not any(
+            "Specialization" in a.get("label", "") for a in f.alternatives
+        )
 
     def test_acting_sneaking_is_conditional_alternative(self):
         """Acting→Sneaking only applies on 'blending into a crowd' rolls,
@@ -837,6 +878,41 @@ class TestKnackFormula:
         assert f.rolled == 5
         assert f.kept == 3
 
+    def test_pontificate_uses_water_when_water_higher(self):
+        """Pontificate rolls with whichever of Water/Air is higher.
+        With Water 4, Air 2: ring is Water and (rank + 4) k 4."""
+        char = make_character_data(
+            school="priest", school_ring_choice="Water",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 3},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+        )
+        f = build_knack_formula("pontificate", char)
+        assert f.kept == 4
+        assert f.rolled == 3 + 4
+        assert "(Water)" in f.label
+
+    def test_pontificate_uses_air_when_air_higher(self):
+        char = make_character_data(
+            school="priest", school_ring_choice="Water",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 3},
+            rings={"Air": 5, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        f = build_knack_formula("pontificate", char)
+        assert f.kept == 5
+        assert f.rolled == 3 + 5
+        assert "(Air)" in f.label
+
+    def test_pontificate_tie_picks_water(self):
+        """When Water == Air, pick Water as a deterministic preference."""
+        char = make_character_data(
+            school="priest", school_ring_choice="Water",
+            knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        f = build_knack_formula("pontificate", char)
+        assert f.kept == 3
+        assert "(Water)" in f.label
+
     def test_dragon_tattoo_is_2x_k1_damage_roll(self):
         """Dragon Tattoo rolls (2 * rank)k1, not rank+Earth based."""
         char = make_character_data(
@@ -1108,6 +1184,22 @@ class TestBuildAllRollFormulas:
         assert "knack:conviction" not in formulas
         assert "knack:otherworldliness" not in formulas
         assert "knack:worldliness" not in formulas
+
+    def test_absorb_void_knack_is_not_rollable(self):
+        """Absorb Void is a per-adventure VP-restoration ability, not a roll.
+        It must not appear in the knack:* keys produced for an Isawa Ishi
+        character (or any school that has it as a school knack)."""
+        from app.services.dice import NON_ROLLABLE_KNACKS
+        assert "absorb_void" in NON_ROLLABLE_KNACKS
+
+        char = make_character_data(
+            school="isawa_ishi",
+            knacks={"absorb_void": 2, "kharmic_spin": 2, "otherworldliness": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        assert "knack:absorb_void" not in formulas
+        # Sibling rollable knack is still produced, so the school is wired up.
+        assert "knack:kharmic_spin" in formulas
 
     def test_zero_rank_skills_included_as_unskilled(self):
         char = make_character_data(skills={"bragging": 0, "etiquette": 1})

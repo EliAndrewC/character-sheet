@@ -368,14 +368,17 @@ def _build_advantages_rows(
     all_disadvs = (char_dict.get("disadvantages") or []) + (char_dict.get("campaign_disadvantages") or [])
     campaign_advs = set(char_dict.get("campaign_advantages") or [])
     campaign_disadvs = set(char_dict.get("campaign_disadvantages") or [])
+    specs = char_dict.get("specializations") or []
 
-    # Advantages section
-    if all_advs:
+    # Advantages section (incl. one row per Specialization since each
+    # instance is its own line item with distinct text/skill).
+    if all_advs or specs:
         rows.append([
             _str_cell("Advantage", **_header_fmt()),
             _str_cell("Details", **_header_fmt()),
         ])
-        for i, aid in enumerate(all_advs):
+        i = 0
+        for aid in all_advs:
             adv = ADVANTAGES.get(aid) or CAMPAIGN_ADVANTAGES.get(aid)
             if not adv:
                 continue
@@ -386,6 +389,18 @@ def _build_advantages_rows(
             detail = advantage_details.get(aid, {})
             detail_text = detail.get("text", "") if isinstance(detail, dict) else ""
             rows.append([_str_cell(name, **bg), _str_cell(detail_text, **bg)])
+            i += 1
+        for spec in specs:
+            bg = _row_bg(i)
+            text = (spec.get("text") or "").strip()
+            skill_id = (spec.get("skills") or [None])[0]
+            sk = SKILLS.get(skill_id) if skill_id else None
+            detail_text = f"{text} ({sk.name})" if (text and sk) else text or (sk.name if sk else "")
+            rows.append([
+                _str_cell("Specialization", **bg),
+                _str_cell(detail_text, **bg),
+            ])
+            i += 1
         rows.append([])
 
     # Disadvantages section

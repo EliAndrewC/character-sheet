@@ -174,6 +174,11 @@ _SYSTEM_PROMPT = (
     "- Ring values are integers 1 through 6. If the source lists a 'pool' "
     "value (twice the ring), still return the ring, not the pool.\n"
     "- Skill / knack ranks are integers 1 through 5.\n"
+    "- The Specialization advantage may be taken multiple times. Record "
+    "every Specialization the source lists in the dedicated "
+    "``specializations`` field (NOT the advantages list); each entry "
+    "carries the sub-domain text plus the related skill name as written "
+    "(e.g. text='Court Etiquette', skill_as_written='Etiquette').\n"
     "- Record freeform prose (backstory, physical description, notes) in "
     "freeform_sections with reasonable labels.\n"
     "- NEVER import or mention character art. Ignore image references "
@@ -258,6 +263,7 @@ def _canonical_stub_payload() -> Dict[str, Any]:
             {"name_as_written": "Proud"},
             {"name_as_written": "Contrary"},
         ],
+        "specializations": [],
         "first_dan_choices": [], "second_dan_choice": None, "third_dan_skill_choices": [],
         "honor": 3.0, "rank": 7.5, "recognition": 7.5,
         "starting_xp": 150,
@@ -330,6 +336,7 @@ def _stub_response_for(document_text: str) -> Dict[str, Any]:
             "attack": None, "parry": None,
             "skills": [], "knacks": [],
             "advantages": [], "disadvantages": [],
+            "specializations": [],
             "first_dan_choices": [], "second_dan_choice": None, "third_dan_skill_choices": [],
             "honor": None, "rank": None, "recognition": None,
             "starting_xp": None,

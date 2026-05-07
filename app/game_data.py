@@ -107,7 +107,10 @@ ADVANTAGE_DETAIL_FIELDS = {
     "dark_secret": {"text": "What is your secret?", "player": True},
     "driven": {"text": "What is your ultimate goal?"},
     "higher_purpose": {"text": "What is your cause?", "skills": "multi"},
-    "specialization": {"text": "What specialization?", "skills": "single"},
+    # Specialization is the only advantage that may be taken multiple times -
+    # it has its own dedicated sub-section in the editor (one row per
+    # instance) backed by Character.specializations, so it does NOT appear
+    # in the per-advantage detail-field renderer above.
 }
 
 EXCLUSIVE_PAIRS = [
@@ -759,18 +762,18 @@ _KNACKS_LIST: List[SchoolKnack] = [
         name="Absorb Void",
         ring=None,
         description=(
-            "Ability to absorb and redirect void energy. "
-            "Used by Isawa Ishi shugenja."
+            "Per-adventure ability to absorb and redirect void energy. "
+            "Used by Isawa shugenja. Not rolled."
         ),
         rules_text=(
-            "A number of times per day equal to your rank in this knack, you may "
-            "draw void from your surroundings and regain a spent void point. If "
-            "you target a character when doing this, that character loses a void "
-            "point; if that character has no void points then the next time they "
-            "would regain one they do not. You may do this either while conversing "
-            "with that character or when attacking or being attacked by that "
-            "character in combat, but you may not target the same character more "
-            "than once per day."
+            "A number of times per adventure equal to your rank in this knack, "
+            "you may draw void from your surroundings and regain a spent void "
+            "point. If you target a character when doing this, that character "
+            "loses a void point; if that character has no void points then the "
+            "next time they would regain one they do not. You may do this "
+            "either while conversing with that character or when attacking or "
+            "being attacked by that character in combat, but you may not "
+            "target the same character more than once per day."
         ),
     ),
     SchoolKnack(
@@ -1053,15 +1056,17 @@ _KNACKS_LIST: List[SchoolKnack] = [
     SchoolKnack(
         id="pontificate",
         name="Pontificate",
-        ring=Ring.WATER.value,
+        ring="Water or Air",
         description=(
             "Deliver lengthy speeches and sermons that inspire or persuade. "
-            "Rolled with Water."
+            "Rolled with Water or Air, whichever is higher."
         ),
         rules_text=(
             "Once per conversation, you may use your practiced aura of "
             "knowledgeable confidence to roll this knack instead of any basic "
-            "skill when making an uncontested roll."
+            "skill when making an uncontested roll. This knack may be rolled "
+            "with either Water or Air, whichever is higher at the time it is "
+            "rolled."
         ),
     ),
     SchoolKnack(

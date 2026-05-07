@@ -7,7 +7,7 @@ side-effects or database dependencies.
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app.game_data import (
     ADVANCED_SKILL_COSTS,
@@ -205,13 +205,29 @@ def calculate_recognition_xp(
     return round(cost)
 
 
-def calculate_advantage_xp(advantages: List[str]) -> int:
-    """Return total XP spent on advantages."""
+SPECIALIZATION_COST = 2  # XP per Specialization instance
+
+
+def calculate_advantage_xp(
+    advantages: List[str],
+    specializations: Optional[List[dict]] = None,
+) -> int:
+    """Return total XP spent on advantages.
+
+    Specialization is the only advantage that can be taken multiple times
+    and lives in its own ``specializations`` list, not in ``advantages``.
+    Each spec costs ``SPECIALIZATION_COST`` XP. We also defensively filter
+    a stale ``"specialization"`` string out of ``advantages`` so a forgotten
+    legacy flag can't double-count XP.
+    """
     xp = 0
     for adv_id in advantages:
+        if adv_id == "specialization":
+            continue
         adv = ADVANTAGES.get(adv_id)
         if adv is not None:
             xp += adv.xp_cost
+    xp += SPECIALIZATION_COST * len(specializations or [])
     return xp
 
 
@@ -403,10 +419,16 @@ def combat_skill_xp_items(attack: int = 1, parry: int = 1) -> List[dict]:
 def advantage_items(
     advantages: List[str],
     campaign_advantages: List[str],
+    specializations: Optional[List[dict]] = None,
 ) -> List[dict]:
-    """One item per advantage (regular + campaign), alphabetised."""
+    """One item per advantage (regular + campaign + each Specialization),
+    alphabetised. Each Specialization carries its own ``Specialization
+    (<text>)`` label so a player can see exactly what the 2 XP went toward."""
     items: List[dict] = []
     for adv_id in advantages:
+        # Stale legacy flag - the specs list below is the single source of truth.
+        if adv_id == "specialization":
+            continue
         adv = ADVANTAGES.get(adv_id)
         if adv is not None:
             items.append({"xp": adv.xp_cost, "label": adv.name})
@@ -414,6 +436,12 @@ def advantage_items(
         adv = CAMPAIGN_ADVANTAGES.get(adv_id)
         if adv is not None:
             items.append({"xp": adv.xp_cost, "label": adv.name})
+    for spec in specializations or []:
+        text = (spec.get("text") or "").strip() or "(unspecified)"
+        items.append({
+            "xp": SPECIALIZATION_COST,
+            "label": f"Specialization ({text})",
+        })
     items.sort(key=lambda i: i["label"])
     return items
 
@@ -525,6 +553,7 @@ def calculate_xp_breakdown(character_data: dict) -> dict:
     adv_list = advantage_items(
         character_data.get("advantages", []),
         character_data.get("campaign_advantages", []),
+        specializations=character_data.get("specializations", []),
     )
     dis_list = disadvantage_items(
         character_data.get("disadvantages", []),
@@ -657,7 +686,10 @@ def calculate_total_xp(character_data: dict) -> dict:
         character_data.get("rank", RANK_START),
         halved=character_data.get("recognition_halved", False),
     )
-    advantages = calculate_advantage_xp(character_data.get("advantages", []))
+    advantages = calculate_advantage_xp(
+        character_data.get("advantages", []),
+        specializations=character_data.get("specializations", []),
+    )
     disadvantages = calculate_disadvantage_xp(
         character_data.get("disadvantages", []),
     )

@@ -325,6 +325,47 @@ class TestAdvantagesRows:
                 assert row[1]["userEnteredValue"]["stringValue"] == "Compassion"
                 break
 
+    def test_specializations_each_emit_their_own_row(self):
+        data = make_character_data(
+            specializations=[
+                {"text": "Court Etiquette", "skills": ["etiquette"]},
+                {"text": "Loyalty Speeches", "skills": ["bragging"]},
+            ],
+        )
+        rows = _build_advantages_rows(data, {})
+        spec_rows = [
+            r for r in rows
+            if r and r[0].get("userEnteredValue", {}).get("stringValue") == "Specialization"
+        ]
+        assert len(spec_rows) == 2
+        details = [r[1].get("userEnteredValue", {}).get("stringValue") for r in spec_rows]
+        assert any("Court Etiquette" in d and "Etiquette" in d for d in details)
+        assert any("Loyalty Speeches" in d and "Bragging" in d for d in details)
+
+    def test_specializations_render_with_unknown_skill_falls_back_to_text(self):
+        data = make_character_data(
+            specializations=[
+                {"text": "Whittling", "skills": ["not_a_skill"]},
+                # spec with empty skills
+                {"text": "Brooding", "skills": []},
+                # spec with empty text but a real skill
+                {"text": "", "skills": ["culture"]},
+            ],
+        )
+        rows = _build_advantages_rows(data, {})
+        spec_rows = [
+            r for r in rows
+            if r and r[0].get("userEnteredValue", {}).get("stringValue") == "Specialization"
+        ]
+        assert len(spec_rows) == 3
+        details = [r[1].get("userEnteredValue", {}).get("stringValue") for r in spec_rows]
+        # Unknown skill: text alone
+        assert "Whittling" in details
+        # Empty skills: text alone
+        assert "Brooding" in details
+        # Empty text but real skill: skill name alone
+        assert "Culture" in details
+
 
 # ---------------------------------------------------------------------------
 # XP tab tests
