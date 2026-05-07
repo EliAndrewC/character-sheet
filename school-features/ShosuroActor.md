@@ -3,7 +3,7 @@
 **School ID:** `shosuro_actor`
 **Category:** Court
 **School Ring:** Air - Confirmed correct.
-**School Knacks:** athletics, discern_honor, pontificate - Athletics is rollable (varies by ring). Discern_honor is rollable (Air). Pontificate is rollable (Water).
+**School Knacks:** athletics, discern_honor, pontificate - Athletics is rollable (varies by ring). Discern_honor is rollable (Air). Pontificate is rollable with whichever of Water or Air is higher at roll time.
 
 ---
 

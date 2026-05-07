@@ -65,6 +65,11 @@ NON_ROLLABLE_KNACKS = frozenset({
     "worldliness",
     "otherworldliness",
     "conviction",
+    # Absorb Void is a per-adventure VP-restoration ability (each use
+    # regains 1 spent void point), not a roll. Listed here so it never
+    # produces a knack:* formula and is filtered out of every flexible
+    # 1st/2nd/3rd Dan technique picker.
+    "absorb_void",
 })
 
 
@@ -535,10 +540,12 @@ def build_skill_formula(
                 "extra_flat": FREE_RAISE_VALUE,
             })
 
-    if "specialization" in advantages:
-        sp = advantage_details.get("specialization", {})
-        sp_skills = sp.get("skills", []) or []
-        sp_text = sp.get("text") or "your specialization"
+    # Specialization may be taken multiple times - each instance lives in
+    # the dedicated character_data["specializations"] list. Each spec that
+    # targets this skill produces its own +10 conditional alternative.
+    for spec in character_data.get("specializations", []) or []:
+        sp_skills = spec.get("skills") or []
+        sp_text = spec.get("text") or "your specialization"
         if skill_id in sp_skills:
             formula.alternatives.append({
                 "label": f"if related to Specialization ({sp_text})",
@@ -587,9 +594,17 @@ def build_knack_formula(
         )
 
     rings = character_data.get("rings", {})
-    # Knacks may have a fixed ring, "varies" (use Earth as a sane default), or None
-    ring_name = knack_def.ring if knack_def.ring in {r.value for r in Ring} else None
-    if ring_name is None:
+    # Knacks may have a fixed ring, "varies", a multi-ring "X or Y" value, or
+    # something we don't recognise (treated as a passive knack with no ring).
+    if knack_id == "pontificate":
+        # Pontificate may be rolled with whichever of Water/Air is higher at
+        # the time it is rolled. Tie picks Water (deterministic preference).
+        water = rings.get("Water", 2)
+        air = rings.get("Air", 2)
+        ring_name = "Water" if water >= air else "Air"
+    elif knack_def.ring in {r.value for r in Ring}:
+        ring_name = knack_def.ring
+    else:
         # Knacks without a ring (e.g. passive) — use the lowest ring as a placeholder.
         # In practice these aren't typically rolled; the formula is best-effort.
         ring_name = "Earth"

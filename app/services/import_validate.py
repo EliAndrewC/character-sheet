@@ -63,6 +63,7 @@ from app.services.import_schema import (
     ExtractedAdvantage,
     ExtractedCharacter,
     ExtractedSkillOrKnack,
+    ExtractedSpecialization,
 )
 
 
@@ -269,11 +270,20 @@ def _normalise_advantages(
     items: List[ExtractedAdvantage],
     bucket: str,
     report: ValidationReport,
-) -> Tuple[List[str], List[str], Dict[str, Dict[str, Any]]]:
-    """Return (base_ids, campaign_ids, details_dict)."""
+) -> Tuple[List[str], List[str], Dict[str, Dict[str, Any]], List[Dict[str, Any]]]:
+    """Return (base_ids, campaign_ids, details_dict, diverted_specs).
+
+    Specialization is the only advantage that can be taken multiple times.
+    A legacy LLM payload (or older document) may emit one or more
+    ``Specialization`` entries on the regular advantages list - divert
+    those into the dedicated ``specializations`` shape rather than
+    persist them as a flat advantage. Skill stays empty since the
+    detail text doesn't carry a skill name; the user picks on edit.
+    """
     base_out: List[str] = []
     campaign_out: List[str] = []
     details: Dict[str, Dict[str, Any]] = {}
+    diverted_specs: List[Dict[str, Any]] = []
 
     for entry in items:
         matched_id, catalog, confidence = match_advantage_or_disadvantage(
@@ -285,6 +295,12 @@ def _normalise_advantages(
                 kind=kind,
                 name_as_written=entry.name_as_written,
             ))
+            continue
+        # Specialization on the legacy advantages path: divert each
+        # occurrence into its own spec row keyed by the detail text.
+        if matched_id == "specialization" and bucket == ADV_BUCKET:
+            text = (entry.detail or "").strip()
+            diverted_specs.append({"text": text, "skills": []})
             continue
         if confidence in (ALIASED, FUZZY):
             report.ambiguities.append(AmbiguityEntry(
@@ -302,7 +318,40 @@ def _normalise_advantages(
         if entry.detail:
             details[matched_id] = {"text": entry.detail}
 
-    return base_out, campaign_out, details
+    return base_out, campaign_out, details, diverted_specs
+
+
+def _normalise_specializations(
+    items: List["ExtractedSpecialization"],
+    diverted_from_advantages: List[Dict[str, Any]],
+    report: ValidationReport,
+) -> List[Dict[str, Any]]:
+    """Resolve each Specialization's ``skill_as_written`` to a SKILL id.
+
+    Specs with an unresolvable skill name keep their text but get
+    ``skills: []`` so the user can fix the skill on the edit page.
+    Diverted legacy specs (no skill name available) are appended too.
+    """
+    out: List[Dict[str, Any]] = []
+    for spec in items:
+        text = (spec.text or "").strip()
+        skill_name = (spec.skill_as_written or "").strip()
+        skills: List[str] = []
+        if skill_name:
+            skill_id, confidence = match_skill(skill_name)
+            if skill_id is not None:
+                skills = [skill_id]
+                if confidence in (ALIASED, FUZZY):
+                    report.ambiguities.append(AmbiguityEntry(
+                        kind="specialization",
+                        name_as_written=skill_name,
+                        resolved_id=skill_id,
+                        confidence=confidence,
+                    ))
+        if text or skills:
+            out.append({"text": text, "skills": skills})
+    out.extend(diverted_from_advantages)
+    return out
 
 
 def _normalise_technique_choices(
@@ -462,10 +511,10 @@ def validate_and_normalise(
     data["knacks"] = knacks
 
     # --- Advantages / Disadvantages -----------------------------------
-    advs, c_advs, adv_details = _normalise_advantages(
+    advs, c_advs, adv_details, diverted_specs = _normalise_advantages(
         extracted.advantages, ADV_BUCKET, report,
     )
-    disads, c_disads, disad_details = _normalise_advantages(
+    disads, c_disads, disad_details, _ = _normalise_advantages(
         extracted.disadvantages, DIS_BUCKET, report,
     )
     data["advantages"] = advs
@@ -474,6 +523,11 @@ def validate_and_normalise(
     data["campaign_disadvantages"] = c_disads
     merged_details = {**adv_details, **disad_details}
     data["advantage_details"] = merged_details
+
+    # --- Specializations (taken multiple times) -----------------------
+    data["specializations"] = _normalise_specializations(
+        extracted.specializations, diverted_specs, report,
+    )
 
     # --- Technique choices --------------------------------------------
     data["technique_choices"] = _normalise_technique_choices(extracted, report)

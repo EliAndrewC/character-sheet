@@ -2679,6 +2679,38 @@ def test_priest_3rd_dan_pool_appears_on_own_wound_check(page, live_server_url):
     assert pool_block.count() == 1
 
 
+def test_pontificate_picks_higher_of_water_and_air_in_roll_modal(page, live_server_url):
+    """Pontificate may be rolled with whichever of Water/Air is higher.
+    Roll the knack from a character whose Air is greater than Water and
+    verify the dice-roller modal labels and rolls the formula with Air."""
+    # Priest's school ring defaults to Water (3). Bump Air to 4 so it's
+    # the higher of the two.
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PontificateAir")
+    select_school(page, "priest")
+    click_plus(page, "ring_air", 2)   # Air 2 -> 4 (now higher than Water 3)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Setup")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+
+    # Knack badge on the View Sheet should advertise both rings.
+    assert "Water or Air" in page.text_content("body")
+
+    page.locator('[data-roll-key="knack:pontificate"]').click()
+    page.wait_for_function("""() => {
+        const d = window._diceRoller;
+        return d && d.phase === 'done';
+    }""", timeout=10_000)
+    modal = page.locator('[data-modal="dice-roller"]').text_content()
+    # Higher ring (Air = 4) was used; "Pontificate (Air)" appears in the label.
+    assert "Pontificate (Air)" in modal, (
+        f"expected modal label to read 'Pontificate (Air)'; got: {modal!r}"
+    )
+
+
 def test_priest_3rd_dan_pool_does_not_appear_on_skill_roll(page, live_server_url):
     """Plain skill rolls are not an attack/parry/damage/WC so no pool block."""
     _create_priest_3rd_dan(page, live_server_url, "PriestSkillPool", precepts=3)

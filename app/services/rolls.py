@@ -292,10 +292,12 @@ def compute_skill_roll(
                 (FREE_RAISE_VALUE, f"+{FREE_RAISE_VALUE} from Higher Purpose when related to {hp_text}")
             )
 
-    if "specialization" in advantages:
-        sp = advantage_details.get("specialization", {})
-        sp_skills = sp.get("skills", [])
-        sp_text = sp.get("text", "your specialization")
+    # Specialization may be taken multiple times - each instance lives in
+    # character_data["specializations"]. Each spec targeting this skill
+    # adds its own +10 to flat (with a per-instance note).
+    for spec in character_data.get("specializations", []) or []:
+        sp_skills = spec.get("skills") or []
+        sp_text = spec.get("text") or "your specialization"
         if skill_id in sp_skills:
             amount = 2 * FREE_RAISE_VALUE
             result.flat_bonus += amount

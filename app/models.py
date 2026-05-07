@@ -146,6 +146,11 @@ class Character(Base):
     # Extra details for advantages/disadvantages that need text or skill selections
     # Format: {"advantage_id": {"text": "...", "skills": ["skill_id", ...], "player": "discord_id"}}
     advantage_details: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
+    # Specializations are the only advantage that can be taken multiple times,
+    # so they live in their own list (rather than a duplicate-allowed entry in
+    # `advantages`). Each entry: {"text": "<sub-domain>", "skills": ["<skill_id>"]}.
+    # Costs 2 XP per entry; gives a +10 conditional alternative on the named skill.
+    specializations: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list)
 
     # Player-chosen technique selections (for schools with flexible 1st/2nd Dan)
     # Format: {"first_dan_choices": ["skill_id", ...], "second_dan_choice": "skill_id"}
@@ -348,6 +353,7 @@ class Character(Base):
             "campaign_advantages": self.campaign_advantages or [],
             "campaign_disadvantages": self.campaign_disadvantages or [],
             "advantage_details": self.advantage_details or {},
+            "specializations": self.specializations or [],
             "technique_choices": self.technique_choices or {},
             "honor": self.honor,
             "rank": self.rank,
@@ -376,8 +382,29 @@ class Character(Base):
 
         Accepts either a flat ``rings`` dict or individual ``ring_*``
         keys.  JSON collection fields fall back to empty containers.
+
+        Performs the legacy-shape lift for Specialization: pre-multi-spec
+        characters carried ``advantages=[..., "specialization", ...]`` and
+        ``advantage_details["specialization"] = {text, skills}``. Lift the
+        detail into ``specializations[0]`` and strip the flag so the rest
+        of the system sees only the new shape.
         """
         rings = data.get("rings", {})
+
+        # --- Lazy migration: legacy single-Specialization → list shape ---
+        advantages = list(data.get("advantages", []) or [])
+        advantage_details = dict(data.get("advantage_details", {}) or {})
+        specializations = list(data.get("specializations", []) or [])
+        if "specialization" in advantages:
+            if not specializations:
+                legacy = advantage_details.get("specialization")
+                if legacy:
+                    specializations = [{
+                        "text": legacy.get("text", ""),
+                        "skills": list(legacy.get("skills") or []),
+                    }]
+            advantages = [a for a in advantages if a != "specialization"]
+            advantage_details.pop("specialization", None)
 
         return cls(
             name=data.get("name", ""),
@@ -395,10 +422,12 @@ class Character(Base):
             skills=data.get("skills", {}),
             knacks=data.get("knacks", {}),
             foreign_knacks=data.get("foreign_knacks", {}),
-            advantages=data.get("advantages", []),
+            advantages=advantages,
             disadvantages=data.get("disadvantages", []),
             campaign_advantages=data.get("campaign_advantages", []),
             campaign_disadvantages=data.get("campaign_disadvantages", []),
+            advantage_details=advantage_details,
+            specializations=specializations,
             honor=data.get("honor", 1.0),
             rank=data.get("rank", 1.0),
             rank_locked=data.get("rank_locked", False),

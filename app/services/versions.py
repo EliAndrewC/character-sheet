@@ -6,7 +6,7 @@ to previous versions.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -172,6 +172,39 @@ def compute_diff_summary(old_state: Dict[str, Any], new_state: Dict[str, Any]) -
         dis = CAMPAIGN_DISADVANTAGES.get(did)
         name = dis.name if dis else _label(did)
         diffs.append(f"Removed campaign disadvantage: {name}")
+
+    # Specializations (taken multiple times) - emit one line per add/remove
+    # using the per-instance text + skill so the version history reads
+    # naturally without leaking the underlying data shape.
+    from app.game_data import SKILLS as _SK
+
+    def _spec_label(spec: Dict[str, Any]) -> str:
+        text = (spec.get("text") or "").strip() or "(unspecified)"
+        skills = spec.get("skills") or []
+        if skills:
+            sk = _SK.get(skills[0])
+            if sk:
+                return f"{text} ({sk.name})"
+        return text
+
+    def _spec_key(spec: Dict[str, Any]) -> Tuple[str, str]:
+        text = (spec.get("text") or "").strip()
+        skills = spec.get("skills") or []
+        return (text, skills[0] if skills else "")
+
+    old_specs = list(old_state.get("specializations", []) or [])
+    new_specs = list(new_state.get("specializations", []) or [])
+    old_keys = [_spec_key(s) for s in old_specs]
+    new_keys = [_spec_key(s) for s in new_specs]
+    remaining = list(old_keys)
+    for i, k in enumerate(new_keys):
+        if k in remaining:
+            remaining.remove(k)
+        else:
+            diffs.append(f"Added specialization: {_spec_label(new_specs[i])}")
+    for s, k in zip(old_specs, old_keys):
+        if k in remaining:
+            diffs.append(f"Removed specialization: {_spec_label(s)}")
 
     # Earned XP
     old_xp = old_state.get("earned_xp", 0)
@@ -405,6 +438,12 @@ def compute_version_diff(
             entries.append(_entry("Advantages", f"{name} details",
                                   None, "updated", "section_updated"))
 
+    # ---- Specializations -------------------------------------------------
+    # Each spec is keyed by (text, skill_id) for diff purposes. Adding a
+    # second spec with the same text + skill is a legal no-op already and
+    # the editor's "+ Add" path forces a unique combination by validation.
+    _diff_specializations(entries, prev_state, new_state)
+
     # ---- Status (honor, rank, recognition, locks) ------------------------
     for field, label, default in (
         ("honor", "Honor", 1.0),
@@ -512,6 +551,55 @@ def _adv_or_dis_name(aid: str) -> str:
         if item:
             return item.name
     return _label(aid)
+
+
+def _diff_specializations(
+    entries: List[Dict[str, Any]],
+    prev_state: Dict[str, Any],
+    new_state: Dict[str, Any],
+) -> None:
+    """Emit add/remove entries for the specializations list. Each spec is
+    keyed by (text, skill_id) so renaming a spec's text or changing its
+    skill shows up as remove + add."""
+    from app.game_data import SKILLS
+
+    def _key(spec: Dict[str, Any]) -> Tuple[str, str]:
+        text = (spec.get("text") or "").strip()
+        skills = spec.get("skills") or []
+        return (text, skills[0] if skills else "")
+
+    def _label_for(spec: Dict[str, Any]) -> str:
+        text = (spec.get("text") or "").strip() or "(unspecified)"
+        skills = spec.get("skills") or []
+        if skills:
+            sk = SKILLS.get(skills[0])
+            if sk:
+                return f"{text} ({sk.name})"
+        return text
+
+    old_specs = list(prev_state.get("specializations") or [])
+    new_specs = list(new_state.get("specializations") or [])
+    old_keys = [_key(s) for s in old_specs]
+    new_keys = [_key(s) for s in new_specs]
+    # Multiset diff: walk new, drop matched-in-old; remainder = added.
+    remaining_old = list(old_keys)
+    added_specs: List[Dict[str, Any]] = []
+    for i, k in enumerate(new_keys):
+        if k in remaining_old:
+            remaining_old.remove(k)
+        else:
+            added_specs.append(new_specs[i])
+    removed_specs = [
+        s for s, k in zip(old_specs, old_keys) if k in remaining_old
+    ]
+    for spec in added_specs:
+        label = _label_for(spec)
+        entries.append(_entry("Advantages", f"Added specialization: {label}",
+                              None, label, "add"))
+    for spec in removed_specs:
+        label = _label_for(spec)
+        entries.append(_entry("Advantages", f"Removed specialization: {label}",
+                              label, None, "remove"))
 
 
 def _diff_id_list(
@@ -690,7 +778,13 @@ def _wipe_precepts_pool_if_dan_drop(character: Character) -> None:
 
 
 def _restore_character_from_state(character: Character, state: Dict[str, Any]):
-    """Update a character's draft fields from a state dict."""
+    """Update a character's draft fields from a state dict.
+
+    Mirrors ``Character.to_dict``'s set of snapshotted fields. Tracking
+    state (current wounds/VP, adventure_state, action_dice, precepts_pool)
+    is NOT in ``state`` and stays untouched - it's per-session, not
+    per-version.
+    """
     character.name = state.get("name", character.name)
     character.name_explanation = state.get("name_explanation", "")
     character.player_name = state.get("player_name", "")
@@ -708,14 +802,40 @@ def _restore_character_from_state(character: Character, state: Dict[str, Any]):
     character.parry = state.get("parry", 1)
     character.skills = state.get("skills", {})
     character.knacks = state.get("knacks", {})
+    character.foreign_knacks = state.get("foreign_knacks", {})
     character.advantages = state.get("advantages", [])
     character.disadvantages = state.get("disadvantages", [])
     character.campaign_advantages = state.get("campaign_advantages", [])
     character.campaign_disadvantages = state.get("campaign_disadvantages", [])
+    character.advantage_details = state.get("advantage_details", {})
+    character.specializations = state.get("specializations", [])
+    character.technique_choices = state.get("technique_choices", {})
     character.honor = state.get("honor", 1.0)
     character.rank = state.get("rank", 1.0)
     character.rank_locked = state.get("rank_locked", False)
     character.recognition = state.get("recognition", 1.0)
     character.recognition_halved = state.get("recognition_halved", False)
+    character.rank_recognition_awards = state.get("rank_recognition_awards", [])
+    character.starting_xp = state.get("starting_xp", 150)
     character.earned_xp = state.get("earned_xp", 0)
     character.notes = state.get("notes", "")
+    character.sections = state.get("sections", [])
+
+
+def discard_draft_changes(character: Character, db: Session) -> bool:
+    """Roll the character's draft fields back to the last published version.
+
+    No new ``CharacterVersion`` row is created - this is a pure undo of
+    in-progress edits. Returns True when a revert happened, False when
+    the character has never been published (nothing to revert to).
+    Tracking state (wounds, VP, adventure_state, etc.) is preserved.
+    """
+    published = character.published_state
+    if not published:
+        return False
+    _restore_character_from_state(character, published)
+    # A discard may put a Priest below 3rd Dan; clear any stale precepts
+    # pool just like publish/revert do.
+    _wipe_precepts_pool_if_dan_drop(character)
+    db.flush()
+    return True

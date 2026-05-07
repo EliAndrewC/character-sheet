@@ -3,7 +3,7 @@
 **School ID:** `isawa_ishi`
 **Category:** Spellcaster
 **School Ring:** Void - Confirmed correct.
-**School Knacks:** absorb_void, kharmic_spin, otherworldliness - Absorb_void is rollable (Void). Kharmic_spin is rollable (Void). Otherworldliness is non-rollable (passive knack, ring=None).
+**School Knacks:** absorb_void, kharmic_spin, otherworldliness - Absorb_void is non-rollable; per-adventure counter where each use regains 1 spent VP. Kharmic_spin is rollable (Void). Otherworldliness is non-rollable (passive knack, ring=None).
 
 ---
 

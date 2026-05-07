@@ -39,6 +39,42 @@ def test_discerning_bonus_on_interrogation(page, live_server_url):
     assert "Discerning" in page.text_content("body")
 
 
+def test_discerning_editor_shows_plus_5_on_interrogation_and_plus_10_on_investigation(
+    page, live_server_url,
+):
+    """The Edit Sheet's live skill-roll parenthetical must show +5 from
+    Discerning on Interrogation but +10 on Investigation. Regression for
+    the JS treating both skills as a flat +5."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Disc Edit")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_interrogation", 1)
+    click_plus(page, "skill_investigation", 1)
+    page.check('input[name="adv_discerning"]')
+    page.wait_for_timeout(200)
+
+    interrogation_roll = page.locator(
+        '[x-text="skillRollDisplay(\'interrogation\')"]'
+    ).first.text_content()
+    investigation_roll = page.locator(
+        '[x-text="skillRollDisplay(\'investigation\')"]'
+    ).first.text_content()
+
+    assert "+5 from Discerning" in interrogation_roll, (
+        f"interrogation row should show '+5 from Discerning'; got: {interrogation_roll!r}"
+    )
+    assert "+10 from Discerning" in investigation_roll, (
+        f"investigation row should show '+10 from Discerning'; got: {investigation_roll!r}"
+    )
+    # And no double-pushed +5 alongside the +10.
+    assert "+5 from Discerning" not in investigation_roll, (
+        f"investigation row must not also show '+5 from Discerning'; "
+        f"got: {investigation_roll!r}"
+    )
+
+
 def test_genealogist_bonus_on_heraldry(page, live_server_url):
     _create_char_with_skills(page, live_server_url,
                               skills={"heraldry": 1}, advantages=["genealogist"],

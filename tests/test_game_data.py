@@ -120,6 +120,38 @@ class TestSkills:
         assert count == 3
 
 
+class TestPontificateMultiRing:
+    """Pontificate is rolled with whichever of Water or Air is higher.
+    The data should reflect both rings on the badge, the description,
+    and the rules text."""
+
+    def test_pontificate_ring_advertises_both(self):
+        knack = SCHOOL_KNACKS["pontificate"]
+        # The ring badge text shown next to the knack name needs to convey
+        # "either Water or Air" - the exact wording can vary, but both
+        # ring names must be present.
+        assert "Water" in knack.ring and "Air" in knack.ring, (
+            f"pontificate ring should mention both Water and Air; got: {knack.ring!r}"
+        )
+
+    def test_pontificate_description_mentions_both_rings(self):
+        knack = SCHOOL_KNACKS["pontificate"]
+        assert "Water" in knack.description and "Air" in knack.description, (
+            f"description should mention both rings; got: {knack.description!r}"
+        )
+
+    def test_pontificate_rules_text_says_whichever_is_higher(self):
+        knack = SCHOOL_KNACKS["pontificate"]
+        # The rule wording from the upstream rules file.
+        assert "Water" in knack.rules_text and "Air" in knack.rules_text, (
+            f"rules_text should reference both rings; got: {knack.rules_text!r}"
+        )
+        assert "higher" in knack.rules_text.lower(), (
+            f"rules_text should explain the 'whichever is higher' selection; "
+            f"got: {knack.rules_text!r}"
+        )
+
+
 class TestSchools:
     def test_school_count(self):
         assert len(SCHOOLS) == 29

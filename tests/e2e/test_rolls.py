@@ -782,12 +782,12 @@ def test_alternative_totals_render_number_first_with_all_of_the_above(page, live
     hp_row = page.locator('input[name="adv_higher_purpose"]').locator('xpath=ancestor::div[contains(@class,"editor-row")][1]')
     hp_row.locator('label.inline-flex', has_text="Bragging").locator('input[type="checkbox"]').check()
 
-    # Specialization (+10 alt) targeting bragging.
-    page.check('input[name="adv_specialization"]')
-    page.wait_for_selector('input[placeholder="What specialization?"]', timeout=3000)
-    page.fill('input[placeholder="What specialization?"]', "Eligible bachelors")
-    sp_row = page.locator('input[name="adv_specialization"]').locator('xpath=ancestor::div[contains(@class,"editor-row")][1]')
-    sp_row.locator('select').select_option(value="bragging")
+    # Specialization (+10 alt) targeting bragging - lives in the dedicated
+    # sub-section since it can be taken multiple times.
+    page.locator('[data-testid="add-specialization"]').click()
+    spec_row = page.locator('[data-testid="specialization-row-0"]')
+    spec_row.locator('input[type="text"]').fill("Eligible bachelors")
+    spec_row.locator('select').select_option(value="bragging")
 
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Alt totals setup")

@@ -39,6 +39,43 @@ def init_db():
     # Simple migration: add columns that may be missing from older schemas.
     # SQLite supports ADD COLUMN but not ALTER/DROP, which is fine for us.
     _migrate_add_columns()
+    _migrate_legacy_specializations(SessionLocal())
+
+
+def _migrate_legacy_specializations(session) -> int:
+    """Lift legacy single-Specialization shape into the new list-shape column.
+
+    Pre-multi-spec characters carry ``advantages=[..., "specialization", ...]``
+    plus ``advantage_details["specialization"] = {text, skills}``. The new
+    shape is ``Character.specializations: List[Dict]`` with the flag stripped
+    from ``advantages`` and the detail key dropped. Idempotent: rows already
+    in the new shape are left alone. Returns the number of rows updated so
+    the caller can log it (and tests can assert on it).
+    """
+    from app.models import Character
+
+    updated = 0
+    for char in session.query(Character).all():
+        advs = list(char.advantages or [])
+        if "specialization" not in advs:
+            continue
+        details = dict(char.advantage_details or {})
+        existing_specs = list(char.specializations or [])
+        if not existing_specs:
+            legacy = details.get("specialization") or {}
+            existing_specs = [{
+                "text": (legacy.get("text") or "").strip(),
+                "skills": list(legacy.get("skills") or []),
+            }]
+        char.advantages = [a for a in advs if a != "specialization"]
+        details.pop("specialization", None)
+        char.advantage_details = details
+        char.specializations = existing_specs
+        updated += 1
+    if updated:
+        session.commit()
+    session.close()
+    return updated
 
 
 def _migrate_add_columns():
@@ -86,6 +123,7 @@ def _migrate_add_columns():
         ("art_prompt", "TEXT", "NULL"),
         ("name_explanation", "TEXT", "''"),
         ("foreign_knacks", "TEXT", "'{}'"),
+        ("specializations", "TEXT", "'[]'"),
     ]
 
     # Migration bodies below are defensive first-run-on-old-schema branches.

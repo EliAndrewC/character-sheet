@@ -338,8 +338,7 @@ class TestSpecialization:
     def test_specialization_bonus_on_selected_skill(self):
         data = make_character_data(
             skills={"culture": 2},
-            advantages=["specialization"],
-            advantage_details={"specialization": {"text": "poetry", "skills": ["culture"]}},
+            specializations=[{"text": "poetry", "skills": ["culture"]}],
         )
         result = compute_skill_roll("culture", data)
         assert result.flat_bonus >= 10
@@ -349,11 +348,43 @@ class TestSpecialization:
     def test_specialization_no_bonus_on_other_skill(self):
         data = make_character_data(
             skills={"bragging": 1},
-            advantages=["specialization"],
-            advantage_details={"specialization": {"text": "poetry", "skills": ["culture"]}},
+            specializations=[{"text": "poetry", "skills": ["culture"]}],
         )
         result = compute_skill_roll("bragging", data)
         assert "Specialization" not in result.tooltip
+
+    def test_multiple_specializations_each_emit_their_own_note(self):
+        """Two specs on the same skill add twice and emit a note per
+        instance with the per-instance text."""
+        data = make_character_data(
+            skills={"culture": 2},
+            specializations=[
+                {"text": "Tea Ceremony", "skills": ["culture"]},
+                {"text": "Court Poetry", "skills": ["culture"]},
+            ],
+        )
+        result = compute_skill_roll("culture", data)
+        # Two +10s baked in
+        assert result.flat_bonus >= 20
+        assert "Tea Ceremony" in result.tooltip
+        assert "Court Poetry" in result.tooltip
+        # Two separate note lines
+        assert result.tooltip.count("Specialization") >= 2
+
+    def test_specialization_targeting_different_skills_only_applies_to_match(self):
+        data = make_character_data(
+            skills={"culture": 2},
+            specializations=[
+                {"text": "Tea Ceremony", "skills": ["culture"]},
+                {"text": "Long Sword Strikes", "skills": ["iaijutsu"]},
+            ],
+        )
+        result = compute_skill_roll("culture", data)
+        assert "Tea Ceremony" in result.tooltip
+        assert "Long Sword Strikes" not in result.tooltip
+        # Only the matching one bumps flat (one +10).
+        # culture rank 2 + Earth 2 = base 4k2 with flat 0; spec adds 10.
+        assert result.flat_bonus == 10
 
 
 class TestDisadvantageNotes:

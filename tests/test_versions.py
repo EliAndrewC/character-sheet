@@ -169,6 +169,51 @@ class TestDiffSummary:
         diffs = compute_diff_summary(old, new)
         assert any("Removed advantage" in d and "Lucky" in d for d in diffs)
 
+    def test_specialization_added_summary(self):
+        old = {"specializations": []}
+        new = {"specializations": [
+            {"text": "Court Etiquette", "skills": ["etiquette"]},
+        ]}
+        diffs = compute_diff_summary(old, new)
+        assert any(
+            "Added specialization" in d and "Court Etiquette" in d
+            and "Etiquette" in d
+            for d in diffs
+        )
+
+    def test_specialization_removed_summary(self):
+        old = {"specializations": [
+            {"text": "Court Etiquette", "skills": ["etiquette"]},
+        ]}
+        new = {"specializations": []}
+        diffs = compute_diff_summary(old, new)
+        assert any(
+            "Removed specialization" in d and "Court Etiquette" in d
+            for d in diffs
+        )
+
+    def test_specializations_unchanged_emit_no_lines(self):
+        old = {"specializations": [
+            {"text": "Court Etiquette", "skills": ["etiquette"]},
+        ]}
+        new = old
+        diffs = compute_diff_summary(old, new)
+        assert all("specialization" not in d.lower() for d in diffs)
+
+    def test_specialization_with_no_skill_renders_text_only(self):
+        """A spec with an empty / unresolved skill list still renders -
+        falls back to the bare text without the parenthesised skill name."""
+        old = {"specializations": []}
+        new = {"specializations": [
+            {"text": "Whittling", "skills": []},
+        ]}
+        diffs = compute_diff_summary(old, new)
+        assert any(
+            "Added specialization" in d and "Whittling" in d
+            and "(" not in d  # no skill paren
+            for d in diffs
+        )
+
     def test_advantage_removed_unknown_id_falls_back_to_label(self):
         old = {"advantages": ["totally_made_up_adv"]}
         new = {"advantages": []}
@@ -342,6 +387,134 @@ class TestRevertCharacter:
 
         assert char.ring_fire == 2
         assert char.honor == 1.0
+
+
+class TestDiscardDraftChanges:
+    """``discard_draft_changes`` resets a character's draft to its
+    ``published_state`` so any unapplied edits are undone. It does NOT
+    create a new version (unlike publish/revert) - it's purely an undo."""
+
+    def test_discard_restores_basic_fields_to_published_state(self, db):
+        from app.services.versions import discard_draft_changes
+        char = Character(
+            name="Original", school="akodo_bushi", school_ring_choice="Water",
+            ring_water=3, honor=1.0, owner_discord_id="123",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        db.add(char)
+        db.flush()
+        publish_character(char, db)
+
+        # Edit the draft.
+        char.name = "Drafted"
+        char.honor = 4.5
+        db.flush()
+        assert char.has_unpublished_changes
+
+        discard_draft_changes(char, db)
+        db.flush()
+
+        assert char.name == "Original"
+        assert char.honor == 1.0
+        assert not char.has_unpublished_changes
+
+    def test_discard_restores_specializations(self, db):
+        """Spec list is one of the newer fields - confirm restore covers it."""
+        from app.services.versions import discard_draft_changes
+        char = Character(
+            name="Spec Discard", school="akodo_bushi", school_ring_choice="Water",
+            ring_water=3, owner_discord_id="123",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            specializations=[{"text": "Court", "skills": ["etiquette"]}],
+        )
+        db.add(char)
+        db.flush()
+        publish_character(char, db)
+
+        # Add another spec to the draft.
+        char.specializations = char.specializations + [
+            {"text": "Drafted", "skills": ["bragging"]},
+        ]
+        db.flush()
+
+        discard_draft_changes(char, db)
+        db.flush()
+
+        assert char.specializations == [
+            {"text": "Court", "skills": ["etiquette"]},
+        ]
+
+    def test_discard_does_not_create_a_new_version(self, db):
+        from app.services.versions import discard_draft_changes
+        from app.models import CharacterVersion
+        char = Character(
+            name="No New Version", school="akodo_bushi", school_ring_choice="Water",
+            ring_water=3, owner_discord_id="123",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        db.add(char)
+        db.flush()
+        publish_character(char, db)
+        version_count_before = (
+            db.query(CharacterVersion)
+            .filter(CharacterVersion.character_id == char.id).count()
+        )
+
+        char.name = "Drafted"
+        db.flush()
+        discard_draft_changes(char, db)
+        db.flush()
+
+        version_count_after = (
+            db.query(CharacterVersion)
+            .filter(CharacterVersion.character_id == char.id).count()
+        )
+        assert version_count_after == version_count_before
+
+    def test_discard_does_not_touch_tracking_fields(self, db):
+        """Adventure / wound / VP state is per-session, not per-version.
+        Discard must NOT zero them out alongside the draft fields."""
+        from app.services.versions import discard_draft_changes
+        char = Character(
+            name="Track", school="akodo_bushi", school_ring_choice="Water",
+            ring_water=3, owner_discord_id="123",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        db.add(char)
+        db.flush()
+        publish_character(char, db)
+
+        char.current_light_wounds = 7
+        char.current_void_points = 1
+        char.adventure_state = {"lucky_used": True}
+        char.name = "Drafted"
+        db.flush()
+
+        discard_draft_changes(char, db)
+        db.flush()
+
+        # Tracking state preserved.
+        assert char.current_light_wounds == 7
+        assert char.current_void_points == 1
+        assert char.adventure_state == {"lucky_used": True}
+        # Draft change reverted.
+        assert char.name != "Drafted"
+
+    def test_discard_with_no_published_state_is_a_noop(self, db):
+        """Defensive: a never-published draft has nothing to revert to.
+        The function should not raise; it should leave the row untouched."""
+        from app.services.versions import discard_draft_changes
+        char = Character(
+            name="Never Published", school="akodo_bushi", school_ring_choice="Water",
+            owner_discord_id="123",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        db.add(char)
+        db.flush()
+        # No publish - no published_state.
+        discard_draft_changes(char, db)
+        db.flush()
+        assert char.name == "Never Published"
 
 
 class TestPreceptsPoolDanDrop:
@@ -635,6 +808,65 @@ class TestComputeVersionDiff:
             {"advantages": ["charming", "fierce"]},
         )
         assert entries == []
+
+    def test_specialization_added_emits_advantages_entry(self):
+        entries = compute_version_diff(
+            {"specializations": []},
+            {"specializations": [
+                {"text": "Court Etiquette", "skills": ["etiquette"]},
+            ]},
+        )
+        advs = self._by_category(entries, "Advantages")
+        match = next(e for e in advs if "Added specialization" in e["label"])
+        assert match["kind"] == "add"
+        assert "Court Etiquette" in match["label"]
+        assert "Etiquette" in match["label"]
+
+    def test_specialization_removed_emits_advantages_entry(self):
+        entries = compute_version_diff(
+            {"specializations": [
+                {"text": "Old", "skills": ["bragging"]},
+            ]},
+            {"specializations": []},
+        )
+        advs = self._by_category(entries, "Advantages")
+        assert any(
+            e["kind"] == "remove" and "Old" in e["label"] for e in advs
+        )
+
+    def test_specialization_text_change_renders_as_remove_plus_add(self):
+        entries = compute_version_diff(
+            {"specializations": [
+                {"text": "Court Politics", "skills": ["etiquette"]},
+            ]},
+            {"specializations": [
+                {"text": "Court Etiquette", "skills": ["etiquette"]},
+            ]},
+        )
+        advs = self._by_category(entries, "Advantages")
+        kinds = {e["kind"] for e in advs}
+        assert kinds == {"add", "remove"}
+        labels = " ".join(e["label"] for e in advs)
+        assert "Court Politics" in labels
+        assert "Court Etiquette" in labels
+
+    def test_specialization_unchanged_returns_no_advantages_entry(self):
+        same = [{"text": "Court Etiquette", "skills": ["etiquette"]}]
+        entries = compute_version_diff(
+            {"specializations": same}, {"specializations": list(same)},
+        )
+        advs = self._by_category(entries, "Advantages")
+        assert advs == []
+
+    def test_specialization_with_no_skill_renders_text_only_in_structured_diff(self):
+        entries = compute_version_diff(
+            {"specializations": []},
+            {"specializations": [{"text": "Whittling", "skills": []}]},
+        )
+        advs = self._by_category(entries, "Advantages")
+        match = next(e for e in advs if "Whittling" in e["label"])
+        # No skill paren in the label since no skill is resolved.
+        assert "(" not in match["label"]
 
     def test_campaign_advantage_added(self):
         entries = compute_version_diff(

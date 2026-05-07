@@ -287,6 +287,76 @@ def test_family_reckoning_with_detail_goes_to_advantages_list() -> None:
     assert "family_reckoning_righteous_sting" in data["campaign_advantages"]
 
 
+def test_specialization_via_dedicated_field_with_resolved_skill() -> None:
+    """The LLM emits Specializations on the dedicated ``specializations``
+    field. Each entry has ``text`` and ``skill_as_written``; the validator
+    resolves the skill to a skill id and builds data["specializations"]."""
+    payload = _canonical_payload()
+    payload["specializations"] = [
+        {"text": "Court Etiquette", "skill_as_written": "Etiquette"},
+        {"text": "Loyalty Speeches", "skill_as_written": "Bragging"},
+    ]
+    data, _report = _run(payload)
+    assert data["specializations"] == [
+        {"text": "Court Etiquette", "skills": ["etiquette"]},
+        {"text": "Loyalty Speeches", "skills": ["bragging"]},
+    ]
+    # Specialization is NOT in the flat advantages list.
+    assert "specialization" not in data["advantages"]
+
+
+def test_specialization_via_legacy_advantages_field_diverted() -> None:
+    """An older LLM shape (or document) might emit Specialization as an
+    entry in the `advantages` list with the sub-domain in ``detail``. The
+    validator must divert it into ``specializations`` rather than persist
+    it as a standard advantage. Skill stays empty - the user picks it on
+    the edit page."""
+    payload = _canonical_payload()
+    payload["advantages"].append(
+        {"name_as_written": "Specialization", "detail": "Court Etiquette"}
+    )
+    data, _report = _run(payload)
+    assert "specialization" not in data["advantages"]
+    # Detail bubbled into spec text; skills empty for the user to fill in.
+    assert {"text": "Court Etiquette", "skills": []} in data["specializations"]
+
+
+def test_specialization_unknown_skill_lands_with_empty_skills_and_ambiguity() -> None:
+    """If the LLM-supplied skill name doesn't resolve, keep the spec
+    (text is still useful) with empty skills and report an ambiguity."""
+    payload = _canonical_payload()
+    payload["specializations"] = [
+        {"text": "Whittling", "skill_as_written": "Lumberjacking"},
+    ]
+    data, report = _run(payload)
+    assert {"text": "Whittling", "skills": []} in data["specializations"]
+
+
+def test_no_specializations_field_yields_empty_list() -> None:
+    payload = _canonical_payload()
+    data, _report = _run(payload)
+    assert data["specializations"] == []
+
+
+def test_specialization_with_aliased_skill_name_records_ambiguity() -> None:
+    """If the LLM-supplied skill name is aliased / fuzzy-matched (not an
+    exact match), the validator still resolves it but logs an ambiguity
+    so the Import Notes section can flag it."""
+    payload = _canonical_payload()
+    payload["specializations"] = [
+        {"text": "Bow Strings", "skill_as_written": "Etiqette"},  # typo
+    ]
+    data, report = _run(payload)
+    # The fuzzy match still resolves, but with an ambiguity entry.
+    assert data["specializations"] == [
+        {"text": "Bow Strings", "skills": ["etiquette"]},
+    ]
+    assert any(
+        a.kind == "specialization" and a.resolved_id == "etiquette"
+        for a in report.ambiguities
+    )
+
+
 def test_unknown_advantage_dropped() -> None:
     payload = _canonical_payload()
     payload["advantages"].append({"name_as_written": "Administrator"})

@@ -747,6 +747,38 @@ class TestViewCharacter:
         resp = client.get("/characters/999")
         assert resp.status_code == 404
 
+    def test_view_renders_one_row_per_specialization(self, client):
+        cid = _seed_character(
+            client, name="MultiSpec",
+            specializations=[
+                {"text": "Court Etiquette", "skills": ["etiquette"]},
+                {"text": "Loyalty Speeches", "skills": ["bragging"]},
+            ],
+        )
+        body = client.get(f"/characters/{cid}").text
+        # Slice out the "Advantages & Disadvantages" section so we don't
+        # confuse hits in the XP Summary breakdown rows with hits in the
+        # canonical advantages list.
+        section_start = body.index("Advantages & Disadvantages")
+        section_end = body.index("XP Summary", section_start)
+        section = body[section_start:section_end]
+        assert "Court Etiquette" in section
+        assert "Loyalty Speeches" in section
+        # Each instance is labeled "Specialization" so the player sees what
+        # advantage they took.
+        assert section.count("Specialization") >= 2
+
+    def test_view_omits_specializations_section_when_empty(self, client):
+        cid = _seed_character(client, name="NoSpec", specializations=[])
+        body = client.get(f"/characters/{cid}").text
+        # Slice the Advantages section so we don't false-match on
+        # XP Summary's empty-state labels.
+        if "Advantages & Disadvantages" in body:
+            section_start = body.index("Advantages & Disadvantages")
+            section_end = body.index("XP Summary", section_start)
+            section = body[section_start:section_end]
+            assert "Specialization" not in section
+
     def test_view_renders_freeform_roll_button(self, client):
         """The sheet's Rings section has a Freeform Roll button and modal."""
         cid = _seed_character(client, name="Freeform Roll Char")
@@ -856,6 +888,37 @@ class TestPerAdventureTracking:
             knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
         )
         assert "togashi_daily_athletics_raises" not in self._per_adventure_ids(client, cid)
+
+    def test_absorb_void_per_adventure_pool_for_isawa_ishi(self, client):
+        """Isawa Ishi's school knacks include absorb_void; it should appear
+        in per_adventure with max = the rank, just like worldliness."""
+        cid = _seed_character(
+            client, name="IshiAbsorb",
+            school="isawa_ishi", school_ring_choice="Void",
+            knacks={"absorb_void": 3, "kharmic_spin": 1, "otherworldliness": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert '"id": "absorb_void"' in resp.text
+        # max = rank = 3
+        import json, re
+        m = re.search(r"perAdventure:\s*(\[.*?\]),", resp.text)
+        assert m is not None
+        entries = json.loads(m.group(1))
+        ab = next(e for e in entries if e["id"] == "absorb_void")
+        assert ab["type"] == "counter"
+        assert ab["max"] == 3
+        assert ab["name"] == "Absorb Void"
+        # Must NOT be flagged per_day - the rules say "per adventure".
+        assert ab.get("per_day") is not True
+
+    def test_absorb_void_not_in_per_adventure_when_school_lacks_it(self, client):
+        cid = _seed_character(
+            client, name="AkodoNoAbsorb", school="akodo_bushi",
+            school_ring_choice="Water",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        assert "absorb_void" not in self._per_adventure_ids(client, cid)
 
     def test_conviction_entry_is_flagged_per_day(self, client):
         cid = _seed_character(
@@ -1691,7 +1754,9 @@ class TestEditPageUnkemptNote:
         # The JS skillRollDisplay() function must include a branch that pushes
         # an Unkempt-related note when culture is the skill being rendered.
         idx = body.index("skillRollDisplay(skillId)")
-        tail = body[idx:idx + 4000]
+        # Read a generous slice — the function is large and grows over time
+        # as more conditional bonuses are added.
+        tail = body[idx:idx + 8000]
         assert "disadvantages.unkempt" in tail and "culture" in tail, (
             "expected skillRollDisplay() to check disadvantages.unkempt and "
             f"the culture skill id; got: {tail!r}"
@@ -1727,6 +1792,79 @@ class TestEditPageUnkemptNote:
         # No flatBonus assignment inside this exact block.
         assert "flatBonus" not in block, (
             f"Unkempt branch must not touch flatBonus: {block!r}"
+        )
+
+
+class TestAbsorbVoidNonRollableAndExcludedFromPickers:
+    """Absorb Void is a per-adventure VP-restoration ability, not a roll.
+    The sheet must not render a dice icon next to it, the editor's flexible
+    1st/2nd/3rd Dan technique pickers (Mantis, Kitsune Warden, Isawa Ishi,
+    Shugenja, Suzume Overseer, Ide Diplomat) must not list it as an option
+    that could earn an extra rolled die or a free raise."""
+
+    def test_sheet_does_not_render_dice_icon_for_absorb_void(self, client):
+        cid = _seed_character(
+            client, name="AbsorbDiceHidden",
+            school="isawa_ishi", school_ring_choice="Void",
+            knacks={"absorb_void": 2, "kharmic_spin": 2, "otherworldliness": 2},
+        )
+        body = client.get(f"/characters/{cid}").text
+        # The roll-icon button uses data-roll-key="knack:<id>". The
+        # excluded set in the template must include absorb_void so no
+        # such button is emitted for it.
+        assert 'data-roll-key="knack:absorb_void"' not in body
+
+    def test_editor_mantis_non_rollable_set_includes_absorb_void(self, client):
+        """The JS-side MANTIS_NON_ROLLABLE_KNACKS Set drives every
+        flexible-pick dropdown in the editor (Mantis 2nd Dan, Kitsune
+        Warden 1st Dan, the generic flexible 2nd Dan picker). Listing
+        absorb_void here keeps it out of all of them at once."""
+        cid = _seed_character(client, name="EditorAbsorbExcl")
+        body = client.get(f"/characters/{cid}/edit").text
+        idx = body.index("MANTIS_NON_ROLLABLE_KNACKS = new Set([")
+        end = body.index("]);", idx)
+        block = body[idx:end]
+        assert "'absorb_void'" in block, (
+            f"absorb_void must be in MANTIS_NON_ROLLABLE_KNACKS so all "
+            f"flexible 1st/2nd/3rd Dan pickers exclude it; got: {block!r}"
+        )
+
+
+class TestEditPageDiscerningInvestigationBonus:
+    """Discerning gives 1 free raise (+5) on Interrogation but 2 free raises
+    (+10) on Investigation. The Edit Sheet's live skill-roll parenthetical
+    must reflect both amounts. Regression: the JS treated all free-raise
+    advantages uniformly as +5, so Investigation showed +5 instead of +10."""
+
+    def test_skill_roll_display_js_handles_discerning_investigation_as_plus_10(
+        self, client,
+    ):
+        cid = _seed_character(client, name="Discerning Edit")
+        body = client.get(f"/characters/{cid}/edit").text
+        idx = body.index("skillRollDisplay(skillId)")
+        tail = body[idx:idx + 5000]
+        # The function body must reference the +10 Discerning case for
+        # investigation. It should not be relying solely on the generic
+        # ADVANTAGE_FREE_RAISES loop (which gives a flat +5 to every match).
+        assert "investigation" in tail.lower(), (
+            "expected skillRollDisplay() to mention investigation for the "
+            f"discerning special case; got: {tail!r}"
+        )
+        assert "+10 from Discerning" in tail or "10 from Discerning" in tail, (
+            f"expected an explicit '+10 from Discerning' note in JS; got: {tail!r}"
+        )
+
+    def test_advantage_free_raises_no_longer_lists_discerning(self, client):
+        """Discerning must NOT be in the generic ADVANTAGE_FREE_RAISES map -
+        otherwise the loop would push '+5 from Discerning' alongside the
+        special-case '+10 from Discerning'. Keep it in one place."""
+        cid = _seed_character(client, name="DiscerningMap")
+        body = client.get(f"/characters/{cid}/edit").text
+        idx = body.index("ADVANTAGE_FREE_RAISES = {")
+        end = body.index("};", idx)
+        block = body[idx:end]
+        assert "'discerning'" not in block and '"discerning"' not in block, (
+            f"discerning must be removed from ADVANTAGE_FREE_RAISES; got: {block!r}"
         )
 
 
@@ -1857,6 +1995,82 @@ class TestUpdateCharacter:
         assert resp.status_code == 303
         char = query_db(client).filter(Character.id == cid).first()
         assert "athletics" not in (char.foreign_knacks or {})
+
+    def test_form_post_persists_specializations_json_field(self, client):
+        """The form-encoded POST accepts a hidden ``specializations_json``
+        field carrying the full list - same wire format as autosave."""
+        import json
+        cid = _seed_character(client, name="SpecForm")
+        form = make_character_form()
+        form["specializations_json"] = json.dumps([
+            {"text": "Court Etiquette", "skills": ["etiquette"]},
+            {"text": "Loyalty Speeches", "skills": ["bragging"]},
+        ])
+        resp = client.post(f"/characters/{cid}", data=form, follow_redirects=False)
+        assert resp.status_code == 303
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.specializations == [
+            {"text": "Court Etiquette", "skills": ["etiquette"]},
+            {"text": "Loyalty Speeches", "skills": ["bragging"]},
+        ]
+
+    def test_form_post_missing_specializations_json_clears_list(self, client):
+        """If the field is absent from a form POST, treat as no specs.
+        (The form always sends it as JSON, so this is a defensive case.)"""
+        cid = _seed_character(
+            client, name="ClearForm",
+            specializations=[{"text": "Old", "skills": ["culture"]}],
+        )
+        form = make_character_form()
+        resp = client.post(f"/characters/{cid}", data=form, follow_redirects=False)
+        assert resp.status_code == 303
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.specializations == []
+
+    def test_form_post_garbage_specializations_json_treated_as_empty(self, client):
+        """If the hidden field arrives malformed (e.g. truncated by a
+        crashed Alpine update), don't blow up the route - persist []."""
+        cid = _seed_character(
+            client, name="GarbageJsonForm",
+            specializations=[{"text": "Old", "skills": ["culture"]}],
+        )
+        form = make_character_form()
+        form["specializations_json"] = "{not valid json"
+        resp = client.post(f"/characters/{cid}", data=form, follow_redirects=False)
+        assert resp.status_code == 303
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.specializations == []
+
+    def test_autosave_specializations_non_list_treated_as_empty(self, client):
+        """A garbled top-level value (e.g. a dict instead of a list) is
+        coerced to [] rather than raising."""
+        cid = _seed_character(
+            client, name="NonListSpec",
+            specializations=[{"text": "Old", "skills": ["culture"]}],
+        )
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"specializations": {"oops": "not a list"}},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.specializations == []
+
+    def test_autosave_specializations_non_dict_entry_dropped(self, client):
+        """Entries that aren't dicts (e.g. a stray string) are dropped."""
+        cid = _seed_character(client, name="NonDictEntry")
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"specializations": [
+                "not a dict",
+                {"text": "Real", "skills": ["culture"]},
+            ]},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.specializations == [
+            {"text": "Real", "skills": ["culture"]},
+        ]
 
     def test_autosave_persists_foreign_knacks(self, client):
         """API autosave path: foreign_knacks dict in body is cleaned and
@@ -2101,6 +2315,55 @@ class TestAutoSave:
         char = query_db(client).filter(Character.id == cid).first()
         assert char.honor == 3.0
         assert char.name == "Original"  # unchanged
+
+    def test_autosave_persists_specializations_list(self, client):
+        cid = _seed_character(client, name="Spec")
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"specializations": [
+                {"text": "Court Etiquette", "skills": ["etiquette"]},
+                {"text": "Loyalty Speeches", "skills": ["bragging"]},
+            ]},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.specializations == [
+            {"text": "Court Etiquette", "skills": ["etiquette"]},
+            {"text": "Loyalty Speeches", "skills": ["bragging"]},
+        ]
+
+    def test_autosave_drops_empty_text_specializations(self, client):
+        """A blank-text spec is half-filled-out form state - drop it on
+        save rather than persist a nonsense entry."""
+        cid = _seed_character(client, name="DropEmpty")
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"specializations": [
+                {"text": "Court Etiquette", "skills": ["etiquette"]},
+                {"text": "", "skills": ["bragging"]},
+                {"text": "   ", "skills": ["culture"]},
+            ]},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.specializations == [
+            {"text": "Court Etiquette", "skills": ["etiquette"]},
+        ]
+
+    def test_autosave_drops_unknown_skill_specializations(self, client):
+        cid = _seed_character(client, name="DropBadSkill")
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"specializations": [
+                {"text": "Bogus", "skills": ["not_a_skill_id"]},
+                {"text": "Real", "skills": ["culture"]},
+            ]},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.specializations == [
+            {"text": "Real", "skills": ["culture"]},
+        ]
 
 
     def test_autosave_rejects_initiative_for_mantis_2nd_dan(self, client):
@@ -2761,6 +3024,165 @@ class TestPublish:
             CharacterVersion.character_id == cid
         ).first()
         assert v.author_discord_id == "183026066498125825"
+
+
+class TestDiscardChangesRoute:
+    """``POST /characters/{id}/discard`` reverts unapplied edits to the
+    last published state. Permission-gated like publish; safe no-op when
+    the character has never been published."""
+
+    def test_discard_reverts_draft_to_published_state(self, client):
+        cid = _seed_character(client, name="Pre-Publish", is_published=False)
+        # Publish to lock in the baseline.
+        client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
+
+        # Edit the draft.
+        client.post(f"/characters/{cid}/autosave", json={
+            "name": "Drafted Name",
+            "honor": 4.0,
+        })
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.name == "Drafted Name"
+        assert char.has_unpublished_changes
+
+        resp = client.post(f"/characters/{cid}/discard")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "discarded"
+
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.name == "Pre-Publish"
+        assert char.honor == 1.0
+        assert not char.has_unpublished_changes
+
+    def test_discard_does_not_create_a_new_version(self, client):
+        from app.models import CharacterVersion
+        cid = _seed_character(client, name="No Version", is_published=False)
+        client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
+        session = client._test_session_factory()
+        before = session.query(CharacterVersion).filter(
+            CharacterVersion.character_id == cid).count()
+        client.post(f"/characters/{cid}/autosave", json={"name": "Drafted"})
+        client.post(f"/characters/{cid}/discard")
+        after = session.query(CharacterVersion).filter(
+            CharacterVersion.character_id == cid).count()
+        assert after == before
+
+    def test_discard_404_for_unknown_character(self, client):
+        resp = client.post("/characters/9999/discard")
+        assert resp.status_code == 404
+
+    def test_discard_no_published_state_returns_409(self, client):
+        """A never-published draft has nothing to revert to. The route
+        should refuse cleanly instead of silently no-op'ing - the editor
+        button is gated on is_published, but a crafted POST might still
+        arrive."""
+        cid = _seed_character(client, name="Never Published",
+                              is_published=False, published_state=None)
+        char = query_db(client).filter(Character.id == cid).first()
+        assert not char.published_state
+        resp = client.post(f"/characters/{cid}/discard")
+        assert resp.status_code == 409
+        assert "no" in resp.json()["error"].lower()
+
+
+class TestDraftDiffRoute:
+    """``GET /characters/{id}/draft-diff`` returns the changes since the
+    last Apply Changes as a list of human-readable lines, used to
+    populate the Discard confirmation modal."""
+
+    def test_returns_diff_lines_for_modified_draft(self, client):
+        cid = _seed_character(client, name="Original", is_published=False)
+        client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
+        client.post(f"/characters/{cid}/autosave",
+                    json={"name": "Modified", "honor": 3.0})
+        resp = client.get(f"/characters/{cid}/draft-diff")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "lines" in data
+        text = " ".join(data["lines"])
+        assert "Original" in text or "Modified" in text
+        # Honor change shows up too.
+        assert "Honor" in text
+
+    def test_returns_empty_when_no_unapplied_changes(self, client):
+        cid = _seed_character(client, name="Clean", is_published=False)
+        client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
+        resp = client.get(f"/characters/{cid}/draft-diff")
+        assert resp.status_code == 200
+        assert resp.json()["lines"] == []
+
+    def test_404_for_unknown_character(self, client):
+        resp = client.get("/characters/9999/draft-diff")
+        assert resp.status_code == 404
+
+    def test_returns_empty_for_never_published_character(self, client):
+        cid = _seed_character(client, name="Never Pub", is_published=False,
+                              published_state=None)
+        resp = client.get(f"/characters/{cid}/draft-diff")
+        assert resp.status_code == 200
+        assert resp.json()["lines"] == []
+
+
+class TestDiscardAndDraftDiffAuth:
+    """Auth gating mirrors publish/revert: anonymous = 401, non-editor = 403."""
+
+    def _fake_anonymous_request(self):
+        class _Req:
+            class state: pass
+            state = state()
+        req = _Req()
+        req.state.user = None
+        return req
+
+    def _fake_other_user_request(self):
+        class _Req:
+            class state: pass
+            state = state()
+        req = _Req()
+        req.state.user = {"discord_id": "999999999"}
+        return req
+
+    def test_discard_anonymous_returns_401(self, client):
+        import asyncio
+        from app.routes.characters import discard_changes_route
+        cid = _seed_character(client, name="Anon Discard")
+        resp = asyncio.get_event_loop().run_until_complete(
+            discard_changes_route(self._fake_anonymous_request(), cid,
+                                  db=client._test_session_factory()),
+        )
+        assert resp.status_code == 401
+
+    def test_discard_non_editor_returns_403(self, client):
+        import asyncio
+        from app.routes.characters import discard_changes_route
+        cid = _seed_character(client, name="Other Discard",
+                              owner_discord_id="183026066498125825")
+        resp = asyncio.get_event_loop().run_until_complete(
+            discard_changes_route(self._fake_other_user_request(), cid,
+                                  db=client._test_session_factory()),
+        )
+        assert resp.status_code == 403
+
+    def test_draft_diff_anonymous_returns_401(self, client):
+        import asyncio
+        from app.routes.characters import draft_diff_route
+        cid = _seed_character(client, name="Anon Diff")
+        resp = asyncio.get_event_loop().run_until_complete(
+            draft_diff_route(self._fake_anonymous_request(), cid,
+                             db=client._test_session_factory()),
+        )
+        assert resp.status_code == 401
+
+    def test_draft_diff_non_editor_returns_403(self, client):
+        import asyncio
+        from app.routes.characters import draft_diff_route
+        cid = _seed_character(client, name="Other Diff",
+                              owner_discord_id="183026066498125825")
+        resp = asyncio.get_event_loop().run_until_complete(
+            draft_diff_route(self._fake_other_user_request(), cid,
+                             db=client._test_session_factory()),
+        )
+        assert resp.status_code == 403
 
 
 class TestUpdateVersionSummary:

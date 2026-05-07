@@ -47,6 +47,16 @@ class ExtractedAdvantage(BaseModel):
     detail: str = ""
 
 
+class ExtractedSpecialization(BaseModel):
+    """One Specialization. May appear multiple times on the same character.
+    ``skill_as_written`` is the human-readable skill name from the document
+    that the validator resolves to a SKILL id. ``text`` is the sub-domain
+    descriptor (e.g. ``"Court Etiquette"``) - free-form, GM-discussed."""
+    model_config = ConfigDict(extra="ignore")
+    text: str = ""
+    skill_as_written: str = ""
+
+
 class ExtractedRings(BaseModel):
     model_config = ConfigDict(extra="ignore")
     air: Optional[int] = None
@@ -97,6 +107,13 @@ class ExtractedCharacter(BaseModel):
     # --- Advantages / Disadvantages -----------------------------------
     advantages: List[ExtractedAdvantage] = Field(default_factory=list)
     disadvantages: List[ExtractedAdvantage] = Field(default_factory=list)
+
+    # --- Specializations ----------------------------------------------
+    # Specialization is the only advantage that may be taken multiple
+    # times. The LLM emits one entry per instance with the sub-domain
+    # text plus the human-readable skill name. The validator resolves
+    # each skill name to a SKILL id before persisting.
+    specializations: List[ExtractedSpecialization] = Field(default_factory=list)
 
     # --- Technique choices --------------------------------------------
     # Only for schools with player-choosable 1st / 2nd Dan techniques
@@ -333,6 +350,7 @@ __all__ = [
     "ExtractedRings",
     "ExtractedSkillOrKnack",
     "ExtractedAdvantage",
+    "ExtractedSpecialization",
     "ExtractedSection",
     "ExtractedAmbiguity",
     "GEMINI_RESPONSE_SCHEMA",

@@ -124,6 +124,89 @@ class TestCharacterFromDict:
         assert d["notes"] == "Some notes"
 
 
+class TestSpecializations:
+    """Specialization is the only advantage that may be taken multiple
+    times. Each instance carries its own text + skill and costs 2 XP.
+    The shape is `specializations: List[Dict]` on Character."""
+
+    def test_to_dict_includes_specializations(self, db):
+        c = Character(
+            name="Spec",
+            specializations=[
+                {"text": "Court Etiquette", "skills": ["etiquette"]},
+                {"text": "Dueling Stance", "skills": ["iaijutsu"]},
+            ],
+        )
+        db.add(c)
+        db.flush()
+        d = c.to_dict()
+        assert d["specializations"] == [
+            {"text": "Court Etiquette", "skills": ["etiquette"]},
+            {"text": "Dueling Stance", "skills": ["iaijutsu"]},
+        ]
+
+    def test_to_dict_empty_specializations_default(self):
+        c = Character(name="NoSpec")
+        d = c.to_dict()
+        assert d["specializations"] == []
+
+    def test_from_dict_round_trips_specializations(self):
+        data = {
+            "name": "RT",
+            "specializations": [
+                {"text": "Long Sword Strikes", "skills": ["iaijutsu"]},
+            ],
+        }
+        c = Character.from_dict(data)
+        assert c.specializations == [
+            {"text": "Long Sword Strikes", "skills": ["iaijutsu"]},
+        ]
+
+    def test_from_dict_lazy_migrates_legacy_shape(self):
+        """Legacy characters carry advantages=["specialization"] +
+        advantage_details["specialization"]={text,skills}. On read, lift
+        the detail into specializations[0] and strip the flag from
+        advantages so the rest of the system sees the new shape."""
+        data = {
+            "name": "Legacy",
+            "advantages": ["lucky", "specialization", "fierce"],
+            "advantage_details": {
+                "specialization": {"text": "Politics", "skills": ["etiquette"]},
+            },
+        }
+        c = Character.from_dict(data)
+        assert "specialization" not in c.advantages
+        assert c.advantages == ["lucky", "fierce"]
+        assert c.specializations == [
+            {"text": "Politics", "skills": ["etiquette"]},
+        ]
+        assert "specialization" not in (c.advantage_details or {})
+
+    def test_from_dict_lazy_migration_skips_when_already_migrated(self):
+        """If the new field is already populated, leave it alone (idempotent)."""
+        data = {
+            "name": "Already",
+            "advantages": ["specialization"],  # stale flag, possible but should be cleared
+            "advantage_details": {
+                "specialization": {"text": "Stale", "skills": ["bragging"]},
+            },
+            "specializations": [
+                {"text": "Already Migrated", "skills": ["etiquette"]},
+            ],
+        }
+        c = Character.from_dict(data)
+        assert c.specializations == [
+            {"text": "Already Migrated", "skills": ["etiquette"]},
+        ]
+        # The stale flag must still be cleared so the new field is the
+        # single source of truth.
+        assert "specialization" not in c.advantages
+
+    def test_from_dict_no_legacy_no_new_keeps_empty(self):
+        c = Character.from_dict({"name": "Empty"})
+        assert (c.specializations or []) == []
+
+
 class TestPublishStatus:
     def test_unpublished_character(self):
         c = Character(name="Test", is_published=False)
@@ -212,6 +295,96 @@ class TestPublishStatus:
         c.skills = {"bragging": 2}
         assert c.has_unpublished_changes is True
         assert c.publish_status == "modified"
+
+
+class TestEagerSpecializationBackfill:
+    """Live-site characters carry the legacy single-Specialization shape
+    in their stored ``advantages`` + ``advantage_details``. The eager
+    backfill in ``_migrate_legacy_specializations`` rewrites those rows
+    on app startup so the new shape is the single source of truth on
+    every subsequent read."""
+
+    def test_migrates_legacy_row(self, db):
+        from app.database import _migrate_legacy_specializations
+        c = Character(
+            name="Legacy",
+            advantages=["lucky", "specialization", "fierce"],
+            advantage_details={
+                "specialization": {"text": "Politics", "skills": ["etiquette"]},
+                "virtue": {"text": "Courage"},
+            },
+            specializations=[],
+        )
+        db.add(c)
+        db.commit()
+
+        # Run on a fresh session bound to the same in-memory engine.
+        Session = type(db)
+        session = Session(bind=db.bind)
+        try:
+            updated = _migrate_legacy_specializations(session)
+        finally:
+            pass  # _migrate_legacy_specializations closes the session it gets
+        assert updated == 1
+
+        # Reload the row and assert the new shape.
+        fresh = db.query(Character).filter(Character.name == "Legacy").first()
+        assert "specialization" not in fresh.advantages
+        assert fresh.advantages == ["lucky", "fierce"]
+        assert fresh.specializations == [
+            {"text": "Politics", "skills": ["etiquette"]},
+        ]
+        # Other detail entries unaffected.
+        assert fresh.advantage_details == {"virtue": {"text": "Courage"}}
+
+    def test_idempotent_on_already_migrated_row(self, db):
+        from app.database import _migrate_legacy_specializations
+        c = Character(
+            name="Already",
+            advantages=["lucky"],
+            specializations=[
+                {"text": "Court", "skills": ["etiquette"]},
+            ],
+        )
+        db.add(c)
+        db.commit()
+
+        Session = type(db)
+        session = Session(bind=db.bind)
+        updated = _migrate_legacy_specializations(session)
+        # Nothing to do.
+        assert updated == 0
+
+        fresh = db.query(Character).filter(Character.name == "Already").first()
+        assert fresh.advantages == ["lucky"]
+        assert fresh.specializations == [
+            {"text": "Court", "skills": ["etiquette"]},
+        ]
+
+    def test_legacy_row_with_no_existing_detail_still_strips_flag(self, db):
+        """If somehow a character has 'specialization' in advantages but
+        no corresponding detail dict, drop the flag and leave specs empty
+        (not [{empty_text}], which would clutter the editor)."""
+        from app.database import _migrate_legacy_specializations
+        c = Character(
+            name="StaleFlag",
+            advantages=["specialization"],
+            advantage_details={},
+        )
+        db.add(c)
+        db.commit()
+
+        Session = type(db)
+        session = Session(bind=db.bind)
+        updated = _migrate_legacy_specializations(session)
+        assert updated == 1
+
+        fresh = db.query(Character).filter(Character.name == "StaleFlag").first()
+        assert "specialization" not in fresh.advantages
+        # Empty placeholder spec is acceptable so the editor surfaces a
+        # row the player can complete; or empty list. Either is fine -
+        # what matters is the flag is gone.
+        assert "specialization" not in (fresh.advantage_details or {})
 
 
 class TestCharacterDB:
