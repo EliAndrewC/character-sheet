@@ -84,7 +84,7 @@
 
         <form method="POST"
               :action="saveUrl"
-              class="flex gap-3"
+              class="flex flex-wrap gap-3"
               data-testid="art-gen-save-form">
             <input type="hidden" name="x" :value="Math.round(box.x)">
             <input type="hidden" name="y" :value="Math.round(box.y)">
@@ -95,6 +95,18 @@
                     data-action="save-headshot">
                 Save Headshot
             </button>
+            {# Download Screenshot: lets the player save the full generated
+               image locally so they can iterate on the prompt and pick
+               their favourite without committing one as the headshot.
+               Browser uses the ``download`` attribute as the suggested
+               filename; since the staged-image route is same-origin the
+               browser saves rather than navigates. #}
+            <a :href="imageUrl"
+               :download="`character-${charId}-${Date.now()}.png`"
+               data-action="download-screenshot"
+               class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded font-medium">
+                Download Screenshot
+            </a>
         </form>
     </div>
 </div>
@@ -125,7 +137,13 @@ function artReview(charId, stagingId) {
     async generate() {
       // Tear down any state from a prior successful generation so the
       // user doesn't sit looking at the previous image (and its Cropper
-      // overlay) while the new one is still being produced.
+      // overlay) while the new one is still being produced. Cancel any
+      // pending poll tick so a stale tick can't fire _onSucceeded
+      // against the previous job after we've moved on.
+      if (this._pollTimer) {
+        clearTimeout(this._pollTimer);
+        this._pollTimer = null;
+      }
       if (this.cropper) { this.cropper.destroy(); this.cropper = null; }
       this.imageUrl = '';
       this.state = 'generating';
@@ -207,7 +225,18 @@ function artReview(charId, stagingId) {
     _initCropper() {
       const img = document.getElementById('art-gen-crop-target');
       const self = this;
+      // Defensive: if a stale 'load' listener from a previous generation
+      // fires after we've already constructed a Cropper for this round,
+      // destroy it before creating a new one. Otherwise Cropper.js layers
+      // its wrapper on top of its own previous wrapper and the result is
+      // either two stacked images or a transparent overlay with no
+      // picture inside it - exactly the symptoms players reported.
       const ready = () => {
+        // If the user kicked off another generation while this image was
+        // still loading, bail out - we'll be re-invoked when the new
+        // image lands.
+        if (self.state !== 'succeeded') return;
+        if (self.cropper) { self.cropper.destroy(); self.cropper = null; }
         self.cropper = new Cropper(img, {
           aspectRatio: self.aspectRatio,
           viewMode: 1,
@@ -230,7 +259,10 @@ function artReview(charId, stagingId) {
         });
       };
       if (img.complete && img.naturalWidth > 0) ready();
-      else img.addEventListener('load', ready);
+      // {once: true} so the listener auto-removes after firing - prevents
+      // accumulation across regenerations (the root cause of the
+      // multiple-Cropper-instance bug above).
+      else img.addEventListener('load', ready, { once: true });
     },
   };
 }

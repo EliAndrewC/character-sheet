@@ -4,7 +4,56 @@ import pytest
 from app.models import Character, CharacterVersion
 from app.services.versions import (
     compute_diff_summary, compute_version_diff, publish_character, revert_character,
+    stringify_version_diff_entries,
 )
+
+
+class TestStringifyVersionDiffEntries:
+    """Lines fed to the Discard Changes modal."""
+
+    def test_add_kind_uses_label_as_is(self):
+        out = stringify_version_diff_entries([
+            {"category": "Advantages", "label": "Added advantage: Lucky",
+             "before": None, "after": "Lucky", "kind": "add"},
+        ])
+        assert out == ["Added advantage: Lucky"]
+
+    def test_remove_kind_uses_label_as_is(self):
+        out = stringify_version_diff_entries([
+            {"category": "Advantages", "label": "Removed advantage: Fierce",
+             "before": "Fierce", "after": None, "kind": "remove"},
+        ])
+        assert out == ["Removed advantage: Fierce"]
+
+    def test_change_with_before_and_after(self):
+        out = stringify_version_diff_entries([
+            {"category": "Status", "label": "Honor",
+             "before": "1.0", "after": "3.0", "kind": "change"},
+        ])
+        assert out == ["Honor: 1.0 -> 3.0"]
+
+    def test_section_updated_kind(self):
+        out = stringify_version_diff_entries([
+            {"category": "Sections", "label": "Backstory",
+             "before": None, "after": "updated", "kind": "section_updated"},
+        ])
+        assert out == ["Backstory updated"]
+
+    def test_change_with_no_values_falls_back_to_label_only(self):
+        """Some entries (like the 'all of the above' summary) carry no
+        before/after - we render just the label."""
+        out = stringify_version_diff_entries([
+            {"category": "X", "label": "summary line",
+             "before": None, "after": None, "kind": "change"},
+        ])
+        assert out == ["summary line"]
+
+    def test_change_with_empty_string_renders_as_empty_marker(self):
+        out = stringify_version_diff_entries([
+            {"category": "X", "label": "Player name",
+             "before": "", "after": "Alice", "kind": "change"},
+        ])
+        assert out == ["Player name: (empty) -> Alice"]
 
 
 class TestCharacterVersionModel:
@@ -128,12 +177,6 @@ class TestDiffSummary:
         diffs = compute_diff_summary(old, new)
         assert any("Attack" in d for d in diffs)
 
-    def test_player_name_change(self):
-        old = {"player_name": "Old"}
-        new = {"player_name": "New"}
-        diffs = compute_diff_summary(old, new)
-        assert any("New" in d for d in diffs)
-
     def test_school_change(self):
         old = {"school": "akodo_bushi"}
         new = {"school": "bayushi_bushi"}
@@ -157,11 +200,31 @@ class TestDiffSummary:
         diffs = compute_diff_summary(state, state)
         assert diffs == []
 
-    def test_name_change(self):
+    def test_name_change_omitted_from_summary(self):
+        """Name is metadata - changes don't trigger Apply Changes and
+        don't appear in revision history. See METADATA_FIELDS."""
         old = {"name": "Old Name"}
         new = {"name": "New Name"}
         diffs = compute_diff_summary(old, new)
-        assert any("name" in d.lower() for d in diffs)
+        assert diffs == []
+
+    def test_player_name_change_omitted_from_summary(self):
+        old = {"player_name": "Alice"}
+        new = {"player_name": "Bob"}
+        diffs = compute_diff_summary(old, new)
+        assert diffs == []
+
+    def test_name_explanation_change_omitted_from_summary(self):
+        old = {"name_explanation": "old"}
+        new = {"name_explanation": "new"}
+        diffs = compute_diff_summary(old, new)
+        assert diffs == []
+
+    def test_age_change_omitted_from_summary(self):
+        old = {"age": 20}
+        new = {"age": 30}
+        diffs = compute_diff_summary(old, new)
+        assert diffs == []
 
     def test_advantage_removed(self):
         old = {"advantages": ["lucky"]}
@@ -337,25 +400,55 @@ class TestPublishCharacter:
 
 class TestRevertCharacter:
     def test_revert_creates_new_version(self, db):
-        char = Character(name="V1 Name", school="akodo_bushi",
+        # Use a stat (honor) to verify the revert mechanic - name is now
+        # metadata and not subject to revert.
+        char = Character(name="Revert Test", school="akodo_bushi",
                          school_ring_choice="Water", ring_water=3,
+                         honor=1.0,
                          owner_discord_id="123",
                          knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1})
         db.add(char)
         db.flush()
         v1 = publish_character(char, db)
 
-        char.name = "V2 Name"
+        char.honor = 3.5
         db.flush()
-        v2 = publish_character(char, db)
+        publish_character(char, db)
 
         # Revert to v1
         v3 = revert_character(char, v1.id, db)
 
         assert v3.version_number == 3
         assert "revert" in v3.summary.lower()
-        assert char.name == "V1 Name"
-        assert char.published_state["name"] == "V1 Name"
+        assert char.honor == 1.0
+        assert char.published_state["honor"] == 1.0
+
+    def test_revert_does_not_touch_metadata_fields(self, db):
+        """Metadata (name, name_explanation, player_name, age) lives
+        outside the version system. Revert preserves the player's
+        current values rather than rolling them back."""
+        char = Character(name="Old Name", school="akodo_bushi",
+                         school_ring_choice="Water", ring_water=3,
+                         honor=1.0, age=20, owner_discord_id="123",
+                         knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+        db.add(char)
+        db.flush()
+        v1 = publish_character(char, db)
+
+        # Edit metadata + a stat, then publish.
+        char.name = "New Name"
+        char.age = 99
+        char.honor = 2.5
+        db.flush()
+        publish_character(char, db)
+
+        # Revert to v1 - stat goes back, metadata stays at the current
+        # ("New Name" / 99) values.
+        revert_character(char, v1.id, db)
+
+        assert char.honor == 1.0
+        assert char.name == "New Name"
+        assert char.age == 99
 
     def test_revert_with_unknown_version_id_raises(self, db):
         char = Character(name="Target", school="akodo_bushi",
@@ -405,17 +498,17 @@ class TestDiscardDraftChanges:
         db.flush()
         publish_character(char, db)
 
-        # Edit the draft.
-        char.name = "Drafted"
+        # Edit the draft - use stats since name is metadata now.
         char.honor = 4.5
+        char.attack = 3
         db.flush()
         assert char.has_unpublished_changes
 
         discard_draft_changes(char, db)
         db.flush()
 
-        assert char.name == "Original"
         assert char.honor == 1.0
+        assert char.attack == 1
         assert not char.has_unpublished_changes
 
     def test_discard_restores_specializations(self, db):
@@ -487,7 +580,8 @@ class TestDiscardDraftChanges:
         char.current_light_wounds = 7
         char.current_void_points = 1
         char.adventure_state = {"lucky_used": True}
-        char.name = "Drafted"
+        # Use a stat to verify the discard mechanic - name is metadata now.
+        char.honor = 4.0
         db.flush()
 
         discard_draft_changes(char, db)
@@ -498,7 +592,7 @@ class TestDiscardDraftChanges:
         assert char.current_void_points == 1
         assert char.adventure_state == {"lucky_used": True}
         # Draft change reverted.
-        assert char.name != "Drafted"
+        assert char.honor == 1.0
 
     def test_discard_with_no_published_state_is_a_noop(self, db):
         """Defensive: a never-published draft has nothing to revert to.
@@ -606,28 +700,68 @@ class TestComputeVersionDiff:
         assert compute_version_diff({}, {"name": "x"}) == []
         assert compute_version_diff(None, {"name": "x"}) == []
 
-    def test_basics_name_change(self):
-        entries = compute_version_diff({"name": "Old"}, {"name": "New"})
-        basics = self._by_category(entries, "Basics")
-        assert any(e["label"] == "Name" and e["before"] == "Old" and e["after"] == "New"
-                   for e in basics)
-
-    def test_basics_player_name_change_renders_empty_when_unset(self):
-        entries = compute_version_diff({"player_name": ""}, {"player_name": "Alice"})
-        basics = self._by_category(entries, "Basics")
-        match = next(e for e in basics if e["label"] == "Player name")
-        assert match["before"] == "(empty)" and match["after"] == "Alice"
-
-    def test_name_explanation_surfaces_as_section_updated(self):
+    def test_foreign_knack_added(self):
         entries = compute_version_diff(
-            {"name_explanation": "old reason"},
-            {"name_explanation": "new reason"},
+            {"foreign_knacks": {}},
+            {"foreign_knacks": {"athletics": 2}},
         )
-        match = next(e for e in entries if e["label"] == "Name explanation")
-        assert match["kind"] == "section_updated"
-        assert match["after"] == "updated"
-        # Crucially, the actual prose isn't dumped into the diff.
-        assert "old reason" not in str(match) and "new reason" not in str(match)
+        knack_entries = self._by_category(entries, "Knacks")
+        assert any(
+            e["kind"] == "add" and "foreign" in e["label"].lower()
+            and "Athletics" in e["label"]
+            for e in knack_entries
+        )
+
+    def test_foreign_knack_removed(self):
+        entries = compute_version_diff(
+            {"foreign_knacks": {"athletics": 2}},
+            {"foreign_knacks": {}},
+        )
+        knack_entries = self._by_category(entries, "Knacks")
+        assert any(
+            e["kind"] == "remove" and "foreign" in e["label"].lower()
+            for e in knack_entries
+        )
+
+    def test_foreign_knack_rank_changed(self):
+        entries = compute_version_diff(
+            {"foreign_knacks": {"athletics": 1}},
+            {"foreign_knacks": {"athletics": 4}},
+        )
+        knack_entries = self._by_category(entries, "Knacks")
+        assert any(
+            e["kind"] == "change" and "foreign" in e["label"].lower()
+            and e["before"] == 1 and e["after"] == 4
+            for e in knack_entries
+        )
+
+    def test_foreign_knack_unchanged_emits_nothing(self):
+        entries = compute_version_diff(
+            {"foreign_knacks": {"athletics": 2}},
+            {"foreign_knacks": {"athletics": 2}},
+        )
+        knack_entries = self._by_category(entries, "Knacks")
+        assert not any(
+            "foreign" in e.get("label", "").lower() for e in knack_entries
+        )
+
+    def test_metadata_changes_omitted_from_structured_diff(self):
+        """name, name_explanation, player_name, age are metadata. They
+        don't trigger Apply Changes, so they don't appear in the
+        version-history drill-down or the Discard preview either."""
+        entries = compute_version_diff(
+            {"name": "Old", "player_name": "P1",
+             "name_explanation": "old", "age": 20},
+            {"name": "New", "player_name": "P2",
+             "name_explanation": "new", "age": 30},
+        )
+        basics = self._by_category(entries, "Basics")
+        labels = {e.get("label") for e in basics}
+        for forbidden in ("Name", "Player name", "Name explanation", "Age"):
+            assert forbidden not in labels, (
+                f"Metadata label {forbidden!r} must NOT appear in the "
+                f"structured diff; got: {labels!r}"
+            )
 
     def test_school_change_renders_display_names(self):
         entries = compute_version_diff(

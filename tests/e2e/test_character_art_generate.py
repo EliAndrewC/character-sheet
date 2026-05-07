@@ -143,6 +143,40 @@ def test_create_prompt_advances_to_step3_with_textarea(page, live_server_url):
     assert "He is approximately" in content
 
 
+def test_age_field_is_bidirectional_between_sheet_and_art_form(page, live_server_url):
+    """Age set on the Edit Sheet pre-fills the art-generation form, AND
+    changing it on the art form propagates back to the sheet."""
+    edit_url = _create_character(page, live_server_url, "AgeSync")
+    char_id = edit_url.split("/characters/")[1].split("/")[0]
+
+    # 1. Set Age=33 on the Edit Sheet.
+    page.goto(edit_url)
+    page.fill('input[name="age"]', "33")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.wait_for_timeout(200)
+
+    # 2. Open the art generation form -> the Age input is pre-filled to 33.
+    page.goto(f"{live_server_url}/characters/{char_id}/art/generate/options?gender=male")
+    page.wait_for_selector('[data-testid="age-input"]')
+    age_input = page.locator('[data-testid="age-input"]')
+    assert age_input.input_value() == "33"
+
+    # 3. Change Age to 41 on the art form and submit.
+    age_input.fill("41")
+    page.locator('[data-action="create-prompt"]').click()
+    page.wait_for_url("**/art/generate/review/**")
+
+    # 4. Back on the Edit Sheet, the Age field reflects the new value.
+    page.goto(edit_url)
+    page.wait_for_selector('input[name="age"]')
+    assert page.locator('input[name="age"]').input_value() == "41"
+
+    # 5. The age change must NOT count as an unapplied stat change.
+    page.wait_for_timeout(200)
+    assert not page.locator('[data-action="apply-changes"]').is_visible()
+    assert not page.locator('[data-action="discard-changes"]').is_visible()
+
+
 # ---------------------------------------------------------------------------
 # In-place generation + Cropper
 # ---------------------------------------------------------------------------
@@ -175,6 +209,104 @@ def test_generation_happy_path_in_place_crop_and_save(page, live_server_url):
     page.locator('[data-action="save-headshot"]').click()
     page.wait_for_url("**/edit?art_saved=1")
     page.wait_for_selector('[data-testid="art-saved-banner"]')
+
+
+def test_download_screenshot_button_serves_the_generated_image(page, live_server_url):
+    """The Download Screenshot button on the review page lets the player
+    save the generated image locally without committing it as the
+    headshot. This is the iterate-on-prompt workflow: generate, download
+    a candidate, regenerate with a tweaked prompt, repeat until happy."""
+    edit_url = _create_character(page, live_server_url, "GenDownload")
+    char_id = edit_url.split("/characters/")[1].split("/")[0]
+    page.goto(f"{live_server_url}/characters/{char_id}/art/generate/options?gender=female")
+    page.wait_for_selector('[data-testid="age-input"]')
+    page.locator('[data-action="create-prompt"]').click()
+    page.wait_for_url("**/art/generate/review/**")
+
+    page.locator('[data-action="generate-art"]').click()
+    page.wait_for_selector(
+        '[data-testid="art-gen-crop-section"]', state="visible", timeout=10_000,
+    )
+
+    download_link = page.locator('[data-action="download-screenshot"]')
+    assert download_link.is_visible()
+    # Has an HTML download attribute so the browser saves rather than
+    # navigates - filename includes the character id for sanity.
+    suggested = download_link.get_attribute("download")
+    assert suggested and char_id in suggested
+    assert suggested.endswith(".png")
+    # Clicking starts a download (Playwright helper).
+    with page.expect_download() as info:
+        download_link.click()
+    download = info.value
+    assert download.suggested_filename.endswith(".png")
+    # Save Headshot button is still visible after a download (download
+    # doesn't commit the headshot).
+    assert page.locator('[data-action="save-headshot"]').is_visible()
+
+
+def test_repeated_regenerations_do_not_accumulate_cropper_containers(page, live_server_url):
+    """Players doing multiple back-to-back regenerations must always end
+    up with exactly one Cropper wrapper in the DOM.
+
+    Regression: the load-event listener attached in _initCropper had no
+    {once: true}, so every regeneration where the image wasn't already
+    preloaded left a stale listener. On the next image load all stale
+    listeners fired together, each constructing a new Cropper - producing
+    "two pictures stacked" or "transparent rectangle with no picture
+    inside" once Cropper.js got confused by being layered on its own
+    previous wrapper. The fix is once-fire listeners + a defensive
+    cropper-destroy at the top of _initCropper."""
+    edit_url = _create_character(page, live_server_url, "RegenStress")
+    char_id = edit_url.split("/characters/")[1].split("/")[0]
+    page.goto(f"{live_server_url}/characters/{char_id}/art/generate/options?gender=female")
+    page.wait_for_selector('[data-testid="age-input"]')
+    page.locator('[data-action="create-prompt"]').click()
+    page.wait_for_url("**/art/generate/review/**")
+
+    textarea = page.locator('[data-testid="prompt-textarea"]')
+
+    def run_one_generation():
+        prev_src = page.locator('#art-gen-crop-target').get_attribute('src') or ''
+        page.locator('[data-action="generate-art"]').click()
+        # Wait until state lands back at 'succeeded' AND a fresh src is in
+        # place AND Cropper has actually wired up (its ``.cropper-container``
+        # wrapper is the signal). Without the cropper wait, this helper
+        # races the $nextTick + image-load chain and can return before
+        # _initCropper has finished, producing a flaky 0-vs-1 mismatch.
+        import json
+        prev_json = json.dumps(prev_src)
+        page.wait_for_function(
+            f"""() => {{
+                const el = document.querySelector('[data-testid="art-gen-review-page"]');
+                const data = window.Alpine && window.Alpine.$data(el);
+                if (!data || data.state !== 'succeeded') return false;
+                const cur = document.querySelector('#art-gen-crop-target')?.getAttribute('src');
+                if (!cur || cur === {prev_json}) return false;
+                return document.querySelectorAll('.cropper-container').length >= 1;
+            }}""",
+            timeout=15_000,
+        )
+
+    # 1st generation - default Wasp prompt.
+    run_one_generation()
+    assert page.locator('.cropper-container').count() == 1
+
+    # Now do four more generations, alternating the keyword between Wasp
+    # and Scorpion so the stub returns different bytes and the cache-buster
+    # flips. After EACH regeneration, exactly one Cropper container must
+    # exist - not 2, not "0 + a transparent overlay".
+    for i, keyword in enumerate(("Scorpion", "Wasp", "Scorpion", "Wasp")):
+        current = textarea.input_value()
+        # Replace whichever keyword is currently in the prompt.
+        edited = current.replace("Wasp", keyword).replace("wasp", keyword.lower())
+        textarea.fill(edited)
+        run_one_generation()
+        cropper_count = page.locator('.cropper-container').count()
+        assert cropper_count == 1, (
+            f"after {i + 2} generations, expected exactly one .cropper-container, "
+            f"got {cropper_count}"
+        )
 
 
 def test_re_generation_after_prompt_edit_loads_new_image(page, live_server_url):

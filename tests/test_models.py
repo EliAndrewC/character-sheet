@@ -297,6 +297,70 @@ class TestPublishStatus:
         assert c.publish_status == "modified"
 
 
+class TestAgeMetadata:
+    """Age is metadata, not a stat. It persists, the editor can read/write
+    it, and the validator complains when unset - but it must NOT count as
+    an unpublished change, must NOT appear in revision history diffs, and
+    must NOT be reverted by Discard / Revert."""
+
+    def test_to_dict_includes_age(self):
+        c = Character(name="Aged", age=28)
+        d = c.to_dict()
+        assert d["age"] == 28
+
+    def test_to_dict_age_default_is_none(self):
+        c = Character(name="Unaged")
+        d = c.to_dict()
+        assert d["age"] is None
+
+    def test_from_dict_accepts_age(self):
+        c = Character.from_dict({"name": "RT", "age": 35})
+        assert c.age == 35
+
+    def test_from_dict_age_default_is_none(self):
+        c = Character.from_dict({"name": "NoAge"})
+        assert c.age is None
+
+    def test_changing_age_does_not_flip_has_unpublished_changes(self, db):
+        c = Character(
+            name="AgeNoFlip", school="akodo_bushi", school_ring_choice="Water",
+            ring_water=3, owner_discord_id="123",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            age=None,
+        )
+        db.add(c)
+        db.flush()
+        from app.services.versions import publish_character
+        publish_character(c, db)
+        db.flush()
+        assert not c.has_unpublished_changes
+        # Setting age must NOT flip the character into "modified" state.
+        c.age = 30
+        db.flush()
+        assert not c.has_unpublished_changes
+
+    def test_discard_preserves_age(self, db):
+        from app.services.versions import publish_character, discard_draft_changes
+        c = Character(
+            name="AgeKeep", school="akodo_bushi", school_ring_choice="Water",
+            ring_water=3, owner_discord_id="123",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            age=20,
+        )
+        db.add(c)
+        db.flush()
+        publish_character(c, db)
+        db.flush()
+        # Edit a stat AND change age; only the stat should revert.
+        c.honor = 4.0
+        c.age = 99
+        db.flush()
+        discard_draft_changes(c, db)
+        db.flush()
+        assert c.honor == 1.0  # stat reverted
+        assert c.age == 99     # metadata preserved
+
+
 class TestEagerSpecializationBackfill:
     """Live-site characters carry the legacy single-Specialization shape
     in their stored ``advantages`` + ``advantage_details``. The eager

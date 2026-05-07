@@ -478,6 +478,11 @@ def art_generate_options(
         return RedirectResponse(
             f"/characters/{char_id}/art/generate", status_code=303,
         )
+    # Pre-fill the Age input from the character's saved age so the
+    # bidirectional link works: the editor's Age field and this form share
+    # the same value. Submitting this form (assemble) writes back to
+    # Character.age so changes here propagate to the sheet.
+    prefill_age = character.age if character.age is not None else art_prompt.DEFAULT_AGE
     return _templates().TemplateResponse(
         request=request,
         name="character/art_generate_options.html",
@@ -487,7 +492,7 @@ def art_generate_options(
             "subject_pronoun": "She" if gender == "female" else "He",
             "clan_colors": art_prompt.CLAN_COLORS,
             "default_clan": art_prompt.DEFAULT_CLAN,
-            "default_age": art_prompt.DEFAULT_AGE,
+            "default_age": prefill_age,
             "age_min": art_prompt.AGE_MIN,
             "age_max": art_prompt.AGE_MAX,
             "armor_choices": art_prompt.ARMOR_CHOICES,
@@ -510,7 +515,7 @@ def art_generate_assemble(
     db: Session = Depends(get_db),
 ):
     """Step 2 -> step 3. Builds the prompt, stages it, redirects."""
-    _character, err = _load_character_for_edit(request, db, char_id)
+    character, err = _load_character_for_edit(request, db, char_id)
     if err is not None:
         return err
 
@@ -524,9 +529,21 @@ def art_generate_assemble(
         # Any out-of-range input bounces back to step 1. We don't try
         # to carry partial state forward - it's rare enough that a
         # clean reset is less confusing than a half-filled form.
+        # Critically: do NOT persist the invalid age back to the
+        # character - the writeback below only runs on a successful
+        # assemble.
         return RedirectResponse(
             f"/characters/{char_id}/art/generate", status_code=303,
         )
+
+    # Bidirectional age sync: the same age field lives on the character
+    # sheet, and changes made here propagate back so the player doesn't
+    # have to keep two values in sync. Age is metadata (not in the
+    # has_unpublished_changes skip set), so this write doesn't flip the
+    # character into "modified" state.
+    if character.age != age:
+        character.age = age
+        db.commit()
 
     staging_id = art_jobs.stage_art(
         user_id=request.state.user["discord_id"],

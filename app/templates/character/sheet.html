@@ -155,8 +155,12 @@
                     </div>
                 </span>{% endif %}
             </h1>
-            {% if owner_display_name %}
-            <p class="text-ink/60">Player: {{ owner_display_name }}</p>
+            {% if owner_display_name or character.age is not none %}
+            <p class="text-ink/60">
+                {% if owner_display_name %}Player: {{ owner_display_name }}{% endif %}
+                {% if owner_display_name and character.age is not none %} &middot; {% endif %}
+                {% if character.age is not none %}Age: {{ character.age }}{% endif %}
+            </p>
             {% endif %}
         </div>
         {% if viewer_can_edit %}

@@ -739,6 +739,13 @@ def validate_character(character_data: dict) -> List[str]:
     """Return a list of validation error strings.  Empty list means valid."""
     errors: List[str] = []
 
+    # -- Age (metadata, but the View Sheet flags it when unset) --
+    age = character_data.get("age")
+    if age is None:
+        errors.append("Age is not set.")
+    elif age < 0:
+        errors.append(f"Age ({age}) cannot be negative.")
+
     school_id = character_data.get("school", "")
     school = SCHOOLS.get(school_id)
     school_ring = character_data.get("school_ring_choice", "")

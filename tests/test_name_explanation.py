@@ -138,32 +138,39 @@ class TestFormUpdate:
 
 
 class TestVersionRestore:
-    def test_restore_sets_explanation_from_state(self):
+    """name_explanation is now metadata - it lives outside the version
+    system. Discard / Revert must NOT touch it (the player's current
+    explanation stays put), and edits to it don't flip the character
+    into the "modified" draft state."""
+
+    def test_restore_does_not_touch_explanation(self):
         c = Character(name="Test", name_explanation="Current draft note.")
         _restore_character_from_state(c, {"name": "Test", "name_explanation": "Older note."})
-        assert c.name_explanation == "Older note."
+        # Explanation is preserved (not reset to the snapshot's value).
+        assert c.name_explanation == "Current draft note."
 
-    def test_restore_clears_explanation_when_state_has_none(self):
+    def test_restore_does_not_clear_explanation(self):
         c = Character(name="Test", name_explanation="Current draft note.")
         _restore_character_from_state(c, {"name": "Test"})
-        assert c.name_explanation == ""
+        assert c.name_explanation == "Current draft note."
 
 
 # ---------------------------------------------------------------------------
-# Draft diff: editing name_explanation triggers a "modified" draft
+# Draft diff: editing name_explanation does NOT trigger a "modified" draft
 # ---------------------------------------------------------------------------
 
 
 class TestDraftDiff:
-    def test_has_unpublished_changes_when_explanation_differs(self, db):
+    def test_no_unpublished_changes_when_only_explanation_differs(self, db):
+        """Metadata-only edits don't flip the character into the
+        modified state."""
         c = Character(name="Test", is_published=True, name_explanation="New text.")
         db.add(c)
         db.flush()
-        # Seed published_state from a snapshot with DIFFERENT explanation.
         snapshot = c.to_dict()
         snapshot["name_explanation"] = "Old text."
         c.published_state = snapshot
-        assert c.has_unpublished_changes is True
+        assert c.has_unpublished_changes is False
 
     def test_no_changes_when_explanation_matches(self, db):
         c = Character(name="Test", is_published=True, name_explanation="Same text.")

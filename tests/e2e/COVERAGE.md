@@ -1087,6 +1087,8 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Discard Changes button hidden for never-applied draft (no published_state to revert to) → `test_apply_modal.py::test_discard_button_hidden_for_never_applied_draft`
 - [x] Neither Apply nor Discard button visible when there are no unapplied changes → `test_apply_modal.py::test_neither_button_visible_when_no_unapplied_changes`
 - [x] Discard full flow: edit -> click Discard -> modal lists diff lines -> Cancel keeps draft, Confirm reverts to published state and hides both buttons → `test_apply_modal.py::test_discard_full_flow_modal_diff_and_revert`
+- [x] Age metadata: setting age does not flip the character to "unpublished changes" (Apply/Discard stay hidden); the View Sheet flags an unset age as a Validation Issue and that issue clears once the player sets a value → `test_apply_modal.py::test_age_metadata_does_not_count_as_unapplied_changes`
+- [x] Age is bidirectionally linked between the Edit Sheet and the AI art generation form: setting age on the sheet pre-fills the art form; changing age on the art form syncs back to the sheet without flipping the character to "modified" → `test_character_art_generate.py::test_age_field_is_bidirectional_between_sheet_and_art_form`
 
 ## Character Editor — Hidden Draft Visibility
 
@@ -1491,6 +1493,8 @@ JS-error sanity:
       `test_character_art_generate.py::test_generation_happy_path_in_place_crop_and_save`
 - [x] Re-generation after a successful first generation: edited prompt produces a new image, img.src cache-busts, old Cropper is destroyed (regression: stale image after second Generate click) ->
       `test_character_art_generate.py::test_re_generation_after_prompt_edit_loads_new_image`
+- [x] Download Screenshot button: saves the generated image locally with a per-character filename so the player can iterate on prompts before committing one as the headshot. Save Headshot remains visible after download ->
+      `test_character_art_generate.py::test_download_screenshot_button_serves_the_generated_image`
 - [-] Failed generation shows the error + re-enables textarea for retry
       (route-level failure paths are covered by
       `test_art_routes.py::TestGenerateStatusEndpoint::test_failed_payload_includes_error_code_and_message`;

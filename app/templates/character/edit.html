@@ -400,6 +400,19 @@
                            @input="markDirty()"
                            class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
                 </div>
+                {# Age is metadata - changes don't trigger draft state and
+                   don't appear in revision history. Optional but flagged
+                   as a Validation Issue on the View Sheet when blank.
+                   The same value is used to pre-fill the AI art generator
+                   form, and edits made there sync back here. #}
+                <div class="min-w-0">
+                    <label class="block text-sm font-medium mb-1">Age</label>
+                    <input type="number" name="age" value="{{ character.age if character.age is not none else '' }}"
+                           min="0"
+                           x-model.number="age"
+                           @input="markDirty()"
+                           class="w-24 border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                </div>
             </div>
         </section>
 
@@ -1531,19 +1544,19 @@
                         </div>
                         {% endif %}
                     </div>
-                    {# Discard Changes is only available when (a) the
-                       character has been Applied at least once (so there's
-                       a published_state to revert to) AND (b) there are
-                       unapplied edits to discard. The Apply button shares
-                       the second condition. Both flags are client-reactive
-                       so the buttons appear the moment the user makes any
-                       change and disappear after Apply / Discard. #}
+                    {# Apply Changes shows whenever the player has anything
+                       to commit:
+                         - never-applied draft (creates the first version), OR
+                         - published character with edits since last Apply.
+                       Discard Changes additionally requires a published
+                       version to revert to. After Apply / Discard the page
+                       reloads and both flip back to clean. #}
                     <button type="button" x-show="isPublished && hasUnpublishedChanges" x-cloak
                             @click="openDiscardModal()" data-action="discard-changes"
                             class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base">
                         Discard Changes
                     </button>
-                    <button type="button" x-show="hasUnpublishedChanges" x-cloak
+                    <button type="button" x-show="!isPublished || hasUnpublishedChanges" x-cloak
                             @click="openApplyModal()" data-action="apply-changes"
                             :disabled="!school"
                             class="bg-accent hover:bg-red-900 text-parchment px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base disabled:opacity-40 disabled:cursor-not-allowed">
@@ -1740,6 +1753,7 @@ function characterForm() {
         schoolRingChoice: '{{ character.school_ring_choice }}',
         startingXp: 150,
         earnedXp: {{ character.earned_xp }},
+        age: {{ character.age if character.age is not none else 'null' }},
         rings: {{ char_dict.rings | tojson }},
         skills: {
             {% for sid in skills %}
@@ -1971,6 +1985,7 @@ function characterForm() {
                 const body = {
                     name: document.querySelector('input[name="name"]')?.value || this.school || 'New Character',
                     name_explanation: this.nameExplanation || '',
+                    age: (this.age === '' || this.age === null || isNaN(this.age)) ? null : this.age,
                     owner_discord_id: document.querySelector('select[name="owner_discord_id"]')?.value || undefined,
                     school: this.school,
                     school_ring_choice: this.schoolRingChoice,
@@ -2006,10 +2021,20 @@ function characterForm() {
                 if (resp.ok) {
                     this.saveStatus = 'Saved';
                     this._clearSaveRetry();
-                    // Any successful save means the draft now differs from
-                    // the published state, so the Apply / Discard buttons
-                    // become relevant.
-                    this.hasUnpublishedChanges = true;
+                    // The server tells us whether the post-save state
+                    // differs from the published snapshot. Metadata-only
+                    // edits (e.g. age) won't flip the flag, so the Apply
+                    // / Discard buttons stay hidden in that case.
+                    try {
+                        const data = await resp.json();
+                        if (typeof data.has_unpublished_changes === 'boolean') {
+                            this.hasUnpublishedChanges = data.has_unpublished_changes;
+                        } else {
+                            this.hasUnpublishedChanges = true;
+                        }
+                    } catch (e) {
+                        this.hasUnpublishedChanges = true;
+                    }
                     setTimeout(() => { if (this.saveStatus === 'Saved') this.saveStatus = ''; }, 2000);
                 } else if (resp.status >= 400 && resp.status < 500) {
                     // 4xx: validation failure, auth lost, etc. Retrying
