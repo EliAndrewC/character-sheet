@@ -112,14 +112,28 @@ def add_light_wounds(page, amount, *, dismiss_wc=True):
         dismiss_wc_modal(page)
 
 
-def apply_changes(page, summary="Test version"):
+def apply_changes(page, summary="Test version", make_visible=True):
     """Click Apply Changes, fill in the modal summary, and confirm.
+
+    ``make_visible`` ticks the modal's "make visible" checkbox when the
+    character is currently hidden so the published version is broadcast
+    to non-editor viewers. The checkbox markup is gated on isHidden, so
+    on already-public characters the parameter is a no-op. Defaults to
+    True so existing tests that publish a hidden draft and then assert
+    against a non-editor view continue to behave as before.
 
     Waits for redirect to the character sheet view.
     """
     page.locator('[data-action="apply-changes"]').click()
     page.wait_for_selector('textarea[placeholder="Describe your changes..."]', timeout=5000)
     page.fill('textarea[placeholder="Describe your changes..."]', summary)
+    if make_visible:
+        # The checkbox row is x-show'd only while isHidden=true; checking
+        # is_visible() handles both the "currently hidden" and "already
+        # public" cases without a separate branch.
+        cb = page.locator('[data-testid="apply-make-visible-checkbox"]')
+        if cb.is_visible():
+            cb.check()
     # Click the modal's confirm button (inside the fixed overlay)
     page.locator('div.fixed button:text("Apply Changes")').click()
     # Use a generous timeout — under heavy session load the server can be slow

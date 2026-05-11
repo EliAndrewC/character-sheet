@@ -570,6 +570,428 @@ def test_priest_still_defaults_ring_to_water(page, live_server_url):
     assert page.locator('input[name="ring_water"]').input_value() == "3"
 
 
+def test_school_change_at_dan_4_clamps_old_school_ring(page, live_server_url):
+    """At Dan 4 with the school ring (Water) at 7, switching schools to
+    one whose school ring is a different ring leaves Water as a non-
+    school ring (max 5). The old Water=7 must clamp back to 5; otherwise
+    validate_character flags 'Water (7) exceeds maximum (5)'."""
+    _go_to_editor(page, live_server_url)
+    # Reach 4th Dan with Akodo Bushi (school ring = Water).
+    click_plus(page, "knack_double_attack", 3)
+    click_plus(page, "knack_feint", 3)
+    click_plus(page, "knack_iaijutsu", 3)
+    page.wait_for_timeout(100)
+    click_plus(page, "ring_water", 3)  # 4 -> 7
+    assert page.locator('input[name="ring_water"]').input_value() == "7"
+    # Switch school - Bayushi Bushi's school ring is a different ring.
+    select_school(page, "bayushi_bushi")
+    page.wait_for_timeout(300)
+    # Water is now a non-school ring; its max is 5. Must be clamped.
+    val = int(page.locator('input[name="ring_water"]').input_value())
+    assert val <= 5, (
+        f"old school ring Water stayed at {val} after school change "
+        "(non-school max is 5)"
+    )
+
+
+def test_school_ring_choice_change_clamps_old_school_ring(page, live_server_url):
+    """For a variable-ring school (Mantis Wave-Treader) at Dan 4 with
+    Air at 7 (Air was the chosen school ring), switching school_ring_
+    choice to Water makes Air a non-school ring. Air must clamp from
+    7 to 5."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "RingChoiceFlip")
+    select_school(page, "mantis_wave_treader")
+    page.wait_for_timeout(200)
+    # Pick Air as the school ring, raise knacks to 4, raise Air to 7.
+    # Use a direct Alpine bridge to make the setup robust against the
+    # variable-ring picker's exact selector wiring.
+    page.evaluate("""() => {
+        const root = document.querySelector('[x-data="characterForm()"]');
+        const d = Alpine.$data(root);
+        d.schoolRingChoice = 'Air';
+        d.knacks = {athletics: 4, awareness: 4, sailing: 4};
+        d.rings.Air = 7;
+    }""")
+    page.wait_for_timeout(200)
+    pre = page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        return {sr: d.getSchoolRing(), air: d.rings.Air, dan: d.currentDan()};
+    }""")
+    assert pre == {"sr": "Air", "air": 7, "dan": 4}, pre
+    # Now flip school_ring_choice to Water via onSchoolRingChange (mirrors
+    # what the picker fires when the user changes the dropdown).
+    page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        d.schoolRingChoice = 'Water';
+        d.onSchoolRingChange();
+    }""")
+    page.wait_for_timeout(200)
+    post = page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        return {sr: d.getSchoolRing(), air: d.rings.Air, water: d.rings.Water};
+    }""")
+    assert post["sr"] == "Water", post
+    assert post["air"] <= 5, (
+        f"old school ring Air stayed at {post['air']} after "
+        "school_ring_choice changed (non-school max is 5)"
+    )
+
+
+def test_corrupt_state_clamps_on_edit_page_load(page, live_server_url):
+    """A character already persisted with an invalid ring (e.g. ring=7
+    while Dan=3, surviving from a past bug) must reconcile on edit page
+    init so the editor doesn't continue to display an out-of-range
+    value."""
+    _go_to_editor(page, live_server_url)
+    # Force a corrupt persisted state via direct autosave: knacks at
+    # rank 3 (Dan 3) but Water at 7 (only valid at Dan 4).
+    char_id = page.url.rstrip("/").split("/")[-2]
+    page.evaluate(
+        """async (cid) => {
+            await fetch('/characters/' + cid + '/autosave', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    school: 'akodo_bushi',
+                    school_ring_choice: 'Water',
+                    rings: {Air: 2, Fire: 2, Earth: 2, Water: 7, Void: 2},
+                    knacks: {double_attack: 3, feint: 3, iaijutsu: 3},
+                }),
+            });
+        }""",
+        char_id,
+    )
+    page.reload()
+    page.wait_for_selector('input[name="name"]')
+    page.wait_for_timeout(400)
+    val = int(page.locator('input[name="ring_water"]').input_value())
+    assert val == 6, (
+        f"BUG: editor init() did not clamp ring; got Water={val} "
+        "with Dan=3 (max for school ring at Dan<4 is 6)"
+    )
+
+
+def _ring_bounds_invariant(page):
+    """Read current Alpine state and assert every ring is within the
+    valid range for the current school, schoolRingChoice, and Dan.
+
+    Returns the snapshot dict for test-side logging.
+    """
+    state = page.evaluate("""() => {
+        const root = document.querySelector('[x-data="characterForm()"]');
+        const d = Alpine.$data(root);
+        return JSON.parse(JSON.stringify({
+            school: d.school,
+            sr: d.getSchoolRing(),
+            dan: d.currentDan(),
+            rings: d.rings,
+        }));
+    }""")
+    sr = state["sr"]
+    dan = state["dan"]
+    for ring, val in state["rings"].items():
+        if ring == sr:
+            lo = 4 if dan >= 4 else 3
+            hi = 7 if dan >= 4 else 6
+        else:
+            lo, hi = 2, 5
+        assert lo <= val <= hi, (
+            f"Ring invariant violated after state {state}: "
+            f"{ring}={val} not in [{lo}, {hi}]"
+        )
+    return state
+
+
+def test_round_trip_school_change_keeps_invariant(page, live_server_url):
+    """Akodo (Water school) at Dan 4 with Water=7, switch to Bayushi
+    (Fire school), then back to Akodo. After each step every ring must
+    be inside its bounds."""
+    _go_to_editor(page, live_server_url)
+    click_plus(page, "knack_double_attack", 3)
+    click_plus(page, "knack_feint", 3)
+    click_plus(page, "knack_iaijutsu", 3)
+    page.wait_for_timeout(100)
+    click_plus(page, "ring_water", 3)  # 4 -> 7
+    s1 = _ring_bounds_invariant(page)
+    assert s1["sr"] == "Water" and s1["dan"] == 4 and s1["rings"]["Water"] == 7
+    # Akodo -> Bayushi (Fire school). Water becomes non-school.
+    select_school(page, "bayushi_bushi")
+    page.wait_for_timeout(300)
+    s2 = _ring_bounds_invariant(page)
+    assert s2["school"] == "bayushi_bushi"
+    assert s2["rings"]["Water"] <= 5
+    # Bayushi -> Akodo. Water is school ring again at Dan 1 -> 3..6.
+    select_school(page, "akodo_bushi")
+    page.wait_for_timeout(300)
+    s3 = _ring_bounds_invariant(page)
+    assert s3["school"] == "akodo_bushi"
+    assert s3["sr"] == "Water"
+
+
+def test_round_trip_school_ring_choice_keeps_invariant(page, live_server_url):
+    """Mantis with schoolRingChoice=Air at Dan 4 with Air=7, switch the
+    pick Water -> Air -> Water -> Air. Each hop must leave every ring in
+    range."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "RoundTripChoice")
+    select_school(page, "mantis_wave_treader")
+    # Seed Dan 4 Air=7 directly so the test focuses on the dropdown path.
+    page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        d.schoolRingChoice = 'Air';
+        d.knacks = {athletics: 4, awareness: 4, sailing: 4};
+        d.rings.Air = 7;
+    }""")
+    page.wait_for_timeout(100)
+    _ring_bounds_invariant(page)
+    for target in ['Water', 'Air', 'Water', 'Fire', 'Air']:
+        page.evaluate("""(t) => {
+            const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+            d.schoolRingChoice = t;
+            d.onSchoolRingChange();
+        }""", target)
+        page.wait_for_timeout(100)
+        s = _ring_bounds_invariant(page)
+        assert s["sr"] == target
+
+
+def test_compound_dan_and_school_change_sequence(page, live_server_url):
+    """Drive the editor through a long sequence touching every axis -
+    knacks, ring +/-, school, schoolRingChoice - and assert the ring
+    invariant after every mutation."""
+    _go_to_editor(page, live_server_url)
+    _ring_bounds_invariant(page)
+    # Reach Dan 4 on Akodo, raise Water to 7.
+    click_plus(page, "knack_double_attack", 3)
+    _ring_bounds_invariant(page)
+    click_plus(page, "knack_feint", 3)
+    _ring_bounds_invariant(page)
+    click_plus(page, "knack_iaijutsu", 3)
+    _ring_bounds_invariant(page)
+    click_plus(page, "ring_water", 3)
+    _ring_bounds_invariant(page)
+    # Drop one knack -> Dan 3, Water should clamp to 6.
+    click_minus(page, "knack_feint", 1)
+    s_after_drop = _ring_bounds_invariant(page)
+    assert s_after_drop["rings"]["Water"] == 6
+    # Switch to Mantis (variable-ring school).
+    select_school(page, "mantis_wave_treader")
+    page.wait_for_timeout(300)
+    _ring_bounds_invariant(page)
+    # Raise all Mantis knacks to 4 (Dan 4).
+    page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        for (const k of Object.keys(d.knacks)) d.knacks[k] = 4;
+    }""")
+    page.wait_for_timeout(100)
+    _ring_bounds_invariant(page)
+    # Flip schoolRingChoice through several rings.
+    for r in ['Air', 'Water', 'Fire', 'Void', 'Earth', 'Void']:
+        page.evaluate("""(t) => {
+            const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+            d.schoolRingChoice = t;
+            d.onSchoolRingChange();
+        }""", r)
+        page.wait_for_timeout(50)
+        _ring_bounds_invariant(page)
+    # Drop Dan back to 1.
+    page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        for (const k of Object.keys(d.knacks)) d.knacks[k] = 1;
+    }""")
+    page.wait_for_timeout(100)
+    _ring_bounds_invariant(page)
+    # Switch back to Akodo (fixed-ring). Water becomes school ring again.
+    select_school(page, "akodo_bushi")
+    page.wait_for_timeout(300)
+    final = _ring_bounds_invariant(page)
+    assert final["school"] == "akodo_bushi"
+
+
+def test_lower_ring_blocked_at_min_then_school_swap(page, live_server_url):
+    """At Dan 4 the school ring's floor is 4; the - button must be
+    disabled when at 4. After switching to a school whose school ring
+    is a different ring, the OLD school ring is now non-school - so its
+    - button should still be capped at 2 (the non-school min), with no
+    way to step below."""
+    _go_to_editor(page, live_server_url)
+    click_plus(page, "knack_double_attack", 3)
+    click_plus(page, "knack_feint", 3)
+    click_plus(page, "knack_iaijutsu", 3)
+    page.wait_for_timeout(100)
+    # Auto-raise put Water at 4. The - button should be disabled.
+    minus = page.locator('input[name="ring_water"]').locator('..').locator('button', has_text="-")
+    assert minus.is_disabled()
+    # Switch schools so Water is no longer the school ring.
+    select_school(page, "bayushi_bushi")
+    page.wait_for_timeout(300)
+    # Water is now non-school; current value got clamped by the reconciler.
+    # Min for non-school is 2. - button should be enabled (we're at >2)
+    # OR disabled at 2.
+    s = _ring_bounds_invariant(page)
+    val = s["rings"]["Water"]
+    assert 2 <= val <= 5
+    if val > 2:
+        assert not minus.is_disabled()
+    else:
+        assert minus.is_disabled()
+
+
+def _ring_bounds_for(sr, ring, dan):
+    if ring == sr:
+        return (4, 7) if dan >= 4 else (3, 6)
+    return 2, 5
+
+
+@pytest.mark.parametrize("seed", [0x12345678, 0xCAFEBABE, 0xDEADBEEF])
+def test_fuzz_random_sequence_keeps_ring_invariant(page, live_server_url, seed):
+    """Drive 500 random mutations across every axis (knack +/-, ring
+    +/-, school change, school_ring_choice flip) and re-check the ring
+    invariant after every step. Every 100 steps also flushes the
+    autosave, reloads the page, and asserts the rehydrated state still
+    matches the in-memory state from before the reload - proving that
+    what's persisted to the server is itself a valid state, not just
+    that the editor reconciles on load. Parametrized over three
+    deterministic seeds so a regression reproduces and the search
+    covers more state space without combinatorial blowup."""
+    _go_to_editor(page, live_server_url)
+    char_id = page.url.rstrip("/").split("/")[-2]
+
+    page.evaluate(
+        """(s) => { window._fuzzRng = (() => {
+            // Linear congruential RNG seeded from the test parameter.
+            let state = s >>> 0;
+            return () => { state = (1103515245 * state + 12345) & 0x7fffffff; return state / 0x7fffffff; };
+        })(); }""",
+        seed,
+    )
+
+    def fuzz_step():
+        return page.evaluate("""async () => {
+            const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+            const rng = window._fuzzRng;
+            const action = Math.floor(rng() * 4);
+            const rings = ['Air', 'Fire', 'Earth', 'Water', 'Void'];
+            if (action === 0) {
+                const ks = Object.keys(d.knacks);
+                if (ks.length > 0) {
+                    const k = ks[Math.floor(rng() * ks.length)];
+                    const delta = rng() < 0.5 ? -1 : 1;
+                    d.knacks[k] = Math.max(1, Math.min(5, d.knacks[k] + delta));
+                }
+            } else if (action === 1) {
+                const r = rings[Math.floor(rng() * rings.length)];
+                const delta = rng() < 0.5 ? -1 : 1;
+                if (delta > 0) {
+                    d.rings[r] = Math.min(d.ringMax(r), d.rings[r] + 1);
+                } else {
+                    const floor = (d.getSchoolRing() === r) ? d.schoolRingMin() : 2;
+                    d.rings[r] = Math.max(floor, d.rings[r] - 1);
+                }
+            } else if (action === 2) {
+                const schools = ['akodo_bushi', 'bayushi_bushi', 'mantis_wave_treader',
+                                 'kakita_duelist', 'shiba_bushi', 'priest', 'kuni_witch_hunter',
+                                 'doji_artisan', 'ide_diplomat', 'kitsune_warden'];
+                const s = schools[Math.floor(rng() * schools.length)];
+                const info = SCHOOLS_DATA[s];
+                d.school = s;
+                if (info) {
+                    const fixed = ['Air','Fire','Earth','Water','Void'];
+                    if (fixed.includes(info.ring)) {
+                        d.schoolRingChoice = info.ring;
+                        d.rings[info.ring] = Math.max(d.rings[info.ring], 3);
+                    } else {
+                        d.schoolRingChoice = (s === 'mantis_wave_treader') ? 'Void' : 'Water';
+                        d.rings[d.schoolRingChoice] = Math.max(d.rings[d.schoolRingChoice], 3);
+                    }
+                    const newKnacks = {};
+                    for (const kid of info.knacks) newKnacks[kid] = 1;
+                    d.knacks = newKnacks;
+                }
+            } else {
+                const r = rings[Math.floor(rng() * rings.length)];
+                d.schoolRingChoice = r;
+                d.onSchoolRingChange();
+            }
+            // Give Alpine's reactivity a chance to fire watchers
+            // (including the knacks watcher that runs the bounds
+            // reconciler). Without this, the snapshot would show the
+            // raw post-mutation state before the watcher has run, and
+            // the test would flag false positives that the user never
+            // actually sees because the watcher fires before any UI
+            // re-render or autosave snapshot.
+            await new Promise(resolve => {
+                if (typeof Alpine !== 'undefined' && Alpine.nextTick) {
+                    Alpine.nextTick(resolve);
+                } else {
+                    setTimeout(resolve, 0);
+                }
+            });
+            return JSON.parse(JSON.stringify({
+                school: d.school, sr: d.getSchoolRing(),
+                dan: d.currentDan(), rings: d.rings, action,
+            }));
+        }""")
+
+    def snapshot():
+        return page.evaluate("""() => {
+            const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+            return JSON.parse(JSON.stringify({
+                school: d.school, sr: d.getSchoolRing(),
+                schoolRingChoice: d.schoolRingChoice,
+                dan: d.currentDan(), rings: d.rings, knacks: d.knacks,
+            }));
+        }""")
+
+    for step in range(500):
+        s = fuzz_step()
+        sr, dan = s["sr"], s["dan"]
+        for ring, val in s["rings"].items():
+            lo, hi = _ring_bounds_for(sr, ring, dan)
+            assert lo <= val <= hi, (
+                f"seed={hex(seed)} step={step} action={s['action']} "
+                f"broke invariant: school={s['school']} sr={sr} dan={dan} "
+                f"{ring}={val} not in [{lo}, {hi}]"
+            )
+
+        # Every 100 steps, persist + reload + assert the rehydrated
+        # state is identical to what we had in memory before the reload.
+        # If init's reconciler had to clamp anything, the persisted state
+        # was invalid - meaning some mutation path slipped past the
+        # bounds enforcement, and the reload-time reconciler is masking
+        # it. The equality check would catch that.
+        if step > 0 and step % 100 == 0:
+            page.evaluate("""async () => {
+                const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+                await d.flushPendingSave();
+            }""")
+            pre = snapshot()
+            page.goto(f"{live_server_url}/characters/{char_id}/edit")
+            page.wait_for_selector('input[name="name"]')
+            page.wait_for_timeout(200)
+            post = snapshot()
+            assert pre == post, (
+                f"seed={hex(seed)} step={step}: persisted state diverged "
+                f"from in-memory state after reload.\npre:  {pre}\npost: {post}"
+            )
+            # Re-seed the RNG after the reload (window was wiped).
+            page.evaluate(
+                """({seed, step}) => { window._fuzzRng = (() => {
+                    let state = seed >>> 0;
+                    for (let i = 0; i < step + 1; i++) {
+                        state = (1103515245 * state + 12345) & 0x7fffffff;
+                    }
+                    return () => { state = (1103515245 * state + 12345) & 0x7fffffff; return state / 0x7fffffff; };
+                })(); }""",
+                {"seed": seed, "step": step},
+            )
+
+
 def test_mantis_school_is_selectable_and_saves(page, live_server_url):
     """Mantis Wave-Treader can be selected, the draft saves, and Apply Changes
     creates the first version."""

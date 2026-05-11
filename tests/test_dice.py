@@ -2377,6 +2377,62 @@ class TestSchoolAbilities:
         f = build_skill_formula("bragging", char)
         assert any("2nd Dan" in b["label"] and b["amount"] == 5 for b in f.bonuses)
 
+    # --- Isawa Ishi 1st Dan auto-precepts ---
+    def test_isawa_ishi_first_dan_auto_precepts(self):
+        """Ishi precepts gets +1 die on top of the player's two picks
+        ("precepts AND any two types of rolls of your choice")."""
+        char = make_character_data(
+            school="isawa_ishi",
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 3},
+            knacks={"absorb_void": 1, "kharmic_spin": 1, "otherworldliness": 1},
+            skills={"precepts": 2, "bragging": 2, "intimidation": 2},
+            technique_choices={"first_dan_choices": ["bragging", "intimidation"]},
+        )
+        f_precepts = build_skill_formula("precepts", char)
+        f_bragging = build_skill_formula("bragging", char)
+        # precepts (Water): rank 2 + Water 2 + 1 (auto) = 5
+        assert f_precepts.rolled == 5
+        # bragging (Air): rank 2 + Air 2 + 1 (picked) = 5
+        assert f_bragging.rolled == 5
+
+    def test_isawa_ishi_first_dan_no_picks_still_grants_precepts(self):
+        """Even with no first_dan_choices set, Ishi precepts gets +1 die."""
+        char = make_character_data(
+            school="isawa_ishi",
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 3},
+            knacks={"absorb_void": 1, "kharmic_spin": 1, "otherworldliness": 1},
+            skills={"precepts": 1},
+        )
+        f = build_skill_formula("precepts", char)
+        # rank 1 + Water 2 + 1 (auto) = 4
+        assert f.rolled == 4
+
+    def test_isawa_ishi_first_dan_explicit_precepts_no_double(self):
+        """Redundant explicit precepts pick must not double the bonus."""
+        char = make_character_data(
+            school="isawa_ishi",
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 3},
+            knacks={"absorb_void": 1, "kharmic_spin": 1, "otherworldliness": 1},
+            skills={"precepts": 1},
+            technique_choices={"first_dan_choices": ["precepts", "bragging"]},
+        )
+        f = build_skill_formula("precepts", char)
+        # rank 1 + Water 2 + 1 (single) = 4
+        assert f.rolled == 4
+
+    def test_isawa_ishi_first_dan_does_not_affect_other_schools(self):
+        """The auto-precepts bonus is Ishi-only; another flexible-1st-Dan
+        school (Priest) does not get it without picking precepts."""
+        char = make_character_data(
+            school="priest",
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 3},
+            knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1},
+            skills={"precepts": 1},
+        )
+        f = build_skill_formula("precepts", char)
+        # rank 1 + Water 2 (no auto) = 3
+        assert f.rolled == 3
+
 
 # ---------------------------------------------------------------------------
 # Comprehensive 2nd Dan free raise tests (all schools)

@@ -90,7 +90,7 @@ def test_count_recent_imports_counts_only_tagged_characters(db) -> None:
 def test_count_recent_imports_ignores_old_characters(db) -> None:
     c = _add_char_with_import_notes(db)
     # Force an old created_at (> 24 hours ago).
-    c.created_at = datetime.utcnow() - timedelta(hours=48)
+    c.created_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=48)
     db.commit()
     assert rl.count_recent_imports(db, USER_ID) == 0
 

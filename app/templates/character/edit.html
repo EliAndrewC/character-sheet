@@ -133,6 +133,24 @@
                         <button type="button" @click="applySummary = 'Spending some leftover XP mid-adventure'"
                                 class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">Spending some leftover XP mid-adventure</button>
                     </div>
+                    {# Visibility opt-in: shown only when the character is
+                       currently hidden so a published-and-public character
+                       never has the option to flip itself private during
+                       Apply Changes (use the header chip for that). #}
+                    <div x-show="isHidden" x-cloak class="mb-4"
+                         data-testid="apply-make-visible-row">
+                        <label class="inline-flex items-start gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" x-model="applyMakeVisible"
+                                   data-testid="apply-make-visible-checkbox"
+                                   class="mt-0.5 rounded border-ink/30">
+                            <span>
+                                <strong>Make this character visible.</strong>
+                                Right now only editors can see it. Check this
+                                box to share it with everyone in your gaming
+                                groups when applying these changes.
+                            </span>
+                        </label>
+                    </div>
                     <div class="flex justify-end gap-3">
                         <button type="button" @click="showApplyModal = false" data-action="cancel-apply"
                                 class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
@@ -297,14 +315,41 @@
     </div>
     {% endif %}
 
-    <h1 class="text-3xl font-bold mb-6">Edit: {{ character.name }}</h1>
+    {# Title row: name on the left, visibility chip floated to the right.
+       The chip is bidirectional - clicking it flips is_hidden on the
+       server (POST /show or /hide) and updates the local Alpine flag so
+       the banner below shows/hides without a reload. The flex row wraps
+       on narrow screens so the chip drops to its own line. #}
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 class="text-3xl font-bold">Edit: {{ character.name }}</h1>
+        <button type="button" @click="toggleVisibility()"
+                :disabled="visibilityBusy"
+                data-testid="visibility-toggle"
+                :data-state="isHidden ? 'hidden' : 'visible'"
+                :class="isHidden
+                    ? 'bg-amber-100 hover:bg-amber-200 border-amber-400 text-amber-900'
+                    : 'bg-emerald-100 hover:bg-emerald-200 border-emerald-400 text-emerald-900'"
+                :title="isHidden
+                    ? 'Hidden - only editors can see this character. Click to make visible.'
+                    : 'Visible to everyone in your gaming groups. Click to hide.'"
+                class="inline-flex items-center gap-2 border rounded-full px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <svg x-show="isHidden" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M10.585 10.587a2 2 0 002.828 2.83M9.363 5.365A9.466 9.466 0 0112 5c4.478 0 8.268 2.943 9.542 7a9.97 9.97 0 01-1.563 2.81M6.21 6.215C4.293 7.41 2.83 9.092 2.458 12c1.274 4.057 5.064 7 9.542 7 1.62 0 3.146-.39 4.49-1.077"/>
+            </svg>
+            <svg x-show="!isHidden" x-cloak class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.522 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.478 0-8.268-2.943-9.542-7z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <span x-text="isHidden ? 'Hidden' : 'Visible'"></span>
+        </button>
+    </div>
 
-    {# Hidden-draft banner: only editors (you and the GM, plus any account
-       grantees) can see the draft until it's revealed. Wrapped in a Jinja
-       `is_hidden` guard so non-hidden chars don't ship the markup at all,
-       AND in `x-show="isHidden"` so the banner can disappear instantly
-       after Apply Changes or Make Draft Visible flips the in-memory flag. #}
-    {% if character.is_hidden %}
+    {# Hidden-draft banner. The Alpine `isHidden` flag lets the banner
+       appear/disappear instantly when the visibility toggle flips, and
+       the markup is rendered unconditionally now that visibility is
+       bidirectional - server-side gating on `character.is_hidden` would
+       drop the markup whenever the page was last rendered visible, even
+       though the flag can subsequently flip back to hidden. #}
     <div x-show="isHidden" x-cloak data-testid="hidden-draft-banner"
          class="rounded bg-amber-50 border-l-4 border-amber-400 text-amber-900 px-4 py-3 mb-6 flex items-start gap-3">
         <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
@@ -312,14 +357,12 @@
             <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
         </svg>
         <div class="text-sm">
-            <strong>This draft is hidden.</strong>
-            Only editors ({{ editor_list_text }}) can see it. Share it
-            with everyone by clicking the <strong>Make Draft Visible</strong>
-            button at the bottom of this page, or by clicking
-            <strong>Apply Changes</strong> to snapshot your first revision.
+            <strong>This character is hidden.</strong>
+            Only editors ({{ editor_list_text }}) can see it. Click the
+            <strong>Hidden</strong> chip at the top of this page to make
+            it visible to everyone.
         </div>
     </div>
-    {% endif %}
 
     <form class="space-y-8">
 
@@ -530,6 +573,53 @@
                                 <template x-for="sid in MANTIS_2ND_DAN_SKILL_IDS" :key="'k1s'+sid+slot">
                                     <option :value="sid"
                                             :disabled="kitsune1stDanIsTakenInOtherSlot(slot, sid)"
+                                            x-text="SKILL_NAMES[sid] || sid"></option>
+                                </template>
+                            </optgroup>
+                        </select>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Isawa Ishi 1st Dan picker: precepts always gets +1 rolled die
+                 (handled server-side); the player picks two more roll types.
+                 Eligible options mirror the Kitsune Warden 1st Dan picker
+                 (skills, rollable knacks, 5 combat roll types). Persists into
+                 techniqueChoices.first_dan_choices. -->
+            <div x-show="school === 'isawa_ishi' && currentDan() >= 1"
+                 x-cloak class="mt-3 p-3 bg-white/60 border border-accent/20 rounded"
+                 data-testid="ishi-1st-dan-picker">
+                <label class="block text-sm font-medium mb-1">
+                    1st Dan extra die - pick two roll types
+                </label>
+                <p class="text-xs text-ink/60 mb-2">
+                    Precepts always gets the extra die. Pick two more rolls.
+                </p>
+                <div class="grid gap-2 sm:grid-cols-2">
+                    <template x-for="slot in [0, 1]" :key="'i1d-slot-'+slot">
+                        <select :data-testid="'ishi-1st-dan-slot-' + slot"
+                                x-effect="$nextTick(() => $el.value = (techniqueChoices.first_dan_choices || [])[slot] || '')"
+                                @change="setIshi1stDanChoice(slot, $event.target.value)"
+                                class="border rounded px-3 py-2 text-sm w-full">
+                            <option value="">(none selected)</option>
+                            <optgroup label="Combat rolls">
+                                <template x-for="id in KITSUNE_1ST_DAN_COMBAT_ROLLS" :key="'i1c'+id+slot">
+                                    <option :value="id"
+                                            :disabled="ishi1stDanIsTakenInOtherSlot(slot, id)"
+                                            x-text="KITSUNE_1ST_DAN_LABELS[id]"></option>
+                                </template>
+                            </optgroup>
+                            <optgroup label="School knacks">
+                                <template x-for="kid in ishi1stDanEligibleKnacks()" :key="'i1k'+kid+slot">
+                                    <option :value="kid"
+                                            :disabled="ishi1stDanIsTakenInOtherSlot(slot, kid)"
+                                            x-text="KNACK_NAMES[kid] || kid"></option>
+                                </template>
+                            </optgroup>
+                            <optgroup label="Skills">
+                                <template x-for="sid in ISHI_1ST_DAN_SKILL_IDS" :key="'i1s'+sid+slot">
+                                    <option :value="sid"
+                                            :disabled="ishi1stDanIsTakenInOtherSlot(slot, sid)"
                                             x-text="SKILL_NAMES[sid] || sid"></option>
                                 </template>
                             </optgroup>
@@ -1562,27 +1652,6 @@
                             class="bg-accent hover:bg-red-900 text-parchment px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base disabled:opacity-40 disabled:cursor-not-allowed">
                         Apply Changes
                     </button>
-                    {# Hidden-draft only: explicit reveal that doesn't
-                       snapshot a version. Same combined Jinja+x-show gate
-                       as the banner above so the markup ships only when
-                       relevant AND can hide instantly after click. #}
-                    {% if character.is_hidden %}
-                    <div x-show="isHidden" x-cloak class="relative tooltip-trigger">
-                        <button type="button" @click="makeDraftVisible()"
-                                data-action="make-draft-visible"
-                                :disabled="makingVisible"
-                                class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base disabled:opacity-40 disabled:cursor-not-allowed">
-                            Make Draft Visible
-                        </button>
-                        <div class="tooltip-content absolute right-0 bottom-full mb-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-64 text-left">
-                            Only editors ({{ editor_list_text }}) can see this
-                            draft right now. Click to make this draft visible
-                            to everyone without snapshotting a version. This
-                            is permanent - you cannot re-hide it. Apply Changes
-                            also reveals the draft.
-                        </div>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -1685,6 +1754,14 @@ const KITSUNE_1ST_DAN_LABELS = {
 // 1st Dan picker does not). Persists into techniqueChoices.third_dan_skill_choices.
 const KITSUNE_3RD_DAN_SKILL_IDS = MANTIS_2ND_DAN_SKILL_IDS.filter(
     sid => sid !== 'iaijutsu'
+);
+
+// Isawa Ishi 1st Dan picker: "precepts and any two types of rolls of your
+// choice." Precepts is auto-applied server-side, so the option list omits
+// it to prevent a redundant pick. Eligible roll types otherwise mirror the
+// Kitsune Warden 1st Dan picker.
+const ISHI_1ST_DAN_SKILL_IDS = MANTIS_2ND_DAN_SKILL_IDS.filter(
+    sid => sid !== 'precepts'
 );
 
 // Skill -> Ring mapping
@@ -2100,6 +2177,11 @@ function characterForm() {
         publishMessage: '',
         showApplyModal: false,
         applySummary: '',
+        // Apply Changes "make visible" opt-in. Default false: applying
+        // changes preserves the current visibility unless the editor
+        // explicitly checks the box. The checkbox itself is hidden
+        // (x-show="isHidden") for already-public characters.
+        applyMakeVisible: false,
         // Discard Changes UI state. Both buttons (Apply + Discard) ride
         // hasUnpublishedChanges so they appear/disappear in lockstep as
         // the user types. isPublished gates Discard alone since a never-
@@ -2112,29 +2194,33 @@ function characterForm() {
         hasUnpublishedChanges: {{ 'true' if has_unpublished_changes else 'false' }},
         isPublished: {{ 'false' if is_first_version else 'true' }},
 
-        // Hidden-draft visibility. Mirror the server-side flag so the banner
-        // and the "Make Draft Visible" button can disappear instantly after
-        // either Apply Changes or makeDraftVisible() succeeds.
+        // Visibility flag. Mirror of character.is_hidden so the header
+        // chip, the hidden-draft banner, and the Apply Changes opt-in
+        // checkbox all reflect the current state without a page reload.
+        // Bidirectional: toggleVisibility() flips between /show and /hide.
         isHidden: {{ 'true' if character.is_hidden else 'false' }},
-        makingVisible: false,
+        visibilityBusy: false,
 
-        async makeDraftVisible() {
-            if (this.makingVisible || !this.isHidden) return;
-            this.makingVisible = true;
+        async toggleVisibility() {
+            if (this.visibilityBusy) return;
+            this.visibilityBusy = true;
+            const target = this.isHidden ? 'show' : 'hide';
             try {
-                const resp = await fetch('/characters/' + this._charId + '/show', {
-                    method: 'POST',
-                });
+                const resp = await fetch(
+                    '/characters/' + this._charId + '/' + target,
+                    {method: 'POST'},
+                );
                 if (resp.ok) {
-                    this.isHidden = false;
+                    this.isHidden = (target === 'hide');
                 }
             } finally {
-                this.makingVisible = false;
+                this.visibilityBusy = false;
             }
         },
 
         openApplyModal() {
             this.applySummary = {{ 'true' if is_first_version else 'false' }} ? 'Initial character creation' : '';
+            this.applyMakeVisible = false;
             this.showApplyModal = true;
         },
 
@@ -2187,10 +2273,14 @@ function characterForm() {
             this.publishing = true;
             this.publishMessage = 'Applying changes...';
             try {
+                const makeVisible = this.isHidden && this.applyMakeVisible;
                 const resp = await fetch('/characters/' + this._charId + '/publish', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({summary: this.applySummary.trim()}),
+                    body: JSON.stringify({
+                        summary: this.applySummary.trim(),
+                        make_visible: makeVisible,
+                    }),
                 });
                 if (resp.ok) {
                     const data = await resp.json();
@@ -2247,6 +2337,10 @@ function characterForm() {
                     this.schoolRingMin(),
                 );
             }
+            // Reconcile every ring's bounds now that the school ring
+            // identity has changed - the previous school ring's cap
+            // drops back to 5 (non-school) and may need to clamp.
+            this.enforceFourthDanRing();
             this.markDirty();
         },
 
@@ -2463,21 +2557,25 @@ function characterForm() {
         },
 
         enforceFourthDanRing() {
-            // Reconciles the school ring with the character's current Dan.
-            // At 4th Dan the school ring gets a free +1 (floor becomes 4,
-            // ceiling becomes 7). Below 4th Dan the floor is 3 and the
-            // ceiling is 6. This function ALWAYS clamps the ring into the
-            // valid range for the current Dan, so repeated raise/lower of
-            // knacks across the 4th Dan boundary always produces a
-            // consistent state.
+            // Reconciles every ring with the character's current Dan and
+            // school. The school ring's bounds are Dan-aware: at 4th Dan
+            // the floor jumps to 4 and the ceiling to 7 (the 4th Dan
+            // technique raises both); below 4th Dan the bounds are 3..6.
+            // Non-school rings are always 2..5. Iterating over every ring
+            // also handles the case where a ring used to be the school
+            // ring (e.g. variable-ring school whose pick was just
+            // changed, or a school switch leaving the old ring high) -
+            // the old ring is now bounded at 5 and gets clamped back.
             const schoolRing = this.getSchoolRing();
-            if (!schoolRing) return;
             const dan = this.currentDan();
-            const minVal = dan >= 4 ? 4 : 3;
-            const maxVal = dan >= 4 ? 7 : 6;
-            const current = this.rings[schoolRing] || 0;
-            if (current < minVal) this.rings[schoolRing] = minVal;
-            if (current > maxVal) this.rings[schoolRing] = maxVal;
+            for (const ring of ['Air', 'Fire', 'Earth', 'Water', 'Void']) {
+                const isSchool = ring === schoolRing;
+                const minVal = isSchool ? (dan >= 4 ? 4 : 3) : 2;
+                const maxVal = isSchool ? (dan >= 4 ? 7 : 6) : 5;
+                const current = this.rings[ring] || 0;
+                if (current < minVal) this.rings[ring] = minVal;
+                if (current > maxVal) this.rings[ring] = maxVal;
+            }
         },
 
         skillXpLabel(skillId, isAdvanced) {
@@ -2532,6 +2630,33 @@ function characterForm() {
             // Server-side dice.py treats an empty string as no-op (no
             // skill/knack/roll-type id matches ""), so storing empty slots
             // is safe. Trim trailing empties for tidiness.
+            while (picks.length > 0 && picks[picks.length - 1] === '') picks.pop();
+            this.techniqueChoices.first_dan_choices = picks;
+            this.markDirty();
+        },
+
+        // Isawa Ishi 1st Dan picker helpers. Two slots (precepts is auto-
+        // applied server-side, not picked here), but the storage shape
+        // matches Kitsune Warden's: techniqueChoices.first_dan_choices as
+        // a List[str].
+        ishi1stDanEligibleKnacks() {
+            const own = Object.keys(this.knacks || {});
+            const foreign = Object.keys(this.foreignKnacks || {});
+            const all = [...new Set([...own, ...foreign])];
+            return all.filter(kid => !MANTIS_NON_ROLLABLE_KNACKS.has(kid));
+        },
+        ishi1stDanIsTakenInOtherSlot(slot, value) {
+            if (!value) return false;
+            const picks = this.techniqueChoices.first_dan_choices || [];
+            for (let i = 0; i < picks.length; i++) {
+                if (i !== slot && picks[i] === value) return true;
+            }
+            return false;
+        },
+        setIshi1stDanChoice(slot, value) {
+            const picks = (this.techniqueChoices.first_dan_choices || []).slice();
+            while (picks.length < 2) picks.push('');
+            picks[slot] = value;
             while (picks.length > 0 && picks[picks.length - 1] === '') picks.pop();
             this.techniqueChoices.first_dan_choices = picks;
             this.markDirty();

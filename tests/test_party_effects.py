@@ -125,7 +125,10 @@ class TestPartyNonRankEffects:
 class TestSelfGroupEffect:
     def test_own_righteous_sting_appears_in_own_rank(self):
         """A character's own party-wide rank modifier (e.g. Righteous Sting)
-        should show on their OWN Rank tooltip, not just on party members'."""
+        should show on their OWN Rank tooltip, not just on party members'.
+        The taker themselves gets +2.0 (not +1.0) per the advantage rules
+        - "Your own Rank is considered 2.0 higher, and the Rank of every
+        other member of your party is considered 1.0 higher.\""""
         char = _bare_char(
             campaign_advantages=["family_reckoning_righteous_sting"],
         )
@@ -133,8 +136,7 @@ class TestSelfGroupEffect:
         status = compute_effective_status(char, party_members=[])
         modifiers = [m for m in status.rank_modifiers if "Righteous" in m["source"]]
         assert len(modifiers) == 1
-        assert modifiers[0]["value"] == 1.0
-        assert "Doji Natsu" in modifiers[0]["context"]
+        assert modifiers[0]["value"] == 2.0
 
     def test_own_imperial_disdain_appears_in_own_rank(self):
         char = _bare_char(

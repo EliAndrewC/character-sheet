@@ -695,7 +695,7 @@ class TestAllyConvictionAuth:
         req = _Req()
         req.state.user = None
         # Use a dummy db session; the endpoint should 401 before using it.
-        resp = asyncio.get_event_loop().run_until_complete(
+        resp = asyncio.run(
             ally_conviction(req, 1, db=None)
         )
         assert resp.status_code == 401
@@ -714,7 +714,7 @@ class TestPreceptsPoolAuth:
 
         req = _Req()
         req.state.user = None
-        resp = asyncio.get_event_loop().run_until_complete(
+        resp = asyncio.run(
             precepts_pool(req, 1, db=None)
         )
         assert resp.status_code == 401
@@ -942,9 +942,11 @@ class TestPerAdventureTracking:
         )
         assert "togashi_daily_athletics_raises" not in self._per_adventure_ids(client, cid)
 
-    def test_absorb_void_per_adventure_pool_for_isawa_ishi(self, client):
-        """Isawa Ishi's school knacks include absorb_void; it should appear
-        in per_adventure with max = the rank, just like worldliness."""
+    def test_absorb_void_pool_for_isawa_ishi_is_per_day(self, client):
+        """Isawa Ishi's special ability resets Absorb Void with a night's
+        rest, so the tracker entry is flagged ``per_day`` (gets a Reset
+        button alongside the +/- controls). The pool max is still the
+        rank in the knack."""
         cid = _seed_character(
             client, name="IshiAbsorb",
             school="isawa_ishi", school_ring_choice="Void",
@@ -953,7 +955,6 @@ class TestPerAdventureTracking:
         resp = client.get(f"/characters/{cid}")
         assert resp.status_code == 200
         assert '"id": "absorb_void"' in resp.text
-        # max = rank = 3
         import json, re
         m = re.search(r"perAdventure:\s*(\[.*?\]),", resp.text)
         assert m is not None
@@ -962,7 +963,24 @@ class TestPerAdventureTracking:
         assert ab["type"] == "counter"
         assert ab["max"] == 3
         assert ab["name"] == "Absorb Void"
-        # Must NOT be flagged per_day - the rules say "per adventure".
+        assert ab.get("per_day") is True
+
+    def test_absorb_void_pool_for_kitsune_warden_is_per_adventure(self, client):
+        """Kitsune Warden has no per-day reset language, so its Absorb
+        Void pool stays per-adventure (no Reset button)."""
+        cid = _seed_character(
+            client, name="KitsuneAbsorb",
+            school="kitsune_warden", school_ring_choice="Earth",
+            knacks={"absorb_void": 2, "commune": 1, "iaijutsu": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        import json, re
+        m = re.search(r"perAdventure:\s*(\[.*?\]),", resp.text)
+        assert m is not None
+        entries = json.loads(m.group(1))
+        ab = next(e for e in entries if e["id"] == "absorb_void")
+        assert ab["max"] == 2
         assert ab.get("per_day") is not True
 
     def test_absorb_void_not_in_per_adventure_when_school_lacks_it(self, client):
@@ -3283,7 +3301,7 @@ class TestDiscardAndDraftDiffAuth:
         import asyncio
         from app.routes.characters import discard_changes_route
         cid = _seed_character(client, name="Anon Discard")
-        resp = asyncio.get_event_loop().run_until_complete(
+        resp = asyncio.run(
             discard_changes_route(self._fake_anonymous_request(), cid,
                                   db=client._test_session_factory()),
         )
@@ -3294,7 +3312,7 @@ class TestDiscardAndDraftDiffAuth:
         from app.routes.characters import discard_changes_route
         cid = _seed_character(client, name="Other Discard",
                               owner_discord_id="183026066498125825")
-        resp = asyncio.get_event_loop().run_until_complete(
+        resp = asyncio.run(
             discard_changes_route(self._fake_other_user_request(), cid,
                                   db=client._test_session_factory()),
         )
@@ -3304,7 +3322,7 @@ class TestDiscardAndDraftDiffAuth:
         import asyncio
         from app.routes.characters import draft_diff_route
         cid = _seed_character(client, name="Anon Diff")
-        resp = asyncio.get_event_loop().run_until_complete(
+        resp = asyncio.run(
             draft_diff_route(self._fake_anonymous_request(), cid,
                              db=client._test_session_factory()),
         )
@@ -3315,7 +3333,7 @@ class TestDiscardAndDraftDiffAuth:
         from app.routes.characters import draft_diff_route
         cid = _seed_character(client, name="Other Diff",
                               owner_discord_id="183026066498125825")
-        resp = asyncio.get_event_loop().run_until_complete(
+        resp = asyncio.run(
             draft_diff_route(self._fake_other_user_request(), cid,
                              db=client._test_session_factory()),
         )
@@ -4878,21 +4896,59 @@ class TestHiddenDefault:
         assert char.is_hidden is False
 
 
-class TestHiddenAppliesUnhides:
-    """Once a character is published via Apply Changes the hidden flag is
-    cleared - it can never be re-hidden."""
+class TestPublishVisibility:
+    """Apply Changes (POST /publish) preserves visibility unless the editor
+    explicitly opts in via the ``make_visible`` checkbox in the modal."""
 
-    def test_publish_clears_is_hidden(self, client):
+    def test_publish_default_keeps_hidden(self, client):
+        """A hidden draft stays hidden after Apply Changes when the
+        editor does not opt in - matches the new design where the modal
+        asks first."""
         client.post("/characters")
         char = query_db(client).first()
         cid = char.id
         assert char.is_hidden is True
-        # Apply changes
         resp = client.post(f"/characters/{cid}/publish", json={"summary": "First"})
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is True
+        assert char.is_published is True
+
+    def test_publish_with_make_visible_clears_is_hidden(self, client):
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        assert char.is_hidden is True
+        resp = client.post(
+            f"/characters/{cid}/publish",
+            json={"summary": "First", "make_visible": True},
+        )
         assert resp.status_code == 200
         char = query_db(client).filter(Character.id == cid).first()
         assert char.is_hidden is False
         assert char.is_published is True
+
+    def test_publish_make_visible_false_keeps_hidden(self, client):
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        resp = client.post(
+            f"/characters/{cid}/publish",
+            json={"summary": "First", "make_visible": False},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is True
+
+    def test_publish_make_visible_on_already_visible_is_idempotent(self, client):
+        cid = _seed_character(client, name="Pub visible")
+        resp = client.post(
+            f"/characters/{cid}/publish",
+            json={"summary": "x", "make_visible": True},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is False
 
 
 class TestMakeDraftVisibleEndpoint:
@@ -4939,6 +4995,64 @@ class TestMakeDraftVisibleEndpoint:
             headers={"X-Test-User": "test_user_1:Test User 1"},
         )
         assert resp.status_code == 403
+
+
+class TestHideEndpoint:
+    """POST /characters/{id}/hide flips ``is_hidden`` to True. Mirror of
+    /show; together they back the bidirectional header visibility chip."""
+
+    def test_hide_flips_visible_to_hidden(self, client):
+        cid = _seed_character(client, name="Visible to hide", is_hidden=False)
+        resp = client.post(f"/characters/{cid}/hide")
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "hidden"}
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is True
+
+    def test_hide_idempotent_on_already_hidden(self, client):
+        client.post("/characters")
+        char = query_db(client).first()
+        cid = char.id
+        # Created hidden; hiding again is a no-op success.
+        resp = client.post(f"/characters/{cid}/hide")
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is True
+
+    def test_hide_unauthenticated_401(self, client):
+        cid = _seed_character(client, name="Unauth hide")
+        resp = client.post(f"/characters/{cid}/hide", headers={"X-Test-User": ""})
+        assert resp.status_code == 401
+
+    def test_hide_404_for_missing(self, client):
+        resp = client.post("/characters/9999/hide")
+        assert resp.status_code == 404
+
+    def test_hide_403_for_non_editor(self, client):
+        from app.models import User
+        session = client._test_session_factory()
+        session.add(User(discord_id="other_owner", discord_name="o", display_name="Owner"))
+        session.commit()
+        cid = _seed_character(client, name="Foreign hide", owner_discord_id="other_owner")
+        resp = client.post(
+            f"/characters/{cid}/hide",
+            headers={"X-Test-User": "test_user_1:Test User 1"},
+        )
+        assert resp.status_code == 403
+
+    def test_hide_after_publish_re_hides_published_character(self, client):
+        """A published, currently-visible character can be re-hidden via
+        /hide; the round-trip works from any starting visibility."""
+        cid = _seed_character(client, name="Pub round-trip", is_hidden=False)
+        client.post(f"/characters/{cid}/publish", json={"summary": "v1"})
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is False
+        assert char.is_published is True
+        resp = client.post(f"/characters/{cid}/hide")
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.is_hidden is True
+        assert char.is_published is True
 
 
 class TestHiddenIndexFiltering:
@@ -5009,6 +5123,38 @@ class TestHiddenIndexFiltering:
         assert "Public Char" in resp.text
 
 
+class TestHiddenIndexBadge:
+    """For editors who can see hidden characters on the homepage, the
+    card is styled differently (dashed gray outline, opacity'd headshot,
+    'Hidden' pill at the bottom)."""
+
+    def test_hidden_card_has_hidden_badge(self, client):
+        _seed_character(client, name="My Hidden", is_hidden=True)
+        resp = client.get("/")
+        assert resp.status_code == 200
+        # Owner is admin, so the card is rendered.
+        assert "My Hidden" in resp.text
+        assert 'data-testid="card-hidden-badge"' in resp.text
+
+    def test_hidden_card_has_data_hidden_attribute(self, client):
+        _seed_character(client, name="Marked Hidden", is_hidden=True)
+        resp = client.get("/")
+        assert 'data-hidden="true"' in resp.text
+
+    def test_visible_card_has_no_hidden_badge(self, client):
+        _seed_character(client, name="Plainly Visible", is_hidden=False)
+        resp = client.get("/")
+        assert "Plainly Visible" in resp.text
+        # No `data-hidden="true"` and no Hidden badge for the visible card.
+        # (Other test classes may have seeded hidden chars; check that no
+        # hidden marker is associated with this visible character by
+        # inspecting an excerpt around its name.)
+        idx = resp.text.find("Plainly Visible")
+        snippet = resp.text[max(0, idx - 500):idx + 500]
+        assert 'data-testid="card-hidden-badge"' not in snippet
+        assert 'data-hidden="true"' not in snippet
+
+
 class TestHiddenViewCharacter:
     """GET /characters/{id} returns 404 for non-editors when the character
     is hidden, so a hidden character cannot be probed by URL."""
@@ -5046,6 +5192,25 @@ class TestHiddenViewCharacter:
         cid = self._seed_hidden_for_other(client)
         resp = client.get(f"/characters/{cid}", headers={"X-Test-User": ""})
         assert resp.status_code == 404
+
+
+class TestSheetHiddenIndicator:
+    """The view-sheet page renders a 'Hidden' pill next to the character
+    name for editors viewing a hidden character. Non-editors get a 404
+    before reaching the sheet, so the markup is gated on
+    ``character.is_hidden`` only."""
+
+    def test_hidden_sheet_shows_indicator(self, client):
+        cid = _seed_character(client, name="Hidden On Sheet", is_hidden=True)
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-testid="sheet-hidden-indicator"' in resp.text
+
+    def test_visible_sheet_omits_indicator(self, client):
+        cid = _seed_character(client, name="Visible On Sheet", is_hidden=False)
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        assert 'data-testid="sheet-hidden-indicator"' not in resp.text
 
 
 class TestHiddenPartyMemberFiltering:
@@ -5098,24 +5263,92 @@ class TestHiddenPartyMemberFiltering:
         assert resp.status_code == 200
         assert "Hidden Priest 5D" in resp.text
 
+    def test_re_hidden_published_priest_filtered_for_non_editor(self, client):
+        """A previously-public, then re-hidden character is treated the
+        same as a never-revealed draft for party-effect filtering. This
+        exercises the new bidirectional ``is_hidden`` semantics."""
+        from app.models import Character as CharacterModel, User
+        priest_id, ally_id = self._setup(client, "other_owner")
+        session = client._test_session_factory()
+        # Bring the priest into the public state, publish it, then hide
+        # it again - mirrors the chip toggle round-trip in the UI.
+        priest = session.query(CharacterModel).filter(CharacterModel.id == priest_id).first()
+        priest.is_hidden = False
+        priest.is_published = True
+        session.commit()
+        bushi = session.query(CharacterModel).filter(CharacterModel.id == ally_id).first()
+        bushi.owner_discord_id = "test_user_1"
+        session.commit()
+        # Confirm the public priest appears for the non-editor first.
+        resp = client.get(f"/characters/{ally_id}",
+                          headers={"X-Test-User": "test_user_1:T1"})
+        assert "Hidden Priest 5D" in resp.text
+        # Now re-hide and verify the priest disappears from the ally view.
+        priest = session.query(CharacterModel).filter(CharacterModel.id == priest_id).first()
+        priest.is_hidden = True
+        session.commit()
+        resp = client.get(f"/characters/{ally_id}",
+                          headers={"X-Test-User": "test_user_1:T1"})
+        assert resp.status_code == 200
+        assert "Hidden Priest 5D" not in resp.text
+
+    def test_hidden_character_still_sees_other_party_members_on_own_sheet(self, client):
+        """Asymmetric visibility: a hidden character does not surface to
+        other party members, but other (visible) party members still
+        surface to the hidden character on its own sheet. The hidden
+        character's own owner is the editor, so they have full view of
+        their own sheet's party block."""
+        from app.models import GamingGroup, Character as CharacterModel
+        session = client._test_session_factory()
+        group = GamingGroup(name="Asym group")
+        session.add(group)
+        session.commit()
+        # Hidden bushi owned by the default admin viewer.
+        hidden_id = _seed_character(
+            client, name="Hidden Bushi", school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            gaming_group_id=group.id, owner_discord_id=OWNER_ID,
+            is_hidden=True,
+        )
+        # Visible priest in the same group, a different owner.
+        from app.models import User
+        if not session.query(User).filter(User.discord_id == "other_owner_2").first():
+            session.add(User(discord_id="other_owner_2", discord_name="o2",
+                             display_name="O2"))
+            session.commit()
+        priest_id = _seed_character(
+            client, name="Visible Priest", school="priest",
+            knacks={"conviction": 5, "otherworldliness": 5, "pontificate": 5},
+            gaming_group_id=group.id, owner_discord_id="other_owner_2",
+        )
+        # Hidden bushi's owner views their own (hidden) sheet - the
+        # priest should be reflected in the party data.
+        resp = client.get(f"/characters/{hidden_id}")
+        assert resp.status_code == 200
+        assert "Visible Priest" in resp.text
+
 
 class TestHiddenEditPageBanner:
-    """The edit page renders a 'hidden draft' banner above the Basics section
-    only while the character is hidden, with the editor list and a hint about
-    Apply Changes / Make Draft Visible."""
+    """The edit page renders a 'hidden draft' banner above the Basics
+    section. The markup ships unconditionally now that visibility is
+    bidirectional - the Alpine ``isHidden`` flag controls show/hide, and
+    that flag is initialized from ``character.is_hidden`` so the banner
+    only paints when relevant."""
 
-    def test_banner_present_when_hidden(self, client):
+    def test_banner_markup_present_on_hidden(self, client):
         client.post("/characters")
         char = query_db(client).first()
         cid = char.id
         resp = client.get(f"/characters/{cid}/edit")
         assert resp.status_code == 200
         assert 'data-testid="hidden-draft-banner"' in resp.text
-        # Basics heading appears AFTER the banner
+        # isHidden defaults true so the Alpine flag will display the banner.
+        assert "isHidden: true" in resp.text
+        # Banner sits above Basics in source order.
         banner_idx = resp.text.find('data-testid="hidden-draft-banner"')
         basics_idx = resp.text.find(">Basics<")
         assert banner_idx != -1 and basics_idx != -1
-        assert banner_idx < basics_idx, "Banner must be above the Basics section"
+        assert banner_idx < basics_idx
 
     def test_banner_lists_editors(self, client):
         client.post("/characters")
@@ -5125,36 +5358,31 @@ class TestHiddenEditPageBanner:
         # The viewer is owner+admin, so the editor list collapses to "you and the GM"
         assert "you and the GM" in resp.text
 
-    def test_banner_hidden_when_visible(self, client):
+    def test_banner_alpine_flag_false_when_visible(self, client):
         cid = _seed_character(client, name="Visible char", is_hidden=False)
         resp = client.get(f"/characters/{cid}/edit")
         assert resp.status_code == 200
-        assert 'data-testid="hidden-draft-banner"' not in resp.text
+        # Markup ships unconditionally; Alpine ``isHidden`` is false so
+        # x-show keeps the banner hidden client-side.
+        assert "isHidden: false" in resp.text
 
 
-class TestMakeDraftVisibleButton:
-    """The 'Make Draft Visible' button sits next to Apply Changes only while
-    the character is hidden, with an explanatory tooltip."""
+class TestVisibilityToggle:
+    """The header chip exposes the current visibility and flips it on
+    click. The pre-existing bottom-bar 'Make Draft Visible' button has
+    been removed - the chip is the only affordance now."""
 
-    def test_button_present_when_hidden(self, client):
+    def test_chip_present_on_edit_page(self, client):
+        cid = _seed_character(client, name="Toggle present")
+        resp = client.get(f"/characters/{cid}/edit")
+        assert 'data-testid="visibility-toggle"' in resp.text
+
+    def test_old_make_draft_visible_button_removed(self, client):
         client.post("/characters")
         char = query_db(client).first()
         cid = char.id
-        resp = client.get(f"/characters/{cid}/edit")
-        assert 'data-action="make-draft-visible"' in resp.text
-
-    def test_button_absent_when_visible(self, client):
-        cid = _seed_character(client, name="Already visible", is_hidden=False)
         resp = client.get(f"/characters/{cid}/edit")
         assert 'data-action="make-draft-visible"' not in resp.text
-
-    def test_button_has_tooltip_explaining_share(self, client):
-        client.post("/characters")
-        char = query_db(client).first()
-        cid = char.id
-        resp = client.text if False else client.get(f"/characters/{cid}/edit").text
-        # Tooltip mentions both editors-only and how to share
-        assert "Make this draft visible" in resp or "make this draft visible" in resp.lower()
 
 
 class TestReadOnlyRollBannerContext:

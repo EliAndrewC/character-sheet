@@ -750,18 +750,64 @@ def test_kitsune_1st_dan_picks_persist_across_reload(page, live_server_url):
     assert page.locator('[data-testid="kitsune-1st-dan-slot-2"]').input_value() == "initiative"
 
 
-def test_isawa_ishi_1st_dan_skill_selection(page, live_server_url):
-    """Isawa Ishi 1st Dan: technique_choices apply +1 rolled die to chosen skills."""
-    _create_char(page, live_server_url, "IsawaIshi1", "isawa_ishi",
-                 skill_overrides={"precepts": 1})
-    char_id = _extract_char_id(page)
-    _set_technique_choices(page, char_id, {"first_dan_choices": ["precepts", "bragging"]})
-    page.reload()
+def test_isawa_ishi_1st_dan_picker_applies_extra_die(page, live_server_url):
+    """Isawa Ishi 1st Dan picker: precepts auto-gets +1 die; the two
+    picker slots add +1 die to the player's chosen rolls. Drives the UI
+    selectors directly (rather than seeding technique_choices via PATCH)."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "IshiPicker")
+    select_school(page, "isawa_ishi")
+    click_plus(page, "skill_precepts", 1)
+    click_plus(page, "skill_bragging", 2)
+    # Picker is visible at Dan 1 (default knacks all rank 1 = Dan 1).
+    page.wait_for_selector('[data-testid="ishi-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.locator('[data-testid="ishi-1st-dan-slot-0"]').select_option("bragging")
+    page.wait_for_timeout(200)
+    page.locator('[data-testid="ishi-1st-dan-slot-1"]').select_option("attack")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Pick Ishi 1st Dan rolls")
     page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
-    f = _get_formula(page, "skill:precepts")
-    assert f is not None
-    # precepts rank 1 + Water 2 + 1 (1st Dan) = 4
-    assert f["rolled"] == 4
+    # Precepts (Water): rank 1 + Water 2 + 1 (auto) = 4
+    f_precepts = _get_formula(page, "skill:precepts")
+    assert f_precepts is not None
+    assert f_precepts["rolled"] == 4, \
+        f"Expected precepts rolled=4 (auto bonus), got {f_precepts['rolled']}"
+    # Bragging (Air): rank 2 + Air 2 + 1 (picked) = 5
+    f_bragging = _get_formula(page, "skill:bragging")
+    assert f_bragging is not None
+    assert f_bragging["rolled"] == 5, \
+        f"Expected bragging rolled=5 (picked), got {f_bragging['rolled']}"
+
+
+def test_isawa_ishi_1st_dan_picks_persist_across_reload(page, live_server_url):
+    """The Ishi 1st Dan picks (two slots) survive a page reload."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "IshiPersist")
+    select_school(page, "isawa_ishi")
+    page.wait_for_selector('[data-testid="ishi-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.locator('[data-testid="ishi-1st-dan-slot-0"]').select_option("attack")
+    page.wait_for_timeout(200)
+    page.locator('[data-testid="ishi-1st-dan-slot-1"]').select_option("wound_check")
+    # Flush the autosave debounce before reload (mirrors Kitsune persist test).
+    page.evaluate("""async () => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.flushPendingSave === 'function') {
+                await d.flushPendingSave();
+                return;
+            }
+        }
+    }""")
+    page.reload()
+    page.wait_for_selector('[data-testid="ishi-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.wait_for_timeout(300)
+    assert page.locator('[data-testid="ishi-1st-dan-slot-0"]').input_value() == "attack"
+    assert page.locator('[data-testid="ishi-1st-dan-slot-1"]').input_value() == "wound_check"
 
 
 def test_isawa_ishi_2nd_dan_skill_selection(page, live_server_url):
@@ -780,6 +826,28 @@ def test_isawa_ishi_2nd_dan_skill_selection(page, live_server_url):
     assert f is not None
     assert any(b["label"] == "2nd Dan technique" and b["amount"] == 5
                for b in f.get("bonuses", []))
+
+
+def test_isawa_ishi_absorb_void_has_per_day_reset_button(page, live_server_url):
+    """Isawa Ishi's special ability resets Absorb Void on a full night's
+    rest, so the tracker renders the per-day Reset button alongside the
+    +/- controls (mirrors Conviction). Kitsune Warden's Absorb Void
+    stays per-adventure and has no Reset button."""
+    _create_char(page, live_server_url, "IshiAVReset", "isawa_ishi",
+                 knack_overrides={"absorb_void": 3, "kharmic_spin": 1, "otherworldliness": 1})
+    btn = page.locator('[data-action="reset-ability-absorb_void"]')
+    assert btn.count() == 1
+    assert btn.get_attribute("title") == "This pool resets each day"
+
+
+def test_kitsune_warden_absorb_void_has_no_per_day_reset_button(page, live_server_url):
+    """Kitsune Warden's Absorb Void is per-adventure - no dedicated
+    Reset button (the per-adventure reset for the whole sheet still
+    applies)."""
+    _create_char(page, live_server_url, "KitsuneAVReset", "kitsune_warden",
+                 knack_overrides={"absorb_void": 3, "commune": 1, "iaijutsu": 1})
+    btn = page.locator('[data-action="reset-ability-absorb_void"]')
+    assert btn.count() == 0
 
 
 def test_isawa_ishi_vp_max_display(page, live_server_url):

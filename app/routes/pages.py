@@ -342,6 +342,9 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     # the tracker shows a dedicated "reset" button. Foreign-knack copies grant
     # the same pool (e.g. "if you take Worldliness, you get the Worldliness
     # pool") - absorb_void is supernatural so it can't be a foreign knack.
+    # Absorb Void is per-adventure by default (Kitsune Warden uses it that
+    # way); the Isawa Ishi special ability overrides it to per-day so the
+    # pool resets with a full night's rest alongside the school's VP regen.
     for knack_id in ("conviction", "otherworldliness", "worldliness", "absorb_void"):
         info = char_knacks.get(knack_id) or char_foreign_knacks.get(knack_id)
         if info:
@@ -355,6 +358,8 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                 "max": pool_max,
             }
             if knack_id == "conviction":
+                entry["per_day"] = True
+            if knack_id == "absorb_void" and character.school == "isawa_ishi":
                 entry["per_day"] = True
             per_adventure.append(entry)
 
