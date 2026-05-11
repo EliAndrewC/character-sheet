@@ -9,3 +9,4 @@ __pycache__/
 client_secret*.json
 staged_art/
 logs/
+.claude/

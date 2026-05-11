@@ -66,7 +66,7 @@
     .ql-container.ql-snow { border-bottom-left-radius: 0.375rem; border-bottom-right-radius: 0.375rem; border-color: rgba(44,24,16,0.2); min-height: 8rem; background: white; }
     .ql-editor { min-height: 8rem; }
 </style>
-<div x-data="characterForm()" x-init="init()">
+<div x-data="characterForm()">
     <!-- Discard Changes modal -->
     <div x-show="showDiscardModal" x-cloak
          data-modal="discard-changes"
@@ -443,18 +443,60 @@
                            @input="markDirty()"
                            class="w-full border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
                 </div>
-                {# Age is metadata - changes don't trigger draft state and
-                   don't appear in revision history. Optional but flagged
-                   as a Validation Issue on the View Sheet when blank.
-                   The same value is used to pre-fill the AI art generator
-                   form, and edits made there sync back here. #}
-                <div class="min-w-0">
-                    <label class="block text-sm font-medium mb-1">Age</label>
-                    <input type="number" name="age" value="{{ character.age if character.age is not none else '' }}"
-                           min="0"
-                           x-model.number="age"
-                           @input="markDirty()"
-                           class="w-24 border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                {# Age + Lineage share a row. Both are metadata - changes
+                   don't trigger draft state, don't appear in revision
+                   history. The view sheet flags either as a Validation
+                   Issue when blank. The age value is also used to
+                   pre-fill the AI art generator form. #}
+                <div class="min-w-0 flex flex-wrap gap-4 items-start">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Age</label>
+                        <input type="number" name="age" value="{{ character.age if character.age is not none else '' }}"
+                               min="0"
+                               x-model.number="age"
+                               @input="markDirty()"
+                               class="w-24 border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                    </div>
+                    <div class="min-w-0">
+                        <label class="block text-sm font-medium mb-1">Lineage</label>
+                        {# Hidden field carries the resolved canonical value
+                           for the form-encoded POST path. The autosave
+                           payload uses the same ``_currentLineage()`` helper. #}
+                        <input type="hidden" name="lineage" :value="_currentLineage()">
+                        <div class="flex gap-2 flex-wrap items-center">
+                            <select x-model="lineageDropdown"
+                                    @change="markDirty()"
+                                    :title="WASP_LINEAGES[lineageDropdown] || ''"
+                                    data-testid="lineage-dropdown"
+                                    class="border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent bg-white">
+                                <option value="">-- Choose --</option>
+                                {% for name, desc in wasp_lineages.items() %}
+                                <option value="{{ name }}" title="{{ desc }}">{{ name }}</option>
+                                {% endfor %}
+                                <option value="Other">Other...</option>
+                            </select>
+                            <input x-show="lineageDropdown === 'Other'" x-cloak
+                                   type="text"
+                                   x-model="lineageCustom"
+                                   @input="markDirty()"
+                                   data-testid="lineage-custom"
+                                   placeholder="Lineage name"
+                                   class="border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
+                            {# Help icon: shown only when one of the canonical
+                               lineages is picked. Hovering surfaces the
+                               description (same text as the option's native
+                               title) so the player can re-read it without
+                               re-opening the dropdown. #}
+                            <span x-show="WASP_LINEAGES[lineageDropdown]" x-cloak
+                                  class="tooltip-trigger relative inline-flex items-center justify-center w-6 h-6 rounded-full bg-ink/10 text-ink/70 text-xs cursor-help"
+                                  data-testid="lineage-help"
+                                  aria-label="Lineage description">
+                                ?
+                                <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-normal text-left font-normal"
+                                      x-text="WASP_LINEAGES[lineageDropdown] || ''"></span>
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -1674,6 +1716,11 @@ const SCHOOL_RING_OPTIONS = {
     {% endfor %}
 };
 
+// Wasp lineage descriptions, used by the Basics-section dropdown to
+// surface each lineage's description as a hover tooltip without
+// reserving vertical space for the full text.
+const WASP_LINEAGES = {{ wasp_lineages | tojson }};
+
 // Schools data for ring resolution and knack initialization
 const SCHOOLS_DATA = {
     {% for sid, s in schools.items() %}
@@ -1834,6 +1881,12 @@ function characterForm() {
         startingXp: 150,
         earnedXp: {{ character.earned_xp }},
         age: {{ character.age if character.age is not none else 'null' }},
+        // Lineage is split into two reactive fields for the editor UI;
+        // the canonical value persisted to the server is computed by
+        // ``_currentLineage()`` and submitted via a hidden form field
+        // / the autosave payload.
+        lineageDropdown: {{ ((character.lineage or '') if (character.lineage in ['Tsuruchi', 'Kyo', 'Ami']) else ('Other' if (character.lineage or '') else '')) | tojson }},
+        lineageCustom: {{ ((character.lineage or '') if (character.lineage not in ['Tsuruchi', 'Kyo', 'Ami', '']) else '') | tojson }},
         rings: {{ char_dict.rings | tojson }},
         skills: {
             {% for sid in skills %}
@@ -1946,6 +1999,21 @@ function characterForm() {
             });
 
             this.$watch('rings', () => this.markDirty(), { deep: true });
+            // School-ring shift: the OLD school ring loses its free
+            // auto-raises (2->3 for any Dan, plus 3->4 at Dan>=4) so
+            // its value drops by 1 (or 2 at Dan>=4) when the player
+            // moves the school ring elsewhere. Floored at 2 (the
+            // non-school baseline) so any XP-paid raises above the
+            // auto-baseline survive the shift. Without this, a ring
+            // that used to be a school ring keeps the free bonus
+            // forever and the XP totals quietly over-credit the
+            // character.
+            this.$watch('schoolRingChoice', (newVal, oldVal) => {
+                if (!oldVal || newVal === oldVal) return;
+                if (!Object.prototype.hasOwnProperty.call(this.rings, oldVal)) return;
+                const dropAmount = 1 + (this.currentDan() >= 4 ? 1 : 0);
+                this.rings[oldVal] = Math.max(2, (this.rings[oldVal] || 2) - dropAmount);
+            });
             this.$watch('skills', () => this.markDirty(), { deep: true });
             this.$watch('knacks', () => {
                 // 4th Dan technique: school ring is auto-raised to 4 (and
@@ -2066,6 +2134,7 @@ function characterForm() {
                     name: document.querySelector('input[name="name"]')?.value || this.school || 'New Character',
                     name_explanation: this.nameExplanation || '',
                     age: (this.age === '' || this.age === null || isNaN(this.age)) ? null : this.age,
+                    lineage: this._currentLineage(),
                     owner_discord_id: document.querySelector('select[name="owner_discord_id"]')?.value || undefined,
                     school: this.school,
                     school_ring_choice: this.schoolRingChoice,
@@ -2582,6 +2651,18 @@ function characterForm() {
                 if (current < minVal) this.rings[ring] = minVal;
                 if (current > maxVal) this.rings[ring] = maxVal;
             }
+        },
+
+        _currentLineage() {
+            // Resolve the dropdown + custom-text pair to a single
+            // canonical string for persistence. The blank-dropdown
+            // state means "unset" (the validator surfaces this on the
+            // View Sheet); a pre-defined pick stores its own name; the
+            // Other pick stores whatever the player typed.
+            if (this.lineageDropdown === 'Other') {
+                return (this.lineageCustom || '').trim();
+            }
+            return this.lineageDropdown || '';
         },
 
         skillXpLabel(skillId, isAdvanced) {

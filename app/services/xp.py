@@ -746,6 +746,11 @@ def validate_character(character_data: dict) -> List[str]:
     elif age < 0:
         errors.append(f"Age ({age}) cannot be negative.")
 
+    # -- Lineage (metadata, but the View Sheet flags it when unset) --
+    lineage = (character_data.get("lineage") or "").strip()
+    if not lineage:
+        errors.append("Lineage is not set.")
+
     school_id = character_data.get("school", "")
     school = SCHOOLS.get(school_id)
     school_ring = character_data.get("school_ring_choice", "")

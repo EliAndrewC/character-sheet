@@ -130,3 +130,88 @@ class TestDan:
 
     def test_dan_at_999_xp(self):
         assert dan_for_xp(999) == 5
+
+
+class TestSocialVisibleSets:
+    """The Group Summary page uses these allowlists to filter each
+    PC's adv/disadv chip strip down to "conversation-relevant" entries.
+    The membership choices here are a campaign-design call by the GM,
+    so regressions to the set are flagged rather than silently changing
+    what the GM sees on the roster."""
+
+    def test_social_visible_advantages_membership(self):
+        from app.game_data import (
+            ADVANTAGES, CAMPAIGN_ADVANTAGES, SOCIAL_VISIBLE_ADVANTAGES,
+        )
+        # Every entry must exist in the standard or campaign catalogs.
+        all_advs = set(ADVANTAGES) | set(CAMPAIGN_ADVANTAGES)
+        for aid in SOCIAL_VISIBLE_ADVANTAGES:
+            assert aid in all_advs, f"unknown advantage id: {aid}"
+        # Specific entries the GM explicitly opted in.
+        expected_in = {
+            "charming", "wealthy",
+            "imperial_favor", "highest_regard",
+            "minor_clan_major_ally_sparrow",
+            "minor_clan_major_ally_fox",
+            "minor_clan_major_ally_mantis",
+        }
+        assert expected_in <= SOCIAL_VISIBLE_ADVANTAGES
+        # Specific mechanical-only entries that must stay OUT.
+        for excluded in ("higher_purpose", "tactician", "lucky",
+                         "specialization", "kind_eye"):
+            assert excluded not in SOCIAL_VISIBLE_ADVANTAGES
+        # Surfaced via the Honor color highlight / Rank-Recognition
+        # rows instead of as chips, so they're deliberately not in
+        # the chip allowlist. ``household_wealth`` is excluded for
+        # space (the chip text was too long for what it conveys).
+        for excluded in ("virtue", "good_reputation", "household_wealth"):
+            assert excluded not in SOCIAL_VISIBLE_ADVANTAGES
+
+    def test_social_visible_disadvantages_membership(self):
+        from app.game_data import (
+            DISADVANTAGES, CAMPAIGN_DISADVANTAGES,
+            SOCIAL_VISIBLE_DISADVANTAGES,
+        )
+        all_disadvs = set(DISADVANTAGES) | set(CAMPAIGN_DISADVANTAGES)
+        for did in SOCIAL_VISIBLE_DISADVANTAGES:
+            assert did in all_disadvs, f"unknown disadvantage id: {did}"
+        expected_in = {
+            "unkempt", "vain", "proud", "humble", "emotional",
+            "short_temper", "long_temper", "contrary", "meddler",
+            "jealousy", "transparent", "thoughtless",
+            "dark_secret", "unlucky",
+        }
+        assert expected_in <= SOCIAL_VISIBLE_DISADVANTAGES
+        # Same rationale as the advantage side: surfaced elsewhere on
+        # the card (Honor color, Rank/Recognition rows), or roll-only.
+        for excluded in ("unconventional", "bad_reputation",
+                         "withdrawn", "permanent_wound"):
+            assert excluded not in SOCIAL_VISIBLE_DISADVANTAGES
+
+    def test_social_chip_labels_compact_names(self):
+        """The chip-label override map shortens names that read better
+        on a compact card. Each override must be (a) a known adv/disadv
+        ID, and (b) actually shorter than the canonical name."""
+        from app.game_data import (
+            ADVANTAGES, CAMPAIGN_ADVANTAGES,
+            DISADVANTAGES, CAMPAIGN_DISADVANTAGES,
+            SOCIAL_CHIP_LABELS,
+        )
+        known = (set(ADVANTAGES) | set(CAMPAIGN_ADVANTAGES)
+                 | set(DISADVANTAGES) | set(CAMPAIGN_DISADVANTAGES))
+        for cid, short_label in SOCIAL_CHIP_LABELS.items():
+            assert cid in known, f"unknown chip-label id: {cid}"
+            adv = (
+                ADVANTAGES.get(cid) or CAMPAIGN_ADVANTAGES.get(cid)
+                or DISADVANTAGES.get(cid) or CAMPAIGN_DISADVANTAGES.get(cid)
+            )
+            assert len(short_label) < len(adv.name), (
+                f"short label {short_label!r} is not shorter than the "
+                f"canonical name {adv.name!r}"
+            )
+        # The three minor-clan allies are the named cases.
+        assert SOCIAL_CHIP_LABELS == {
+            "minor_clan_major_ally_sparrow": "Sparrow Ally",
+            "minor_clan_major_ally_fox": "Fox Ally",
+            "minor_clan_major_ally_mantis": "Mantis Ally",
+        }

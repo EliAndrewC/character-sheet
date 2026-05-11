@@ -46,6 +46,333 @@ class TestIndexPage:
         resp = client.get("/")
         assert "My Draft" in resp.text
 
+    def test_index_sorts_characters_alphabetically_within_group(self, client):
+        """Characters inside a gaming group cluster are rendered in
+        alphabetical order by name on the homepage."""
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="Tuesday Group")
+        session.add(group); session.commit()
+        # Insert out of alphabetical order.
+        for name in ["Zaiko", "Akiko", "Mariko"]:
+            _seed_character(client, name=name, gaming_group_id=group.id,
+                            is_published=True)
+        resp = client.get("/")
+        body = resp.text
+        # The three names appear in order in the rendered HTML.
+        i_a = body.index("Akiko")
+        i_m = body.index("Mariko")
+        i_z = body.index("Zaiko")
+        assert i_a < i_m < i_z
+
+    def test_index_group_header_links_to_group_summary(self, client):
+        """The group name on the homepage is a link to /groups/{id}."""
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name="Linked Group")
+        session.add(group); session.commit()
+        _seed_character(client, name="GroupChar", gaming_group_id=group.id,
+                        is_published=True)
+        resp = client.get("/")
+        assert f'href="/groups/{group.id}"' in resp.text
+
+    def test_index_unassigned_group_has_no_link(self, client):
+        """Characters with no gaming group still cluster under
+        "Not assigned to a group", but the header is plain text - no
+        /groups/None endpoint to link to."""
+        _seed_character(client, name="LooseChar", gaming_group_id=None,
+                        is_published=True)
+        resp = client.get("/")
+        assert "Not assigned to a group" in resp.text
+        # No spurious link points at /groups/None.
+        assert "/groups/None" not in resp.text
+
+
+class TestGroupSummaryPage:
+    """Coverage for ``GET /groups/{group_id}`` - the conversation-stats
+    roster view."""
+
+    def _make_group_with(self, client, *characters, group_name="Friday Group"):
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name=group_name)
+        session.add(group); session.commit()
+        for kwargs in characters:
+            _seed_character(client, gaming_group_id=group.id,
+                            is_published=True, **kwargs)
+        return group.id
+
+    def test_returns_404_when_group_missing(self, client):
+        resp = client.get("/groups/99999")
+        assert resp.status_code == 404
+
+    def test_returns_404_when_group_has_no_visible_characters(self, client):
+        gid = self._make_group_with(
+            client,
+            {"name": "OnlyHidden", "is_hidden": True},
+        )
+        resp = client.get(f"/groups/{gid}")
+        assert resp.status_code == 404
+
+    def test_lists_visible_characters_alphabetically(self, client):
+        gid = self._make_group_with(
+            client,
+            {"name": "Zara"},
+            {"name": "Akiko"},
+            {"name": "Mariko"},
+        )
+        resp = client.get(f"/groups/{gid}")
+        assert resp.status_code == 200
+        body = resp.text
+        i_a = body.index("Akiko")
+        i_m = body.index("Mariko")
+        i_z = body.index("Zara")
+        assert i_a < i_m < i_z
+
+    def test_hides_is_hidden_characters_even_from_admin(self, client):
+        """The hidden filter is unconditional: hidden characters are
+        skipped regardless of viewer identity, since the design treats
+        a hidden draft as "not yet part of the group". The default
+        test fixture authenticates as an admin."""
+        gid = self._make_group_with(
+            client,
+            {"name": "VisibleSamurai"},
+            {"name": "HiddenSamurai", "is_hidden": True},
+        )
+        resp = client.get(f"/groups/{gid}")
+        assert resp.status_code == 200
+        assert "VisibleSamurai" in resp.text
+        assert "HiddenSamurai" not in resp.text
+
+    def test_shows_only_social_visible_adv_and_disadv(self, client):
+        """Mechanical-only advantages (Higher Purpose, Tactician,
+        Lucky, Specialization, etc.) are filtered out of the chip
+        strip; so are entries that already surface elsewhere on the
+        card (Good/Bad Reputation flow into Rank+Recognition rows,
+        Virtue/Unconventional flow into the Honor color highlight,
+        Permanent Wound is implied by combat numbers, Withdrawn is
+        roll-only). Only the curated SOCIAL_VISIBLE_* IDs render as
+        chips.
+
+        Checks the chip elements directly (via the data-adv-id /
+        data-dis-id markers) rather than scanning the whole page body
+        - the expanded Rank/Recognition breakdowns and the inline
+        Honor tooltip legitimately mention some of these names as
+        modifier sources, and that's not a regression."""
+        gid = self._make_group_with(
+            client,
+            {
+                "name": "MixedAdvs",
+                "advantages": ["charming", "good_reputation", "virtue",
+                               "higher_purpose", "tactician", "lucky"],
+                "disadvantages": ["unkempt", "transparent",
+                                  "bad_reputation", "unconventional",
+                                  "permanent_wound", "withdrawn"],
+            },
+        )
+        resp = client.get(f"/groups/{gid}")
+        body = resp.text
+        # Social-visible entries render as chips (presence asserted
+        # via the markered element).
+        assert 'data-adv-id="charming"' in body
+        assert 'data-dis-id="unkempt"' in body
+        assert 'data-dis-id="transparent"' in body
+        # Entries excluded from the chip allowlist do NOT render as
+        # chips - the markered element must be absent from the body.
+        for marker in (
+            'data-adv-id="good_reputation"',
+            'data-adv-id="virtue"',
+            'data-adv-id="higher_purpose"',
+            'data-adv-id="tactician"',
+            'data-adv-id="lucky"',
+            'data-dis-id="bad_reputation"',
+            'data-dis-id="unconventional"',
+            'data-dis-id="permanent_wound"',
+            'data-dis-id="withdrawn"',
+        ):
+            assert marker not in body, f"chip {marker!r} leaked onto the card"
+
+    def test_honor_highlight_blue_with_virtue(self, client):
+        """Virtue colors the inline Honor blue and surfaces the
+        per-character ``advantage_details['virtue']['text']`` in the
+        Honor hover tooltip."""
+        gid = self._make_group_with(
+            client,
+            {
+                "name": "VirtuousOne",
+                "advantages": ["virtue"],
+                "advantage_details": {"virtue": {"text": "Courage"}},
+            },
+        )
+        resp = client.get(f"/groups/{gid}")
+        body = resp.text
+        assert 'data-honor-mod="virtue"' in body
+        assert "text-blue-700" in body
+        # Detail text surfaces in the tooltip-content.
+        assert "Virtue: Courage" in body
+
+    def test_honor_highlight_orange_with_unconventional(self, client):
+        """Unconventional colors the inline Honor orange and surfaces
+        the per-character detail text in the tooltip."""
+        gid = self._make_group_with(
+            client,
+            {
+                "name": "UnconventionalOne",
+                "disadvantages": ["unconventional"],
+                "advantage_details": {
+                    "unconventional": {"text": "Believes peasants are equal"},
+                },
+            },
+        )
+        resp = client.get(f"/groups/{gid}")
+        body = resp.text
+        assert 'data-honor-mod="unconventional"' in body
+        assert "text-orange-600" in body
+        assert "Unconventional: Believes peasants are equal" in body
+
+    def test_minor_clan_ally_chip_uses_short_label(self, client):
+        """The Minor Clan Major Ally chip face renders as e.g.
+        ``"Mantis Ally"`` rather than the full canonical name
+        ``"Minor Clan Major Ally: Mantis"`` (which eats too much chip
+        width on a compact card). The ``data-adv-id`` keeps the ID
+        intact for selectors / tests."""
+        gid = self._make_group_with(
+            client,
+            {
+                "name": "MantisFriend",
+                "campaign_advantages": ["minor_clan_major_ally_mantis"],
+            },
+        )
+        resp = client.get(f"/groups/{gid}")
+        body = resp.text
+        # Chip exists with its canonical id...
+        assert 'data-adv-id="minor_clan_major_ally_mantis"' in body
+        # ...and the visible face is the short label.
+        assert "Mantis Ally" in body
+        # The full canonical advantage name must NOT appear on the
+        # chip face (it would still appear on a full View Sheet,
+        # but the chip strip is supposed to stay compact).
+        # Locate the chip span and check its inner text directly.
+        import re
+        chip_match = re.search(
+            r'data-adv-id="minor_clan_major_ally_mantis"[^>]*>([^<]+)<',
+            body,
+        )
+        assert chip_match is not None
+        assert chip_match.group(1).strip() == "Mantis Ally"
+
+    def test_unlucky_chip_renders_top_right_not_in_chip_strip(self, client):
+        """When a character has Unlucky it surfaces as the floated
+        top-right control, NOT as a chip in the bottom adv/disadv
+        strip. Editors get the dropdown shell; the chip starts in
+        the 'unused' state when ``adventure_state.unlucky_used`` is
+        falsy."""
+        gid = self._make_group_with(
+            client,
+            {
+                "name": "UnluckyOne",
+                "disadvantages": ["unlucky"],
+            },
+        )
+        resp = client.get(f"/groups/{gid}")
+        body = resp.text
+        # Top-right control is rendered with the dropdown shell.
+        assert 'data-testid="card-unlucky"' in body
+        assert 'data-testid="card-unlucky-chip"' in body
+        # Default test viewer is admin so the apply control is wired up.
+        assert 'data-testid="card-unlucky-apply"' in body
+        # Initial state is unused (adventure_state lacks unlucky_used).
+        assert "used: false" in body
+        # Unlucky does NOT appear inside the bottom chip strip.
+        assert 'data-dis-id="unlucky"' not in body
+
+    def test_unlucky_chip_used_state(self, client):
+        """A character whose ``adventure_state.unlucky_used`` is
+        already true gets the chip pre-marked used: gray + line-through
+        text, no pointer cursor, and a ``Already used this adventure.``
+        tooltip in place of the dropdown."""
+        gid = self._make_group_with(
+            client,
+            {
+                "name": "AlreadyUnlucky",
+                "disadvantages": ["unlucky"],
+                "adventure_state": {"unlucky_used": True},
+            },
+        )
+        resp = client.get(f"/groups/{gid}")
+        body = resp.text
+        assert "used: true" in body
+        # Visual treatment for the used state - class binding includes
+        # the line-through + cursor-default plus the gray background.
+        assert "line-through" in body
+        assert "cursor-default" in body
+        assert "bg-gray-300" in body
+        # The explanation tooltip is wired up via the standard
+        # tooltip-trigger / tooltip-content pattern.
+        assert 'data-testid="card-unlucky-used-tooltip"' in body
+        assert "Already used this adventure" in body
+
+    def test_unlucky_chip_hidden_for_non_editor(self, client):
+        """Anonymous viewers don't get the Apply Unlucky action.
+        The chip itself still renders (so the GM viewing the page
+        can see who has Unlucky) but ``canEdit`` is false in the
+        chip's Alpine state, which the template uses to disable the
+        click handler."""
+        gid = self._make_group_with(
+            client,
+            {
+                "name": "UnluckyAnon",
+                "disadvantages": ["unlucky"],
+            },
+        )
+        # Anonymous request.
+        client.headers.pop("X-Test-User", None)
+        resp = client.get(f"/groups/{gid}")
+        body = resp.text
+        assert 'data-testid="card-unlucky-chip"' in body
+        assert "canEdit: false" in body
+
+    def test_unlucky_chip_absent_when_disadvantage_not_taken(self, client):
+        """No Unlucky on the character → no top-right control at
+        all (the markup is gated on ``card.has_unlucky``)."""
+        gid = self._make_group_with(
+            client,
+            {"name": "NoUnlucky", "disadvantages": ["unkempt"]},
+        )
+        resp = client.get(f"/groups/{gid}")
+        body = resp.text
+        assert 'data-testid="card-unlucky"' not in body
+
+    def test_honor_no_highlight_without_modifier(self, client):
+        """A character with neither Virtue nor Unconventional gets the
+        plain (uncolored) inline Honor display - no tooltip wrapper."""
+        gid = self._make_group_with(client, {"name": "PlainOne"})
+        resp = client.get(f"/groups/{gid}")
+        body = resp.text
+        assert 'data-testid="card-honor"' in body
+        assert 'data-honor-mod=' not in body
+
+    def test_shows_school_name_and_lineage(self, client):
+        gid = self._make_group_with(
+            client,
+            {"name": "Identifiable", "school": "akodo_bushi",
+             "school_ring_choice": "Water", "lineage": "Kyo"},
+        )
+        resp = client.get(f"/groups/{gid}")
+        body = resp.text
+        assert "Akodo Bushi" in body
+        assert "Kyo lineage" in body
+
+    def test_anonymous_visitor_can_view(self, client):
+        """No login required - matches the per-character View Sheet's
+        public-by-default policy."""
+        gid = self._make_group_with(client, {"name": "PublicChar"})
+        # Drop the auth header that the default test client carries.
+        client.headers.pop("X-Test-User", None)
+        resp = client.get(f"/groups/{gid}")
+        assert resp.status_code == 200
+        assert "PublicChar" in resp.text
+
 
 class TestCreateCharacter:
     def test_create_redirects_to_edit(self, client):
@@ -2504,6 +2831,56 @@ class TestAutoSave:
         assert resp.status_code == 200
         char = query_db(client).filter(Character.id == cid).first()
         assert char.age is None
+
+    def test_autosave_persists_lineage(self, client):
+        """Lineage is metadata - autosave persists the string, trims
+        whitespace, and a non-string payload clears the field."""
+        cid = _seed_character(client, name="LineageMeta", lineage="")
+        # String value persists (after trim).
+        resp = client.post(
+            f"/characters/{cid}/autosave", json={"lineage": "  Tsuruchi  "},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.lineage == "Tsuruchi"
+        # A free-form "Other" value is stored verbatim.
+        resp = client.post(
+            f"/characters/{cid}/autosave", json={"lineage": "Some Other Lineage"},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.lineage == "Some Other Lineage"
+        # Non-string payload (e.g. null) clears the field.
+        resp = client.post(
+            f"/characters/{cid}/autosave", json={"lineage": None},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.lineage == ""
+
+    def test_autosave_lineage_change_does_not_flip_unpublished(self, client):
+        """Lineage is metadata - changing it on a published character
+        must not flip ``has_unpublished_changes`` (matches the age /
+        name contract)."""
+        cid = _seed_character(client, name="LineagePub", lineage="Tsuruchi",
+                              is_published=True)
+        # Publish snapshot so has_unpublished_changes can flip if a
+        # game-relevant field changes.
+        char = query_db(client).filter(Character.id == cid).first()
+        char.published_state = char.to_dict()
+        char.published_state["lineage"] = "Tsuruchi"
+        # Seed via session commit on the same connection the route uses.
+        session = client._test_session_factory()
+        session.merge(char)
+        session.commit()
+        resp = client.post(
+            f"/characters/{cid}/autosave", json={"lineage": "Kyo"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body.get("has_unpublished_changes") is False
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.lineage == "Kyo"
 
     def test_autosave_persists_specializations_list(self, client):
         cid = _seed_character(client, name="Spec")

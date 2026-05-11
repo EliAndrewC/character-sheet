@@ -125,6 +125,7 @@ def _migrate_add_columns():
         ("foreign_knacks", "TEXT", "'{}'"),
         ("specializations", "TEXT", "'[]'"),
         ("age", "INTEGER", "NULL"),
+        ("lineage", "TEXT", "''"),
     ]
 
     # Migration bodies below are defensive first-run-on-old-schema branches.

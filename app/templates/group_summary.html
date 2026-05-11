@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block title %}L7R - {{ group.name }}{% endblock %}
+
+{# The group name lives in the nav title bar (rather than a body H1)
+   so the cards start at the top of the page. The L7R Character
+   Builder link in the nav already gets the user back to the
+   character list, so the in-page back link is gone too. #}
+{% block nav_center %}{{ group.name }}{% endblock %}
+
+{# Hide the "New Character" control on this page - it lives on every
+   other page already and isn't a primary action while reviewing the
+   group roster. #}
+{% block nav_new_character %}{% endblock %}
+
+{# Tighter bottom padding than the global default so the gap between
+   the last row of cards and the page footer matches the dense card
+   layout of this page. #}
+{% block main_pb %}pb-2{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Two cards per row on desktop, one per row on mobile. #}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for card in cards %}
+        {% set c = card.character %}
+        {% set hs_url = headshot_url(c) %}
+        {% set school_obj = schools.get(c.school) %}
+        {% set advantage_details = advantage_details_by_char_id.get(c.id, {}) %}
+        <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3"
+                 data-group-card data-character-id="{{ c.id }}"
+                 data-character-name="{{ c.name }}">
+
+            {# Top section: headshot floated top-left, name/school
+               flowing to its right, chip strip flowing after the
+               name/school. Because the chip strip is a block of
+               inline-block chips and the headshot is floated, the
+               chips naturally wrap around the headshot in an L-shape:
+               they begin to the right of the headshot at the same
+               vertical level as the headshot's bottom edge, then
+               extend underneath the headshot once they pass it. Block
+               formatting context (``overflow-hidden``) on the wrapper
+               clears the float so the Honor/Rank/Recognition rows
+               below render cleanly. ``flow-root`` (rather than
+               ``overflow-hidden``) creates the block formatting
+               context without clipping descendant tooltips that
+               overflow the wrapper - the chip-detail hover tooltips
+               extend below the card and would otherwise be cut off. #}
+            <div class="flow-root">
+                {# Unlucky control: floated top-right, on the same line
+                   as the character name. Color-coded by per-adventure
+                   state - gold when available, gray when already used.
+                   Editors with edit access to the target character get
+                   a one-option dropdown ("Apply Unlucky") that posts
+                   the merged adventure_state to /track. Non-editors
+                   and already-used chips have no dropdown. The chip
+                   stays out of the bottom chip strip (it's filtered
+                   out of ``card.social_disadvantages`` in the route). #}
+                {% if card.has_unlucky %}
+                <div class="float-right ml-2 relative"
+                     data-testid="card-unlucky"
+                     x-data="{
+                         used: {{ 'true' if card.unlucky_used else 'false' }},
+                         canEdit: {{ 'true' if card.viewer_can_edit else 'false' }},
+                         menuOpen: false,
+                         state: {{ (c.adventure_state or {}) | tojson }},
+                         async apply() {
+                             try {
+                                 const resp = await fetch('/characters/{{ c.id }}/track', {
+                                     method: 'POST',
+                                     headers: {'Content-Type': 'application/json'},
+                                     body: JSON.stringify({adventure_state: Object.assign({}, this.state, {unlucky_used: true})}),
+                                 });
+                                 if (resp.ok) {
+                                     this.used = true;
+                                     this.state = Object.assign({}, this.state, {unlucky_used: true});
+                                     this.menuOpen = false;
+                                 }
+                             } catch (e) { /* swallow - the GM can retry */ }
+                         },
+                     }"
+                     @click.outside="menuOpen = false">
+                    <button type="button"
+                            :class="used
+                                    ? 'bg-gray-300 text-gray-600 line-through cursor-default'
+                                    : (canEdit
+                                        ? 'bg-amber-200 text-amber-900 hover:bg-amber-300 cursor-pointer'
+                                        : 'bg-amber-200 text-amber-900 cursor-default')"
+                            class="tooltip-trigger relative inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium align-middle"
+                            data-testid="card-unlucky-chip"
+                            :data-state="used ? 'used' : 'unused'"
+                            @click="!used && canEdit && (menuOpen = !menuOpen)">
+                        Unlucky
+                        {# Tooltip only renders when used=true. The
+                           ``tooltip-content`` class hides it by default
+                           and the surrounding ``tooltip-trigger`` flips
+                           visibility on hover. ``x-show="used"`` strips
+                           the element from the DOM when unused so the
+                           CSS hover rule can't accidentally surface it
+                           on the gold (unused) chip. ``no-underline``
+                           cancels the parent button's ``line-through``
+                           text-decoration inheritance for the tooltip
+                           body. #}
+                        <span x-show="used" x-cloak
+                              class="tooltip-content absolute right-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg w-56 whitespace-normal text-left font-normal no-underline"
+                              data-testid="card-unlucky-used-tooltip">
+                            Already used this adventure.
+                        </span>
+                    </button>
+                    <div x-show="menuOpen" x-cloak
+                         class="absolute right-0 mt-1 w-44 bg-ink border border-parchment/10 rounded shadow-lg z-50"
+                         role="menu">
+                        <button type="button"
+                                @click="apply()"
+                                class="w-full text-left px-3 py-2 text-sm text-parchment hover:bg-accent/70 transition-colors"
+                                data-testid="card-unlucky-apply">
+                            Apply Unlucky
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if hs_url %}
+                <a href="/characters/{{ c.id }}"
+                   class="float-left mr-3 mb-1.5"
+                   data-testid="card-headshot-link">
+                    <img src="{{ hs_url }}" alt=""
+                         aria-hidden="true"
+                         class="rounded-md object-cover bg-ink/5"
+                         style="width: 80px; height: 108px;"
+                         data-testid="card-headshot">
+                </a>
+                {% else %}
+                <a href="/characters/{{ c.id }}" class="float-left mr-3 mb-1.5">
+                    <div class="rounded-md bg-ink/10 flex items-center justify-center text-ink/30"
+                         style="width: 80px; height: 108px;"
+                         data-testid="card-headshot-placeholder"
+                         aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-9 h-9" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 9a3 3 0 100-6 3 3 0 000 6z"/>
+                            <path d="M3.5 17a6.5 6.5 0 0113 0H3.5z"/>
+                        </svg>
+                    </div>
+                </a>
+                {% endif %}
+
+                <h2 class="text-base font-bold text-accent leading-tight">
+                    <a href="/characters/{{ c.id }}" class="hover:underline"
+                       data-testid="card-name-link">{{ c.name }}</a>
+                </h2>
+                {# Identity sub-line: School &middot; Lineage &middot; Honor.
+                   Honor lives here (rather than its own Status row) to
+                   save vertical height. Virtue and Unconventional are
+                   NOT rendered as chips - their effect surfaces here
+                   as a color highlight on the Honor number:
+                       - Virtue          → blue   Honor (more honorable)
+                       - Unconventional  → orange Honor (less honorable)
+                   The per-character ``advantage_details`` text (e.g.
+                   "Courage" for Virtue, "Believes peasants are equal"
+                   for Unconventional) hovers as the tooltip. #}
+                {% set _virtue_detail = (advantage_details.get('virtue') or {}).get('text') %}
+                {% set _unconv_detail = (advantage_details.get('unconventional') or {}).get('text') %}
+                {% set has_virtue = 'virtue' in (c.advantages or []) %}
+                {% set has_unconv = 'unconventional' in (c.disadvantages or []) %}
+                {% if school_obj or c.lineage or c.honor is not none %}
+                <p class="text-xs text-ink/60 leading-snug mt-0.5 mb-1.5">
+                    {% set ns = namespace(need_sep=false) %}
+                    {% if school_obj %}{{ school_obj.name }}{% set ns.need_sep = true %}{% endif %}
+                    {% if c.lineage %}
+                    {%- if ns.need_sep %} &middot; {% endif -%}
+                    {%- set _lineage_desc = wasp_lineages.get(c.lineage) -%}
+                    {%- if _lineage_desc -%}
+                    <span class="tooltip-trigger relative inline-block cursor-help"
+                          data-testid="card-lineage-tooltip">{{ c.lineage }} lineage<span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-normal text-left font-normal">{{ _lineage_desc }}</span></span>
+                    {%- else -%}
+                    {{ c.lineage }} lineage
+                    {%- endif -%}
+                    {% set ns.need_sep = true %}
+                    {% endif %}
+                    {%- if ns.need_sep %} &middot; {% endif -%}
+                    {% if has_virtue or has_unconv %}
+                    {%- if has_virtue -%}
+                    {% set _honor_class = 'text-blue-700 font-semibold' %}
+                    {%- else -%}
+                    {% set _honor_class = 'text-orange-600 font-semibold' %}
+                    {%- endif -%}
+                    <span class="tooltip-trigger relative inline-block cursor-help {{ _honor_class }}"
+                          data-testid="card-honor-tooltip"
+                          {% if has_virtue %}data-honor-mod="virtue"{% else %}data-honor-mod="unconventional"{% endif %}>{{ "%.1f"|format(c.honor) }} Honor<span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-pre-line text-left font-normal">{%- if has_virtue -%}Virtue{%- if _virtue_detail %}: {{ _virtue_detail }}{%- endif -%}{%- endif -%}{%- if has_virtue and has_unconv %}
+{% endif -%}{%- if has_unconv -%}Unconventional{%- if _unconv_detail %}: {{ _unconv_detail }}{%- endif -%}{%- endif -%}</span></span>
+                    {% else %}
+                    <span data-testid="card-honor">{{ "%.1f"|format(c.honor) }} Honor</span>
+                    {% endif %}
+                </p>
+                {% endif %}
+
+                {# Combined chip strip. Each chip is ``inline-flex``
+                   so the block container can be a normal block with
+                   chip glyphs flowing inline; that's what lets the
+                   strip wrap around the floated headshot rather than
+                   being pinned to a single column. Per-chip margins
+                   (``mr-1.5 mb-1.5``) replace what would otherwise
+                   be a flex ``gap`` - we can't use ``flex`` here
+                   without losing the wrap-around behavior. #}
+                <div data-testid="card-social-chips">
+                    {% for aid in card.social_advantages %}
+                    {% set adv = advantages.get(aid) or campaign_advantages.get(aid) %}
+                    {% if adv %}
+                    {% set detail = advantage_details.get(aid, {}) %}
+                    {% set has_detail = detail.get('text') or (detail.get('player') and detail.player in player_names) %}
+                    {% set chip_label = social_chip_labels.get(aid, adv.name) %}
+                    {% if has_detail %}
+                    <span class="tooltip-trigger relative inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-emerald-100 text-emerald-900 text-xs font-medium cursor-help align-middle"
+                          data-adv-id="{{ aid }}">{{ chip_label }}<span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-pre-line font-normal text-left">{%- if detail.get('text') -%}{{ detail.text }}{%- endif -%}{%- if detail.get('text') and detail.get('player') and detail.player in player_names %}
+{% endif %}{%- if detail.get('player') and detail.player in player_names -%}(known by {{ player_names[detail.player] }}){%- endif -%}</span></span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-emerald-100 text-emerald-900 text-xs font-medium align-middle"
+                          data-adv-id="{{ aid }}">{{ chip_label }}</span>
+                    {% endif %}
+                    {% endif %}
+                    {% endfor %}
+                    {% for did in card.social_disadvantages %}
+                    {% set dis = disadvantages.get(did) or campaign_disadvantages.get(did) %}
+                    {% if dis %}
+                    {% set detail = advantage_details.get(did, {}) %}
+                    {% set has_detail = detail.get('text') or (detail.get('player') and detail.player in player_names) %}
+                    {% set chip_label = social_chip_labels.get(did, dis.name) %}
+                    {% if has_detail %}
+                    <span class="tooltip-trigger relative inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-rose-100 text-rose-900 text-xs font-medium cursor-help align-middle"
+                          data-dis-id="{{ did }}">{{ chip_label }}<span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-pre-line font-normal text-left">{%- if detail.get('text') -%}{{ detail.text }}{%- endif -%}{%- if detail.get('text') and detail.get('player') and detail.player in player_names %}
+{% endif %}{%- if detail.get('player') and detail.player in player_names -%}(known by {{ player_names[detail.player] }}){%- endif -%}</span></span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-rose-100 text-rose-900 text-xs font-medium align-middle"
+                          data-dis-id="{{ did }}">{{ chip_label }}</span>
+                    {% endif %}
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# Bottom section: Honor / Rank / Recognition rows. Shared
+               with the View Sheet via the partial. ``status_prefix``
+               keeps the data-status-row selectors unique per card so
+               the clicktest fleet can address individual rows. #}
+            <div class="space-y-2">
+                {% set status_prefix = 'c' ~ c.id ~ '-' %}
+                {% with character=c, effective=card.effective, status_prefix=status_prefix, show_honor=False %}
+                {% include 'character/partials/status_rows.html' %}
+                {% endwith %}
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

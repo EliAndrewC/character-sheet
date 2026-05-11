@@ -90,6 +90,7 @@ def _parse_form_to_dict(form_data: dict) -> dict:
         "name": form_data.get("name", "").strip(),
         "name_explanation": form_data.get("name_explanation", ""),
         "player_name": form_data.get("player_name", "").strip(),
+        "lineage": (form_data.get("lineage") or "").strip(),
         "school": form_data.get("school", ""),
         "school_ring_choice": form_data.get("school_ring_choice", ""),
         "rings": {},
@@ -219,6 +220,7 @@ async def update_character(
     # Update fields
     character.name = data["name"]
     character.name_explanation = data["name_explanation"]
+    character.lineage = data["lineage"]
     # Handle owner reassignment (GM only)
     new_owner_id = form_data.get("owner_discord_id")
     if new_owner_id:
@@ -515,6 +517,12 @@ async def autosave_character(
                 character.age = int(raw)
             except (TypeError, ValueError):
                 character.age = None
+    if "lineage" in body:
+        # Metadata, same shape contract as age: blank/null is "unset"
+        # (flagged by validate_character). Anything else stored verbatim
+        # after trimming whitespace.
+        raw = body.get("lineage")
+        character.lineage = raw.strip() if isinstance(raw, str) else ""
     if body.get("owner_discord_id"):
         # Only admins can reassign ownership
         from app.services.auth import is_admin

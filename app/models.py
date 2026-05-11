@@ -105,6 +105,7 @@ METADATA_FIELDS = frozenset({
     "name_explanation",
     "player_name",
     "age",
+    "lineage",
 })
 
 
@@ -123,6 +124,10 @@ class Character(Base):
     # into "unpublished changes" state, don't appear in revision-history
     # diffs, and Discard / Revert don't touch it.
     age: Mapped[Optional[int]] = mapped_column(default=None, nullable=True)
+    # Wasp lineage: "Tsuruchi", "Kyo", "Ami", or a free-form string the
+    # player typed via the "Other" dropdown option. Same metadata
+    # contract as ``age``. Validator flags it as unset when blank.
+    lineage: Mapped[str] = mapped_column(String, default="")
     owner_discord_id: Mapped[Optional[str]] = mapped_column(String, default=None)
     editor_discord_ids: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
 
@@ -293,7 +298,15 @@ class Character(Base):
                 "current_void_points", "current_temp_void_points",
                 "action_dice", "precepts_pool",
                 "google_sheet_id"} | METADATA_FIELDS
-        # Default values for keys that may be absent from older snapshots
+        # Default values for keys that may be absent from older
+        # snapshots. Without an entry here, ``published_state.get(key,
+        # None)`` returns None for keys that didn't exist when the
+        # character was last published, ``cur_val`` is the new column's
+        # "empty" value (``[]`` / ``{}`` / ``False``), and the
+        # mismatch silently flips the character into "Draft changes"
+        # state with no real edit. Every list/dict/bool field that
+        # ``to_dict`` returns through an ``or`` fallback needs a
+        # default of the same shape here.
         defaults = {"campaign_advantages": [], "campaign_disadvantages": [],
                     "advantage_details": {},
                     "attack": 1, "parry": 1, "rank_locked": False,
@@ -301,7 +314,9 @@ class Character(Base):
                     "current_void_points": 0, "current_temp_void_points": 0,
                     "action_dice": [], "precepts_pool": [],
                     "notes": "", "sections": [],
-                    "rank_recognition_awards": []}
+                    "rank_recognition_awards": [],
+                    "specializations": [], "technique_choices": {},
+                    "foreign_knacks": {}, "recognition_halved": False}
         for key in current:
             if key in skip:
                 continue
@@ -356,6 +371,7 @@ class Character(Base):
             "name_explanation": self.name_explanation or "",
             "player_name": self.player_name,
             "age": self.age,
+            "lineage": self.lineage or "",
             "owner_discord_id": self.owner_discord_id,
             "editor_discord_ids": self.editor_discord_ids or [],
             "school": self.school,
@@ -429,6 +445,7 @@ class Character(Base):
             name_explanation=data.get("name_explanation", ""),
             player_name=data.get("player_name", ""),
             age=data.get("age"),
+            lineage=(data.get("lineage") or ""),
             school=data.get("school", ""),
             school_ring_choice=data.get("school_ring_choice", ""),
             ring_air=rings.get("Air", data.get("ring_air", 2)),

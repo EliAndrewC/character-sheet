@@ -592,6 +592,79 @@ def test_school_change_at_dan_4_clamps_old_school_ring(page, live_server_url):
     )
 
 
+def test_school_ring_choice_change_drops_old_school_ring_auto_raises(page, live_server_url):
+    """When the player switches the school ring on a variable-ring
+    school, the OLD school ring loses its free auto-raises (the 2->3
+    school baseline plus the 3->4 Dan>=4 bonus). The old ring drops
+    by 2 (Dan>=4) or by 1 (Dan<4) - floored at 2 so XP-paid raises
+    above the auto-baseline survive."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "OldRingDrop")
+    select_school(page, "mantis_wave_treader")
+    page.wait_for_timeout(200)
+    # Air at the school-ring auto-baseline of 4 (Dan 4 school ring).
+    page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        d.schoolRingChoice = 'Air';
+        d.knacks = {athletics: 4, awareness: 4, sailing: 4};
+        d.rings.Air = 4;
+    }""")
+    page.wait_for_timeout(200)
+    # Switch to Water - Air should drop by 2 (loses both auto-raises).
+    page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        d.schoolRingChoice = 'Water';
+    }""")
+    page.wait_for_timeout(200)
+    air = page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        return d.rings.Air;
+    }""")
+    # 4 - 2 = 2, floored at 2 anyway. The point: NOT still 4.
+    assert air == 2, (
+        f"Air stayed at {air} after school ring shifted away - the "
+        "school-ring auto-raise should have dropped off"
+    )
+
+
+def test_school_ring_choice_change_preserves_paid_raises(page, live_server_url):
+    """If the player had paid XP to raise the old school ring beyond
+    its auto-baseline, those paid raises survive the shift. e.g. at
+    Dan 4 with Air at 6 (auto-baseline 4, paid raises 4->5 and 5->6),
+    switching schools leaves Air at 4 (paid raises now count from
+    non-school baseline 2)."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PaidRaisesKept")
+    select_school(page, "mantis_wave_treader")
+    page.wait_for_timeout(200)
+    page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        d.schoolRingChoice = 'Air';
+        d.knacks = {athletics: 4, awareness: 4, sailing: 4};
+        d.rings.Air = 6;
+    }""")
+    page.wait_for_timeout(200)
+    page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        d.schoolRingChoice = 'Water';
+    }""")
+    page.wait_for_timeout(200)
+    air = page.evaluate("""() => {
+        const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
+        return d.rings.Air;
+    }""")
+    # 6 - 2 = 4. The paid raises (4->5, 5->6) become (3->4) on the
+    # new non-school baseline; the player will get an XP refund on
+    # the difference, surfaced via the live XP totals on the editor.
+    assert air == 4, (
+        f"Air dropped to {air}, expected 4 (drop by 2 from 6)"
+    )
+
+
 def test_school_ring_choice_change_clamps_old_school_ring(page, live_server_url):
     """For a variable-ring school (Mantis Wave-Treader) at Dan 4 with
     Air at 6 (Air was the chosen school ring), switching school_ring_

@@ -74,6 +74,110 @@ def test_set_group_does_not_create_modified_badge(page, live_server_url):
 # ---------------------------------------------------------------------------
 
 
+def test_homepage_group_header_links_to_group_summary(page, live_server_url):
+    """Each homepage group section's header is a clickable link to
+    ``/groups/{id}``. The Group Summary page then renders one card
+    per visible PC with their headshot, name, school, lineage, status
+    rows, and the social adv/disadv chips."""
+    # Two characters in the same group, named so alphabetical sort
+    # is unambiguous. One is given Good Reputation so the card
+    # surfaces a social-visible advantage chip.
+    create_and_apply(page, live_server_url, name="ZaikoCard", school="akodo_bushi")
+    page.goto(page.url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(300)
+
+    create_and_apply(page, live_server_url, name="AkikoCard", school="akodo_bushi")
+    page.goto(page.url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    # Jealousy is a social-visible chip with a per-instance text
+    # field ("Which skill do you measure yourself by?"). The chip
+    # face should show only the disadvantage name; the per-instance
+    # text lives in a hover tooltip.
+    page.check('input[name="dis_jealousy"]')
+    page.wait_for_selector(
+        'input[placeholder="Which skill do you measure yourself by?"]',
+        timeout=3000,
+    )
+    page.fill('input[placeholder="Which skill do you measure yourself by?"]',
+              "intimidation")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Add jealousy")
+
+    page.goto(live_server_url)
+    # Group header is a link.
+    link = page.locator('[data-testid="group-link"]', has_text="Tuesday Group")
+    assert link.is_visible()
+    link.click()
+    page.wait_for_url("**/groups/**")
+    body = page.text_content("body")
+    # Both characters render, alphabetically ordered.
+    assert "AkikoCard" in body
+    assert "ZaikoCard" in body
+    assert body.index("AkikoCard") < body.index("ZaikoCard")
+    # Other tests in the same session may have left characters in
+    # the same group, so we only assert >= 2 here.
+    cards = page.locator('[data-group-card]')
+    assert cards.count() >= 2
+    akiko = cards.filter(has_text="AkikoCard").first
+    assert "Akodo Bushi" in akiko.text_content()
+    # Player name is intentionally absent now - the GM knows them.
+    assert "Player:" not in akiko.text_content()
+    # Honor is inlined on the identity sub-line (not its own status
+    # row): "School ... &middot; ... Honor" with the bare number.
+    assert "Honor" in akiko.text_content()
+    assert akiko.locator(
+        '[data-status-row*="honor"]'
+    ).count() == 0, "Honor must not get its own status row on the group page"
+    # Adv + disadv chips share one strip; color carries the polarity.
+    chip_strip = akiko.locator('[data-testid="card-social-chips"]')
+    chip = chip_strip.locator('[data-dis-id="jealousy"]')
+    assert chip.count() == 1
+    # The chip's visible face is only the disadvantage name
+    # (Playwright's ``inner_text`` skips hidden tooltip-content
+    # children).
+    assert chip.inner_text().strip() == "Jealousy"
+    # The per-instance detail text lives in the tooltip-content
+    # (visibility flips on hover; ``text_content`` reads it regardless).
+    tip_text = chip.locator('.tooltip-content').text_content()
+    assert "intimidation" in tip_text
+
+
+def test_group_summary_hides_hidden_characters(page, live_server_url):
+    """A character with ``is_hidden=true`` does NOT show up on the
+    group summary page even though the viewer (default test fixture)
+    is an admin with edit access. Per spec: hidden = "not yet part
+    of the group"."""
+    create_and_apply(page, live_server_url, name="OpenChar", school="akodo_bushi")
+    page.goto(page.url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(300)
+
+    # Start a second character, assign to the group, but keep it
+    # hidden (new chars start hidden; we skip Apply Changes so it
+    # stays in the hidden draft state).
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "HiddenDraft")
+    from tests.e2e.helpers import select_school
+    select_school(page, "akodo_bushi")
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    # Don't apply changes: the character stays hidden in draft state.
+
+    # Now visit the group summary. Hidden draft must NOT appear.
+    page.goto(live_server_url)
+    page.locator('[data-testid="group-link"]', has_text="Tuesday Group").click()
+    page.wait_for_url("**/groups/**")
+    body = page.text_content("body")
+    assert "OpenChar" in body
+    assert "HiddenDraft" not in body
+
+
 def test_homepage_clusters_characters_by_group(page, live_server_url):
     """Characters in the same group appear under the same heading; unassigned chars
     appear under "Not assigned to a group"."""
