@@ -58,6 +58,7 @@ from app.services.import_match import (
     match_ring_name,
     match_school,
     match_skill,
+    match_skill_or_combat,
 )
 from app.services.import_schema import (
     ExtractedAdvantage,
@@ -338,7 +339,7 @@ def _normalise_specializations(
         skill_name = (spec.skill_as_written or "").strip()
         skills: List[str] = []
         if skill_name:
-            skill_id, confidence = match_skill(skill_name)
+            skill_id, confidence = match_skill_or_combat(skill_name)
             if skill_id is not None:
                 skills = [skill_id]
                 if confidence in (ALIASED, FUZZY):

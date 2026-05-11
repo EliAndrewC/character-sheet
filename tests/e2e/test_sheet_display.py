@@ -96,27 +96,105 @@ def test_status_chevron_expands_detail(page, live_server_url):
 
 
 def test_status_multi_modifier_pills_show_signed_deltas(page, live_server_url):
-    """When a row has more than one distinct short_label, the pill
+    """When a row has more than one distinct pill label, the pill
     format switches from '(value for label)' to comma-separated signed
-    deltas: '(+N label, +M label)'."""
+    deltas: '(+N label, +M label)'. Good Reputation + Imperial Favor
+    together produce two distinct pill labels (``reputation`` and the
+    combined ``for Imperials``)."""
     page.goto(live_server_url)
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Status Multi")
     select_school(page, "akodo_bushi")
-    # Imperial Favor produces TWO distinct rank pills (imperial family
-    # and imperial post) so the row hits the multi-modifier branch.
+    page.check('input[name="adv_good_reputation"]')
     page.check('input[name="adv_imperial_favor"]')
     page.wait_for_selector('text="Saved"', timeout=5000)
-    apply_changes(page, "ImperialFavor")
+    apply_changes(page, "GoodRep + ImperialFavor")
     rank_row = page.locator('[data-status-row="rank"]')
     pills = rank_row.locator('[data-status-pills="rank"]')
     text = pills.text_content()
-    assert "+3.0" in text and "imperial family" in text
-    assert "+1.0" in text and "imperial post" in text
-    # Should NOT contain the "for X" preposition (that's the single-
-    # modifier format only).
-    assert " for " not in text
+    # Good Reputation: +2 reputation.
+    assert "+2.0" in text and "reputation" in text
+    # Imperial Favor: imperial family (+3) and imperial post (+1)
+    # collapse into a single "+4.0 for Imperials" pill.
+    assert "+4.0" in text and "for Imperials" in text
+    # The individual ``imperial family`` / ``imperial post`` short
+    # labels stay out of the collapsed pill - they only appear in
+    # the expanded breakdown below.
+    assert "imperial family" not in text
+    assert "imperial post" not in text
+
+
+def test_status_highest_regard_renders_for_wasp_pill(page, live_server_url):
+    """Highest Regard (campaign) adds +2.0 to Rank and Recognition,
+    rendered as a single ``for Wasp`` pill on the collapsed line.
+    The expanded breakdown shows the per-source context."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "WaspRegard")
+    select_school(page, "akodo_bushi")
+    page.check('input[name="camp_adv_highest_regard"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Highest Regard")
+    for axis in ("rank", "recognition"):
+        row = page.locator(f'[data-status-row="{axis}"]')
+        text = row.locator(f'[data-status-pills="{axis}"]').text_content().strip()
+        assert "for Wasp" in text
+        assert "for for" not in text
+        row.locator('div').first.click()
+        page.wait_for_timeout(100)
+        assert "Highest Regard" in row.text_content()
+        assert "with other Wasp samurai" in row.text_content()
+
+
+def test_status_minor_clan_major_ally_renders_for_clan_pill(page, live_server_url):
+    """Minor Clan Major Ally (Mantis) adds +3.0 to Rank and Recognition,
+    rendered as a single ``for Mantis`` pill on the collapsed line."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "MantisAlly")
+    select_school(page, "akodo_bushi")
+    page.check('input[name="camp_adv_minor_clan_major_ally_mantis"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Mantis Ally")
+    for axis in ("rank", "recognition"):
+        row = page.locator(f'[data-status-row="{axis}"]')
+        text = row.locator(f'[data-status-pills="{axis}"]').text_content().strip()
+        assert "for Mantis" in text
+        assert "for for" not in text
+        row.locator('div').first.click()
+        page.wait_for_timeout(100)
+        assert "Minor Clan Major Ally: Mantis" in row.text_content()
+        assert "with members of the Mantis clan" in row.text_content()
+
+
+def test_status_imperial_favor_alone_renders_single_pill(page, live_server_url):
+    """Imperial Favor on its own produces a single collapsed pill -
+    ``(N.N for Imperials)`` - and the expanded breakdown still spells
+    out each per-context modifier."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Imperials Only")
+    select_school(page, "akodo_bushi")
+    page.check('input[name="adv_imperial_favor"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "ImperialFavor alone")
+    rank_row = page.locator('[data-status-row="rank"]')
+    pills = rank_row.locator('[data-status-pills="rank"]')
+    text = pills.text_content().strip()
+    # Single-pill format: parens with absolute value + label - no
+    # signed delta, and crucially no "for for Imperials" double prefix.
+    assert "for Imperials" in text
+    assert "for for" not in text
+    # Expand the row; the breakdown still distinguishes family vs post.
+    rank_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    expanded = rank_row.text_content()
+    assert "Imperial family members" in expanded
+    assert "Imperial post holders" in expanded
 
 
 def test_recognition_displayed(page, live_server_url):

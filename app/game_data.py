@@ -2429,12 +2429,13 @@ def starting_rings(school_ring: str) -> Dict[str, int]:
 def ring_max(ring_name: str, school_ring: str, dan: int = 0) -> int:
     """Maximum value for a ring.
 
-    School ring caps at 6 normally, or 7 once the character reaches 4th Dan
-    (the 4th Dan technique raises the school ring's max by 1). All other
-    rings always cap at 5.
+    Every ring caps at 5, except the character's school ring once they
+    reach 4th Dan: from 4th Dan onwards the school ring can be raised
+    to 6. The cap never exceeds 6 - there is no further bonus at
+    higher Dan levels.
     """
-    if ring_name == school_ring:
-        return RING_MAX_SCHOOL + (1 if dan >= 4 else 0)
+    if ring_name == school_ring and dan >= 4:
+        return RING_MAX_SCHOOL
     return RING_MAX_NORMAL
 
 

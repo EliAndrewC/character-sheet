@@ -293,22 +293,126 @@ class TestStatusPills:
         assert len(rank_pills) == 1
         assert rank_pills[0] == {"short_label": "reputation", "value": 4.0}
 
-    def test_pills_keep_distinct_labels(self):
-        """Imperial Favor produces both 'imperial family' and 'imperial
-        post' pills, which must NOT collapse together."""
+    def test_imperial_favor_pills_combine_into_for_imperials(self):
+        """Imperial Favor's ``imperial family`` (+3) and ``imperial
+        post`` (+1) modifiers collapse into a single ``for Imperials``
+        (+4) pill on the View Sheet's collapsed status line. The
+        expanded breakdown still surfaces each context separately
+        (see ``rank_modifiers`` / ``recognition_modifiers`` below)."""
         data = make_character_data(advantages=["imperial_favor"])
         status = compute_effective_status(data)
-        rank_pills = status.rank_pills()
-        labels = [p["short_label"] for p in rank_pills]
-        assert "imperial family" in labels
-        assert "imperial post" in labels
-        assert len(rank_pills) == 2
+        assert status.rank_pills() == [
+            {"short_label": "for Imperials", "value": 4.0},
+        ]
+        assert status.recognition_pills() == [
+            {"short_label": "for Imperials", "value": 4.0},
+        ]
+        # The raw modifier list (used by the expanded view) still has
+        # two distinct entries per axis so the breakdown can show the
+        # per-context detail.
+        rank_short_labels = sorted(m["short_label"] for m in status.rank_modifiers)
+        assert rank_short_labels == ["imperial family", "imperial post"]
+        rank_contexts = sorted(m["context"] for m in status.rank_modifiers)
+        assert rank_contexts == [
+            "with Imperial family members",
+            "with Imperial post holders",
+        ]
+
+    def test_imperial_favor_and_disdain_net_in_for_imperials_pill(self):
+        """A party member's Imperial Disdain (-1.0) shares the same
+        ``for Imperials`` pill key as the character's own Imperial
+        Favor (+4.0), so the collapsed pill nets to +3.0."""
+        data = make_character_data(advantages=["imperial_favor"])
+        party = [{
+            "name": "Tetsuro", "school": "akodo_bushi", "dan": 1,
+            "advantages": [], "disadvantages": [],
+            "campaign_advantages": [],
+            "campaign_disadvantages": ["imperial_disdain"],
+        }]
+        status = compute_effective_status(data, party_members=party)
+        assert status.rank_pills() == [
+            {"short_label": "for Imperials", "value": 3.0},
+        ]
 
     def test_pills_empty_when_no_modifiers(self):
         data = make_character_data()
         status = compute_effective_status(data)
         assert status.rank_pills() == []
         assert status.recognition_pills() == []
+
+    def test_highest_regard_adds_for_wasp_pill(self):
+        """Highest Regard (campaign) adds +2.0 to Rank and Recognition
+        when dealing with Wasp samurai. The pill label is ``for Wasp``
+        and the expanded breakdown spells out the context."""
+        data = make_character_data(
+            campaign_advantages=["highest_regard"],
+        )
+        status = compute_effective_status(data)
+        assert status.rank_pills() == [
+            {"short_label": "for Wasp", "value": 2.0},
+        ]
+        assert status.recognition_pills() == [
+            {"short_label": "for Wasp", "value": 2.0},
+        ]
+        # Expanded view: the raw modifier carries the full context and
+        # a per-source label.
+        rank_mod = next(
+            m for m in status.rank_modifiers if m["source"] == "Highest Regard"
+        )
+        assert rank_mod["context"] == "with other Wasp samurai"
+        assert rank_mod["value"] == 2.0
+
+    def test_minor_clan_major_ally_mantis_pill(self):
+        data = make_character_data(
+            campaign_advantages=["minor_clan_major_ally_mantis"],
+        )
+        status = compute_effective_status(data)
+        assert status.rank_pills() == [
+            {"short_label": "for Mantis", "value": 3.0},
+        ]
+        assert status.recognition_pills() == [
+            {"short_label": "for Mantis", "value": 3.0},
+        ]
+        rank_mod = next(
+            m for m in status.rank_modifiers
+            if m["source"] == "Minor Clan Major Ally: Mantis"
+        )
+        assert rank_mod["context"] == "with members of the Mantis clan"
+
+    def test_minor_clan_major_ally_fox_pill(self):
+        data = make_character_data(
+            campaign_advantages=["minor_clan_major_ally_fox"],
+        )
+        status = compute_effective_status(data)
+        assert status.rank_pills() == [
+            {"short_label": "for Fox", "value": 3.0},
+        ]
+
+    def test_minor_clan_major_ally_sparrow_pill(self):
+        data = make_character_data(
+            campaign_advantages=["minor_clan_major_ally_sparrow"],
+        )
+        status = compute_effective_status(data)
+        assert status.rank_pills() == [
+            {"short_label": "for Sparrow", "value": 3.0},
+        ]
+
+    def test_highest_regard_and_minor_clan_combine_into_two_pills(self):
+        """A character with both Highest Regard and a Minor Clan Major
+        Ally surfaces two distinct pills (no merging - different clans).
+        The multi-pill format ('+N for X, +M for Y') is then used by
+        the template."""
+        data = make_character_data(
+            campaign_advantages=[
+                "highest_regard",
+                "minor_clan_major_ally_mantis",
+            ],
+        )
+        status = compute_effective_status(data)
+        pills = status.rank_pills()
+        assert {"short_label": "for Wasp", "value": 2.0} in pills
+        assert {"short_label": "for Mantis", "value": 3.0} in pills
+        assert len(pills) == 2
 
     def test_group_effect_pill_uses_effect_category_label(self):
         """Family Reckoning from a party member surfaces in the pills

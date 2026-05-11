@@ -63,15 +63,14 @@ def test_school_ring_min_3(page, live_server_url):
     assert minus.is_disabled()
 
 
-def test_school_ring_max_6(page, live_server_url):
-    """School ring can go up to 6 (one higher than non-school)."""
+def test_school_ring_below_4th_dan_max_5(page, live_server_url):
+    """Below 4th Dan the school ring caps at 5 (same as any ring).
+    The 6 cap only becomes available at 4th Dan."""
     _go_to_editor(page, live_server_url)
-    click_plus(page, "ring_water", 3)  # 3 → 6
+    click_plus(page, "ring_water", 2)  # 3 → 5
     plus = page.locator('input[name="ring_water"]').locator('..').locator('button', has_text="+")
     assert plus.is_disabled()
-    # Verify value is 6
-    val = page.locator('input[name="ring_water"]').input_value()
-    assert val == "6"
+    assert page.locator('input[name="ring_water"]').input_value() == "5"
 
 
 # --- Knacks ---
@@ -107,34 +106,36 @@ def test_fourth_dan_auto_raises_school_ring(page, live_server_url):
     assert minus.is_disabled()
 
 
-def test_fourth_dan_school_ring_max_7(page, live_server_url):
-    """At 4th Dan the school ring's max climbs from 6 to 7."""
+def test_fourth_dan_school_ring_max_6(page, live_server_url):
+    """At 4th Dan the school ring's max climbs from 5 to 6. The cap
+    never goes higher than 6 - no further bonus at higher Dan levels."""
     _go_to_editor(page, live_server_url)
     # Reach 4th Dan
     click_plus(page, "knack_double_attack", 3)
     click_plus(page, "knack_feint", 3)
     click_plus(page, "knack_iaijutsu", 3)
     page.wait_for_timeout(200)
-    # School ring is now 4. Raise it to 7.
-    click_plus(page, "ring_water", 3)  # 4 → 7
-    assert page.locator('input[name="ring_water"]').input_value() == "7"
+    # School ring is now 4. Raise it to 6.
+    click_plus(page, "ring_water", 2)  # 4 → 6
+    assert page.locator('input[name="ring_water"]').input_value() == "6"
     plus = page.locator('input[name="ring_water"]').locator('..').locator('button', has_text="+")
     assert plus.is_disabled()
 
 
-def test_drop_below_4th_dan_caps_ring_at_6(page, live_server_url):
-    """Ring at 7 drops to 6 when a knack is lowered below 4th Dan."""
+def test_drop_below_4th_dan_caps_ring_at_5(page, live_server_url):
+    """Ring at 6 drops to 5 when a knack is lowered below 4th Dan
+    (the school-ring 6 cap is only available at 4th Dan)."""
     _go_to_editor(page, live_server_url)
     click_plus(page, "knack_double_attack", 3)
     click_plus(page, "knack_feint", 3)
     click_plus(page, "knack_iaijutsu", 3)
     page.wait_for_timeout(200)
-    click_plus(page, "ring_water", 3)  # 4 -> 7
-    assert page.locator('input[name="ring_water"]').input_value() == "7"
+    click_plus(page, "ring_water", 2)  # 4 -> 6
+    assert page.locator('input[name="ring_water"]').input_value() == "6"
     # Lower one knack -> Dan drops to 3
     click_minus(page, "knack_feint", 1)  # 4 -> 3
     page.wait_for_timeout(200)
-    assert page.locator('input[name="ring_water"]').input_value() == "6"
+    assert page.locator('input[name="ring_water"]').input_value() == "5"
 
 
 def test_drop_below_4th_dan_ring_at_4_goes_to_3(page, live_server_url):
@@ -151,14 +152,10 @@ def test_drop_below_4th_dan_ring_at_4_goes_to_3(page, live_server_url):
     # Drop a knack
     click_minus(page, "knack_feint", 1)
     page.wait_for_timeout(200)
-    # Should go back to 3 (floor is 3, ring was at 4 = old floor, now below new...
-    # Actually at Dan<4 the floor is 3, so 4 is valid. But the enforce function
-    # should NOT lower from 4 to 3 because 4 is still >= min(3).
-    # The user said "lower the ring immediately" but the ring at 4 is valid at Dan 3.
-    # The enforce clamps: min=3, max=6, current=4 -> no change.
-    # UNLESS we interpret "auto-raise is reversed" as the ring losing the +1.
-    # Let me check what the user actually wants...)
-    # Per the enforce function: Dan<4 floor=3, ring=4, 4 >= 3 and 4 <= 6 -> no clamp.
+    # At Dan<4 the school-ring bounds are [3, 5]. The ring is at 4,
+    # which sits inside [3, 5], so the enforce function does not
+    # clamp it down to 3 - the auto-raise to 4 isn't undone when
+    # Dan drops, the value just stays where it was.
     assert page.locator('input[name="ring_water"]').input_value() == "4"
 
 
@@ -170,22 +167,22 @@ def test_ring_max_correct_after_repeated_dan_toggle(page, live_server_url):
     click_plus(page, "knack_iaijutsu", 3)
     page.wait_for_timeout(100)
     plus = page.locator('input[name="ring_water"]').locator('..').locator('button', has_text="+")
-    # At 4th Dan, ring=4, max=7 -> + is enabled
+    # At 4th Dan, ring=4, max=6 -> + is enabled
     assert not plus.is_disabled()
     # Toggle below 4th Dan
     click_minus(page, "knack_feint", 1)
     page.wait_for_timeout(100)
-    # At 3rd Dan, ring=4, max=6 -> + should still be enabled (4 < 6)
+    # At 3rd Dan, ring=4, max=5 -> + should still be enabled (4 < 5)
     assert not plus.is_disabled()
-    # Raise ring to 6 (the non-4th-Dan max)
-    click_plus(page, "ring_water", 2)  # 4 -> 6
+    # Raise ring to 5 (the school-ring max below 4th Dan)
+    click_plus(page, "ring_water", 1)  # 4 -> 5
     page.wait_for_timeout(100)
-    # At 3rd Dan, ring=6, max=6 -> + IS disabled
+    # At 3rd Dan, ring=5, max=5 -> + IS disabled
     assert plus.is_disabled()
     # Toggle back to 4th Dan
     click_plus(page, "knack_feint", 1)  # 3 -> 4
     page.wait_for_timeout(100)
-    # At 4th Dan, ring=6, max=7 -> + is enabled again
+    # At 4th Dan, ring=5, max=6 -> + is enabled again
     assert not plus.is_disabled()
 
 
@@ -196,24 +193,25 @@ def test_ring_max_never_exceeds_bounds_after_many_toggles(page, live_server_url)
     click_plus(page, "knack_feint", 3)
     click_plus(page, "knack_iaijutsu", 3)
     page.wait_for_timeout(100)
-    # Raise ring to 7 (4th Dan max)
-    click_plus(page, "ring_water", 3)
+    # Raise ring to 6 (4th Dan max - the school ring never goes above 6)
+    click_plus(page, "ring_water", 2)
     page.wait_for_timeout(100)
-    assert page.locator('input[name="ring_water"]').input_value() == "7"
+    assert page.locator('input[name="ring_water"]').input_value() == "6"
     # Toggle Dan several times
     for _ in range(3):
         click_minus(page, "knack_feint", 1)  # below 4th
         page.wait_for_timeout(50)
         click_plus(page, "knack_feint", 1)   # back to 4th
         page.wait_for_timeout(50)
-    # Should be clamped to 6 then raised back... let's check
     val = int(page.locator('input[name="ring_water"]').input_value())
+    # The ring stays within the legal Dan-aware band [4, 6] for the
+    # school ring at 4th Dan (or [3, 5] when Dan dips below 4 with
+    # the ring auto-clamping down).
+    assert 4 <= val <= 6
     plus = page.locator('input[name="ring_water"]').locator('..').locator('button', has_text="+")
     minus = page.locator('input[name="ring_water"]').locator('..').locator('button', has_text="-")
-    # The ring should be in a valid state
-    assert 4 <= val <= 7
-    # + disabled iff at max
-    if val == 7:
+    # + disabled iff at max (6 at 4th Dan)
+    if val == 6:
         assert plus.is_disabled()
     else:
         assert not plus.is_disabled()
@@ -571,18 +569,18 @@ def test_priest_still_defaults_ring_to_water(page, live_server_url):
 
 
 def test_school_change_at_dan_4_clamps_old_school_ring(page, live_server_url):
-    """At Dan 4 with the school ring (Water) at 7, switching schools to
+    """At Dan 4 with the school ring (Water) at 6, switching schools to
     one whose school ring is a different ring leaves Water as a non-
-    school ring (max 5). The old Water=7 must clamp back to 5; otherwise
-    validate_character flags 'Water (7) exceeds maximum (5)'."""
+    school ring (max 5). The old Water=6 must clamp back to 5; otherwise
+    validate_character flags 'Water (6) exceeds maximum (5)'."""
     _go_to_editor(page, live_server_url)
     # Reach 4th Dan with Akodo Bushi (school ring = Water).
     click_plus(page, "knack_double_attack", 3)
     click_plus(page, "knack_feint", 3)
     click_plus(page, "knack_iaijutsu", 3)
     page.wait_for_timeout(100)
-    click_plus(page, "ring_water", 3)  # 4 -> 7
-    assert page.locator('input[name="ring_water"]').input_value() == "7"
+    click_plus(page, "ring_water", 2)  # 4 -> 6
+    assert page.locator('input[name="ring_water"]').input_value() == "6"
     # Switch school - Bayushi Bushi's school ring is a different ring.
     select_school(page, "bayushi_bushi")
     page.wait_for_timeout(300)
@@ -596,16 +594,16 @@ def test_school_change_at_dan_4_clamps_old_school_ring(page, live_server_url):
 
 def test_school_ring_choice_change_clamps_old_school_ring(page, live_server_url):
     """For a variable-ring school (Mantis Wave-Treader) at Dan 4 with
-    Air at 7 (Air was the chosen school ring), switching school_ring_
+    Air at 6 (Air was the chosen school ring), switching school_ring_
     choice to Water makes Air a non-school ring. Air must clamp from
-    7 to 5."""
+    6 to 5."""
     page.goto(live_server_url)
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "RingChoiceFlip")
     select_school(page, "mantis_wave_treader")
     page.wait_for_timeout(200)
-    # Pick Air as the school ring, raise knacks to 4, raise Air to 7.
+    # Pick Air as the school ring, raise knacks to 4, raise Air to 6.
     # Use a direct Alpine bridge to make the setup robust against the
     # variable-ring picker's exact selector wiring.
     page.evaluate("""() => {
@@ -613,14 +611,14 @@ def test_school_ring_choice_change_clamps_old_school_ring(page, live_server_url)
         const d = Alpine.$data(root);
         d.schoolRingChoice = 'Air';
         d.knacks = {athletics: 4, awareness: 4, sailing: 4};
-        d.rings.Air = 7;
+        d.rings.Air = 6;
     }""")
     page.wait_for_timeout(200)
     pre = page.evaluate("""() => {
         const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
         return {sr: d.getSchoolRing(), air: d.rings.Air, dan: d.currentDan()};
     }""")
-    assert pre == {"sr": "Air", "air": 7, "dan": 4}, pre
+    assert pre == {"sr": "Air", "air": 6, "dan": 4}, pre
     # Now flip school_ring_choice to Water via onSchoolRingChange (mirrors
     # what the picker fires when the user changes the dropdown).
     page.evaluate("""() => {
@@ -641,23 +639,37 @@ def test_school_ring_choice_change_clamps_old_school_ring(page, live_server_url)
 
 
 def test_corrupt_state_clamps_on_edit_page_load(page, live_server_url):
-    """A character already persisted with an invalid ring (e.g. ring=7
-    while Dan=3, surviving from a past bug) must reconcile on edit page
-    init so the editor doesn't continue to display an out-of-range
-    value."""
+    """A character already persisted with an invalid ring (Water=6 at
+    Dan 3) must reconcile on edit-page init so the editor doesn't
+    continue to display an out-of-range value.
+
+    To reach the corrupt state without the autosave clamp short-
+    circuiting it, we sequence two autosave calls: first raise the
+    rings to 4th-Dan + Water=6 (legal then), then lower the knacks
+    back to Dan 3 in a payload that omits ``rings`` (so the prior
+    Water=6 sticks)."""
     _go_to_editor(page, live_server_url)
-    # Force a corrupt persisted state via direct autosave: knacks at
-    # rank 3 (Dan 3) but Water at 7 (only valid at Dan 4).
     char_id = page.url.rstrip("/").split("/")[-2]
     page.evaluate(
         """async (cid) => {
+            // Step 1: persist Dan 4 + Water 6 (legal at Dan 4).
             await fetch('/characters/' + cid + '/autosave', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     school: 'akodo_bushi',
                     school_ring_choice: 'Water',
-                    rings: {Air: 2, Fire: 2, Earth: 2, Water: 7, Void: 2},
+                    rings: {Air: 2, Fire: 2, Earth: 2, Water: 6, Void: 2},
+                    knacks: {double_attack: 4, feint: 4, iaijutsu: 4},
+                }),
+            });
+            // Step 2: drop Dan to 3 without touching rings - the
+            // server falls back to the stored Water=6, leaving it
+            // in place even though it's now illegal.
+            await fetch('/characters/' + cid + '/autosave', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
                     knacks: {double_attack: 3, feint: 3, iaijutsu: 3},
                 }),
             });
@@ -668,9 +680,9 @@ def test_corrupt_state_clamps_on_edit_page_load(page, live_server_url):
     page.wait_for_selector('input[name="name"]')
     page.wait_for_timeout(400)
     val = int(page.locator('input[name="ring_water"]').input_value())
-    assert val == 6, (
+    assert val == 5, (
         f"BUG: editor init() did not clamp ring; got Water={val} "
-        "with Dan=3 (max for school ring at Dan<4 is 6)"
+        "with Dan=3 (school ring caps at 5 below 4th Dan)"
     )
 
 
@@ -695,7 +707,7 @@ def _ring_bounds_invariant(page):
     for ring, val in state["rings"].items():
         if ring == sr:
             lo = 4 if dan >= 4 else 3
-            hi = 7 if dan >= 4 else 6
+            hi = 6 if dan >= 4 else 5
         else:
             lo, hi = 2, 5
         assert lo <= val <= hi, (
@@ -706,7 +718,7 @@ def _ring_bounds_invariant(page):
 
 
 def test_round_trip_school_change_keeps_invariant(page, live_server_url):
-    """Akodo (Water school) at Dan 4 with Water=7, switch to Bayushi
+    """Akodo (Water school) at Dan 4 with Water=6, switch to Bayushi
     (Fire school), then back to Akodo. After each step every ring must
     be inside its bounds."""
     _go_to_editor(page, live_server_url)
@@ -714,16 +726,16 @@ def test_round_trip_school_change_keeps_invariant(page, live_server_url):
     click_plus(page, "knack_feint", 3)
     click_plus(page, "knack_iaijutsu", 3)
     page.wait_for_timeout(100)
-    click_plus(page, "ring_water", 3)  # 4 -> 7
+    click_plus(page, "ring_water", 2)  # 4 -> 6
     s1 = _ring_bounds_invariant(page)
-    assert s1["sr"] == "Water" and s1["dan"] == 4 and s1["rings"]["Water"] == 7
+    assert s1["sr"] == "Water" and s1["dan"] == 4 and s1["rings"]["Water"] == 6
     # Akodo -> Bayushi (Fire school). Water becomes non-school.
     select_school(page, "bayushi_bushi")
     page.wait_for_timeout(300)
     s2 = _ring_bounds_invariant(page)
     assert s2["school"] == "bayushi_bushi"
     assert s2["rings"]["Water"] <= 5
-    # Bayushi -> Akodo. Water is school ring again at Dan 1 -> 3..6.
+    # Bayushi -> Akodo. Water is school ring again at Dan 1 -> bounds 3..5.
     select_school(page, "akodo_bushi")
     page.wait_for_timeout(300)
     s3 = _ring_bounds_invariant(page)
@@ -732,7 +744,7 @@ def test_round_trip_school_change_keeps_invariant(page, live_server_url):
 
 
 def test_round_trip_school_ring_choice_keeps_invariant(page, live_server_url):
-    """Mantis with schoolRingChoice=Air at Dan 4 with Air=7, switch the
+    """Mantis with schoolRingChoice=Air at Dan 4 with Air=6, switch the
     pick Water -> Air -> Water -> Air. Each hop must leave every ring in
     range."""
     page.goto(live_server_url)
@@ -740,12 +752,12 @@ def test_round_trip_school_ring_choice_keeps_invariant(page, live_server_url):
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "RoundTripChoice")
     select_school(page, "mantis_wave_treader")
-    # Seed Dan 4 Air=7 directly so the test focuses on the dropdown path.
+    # Seed Dan 4 Air=6 directly so the test focuses on the dropdown path.
     page.evaluate("""() => {
         const d = Alpine.$data(document.querySelector('[x-data="characterForm()"]'));
         d.schoolRingChoice = 'Air';
         d.knacks = {athletics: 4, awareness: 4, sailing: 4};
-        d.rings.Air = 7;
+        d.rings.Air = 6;
     }""")
     page.wait_for_timeout(100)
     _ring_bounds_invariant(page)
@@ -766,19 +778,19 @@ def test_compound_dan_and_school_change_sequence(page, live_server_url):
     invariant after every mutation."""
     _go_to_editor(page, live_server_url)
     _ring_bounds_invariant(page)
-    # Reach Dan 4 on Akodo, raise Water to 7.
+    # Reach Dan 4 on Akodo, raise Water to 6 (the school-ring cap).
     click_plus(page, "knack_double_attack", 3)
     _ring_bounds_invariant(page)
     click_plus(page, "knack_feint", 3)
     _ring_bounds_invariant(page)
     click_plus(page, "knack_iaijutsu", 3)
     _ring_bounds_invariant(page)
-    click_plus(page, "ring_water", 3)
+    click_plus(page, "ring_water", 2)
     _ring_bounds_invariant(page)
-    # Drop one knack -> Dan 3, Water should clamp to 6.
+    # Drop one knack -> Dan 3, Water should clamp to 5.
     click_minus(page, "knack_feint", 1)
     s_after_drop = _ring_bounds_invariant(page)
-    assert s_after_drop["rings"]["Water"] == 6
+    assert s_after_drop["rings"]["Water"] == 5
     # Switch to Mantis (variable-ring school).
     select_school(page, "mantis_wave_treader")
     page.wait_for_timeout(300)
@@ -844,7 +856,7 @@ def test_lower_ring_blocked_at_min_then_school_swap(page, live_server_url):
 
 def _ring_bounds_for(sr, ring, dan):
     if ring == sr:
-        return (4, 7) if dan >= 4 else (3, 6)
+        return (4, 6) if dan >= 4 else (3, 5)
     return 2, 5
 
 

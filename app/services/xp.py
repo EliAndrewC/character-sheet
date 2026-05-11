@@ -776,10 +776,11 @@ def validate_character(character_data: dict) -> List[str]:
     for ring_name in RING_NAMES:
         value = rings.get(ring_name, RING_DEFAULT)
         # School ring minimum: 3 (base) or 4 (at 4th Dan).
-        # School ring maximum: 6 normally, 7 at 4th Dan.
+        # School ring maximum: 5 normally, 6 at 4th Dan. All other
+        # rings cap at 5 regardless of Dan.
         if ring_name == school_ring:
             min_val = 4 if dan >= 4 else RING_SCHOOL_DEFAULT
-            max_val = RING_MAX_SCHOOL + (1 if dan >= 4 else 0)
+            max_val = RING_MAX_SCHOOL if dan >= 4 else RING_MAX_NORMAL
         else:
             min_val = RING_DEFAULT
             max_val = RING_MAX_NORMAL

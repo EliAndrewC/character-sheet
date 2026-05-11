@@ -338,6 +338,22 @@ def test_no_specializations_field_yields_empty_list() -> None:
     assert data["specializations"] == []
 
 
+def test_specialization_can_target_attack_combat_skill() -> None:
+    """Attack and Parry are valid Specialization targets too. The
+    LLM-emitted ``skill_as_written='Attack'`` must resolve to the
+    ``attack`` combat skill id, not be dropped."""
+    payload = _canonical_payload()
+    payload["specializations"] = [
+        {"text": "Katana", "skill_as_written": "Attack"},
+        {"text": "vs cavalry", "skill_as_written": "Parry"},
+    ]
+    data, _report = _run(payload)
+    assert data["specializations"] == [
+        {"text": "Katana", "skills": ["attack"]},
+        {"text": "vs cavalry", "skills": ["parry"]},
+    ]
+
+
 def test_specialization_with_aliased_skill_name_records_ambiguity() -> None:
     """If the LLM-supplied skill name is aliased / fuzzy-matched (not an
     exact match), the validator still resolves it but logs an ambiguity

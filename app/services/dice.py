@@ -770,6 +770,17 @@ def build_combat_formula(
     if school_id == "kakita_duelist" and dan >= 3 and which == "attack":
         formula.kakita_3rd_dan_defender_phase_bonus = True
 
+    # Specialization on attack/parry: same shape as build_skill_formula -
+    # each matching spec adds a conditional +10 alternative.
+    for spec in character_data.get("specializations", []) or []:
+        sp_skills = spec.get("skills") or []
+        sp_text = spec.get("text") or "your specialization"
+        if which in sp_skills:
+            formula.alternatives.append({
+                "label": f"if related to Specialization ({sp_text})",
+                "extra_flat": 2 * FREE_RAISE_VALUE,
+            })
+
     _finalize_caps(formula)
     return formula
 
@@ -895,6 +906,17 @@ def build_athletics_combat_formula(
     # formula. Rolled count only.
     if school_id == "kitsune_warden" and dan >= 4 and formula.rolled < 10:
         formula.rolled = 10
+
+    # Specialization on attack/parry: applies when substituting athletics
+    # for that action, mirroring the school-technique-bonus pattern above.
+    for spec in character_data.get("specializations", []) or []:
+        sp_skills = spec.get("skills") or []
+        sp_text = spec.get("text") or "your specialization"
+        if which in sp_skills:
+            formula.alternatives.append({
+                "label": f"if related to Specialization ({sp_text})",
+                "extra_flat": 2 * FREE_RAISE_VALUE,
+            })
 
     _finalize_caps(formula)
     return formula

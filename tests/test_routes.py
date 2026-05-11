@@ -2143,6 +2143,95 @@ class TestUpdateCharacter:
             {"text": "Real", "skills": ["culture"]},
         ]
 
+    def test_autosave_clamps_school_ring_above_cap(self, client):
+        """A crafted JSON POST cannot raise the school ring past 6 at
+        4th Dan, or past 5 below 4th Dan. Defense-in-depth for the
+        cap the editor UI already enforces."""
+        cid = _seed_character(
+            client, name="RingClamp",
+            school="akodo_bushi", school_ring_choice="Water",
+            ring_water=3,
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},  # Dan 4
+        )
+        # Dan 4 character: try to push Water to 9 - clamps to 6.
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"rings": {"Water": 9}},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.ring_water == 6
+
+    def test_autosave_clamps_school_ring_below_4th_dan(self, client):
+        """Below 4th Dan a crafted JSON POST cannot raise the school
+        ring past 5 - it's not special until 4th Dan."""
+        cid = _seed_character(
+            client, name="RingClampLowDan",
+            school="akodo_bushi", school_ring_choice="Water",
+            ring_water=3,
+            # Dan 1 (all school knacks at the free starting rank).
+        )
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"rings": {"Water": 7}},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.ring_water == 5
+
+    def test_autosave_clamps_non_school_ring_at_5(self, client):
+        """Non-school rings are always capped at 5, no matter the
+        Dan."""
+        cid = _seed_character(
+            client, name="NonSchoolClamp",
+            school="akodo_bushi", school_ring_choice="Water",
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},  # Dan 4
+        )
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"rings": {"Fire": 8}},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.ring_fire == 5
+
+    def test_autosave_non_int_ring_keeps_current_value(self, client):
+        """Garbage ring values (string, null, dict) keep the persisted
+        ring rather than raising or zeroing the column."""
+        cid = _seed_character(
+            client, name="GarbageRing",
+            school="akodo_bushi", school_ring_choice="Water",
+            ring_water=4,
+        )
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"rings": {"Water": "not a number"}},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.ring_water == 4
+
+    def test_form_post_clamps_school_ring_above_cap(self, client):
+        """Same clamping behavior on the form-encoded POST route."""
+        import json
+        cid = _seed_character(
+            client, name="FormClamp",
+            school="akodo_bushi", school_ring_choice="Water",
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},  # Dan 4
+        )
+        form = make_character_form()
+        form["school"] = "akodo_bushi"
+        form["school_ring_choice"] = "Water"
+        form["ring_water"] = "9"  # over the cap
+        # Dan 4 knacks need to be present in the form too.
+        form["knack_double_attack"] = "4"
+        form["knack_feint"] = "4"
+        form["knack_iaijutsu"] = "4"
+        resp = client.post(f"/characters/{cid}", data=form, follow_redirects=False)
+        assert resp.status_code == 303
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.ring_water == 6
+
     def test_autosave_persists_foreign_knacks(self, client):
         """API autosave path: foreign_knacks dict in body is cleaned and
         persisted; entries with rank<1 or non-int rank are dropped."""
@@ -2463,6 +2552,24 @@ class TestAutoSave:
         char = query_db(client).filter(Character.id == cid).first()
         assert char.specializations == [
             {"text": "Real", "skills": ["culture"]},
+        ]
+
+    def test_autosave_accepts_combat_skill_specializations(self, client):
+        """Specialization may target the combat skills ``attack`` or
+        ``parry`` (not just regular skills)."""
+        cid = _seed_character(client, name="CombatSpec")
+        resp = client.post(
+            f"/characters/{cid}/autosave",
+            json={"specializations": [
+                {"text": "katana", "skills": ["attack"]},
+                {"text": "vs cavalry", "skills": ["parry"]},
+            ]},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.specializations == [
+            {"text": "katana", "skills": ["attack"]},
+            {"text": "vs cavalry", "skills": ["parry"]},
         ]
 
 

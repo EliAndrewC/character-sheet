@@ -469,13 +469,25 @@ class TestValidation:
         errors = validate_character(data)
         assert any("Air" in e and "exceeds" in e for e in errors)
 
-    def test_school_ring_can_reach_6(self):
+    def test_school_ring_can_reach_6_only_at_4th_dan(self):
+        """The school ring can climb to 6, but only once the character
+        reaches 4th Dan. Below 4th Dan it caps at 5 like any ring."""
+        # Dan 4 (every school knack at rank 4): Water -> 6 is valid.
+        data = make_character_data(
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 6, "Void": 2},
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+            starting_xp=500,
+        )
+        errors = validate_character(data)
+        assert not any("Water" in e and "exceeds" in e for e in errors)
+        # Dan 1 (school knacks at the free starting rank): Water -> 6
+        # is now an error.
         data = make_character_data(
             rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 6, "Void": 2},
             starting_xp=300,
         )
         errors = validate_character(data)
-        assert not any("Water" in e and "exceeds" in e for e in errors)
+        assert any("Water" in e and "exceeds" in e for e in errors)
 
     def test_skill_too_high(self):
         data = make_character_data(skills={"bragging": 6})

@@ -1249,6 +1249,9 @@
                                             :class="!spec.skills[0] ? 'border-red-400 bg-red-50' : ''"
                                             class="text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
                                         <option value="">Applied to which skill?</option>
+                                        {% for sid, skill in combat_skills.items() %}
+                                        <option value="{{ sid }}">{{ skill.name }}</option>
+                                        {% endfor %}
                                         {% for sid, skill in skills.items() %}
                                         <option value="{{ sid }}">{{ skill.name }}</option>
                                         {% endfor %}
@@ -2354,9 +2357,11 @@ function characterForm() {
 
         ringMax(ringName) {
             const schoolRing = this.getSchoolRing();
-            if (ringName !== schoolRing) return 5;
-            // 4th Dan technique raises the school ring's max by 1.
-            return this.currentDan() >= 4 ? 7 : 6;
+            // Every ring caps at 5, except the school ring once the
+            // character reaches 4th Dan (then it can climb to 6). The
+            // cap never goes above 6.
+            if (ringName === schoolRing && this.currentDan() >= 4) return 6;
+            return 5;
         },
 
         ringCost(ringName) {
@@ -2557,21 +2562,22 @@ function characterForm() {
         },
 
         enforceFourthDanRing() {
-            // Reconciles every ring with the character's current Dan and
-            // school. The school ring's bounds are Dan-aware: at 4th Dan
-            // the floor jumps to 4 and the ceiling to 7 (the 4th Dan
-            // technique raises both); below 4th Dan the bounds are 3..6.
-            // Non-school rings are always 2..5. Iterating over every ring
-            // also handles the case where a ring used to be the school
-            // ring (e.g. variable-ring school whose pick was just
-            // changed, or a school switch leaving the old ring high) -
-            // the old ring is now bounded at 5 and gets clamped back.
+            // Reconciles every ring with the character's current Dan
+            // and school. The school ring's bounds are Dan-aware:
+            // below 4th Dan it behaves like any other ring (3..5);
+            // at 4th Dan+ the floor jumps to 4 and the ceiling to 6.
+            // Non-school rings are always 2..5. The cap never exceeds
+            // 6. Iterating over every ring also handles the case where
+            // a ring used to be the school ring (e.g. variable-ring
+            // school whose pick was just changed, or a school switch
+            // leaving the old ring high) - the old ring is now bounded
+            // at 5 and gets clamped back.
             const schoolRing = this.getSchoolRing();
             const dan = this.currentDan();
             for (const ring of ['Air', 'Fire', 'Earth', 'Water', 'Void']) {
                 const isSchool = ring === schoolRing;
                 const minVal = isSchool ? (dan >= 4 ? 4 : 3) : 2;
-                const maxVal = isSchool ? (dan >= 4 ? 7 : 6) : 5;
+                const maxVal = isSchool && dan >= 4 ? 6 : 5;
                 const current = this.rings[ring] || 0;
                 if (current < minVal) this.rings[ring] = minVal;
                 if (current > maxVal) this.rings[ring] = maxVal;

@@ -11,7 +11,8 @@ import json
 from app.database import get_db
 from app.game_data import (
     ADVANTAGES, CAMPAIGN_ADVANTAGES, CAMPAIGN_DISADVANTAGES,
-    DISADVANTAGES, SCHOOLS, SKILLS, SCHOOL_KNACKS, Ring,
+    COMBAT_SKILLS, DISADVANTAGES, SCHOOLS, SKILLS, SCHOOL_KNACKS, Ring,
+    ring_max,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User
 from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids, get_all_editors
@@ -35,6 +36,29 @@ def _templates():
     return templates
 
 
+def _clamp_ring(ring_name: str, raw, school_ring_choice: str, knacks: dict, current_value: int) -> int:
+    """Clamp a posted ring value to the legal range for the
+    character's current school ring + Dan.
+
+    Defense-in-depth for the cap that the editor UI already enforces.
+    Non-integer / missing values fall back to the character's existing
+    value so partial autosave payloads don't reset rings.
+    """
+    try:
+        v = int(raw)
+    except (TypeError, ValueError):
+        return current_value
+    dan = compute_dan(knacks or {}) if knacks else 0
+    upper = ring_max(ring_name, school_ring_choice or "", dan=dan)
+    # Lower bound: 2 for any ring, 3 for school ring, 4 once 4th Dan
+    # auto-raises the school ring. Mirrors the UI's schoolRingMin().
+    if ring_name == school_ring_choice:
+        lower = 4 if dan >= 4 else 3
+    else:
+        lower = 2
+    return max(lower, min(upper, v))
+
+
 def _sanitize_specializations(raw) -> list:
     """Coerce a posted ``specializations`` payload into the canonical
     ``List[Dict]`` shape, dropping garbage rows.
@@ -54,7 +78,7 @@ def _sanitize_specializations(raw) -> list:
         if not text or not isinstance(skills, list) or not skills:
             continue
         sid = skills[0]
-        if sid not in SKILLS:
+        if sid not in SKILLS and sid not in COMBAT_SKILLS:
             continue
         cleaned.append({"text": text, "skills": [sid]})
     return cleaned
@@ -206,11 +230,18 @@ async def update_character(
                 character.player_name = new_owner.display_name or new_owner.discord_name
     character.school = data["school"]
     character.school_ring_choice = data["school_ring_choice"]
-    character.ring_air = data["rings"]["Air"]
-    character.ring_fire = data["rings"]["Fire"]
-    character.ring_earth = data["rings"]["Earth"]
-    character.ring_water = data["rings"]["Water"]
-    character.ring_void = data["rings"]["Void"]
+    # Clamp ring values against the form's own school + knacks so a
+    # crafted POST can't bypass the editor's cap UI. The cap depends
+    # on the school ring (school_ring_choice) and the character's
+    # current Dan (derived from knacks).
+    _src = data["rings"]
+    _knacks = data.get("knacks") or {}
+    _src_ring = data.get("school_ring_choice") or ""
+    character.ring_air = _clamp_ring("Air", _src.get("Air"), _src_ring, _knacks, character.ring_air)
+    character.ring_fire = _clamp_ring("Fire", _src.get("Fire"), _src_ring, _knacks, character.ring_fire)
+    character.ring_earth = _clamp_ring("Earth", _src.get("Earth"), _src_ring, _knacks, character.ring_earth)
+    character.ring_water = _clamp_ring("Water", _src.get("Water"), _src_ring, _knacks, character.ring_water)
+    character.ring_void = _clamp_ring("Void", _src.get("Void"), _src_ring, _knacks, character.ring_void)
     character.attack = data["attack"]
     character.parry = data["parry"]
     character.skills = data["skills"]
@@ -500,11 +531,17 @@ async def autosave_character(
         character.school_ring_choice = body["school_ring_choice"]
     if "rings" in body:
         rings = body["rings"]
-        character.ring_air = rings.get("Air", character.ring_air)
-        character.ring_fire = rings.get("Fire", character.ring_fire)
-        character.ring_earth = rings.get("Earth", character.ring_earth)
-        character.ring_water = rings.get("Water", character.ring_water)
-        character.ring_void = rings.get("Void", character.ring_void)
+        # Clamp ring values against the autosave payload's own school
+        # ring + knacks so a crafted JSON can't bypass the editor cap.
+        # ``body`` may not include ``school_ring_choice`` / ``knacks``
+        # in this autosave call - fall back to the persisted values.
+        clamp_ring_choice = body.get("school_ring_choice", character.school_ring_choice)
+        clamp_knacks = body.get("knacks", character.knacks) or {}
+        character.ring_air = _clamp_ring("Air", rings.get("Air"), clamp_ring_choice, clamp_knacks, character.ring_air)
+        character.ring_fire = _clamp_ring("Fire", rings.get("Fire"), clamp_ring_choice, clamp_knacks, character.ring_fire)
+        character.ring_earth = _clamp_ring("Earth", rings.get("Earth"), clamp_ring_choice, clamp_knacks, character.ring_earth)
+        character.ring_water = _clamp_ring("Water", rings.get("Water"), clamp_ring_choice, clamp_knacks, character.ring_water)
+        character.ring_void = _clamp_ring("Void", rings.get("Void"), clamp_ring_choice, clamp_knacks, character.ring_void)
         # For unpublished characters, keep void points at max as rings change
         if not character.is_published:
             ring_vals = [character.ring_air, character.ring_fire,

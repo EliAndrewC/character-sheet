@@ -22,10 +22,18 @@ def _group_modifiers(modifiers: List[dict]) -> List[dict]:
     Reckoning) likewise combine into one ``Family Reckoning`` pill -
     and if the contributions net to zero (e.g. one Righteous Sting and
     one Venomous Sting from different members), the pill is dropped
-    entirely so the View Sheet doesn't render a useless ``+0.0``."""
+    entirely so the View Sheet doesn't render a useless ``+0.0``.
+
+    A modifier may set ``pill_label`` to a string that overrides its
+    ``short_label`` *for pill grouping only*. The expanded breakdown
+    still uses the original ``short_label`` / ``context`` so the user
+    can see the per-source detail. This is how Imperial Favor's
+    ``imperial family`` and ``imperial post`` modifiers collapse into
+    a single ``for Imperials`` pill while remaining distinct rows in
+    the expanded view."""
     by_label: dict = {}
     for m in modifiers:
-        label = m.get("short_label") or m.get("source", "")
+        label = m.get("pill_label") or m.get("short_label") or m.get("source", "")
         by_label[label] = by_label.get(label, 0.0) + m.get("value", 0.0)
     return [
         {"short_label": k, "value": v}
@@ -155,13 +163,61 @@ def compute_effective_status(
             "short_label": "reputation",
         })
 
+    # Highest Regard (Wasp campaign): +2.0 to Rank and Recognition when
+    # dealing with other Wasp samurai. Single pill on each axis.
+    if "highest_regard" in campaign_advantages:
+        status.rank_modifiers.append({
+            "field": "rank",
+            "context": "with other Wasp samurai",
+            "value": 2.0,
+            "source": "Highest Regard",
+            "short_label": "for Wasp",
+        })
+        status.recognition_modifiers.append({
+            "field": "recognition",
+            "context": "with other Wasp samurai",
+            "value": 2.0,
+            "source": "Highest Regard",
+            "short_label": "for Wasp",
+        })
+
+    # Minor Clan Major Ally (one per clan; mutually exclusive in
+    # practice but the code doesn't enforce that). Each variant adds
+    # +3.0 to Rank and Recognition when dealing with members of the
+    # named clan.
+    _MINOR_CLAN_NAMES = {
+        "minor_clan_major_ally_sparrow": "Sparrow",
+        "minor_clan_major_ally_fox": "Fox",
+        "minor_clan_major_ally_mantis": "Mantis",
+    }
+    for adv_id, clan in _MINOR_CLAN_NAMES.items():
+        if adv_id in campaign_advantages:
+            status.rank_modifiers.append({
+                "field": "rank",
+                "context": f"with members of the {clan} clan",
+                "value": 3.0,
+                "source": f"Minor Clan Major Ally: {clan}",
+                "short_label": f"for {clan}",
+            })
+            status.recognition_modifiers.append({
+                "field": "recognition",
+                "context": f"with members of the {clan} clan",
+                "value": 3.0,
+                "source": f"Minor Clan Major Ally: {clan}",
+                "short_label": f"for {clan}",
+            })
+
     if "imperial_favor" in advantages:
+        # The pill_label folds family + post into one combined pill on
+        # the View Sheet's collapsed line ("+4.0 for Imperials") while
+        # the expanded breakdown still spells out each context.
         status.rank_modifiers.append({
             "field": "rank",
             "context": "with Imperial family members",
             "value": 3.0,
             "source": "Imperial Favor",
             "short_label": "imperial family",
+            "pill_label": "for Imperials",
         })
         status.recognition_modifiers.append({
             "field": "recognition",
@@ -169,6 +225,7 @@ def compute_effective_status(
             "value": 3.0,
             "source": "Imperial Favor",
             "short_label": "imperial family",
+            "pill_label": "for Imperials",
         })
         status.rank_modifiers.append({
             "field": "rank",
@@ -176,6 +233,7 @@ def compute_effective_status(
             "value": 1.0,
             "source": "Imperial Favor",
             "short_label": "imperial post",
+            "pill_label": "for Imperials",
         })
         status.recognition_modifiers.append({
             "field": "recognition",
@@ -183,6 +241,7 @@ def compute_effective_status(
             "value": 1.0,
             "source": "Imperial Favor",
             "short_label": "imperial post",
+            "pill_label": "for Imperials",
         })
 
     # --- Disadvantages ---
