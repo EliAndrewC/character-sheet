@@ -2379,7 +2379,7 @@
                         {% if rank_pills | length == 1 %}
                         {% set p = rank_pills[0] %}
                         <span class="text-sm text-ink/70" data-status-pills="rank">
-                            ({{ "%.1f"|format(character.rank + p.value) }} for {{ p.short_label }})
+                            ({{ "%.1f"|format(character.rank + p.value) }} {% if p.short_label.startswith('for ') %}{{ p.short_label }}{% else %}for {{ p.short_label }}{% endif %})
                         </span>
                         {% elif rank_pills | length > 1 %}
                         <span class="text-sm text-ink/70" data-status-pills="rank">
@@ -2434,7 +2434,7 @@
                         {% if recog_pills | length == 1 %}
                         {% set p = recog_pills[0] %}
                         <span class="text-sm text-ink/70" data-status-pills="recognition">
-                            ({{ "%.1f"|format(character.recognition + p.value) }} for {{ p.short_label }})
+                            ({{ "%.1f"|format(character.recognition + p.value) }} {% if p.short_label.startswith('for ') %}{{ p.short_label }}{% else %}for {{ p.short_label }}{% endif %})
                         </span>
                         {% elif recog_pills | length > 1 %}
                         <span class="text-sm text-ink/70" data-status-pills="recognition">
@@ -2589,7 +2589,7 @@
                 {# Specialization can be taken multiple times; render one row per
                    instance with its per-row sub-domain text + the chosen skill. #}
                 {% for spec in char_specs %}
-                {% set spec_skill = skills.get(spec.skills[0]) if spec.skills else none %}
+                {% set spec_skill = (skills.get(spec.skills[0]) or combat_skills.get(spec.skills[0])) if spec.skills else none %}
                 <div class="mb-2 tooltip-trigger relative">
                     <span class="text-sm font-medium cursor-help">Specialization</span>
                     {% if spec.text %}
@@ -2961,6 +2961,7 @@
     <script type="application/json" id="wound-check-probs">{{ wound_check_probs | tojson }}</script>
     <script type="application/json" id="void-spend-config">{{ void_spend_config | tojson }}</script>
     <script type="application/json" id="school-abilities">{{ school_abilities | tojson }}</script>
+    <script type="application/json" id="attack-specializations">{{ attack_specs | tojson }}</script>
     <script type="application/json" id="daidoji-counterattack-party">{{ daidoji_counterattack_party | tojson }}</script>
     <script type="application/json" id="adventure-raises-config">{{ {
         "available": adv_raises_max.val,
@@ -4193,6 +4194,25 @@
                         bonus (from TN <span x-text="atkTN"></span>)
                     </div>
 
+                    {# Attack Specialization: one checkbox per spec targeting
+                       the Attack combat skill. Each checked box adds +10 to
+                       the roll (and to the hit-probability table). Shown on
+                       every attack-modal variant (plain attack, double_attack,
+                       lunge, counterattack, athletics:attack, Kakita iaijutsu)
+                       since "Specialization (Attack)" applies to any attack. #}
+                    <div x-show="atkFormula?.is_attack_type && attackSpecs.length > 0" x-cloak
+                         data-testid="attack-spec-section"
+                         class="text-xs text-ink/60 bg-parchment rounded p-2 space-y-1">
+                        <template x-for="(spec, i) in attackSpecs" :key="i">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" x-model="atkSpecApplies[i]"
+                                       :data-testid="'attack-spec-checkbox-' + i"
+                                       class="rounded border-ink/30">
+                                <span>Specialization (<span x-text="spec.text || 'unspecified'"></span>) applies: +10 to the roll</span>
+                            </label>
+                        </template>
+                    </div>
+
                     {# Doji Artisan 4th Dan: "target has not attacked me this
                        round" bonus = current phase. The phase matters but we
                        can't derive it from action-die state alone (the attack
@@ -4468,6 +4488,10 @@
                         <div x-show="formula?.doji_4th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
                              data-testid="doji-4th-dan-breakdown">
                             &bull; +<span x-text="formula?.doji_4th_dan_bonus"></span> from Doji 4th Dan (phase <span x-text="formula?.doji_4th_dan_phase"></span>, target had not attacked)
+                        </div>
+                        <div x-show="formula?.attack_spec_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
+                             data-testid="attack-spec-breakdown">
+                            &bull; +<span x-text="formula?.attack_spec_bonus"></span> from Specialization (<span x-text="(formula?.attack_spec_applied_texts || []).join(', ')"></span>)
                         </div>
                         <div x-show="formula?.shinjo_phase_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
                              data-testid="shinjo-phase-bonus-breakdown">
@@ -6774,6 +6798,11 @@
             merchant5thSelections: [],
             voidSpendConfig: { cap: 0, worldliness_max: 0, combat_vp_flat_bonus: 0, wc_vp_free_raise: false },
             schoolAbilities: {},
+            // Attack-targeting Specializations (one entry per spec). The
+            // attack modal renders one checkbox per entry; ``atkSpecApplies``
+            // mirrors the same length with the player's per-roll choices.
+            attackSpecs: [],
+            atkSpecApplies: [],
             matsuBankedWcBonuses: [],
             shosuroLowest3Bonus: 0,
             akodoReflectVP: 0,
@@ -6878,6 +6907,11 @@
                         document.getElementById('school-abilities').textContent || '{}'
                     );
                 } catch (e) { this.schoolAbilities = {}; }
+                try {
+                    this.attackSpecs = JSON.parse(
+                        document.getElementById('attack-specializations').textContent || '[]'
+                    );
+                } catch (e) { this.attackSpecs = []; }
                 // Daidoji counterattack: determine if this character or a party member has the ability
                 try {
                     const partyDaidoji = JSON.parse(
@@ -8704,6 +8738,7 @@
                 this.atkIsawaTnTrade = false;
                 this.atkOtakuTradeDice = false;
                 this.atkDojiUntouchedTarget = false;
+                this.atkSpecApplies = this.attackSpecs.map(() => false);
                 this.atkDojiPhase = 1;
                 // Default the Shinjo phase picker to the to-be-spent die's
                 // value so the dropdown's initial selection matches its own
@@ -9053,6 +9088,18 @@
                     ? Math.max(0, Math.floor((this.atkTN - 10) / 5)) : 0;
             },
 
+            // Attack Specialization bonus: +10 per checked attack spec.
+            // Returns 0 unless the current formula is an attack-type roll
+            // (gates out parry/skill paths that never show the checkboxes).
+            _attackSpecBonus() {
+                if (!this.atkFormula?.is_attack_type) return 0;
+                let count = 0;
+                for (let i = 0; i < (this.atkSpecApplies || []).length; i++) {
+                    if (this.atkSpecApplies[i]) count++;
+                }
+                return 10 * count;
+            },
+
             // Doji Artisan 4th Dan: +phase when attacking a target that has
             // not attacked you this round. Returns 0 unless the pre-roll
             // checkbox is ticked and the formula exposes the flag.
@@ -9173,11 +9220,12 @@
                 const shinjoPhase = this._shinjoPhaseBonus();
                 const kakita3rd = this._kakita3rdDanBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
+                const specFlat = this._attackSpecBonus();
                 // Mantis Wave-Treader: offensive posture (+5) plus 5th Dan
                 // offensive-posture-count accumulator (+N) feed into the target.
                 const postureFlat = this._mantisLiveAttackFlat();
                 const target = Math.max(0,
-                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - dojiUntouched - shinjoPhase - kakita3rd - shosuroFlat - postureFlat);
+                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - dojiUntouched - shinjoPhase - kakita3rd - shosuroFlat - postureFlat - specFlat);
                 return target < arr.length ? arr[target] : 0;
             },
 
@@ -9191,8 +9239,9 @@
                 const shinjoPhase = this._shinjoPhaseBonus();
                 const kakita3rd = this._kakita3rdDanBonus();
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
+                const specFlat = this._attackSpecBonus();
                 const postureFlat = this._mantisLiveAttackFlat();
-                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + dojiUntouched + shinjoPhase + kakita3rd + shosuroFlat + postureFlat;
+                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + dojiUntouched + shinjoPhase + kakita3rd + shosuroFlat + postureFlat + specFlat;
             },
 
             atkAvgExtraDice(voidCount) {
@@ -9466,6 +9515,24 @@
                         formula.flat += phase;
                         formula.doji_4th_dan_bonus = phase;
                         formula.doji_4th_dan_phase = phase;
+                    }
+                }
+
+                // Attack Specialization: +10 per checked spec, plus the
+                // matching sub-domain texts for the post-roll breakdown.
+                {
+                    const appliedTexts = [];
+                    for (let i = 0; i < (this.atkSpecApplies || []).length; i++) {
+                        if (!this.atkSpecApplies[i]) continue;
+                        const s = this.attackSpecs[i];
+                        if (!s) continue;
+                        appliedTexts.push(s.text || 'unspecified');
+                    }
+                    if (appliedTexts.length > 0) {
+                        const bonus = 10 * appliedTexts.length;
+                        formula.flat += bonus;
+                        formula.attack_spec_bonus = bonus;
+                        formula.attack_spec_applied_texts = appliedTexts;
                     }
                 }
 

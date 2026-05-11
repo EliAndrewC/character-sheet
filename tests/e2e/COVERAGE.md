@@ -941,7 +941,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] "Air or Water" school shows ring dropdown → `test_school_rings.py::test_air_or_water_ring_dropdown`
 - [x] Selecting ring from dropdown updates choice → `test_school_rings.py::test_selecting_ring_from_dropdown`
 - [x] School ring min 3 enforced → `test_editor_controls.py::test_school_ring_min_3`
-- [x] School ring max 6 → `test_editor_controls.py::test_school_ring_max_6`
+- [x] School ring below 4th Dan max 5 → `test_editor_controls.py::test_school_ring_below_4th_dan_max_5`
 - [x] Non-school ring max 5 → `test_editor_controls.py::test_nonschool_ring_max_5`
 - [x] Changing school resets knacks → `test_school_rings.py::test_changing_school_resets_knacks`
 - [x] Multi-ring to fixed-ring hides dropdown → `test_school_rings.py::test_changing_multi_to_fixed_hides_dropdown`
@@ -955,7 +955,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Non-school ring min 2 (- disabled) → `test_editor_controls.py::test_nonschool_ring_min_2`
 - [x] Non-school ring max 5 (+ disabled) → `test_editor_controls.py::test_nonschool_ring_max_5`
 - [x] School ring min 3 (- disabled) → `test_editor_controls.py::test_school_ring_min_3`
-- [x] School ring max 6 (+ disabled) → `test_editor_controls.py::test_school_ring_max_6`
+- [x] School ring max 5 below 4th Dan (+ disabled) → `test_editor_controls.py::test_school_ring_below_4th_dan_max_5`
 - [x] XP overspend turns remaining red → `test_live_xp.py::test_remaining_goes_negative_on_overspend`
 
 ## Character Editor — Knacks
@@ -964,8 +964,8 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Knack - disabled at rank 1 → `test_editor_controls.py::test_knack_min_1`
 - [x] Knack + disabled at rank 5 → `test_editor_controls.py::test_knack_max_5`
 - [x] 4th Dan auto-raises school ring to 4 → `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring`
-- [x] 4th Dan school ring max is 7 → `test_editor_controls.py::test_fourth_dan_school_ring_max_7`
-- [x] Drop below 4th Dan caps ring at 6 → `test_editor_controls.py::test_drop_below_4th_dan_caps_ring_at_6`
+- [x] 4th Dan school ring max is 6 (never higher) → `test_editor_controls.py::test_fourth_dan_school_ring_max_6`
+- [x] Drop below 4th Dan caps school ring at 5 → `test_editor_controls.py::test_drop_below_4th_dan_caps_ring_at_5`
 - [x] Drop below 4th Dan ring at 4 stays at 4 → `test_editor_controls.py::test_drop_below_4th_dan_ring_at_4_goes_to_3`
 - [x] Ring max correct after repeated Dan toggle → `test_editor_controls.py::test_ring_max_correct_after_repeated_dan_toggle`
 - [x] Ring max never exceeds bounds after many toggles → `test_editor_controls.py::test_ring_max_never_exceeds_bounds_after_many_toggles`
@@ -1066,6 +1066,10 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Virtue: text shown on sheet → `test_advantage_details.py::test_virtue_shows_text_field`
 - [x] Specialization sub-section: + Add / × remove buttons; multiple rows; each costs 2 XP → `test_advantage_details.py::test_specialization_sub_section_lets_you_add_multiple_rows`
 - [x] Specialization full lifecycle (multi-row in editor → View Sheet renders one row each → roll modal alt-total carries the matching spec's text) → `test_advantage_details.py::test_specialization_full_lifecycle_multiple_rows_view_sheet_roll_modal`
+- [x] Specialization dropdown includes Attack and Parry combat skills (persists to sheet) → `test_advantage_details.py::test_specialization_dropdown_includes_attack_and_parry`
+- [x] Attack-Specialization checkbox on attack modal (per-spec checkbox, +10, breakdown, hit-chance shift) → `test_advantage_details.py::test_attack_specialization_checkboxes_on_attack_modal`
+- [x] Attack-Specialization section hidden when no Spec on Attack → `test_advantage_details.py::test_attack_specialization_section_hidden_without_attack_spec`
+- [x] Attack-Specialization checkbox shows on other attack-type modals (knack:double_attack) → `test_advantage_details.py::test_attack_specialization_checkbox_visible_on_other_attack_variants`
 - [x] Dark Secret: text and player dropdown appear → `test_advantage_details.py::test_dark_secret_shows_fields`
 - [x] Jealousy: text field appears → `test_advantage_details.py::test_jealousy_shows_text`
 - [x] Good Reputation: text field appears → `test_advantage_details.py::test_good_reputation_shows_text`
@@ -1135,7 +1139,10 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Rank displayed without a "(locked)" indicator (the view sheet drops it; editor still shows it) → `test_sheet_display.py::test_rank_displayed_without_locked_indicator`
 - [x] Rank row renders no pill markup when no contextual modifiers apply → `test_sheet_display.py::test_rank_no_pills_when_no_modifiers`
 - [x] Status chevron expands a status row's detail breakdown (replaces the legacy hover tooltip) → `test_sheet_display.py::test_status_chevron_expands_detail`
-- [x] A status row with two distinct short_labels renders the multi-modifier pill format with signed deltas → `test_sheet_display.py::test_status_multi_modifier_pills_show_signed_deltas`
+- [x] A status row with two distinct pill labels renders the multi-modifier pill format with signed deltas → `test_sheet_display.py::test_status_multi_modifier_pills_show_signed_deltas`
+- [x] Imperial Favor's family + post modifiers collapse into a single ``for Imperials`` pill (and the expanded view still shows both contexts) → `test_sheet_display.py::test_status_imperial_favor_alone_renders_single_pill`
+- [x] Highest Regard adds a ``+2.0 for Wasp`` pill to Rank and Recognition (expanded shows the per-source context) → `test_sheet_display.py::test_status_highest_regard_renders_for_wasp_pill`
+- [x] Minor Clan Major Ally adds a ``+3.0 for <Clan>`` pill to Rank and Recognition → `test_sheet_display.py::test_status_minor_clan_major_ally_renders_for_clan_pill`
 - [x] Recognition displayed → `test_sheet_display.py::test_recognition_displayed`
 - [x] Stipend displayed → `test_sheet_display.py::test_stipend_displayed`
 - [x] Stipend chevron expands to show the calculation breakdown → `test_sheet_advanced.py::test_stipend_expand_shows_calculation`

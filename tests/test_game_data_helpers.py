@@ -43,11 +43,21 @@ class TestStartingRings:
 
 
 class TestRingMax:
-    def test_school_ring_max_6(self):
-        assert ring_max("Water", "Water") == 6
+    def test_school_ring_below_4th_dan_max_5(self):
+        """Below 4th Dan the school ring is capped at 5, same as any
+        ring. The 6 cap only becomes available at 4th Dan."""
+        assert ring_max("Water", "Water") == 5
+        assert ring_max("Water", "Water", dan=3) == 5
+
+    def test_school_ring_at_or_above_4th_dan_max_6(self):
+        """At 4th Dan and above the school ring can climb to 6, but
+        never higher."""
+        assert ring_max("Water", "Water", dan=4) == 6
+        assert ring_max("Water", "Water", dan=5) == 6
 
     def test_non_school_ring_max_5(self):
         assert ring_max("Air", "Water") == 5
+        assert ring_max("Air", "Water", dan=4) == 5
 
 
 class TestVoidPoints:

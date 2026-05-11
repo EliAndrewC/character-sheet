@@ -37,6 +37,7 @@ from app.game_data import (
     ADVANTAGES,
     CAMPAIGN_ADVANTAGES,
     CAMPAIGN_DISADVANTAGES,
+    COMBAT_SKILLS,
     DISADVANTAGES,
     EXCLUSIVE_PAIRS,
     RING_NAMES,
@@ -255,6 +256,15 @@ def match_skill(name_as_written: str) -> Tuple[Optional[str], Optional[str]]:
         {sid: s.name for sid, s in SKILLS.items()},
         _SKILL_ALIASES,
     )
+
+
+def match_skill_or_combat(name_as_written: str) -> Tuple[Optional[str], Optional[str]]:
+    """Like ``match_skill`` but also resolves the two combat skills
+    (``attack`` / ``parry``). Used for Specialization, which may target
+    either kind."""
+    pool = {sid: s.name for sid, s in SKILLS.items()}
+    pool.update({sid: c["name"] for sid, c in COMBAT_SKILLS.items()})
+    return _match_in_pool(name_as_written, pool, _SKILL_ALIASES)
 
 
 def match_knack(name_as_written: str) -> Tuple[Optional[str], Optional[str]]:

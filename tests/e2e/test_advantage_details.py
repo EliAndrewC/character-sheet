@@ -172,6 +172,166 @@ def test_specialization_sub_section_lets_you_add_multiple_rows(page, live_server
     assert grossSpent_after == grossSpent - 2
 
 
+def test_attack_specialization_checkboxes_on_attack_modal(page, live_server_url):
+    """Specialization on Attack surfaces one checkbox per spec on the
+    attack-modal pre-roll panel. Each checked box adds +10 to the roll
+    and to the hit-chance probability table, and a labeled line shows
+    in the post-roll breakdown."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "AttackSpecModal")
+    select_school(page, "akodo_bushi")
+
+    # Add two attack specs.
+    add = page.locator('[data-testid="add-specialization"]')
+    add.click()
+    add.click()
+    page.wait_for_timeout(150)
+    row0 = page.locator('[data-testid="specialization-row-0"]')
+    row0.locator('input[type="text"]').fill("katana")
+    row0.locator('select').select_option(value="attack")
+    row1 = page.locator('[data-testid="specialization-row-1"]')
+    row1.locator('input[type="text"]').fill("vs cavalry")
+    row1.locator('select').select_option(value="attack")
+    page.wait_for_timeout(150)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Two attack specs")
+
+    # Open the attack modal.
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+
+    section = page.locator('[data-testid="attack-spec-section"]')
+    assert section.is_visible()
+    cb0 = page.locator('[data-testid="attack-spec-checkbox-0"]')
+    cb1 = page.locator('[data-testid="attack-spec-checkbox-1"]')
+    assert cb0.is_visible()
+    assert cb1.is_visible()
+    # Labels include the per-row sub-domain text.
+    assert "katana" in section.text_content()
+    assert "vs cavalry" in section.text_content()
+
+    # Probability table climbs as each box is ticked.
+    base = page.evaluate("window._diceRoller.atkHitChance(0)")
+    cb0.check()
+    boosted_one = page.evaluate("window._diceRoller.atkHitChance(0)")
+    cb1.check()
+    boosted_two = page.evaluate("window._diceRoller.atkHitChance(0)")
+    assert boosted_one >= base
+    assert boosted_two >= boosted_one
+    # Helper returns +20 with both ticked.
+    assert page.evaluate("window._diceRoller._attackSpecBonus()") == 20
+
+    # Roll. Both spec bonuses are stamped onto the formula and the
+    # post-roll breakdown surfaces the labeled +20 entry.
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.atkPhase === 'result'",
+        timeout=10000,
+    )
+    result = page.evaluate("""() => ({
+        bonus: window._diceRoller.formula?.attack_spec_bonus || 0,
+        texts: window._diceRoller.formula?.attack_spec_applied_texts || [],
+    })""")
+    assert result["bonus"] == 20
+    assert "katana" in result["texts"]
+    assert "vs cavalry" in result["texts"]
+    breakdown = page.locator('[data-testid="attack-spec-breakdown"]')
+    assert breakdown.is_visible()
+    assert "+20" in breakdown.text_content()
+
+
+def test_attack_specialization_section_hidden_without_attack_spec(page, live_server_url):
+    """No Specialization on Attack → the attack-modal section never renders.
+    A spec on a non-combat skill should NOT surface the checkbox."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "NoAtkSpec")
+    select_school(page, "akodo_bushi")
+
+    add = page.locator('[data-testid="add-specialization"]')
+    add.click()
+    page.wait_for_timeout(150)
+    row0 = page.locator('[data-testid="specialization-row-0"]')
+    row0.locator('input[type="text"]').fill("Court")
+    row0.locator('select').select_option(value="etiquette")
+    page.wait_for_timeout(150)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Non-combat spec only")
+
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    section = page.locator('[data-testid="attack-spec-section"]')
+    assert not section.is_visible()
+
+
+def test_attack_specialization_checkbox_visible_on_other_attack_variants(page, live_server_url):
+    """The checkbox is gated on ``is_attack_type``, so it must appear on
+    every attack-modal variant - here we verify it on double_attack,
+    an attack-type knack that opens the attack modal."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "AtkSpecDA")
+    select_school(page, "akodo_bushi")
+    # Akodo's school knacks include double_attack; rank 1 is free, so the
+    # knack:double_attack roll key is available without extra ranks.
+
+    add = page.locator('[data-testid="add-specialization"]')
+    add.click()
+    page.wait_for_timeout(150)
+    row0 = page.locator('[data-testid="specialization-row-0"]')
+    row0.locator('input[type="text"]').fill("katana")
+    row0.locator('select').select_option(value="attack")
+    page.wait_for_timeout(150)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Attack spec + double_attack")
+
+    page.locator('[data-roll-key="knack:double_attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    assert page.locator('[data-testid="attack-spec-section"]').is_visible()
+    assert page.locator('[data-testid="attack-spec-checkbox-0"]').is_visible()
+
+
+def test_specialization_dropdown_includes_attack_and_parry(page, live_server_url):
+    """Specialization may target the Attack / Parry combat skills, not
+    just the regular skill list. Pick one and verify it persists on the
+    sheet's advantages list with the chosen combat skill labelled."""
+    _go_to_editor(page, live_server_url)
+    page.fill('input[name="name"]', "AttackSpec")
+
+    add_btn = page.locator('[data-testid="add-specialization"]')
+    add_btn.click()
+    page.wait_for_timeout(150)
+    row = page.locator('[data-testid="specialization-row-0"]')
+
+    # The dropdown carries options for the combat skills.
+    select_handle = row.locator('select')
+    option_values = select_handle.evaluate(
+        "el => Array.from(el.options).map(o => o.value)"
+    )
+    assert "attack" in option_values
+    assert "parry" in option_values
+
+    row.locator('input[type="text"]').fill("Katana")
+    select_handle.select_option(value="attack")
+    page.wait_for_timeout(150)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+
+    apply_changes(page, "Combat spec")
+    body = page.text_content("body")
+    # The sheet's advantages list shows the spec text and the combat-skill
+    # name in parens (same shape as a regular skill spec).
+    section_start = body.index("Advantages & Disadvantages")
+    section_end = body.index("XP Summary", section_start)
+    section = body[section_start:section_end]
+    assert "Specialization" in section
+    assert "Katana" in section
+    assert "Attack" in section
+
+
 def test_dark_secret_shows_fields(page, live_server_url):
     """Dark Secret shows text field and player dropdown."""
     _go_to_editor(page, live_server_url)

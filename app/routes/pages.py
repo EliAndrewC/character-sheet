@@ -9,6 +9,7 @@ from app.game_data import (
     ADVANTAGES,
     CAMPAIGN_ADVANTAGES,
     CAMPAIGN_DISADVANTAGES,
+    COMBAT_SKILLS,
     DISADVANTAGES,
     ADVANTAGE_DETAIL_FIELDS,
     EXCLUSIVE_PAIRS,
@@ -812,6 +813,16 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             character.published_state or {}, character.to_dict(),
         )
 
+    # Specializations targeting the Attack combat skill. The attack modal
+    # renders one checkbox per entry (label = the sub-domain text); each
+    # checked box adds a +10 flat to the roll and to the hit-probability
+    # table. Computed here so the template only has to emit the JSON.
+    attack_specs = [
+        {"text": (s.get("text") or "")}
+        for s in (character.specializations or [])
+        if "attack" in (s.get("skills") or [])
+    ]
+
     return _templates().TemplateResponse(
         request=request,
         name="character/sheet.html",
@@ -822,6 +833,8 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "xp_breakdown": xp_breakdown,
             "errors": errors,
             "skills": SKILLS,
+            "combat_skills": COMBAT_SKILLS,
+            "attack_specs": attack_specs,
             "advantages": ADVANTAGES,
             "disadvantages": DISADVANTAGES,
             "campaign_advantages": CAMPAIGN_ADVANTAGES,
@@ -923,6 +936,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "schools_by_category": SCHOOLS_BUSHI_NONBUSHI,
             "rings": [r.value for r in Ring],
             "skills": SKILLS,
+            "combat_skills": COMBAT_SKILLS,
             "advantages": ADVANTAGES,
             "disadvantages": DISADVANTAGES,
             "school_knacks": SCHOOL_KNACKS,

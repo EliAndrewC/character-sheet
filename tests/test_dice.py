@@ -301,6 +301,56 @@ class TestAthleticsCombat:
         char = make_character_data(knacks={"double_attack": 1})
         assert build_athletics_combat_formula("attack", char) is None
 
+    def test_athletics_attack_picks_up_attack_specialization(self):
+        """Specialization on Attack still applies when substituting
+        athletics for the attack action (same shape as the school
+        technique bonuses on athletics-as-attack)."""
+        from app.services.dice import build_athletics_combat_formula
+        char = make_character_data(
+            school="",
+            knacks={"athletics": 2},
+            specializations=[
+                {"text": "katana", "skills": ["attack"]},
+            ],
+        )
+        f = build_athletics_combat_formula("attack", char)
+        spec_alts = [a for a in f.alternatives if "Specialization" in a.get("label", "")]
+        assert len(spec_alts) == 1
+        assert "katana" in spec_alts[0]["label"]
+        assert spec_alts[0]["extra_flat"] == 10
+        assert f.flat == 0
+
+    def test_athletics_parry_specialization_default_text(self):
+        """Empty spec text → fallback label, plus parry-side coverage of
+        the athletics-as-parry branch."""
+        from app.services.dice import build_athletics_combat_formula
+        char = make_character_data(
+            school="",
+            knacks={"athletics": 2},
+            specializations=[
+                {"text": "", "skills": ["parry"]},
+            ],
+        )
+        f = build_athletics_combat_formula("parry", char)
+        spec_alts = [a for a in f.alternatives if "Specialization" in a.get("label", "")]
+        assert len(spec_alts) == 1
+        assert "your specialization" in spec_alts[0]["label"]
+
+    def test_athletics_attack_skips_non_matching_spec(self):
+        """Spec on Parry must not bleed into athletics-attack alternatives."""
+        from app.services.dice import build_athletics_combat_formula
+        char = make_character_data(
+            school="",
+            knacks={"athletics": 2},
+            specializations=[
+                {"text": "vs cavalry", "skills": ["parry"]},
+            ],
+        )
+        f = build_athletics_combat_formula("attack", char)
+        assert not any(
+            "Specialization" in a.get("label", "") for a in f.alternatives
+        )
+
     def test_athletics_attack_courtier_5th_dan_air_bonus(self):
         """Courtier 5th Dan: +Air flat on all TN-based combat rolls."""
         char = make_character_data(
@@ -1024,6 +1074,73 @@ class TestCombatFormula:
         assert f.rolled == 5
         assert f.kept == 2
         assert f.flat == 5
+
+    def test_specialization_on_attack_is_alternative_extra_10(self):
+        """Specialization may target the Attack combat skill; the formula
+        surfaces a conditional +10 alternative on matching attack rolls."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            attack=3,
+            specializations=[
+                {"text": "katana", "skills": ["attack"]},
+            ],
+        )
+        f = build_combat_formula("attack", char)
+        spec_alts = [a for a in f.alternatives if "Specialization" in a.get("label", "")]
+        assert len(spec_alts) == 1
+        assert "katana" in spec_alts[0]["label"]
+        assert spec_alts[0]["extra_flat"] == 10
+        # Bonus is conditional, not baked into the unconditional flat.
+        assert f.flat == 0
+
+    def test_specialization_on_parry_is_alternative_extra_10(self):
+        char = make_character_data(
+            school="",
+            knacks={},
+            parry=2,
+            specializations=[
+                {"text": "vs cavalry", "skills": ["parry"]},
+            ],
+        )
+        f = build_combat_formula("parry", char)
+        spec_alts = [a for a in f.alternatives if "Specialization" in a.get("label", "")]
+        assert len(spec_alts) == 1
+        assert "vs cavalry" in spec_alts[0]["label"]
+        assert spec_alts[0]["extra_flat"] == 10
+        assert f.flat == 0
+
+    def test_specialization_on_attack_does_not_apply_to_parry(self):
+        """Spec on attack must NOT show up as a parry alternative."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            attack=2,
+            parry=2,
+            specializations=[
+                {"text": "katana", "skills": ["attack"]},
+            ],
+        )
+        parry_f = build_combat_formula("parry", char)
+        assert not any(
+            "Specialization" in a.get("label", "") for a in parry_f.alternatives
+        )
+
+    def test_specialization_default_text_when_text_missing(self):
+        """When the spec's text is empty, the label falls back to
+        'your specialization' (same shape as build_skill_formula)."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            attack=2,
+            specializations=[
+                {"text": "", "skills": ["attack"]},
+            ],
+        )
+        f = build_combat_formula("attack", char)
+        spec_alts = [a for a in f.alternatives if "Specialization" in a.get("label", "")]
+        assert len(spec_alts) == 1
+        assert "your specialization" in spec_alts[0]["label"]
 
 
 # ---------------------------------------------------------------------------

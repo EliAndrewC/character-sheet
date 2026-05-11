@@ -81,20 +81,45 @@ class TestFourthDanAutoRaise:
         # Water 4->5: normally 25, with 5 discount = 20
         assert result["rings"] == 20
 
-    def test_dan_4_school_ring_max_is_7(self):
-        """At 4th Dan the school ring's max value rises from 6 to 7."""
+    def test_dan_4_school_ring_max_is_6(self):
+        """At 4th Dan the school ring's max value rises from 5 to 6.
+        The cap never goes higher than 6 - there is no 7-ceiling at
+        higher Dan levels."""
         data = make_character_data(
-            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 7, "Void": 2},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 6, "Void": 2},
             knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
             starting_xp=500,
         )
         errors = validate_character(data)
         assert not any("Water" in e and "exceeds" in e for e in errors)
 
-    def test_dan_3_school_ring_max_still_6(self):
-        """Below 4th Dan the school ring max is still 6."""
+    def test_dan_4_school_ring_7_rejected(self):
+        """7 is not reachable at 4th Dan (or any Dan) - the school
+        ring caps at 6."""
         data = make_character_data(
             rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 7, "Void": 2},
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+            starting_xp=500,
+        )
+        errors = validate_character(data)
+        assert any("Water" in e and "exceeds" in e for e in errors)
+
+    def test_dan_5_school_ring_7_still_rejected(self):
+        """Even at 5th Dan the school ring caps at 6. This is the
+        regression case reported by a player who hit 7 via the UI."""
+        data = make_character_data(
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 7, "Void": 2},
+            knacks={"double_attack": 5, "feint": 5, "iaijutsu": 5},
+            starting_xp=1000,
+        )
+        errors = validate_character(data)
+        assert any("Water" in e and "exceeds" in e for e in errors)
+
+    def test_dan_3_school_ring_above_5_rejected(self):
+        """Below 4th Dan the school ring is capped at 5 (same as any
+        ring). A school ring at 6 is rejected."""
+        data = make_character_data(
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 6, "Void": 2},
             knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
             starting_xp=500,
         )
@@ -111,16 +136,6 @@ class TestFourthDanAutoRaise:
             )
             errors = validate_character(data)
             assert not any("Water" in e for e in errors), f"Dan={dan}"
-
-    def test_dan_3_ring_at_6_valid(self):
-        """Ring at 6 (school ring max at Dan 3) is the ceiling."""
-        data = make_character_data(
-            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 6, "Void": 2},
-            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
-            starting_xp=500,
-        )
-        errors = validate_character(data)
-        assert not any("Water" in e and "exceeds" in e for e in errors)
 
     def test_dan_4_ring_at_4_has_zero_xp_cost(self):
         """At 4th Dan, school ring 3->4 is free (0 XP)."""
@@ -143,7 +158,8 @@ class TestFourthDanAutoRaise:
         assert result["rings"] == 20
 
     def test_ring_7_invalid_at_dan_3(self):
-        """Ring at 7 with Dan=3 should fail validation (max is 6)."""
+        """Ring at 7 with Dan=3 fails validation (school ring is
+        capped at 5 below 4th Dan)."""
         data = make_character_data(
             rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 7, "Void": 2},
             knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
@@ -154,23 +170,16 @@ class TestFourthDanAutoRaise:
         assert len(ring_errors) > 0
         assert any("exceeds" in e for e in ring_errors)
 
-    def test_ring_7_valid_at_dan_4(self):
-        """Ring at 7 with Dan=4 should pass validation (max is 7)."""
-        data = make_character_data(
-            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 7, "Void": 2},
-            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
-            starting_xp=500,
-        )
-        errors = validate_character(data)
-        assert not any("Water" in e and "exceeds" in e for e in errors)
-
-    def test_ring_max_helper_4th_dan(self):
-        """game_data.ring_max returns 7 for school ring at 4th Dan, 6 otherwise."""
+    def test_ring_max_helper(self):
+        """game_data.ring_max returns 6 for the school ring at 4th
+        Dan, 5 otherwise (including for the school ring below 4th
+        Dan and for non-school rings at any Dan)."""
         from app.game_data import ring_max
-        assert ring_max("Water", "Water", dan=4) == 7
-        assert ring_max("Water", "Water", dan=3) == 6
-        assert ring_max("Water", "Water") == 6  # default dan=0
-        assert ring_max("Air", "Water", dan=4) == 5  # non-school
+        assert ring_max("Water", "Water", dan=4) == 6  # school at 4th Dan
+        assert ring_max("Water", "Water", dan=5) == 6  # never above 6
+        assert ring_max("Water", "Water", dan=3) == 5  # school below 4th Dan
+        assert ring_max("Water", "Water") == 5         # default dan=0
+        assert ring_max("Air", "Water", dan=4) == 5    # non-school
 
 
 class TestCampaignAdvantages:
