@@ -36,6 +36,52 @@ def _templates():
     return templates
 
 
+def _apply_school_ring_change(character: Character, new_choice: str, knacks: dict) -> str:
+    """Reconcile a request to set ``school_ring_choice``.
+
+    Returns the value that should actually be persisted on the row.
+
+    Rules:
+    - Published characters can never change their school ring after
+      Apply Changes. The editor locks the picker visibly, but the
+      server is the source of truth: ignore any incoming choice that
+      doesn't match the persisted one. This is the path that produced
+      Kitsune Moriko's orphan state - a tab whose JS thought the
+      character was unpublished POSTed a school-ring switch the
+      editor wouldn't otherwise have offered.
+
+    - Unpublished characters can change freely. When the choice does
+      change, drop the OLD school ring's value by the auto-raise
+      amount it had received (1 always, plus 1 more at Dan>=4), so
+      the free school-ring raises don't carry over as if the player
+      had paid XP for them. Floored at 2.
+
+    The old ring's drop happens IN PLACE on the character row. The
+    caller still applies ring clamps after this returns.
+    """
+    if not new_choice:
+        new_choice = ""
+    old_choice = character.school_ring_choice or ""
+    if new_choice == old_choice:
+        return old_choice
+    if character.is_published:
+        # Lock-after-publish: keep the persisted value, regardless of
+        # what the client sent.
+        return old_choice
+    # Unpublished + actual change: drop the old school ring using the
+    # Dan computed from the incoming knacks (so a same-request knack
+    # change is reflected). Knack data is the route's responsibility
+    # to provide consistently.
+    if old_choice:
+        dan = compute_dan(knacks or {}) if knacks else 0
+        drop = 1 + (1 if dan >= 4 else 0)
+        column = f"ring_{old_choice.lower()}"
+        current_val = getattr(character, column, None)
+        if isinstance(current_val, int):
+            setattr(character, column, max(2, current_val - drop))
+    return new_choice
+
+
 def _clamp_ring(ring_name: str, raw, school_ring_choice: str, knacks: dict, current_value: int) -> int:
     """Clamp a posted ring value to the legal range for the
     character's current school ring + Dan.
@@ -231,14 +277,20 @@ async def update_character(
                 character.owner_discord_id = new_owner.discord_id
                 character.player_name = new_owner.display_name or new_owner.discord_name
     character.school = data["school"]
-    character.school_ring_choice = data["school_ring_choice"]
+    # Reconcile the school-ring choice against the publish-lock and
+    # auto-drop the old school ring (for unpublished characters) if
+    # it's actually changing. See ``_apply_school_ring_change`` for
+    # the full rules.
+    _knacks = data.get("knacks") or {}
+    character.school_ring_choice = _apply_school_ring_change(
+        character, data["school_ring_choice"], _knacks,
+    )
     # Clamp ring values against the form's own school + knacks so a
     # crafted POST can't bypass the editor's cap UI. The cap depends
     # on the school ring (school_ring_choice) and the character's
     # current Dan (derived from knacks).
     _src = data["rings"]
-    _knacks = data.get("knacks") or {}
-    _src_ring = data.get("school_ring_choice") or ""
+    _src_ring = character.school_ring_choice or ""
     character.ring_air = _clamp_ring("Air", _src.get("Air"), _src_ring, _knacks, character.ring_air)
     character.ring_fire = _clamp_ring("Fire", _src.get("Fire"), _src_ring, _knacks, character.ring_fire)
     character.ring_earth = _clamp_ring("Earth", _src.get("Earth"), _src_ring, _knacks, character.ring_earth)
@@ -536,14 +588,21 @@ async def autosave_character(
     if "school" in body:
         character.school = body["school"]
     if "school_ring_choice" in body:
-        character.school_ring_choice = body["school_ring_choice"]
+        # Reconcile against the publish-lock + auto-drop the old
+        # school ring (for unpublished characters) if changing.
+        # Knacks for the Dan check come from the body when present,
+        # else the persisted value.
+        _src_knacks = body.get("knacks", character.knacks) or {}
+        character.school_ring_choice = _apply_school_ring_change(
+            character, body["school_ring_choice"], _src_knacks,
+        )
     if "rings" in body:
         rings = body["rings"]
         # Clamp ring values against the autosave payload's own school
         # ring + knacks so a crafted JSON can't bypass the editor cap.
         # ``body`` may not include ``school_ring_choice`` / ``knacks``
         # in this autosave call - fall back to the persisted values.
-        clamp_ring_choice = body.get("school_ring_choice", character.school_ring_choice)
+        clamp_ring_choice = character.school_ring_choice
         clamp_knacks = body.get("knacks", character.knacks) or {}
         character.ring_air = _clamp_ring("Air", rings.get("Air"), clamp_ring_choice, clamp_knacks, character.ring_air)
         character.ring_fire = _clamp_ring("Fire", rings.get("Fire"), clamp_ring_choice, clamp_knacks, character.ring_fire)

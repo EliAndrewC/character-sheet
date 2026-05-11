@@ -4118,10 +4118,152 @@ class TestAutosaveAllFieldSetters:
         assert char.school == "bayushi_bushi"
 
     def test_school_ring_choice_setter(self, client):
-        cid = _seed_character(client, school_ring_choice="Water")
+        # Unpublished characters can change their school ring freely
+        # (the lock kicks in only after Apply Changes).
+        cid = _seed_character(client, school_ring_choice="Water",
+                              is_published=False)
         client.post(f"/characters/{cid}/autosave", json={"school_ring_choice": "Fire"})
         char = query_db(client).filter(Character.id == cid).first()
         assert char.school_ring_choice == "Fire"
+
+    def test_school_ring_choice_locked_after_publish_via_autosave(self, client):
+        """Once Apply Changes has fired (``is_published=True``), the
+        server hard-rejects any autosave attempt to change the school
+        ring. The persisted value is unchanged regardless of what the
+        payload sends. This is the lock that prevents the Kitsune
+        Moriko bug class from re-occurring."""
+        cid = _seed_character(client, school_ring_choice="Water",
+                              is_published=True)
+        client.post(f"/characters/{cid}/autosave",
+                    json={"school_ring_choice": "Fire"})
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.school_ring_choice == "Water"
+
+    def test_school_ring_choice_locked_after_publish_via_form_post(self, client):
+        """Same lock applies to the form-encoded character POST path,
+        not just the JSON autosave."""
+        cid = _seed_character(client, school_ring_choice="Water",
+                              is_published=True, school="akodo_bushi")
+        form = make_character_form()
+        form["school"] = "akodo_bushi"
+        form["school_ring_choice"] = "Fire"
+        client.post(f"/characters/{cid}", data=form, follow_redirects=False)
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.school_ring_choice == "Water"
+
+    def test_school_ring_choice_change_drops_old_ring_server_side(self, client):
+        """On an unpublished character at Dan 4, switching school ring
+        via autosave drops the OLD school ring by 2 (loses both
+        auto-raises). This is the server-side mirror of the editor's
+        client-side drop logic - belt-and-braces against any client
+        that doesn't apply it itself."""
+        cid = _seed_character(
+            client,
+            school="akodo_bushi",
+            school_ring_choice="Water",
+            ring_water=4,   # school-ring auto-baseline at Dan 4
+            ring_fire=2,
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},  # Dan 4
+            is_published=False,
+        )
+        client.post(
+            f"/characters/{cid}/autosave",
+            json={"school_ring_choice": "Fire"},
+        )
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.school_ring_choice == "Fire"
+        # Water was the school ring at 4 (free auto-raises 2->3 and
+        # 3->4). After the switch, both auto-raises are gone -> 2.
+        assert char.ring_water == 2
+
+    def test_school_ring_choice_change_preserves_paid_raises_server_side(self, client):
+        """Server-side mirror of the editor's paid-raise survival:
+        Water at 6 (school ring at Dan 4 with paid 4->5 and 5->6)
+        drops to 4 when the school ring shifts, not all the way to 2."""
+        cid = _seed_character(
+            client,
+            school="akodo_bushi",
+            school_ring_choice="Water",
+            ring_water=6,
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+            is_published=False,
+            # Generous XP so seeding doesn't fight clamps.
+            starting_xp=300,
+        )
+        client.post(
+            f"/characters/{cid}/autosave",
+            json={"school_ring_choice": "Fire"},
+        )
+        char = query_db(client).filter(Character.id == cid).first()
+        # 6 - 2 = 4. Paid raises survive the shift.
+        assert char.ring_water == 4
+
+    def test_school_ring_choice_null_payload_treated_as_unset(self, client):
+        """A null / empty school_ring_choice in the payload normalises
+        to ``""`` rather than crashing. On an unpublished character
+        that has an existing choice, this means switching FROM a
+        ring to "no choice" - which triggers the drop on the old
+        ring like any other change."""
+        cid = _seed_character(
+            client, school_ring_choice="Water", ring_water=3,
+            is_published=False,
+        )
+        client.post(
+            f"/characters/{cid}/autosave",
+            json={"school_ring_choice": None},
+        )
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.school_ring_choice == ""
+        # Water dropped from 3 to 2 (loses the auto-2->3).
+        assert char.ring_water == 2
+
+    def test_school_ring_drop_uses_payload_knacks_when_present(self, client):
+        """The server-side auto-drop reads Dan from the same payload
+        that triggers the change, NOT from the persisted knacks. This
+        matters when an autosave bundles a knack change with the
+        school-ring change - we want the drop to use the new Dan."""
+        # Persisted state: Dan 4. Payload: school_ring_choice change
+        # AND knacks dropping to Dan 1. The drop should use Dan 1
+        # (matching the new knacks).
+        cid = _seed_character(
+            client,
+            school="akodo_bushi",
+            school_ring_choice="Water",
+            ring_water=4,
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+            is_published=False,
+        )
+        client.post(
+            f"/characters/{cid}/autosave",
+            json={
+                "school_ring_choice": "Fire",
+                "knacks": {"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            },
+        )
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.school_ring_choice == "Fire"
+        # Dan 1 drop (the payload's knacks) drops Water by 1: 4 -> 3.
+        assert char.ring_water == 3
+
+    def test_school_ring_choice_change_drops_by_1_below_4th_dan(self, client):
+        """Below 4th Dan the school ring only auto-raises 2->3 (the
+        3->4 bonus comes from the 4th Dan technique). Switching at
+        Dan<4 should drop the old ring by 1, not 2."""
+        cid = _seed_character(
+            client,
+            school="akodo_bushi",
+            school_ring_choice="Water",
+            ring_water=3,
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},  # Dan 3
+            is_published=False,
+        )
+        client.post(
+            f"/characters/{cid}/autosave",
+            json={"school_ring_choice": "Fire"},
+        )
+        char = query_db(client).filter(Character.id == cid).first()
+        # 3 - 1 = 2.
+        assert char.ring_water == 2
 
     def test_skills_setter(self, client):
         cid = _seed_character(client)
