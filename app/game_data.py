@@ -2079,14 +2079,16 @@ _SCHOOLS_LIST: List[School] = [
         category="spellcaster",
         special_ability=(
             "Your maximum number of void points is equal to your highest ring "
-            "plus your school rank. You regain a number of void points equal "
-            "to your lowest Ring after a full night's rest, and one void point "
-            "per 2 hours for a partial night. However, you may not spend more "
-            "void points on any one roll than your lowest Ring minus 1."
+            "plus your school rank. After a full night's rest, your Absorb "
+            "Void school knack resets to full usage and you regain spent "
+            "void points equal to your lowest Ring. A partial night's rest "
+            "restores 1 spent void point and 1 use of Absorb Void per 90 "
+            "minutes of sleep. However, you may not spend more void points "
+            "on any one roll than your lowest Ring minus 1."
         ),
         school_knacks=["absorb_void", "kharmic_spin", "otherworldliness"],
         techniques={
-            1: "Roll one extra die on precepts and any two skills of your choice.",
+            1: "Roll one extra die on precepts and any two types of rolls of your choice.",
             2: "You get a free raise on all rolls for any skill of your choice.",
             3: (
                 "After another character makes a roll for which void points may "
@@ -2769,7 +2771,7 @@ SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
 
     # ================== SPELLCASTER SCHOOLS =======================
     "isawa_ishi": {
-        "first_dan_extra_die": None,   # "precepts and two chosen skill rolls"
+        "first_dan_extra_die": None,   # "precepts (auto) and two chosen rolls of any type"
         "second_dan_free_raise": None,  # "all rolls for a chosen skill"
         # 3rd Dan: non-standard (spend void to add Xk1 to ally's roll)
     },
@@ -3132,18 +3134,25 @@ GROUP_EFFECTS: Dict[str, Dict[str, Any]] = {
     "family_reckoning_venomous_sting": {
         "name": "Family Reckoning: Venomous Sting",
         "label": (
-            "Party Rank is considered 1.0 lower when dealing with those who "
-            "know this history."
+            "Party Rank is considered 1.0 lower (2.0 for the taker) when "
+            "dealing with those who know this history."
         ),
         "rank_modifier": (-1.0, "with those aware of {name}'s family history"),
+        # The taker themselves gets -2.0 (not -1.0): "Your own Rank is
+        # considered 2.0 lower, and the Rank of every other member of
+        # your party is considered 1.0 lower" - per the advantage text.
+        "self_rank_modifier": (-2.0, "with those aware of your family history"),
+        "short_label": "Family Reckoning",
     },
     "family_reckoning_righteous_sting": {
         "name": "Family Reckoning: Righteous Sting",
         "label": (
-            "Party Rank is considered 1.0 higher when dealing with those who "
-            "know this history."
+            "Party Rank is considered 1.0 higher (2.0 for the taker) when "
+            "dealing with those who know this history."
         ),
         "rank_modifier": (1.0, "with those aware of {name}'s family history"),
+        "self_rank_modifier": (2.0, "with those aware of your family history"),
+        "short_label": "Family Reckoning",
     },
     "imperial_disdain": {
         "name": "Imperial Disdain",
@@ -3152,6 +3161,7 @@ GROUP_EFFECTS: Dict[str, Dict[str, Any]] = {
             "post holders."
         ),
         "rank_modifier": (-1.0, "with Imperial post holders ({name}'s Imperial Disdain)"),
+        "short_label": "for Imperials",
     },
 }
 

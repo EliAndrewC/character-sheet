@@ -5,16 +5,18 @@ import pytest
 
 pytestmark = [pytest.mark.status_display, pytest.mark.xp_summary, pytest.mark.version_history, pytest.mark.tracking]
 
-def test_stipend_tooltip(page, live_server_url):
-    """Stipend tooltip shows calculation breakdown."""
-
-    create_and_apply(page, live_server_url, "Stipend Tooltip")
-    stipend = page.locator('div', has=page.locator('text="Stipend"')).first
-    # Hover to see tooltip
-    stipend.hover()
-    page.wait_for_timeout(500)
-    body = page.text_content("body")
-    assert "Wasp campaign base" in body
+def test_stipend_expand_shows_calculation(page, live_server_url):
+    """Stipend row expands on click (no longer a hover tooltip) to show
+    the calculation breakdown."""
+    create_and_apply(page, live_server_url, "Stipend Expand")
+    stipend_row = page.locator('[data-status-row="stipend"]')
+    assert stipend_row.is_visible()
+    detail = stipend_row.locator(':text("Wasp campaign base")')
+    # x-show keeps the detail in the DOM but hidden until expanded.
+    assert detail.is_visible() is False
+    stipend_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    assert detail.is_visible()
 
 
 def test_stipend_with_household_wealth(page, live_server_url):

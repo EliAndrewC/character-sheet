@@ -3,6 +3,7 @@
 import logging
 import os
 import threading
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Request
@@ -25,7 +26,16 @@ from app.services.import_rate_limit import import_enabled
 
 log = logging.getLogger(__name__)
 
-app = FastAPI(title="L7R Character Builder")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    _seed_campaign_players()
+    threading.Thread(target=_check_and_backup, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="L7R Character Builder", lifespan=lifespan)
 
 # Templates
 templates = Jinja2Templates(
@@ -242,13 +252,6 @@ app.include_router(names.router)
 
 # Global backup status (read by routes for admin banner)
 backup_status = {"last_success": None, "last_error": None, "in_progress": False}
-
-
-@app.on_event("startup")
-def on_startup():
-    init_db()
-    _seed_campaign_players()
-    threading.Thread(target=_check_and_backup, daemon=True).start()
 
 
 def _check_and_backup():

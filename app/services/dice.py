@@ -252,6 +252,18 @@ def _apply_school_technique_bonus(
         if skill_or_knack_id in chosen:
             formula.rolled += 1
 
+    # Isawa Ishi 1st Dan auto-applies +1 die to precepts ("precepts AND any
+    # two types of rolls of your choice"); the picker only collects the two
+    # additional rolls. Skipped if the player redundantly picked precepts so
+    # the bonus never doubles.
+    if (
+        dan >= 1
+        and school_id == "isawa_ishi"
+        and skill_or_knack_id == "precepts"
+        and "precepts" not in ((technique_choices or {}).get("first_dan_choices") or [])
+    ):
+        formula.rolled += 1
+
     if dan >= 2 and bonuses_def.get("second_dan_free_raise"):
         if skill_or_knack_id == bonuses_def["second_dan_free_raise"]:
             _add_flat_bonus(formula, "2nd Dan technique", FREE_RAISE_VALUE)

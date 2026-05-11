@@ -763,8 +763,10 @@ async def set_award_source(
 async def show_character_route(
     request: Request, char_id: int, db: Session = Depends(get_db)
 ):
-    """Mark a hidden draft as visible without publishing. One-way: once
-    cleared the character can never be re-hidden. Editors only."""
+    """Make a character visible to non-editors. Editors only.
+
+    The /show + /hide pair is a bidirectional toggle; the edit-page
+    visibility chip uses one or the other based on the current state."""
     user = getattr(request.state, "user", None)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
@@ -788,6 +790,41 @@ async def show_character_route(
     character.is_hidden = False
     db.commit()
     return JSONResponse({"status": "visible"})
+
+
+@router.post("/{char_id}/hide")
+async def hide_character_route(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Hide a character from non-editors. Editors only.
+
+    Mirror of /show. A re-hidden character behaves the same as a never-
+    revealed draft from a non-editor's perspective: omitted from the
+    homepage list, 404 on direct view, stripped from other party
+    members' party-effect data."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"],
+        character.owner_discord_id,
+        all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    character.is_hidden = True
+    db.commit()
+    return JSONResponse({"status": "hidden"})
 
 
 @router.post("/{char_id}/publish")
@@ -821,11 +858,13 @@ async def publish_character_route(
     except Exception:
         pass
     custom_summary = body.get("summary", "")
+    make_visible = bool(body.get("make_visible", False))
 
     version = publish_character(
         character, db,
         summary=custom_summary,
         author_discord_id=user["discord_id"],
+        make_visible=make_visible,
     )
     db.commit()
 

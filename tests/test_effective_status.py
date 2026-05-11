@@ -268,6 +268,123 @@ class TestCombined:
         assert len(status.rank_modifiers) >= 3  # good_rep(+2) + imperial(+3, +1)
 
 
+class TestStatusPills:
+    """``rank_pills()`` and ``recognition_pills()`` collapse the per-source
+    modifier list into one entry per short_label with summed values. Two
+    Good Reputation awards yield a single ``+2 identification`` pill,
+    not two separate ``+1`` pills."""
+
+    def test_pills_collapse_same_label(self):
+        data = make_character_data(
+            rank_recognition_awards=[
+                {"type": "good_reputation", "source": "Saved a village",
+                 "recognition_delta": 1.0, "rank_delta": 2.0},
+                {"type": "good_reputation", "source": "Outwitted a courtier",
+                 "recognition_delta": 1.0, "rank_delta": 2.0},
+            ],
+        )
+        status = compute_effective_status(data)
+        rec_pills = status.recognition_pills()
+        rank_pills = status.rank_pills()
+        # Two Good Rep awards share short_label='identification' for
+        # recognition and 'reputation' for rank.
+        assert len(rec_pills) == 1
+        assert rec_pills[0] == {"short_label": "identification", "value": 2.0}
+        assert len(rank_pills) == 1
+        assert rank_pills[0] == {"short_label": "reputation", "value": 4.0}
+
+    def test_pills_keep_distinct_labels(self):
+        """Imperial Favor produces both 'imperial family' and 'imperial
+        post' pills, which must NOT collapse together."""
+        data = make_character_data(advantages=["imperial_favor"])
+        status = compute_effective_status(data)
+        rank_pills = status.rank_pills()
+        labels = [p["short_label"] for p in rank_pills]
+        assert "imperial family" in labels
+        assert "imperial post" in labels
+        assert len(rank_pills) == 2
+
+    def test_pills_empty_when_no_modifiers(self):
+        data = make_character_data()
+        status = compute_effective_status(data)
+        assert status.rank_pills() == []
+        assert status.recognition_pills() == []
+
+    def test_group_effect_pill_uses_effect_category_label(self):
+        """Family Reckoning from a party member surfaces in the pills
+        as the category label ``Family Reckoning`` (no name prefix).
+        Multiple sources combine on this label."""
+        data = make_character_data(name="Mine")
+        party = [{
+            "name": "Bob", "school": "akodo_bushi", "dan": 1,
+            "advantages": [], "disadvantages": [],
+            "campaign_advantages": ["family_reckoning_righteous_sting"],
+            "campaign_disadvantages": [],
+        }]
+        status = compute_effective_status(data, party_members=party)
+        pills = status.rank_pills()
+        labels = [p["short_label"] for p in pills]
+        assert labels == ["Family Reckoning"]
+
+    def test_family_reckoning_self_gets_double_value(self):
+        """The taker of Family Reckoning gets +/-2.0 to their own Rank
+        (not +/-1.0); other party members get +/-1.0."""
+        data = make_character_data(
+            name="Self",
+            campaign_advantages=["family_reckoning_righteous_sting"],
+        )
+        status = compute_effective_status(data)
+        pills = status.rank_pills()
+        assert pills == [{"short_label": "Family Reckoning", "value": 2.0}]
+
+    def test_family_reckoning_sources_combine_and_cancel(self):
+        """Multiple party members contributing to the same category get
+        their values summed in the top-line pill view. If the sum is 0
+        the pill is dropped (e.g. one Righteous +1 and one Venomous -1
+        from different party members cancel out for an uninvolved third
+        character). The cancellation is summary-only: the raw modifier
+        list keeps both entries so the expanded breakdown still shows
+        each contributor individually."""
+        data = make_character_data(name="Third")
+        party = [
+            {"name": "Alice", "school": "akodo_bushi", "dan": 1,
+             "advantages": [], "disadvantages": [],
+             "campaign_advantages": ["family_reckoning_righteous_sting"],
+             "campaign_disadvantages": []},
+            {"name": "Bob", "school": "akodo_bushi", "dan": 1,
+             "advantages": [], "disadvantages": [],
+             "campaign_advantages": [],
+             "campaign_disadvantages": ["family_reckoning_venomous_sting"]},
+        ]
+        status = compute_effective_status(data, party_members=party)
+        # Top-line pills cancel out.
+        assert status.rank_pills() == []
+        # But the raw modifier list keeps both entries so the expanded
+        # breakdown can attribute the +1 and -1 to their owners.
+        fr_mods = [m for m in status.rank_modifiers
+                   if "Family Reckoning" in m["source"]]
+        assert len(fr_mods) == 2
+        values = sorted(m["value"] for m in fr_mods)
+        assert values == [-1.0, 1.0]
+        sources = {m["source"] for m in fr_mods}
+        assert any("Alice" in s for s in sources)
+        assert any("Bob" in s for s in sources)
+
+    def test_imperial_disdain_label_is_for_imperials(self):
+        """Imperial Disdain's pill is labelled ``for Imperials`` (no
+        per-source ``Tetsuro's imperial post`` prefixing)."""
+        data = make_character_data(name="Self")
+        party = [{
+            "name": "Tetsuro", "school": "akodo_bushi", "dan": 1,
+            "advantages": [], "disadvantages": [],
+            "campaign_advantages": [],
+            "campaign_disadvantages": ["imperial_disdain"],
+        }]
+        status = compute_effective_status(data, party_members=party)
+        pills = status.rank_pills()
+        assert pills == [{"short_label": "for Imperials", "value": -1.0}]
+
+
 class TestSchoolRingMinimum:
     def test_school_ring_min_3_in_validation(self):
         """School ring cannot be lowered below 3."""

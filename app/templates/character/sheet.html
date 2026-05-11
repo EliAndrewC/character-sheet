@@ -123,7 +123,14 @@
     <div class="flex flex-wrap items-start justify-between gap-2">
         <div class="min-w-0">
             <h1 class="text-3xl font-bold break-words">
-                {{ character.name }}{% if character.name_explanation %}<span class="inline-block align-middle ml-1"
+                {{ character.name }}{% if character.is_hidden %}<span class="inline-flex items-center gap-1 align-middle ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-sm font-medium border border-amber-300"
+                      title="This character is hidden. Only editors can see it."
+                      data-testid="sheet-hidden-indicator">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M10.585 10.587a2 2 0 002.828 2.83M9.363 5.365A9.466 9.466 0 0112 5c4.478 0 8.268 2.943 9.542 7a9.97 9.97 0 01-1.563 2.81M6.21 6.215C4.293 7.41 2.83 9.092 2.458 12c1.274 4.057 5.064 7 9.542 7 1.62 0 3.146-.39 4.49-1.077"/>
+                    </svg>
+                    Hidden
+                </span>{% endif %}{% if character.name_explanation %}<span class="inline-block align-middle ml-1"
                       data-testid="name-explanation-tooltip"
                       x-data="{ open: false }">
                     <button type="button"
@@ -2170,7 +2177,7 @@
     <div class="flex flex-col md:flex-row gap-4">
 
     <!-- COMBAT SKILLS & SCHOOL KNACKS -->
-    <section class="bg-white rounded-lg shadow p-6 border border-ink/10 md:w-2/3">
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10 md:w-1/2">
         <h2 class="text-xl font-bold mb-4 text-accent">Combat Skills & School Knacks</h2>
         <div class="space-y-2">
             {# Pull rolled/kept/flat from the server-computed formula so
@@ -2314,19 +2321,38 @@
         </div>
     </section>
 
-    <!-- STATUS -->
-    <section class="bg-white rounded-lg shadow p-6 border border-ink/10 md:w-1/3">
+    {# --- STATUS --- #}
+    {# Honor / Rank / Recognition / Stipend. The compact top line shows
+       the base value plus inline pills that summarise contextual
+       modifiers (Good Reputation, Imperial Favor, party Family
+       Reckoning, etc). A click-to-expand chevron reveals the same
+       detailed breakdown that used to live in the hover tooltip. The
+       pill format follows the rule: a single context shows the modified
+       value ("7.5 (8.5 for identification)") while multiple contexts
+       show signed deltas ("7.5 (+1 reputation, +3 imperial family)"). #}
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10 md:w-1/2">
         <h2 class="text-xl font-bold mb-4 text-accent">Status</h2>
         <div class="space-y-3">
+            {# --- Honor --- #}
             {% set has_honor_perception = 'virtue' in (character.advantages or []) or 'unconventional' in (character.disadvantages or []) %}
-            <div class="bg-parchment rounded-lg p-3 {{ 'tooltip-trigger relative' if has_honor_perception else '' }}">
-                <div class="flex items-center justify-between gap-4">
+            <div class="bg-parchment rounded-lg p-3"
+                 x-data="{ expanded: false }"
+                 data-status-row="honor">
+                <div class="flex items-center justify-between gap-3 {{ 'cursor-pointer' if has_honor_perception else '' }}"
+                     {% if has_honor_perception %}@click="expanded = !expanded"{% endif %}>
                     <div class="text-sm text-ink/60">Honor</div>
-                    <div class="text-xl font-bold">{{ character.honor }}</div>
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="text-xl font-bold">{{ character.honor }}</div>
+                        {% if has_honor_perception %}
+                        <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                        {% endif %}
+                    </div>
                 </div>
                 {% if has_honor_perception %}
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 max-w-full text-left">
-                    <p class="font-medium mb-1">Perceived Honor:</p>
+                <div x-show="expanded" x-cloak class="mt-2 pt-2 border-t border-ink/10 text-sm text-ink/80 space-y-1">
+                    <p class="font-medium">Perceived Honor:</p>
                     {% if 'virtue' in (character.advantages or []) %}
                     <p>Virtue: when others use Discern Honor on you, the random adjustment is always positive (you appear more honorable).</p>
                     {% endif %}
@@ -2336,17 +2362,39 @@
                 </div>
                 {% endif %}
             </div>
+
             {# --- Rank --- #}
             {% set rank_awards = (character.rank_recognition_awards or []) | selectattr('rank_delta') | list %}
             {% set rank_base = character.rank - (rank_awards | sum(attribute='rank_delta')) %}
-            {% set has_rank_tooltip = rank_awards or effective.rank_modifiers %}
-            <div class="bg-parchment rounded-lg p-3 {{ 'tooltip-trigger relative' if has_rank_tooltip else '' }}">
-                <div class="flex items-center justify-between gap-4">
-                    <div class="text-sm text-ink/60">Rank{% if character.rank_locked and not rank_awards %} <span class="text-xs">(locked)</span>{% endif %}</div>
-                    <div class="text-xl font-bold">{{ character.rank }}</div>
+            {% set rank_pills = effective.rank_pills() %}
+            {% set has_rank_detail = rank_awards or effective.rank_modifiers %}
+            <div class="bg-parchment rounded-lg p-3"
+                 x-data="{ expanded: false }"
+                 data-status-row="rank">
+                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 {{ 'cursor-pointer' if has_rank_detail else '' }}"
+                     {% if has_rank_detail %}@click="expanded = !expanded"{% endif %}>
+                    <div class="text-sm text-ink/60">Rank</div>
+                    <div class="flex items-center gap-2 flex-wrap min-w-0">
+                        <span class="text-xl font-bold">{{ character.rank }}</span>
+                        {% if rank_pills | length == 1 %}
+                        {% set p = rank_pills[0] %}
+                        <span class="text-sm text-ink/70" data-status-pills="rank">
+                            ({{ "%.1f"|format(character.rank + p.value) }} for {{ p.short_label }})
+                        </span>
+                        {% elif rank_pills | length > 1 %}
+                        <span class="text-sm text-ink/70" data-status-pills="rank">
+                            ({% for p in rank_pills %}{{ "%+.1f"|format(p.value) }} {{ p.short_label }}{{ ", " if not loop.last else "" }}{% endfor %})
+                        </span>
+                        {% endif %}
+                        {% if has_rank_detail %}
+                        <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                        {% endif %}
+                    </div>
                 </div>
-                {% if has_rank_tooltip %}
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 max-w-full text-left">
+                {% if has_rank_detail %}
+                <div x-show="expanded" x-cloak class="mt-2 pt-2 border-t border-ink/10 text-sm text-ink/80">
                     {% if rank_awards %}
                     <div class="status-tooltip-grid mb-2">
                         <div class="text-right font-mono">{{ "%.1f"|format(rank_base) }}:</div>
@@ -2358,7 +2406,7 @@
                     </div>
                     {% endif %}
                     {% if effective.rank_modifiers %}
-                    <p class="font-medium mb-1{{ ' pt-2 border-t border-parchment/20' if rank_awards else '' }}">Effective Rank in context:</p>
+                    <p class="font-medium mb-1{{ ' pt-2 border-t border-ink/10' if rank_awards else '' }}">Effective Rank in context:</p>
                     <div class="status-tooltip-grid">
                         {% for m in effective.rank_modifiers %}
                         <div class="text-right font-mono">{{ "%+.1f"|format(m.value) }}:</div>
@@ -2369,17 +2417,39 @@
                 </div>
                 {% endif %}
             </div>
+
             {# --- Recognition --- #}
             {% set recog_awards = (character.rank_recognition_awards or []) | selectattr('recognition_delta') | list %}
             {% set recog_base = character.recognition - (recog_awards | sum(attribute='recognition_delta')) %}
-            {% set has_recog_tooltip = recog_awards or effective.recognition_modifiers %}
-            <div class="bg-parchment rounded-lg p-3 {{ 'tooltip-trigger relative' if has_recog_tooltip else '' }}">
-                <div class="flex items-center justify-between gap-4">
+            {% set recog_pills = effective.recognition_pills() %}
+            {% set has_recog_detail = recog_awards or effective.recognition_modifiers %}
+            <div class="bg-parchment rounded-lg p-3"
+                 x-data="{ expanded: false }"
+                 data-status-row="recognition">
+                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 {{ 'cursor-pointer' if has_recog_detail else '' }}"
+                     {% if has_recog_detail %}@click="expanded = !expanded"{% endif %}>
                     <div class="text-sm text-ink/60">Recognition</div>
-                    <div class="text-xl font-bold">{{ character.recognition }}</div>
+                    <div class="flex items-center gap-2 flex-wrap min-w-0">
+                        <span class="text-xl font-bold">{{ character.recognition }}</span>
+                        {% if recog_pills | length == 1 %}
+                        {% set p = recog_pills[0] %}
+                        <span class="text-sm text-ink/70" data-status-pills="recognition">
+                            ({{ "%.1f"|format(character.recognition + p.value) }} for {{ p.short_label }})
+                        </span>
+                        {% elif recog_pills | length > 1 %}
+                        <span class="text-sm text-ink/70" data-status-pills="recognition">
+                            ({% for p in recog_pills %}{{ "%+.1f"|format(p.value) }} {{ p.short_label }}{{ ", " if not loop.last else "" }}{% endfor %})
+                        </span>
+                        {% endif %}
+                        {% if has_recog_detail %}
+                        <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                        {% endif %}
+                    </div>
                 </div>
-                {% if has_recog_tooltip %}
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 max-w-full text-left">
+                {% if has_recog_detail %}
+                <div x-show="expanded" x-cloak class="mt-2 pt-2 border-t border-ink/10 text-sm text-ink/80">
                     {% if recog_awards %}
                     <div class="status-tooltip-grid mb-2">
                         <div class="text-right font-mono">{{ "%.1f"|format(recog_base) }}:</div>
@@ -2391,7 +2461,7 @@
                     </div>
                     {% endif %}
                     {% if effective.recognition_modifiers %}
-                    <p class="font-medium mb-1{{ ' pt-2 border-t border-parchment/20' if recog_awards else '' }}">Effective Recognition in context:</p>
+                    <p class="font-medium mb-1{{ ' pt-2 border-t border-ink/10' if recog_awards else '' }}">Effective Recognition in context:</p>
                     <div class="status-tooltip-grid">
                         {% for m in effective.recognition_modifiers %}
                         <div class="text-right font-mono">{{ "%+.1f"|format(m.value) }}:</div>
@@ -2402,19 +2472,31 @@
                 </div>
                 {% endif %}
             </div>
+
             {# --- Stipend --- #}
-            <div class="bg-parchment rounded-lg p-3 tooltip-trigger relative">
-                <div class="flex items-center justify-between gap-4">
+            {% set has_stipend_detail = effective.stipend_modifiers | length > 0 %}
+            <div class="bg-parchment rounded-lg p-3"
+                 x-data="{ expanded: false }"
+                 data-status-row="stipend">
+                <div class="flex items-center justify-between gap-3 {{ 'cursor-pointer' if has_stipend_detail else '' }}"
+                     {% if has_stipend_detail %}@click="expanded = !expanded"{% endif %}>
                     <div class="text-sm text-ink/60">Stipend</div>
-                    <div class="text-xl font-bold">{{ effective.stipend }} <span class="text-sm font-normal text-ink/50">koku/year</span></div>
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="text-xl font-bold">{{ effective.stipend }} <span class="text-sm font-normal text-ink/50">koku/year</span></div>
+                        {% if has_stipend_detail %}
+                        <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                        {% endif %}
+                    </div>
                 </div>
-                {% if effective.stipend_modifiers %}
-                <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-64 max-w-full text-left">
-                    <p class="font-medium mb-1">Stipend calculation:</p>
+                {% if has_stipend_detail %}
+                <div x-show="expanded" x-cloak class="mt-2 pt-2 border-t border-ink/10 text-sm text-ink/80 space-y-1">
+                    <p class="font-medium">Stipend calculation:</p>
                     {% for m in effective.stipend_modifiers %}
                     <p>{{ m.source }}: {{ m.detail }}</p>
                     {% endfor %}
-                    <p class="mt-1 font-medium">= {{ effective.stipend }} koku/year</p>
+                    <p class="font-medium">= {{ effective.stipend }} koku/year</p>
                 </div>
                 {% endif %}
             </div>

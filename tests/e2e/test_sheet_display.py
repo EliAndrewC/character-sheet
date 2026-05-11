@@ -42,12 +42,81 @@ def test_honor_displayed(page, live_server_url):
     assert "2.0" in honor_section.text_content()
 
 
-def test_rank_displayed_with_locked(page, live_server_url):
+def test_rank_displayed_without_locked_indicator(page, live_server_url):
+    """The View Sheet no longer renders a '(locked)' marker next to the
+    Rank label - the editor still shows it, but the read-only sheet
+    drops it to keep the new compact pill layout uncluttered."""
     _create_full_character(page, live_server_url)
-    rank_section = page.locator('div', has=page.locator(':text("Rank")')).nth(0)
-    body = rank_section.text_content()
+    rank_row = page.locator('[data-status-row="rank"]')
+    body = rank_row.text_content()
     assert "7.5" in body
-    assert "locked" in body.lower()
+    assert "locked" not in body.lower()
+
+
+def test_rank_no_pills_when_no_modifiers(page, live_server_url):
+    """A character with no rank-affecting modifiers shows the bare value
+    with no parenthetical pill content."""
+    _create_full_character(page, live_server_url)
+    rank_row = page.locator('[data-status-row="rank"]')
+    # No pill markup at all when there are no modifiers.
+    assert rank_row.locator('[data-status-pills="rank"]').count() == 0
+
+
+def test_status_chevron_expands_detail(page, live_server_url):
+    """Clicking the chevron on a status row toggles a detailed breakdown
+    of the contextual modifiers - replaces the legacy hover tooltip."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Status Expand")
+    select_school(page, "akodo_bushi")
+    # Good Reputation gives +2 rank "with those familiar with your
+    # reputation" and +1 recognition "for identification" - exactly one
+    # modifier per row so the "single" pill format renders.
+    page.check('input[name="adv_good_reputation"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "GoodRep")
+    rank_row = page.locator('[data-status-row="rank"]')
+    assert rank_row.is_visible()
+    pills = rank_row.locator('[data-status-pills="rank"]')
+    assert pills.is_visible()
+    # Single-modifier pill: "(9.5 for reputation)"
+    assert "9.5" in pills.text_content()
+    assert "for reputation" in pills.text_content()
+    # The detail panel is hidden initially.
+    detail = rank_row.locator('div.status-tooltip-grid')
+    assert detail.count() == 0 or detail.first.is_visible() is False
+    # Click the row to expand.
+    rank_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    assert rank_row.locator('div.status-tooltip-grid').first.is_visible()
+    # The expanded breakdown spells out the full source/context.
+    assert "Good Reputation" in rank_row.text_content()
+    assert "with those familiar with your reputation" in rank_row.text_content()
+
+
+def test_status_multi_modifier_pills_show_signed_deltas(page, live_server_url):
+    """When a row has more than one distinct short_label, the pill
+    format switches from '(value for label)' to comma-separated signed
+    deltas: '(+N label, +M label)'."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Status Multi")
+    select_school(page, "akodo_bushi")
+    # Imperial Favor produces TWO distinct rank pills (imperial family
+    # and imperial post) so the row hits the multi-modifier branch.
+    page.check('input[name="adv_imperial_favor"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "ImperialFavor")
+    rank_row = page.locator('[data-status-row="rank"]')
+    pills = rank_row.locator('[data-status-pills="rank"]')
+    text = pills.text_content()
+    assert "+3.0" in text and "imperial family" in text
+    assert "+1.0" in text and "imperial post" in text
+    # Should NOT contain the "for X" preposition (that's the single-
+    # modifier format only).
+    assert " for " not in text
 
 
 def test_recognition_displayed(page, live_server_url):

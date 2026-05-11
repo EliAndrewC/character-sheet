@@ -691,11 +691,18 @@ def publish_character(
     db: Session,
     summary: str = "",
     author_discord_id: str | None = None,
+    make_visible: bool = False,
 ) -> CharacterVersion:
     """Apply the current draft as a new version.
 
     Snapshots the character's current state, uses the provided summary
     (or auto-generates one from the diff), and creates a version record.
+
+    When ``make_visible`` is True the call also clears ``is_hidden`` so a
+    private draft becomes public alongside the snapshot. Default False:
+    Apply Changes preserves whatever visibility the character had so the
+    Apply Changes modal can offer the reveal as an explicit checkbox
+    rather than a silent side effect.
     """
     current_state = character.to_dict()
     old_state = character.published_state or {}
@@ -730,9 +737,8 @@ def publish_character(
     # Update character's published state
     character.is_published = True
     character.published_state = current_state
-    # Apply Changes implicitly reveals a hidden draft. Once cleared, hidden
-    # cannot return - revealing is permanent.
-    character.is_hidden = False
+    if make_visible:
+        character.is_hidden = False
 
     # Priest 3rd Dan precepts pool only exists while the priest is at 3rd Dan
     # or higher. If this publish drops them below 3rd Dan, wipe any stored

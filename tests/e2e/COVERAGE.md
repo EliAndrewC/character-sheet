@@ -278,11 +278,13 @@ The three failures were:
 
 ### Isawa Ishi
 
-- [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_isawa_ishi_1st_dan_skill_selection`
+- [x] 1st Dan picker (two slots, precepts auto) applies +1 die to chosen rolls -> `test_school_abilities.py::test_isawa_ishi_1st_dan_picker_applies_extra_die`
+- [x] 1st Dan picks persist across reload -> `test_school_abilities.py::test_isawa_ishi_1st_dan_picks_persist_across_reload`
 - [x] 2nd Dan skill selection dropdown -> `test_school_abilities.py::test_isawa_ishi_2nd_dan_skill_selection`
 - [x] VP max display and spend cap behavioral -> `test_school_abilities.py::test_isawa_ishi_vp_max_behavioral`
 - [x] 3rd Dan add-to-roll button visible -> `test_school_abilities.py::test_ishi_3rd_dan_add_button_visible` (xfail: Isawa Ishi e2e creation issue)
 - [x] 3rd Dan add-to-roll button deducts VP and opens modal -> `test_school_abilities.py::test_ishi_3rd_dan_add_roll` (xfail: Isawa Ishi e2e creation issue)
+- [x] Absorb Void is per-day for Isawa Ishi (Reset button rendered with the per-day tooltip) -> `test_school_abilities.py::test_isawa_ishi_absorb_void_has_per_day_reset_button`
 
 ### Kakita
 
@@ -380,6 +382,7 @@ The three failures were:
 - [x] Special Ability skill submenu hidden when skill already uses school ring -> `test_school_abilities.py::test_kitsune_skill_submenu_hidden_when_skill_already_uses_school_ring`
 - [x] Special Ability skill submenu hidden when ring values equal -> `test_school_abilities.py::test_kitsune_skill_submenu_hidden_when_ring_values_equal`
 - [x] Special Ability skill submenu hidden for iaijutsu -> `test_school_abilities.py::test_kitsune_skill_submenu_hidden_for_iaijutsu`
+- [x] Absorb Void stays per-adventure for Kitsune Warden (no per-day Reset button) -> `test_school_abilities.py::test_kitsune_warden_absorb_void_has_no_per_day_reset_button`
 - [x] Special Ability skill swap uses school ring in roll formula -> `test_school_abilities.py::test_kitsune_skill_swap_uses_school_ring_in_roll_formula`
 - [x] Special Ability skill swap result panel shows annotation -> `test_school_abilities.py::test_kitsune_skill_swap_results_panel_shows_special_ability_annotation`
 - [x] Special Ability annotation hidden when no swap used (regression) -> `test_school_abilities.py::test_kitsune_skill_swap_no_annotation_without_swap`
@@ -967,6 +970,14 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Ring max correct after repeated Dan toggle → `test_editor_controls.py::test_ring_max_correct_after_repeated_dan_toggle`
 - [x] Ring max never exceeds bounds after many toggles → `test_editor_controls.py::test_ring_max_never_exceeds_bounds_after_many_toggles`
 - [x] Ring at 5 stable across Dan toggle → `test_editor_controls.py::test_ring_at_5_stable_across_dan_toggle`
+- [x] Changing school at Dan 4 clamps the old school ring back to non-school max (5) → `test_editor_controls.py::test_school_change_at_dan_4_clamps_old_school_ring`
+- [x] Changing school_ring_choice (variable-ring school) clamps the old pick back to non-school max → `test_editor_controls.py::test_school_ring_choice_change_clamps_old_school_ring`
+- [x] A persisted out-of-range ring value gets clamped on edit-page init → `test_editor_controls.py::test_corrupt_state_clamps_on_edit_page_load`
+- [x] Round-trip school change (A → B → A) preserves the ring invariant after each step → `test_editor_controls.py::test_round_trip_school_change_keeps_invariant`
+- [x] Round-trip school_ring_choice flip (variable-ring school cycled through several rings) preserves the invariant → `test_editor_controls.py::test_round_trip_school_ring_choice_keeps_invariant`
+- [x] A long compound sequence touching Dan, school, school_ring_choice, and rings preserves the invariant after each step → `test_editor_controls.py::test_compound_dan_and_school_change_sequence`
+- [x] - button stays appropriately disabled across a school swap that turns the school ring into a non-school ring → `test_editor_controls.py::test_lower_ring_blocked_at_min_then_school_swap`
+- [x] 500-step deterministic fuzz across all four axes (knack +/-, ring +/-, school change, school_ring_choice flip), parametrized over three seeds, with a persist+reload round-trip every 100 steps that asserts the rehydrated state equals the pre-reload state (i.e. nothing the editor's load-time reconciler needs to clamp) → `test_editor_controls.py::test_fuzz_random_sequence_keeps_ring_invariant`
 
 ## Character Editor — Combat Skills
 
@@ -1090,12 +1101,18 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Age metadata: setting age does not flip the character to "unpublished changes" (Apply/Discard stay hidden); the View Sheet flags an unset age as a Validation Issue and that issue clears once the player sets a value → `test_apply_modal.py::test_age_metadata_does_not_count_as_unapplied_changes`
 - [x] Age is bidirectionally linked between the Edit Sheet and the AI art generation form: setting age on the sheet pre-fills the art form; changing age on the art form syncs back to the sheet without flipping the character to "modified" → `test_character_art_generate.py::test_age_field_is_bidirectional_between_sheet_and_art_form`
 
-## Character Editor — Hidden Draft Visibility
+## Character Editor — Visibility Toggle
 
-- [ ] New character starts hidden, banner above Basics + Make Draft Visible button render → `test_create_character.py::test_new_character_starts_hidden_with_banner_and_button`
-- [ ] Make Draft Visible button hides banner+button without reload, also persisted across reload → `test_create_character.py::test_make_draft_visible_button_hides_banner_and_button`
-- [ ] Apply Changes also unhides the draft (banner/button absent on later edits) → `test_create_character.py::test_apply_changes_also_unhides_the_draft`
-- [ ] Hidden character is not listed on the homepage for non-editors; appears once revealed → `test_create_character.py::test_hidden_draft_not_listed_on_homepage_for_non_editor`
+- [x] New character starts hidden, banner above Basics + visibility chip read 'Hidden' → `test_create_character.py::test_new_character_starts_hidden_with_banner_and_chip`
+- [x] Chip click flips hidden -> visible (banner hides, label updates, persists across reload) → `test_create_character.py::test_visibility_chip_toggles_hidden_to_visible`
+- [x] Chip is bidirectional - clicking on a visible character re-hides it (banner reappears) → `test_create_character.py::test_visibility_chip_can_re_hide_a_visible_character`
+- [x] Apply Changes does not auto-reveal: leaving the modal checkbox unchecked keeps is_hidden=True → `test_create_character.py::test_apply_changes_keeps_hidden_when_checkbox_unchecked`
+- [x] Apply Changes with the modal checkbox ticked clears is_hidden in one action → `test_create_character.py::test_apply_changes_with_checkbox_makes_visible`
+- [x] The Apply Changes modal omits the visibility checkbox when the character is already visible → `test_create_character.py::test_apply_changes_modal_omits_checkbox_when_already_visible`
+- [x] Hidden character is not listed on the homepage for non-editors; appears once the chip is flipped → `test_create_character.py::test_hidden_draft_not_listed_on_homepage_for_non_editor`
+- [x] Editors see hidden characters on the homepage with a dashed gray outline and a 'Hidden' pill → `test_create_character.py::test_homepage_card_styled_differently_when_hidden`
+- [x] A visible character's card has no hidden marker or pill → `test_create_character.py::test_homepage_visible_card_omits_hidden_styling`
+- [x] The View Sheet page renders a 'Hidden' pill next to the character name for hidden characters; pill disappears once toggled visible → `test_create_character.py::test_sheet_view_shows_hidden_indicator_next_to_name`
 
 ## Character Sheet — Header & Permissions
 
@@ -1115,10 +1132,13 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 ## Character Sheet — Status Display
 
 - [x] Honor displayed → `test_sheet_display.py::test_honor_displayed`
-- [x] Rank displayed with "locked" → `test_sheet_display.py::test_rank_displayed_with_locked`
+- [x] Rank displayed without a "(locked)" indicator (the view sheet drops it; editor still shows it) → `test_sheet_display.py::test_rank_displayed_without_locked_indicator`
+- [x] Rank row renders no pill markup when no contextual modifiers apply → `test_sheet_display.py::test_rank_no_pills_when_no_modifiers`
+- [x] Status chevron expands a status row's detail breakdown (replaces the legacy hover tooltip) → `test_sheet_display.py::test_status_chevron_expands_detail`
+- [x] A status row with two distinct short_labels renders the multi-modifier pill format with signed deltas → `test_sheet_display.py::test_status_multi_modifier_pills_show_signed_deltas`
 - [x] Recognition displayed → `test_sheet_display.py::test_recognition_displayed`
 - [x] Stipend displayed → `test_sheet_display.py::test_stipend_displayed`
-- [x] Stipend tooltip shows calculation → `test_sheet_advanced.py::test_stipend_tooltip`
+- [x] Stipend chevron expands to show the calculation breakdown → `test_sheet_advanced.py::test_stipend_expand_shows_calculation`
 - [x] Stipend with Household Wealth → `test_sheet_advanced.py::test_stipend_with_household_wealth`
 - [x] Stipend with Merchant school → `test_sheet_advanced.py::test_stipend_with_merchant_school`
 
