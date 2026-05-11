@@ -91,6 +91,40 @@ RANK_COST_PER_HALF = 1  # same as Honor
 RECOGNITION_START = 7.5  # Wasp campaign starting Recognition (free)
 CAMPAIGN_STIPEND_RANK = 4  # Wasp campaign: characters considered 4th rank for stipend
 
+# Wasp clan lineages. Each Wasp character belongs to one of these three
+# canonical lineages, or a free-form "Other" the player types in. The
+# editor's dropdown and the View Sheet's display both render the
+# description as a tooltip so the player can read it without re-opening
+# the rules. Keep this dict the single source of truth: edit and sheet
+# templates pull from here so the text never drifts between pages.
+WASP_LINEAGES: "Dict[str, str]" = {
+    "Tsuruchi": (
+        "This is the lineage made up primarily of members of the original "
+        "Shin lineage, plus other members of the Scorpion clan who joined "
+        "the Wasp."
+    ),
+    "Kyo": (
+        "This is the lineage joined by substantially all of the samurai "
+        "from other clans (and more than a few ronin) who joined the Wasp "
+        "clan after its founding. The Kyoma lineage has significantly less "
+        "internal cohesion than either of the other Wasp lineages; unlike "
+        "the Tsuruchi lineage there is no common ancestry traced through "
+        "the common Shin lineage, and unlike the Ami lineage there is no "
+        "commonality of having come from peasant stock before being "
+        "elevated into the samurai caste."
+    ),
+    "Ami": (
+        "Tsuruchi Ami is the wife of Tsuruchi Takuan, and the head of the "
+        "Ami lineage. This is commonly referred to as the \"peasantborn\" "
+        "lineage, as most of the samurai in this lineage were either the "
+        "peasant yoriki who assisted Tsuruchi in his days as an Imperial "
+        "bounty hunter, or the mercenaries who fought under him when he "
+        "retook Hachinaga Keep from his treacherous uncle. Takuan was "
+        "Tsuruchi's most accomplished peasant assistant, and the only "
+        "peasantborn Wasp samurai to merit a Crane wife."
+    ),
+}
+
 # Mutually exclusive advantage/disadvantage pairs.
 # Each tuple is (id_a, name_a, id_b, name_b).  Spans regular and campaign lists.
 # Advantages/disadvantages that require extra detail fields.
@@ -3164,6 +3198,76 @@ GROUP_EFFECTS: Dict[str, Dict[str, Any]] = {
         "rank_modifier": (-1.0, "with Imperial post holders ({name}'s Imperial Disdain)"),
         "short_label": "for Imperials",
     },
+}
+
+
+# ---------------------------------------------------------------------------
+# Conversation-relevant advantages / disadvantages.
+#
+# Used by the Group Summary view to render a curated subset of each
+# PC's adv/disadv list - things an NPC would notice on first meeting
+# (reputation, appearance, personality, visible scars) plus a handful
+# of GM-relevant entries (Dark Secret, Long Temper, Unlucky) that
+# don't directly show up to NPCs but matter for running the scene.
+# Mechanical-only entries (Lucky, Tactician, Higher Purpose, etc.)
+# are intentionally excluded - they affect dice rolls, not how an NPC
+# perceives the character.
+# ---------------------------------------------------------------------------
+
+SOCIAL_VISIBLE_ADVANTAGES: set = {
+    # Standard advantages.
+    "charming",         # perceived as pleasant
+    "wealthy",          # visible by attire / bearing
+    # Campaign advantages.
+    "imperial_favor",
+    "highest_regard",
+    "minor_clan_major_ally_sparrow",
+    "minor_clan_major_ally_fox",
+    "minor_clan_major_ally_mantis",
+    # ``virtue`` and ``good_reputation`` are deliberately NOT chips
+    # on the Group Summary page even though they're social-visible:
+    # virtue's perception flows into the Honor color highlight on
+    # the identity line, and good_reputation's rank/recognition
+    # bump already shows up in the Rank and Recognition rows.
+    # ``household_wealth`` is excluded too - it's the campaign's
+    # standard "not Poor" advantage and the full canonical name
+    # eats more chip width than it earns.
+}
+
+# Short display names for the Group Summary chip strip. The full
+# advantage / disadvantage name is the source of truth elsewhere
+# (catalog, View Sheet, advantage tooltips) - this lookup only
+# replaces the chip face when something shorter fits better on a
+# compact card. Anything not in the dict falls back to ``adv.name``.
+SOCIAL_CHIP_LABELS: "Dict[str, str]" = {
+    "minor_clan_major_ally_sparrow": "Sparrow Ally",
+    "minor_clan_major_ally_fox": "Fox Ally",
+    "minor_clan_major_ally_mantis": "Mantis Ally",
+}
+
+SOCIAL_VISIBLE_DISADVANTAGES: set = {
+    # Standard disadvantages: appearance, behavior, personality.
+    "unkempt",
+    "vain",
+    "proud",
+    "humble",
+    "emotional",
+    "short_temper",
+    "long_temper",      # GM-relevant even if NPCs can't perceive it
+    "contrary",
+    "meddler",
+    "jealousy",
+    "transparent",      # surfaces during conversation
+    "thoughtless",
+    "dark_secret",      # GM-relevant; the secret itself stays private to the listed knowers
+    "unlucky",          # GM-relevant; not directly perceptible
+    # ``unconventional``, ``bad_reputation``, ``withdrawn``, and
+    # ``permanent_wound`` are NOT chips: unconventional flows into
+    # the Honor color highlight, bad_reputation's rank/recognition
+    # penalty surfaces in the Rank and Recognition rows, withdrawn
+    # is a roll-only modifier, and permanent_wound is a fixed
+    # wound-track adjustment (already implied by the character's
+    # combat numbers).
 }
 
 

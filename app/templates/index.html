@@ -71,9 +71,18 @@
     <h1 class="text-3xl font-bold">Characters</h1>
 
     {% if grouped %}
-    {% for group_name, chars in grouped %}
+    {% for group, chars in grouped %}
+    {% set group_name = group.name if group else 'Not assigned to a group' %}
     <section class="space-y-4" data-group-section="{{ group_name }}">
-        <h2 class="text-2xl font-bold text-accent border-b border-ink/20 pb-2">{{ group_name }}</h2>
+        <h2 class="text-2xl font-bold text-accent border-b border-ink/20 pb-2">
+            {% if group %}
+            <a href="/groups/{{ group.id }}"
+               class="hover:underline focus:underline focus:outline-none"
+               data-testid="group-link">{{ group_name }}</a>
+            {% else %}
+            {{ group_name }}
+            {% endif %}
+        </h2>
         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {% for char in chars %}
                 {{ character_card(char) }}

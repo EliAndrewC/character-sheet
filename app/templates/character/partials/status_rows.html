@@ -1,0 +1,171 @@
+{# Honor / Rank / Recognition rows.
+
+   Reused by the per-character View Sheet (where it renders inside the
+   Status section card) and the Group Summary page (where it renders
+   per PC). Each row is its own Alpine ``x-data="{ expanded: false }"``
+   scope so the rows are independently expandable.
+
+   Required context:
+     - ``character``       the Character ORM object
+     - ``effective``       result of ``compute_effective_status(...)``
+     - ``status_prefix``   optional string ID to namespace
+                           ``data-status-row`` selectors when this
+                           partial renders more than once on a page
+                           (e.g. one card per PC). Defaults to "".
+     - ``show_honor``      optional bool. When False, the partial
+                           renders only the Rank and Recognition rows
+                           (the Group Summary inlines Honor on the
+                           identity line to save vertical space).
+                           Defaults to True.
+#}
+{% set _prefix = status_prefix | default('') %}
+{% set _show_honor = show_honor if show_honor is defined else True %}
+
+{% if _show_honor %}
+{# --- Honor --- #}
+{% set has_honor_perception = 'virtue' in (character.advantages or []) or 'unconventional' in (character.disadvantages or []) %}
+<div class="bg-parchment rounded-lg p-3"
+     x-data="{ expanded: false }"
+     data-status-row="{{ _prefix }}honor">
+    <div class="flex items-center justify-between gap-3 {{ 'cursor-pointer' if has_honor_perception else '' }}"
+         {% if has_honor_perception %}@click="expanded = !expanded"{% endif %}>
+        <div class="text-sm text-ink/60">Honor</div>
+        <div class="flex items-center gap-3 min-w-0">
+            <div class="text-xl font-bold">{{ character.honor }}</div>
+            {% if has_honor_perception %}
+            <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+            {% endif %}
+        </div>
+    </div>
+    {% if has_honor_perception %}
+    <div x-show="expanded" x-cloak class="mt-2 pt-2 border-t border-ink/10 text-sm text-ink/80 space-y-1">
+        <p class="font-medium">Perceived Honor:</p>
+        {% if 'virtue' in (character.advantages or []) %}
+        <p>Virtue: when others use Discern Honor on you, the random adjustment is always positive (you appear more honorable).</p>
+        {% endif %}
+        {% if 'unconventional' in (character.disadvantages or []) %}
+        <p>Unconventional: when others use Discern Honor on you, the random adjustment is always negative (you appear less honorable).</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}{# /show_honor #}
+
+{# --- Rank --- #}
+{% set rank_awards = (character.rank_recognition_awards or []) | selectattr('rank_delta') | list %}
+{% set rank_base = character.rank - (rank_awards | sum(attribute='rank_delta')) %}
+{% set rank_pills = effective.rank_pills() %}
+{% set has_rank_detail = rank_awards or effective.rank_modifiers %}
+<div class="bg-parchment rounded-lg p-3"
+     x-data="{ expanded: false }"
+     data-status-row="{{ _prefix }}rank">
+    {# Layout: label is pinned left, the number + chevron are pinned
+       right and never wrap, the pills span fills the middle and wraps
+       its own text downward when too wide. ``items-baseline`` keeps
+       the label's first text line on the same line as the number even
+       when the pills span grows to multiple text rows. #}
+    <div class="flex items-baseline gap-3 {{ 'cursor-pointer' if has_rank_detail else '' }}"
+         {% if has_rank_detail %}@click="expanded = !expanded"{% endif %}>
+        <span class="text-sm text-ink/60 shrink-0">Rank</span>
+        {% if rank_pills %}
+        <span class="text-sm text-ink/70 grow min-w-0" data-status-pills="{{ _prefix }}rank">
+            {%- if rank_pills | length == 1 -%}
+            {%- set p = rank_pills[0] -%}
+            ({{ "%.1f"|format(character.rank + p.value) }} {% if p.short_label.startswith('for ') %}{{ p.short_label }}{% else %}for {{ p.short_label }}{% endif %})
+            {%- else -%}
+            ({% for p in rank_pills %}{{ "%+.1f"|format(p.value) }} {{ p.short_label }}{{ ", " if not loop.last else "" }}{% endfor %})
+            {%- endif -%}
+        </span>
+        {% endif %}
+        <div class="flex items-center gap-2 shrink-0 ml-auto">
+            <span class="text-xl font-bold">{{ character.rank }}</span>
+            {% if has_rank_detail %}
+            <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+            {% endif %}
+        </div>
+    </div>
+    {% if has_rank_detail %}
+    <div x-show="expanded" x-cloak class="mt-2 pt-2 border-t border-ink/10 text-sm text-ink/80">
+        {% if rank_awards %}
+        <div class="status-tooltip-grid mb-2">
+            <div class="text-right font-mono">{{ "%.1f"|format(rank_base) }}:</div>
+            <div>starting Rank</div>
+            {% for a in rank_awards %}
+            <div class="text-right font-mono">{{ "%+.1f"|format(a.rank_delta) }}:</div>
+            <div>{{ a.source }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if effective.rank_modifiers %}
+        <p class="font-medium mb-1{{ ' pt-2 border-t border-ink/10' if rank_awards else '' }}">Effective Rank in context:</p>
+        <div class="status-tooltip-grid">
+            {% for m in effective.rank_modifiers %}
+            <div class="text-right font-mono">{{ "%+.1f"|format(m.value) }}:</div>
+            <div>{{ m.source }} ({{ m.context }})</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{# --- Recognition --- #}
+{% set recog_awards = (character.rank_recognition_awards or []) | selectattr('recognition_delta') | list %}
+{% set recog_base = character.recognition - (recog_awards | sum(attribute='recognition_delta')) %}
+{% set recog_pills = effective.recognition_pills() %}
+{% set has_recog_detail = recog_awards or effective.recognition_modifiers %}
+<div class="bg-parchment rounded-lg p-3"
+     x-data="{ expanded: false }"
+     data-status-row="{{ _prefix }}recognition">
+    {# Same layout shape as the Rank row above; see the comment there
+       for why ``items-baseline`` is used. #}
+    <div class="flex items-baseline gap-3 {{ 'cursor-pointer' if has_recog_detail else '' }}"
+         {% if has_recog_detail %}@click="expanded = !expanded"{% endif %}>
+        <span class="text-sm text-ink/60 shrink-0">Recognition</span>
+        {% if recog_pills %}
+        <span class="text-sm text-ink/70 grow min-w-0" data-status-pills="{{ _prefix }}recognition">
+            {%- if recog_pills | length == 1 -%}
+            {%- set p = recog_pills[0] -%}
+            ({{ "%.1f"|format(character.recognition + p.value) }} {% if p.short_label.startswith('for ') %}{{ p.short_label }}{% else %}for {{ p.short_label }}{% endif %})
+            {%- else -%}
+            ({% for p in recog_pills %}{{ "%+.1f"|format(p.value) }} {{ p.short_label }}{{ ", " if not loop.last else "" }}{% endfor %})
+            {%- endif -%}
+        </span>
+        {% endif %}
+        <div class="flex items-center gap-2 shrink-0 ml-auto">
+            <span class="text-xl font-bold">{{ character.recognition }}</span>
+            {% if has_recog_detail %}
+            <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+            {% endif %}
+        </div>
+    </div>
+    {% if has_recog_detail %}
+    <div x-show="expanded" x-cloak class="mt-2 pt-2 border-t border-ink/10 text-sm text-ink/80">
+        {% if recog_awards %}
+        <div class="status-tooltip-grid mb-2">
+            <div class="text-right font-mono">{{ "%.1f"|format(recog_base) }}:</div>
+            <div>starting Recognition</div>
+            {% for a in recog_awards %}
+            <div class="text-right font-mono">{{ "%+.1f"|format(a.recognition_delta) }}:</div>
+            <div>{{ a.source }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if effective.recognition_modifiers %}
+        <p class="font-medium mb-1{{ ' pt-2 border-t border-ink/10' if recog_awards else '' }}">Effective Recognition in context:</p>
+        <div class="status-tooltip-grid">
+            {% for m in effective.recognition_modifiers %}
+            <div class="text-right font-mono">{{ "%+.1f"|format(m.value) }}:</div>
+            <div>{{ m.source }} ({{ m.context }})</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

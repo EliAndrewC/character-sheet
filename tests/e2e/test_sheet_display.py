@@ -125,6 +125,62 @@ def test_status_multi_modifier_pills_show_signed_deltas(page, live_server_url):
     assert "imperial post" not in text
 
 
+def test_status_row_chevron_stays_on_top_line_when_pills_wrap(page, live_server_url):
+    """When a Rank / Recognition row carries enough pills to force the
+    pill text onto multiple lines, the row's label and the right-side
+    cluster (the bolded number + the expand chevron) must still share
+    the top line. This guards the items-baseline layout against a
+    regression that pushed the chevron to a wrapped second row when
+    many advantages stacked up."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PillsHeavy")
+    select_school(page, "akodo_bushi")
+    # Five distinct rank/recognition pills - enough to wrap the pill
+    # span at typical viewport widths.
+    page.check('input[name="adv_good_reputation"]')
+    page.check('input[name="adv_imperial_favor"]')
+    page.check('input[name="camp_adv_highest_regard"]')
+    page.check('input[name="camp_adv_minor_clan_major_ally_mantis"]')
+    page.check('input[name="camp_adv_family_reckoning_righteous_sting"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Stacked pills")
+    # Narrow the viewport so the pill text is forced to wrap. The
+    # default Playwright viewport is wide enough to fit everything.
+    page.set_viewport_size({"width": 480, "height": 800})
+    page.wait_for_timeout(200)
+    for axis in ("rank", "recognition"):
+        row = page.locator(f'[data-status-row="{axis}"]')
+        pills = row.locator(f'[data-status-pills="{axis}"]')
+        # Get the bolded number (text-xl) and the chevron's bounding
+        # rect, plus the pills span's rect.
+        number = row.locator('span.text-xl').first
+        chevron = row.locator('svg').first
+        num_box = number.bounding_box()
+        chev_box = chevron.bounding_box()
+        pills_box = pills.bounding_box()
+        # Sanity: pills have actually wrapped to multiple text lines
+        # (their box height exceeds a single text-sm line).
+        assert pills_box["height"] > 24, (
+            f"{axis}: pills box height {pills_box['height']} suggests "
+            "the pill text did not wrap - viewport may be too wide for "
+            "this regression test"
+        )
+        # The number's top should sit at the row's top (allow ~6px of
+        # alignment slack since items-baseline aligns text baselines,
+        # not box tops). The chevron's top should match the number's.
+        assert num_box["y"] - pills_box["y"] < 10, (
+            f"{axis}: bolded number's top {num_box['y']} is below the "
+            f"pill span's top {pills_box['y']}, suggesting the right "
+            "cluster fell to a second line"
+        )
+        assert abs(chev_box["y"] - num_box["y"]) < 10, (
+            f"{axis}: chevron top {chev_box['y']} not aligned with "
+            f"number top {num_box['y']}"
+        )
+
+
 def test_status_highest_regard_renders_for_wasp_pill(page, live_server_url):
     """Highest Regard (campaign) adds +2.0 to Rank and Recognition,
     rendered as a single ``for Wasp`` pill on the collapsed line.

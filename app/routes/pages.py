@@ -20,12 +20,16 @@ from app.game_data import (
     SCHOOL_TECHNIQUE_BONUSES,
     SKILLS,
     SCHOOL_KNACKS,
+    SOCIAL_CHIP_LABELS,
+    SOCIAL_VISIBLE_ADVANTAGES,
+    SOCIAL_VISIBLE_DISADVANTAGES,
     SPELLS_BY_ELEMENT,
     SUPERNATURAL_KNACK_IDS,
+    WASP_LINEAGES,
     Ring,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
-from app.services.auth import can_view_drafts, get_admin_ids, is_admin, can_edit_character, format_editor_list_text
+from app.services.auth import can_edit_character, can_view_drafts, format_editor_list_text, get_admin_ids, get_all_editors, is_admin
 from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.rolls import compute_skill_roll
@@ -78,15 +82,29 @@ def index(request: Request, db: Session = Depends(get_db)):
         )
     ]
 
-    # Cluster characters by gaming group; omit empty groups; trailing "not assigned"
+    # Cluster characters by gaming group; omit empty groups; trailing
+    # "not assigned" bucket sorts last. Characters within each cluster
+    # are sorted alphabetically by name so the homepage matches the
+    # Group Summary ordering.
+    def _by_name(c):
+        return (c.name or "").lower()
+
     grouped: list = []
     for group in all_groups:
-        chars_in_group = [c for c in visible_characters if c.gaming_group_id == group.id]
+        chars_in_group = sorted(
+            (c for c in visible_characters if c.gaming_group_id == group.id),
+            key=_by_name,
+        )
         if chars_in_group:
-            grouped.append((group.name, chars_in_group))
-    unassigned = [c for c in visible_characters if c.gaming_group_id is None]
+            grouped.append((group, chars_in_group))
+    unassigned = sorted(
+        (c for c in visible_characters if c.gaming_group_id is None),
+        key=_by_name,
+    )
     if unassigned:
-        grouped.append(("Not assigned to a group", unassigned))
+        # ``None`` here means "no group" - the template renders this
+        # bucket without a link since there's no /groups/{id} to point at.
+        grouped.append((None, unassigned))
 
     return _templates().TemplateResponse(
         request=request,
@@ -103,6 +121,140 @@ def index(request: Request, db: Session = Depends(get_db)):
 def new_character(request: Request):
     """Redirect to POST — new character creation is done via POST /characters."""
     return RedirectResponse("/", status_code=303)
+
+
+@router.get("/groups/{group_id}", response_class=HTMLResponse)
+def group_summary(request: Request, group_id: int, db: Session = Depends(get_db)):
+    """Roster view for one gaming group.
+
+    Shows each visible (non-hidden) PC's conversation-relevant stats:
+    identity, school, lineage, the Honor/Rank/Recognition rows from
+    the View Sheet (reused via partial), and a curated subset of
+    advantages/disadvantages an NPC would notice or that matter to
+    the GM running the scene.
+
+    Anonymous-accessible (the same as ``view_character``); hidden
+    characters are filtered out unconditionally regardless of the
+    viewer's edit access - per the design, hidden chars aren't yet
+    part of the group.
+    """
+    group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
+    if not group:
+        return HTMLResponse("Group not found", status_code=404)
+
+    chars = sorted(
+        [c for c in db.query(Character)
+         .filter(Character.gaming_group_id == group_id).all()
+         if not c.is_hidden],
+        key=lambda c: (c.name or "").lower(),
+    )
+    if not chars:
+        # Empty groups (no group members, or all members hidden) get a
+        # 404 rather than an empty page so the homepage's clickable
+        # group header never lands on a blank screen.
+        return HTMLResponse("Group has no visible characters", status_code=404)
+
+    # Owner display-name lookup for the per-card "Player: ..." line.
+    owner_ids = {c.owner_discord_id for c in chars if c.owner_discord_id}
+    owners = (
+        db.query(UserModel).filter(UserModel.discord_id.in_(owner_ids)).all()
+        if owner_ids else []
+    )
+    owner_names = {u.discord_id: u.display_name or u.discord_name for u in owners}
+
+    # All player names (for the "known by ..." annotation on Dark
+    # Secret detail strings, matching the View Sheet pattern).
+    all_players = db.query(UserModel).order_by(UserModel.display_name).all()
+    player_names = {
+        u.discord_id: u.display_name or u.discord_name for u in all_players
+    }
+
+    # Build per-character data: char dict, effective status (with the
+    # other party members threaded through so party-wide modifiers
+    # like Family Reckoning are reflected in each PC's pills), and
+    # the social-visible adv/disadv ID lists. The same character ORM
+    # instance is passed to the status_rows partial.
+    party_member_payloads = []
+    for c in chars:
+        party_member_payloads.append({
+            "name": c.name,
+            "advantages": c.advantages or [],
+            "disadvantages": c.disadvantages or [],
+            "campaign_advantages": c.campaign_advantages or [],
+            "campaign_disadvantages": c.campaign_disadvantages or [],
+        })
+
+    # Edit-permission resolution: needed per card so the Unlucky
+    # control can hide its "Apply Unlucky" menu for viewers who can't
+    # mutate the target character's adventure_state. Anonymous viewers
+    # have user_id=None and can_edit_character returns False for all.
+    user = getattr(request.state, "user", None)
+    user_id = user["discord_id"] if user else None
+    admin_ids_cache = get_admin_ids()
+    # Look up owner grants for every owner in the group in one pass.
+    char_owner_grants = {
+        u.discord_id: (u.granted_account_ids or []) for u in owners
+    }
+
+    cards = []
+    for c in chars:
+        char_dict = c.to_dict()
+        # Other party members for the perspective of this character.
+        others = [p for p in party_member_payloads if p["name"] != c.name]
+        effective = compute_effective_status(char_dict, party_members=others)
+        # Filter adv/disadv to the social-visible subsets, preserving
+        # the character's own ordering. Unlucky is excluded from the
+        # chip strip - it gets its own top-right control below.
+        social_advs = [
+            aid for aid in ((c.advantages or []) + (c.campaign_advantages or []))
+            if aid in SOCIAL_VISIBLE_ADVANTAGES
+        ]
+        social_disadvs = [
+            did for did in ((c.disadvantages or []) + (c.campaign_disadvantages or []))
+            if did in SOCIAL_VISIBLE_DISADVANTAGES and did != "unlucky"
+        ]
+        adv_state = c.adventure_state or {}
+        has_unlucky = "unlucky" in (c.disadvantages or [])
+        can_edit_this = can_edit_character(
+            user_id,
+            c.owner_discord_id,
+            get_all_editors(
+                c.editor_discord_ids or [],
+                char_owner_grants.get(c.owner_discord_id, []),
+            ),
+            admin_ids=admin_ids_cache,
+        )
+        cards.append({
+            "character": c,
+            "effective": effective,
+            "social_advantages": social_advs,
+            "social_disadvantages": social_disadvs,
+            "owner_display_name": owner_names.get(c.owner_discord_id, c.player_name),
+            "has_unlucky": has_unlucky,
+            "unlucky_used": bool(adv_state.get("unlucky_used")),
+            "viewer_can_edit": can_edit_this,
+        })
+
+    return _templates().TemplateResponse(
+        request=request,
+        name="group_summary.html",
+        context={
+            "group": group,
+            "cards": cards,
+            "advantages": ADVANTAGES,
+            "disadvantages": DISADVANTAGES,
+            "campaign_advantages": CAMPAIGN_ADVANTAGES,
+            "campaign_disadvantages": CAMPAIGN_DISADVANTAGES,
+            "advantage_details_by_char_id": {
+                card["character"].id: (card["character"].advantage_details or {})
+                for card in cards
+            },
+            "schools": SCHOOLS,
+            "wasp_lineages": WASP_LINEAGES,
+            "social_chip_labels": SOCIAL_CHIP_LABELS,
+            "player_names": player_names,
+        },
+    )
 
 
 @router.get("/characters/{char_id}", response_class=HTMLResponse)
@@ -835,6 +987,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "skills": SKILLS,
             "combat_skills": COMBAT_SKILLS,
             "attack_specs": attack_specs,
+            "wasp_lineages": WASP_LINEAGES,
             "advantages": ADVANTAGES,
             "disadvantages": DISADVANTAGES,
             "campaign_advantages": CAMPAIGN_ADVANTAGES,
@@ -890,7 +1043,6 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
         return HTMLResponse("Character not found", status_code=404)
 
     from app.models import User as UserModel
-    from app.services.auth import get_all_editors
     owner = db.query(UserModel).filter(UserModel.discord_id == character.owner_discord_id).first()
     all_editors = get_all_editors(
         character.editor_discord_ids or [],
@@ -937,6 +1089,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "rings": [r.value for r in Ring],
             "skills": SKILLS,
             "combat_skills": COMBAT_SKILLS,
+            "wasp_lineages": WASP_LINEAGES,
             "advantages": ADVANTAGES,
             "disadvantages": DISADVANTAGES,
             "school_knacks": SCHOOL_KNACKS,

@@ -531,17 +531,33 @@ class TestValidation:
         age as a validation issue so the player remembers to set it."""
         data = make_character_data(age=None)
         errors = validate_character(data)
-        assert any("age" in e.lower() for e in errors)
+        assert any(e.startswith("Age") for e in errors)
 
     def test_set_age_no_validation_issue(self):
         data = make_character_data(age=42)
         errors = validate_character(data)
-        assert not any("age" in e.lower() for e in errors)
+        assert not any(e.startswith("Age") for e in errors)
 
     def test_negative_age_emits_validation_issue(self):
         data = make_character_data(age=-1)
         errors = validate_character(data)
-        assert any("age" in e.lower() for e in errors)
+        assert any(e.startswith("Age") for e in errors)
+
+    def test_unset_lineage_emits_validation_issue(self):
+        """Same metadata contract as age: the View Sheet flags an
+        empty / whitespace-only lineage so the player picks one."""
+        for blank in ("", "   "):
+            data = make_character_data(lineage=blank)
+            errors = validate_character(data)
+            assert any(e.startswith("Lineage") for e in errors), blank
+
+    def test_set_lineage_no_validation_issue(self):
+        """A real lineage value (one of the canonical picks OR a free-
+        form ``Other`` value) silences the warning."""
+        for value in ("Tsuruchi", "Kyo", "Ami", "Some other made-up lineage"):
+            data = make_character_data(lineage=value)
+            errors = validate_character(data)
+            assert not any(e.startswith("Lineage") for e in errors), value
 
     def test_recognition_halved_valid(self):
         data = make_character_data(

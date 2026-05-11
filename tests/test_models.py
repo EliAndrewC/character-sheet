@@ -296,6 +296,28 @@ class TestPublishStatus:
         assert c.has_unpublished_changes is True
         assert c.publish_status == "modified"
 
+    def test_legacy_published_state_missing_new_keys_does_not_flip(self, db):
+        """Regression: a character whose ``published_state`` predates a
+        column being added (e.g. ``specializations`` introduced after
+        the snapshot was taken) must not show ``Draft changes`` for an
+        unedited character. The comparison defaults must supply each
+        new column's empty value so a missing key in the old snapshot
+        compares equal to the column's ``or []`` / ``or {}`` fallback
+        in ``to_dict``."""
+        c = self._published(db)
+        # Pretend the published_state was taken before these features
+        # existed, by stripping the keys from the snapshot dict.
+        snap = dict(c.published_state)
+        for legacy_missing in (
+            "specializations", "technique_choices",
+            "foreign_knacks", "recognition_halved",
+        ):
+            snap.pop(legacy_missing, None)
+        c.published_state = snap
+        db.flush()
+        assert c.has_unpublished_changes is False
+        assert c.publish_status == "published"
+
 
 class TestAgeMetadata:
     """Age is metadata, not a stat. It persists, the editor can read/write

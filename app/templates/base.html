@@ -313,6 +313,15 @@
             <a href="/" class="text-xl font-bold tracking-wide hover:text-gold transition-colors">
                 L7R Character Builder
             </a>
+            {# Optional centered title (e.g. group name on the Group
+               Summary page). Absolutely positioned so adding text here
+               doesn't disturb the left link or the right-side action
+               cluster. ``pointer-events-none`` keeps clicks passing
+               through to the hamburger on mobile when the title
+               visually overlaps it. #}
+            <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-w-[50%] sm:max-w-[60%] px-2 truncate text-center text-base sm:text-lg font-semibold tracking-wide pointer-events-none">
+                {% block nav_center %}{% endblock %}
+            </div>
             {# Hamburger - small screens only #}
             <button @click="navOpen = !navOpen" class="sm:hidden text-parchment p-1" aria-label="Toggle navigation">
                 <svg x-show="!navOpen" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -333,6 +342,11 @@
                         absolute sm:static top-full right-0 bg-ink sm:bg-transparent
                         p-4 sm:p-0 rounded-b-lg sm:rounded-none shadow-lg sm:shadow-none z-50 min-w-[160px]">
                 {% if request.state.user %}
+                {# The New Character control is wrapped in its own
+                   block so pages that don't need it (e.g. the Group
+                   Summary, which is non-interactive and the button
+                   appears on every other page) can suppress it. #}
+                {% block nav_new_character %}
                 {% if import_enabled() %}
                 <div class="relative w-full sm:w-auto"
                      x-data="{ newCharOpen: false }"
@@ -378,6 +392,7 @@
                     </button>
                 </form>
                 {% endif %}
+                {% endblock %}
                 <a href="/profile"
                    class="text-sm text-parchment/70 hover:text-parchment transition-colors">
                     {{ request.state.user.display_name }}
@@ -408,7 +423,7 @@
     </div>
     {% endif %}
 
-    <main class="max-w-6xl mx-auto px-4 py-6">
+    <main class="max-w-6xl mx-auto px-4 pt-6 {% block main_pb %}pb-6{% endblock %}">
         {% block content %}{% endblock %}
     </main>
 

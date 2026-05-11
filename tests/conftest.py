@@ -101,6 +101,7 @@ def make_character_data(**overrides) -> dict:
         "advantage_details": {},
         "specializations": [],
         "age": 25,
+        "lineage": "Tsuruchi",
         "earned_xp": 0,
         "starting_xp": 150,
     }
@@ -131,6 +132,7 @@ def make_character_form(**overrides) -> dict:
         "recognition": "7.5",
         "starting_xp": "150",
         "earned_xp": "0",
+        "lineage": "Tsuruchi",
     }
     form.update(overrides)
     return form
