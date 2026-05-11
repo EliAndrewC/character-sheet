@@ -528,11 +528,16 @@
             <div x-show="school && SCHOOL_RING_OPTIONS[school] && SCHOOL_RING_OPTIONS[school].length > 1" class="mt-3">
                 <label class="block text-sm font-medium mb-1">Choose School Ring</label>
                 <select x-model="schoolRingChoice" @change="onSchoolRingChange()"
-                        class="border rounded px-3 py-2">
+                        {% if not is_first_version %}disabled{% endif %}
+                        data-testid="school-ring-choice"
+                        class="border rounded px-3 py-2 {% if not is_first_version %}opacity-60 cursor-not-allowed{% endif %}">
                     <template x-for="ring in (SCHOOL_RING_OPTIONS[school] || [])">
                         <option :value="ring" x-text="ring"></option>
                     </template>
                 </select>
+                {% if not is_first_version %}
+                <p class="text-xs text-ink/50 mt-1">School ring cannot be changed after character creation.</p>
+                {% endif %}
             </div>
 
             <!-- Dan indicator -->
@@ -2009,6 +2014,7 @@ function characterForm() {
             // forever and the XP totals quietly over-credit the
             // character.
             this.$watch('schoolRingChoice', (newVal, oldVal) => {
+                if (this._suppressSchoolRingDrop) return;
                 if (!oldVal || newVal === oldVal) return;
                 if (!Object.prototype.hasOwnProperty.call(this.rings, oldVal)) return;
                 const dropAmount = 1 + (this.currentDan() >= 4 ? 1 : 0);
@@ -2381,17 +2387,34 @@ function characterForm() {
             const info = SCHOOLS_DATA[schoolId];
             if (info) {
                 const fixedRings = ['Air', 'Fire', 'Earth', 'Water', 'Void'];
-                if (fixedRings.includes(info.ring)) {
-                    this.schoolRingChoice = info.ring;
-                    // Auto-set school ring to at least 3
-                    this.rings[info.ring] = Math.max(this.rings[info.ring], 3);
-                } else {
+                const newRing = fixedRings.includes(info.ring)
+                    ? info.ring
                     // Variable-ring school: Mantis Wave-Treader defaults to
                     // Void; every other variable-ring school defaults to Water.
-                    const defaultRing = schoolId === 'mantis_wave_treader' ? 'Void' : 'Water';
-                    this.schoolRingChoice = defaultRing;
-                    this.rings[defaultRing] = Math.max(this.rings[defaultRing], 3);
+                    : (schoolId === 'mantis_wave_treader' ? 'Void' : 'Water');
+
+                // Capture state BEFORE we reset knacks so the
+                // schoolRingChoice $watch sees the correct Dan when
+                // it decides how far to drop the old school ring.
+                // Without this, the knack reset on the line below
+                // would drop Dan to 1 before the watcher runs, and
+                // a Dan-4 school ring would only lose 1 of its
+                // 2 free auto-raises.
+                const oldRing = this.schoolRingChoice;
+                const oldDan = this.currentDan();
+                if (oldRing && oldRing !== newRing
+                        && Object.prototype.hasOwnProperty.call(this.rings, oldRing)) {
+                    const dropAmount = 1 + (oldDan >= 4 ? 1 : 0);
+                    this.rings[oldRing] = Math.max(2, (this.rings[oldRing] || 2) - dropAmount);
+                    // The $watch will also fire when we set
+                    // schoolRingChoice below; suppress its drop so we
+                    // don't subtract another 1 (the post-reset Dan is
+                    // 1, so the watcher would call the drop "by 1").
+                    this._suppressSchoolRingDrop = true;
                 }
+
+                this.schoolRingChoice = newRing;
+                this.rings[newRing] = Math.max(this.rings[newRing], 3);
 
                 // Initialize knacks from school data
                 const newKnacks = {};
@@ -2399,6 +2422,12 @@ function characterForm() {
                     newKnacks[kid] = 1;
                 }
                 this.knacks = newKnacks;
+
+                // Clear the suppress flag once Alpine has had a tick
+                // to fire any queued watchers from the assignments
+                // above. Subsequent picker-driven schoolRingChoice
+                // changes still get the watcher's drop logic.
+                this.$nextTick(() => { this._suppressSchoolRingDrop = false; });
             }
         },
 

@@ -983,21 +983,10 @@ def test_fuzz_random_sequence_keeps_ring_invariant(page, live_server_url, seed):
                                  'kakita_duelist', 'shiba_bushi', 'priest', 'kuni_witch_hunter',
                                  'doji_artisan', 'ide_diplomat', 'kitsune_warden'];
                 const s = schools[Math.floor(rng() * schools.length)];
-                const info = SCHOOLS_DATA[s];
-                d.school = s;
-                if (info) {
-                    const fixed = ['Air','Fire','Earth','Water','Void'];
-                    if (fixed.includes(info.ring)) {
-                        d.schoolRingChoice = info.ring;
-                        d.rings[info.ring] = Math.max(d.rings[info.ring], 3);
-                    } else {
-                        d.schoolRingChoice = (s === 'mantis_wave_treader') ? 'Void' : 'Water';
-                        d.rings[d.schoolRingChoice] = Math.max(d.rings[d.schoolRingChoice], 3);
-                    }
-                    const newKnacks = {};
-                    for (const kid of info.knacks) newKnacks[kid] = 1;
-                    d.knacks = newKnacks;
-                }
+                // Go through ``onSchoolChange`` so the school-change
+                // path's auto-drop on the old school ring (which uses
+                // the PRE-reset Dan) gets exercised by the fuzz.
+                d.onSchoolChange({target: {value: s}});
             } else {
                 const r = rings[Math.floor(rng() * rings.length)];
                 d.schoolRingChoice = r;
@@ -1075,6 +1064,36 @@ def test_fuzz_random_sequence_keeps_ring_invariant(page, live_server_url, seed):
                 })(); }""",
                 {"seed": seed, "step": step},
             )
+
+
+def test_school_ring_picker_locks_after_first_apply_changes(page, live_server_url):
+    """Once a variable-ring-school character has been Applied (the
+    first version exists), the ``Choose School Ring`` picker is
+    disabled in the editor. The explanatory note appears too. This
+    is the lock that prevents the Kitsune Moriko bug class - a
+    player toggling their school ring on a published character and
+    silently invalidating their XP totals."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PickerLock")
+    select_school(page, "mantis_wave_treader")
+    page.wait_for_timeout(200)
+    # Pre-publish: picker is enabled.
+    picker = page.locator('[data-testid="school-ring-choice"]')
+    assert picker.is_visible()
+    assert not picker.is_disabled()
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Initial Mantis draft")
+    # After Apply Changes the player lands on the sheet view; go
+    # back into the editor.
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('input[name="name"]')
+    picker = page.locator('[data-testid="school-ring-choice"]')
+    assert picker.is_disabled()
+    assert page.locator(
+        'text="School ring cannot be changed after character creation."'
+    ).is_visible()
 
 
 def test_mantis_school_is_selectable_and_saves(page, live_server_url):
