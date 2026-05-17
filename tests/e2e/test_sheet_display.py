@@ -253,6 +253,36 @@ def test_status_imperial_favor_alone_renders_single_pill(page, live_server_url):
     assert "Imperial post holders" in expanded
 
 
+def test_status_peasantborn_renders_zero_in_court_pill(page, live_server_url):
+    """Peasantborn (campaign disadvantage) floors the character's
+    effective Rank to 0 against samurai-born people, rendered as a
+    single ``(0 in court)`` pill on the Rank row. The expanded
+    breakdown shows the ``Peasantborn: <name> is never considered to
+    be of peer standing with any samurai-born person.`` bullet."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PeasantbornChar")
+    select_school(page, "akodo_bushi")
+    page.check('input[name="camp_dis_peasantborn"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Peasantborn")
+    rank_row = page.locator('[data-status-row="rank"]')
+    pills = rank_row.locator('[data-status-pills="rank"]')
+    text = pills.text_content().strip()
+    # Parenthetical: "(0 in court)" - integer 0 (no trailing ".0") and
+    # "in court" used verbatim (no "for in court" double prefix).
+    assert "0 in court" in text
+    assert "for in court" not in text
+    assert "0.0" not in text
+    # Expand the row to see the bullet.
+    rank_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    expanded = rank_row.text_content()
+    assert "Peasantborn" in expanded
+    assert "PeasantbornChar is never considered to be of peer standing with any samurai-born person." in expanded
+
+
 def test_recognition_displayed(page, live_server_url):
     _create_full_character(page, live_server_url)
     assert page.locator('text="Recognition"').first.is_visible()
@@ -534,3 +564,60 @@ def test_school_knack_expanded_shows_full_rules(page, live_server_url):
     assert "explained with the other combat rules" in panel_text
     # Phrase that only appears in the old short summary — must NOT be shown
     assert "draw-cut" not in panel_text
+
+
+@pytest.mark.knacks
+def test_isawa_ishi_absorb_void_shows_per_day_override(page, live_server_url):
+    """Isawa Ishi's special ability flips Absorb Void from per-adventure
+    to per-day. The expanded Absorb Void rules panel shows the override
+    inline: strikethrough "per adventure", bold "per day", and a
+    parenthetical note. Other schools that have Absorb Void see the
+    canonical text only (covered by the Kitsune Warden test below)."""
+    create_and_apply(page, live_server_url, name="Ishi", school="isawa_ishi",
+                     summary="Ishi for Absorb Void override test")
+    row = page.locator('div.bg-parchment', has_text="Absorb Void").first
+    rules_panel = row.locator('div.whitespace-pre-line')
+    row.click()
+    page.wait_for_timeout(300)
+    assert rules_panel.is_visible()
+    html = rules_panel.inner_html()
+    assert "<s>per adventure</s>" in html
+    assert "<strong>per day</strong>" in html
+    assert "Ishi special ability makes this per-day instead of per-adventure" in html
+
+
+@pytest.mark.knacks
+def test_isawa_ishi_absorb_void_override_on_editor(page, live_server_url):
+    """The school-details panel on the editor renders the same override
+    as the View Sheet - so a player creating an Isawa Ishi sees the
+    correction inline before they ever click Apply Changes."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "EditorIshi")
+    select_school(page, "isawa_ishi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    panel = page.locator('#school-details')
+    html = panel.inner_html()
+    assert "<s>per adventure</s>" in html
+    assert "<strong>per day</strong>" in html
+    assert "Ishi special ability makes this per-day instead of per-adventure" in html
+
+
+@pytest.mark.knacks
+def test_kitsune_warden_absorb_void_canonical_text(page, live_server_url):
+    """Kitsune Warden also has Absorb Void as a school knack, but no
+    school override fires - they see the canonical per-adventure
+    wording with no strikethrough."""
+    create_and_apply(page, live_server_url, name="Warden",
+                     school="kitsune_warden",
+                     summary="Kitsune Warden for Absorb Void canonical test")
+    row = page.locator('div.bg-parchment', has_text="Absorb Void").first
+    rules_panel = row.locator('div.whitespace-pre-line')
+    row.click()
+    page.wait_for_timeout(300)
+    assert rules_panel.is_visible()
+    html = rules_panel.inner_html()
+    assert "per adventure" in rules_panel.text_content()
+    assert "<s>" not in html
+    assert "Ishi special ability" not in html

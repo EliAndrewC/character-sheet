@@ -380,3 +380,39 @@ def test_detail_hidden_when_unchecked(page, live_server_url):
     page.uncheck('input[name="adv_virtue"]')
     page.wait_for_timeout(300)
     assert not page.locator('input[placeholder="Which virtue?"]').is_visible()
+
+
+def test_text_only_edit_on_published_advantage_is_metadata(page, live_server_url):
+    """Editing the freeform text on a previously published advantage
+    must NOT flip the character to Draft state, so Apply / Discard
+    buttons stay hidden. The new text auto-persists. Symmetric with
+    the existing age / lineage / award-source metadata contract."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Detail Text Meta")
+    select_school(page, "akodo_bushi")
+    page.check('input[name="adv_good_reputation"]')
+    page.wait_for_selector('input[placeholder="What are you known for?"]', timeout=3000)
+    page.fill('input[placeholder="What are you known for?"]', "Saved a village")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Initial with Good Reputation")
+
+    # Back to the editor; change the text only.
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('input[name="name"]')
+    field = page.locator('input[placeholder="What are you known for?"]').first
+    field.fill("Outwitted a courtier")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    page.wait_for_timeout(200)
+
+    # Apply / Discard buttons must NOT appear - text is metadata.
+    assert not page.locator('[data-action="apply-changes"]').is_visible()
+    assert not page.locator('[data-action="discard-changes"]').is_visible()
+
+    # Reload and verify the new text persisted.
+    page.reload()
+    page.wait_for_selector('input[name="name"]')
+    assert page.locator(
+        'input[placeholder="What are you known for?"]'
+    ).first.input_value() == "Outwitted a courtier"

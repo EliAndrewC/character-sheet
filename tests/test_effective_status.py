@@ -489,6 +489,75 @@ class TestStatusPills:
         assert pills == [{"short_label": "for Imperials", "value": -1.0}]
 
 
+class TestPeasantborn:
+    """Peasantborn (campaign disadvantage) floors the character's effective
+    Rank to 0 against any samurai-born person in court / government
+    contexts. The modifier carries ``value = -rank`` so the single-pill
+    absolute display computes to 0."""
+
+    def test_peasantborn_adds_rank_modifier(self):
+        data = make_character_data(
+            rank=2.0, campaign_disadvantages=["peasantborn"],
+        )
+        status = compute_effective_status(data)
+        peas = [m for m in status.rank_modifiers if m["source"] == "Peasantborn"]
+        assert len(peas) == 1
+        # Delta brings absolute rank to 0 (base + value).
+        assert peas[0]["value"] == -2.0
+        assert peas[0]["short_label"] == "in court"
+
+    def test_peasantborn_pill_value_clamps_to_zero(self):
+        """For any base rank the Peasantborn pill's ``character.rank +
+        p.value`` lands on 0, so the rank widget can render "(0 in
+        court)"."""
+        for base_rank in (1.0, 2.0, 5.5, 7.5):
+            data = make_character_data(
+                rank=base_rank, campaign_disadvantages=["peasantborn"],
+            )
+            status = compute_effective_status(data)
+            pills = status.rank_pills()
+            assert pills == [{"short_label": "in court", "value": -base_rank}]
+            assert base_rank + pills[0]["value"] == 0
+
+    def test_peasantborn_description_names_the_character(self):
+        """The bullet text interpolates the character's name in the
+        prescribed sentence, which the template renders verbatim in the
+        expanded modifier list."""
+        data = make_character_data(
+            name="Tsuruchi Hito",
+            campaign_disadvantages=["peasantborn"],
+        )
+        status = compute_effective_status(data)
+        peas = next(m for m in status.rank_modifiers if m["source"] == "Peasantborn")
+        assert peas["description"] == (
+            "Tsuruchi Hito is never considered to be of peer "
+            "standing with any samurai-born person."
+        )
+
+    def test_peasantborn_description_falls_back_when_name_missing(self):
+        """If the character has no name yet (mid-creation drafts), the
+        description still reads sensibly with a generic stand-in."""
+        data = make_character_data(
+            name="", campaign_disadvantages=["peasantborn"],
+        )
+        status = compute_effective_status(data)
+        peas = next(m for m in status.rank_modifiers if m["source"] == "Peasantborn")
+        assert peas["description"].startswith("this character is never considered")
+
+    def test_peasantborn_only_affects_rank(self):
+        """Peasantborn is a Rank-axis effect; it does not touch
+        Recognition or Honor."""
+        data = make_character_data(campaign_disadvantages=["peasantborn"])
+        status = compute_effective_status(data)
+        assert all(m["source"] != "Peasantborn" for m in status.recognition_modifiers)
+        assert all(m["source"] != "Peasantborn" for m in status.honor_modifiers)
+
+    def test_peasantborn_absent_when_not_set(self):
+        data = make_character_data()
+        status = compute_effective_status(data)
+        assert all(m["source"] != "Peasantborn" for m in status.rank_modifiers)
+
+
 class TestSchoolRingMinimum:
     def test_school_ring_min_3_in_validation(self):
         """School ring cannot be lowered below 3."""

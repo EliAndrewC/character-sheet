@@ -123,15 +123,15 @@ def test_lineage_metadata_full_lifecycle(page, live_server_url):
     assert "Validation Issues" in body
     assert "Lineage is not set" in body
 
-    # Back to the editor; pick Kyo from the dropdown.
+    # Back to the editor; pick Kyoma from the dropdown.
     page.locator('a:text-is("Edit")').click()
     page.wait_for_selector('input[name="name"]')
     dropdown = page.locator('[data-testid="lineage-dropdown"]')
     assert dropdown.is_visible()
-    dropdown.select_option("Kyo")
+    dropdown.select_option("Kyoma")
     page.wait_for_timeout(150)
     # Help icon is now present; its tooltip-content carries the full
-    # Kyo description (Kyoma appears in the text).
+    # Kyoma description.
     help_icon = page.locator('[data-testid="lineage-help"]')
     assert help_icon.is_visible()
     assert "Kyoma" in help_icon.text_content()
@@ -143,7 +143,7 @@ def test_lineage_metadata_full_lifecycle(page, live_server_url):
     # Reload, switch to Other + custom value, verify it persists.
     page.reload()
     page.wait_for_selector('input[name="name"]')
-    assert dropdown.input_value() == "Kyo"
+    assert dropdown.input_value() == "Kyoma"
     dropdown.select_option("Other")
     page.wait_for_timeout(150)
     # Help icon disappears for free-form picks; the custom-text input

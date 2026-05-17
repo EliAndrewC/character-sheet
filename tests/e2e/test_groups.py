@@ -481,3 +481,67 @@ def test_admin_delete_group_unassigns_characters(page, live_server_url):
     page.goto(live_server_url)
     unassigned_section = page.locator('[data-group-section="Not assigned to a group"]').first
     assert "DeleteTestChar" in unassigned_section.text_content()
+
+
+def test_group_summary_unlucky_chips_render_correct_styling_per_character(
+    page, live_server_url,
+):
+    """Regression: a Group Details page with multiple Unlucky-bearing
+    characters must show each chip in its own correct state - gold
+    (unused) for one, gray + strikethrough (used) for the other -
+    independent of how many other entries each character has in
+    ``adventure_state``. Before this guard, ``tojson`` output inside
+    a double-quoted x-data attribute truncated the Alpine literal so
+    the chips rendered as unstyled "regular text" buttons regardless
+    of the underlying state."""
+    # Char A: Unlucky, leave it unused.
+    create_and_apply(
+        page, live_server_url, name="UnluckyAlphaCard", school="akodo_bushi",
+        summary="Unused Unlucky", disadvantages=["unlucky"],
+    )
+    page.goto(page.url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(300)
+
+    # Char B: Unlucky, mark it used via the View Sheet toggle so
+    # adventure_state has at least one populated key (this is the
+    # scenario that originally truncated the chip's x-data).
+    create_and_apply(
+        page, live_server_url, name="UnluckyBetaCard", school="akodo_bushi",
+        summary="Used Unlucky", disadvantages=["unlucky"],
+    )
+    page.goto(page.url + "/edit")
+    page.wait_for_selector('select[name="gaming_group_id"]')
+    page.locator('select[name="gaming_group_id"]').select_option(label="Tuesday Group")
+    page.wait_for_timeout(300)
+    # Back to the View Sheet to flip the unlucky_used toggle on.
+    page.locator('a:text-is("View Sheet"), [data-action="view-sheet"]').first.click()
+    page.wait_for_selector('[data-action="toggle-unlucky_used-on"]', timeout=5000)
+    page.locator('[data-action="toggle-unlucky_used-on"]').click()
+    page.wait_for_timeout(300)
+
+    # Now hit the Group Details page and inspect the two chips.
+    page.goto(live_server_url)
+    page.locator('[data-testid="group-link"]', has_text="Tuesday Group").click()
+    page.wait_for_url("**/groups/**")
+    alpha_card = page.locator('[data-group-card]', has_text="UnluckyAlphaCard").first
+    beta_card = page.locator('[data-group-card]', has_text="UnluckyBetaCard").first
+    alpha_chip = alpha_card.locator('[data-testid="card-unlucky-chip"]')
+    beta_chip = beta_card.locator('[data-testid="card-unlucky-chip"]')
+    # Both chips must be present.
+    assert alpha_chip.count() == 1
+    assert beta_chip.count() == 1
+    # The ``:data-state`` Alpine binding only reaches the DOM when
+    # the chip's x-data literal parsed correctly - the regression
+    # left it unbound and the attribute absent.
+    assert alpha_chip.get_attribute("data-state") == "unused"
+    assert beta_chip.get_attribute("data-state") == "used"
+    # And the dynamic ``:class`` binding must reflect the user-visible
+    # styling: gold pill for unused, gray + strikethrough for used.
+    alpha_classes = alpha_chip.get_attribute("class") or ""
+    beta_classes = beta_chip.get_attribute("class") or ""
+    assert "bg-amber-200" in alpha_classes
+    assert "line-through" not in alpha_classes
+    assert "bg-gray-300" in beta_classes
+    assert "line-through" in beta_classes

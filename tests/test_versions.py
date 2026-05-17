@@ -872,10 +872,13 @@ class TestComputeVersionDiff:
     def test_unknown_advantage_details_id_falls_back_to_label(self):
         # An advantage id that exists in neither ADVANTAGES nor any of
         # the campaign tables should still produce a sensible label
-        # rather than crashing.
+        # rather than crashing. ``text`` is metadata so we drive the
+        # diff entry with a structural ``skills`` change instead.
         entries = compute_version_diff(
-            {"advantages": ["mystery_id"], "advantage_details": {"mystery_id": {"text": "a"}}},
-            {"advantages": ["mystery_id"], "advantage_details": {"mystery_id": {"text": "b"}}},
+            {"advantages": ["mystery_id"],
+             "advantage_details": {"mystery_id": {"skills": ["a"]}}},
+            {"advantages": ["mystery_id"],
+             "advantage_details": {"mystery_id": {"skills": ["b"]}}},
         )
         match = next(e for e in entries if "details" in e["label"])
         assert match["label"].startswith("Mystery Id")
@@ -1012,14 +1015,43 @@ class TestComputeVersionDiff:
         assert match["kind"] == "add"
 
     def test_advantage_details_updated_on_persistent_advantage(self):
+        # Higher Purpose's structural ``skills`` selection IS
+        # version-significant; changing it surfaces a "details updated"
+        # entry.
         entries = compute_version_diff(
             {"advantages": ["higher_purpose"],
-             "advantage_details": {"higher_purpose": {"text": "old"}}},
+             "advantage_details": {"higher_purpose": {"text": "X", "skills": ["athletics"]}}},
             {"advantages": ["higher_purpose"],
-             "advantage_details": {"higher_purpose": {"text": "new"}}},
+             "advantage_details": {"higher_purpose": {"text": "X", "skills": ["bragging"]}}},
         )
         match = next(e for e in entries if e["label"].startswith("Higher Purpose"))
         assert match["kind"] == "section_updated"
+
+    def test_advantage_details_text_only_change_not_in_diff(self):
+        # Freeform ``text`` is metadata. Retyping the description on a
+        # persistent advantage must NOT surface in revision history -
+        # symmetric with how award ``source`` text is suppressed.
+        entries = compute_version_diff(
+            {"advantages": ["virtue"],
+             "advantage_details": {"virtue": {"text": "Courage"}}},
+            {"advantages": ["virtue"],
+             "advantage_details": {"virtue": {"text": "Justice"}}},
+        )
+        assert not any("details" in e["label"] for e in entries)
+
+    def test_advantage_details_text_only_change_alongside_skills(self):
+        # When the player changes BOTH text and skills, only the skills
+        # change drives the version entry. The entry still surfaces; the
+        # diff text doesn't expand to mention the text edit.
+        entries = compute_version_diff(
+            {"advantages": ["higher_purpose"],
+             "advantage_details": {"higher_purpose": {"text": "old", "skills": ["a"]}}},
+            {"advantages": ["higher_purpose"],
+             "advantage_details": {"higher_purpose": {"text": "new", "skills": ["b"]}}},
+        )
+        matches = [e for e in entries if e["label"].startswith("Higher Purpose")]
+        assert len(matches) == 1
+        assert matches[0]["kind"] == "section_updated"
 
     def test_advantage_details_not_emitted_for_newly_added_advantage(self):
         # The "add" line covers the introduction; a second "details
@@ -1028,7 +1060,7 @@ class TestComputeVersionDiff:
         entries = compute_version_diff(
             {"advantages": [], "advantage_details": {}},
             {"advantages": ["higher_purpose"],
-             "advantage_details": {"higher_purpose": {"text": "x"}}},
+             "advantage_details": {"higher_purpose": {"text": "x", "skills": ["a"]}}},
         )
         labels = [e["label"] for e in entries]
         assert any(l.startswith("Added advantage") for l in labels)

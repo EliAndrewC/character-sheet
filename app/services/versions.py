@@ -14,7 +14,12 @@ from app.game_data import (
     ADVANTAGES, CAMPAIGN_ADVANTAGES, CAMPAIGN_DISADVANTAGES,
     DISADVANTAGES, SCHOOLS, SKILLS, SCHOOL_KNACKS,
 )
-from app.models import Character, CharacterVersion, award_deltas_for_diff
+from app.models import (
+    Character,
+    CharacterVersion,
+    advantage_details_for_diff,
+    award_deltas_for_diff,
+)
 from app.services.rolls import compute_dan
 
 
@@ -459,9 +464,11 @@ def compute_version_diff(
     # advantage_details: surface only when the advantage still exists on
     # both sides AND the per-advantage detail dict actually changed. New
     # advantages already produce an "add" line above; their initial detail
-    # text would be redundant noise.
-    old_details = prev_state.get("advantage_details", {}) or {}
-    new_details = new_state.get("advantage_details", {}) or {}
+    # text would be redundant noise. ``advantage_details_for_diff``
+    # strips the freeform ``text`` field (metadata) so a description-only
+    # edit doesn't show up in revision history.
+    old_details = advantage_details_for_diff(prev_state.get("advantage_details"))
+    new_details = advantage_details_for_diff(new_state.get("advantage_details"))
     persistent = (
         (set(prev_state.get("advantages") or []) | set(prev_state.get("campaign_advantages") or [])
          | set(prev_state.get("disadvantages") or []) | set(prev_state.get("campaign_disadvantages") or []))

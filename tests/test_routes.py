@@ -312,6 +312,90 @@ class TestGroupSummaryPage:
         assert 'data-testid="card-unlucky-used-tooltip"' in body
         assert "Already used this adventure" in body
 
+    def test_unlucky_chip_x_data_survives_non_empty_adventure_state(self, client):
+        """Regression: the Unlucky chip's ``x-data`` Alpine literal
+        embeds a ``tojson`` snapshot of ``adventure_state``. The HTML
+        attribute MUST be single-quoted so the JSON's double-quoted
+        keys don't close the attribute early - if they do, Alpine
+        never initializes the chip, ``:class`` stays unbound, and the
+        pill renders as unstyled "regular text" instead of the gold
+        unused / gray used treatment. We assert the attribute parses
+        cleanly via BeautifulSoup (which mirrors browser HTML parsing)
+        and still carries the full Alpine body."""
+        from bs4 import BeautifulSoup
+        gid = self._make_group_with(
+            client,
+            {
+                "name": "PopulatedState",
+                "disadvantages": ["unlucky"],
+                "adventure_state": {
+                    "adventure_raises_used": 0,
+                    "lucky_used": False,
+                    "unlucky_used": False,
+                },
+            },
+        )
+        resp = client.get(f"/groups/{gid}")
+        soup = BeautifulSoup(resp.text, "html.parser")
+        wrapper = soup.find(attrs={"data-testid": "card-unlucky"})
+        assert wrapper is not None
+        # The Alpine body must include the ``apply()`` definition. If the
+        # attribute was truncated by an unescaped double quote inside
+        # the embedded JSON, "apply" wouldn't survive into the parsed
+        # attribute value.
+        x_data = wrapper.get("x-data", "")
+        assert "apply()" in x_data, (
+            "x-data attribute appears truncated - did a tojson snapshot "
+            "leak unescaped double quotes into a double-quoted attribute?"
+        )
+        # And the ``state:`` initializer must still hold the full
+        # adventure_state snapshot (all three keys), not a prefix that
+        # got cut off at the first double quote.
+        assert "adventure_raises_used" in x_data
+        assert "lucky_used" in x_data
+        assert "unlucky_used" in x_data
+
+    def test_unlucky_chips_remain_isolated_for_multiple_characters(self, client):
+        """Regression: when a group contains two characters with
+        Unlucky - one already used, one not - the rendered chips must
+        carry independent ``used`` flags. Before the single-quote fix,
+        non-empty adventure_state truncated the x-data attribute,
+        which knocked out Alpine binding and made the chips visually
+        indistinguishable from each other regardless of the underlying
+        state."""
+        import re
+        from bs4 import BeautifulSoup
+        gid = self._make_group_with(
+            client,
+            {
+                "name": "UnluckyAlpha",
+                "disadvantages": ["unlucky"],
+                "adventure_state": {"unlucky_used": False},
+            },
+            {
+                "name": "UnluckyBeta",
+                "disadvantages": ["unlucky"],
+                "adventure_state": {"unlucky_used": True},
+            },
+        )
+        resp = client.get(f"/groups/{gid}")
+        soup = BeautifulSoup(resp.text, "html.parser")
+        wrappers = soup.find_all(attrs={"data-testid": "card-unlucky"})
+        assert len(wrappers) == 2
+        # The chip's top-level ``used`` literal is unrelated to the
+        # ``unlucky_used`` key inside the embedded state snapshot, so
+        # match on the standalone identifier with a word boundary.
+        # ``\b`` will not split ``unlucky_used`` (the underscore counts
+        # as a word character), so the regex isolates the chip flag.
+        used_re = re.compile(r"\bused:\s*(true|false)\b")
+        flags = []
+        for w in wrappers:
+            m = used_re.search(w.get("x-data") or "")
+            assert m is not None, "chip x-data missing top-level 'used' flag"
+            flags.append(m.group(1))
+        # One chip starts unused, the other starts used.
+        assert sorted(flags) == ["false", "true"]
+
     def test_unlucky_chip_hidden_for_non_editor(self, client):
         """Anonymous viewers don't get the Apply Unlucky action.
         The chip itself still renders (so the GM viewing the page
@@ -356,12 +440,12 @@ class TestGroupSummaryPage:
         gid = self._make_group_with(
             client,
             {"name": "Identifiable", "school": "akodo_bushi",
-             "school_ring_choice": "Water", "lineage": "Kyo"},
+             "school_ring_choice": "Water", "lineage": "Kyoma"},
         )
         resp = client.get(f"/groups/{gid}")
         body = resp.text
         assert "Akodo Bushi" in body
-        assert "Kyo lineage" in body
+        assert "Kyoma lineage" in body
 
     def test_anonymous_visitor_can_view(self, client):
         """No login required - matches the per-character View Sheet's
@@ -2874,13 +2958,13 @@ class TestAutoSave:
         session.merge(char)
         session.commit()
         resp = client.post(
-            f"/characters/{cid}/autosave", json={"lineage": "Kyo"},
+            f"/characters/{cid}/autosave", json={"lineage": "Kyoma"},
         )
         assert resp.status_code == 200
         body = resp.json()
         assert body.get("has_unpublished_changes") is False
         char = query_db(client).filter(Character.id == cid).first()
-        assert char.lineage == "Kyo"
+        assert char.lineage == "Kyoma"
 
     def test_autosave_persists_specializations_list(self, client):
         cid = _seed_character(client, name="Spec")

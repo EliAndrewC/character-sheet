@@ -103,7 +103,7 @@ WASP_LINEAGES: "Dict[str, str]" = {
         "Shin lineage, plus other members of the Scorpion clan who joined "
         "the Wasp."
     ),
-    "Kyo": (
+    "Kyoma": (
         "This is the lineage joined by substantially all of the samurai "
         "from other clans (and more than a few ronin) who joined the Wasp "
         "clan after its founding. The Kyoma lineage has significantly less "
@@ -2117,8 +2117,9 @@ _SCHOOLS_LIST: List[School] = [
             "Void school knack resets to full usage and you regain spent "
             "void points equal to your lowest Ring. A partial night's rest "
             "restores 1 spent void point and 1 use of Absorb Void per 90 "
-            "minutes of sleep. However, you may not spend more void points "
-            "on any one roll than your lowest Ring minus 1."
+            "minutes of sleep, up to the per-night total you can regain. "
+            "However, you may not spend more void points on any one roll "
+            "than your lowest Ring minus 1."
         ),
         school_knacks=["absorb_void", "kharmic_spin", "otherworldliness"],
         techniques={
@@ -3220,18 +3221,17 @@ SOCIAL_VISIBLE_ADVANTAGES: set = {
     "wealthy",          # visible by attire / bearing
     # Campaign advantages.
     "imperial_favor",
-    "highest_regard",
     "minor_clan_major_ally_sparrow",
     "minor_clan_major_ally_fox",
     "minor_clan_major_ally_mantis",
-    # ``virtue`` and ``good_reputation`` are deliberately NOT chips
-    # on the Group Summary page even though they're social-visible:
-    # virtue's perception flows into the Honor color highlight on
-    # the identity line, and good_reputation's rank/recognition
-    # bump already shows up in the Rank and Recognition rows.
-    # ``household_wealth`` is excluded too - it's the campaign's
-    # standard "not Poor" advantage and the full canonical name
-    # eats more chip width than it earns.
+    # ``virtue``, ``good_reputation``, and ``highest_regard`` are
+    # deliberately NOT chips on the Group Summary page even though
+    # they're social-visible: virtue's perception flows into the Honor
+    # color highlight on the identity line, and good_reputation /
+    # highest_regard's rank+recognition bump already shows up in the
+    # Rank and Recognition rows. ``household_wealth`` is excluded too
+    # - it's the campaign's standard "not Poor" advantage and the full
+    # canonical name eats more chip width than it earns.
 }
 
 # Short display names for the Group Summary chip strip. The full
@@ -3261,6 +3261,11 @@ SOCIAL_VISIBLE_DISADVANTAGES: set = {
     "thoughtless",
     "dark_secret",      # GM-relevant; the secret itself stays private to the listed knowers
     "unlucky",          # GM-relevant; not directly perceptible
+    # Campaign disadvantages. Both shape inter-clan political
+    # entanglements that the GM needs at-a-glance when running scenes
+    # with the wider clan world.
+    "crane_indebted",
+    "scorpion_advocate",
     # ``unconventional``, ``bad_reputation``, ``withdrawn``, and
     # ``permanent_wound`` are NOT chips: unconventional flows into
     # the Honor color highlight, bad_reputation's rank/recognition

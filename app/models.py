@@ -31,6 +31,34 @@ def award_deltas_for_diff(awards: Optional[List[Dict[str, Any]]]) -> List[Dict[s
     ]
 
 
+def advantage_details_for_diff(
+    details: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Strip the freeform ``text`` field from each per-advantage detail
+    so a text-only edit (e.g. retyping the Good Reputation description)
+    doesn't flip ``has_unpublished_changes`` or surface in revision
+    history diffs. Structural choices on the same dict - ``skills`` for
+    Fierce/Specialization, ``player`` for Dark Secret - remain
+    version-significant.
+
+    Entries that contain only a ``text`` value collapse to ``{}`` and are
+    dropped entirely, so a player who first types a description and then
+    blanks it back out doesn't leave behind a phantom empty key that
+    would mismatch a fresh snapshot's missing-key default.
+    """
+    if not details:
+        return {}
+    stripped: Dict[str, Any] = {}
+    for aid, raw in details.items():
+        if not isinstance(raw, dict):
+            stripped[aid] = raw
+            continue
+        kept = {k: v for k, v in raw.items() if k != "text"}
+        if kept:
+            stripped[aid] = kept
+    return stripped
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -124,7 +152,7 @@ class Character(Base):
     # into "unpublished changes" state, don't appear in revision-history
     # diffs, and Discard / Revert don't touch it.
     age: Mapped[Optional[int]] = mapped_column(default=None, nullable=True)
-    # Wasp lineage: "Tsuruchi", "Kyo", "Ami", or a free-form string the
+    # Wasp lineage: "Tsuruchi", "Kyoma", "Ami", or a free-form string the
     # player typed via the "Other" dropdown option. Same metadata
     # contract as ``age``. Validator flags it as unset when blank.
     lineage: Mapped[str] = mapped_column(String, default="")
@@ -327,6 +355,17 @@ class Character(Base):
             # only the deltas + ids.
             if key == "rank_recognition_awards":
                 if award_deltas_for_diff(cur_val) != award_deltas_for_diff(pub_val):
+                    return True
+                continue
+            # Advantage detail ``text`` is metadata for the same reason
+            # an award ``source`` is - it's a freeform description, not
+            # a stat. Strip it before comparing so retyping the Good
+            # Reputation text doesn't flip the character to Draft.
+            if key == "advantage_details":
+                if (
+                    advantage_details_for_diff(cur_val)
+                    != advantage_details_for_diff(pub_val)
+                ):
                     return True
                 continue
             if cur_val != pub_val:
