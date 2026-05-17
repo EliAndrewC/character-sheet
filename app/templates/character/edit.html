@@ -1890,8 +1890,8 @@ function characterForm() {
         // the canonical value persisted to the server is computed by
         // ``_currentLineage()`` and submitted via a hidden form field
         // / the autosave payload.
-        lineageDropdown: {{ ((character.lineage or '') if (character.lineage in ['Tsuruchi', 'Kyo', 'Ami']) else ('Other' if (character.lineage or '') else '')) | tojson }},
-        lineageCustom: {{ ((character.lineage or '') if (character.lineage not in ['Tsuruchi', 'Kyo', 'Ami', '']) else '') | tojson }},
+        lineageDropdown: {{ ((character.lineage or '') if (character.lineage in ['Tsuruchi', 'Kyoma', 'Ami']) else ('Other' if (character.lineage or '') else '')) | tojson }},
+        lineageCustom: {{ ((character.lineage or '') if (character.lineage not in ['Tsuruchi', 'Kyoma', 'Ami', '']) else '') | tojson }},
         rings: {{ char_dict.rings | tojson }},
         skills: {
             {% for sid in skills %}

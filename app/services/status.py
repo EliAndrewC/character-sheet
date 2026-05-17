@@ -80,6 +80,7 @@ def compute_effective_status(
     advantages = character_data.get("advantages", [])
     disadvantages = character_data.get("disadvantages", [])
     campaign_advantages = character_data.get("campaign_advantages", [])
+    campaign_disadvantages = character_data.get("campaign_disadvantages") or []
     school = character_data.get("school", "")
 
     status = EffectiveStatus(rank=rank, recognition=recognition, honor=honor)
@@ -242,6 +243,27 @@ def compute_effective_status(
             "source": "Imperial Favor",
             "short_label": "imperial post",
             "pill_label": "for Imperials",
+        })
+
+    # --- Campaign disadvantages ---
+    # Peasantborn floors the character's effective Rank to 0 whenever a
+    # government official compares them to a samurai-born person. The
+    # modifier carries ``value = -rank`` so the rank widget's
+    # single-pill absolute display ("character.rank + p.value")
+    # computes to 0 - the widget special-cases an absolute of 0 to
+    # render as "0 in court" rather than "0.0".
+    if "peasantborn" in campaign_disadvantages:
+        self_name = character_data.get("name") or "this character"
+        status.rank_modifiers.append({
+            "field": "rank",
+            "context": "in court vs samurai-born",
+            "value": -rank,
+            "source": "Peasantborn",
+            "short_label": "in court",
+            "description": (
+                f"{self_name} is never considered to be of peer "
+                "standing with any samurai-born person."
+            ),
         })
 
     # --- Disadvantages ---

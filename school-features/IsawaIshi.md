@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Your maximum number of void points is equal to your highest ring plus your school rank. After a full night's rest, your Absorb Void school knack resets to full usage and you regain spent void points equal to your lowest Ring. A partial night's rest restores 1 spent void point and 1 use of Absorb Void per 90 minutes of sleep. However, you may not spend more void points on any one roll than your lowest Ring minus 1.
+> Your maximum number of void points is equal to your highest ring plus your school rank. After a full night's rest, your Absorb Void school knack resets to full usage and you regain spent void points equal to your lowest Ring. A partial night's rest restores 1 spent void point and 1 use of Absorb Void per 90 minutes of sleep, up to the per-night total you can regain. However, you may not spend more void points on any one roll than your lowest Ring minus 1.
 
 **Status:** Fully implemented.
 - VP max (highest ring + school rank) is implemented in `game_data.py:872-873` via `void_points_max_shugenja()`. `app/routes/pages.py` uses `void_points_max_shugenja()` for Isawa Ishi VP max display.

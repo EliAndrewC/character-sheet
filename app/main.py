@@ -171,12 +171,38 @@ _KNACK_RULES_LINKS: dict[str, tuple[str, str]] = {
 }
 
 
-def knack_rules_text_html(knack) -> Markup:
+def knack_rules_text_html(knack, school_id: str | None = None) -> Markup:
     """Render a knack's expanded rules text as HTML, linkifying any phrase
     that points at a rules section (currently just Iaijutsu's "the other
     combat rules"). Falls back to the short description when rules_text is
-    empty, matching the prior template expression."""
+    empty, matching the prior template expression.
+
+    ``school_id`` lets a knack's text get a school-specific override.
+    Isawa Ishi's special ability converts Absorb Void from
+    per-adventure to per-day; only Ishi characters see that override.
+    Foreign-knack callers pass ``None`` (or omit) so the canonical text
+    renders even if the knack happens to match another school's
+    override.
+    """
     text = (knack.rules_text or knack.description) or ""
+    # Isawa Ishi's special ability replaces Absorb Void's per-adventure
+    # cadence with per-day. Render the swap inline so the player can
+    # see both the canonical wording (struck through) and the school
+    # override side-by-side.
+    if (
+        knack
+        and knack.id == "absorb_void"
+        and school_id == "isawa_ishi"
+        and "per adventure" in text
+    ):
+        before, _, after = text.partition("per adventure")
+        return Markup(
+            f"{escape(before)}"
+            '<s>per adventure</s> <strong>per day</strong> '
+            '<em>(Ishi special ability makes this per-day '
+            "instead of per-adventure)</em>"
+            f"{escape(after)}"
+        )
     link = _KNACK_RULES_LINKS.get(knack.id) if knack else None
     if link:
         phrase, url = link

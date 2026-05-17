@@ -554,7 +554,7 @@ class TestValidation:
     def test_set_lineage_no_validation_issue(self):
         """A real lineage value (one of the canonical picks OR a free-
         form ``Other`` value) silences the warning."""
-        for value in ("Tsuruchi", "Kyo", "Ami", "Some other made-up lineage"):
+        for value in ("Tsuruchi", "Kyoma", "Ami", "Some other made-up lineage"):
             data = make_character_data(lineage=value)
             errors = validate_character(data)
             assert not any(e.startswith("Lineage") for e in errors), value

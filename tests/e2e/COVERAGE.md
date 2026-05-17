@@ -1076,6 +1076,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Bad Reputation: text field appears → `test_advantage_details.py::test_bad_reputation_shows_text`
 - [x] Unconventional: text field appears → `test_advantage_details.py::test_unconventional_shows_text`
 - [x] Detail fields hidden when unchecked → `test_advantage_details.py::test_detail_hidden_when_unchecked`
+- [x] Editing the freeform text on a published advantage is metadata: Apply / Discard buttons stay hidden, text auto-persists → `test_advantage_details.py::test_text_only_edit_on_published_advantage_is_metadata`
 
 ## Character Editor — Auto-save
 
@@ -1143,11 +1144,13 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Status row label, number, and chevron stay on the top line when pills wrap to multiple text lines → `test_sheet_display.py::test_status_row_chevron_stays_on_top_line_when_pills_wrap`
 - [x] Homepage group header is a link to the Group Summary; chars listed alphabetically; social adv chip renders → `test_groups.py::test_homepage_group_header_links_to_group_summary`
 - [x] Group Summary hides ``is_hidden`` characters even from admins → `test_groups.py::test_group_summary_hides_hidden_characters`
+- [x] Group Summary Unlucky chips render correct styling per-character (gold unused vs gray strikethrough used) when multiple party members have populated adventure_state - regression for the double-quoted x-data attribute that truncated on embedded JSON → `test_groups.py::test_group_summary_unlucky_chips_render_correct_styling_per_character`
 - [x] Imperial Favor's family + post modifiers collapse into a single ``for Imperials`` pill (and the expanded view still shows both contexts) → `test_sheet_display.py::test_status_imperial_favor_alone_renders_single_pill`
 - [x] Lineage dropdown lifecycle (pick canonical, ``?`` help-tooltip carries the description, switch to Other, custom value round-trips, View Sheet shows it, metadata-only edit doesn't flip unpublished) → `test_apply_modal.py::test_lineage_metadata_full_lifecycle`
 - [x] Lineage tooltip wraps canonical pick on the View Sheet (description in tooltip-content) → `test_apply_modal.py::test_lineage_tooltip_renders_on_view_sheet_for_canonical_pick`
 - [x] Highest Regard adds a ``+2.0 for Wasp`` pill to Rank and Recognition (expanded shows the per-source context) → `test_sheet_display.py::test_status_highest_regard_renders_for_wasp_pill`
 - [x] Minor Clan Major Ally adds a ``+3.0 for <Clan>`` pill to Rank and Recognition → `test_sheet_display.py::test_status_minor_clan_major_ally_renders_for_clan_pill`
+- [x] Peasantborn campaign disadvantage renders a ``(0 in court)`` pill on the Rank row and the expanded bullet ``Peasantborn: <name> is never considered to be of peer standing with any samurai-born person.`` → `test_sheet_display.py::test_status_peasantborn_renders_zero_in_court_pill`
 - [x] Recognition displayed → `test_sheet_display.py::test_recognition_displayed`
 - [x] Stipend displayed → `test_sheet_display.py::test_stipend_displayed`
 - [x] Stipend chevron expands to show the calculation breakdown → `test_sheet_advanced.py::test_stipend_expand_shows_calculation`
@@ -1234,6 +1237,9 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 - [x] Expanded view shows full upstream rules text → `test_sheet_display.py::test_school_knack_expanded_shows_full_rules`
 - [x] Iaijutsu knack expanded text wraps "the other combat rules" in a new-tab link to upstream rules → `test_school_abilities.py::test_iaijutsu_knack_links_to_combat_rules`
+- [x] Isawa Ishi's Absorb Void rules text inlines a strikethrough "per adventure" + bold "per day" + parenthetical note about the school's special ability → `test_sheet_display.py::test_isawa_ishi_absorb_void_shows_per_day_override`
+- [x] Isawa Ishi's Absorb Void override also appears on the editor's school-details panel → `test_sheet_display.py::test_isawa_ishi_absorb_void_override_on_editor`
+- [x] Kitsune Warden's Absorb Void rules text shows the canonical per-adventure wording with no override → `test_sheet_display.py::test_kitsune_warden_absorb_void_canonical_text`
 
 ## Homepage — Card Layout
 

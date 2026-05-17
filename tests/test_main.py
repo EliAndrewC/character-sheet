@@ -322,3 +322,62 @@ class TestGetBackupError:
     def test_none_when_no_error(self, monkeypatch):
         monkeypatch.setitem(main_module.backup_status, "last_error", None)
         assert main_module.get_backup_error() is None
+
+
+class TestKnackRulesTextHtml:
+    """``knack_rules_text_html`` renders a knack's expanded rules text and
+    applies school-specific overrides. The Isawa Ishi school's special
+    ability flips Absorb Void from per-adventure to per-day; only Ishi
+    characters get the inline strike-through + override note."""
+
+    def _knack(self, **kwargs):
+        from app.game_data import SCHOOL_KNACKS
+        return SCHOOL_KNACKS[kwargs.get("kid", "absorb_void")]
+
+    def test_canonical_text_when_no_school(self):
+        knack = self._knack()
+        out = str(main_module.knack_rules_text_html(knack))
+        assert "per adventure" in out
+        assert "<s>" not in out
+        assert "Ishi special ability" not in out
+
+    def test_canonical_text_for_non_ishi_school(self):
+        # Kitsune Warden has Absorb Void as a school knack but no
+        # special-ability override - they see the canonical text.
+        knack = self._knack()
+        out = str(main_module.knack_rules_text_html(knack, "kitsune_warden"))
+        assert "per adventure" in out
+        assert "<s>" not in out
+        assert "Ishi special ability" not in out
+
+    def test_isawa_ishi_overrides_absorb_void(self):
+        knack = self._knack()
+        out = str(main_module.knack_rules_text_html(knack, "isawa_ishi"))
+        assert "<s>per adventure</s>" in out
+        assert "<strong>per day</strong>" in out
+        assert "<em>(Ishi special ability makes this per-day instead of per-adventure)</em>" in out
+
+    def test_isawa_ishi_override_does_not_apply_to_other_knacks(self):
+        # The override is scoped to absorb_void. A different Ishi knack
+        # like commune renders canonically.
+        knack = self._knack(kid="commune")
+        out = str(main_module.knack_rules_text_html(knack, "isawa_ishi"))
+        assert "<s>" not in out
+        assert "Ishi special ability" not in out
+
+    def test_iaijutsu_link_still_renders(self):
+        # Regression: the existing iaijutsu rules-link substitution must
+        # still fire even with the new override branch in place.
+        from app.game_data import SCHOOL_KNACKS
+        knack = SCHOOL_KNACKS["iaijutsu"]
+        out = str(main_module.knack_rules_text_html(knack, "akodo_bushi"))
+        assert "the other combat rules" in out
+        assert '<a href=' in out
+
+    def test_none_school_is_safe(self):
+        # The helper accepts school_id=None (foreign-knack call site
+        # passes nothing) without crashing.
+        knack = self._knack()
+        out = str(main_module.knack_rules_text_html(knack, None))
+        assert "per adventure" in out
+        assert "<s>" not in out

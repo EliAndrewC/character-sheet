@@ -150,7 +150,7 @@ class TestSocialVisibleSets:
         # Specific entries the GM explicitly opted in.
         expected_in = {
             "charming", "wealthy",
-            "imperial_favor", "highest_regard",
+            "imperial_favor",
             "minor_clan_major_ally_sparrow",
             "minor_clan_major_ally_fox",
             "minor_clan_major_ally_mantis",
@@ -162,9 +162,14 @@ class TestSocialVisibleSets:
             assert excluded not in SOCIAL_VISIBLE_ADVANTAGES
         # Surfaced via the Honor color highlight / Rank-Recognition
         # rows instead of as chips, so they're deliberately not in
-        # the chip allowlist. ``household_wealth`` is excluded for
+        # the chip allowlist. ``highest_regard`` is excluded for the
+        # same reason - its rank+recognition bump is already in the
+        # Rank/Recognition rows. ``household_wealth`` is excluded for
         # space (the chip text was too long for what it conveys).
-        for excluded in ("virtue", "good_reputation", "household_wealth"):
+        for excluded in (
+            "virtue", "good_reputation", "highest_regard",
+            "household_wealth",
+        ):
             assert excluded not in SOCIAL_VISIBLE_ADVANTAGES
 
     def test_social_visible_disadvantages_membership(self):
@@ -180,6 +185,9 @@ class TestSocialVisibleSets:
             "short_temper", "long_temper", "contrary", "meddler",
             "jealousy", "transparent", "thoughtless",
             "dark_secret", "unlucky",
+            # Campaign disadvantages with inter-clan political weight
+            # the GM wants visible at-a-glance on the roster.
+            "crane_indebted", "scorpion_advocate",
         }
         assert expected_in <= SOCIAL_VISIBLE_DISADVANTAGES
         # Same rationale as the advantage side: surfaced elsewhere on

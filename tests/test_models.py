@@ -1,6 +1,47 @@
 """Tests for the Character model."""
 
-from app.models import Character
+from app.models import Character, advantage_details_for_diff
+
+
+class TestAdvantageDetailsForDiff:
+    """The helper strips ``text`` from each advantage detail entry so
+    text-only edits stay out of has_unpublished_changes / version diffs.
+    Other fields (``skills``, ``player``) remain so structural choices
+    still register."""
+
+    def test_none_returns_empty_dict(self):
+        assert advantage_details_for_diff(None) == {}
+
+    def test_empty_dict_returns_empty_dict(self):
+        assert advantage_details_for_diff({}) == {}
+
+    def test_text_only_entry_collapses_and_is_dropped(self):
+        # ``virtue`` carries only text; after stripping, the entry has
+        # no remaining fields and is dropped entirely so a fresh
+        # snapshot's missing-key default compares equal.
+        out = advantage_details_for_diff({"virtue": {"text": "Courage"}})
+        assert out == {}
+
+    def test_skills_field_survives(self):
+        out = advantage_details_for_diff(
+            {"higher_purpose": {"text": "Cause", "skills": ["athletics"]}}
+        )
+        assert out == {"higher_purpose": {"skills": ["athletics"]}}
+
+    def test_player_field_survives(self):
+        # Dark Secret carries ``player`` (the knower). That's a
+        # structural choice, not metadata - keep it.
+        out = advantage_details_for_diff(
+            {"dark_secret": {"text": "secret", "player": "discord_id_42"}}
+        )
+        assert out == {"dark_secret": {"player": "discord_id_42"}}
+
+    def test_non_dict_entry_kept_as_is(self):
+        # Defensive path: legacy or hand-edited DB rows may have
+        # non-dict values. We keep them so comparisons still notice
+        # real differences instead of silently collapsing.
+        out = advantage_details_for_diff({"weird": "scalar-value"})
+        assert out == {"weird": "scalar-value"}
 
 
 class TestCharacterRings:
@@ -295,6 +336,61 @@ class TestPublishStatus:
         c.skills = {"bragging": 2}
         assert c.has_unpublished_changes is True
         assert c.publish_status == "modified"
+
+    def test_advantage_details_text_only_change_does_not_flip(self, db):
+        # The freeform ``text`` field is metadata - retyping the
+        # description on an existing advantage must NOT enable Apply
+        # Changes. Symmetric with how an award ``source`` edit is
+        # treated.
+        c = self._published(
+            db,
+            advantages=["virtue"],
+            advantage_details={"virtue": {"text": "Courage"}},
+        )
+        c.advantage_details = {"virtue": {"text": "Justice"}}
+        assert c.has_unpublished_changes is False
+        assert c.publish_status == "published"
+
+    def test_advantage_details_skills_change_still_flips(self, db):
+        # Higher Purpose's ``skills`` selection is structural. Editing
+        # the skill list must still flip the character to Draft - text
+        # is the only metadata field on the detail dict.
+        c = self._published(
+            db,
+            advantages=["higher_purpose"],
+            advantage_details={"higher_purpose": {"text": "Cause", "skills": ["athletics"]}},
+        )
+        c.advantage_details = {
+            "higher_purpose": {"text": "Cause", "skills": ["bragging"]},
+        }
+        assert c.has_unpublished_changes is True
+        assert c.publish_status == "modified"
+
+    def test_advantage_details_first_time_text_does_not_flip(self, db):
+        # A previously empty advantage detail entry getting its first
+        # text value is still text-only - no Draft flip. Mirrors the
+        # case where the player adds Good Reputation, publishes without
+        # filling in the description, then comes back to type it in.
+        c = self._published(
+            db,
+            advantages=["virtue"],
+            advantage_details={},
+        )
+        c.advantage_details = {"virtue": {"text": "Courage"}}
+        assert c.has_unpublished_changes is False
+        assert c.publish_status == "published"
+
+    def test_advantage_details_text_blanked_back_to_empty_does_not_flip(self, db):
+        # Player types a description, publishes, then later clears it
+        # back to blank. With ``text``-only entries dropped to {}, the
+        # comparison shouldn't notice a phantom missing-key mismatch.
+        c = self._published(
+            db,
+            advantages=["virtue"],
+            advantage_details={"virtue": {"text": "Courage"}},
+        )
+        c.advantage_details = {"virtue": {}}
+        assert c.has_unpublished_changes is False
 
     def test_legacy_published_state_missing_new_keys_does_not_flip(self, db):
         """Regression: a character whose ``published_state`` predates a
