@@ -1,0 +1,38 @@
+{# Shared "Copy as image" button. Every roll-result panel renders this
+   so the player can drop a PNG of the result on the clipboard for
+   pasting into Discord.
+
+   Bindings:
+     * ``rollImageStatus`` - 'idle' | 'rendering' | 'ready' | 'copied' | 'failed'
+       Drives the label text + colour + disabled state, and the
+       ``x-show`` guard that hides the button entirely when no
+       prerender has been kicked off for this panel.
+     * ``rollImageBlob`` - the resolved PNG that ``copyRollImage()``
+       writes to ``navigator.clipboard``.
+     * ``copyRollImage()`` - the click handler.
+
+   The button is the same shape and styling across every result panel
+   so a player who learns it in one modal recognises it in the rest.
+   Each calling panel is responsible for calling
+   ``_prerenderRollImage(<modal-specific payload>)`` at the right
+   phase transition and resetting ``rollImageStatus = 'idle'`` when a
+   new roll for that modal begins. #}
+<button type="button"
+        x-show="rollImageStatus !== 'idle'"
+        x-cloak
+        @click="copyRollImage()"
+        :disabled="rollImageStatus !== 'ready' && rollImageStatus !== 'copied'"
+        :class="(rollImageStatus === 'failed')
+                ? 'bg-ink/5 text-ink/40 cursor-not-allowed'
+                : (rollImageStatus === 'copied')
+                  ? 'bg-accent/10 text-accent'
+                  : 'bg-ink/10 hover:bg-ink/20 text-ink'"
+        class="text-xs font-medium px-2.5 py-1 rounded transition-colors disabled:opacity-40 disabled:cursor-wait"
+        data-action="copy-roll-image"
+        :data-state="rollImageStatus"
+        title="Copy roll result as an image for pasting into Discord">
+    <span x-show="rollImageStatus === 'rendering'">Preparing...</span>
+    <span x-show="rollImageStatus === 'ready'">Copy as image</span>
+    <span x-show="rollImageStatus === 'copied'">Copied!</span>
+    <span x-show="rollImageStatus === 'failed'">Copy failed</span>
+</button>

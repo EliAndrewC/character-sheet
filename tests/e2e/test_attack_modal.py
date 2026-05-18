@@ -391,3 +391,339 @@ def test_attack_modal_warning_reflects_athletics_attack_name(page, live_server_u
     assert warning.is_visible()
     # Label strips the parenthetical ring, e.g. "Athletics Attack (Fire)" -> "Athletics Attack".
     assert "Athletics Attack" in warning.text_content()
+
+
+# ---------------------------------------------------------------------------
+# Pre-roll "Extra bonus" - GM-grant situational bonus
+# ---------------------------------------------------------------------------
+
+
+def _open_attack_modal(page):
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+
+
+def test_extra_bonus_starts_unchecked_with_defaults(page, live_server_url):
+    """Pre-roll extra-bonus toggle starts unchecked on every modal open.
+    When checked, the number defaults to +15 and the label defaults
+    to 'surrounding' (per the spec). The number / label inputs are
+    hidden until the box is checked."""
+    _create_attacker(page, live_server_url, "ExtraDefault")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    toggle = page.locator('[data-testid="atk-extra-bonus-toggle"]')
+    amount = page.locator('[data-testid="atk-extra-bonus-amount"]')
+    label = page.locator('[data-testid="atk-extra-bonus-label"]')
+    assert toggle.is_checked() is False
+    assert amount.is_visible() is False
+    toggle.check()
+    page.wait_for_timeout(100)
+    assert amount.is_visible() is True
+    assert label.is_visible() is True
+    assert amount.input_value() == "15"
+    assert label.input_value() == "surrounding"
+
+
+def test_extra_bonus_does_not_persist_between_modal_opens(page, live_server_url):
+    """Checking the box on one attack must not carry over to the next.
+    Spec: "This should not be checked by default, even if it was
+    checked on the previous attack roll." """
+    _create_attacker(page, live_server_url, "ExtraReset")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    page.locator('[data-testid="atk-extra-bonus-toggle"]').check()
+    # Close the modal by clicking the X.
+    page.locator('[data-modal="attack"] button.text-ink\\/60').click()
+    page.wait_for_timeout(150)
+    _open_attack_modal(page)
+    toggle = page.locator('[data-testid="atk-extra-bonus-toggle"]')
+    assert toggle.is_checked() is False
+
+
+def test_extra_bonus_lifts_hit_chance_in_probability_table(page, live_server_url):
+    """The hit-chance column updates live as the bonus is toggled and
+    as the amount field changes - the underlying ``atkHitChance``
+    helper includes ``_atkExtraBonusFlat`` in its target offset."""
+    _create_attacker(page, live_server_url, "ExtraHit")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    # Force a TN where the base hit chance is well below 100% so the
+    # bonus has room to move the needle.
+    page.evaluate("window._diceRoller.atkTN = 30")
+    page.wait_for_timeout(100)
+    before = page.evaluate(
+        "() => Math.round(window._diceRoller.atkHitChance(0) * 100)"
+    )
+    page.locator('[data-testid="atk-extra-bonus-toggle"]').check()
+    page.wait_for_timeout(100)
+    with_default = page.evaluate(
+        "() => Math.round(window._diceRoller.atkHitChance(0) * 100)"
+    )
+    assert with_default > before, "Expected hit chance to rise with +15 bonus"
+    # Editing the number to a much larger value should push it higher
+    # again (or cap at 100%, which is also fine).
+    page.locator('[data-testid="atk-extra-bonus-amount"]').fill("50")
+    page.wait_for_timeout(100)
+    with_larger = page.evaluate(
+        "() => Math.round(window._diceRoller.atkHitChance(0) * 100)"
+    )
+    assert with_larger >= with_default
+
+
+def test_extra_bonus_surfaces_on_breakdown_after_roll(page, live_server_url):
+    """After committing the attack roll, the extra bonus appears in
+    the post-roll breakdown carrying its label verbatim."""
+    _create_attacker(page, live_server_url, "ExtraBreakdown")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    page.locator('[data-testid="atk-extra-bonus-toggle"]').check()
+    page.locator('[data-testid="atk-extra-bonus-amount"]').fill("7")
+    page.locator('[data-testid="atk-extra-bonus-label"]').fill("high ground")
+    # Commit the roll.
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.atkPhase === 'result'",
+        timeout=5000,
+    )
+    breakdown = page.locator('[data-modal="attack"]').text_content() or ""
+    assert "+7 from high ground" in breakdown
+
+
+def test_extra_bonus_blank_label_falls_back_gracefully(page, live_server_url):
+    """A user can clear the label - the breakdown then falls back to
+    ``extra bonus`` rather than rendering ``+N from ``."""
+    _create_attacker(page, live_server_url, "ExtraBlank")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    page.locator('[data-testid="atk-extra-bonus-toggle"]').check()
+    page.locator('[data-testid="atk-extra-bonus-label"]').fill("")
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.atkPhase === 'result'",
+        timeout=5000,
+    )
+    breakdown = page.locator('[data-modal="attack"]').text_content() or ""
+    assert "+15 from extra bonus" in breakdown
+
+
+# ---------------------------------------------------------------------------
+# Post-roll "Extra bonus" - adjusts attack total + damage extra dice
+# ---------------------------------------------------------------------------
+
+
+def _roll_attack_and_wait(page):
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.atkPhase === 'result'",
+        timeout=5000,
+    )
+
+
+def test_post_roll_bonus_starts_unchecked_with_default_5(page, live_server_url):
+    """The post-roll extra-bonus checkbox starts unchecked. When the
+    box is checked, the number field comes up at +5 (the spec'd
+    default for this field; the pre-roll field defaults to +15). No
+    breakdown row renders until the box is on."""
+    _create_attacker(page, live_server_url, "PostRollDefault")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    _roll_attack_and_wait(page)
+    toggle = page.locator('[data-testid="atk-post-roll-bonus-toggle"]')
+    amount = page.locator('[data-testid="atk-post-roll-bonus-amount"]')
+    assert toggle.is_checked() is False
+    # Breakdown row only renders when applied != 0; not yet.
+    assert page.locator(
+        '[data-testid="atk-post-roll-bonus-breakdown"]'
+    ).is_visible() is False
+    # Checking the box reveals the field pre-populated with the
+    # default amount.
+    toggle.check()
+    page.wait_for_timeout(150)
+    assert amount.input_value() == "5"
+
+
+def test_post_roll_bonus_focuses_input_when_toggled(page, live_server_url):
+    """Checking the post-roll extra-bonus auto-focuses the number
+    field so the player can start typing immediately."""
+    _create_attacker(page, live_server_url, "PostRollFocus")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    _roll_attack_and_wait(page)
+    page.locator('[data-testid="atk-post-roll-bonus-toggle"]').check()
+    page.wait_for_timeout(150)
+    focused_id = page.evaluate("() => document.activeElement?.dataset?.testid")
+    assert focused_id == "atk-post-roll-bonus-amount"
+
+
+def test_post_roll_bonus_updates_attack_total_live(page, live_server_url):
+    """Editing the post-roll number field updates atkRollTotal and
+    baseTotal by the typed amount."""
+    _create_attacker(page, live_server_url, "PostRollLive")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    _roll_attack_and_wait(page)
+    before = page.evaluate("() => window._diceRoller.atkRollTotal")
+    page.locator('[data-testid="atk-post-roll-bonus-toggle"]').check()
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').fill("8")
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').dispatch_event("input")
+    page.wait_for_function(
+        "(prev) => window._diceRoller.atkRollTotal === prev + 8",
+        arg=before,
+        timeout=2000,
+    )
+    # Editing to a different value diffs correctly (no double-counting).
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').fill("3")
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').dispatch_event("input")
+    page.wait_for_function(
+        "(prev) => window._diceRoller.atkRollTotal === prev + 3",
+        arg=before,
+        timeout=2000,
+    )
+
+
+def test_post_roll_bonus_toggle_off_subtracts_back(page, live_server_url):
+    """Unchecking the post-roll extra bonus returns atkRollTotal to
+    its pre-toggle value (no residual delta)."""
+    _create_attacker(page, live_server_url, "PostRollUndo")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    _roll_attack_and_wait(page)
+    before = page.evaluate("() => window._diceRoller.atkRollTotal")
+    page.locator('[data-testid="atk-post-roll-bonus-toggle"]').check()
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').fill("10")
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').dispatch_event("input")
+    page.wait_for_timeout(100)
+    page.locator('[data-testid="atk-post-roll-bonus-toggle"]').uncheck()
+    page.wait_for_function(
+        "(prev) => window._diceRoller.atkRollTotal === prev",
+        arg=before,
+        timeout=2000,
+    )
+
+
+def test_post_roll_bonus_can_flip_miss_into_hit(page, live_server_url):
+    """A large enough post-roll bonus can push a missed attack across
+    the TN. The HIT/MISS branch is reactive so the result panel
+    re-renders when atkHit flips true."""
+    _create_attacker(page, live_server_url, "PostRollFlip")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    _roll_attack_and_wait(page)
+    # Manufacture a miss scenario by setting TN above the rolled total.
+    page.evaluate("""() => {
+        const r = window._diceRoller;
+        r.atkTN = r.atkRollTotal + 5;
+        r._atkUpdateHitState();
+    }""")
+    assert page.evaluate("() => window._diceRoller.atkHit") is False
+    page.locator('[data-testid="atk-post-roll-bonus-toggle"]').check()
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').fill("5")
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').dispatch_event("input")
+    page.wait_for_function(
+        "() => window._diceRoller.atkHit === true",
+        timeout=2000,
+    )
+
+
+def test_post_roll_bonus_updates_extra_damage_dice(page, live_server_url):
+    """Each 5 of post-roll bonus above the TN grants another rolled
+    damage die. Pinning a hit scenario and bumping the bonus by 5
+    increments ``atkExtraDice`` by 1."""
+    _create_attacker(page, live_server_url, "PostRollDmgDice")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    _roll_attack_and_wait(page)
+    # Force a clean hit-by-exactly-TN starting point so each +5 of
+    # post-roll bonus translates to exactly +1 extra damage die.
+    page.evaluate("""() => {
+        const r = window._diceRoller;
+        r.atkTN = r.atkRollTotal;
+        r._atkUpdateHitState();
+    }""")
+    base_dice = page.evaluate("() => window._diceRoller.atkExtraDice")
+    page.locator('[data-testid="atk-post-roll-bonus-toggle"]').check()
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').fill("5")
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').dispatch_event("input")
+    page.wait_for_function(
+        "(base) => window._diceRoller.atkExtraDice === base + 1",
+        arg=base_dice,
+        timeout=2000,
+    )
+
+
+def test_post_roll_bonus_breakdown_row_shows_when_active(page, live_server_url):
+    """The "+N extra bonus" line appears in the breakdown panel only
+    when the bonus is non-zero and the box is checked."""
+    _create_attacker(page, live_server_url, "PostRollBreakdown")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    _roll_attack_and_wait(page)
+    row = page.locator('[data-testid="atk-post-roll-bonus-breakdown"]')
+    assert row.is_visible() is False
+    page.locator('[data-testid="atk-post-roll-bonus-toggle"]').check()
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').fill("4")
+    page.locator('[data-testid="atk-post-roll-bonus-amount"]').dispatch_event("input")
+    page.wait_for_timeout(100)
+    assert row.is_visible() is True
+    assert "+4 extra bonus" in row.text_content()
+
+
+# ---------------------------------------------------------------------------
+# Copy-as-image surfaces on the attack roll result + damage result panels
+# ---------------------------------------------------------------------------
+
+
+def _wait_atk_copy_ready(page, timeout=10000):
+    page.wait_for_function(
+        """() => {
+            const modal = document.querySelector('[data-modal="attack"]');
+            if (!modal) return false;
+            const btns = modal.querySelectorAll('[data-action="copy-roll-image"]');
+            for (const b of btns) {
+                if (b.getAttribute('data-state') === 'ready'
+                        && b.offsetParent !== null) {
+                    return true;
+                }
+            }
+            return false;
+        }""",
+        timeout=timeout,
+    )
+
+
+def test_attack_result_has_copy_as_image_button(page, live_server_url):
+    """The attack-roll result panel exposes the Copy-as-image button
+    once the roll lands."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _create_attacker(page, live_server_url, "AtkCopy")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    _roll_attack_and_wait(page)
+    _wait_atk_copy_ready(page)
+
+
+def test_attack_damage_result_has_copy_as_image_button(page, live_server_url):
+    """After rolling damage, the damage-result panel exposes its own
+    Copy-as-image button (a fresh render reflecting damage dice +
+    damage total, not the attack snapshot)."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _create_attacker(page, live_server_url, "AtkDmgCopy")
+    _wait_alpine(page)
+    _open_attack_modal(page)
+    _roll_attack_and_wait(page)
+    # Force a guaranteed hit so the damage roll button appears.
+    page.evaluate("""() => {
+        const r = window._diceRoller;
+        r.atkTN = 0;
+        r._atkUpdateHitState();
+    }""")
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.atkHit === true",
+        timeout=2000,
+    )
+    page.locator('[data-modal="attack"] button:has-text("Make Damage Roll")').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.atkPhase === 'damage-result'",
+        timeout=5000,
+    )
+    _wait_atk_copy_ready(page)

@@ -528,8 +528,11 @@
                         </template>
                     </div>
                     <div class="bg-ink/5 rounded p-3">
-                        <div class="font-bold text-lg">
-                            Total: <span class="text-accent" data-freeform="total" x-text="ffTotal"></span>
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-bold text-lg">
+                                Total: <span class="text-accent" data-freeform="total" x-text="ffTotal"></span>
+                            </div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
                         </div>
                     </div>
                     <div class="flex justify-end gap-2 pt-2">
@@ -3746,9 +3749,12 @@
                     </div>
 
                     <div class="bg-ink/5 rounded p-3 text-sm">
-                        <div class="font-bold text-lg mb-1">
-                            Total: <span class="text-accent" x-text="baseTotal"></span>
-                            <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="wcLightWounds"></span></span>
+                        <div class="flex items-center justify-between gap-3 mb-1">
+                            <div class="font-bold text-lg">
+                                Total: <span class="text-accent" x-text="baseTotal"></span>
+                                <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="wcLightWounds"></span></span>
+                            </div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
                         </div>
                         {# Show breakdown only when there are bonuses beyond the kept dice #}
                         <template x-if="(formula?.flat || 0) > 0 || (formula?.void_spent || 0) > 0 || wcRaisesSpent > 0 || mirumotoPointsSpentThisRoll > 0 || wcDaidojiCounterattack || wcExcessSpentThisRoll > 0 || shosuroLowest3Bonus > 0 || convictionSpentThisRoll > 0">
@@ -4124,7 +4130,10 @@
                         </template>
                     </div>
                     <div class="bg-ink/5 rounded p-3 text-lg font-bold">
-                        Your roll: <span class="text-accent" data-testid="kakita-5th-total" x-text="k5RollTotal"></span>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>Your roll: <span class="text-accent" data-testid="kakita-5th-total" x-text="k5RollTotal"></span></div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
                     </div>
 
                     {# Bonuses applied to the contested roll, so the player
@@ -4319,6 +4328,37 @@
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
                         <span class="font-medium">Bonuses:</span>
                         <span x-text="[...(atkFormula?.bonus_sources || []), ..._mantisLiveAttackLabels()].join(', ')"></span>
+                    </div>
+
+                    {# Pre-roll "Extra bonus": GM-grant situational bonus
+                       that can't be auto-computed (positioning, Isawa
+                       Ishi 1st Dan grant, etc.). Updates the hit-chance
+                       table + expected damage row reactively while
+                       checked, and is folded into the formula on commit
+                       so the post-roll breakdown shows the labeled
+                       contribution. Defaults reset on every modal open
+                       (unchecked, +15, "surrounding"). #}
+                    <div class="border-t border-ink/10 pt-2">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox"
+                                   x-model="atkExtraBonusEnabled"
+                                   data-testid="atk-extra-bonus-toggle"
+                                   class="rounded text-accent">
+                            <span class="font-medium">Extra bonus</span>
+                        </label>
+                        <div x-show="atkExtraBonusEnabled" x-cloak
+                             class="flex gap-2 ml-6 mt-1 items-center">
+                            <input type="number"
+                                   x-model.number="atkExtraBonusAmount"
+                                   data-testid="atk-extra-bonus-amount"
+                                   class="w-20 border rounded px-2 py-1 text-sm text-center">
+                            <input type="text"
+                                   x-model="atkExtraBonusLabel"
+                                   maxlength="60"
+                                   data-testid="atk-extra-bonus-label"
+                                   placeholder="surrounding"
+                                   class="flex-1 border rounded px-2 py-1 text-sm">
+                        </div>
                     </div>
 
                     {# Damage-side bonuses (Courtier +Air, Mantis 2nd Dan +5, etc.).
@@ -4597,14 +4637,17 @@
                         </template>
                     </div>
                     <div class="bg-ink/5 rounded p-3 text-sm">
-                        <div class="font-bold text-lg mb-1">
-                            Total: <span class="text-accent" x-text="baseTotal"></span>
-                            <template x-if="atkIsDoubleAttack()">
-                                <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="atkEffectiveTN()"></span> (<span x-text="atkTN"></span> + 20)</span>
-                            </template>
-                            <template x-if="!atkIsDoubleAttack()">
-                                <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="atkTN"></span></span>
-                            </template>
+                        <div class="flex items-center justify-between gap-3 mb-1">
+                            <div class="font-bold text-lg">
+                                Total: <span class="text-accent" x-text="baseTotal"></span>
+                                <template x-if="atkIsDoubleAttack()">
+                                    <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="atkEffectiveTN()"></span> (<span x-text="atkTN"></span> + 20)</span>
+                                </template>
+                                <template x-if="!atkIsDoubleAttack()">
+                                    <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="atkTN"></span></span>
+                                </template>
+                            </div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
                         </div>
                         <div class="text-xs text-ink/70 mt-0.5">
                             &bull; <span x-text="keptSum"></span> from the kept dice
@@ -4676,6 +4719,39 @@
                         <div x-show="convictionSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="convictionSpentThisRoll"></span>
                             from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
+                        </div>
+                        <div x-show="atkPostRollBonusEnabled && atkPostRollBonusApplied !== 0" x-cloak
+                             class="text-xs text-ink/70 mt-0.5"
+                             data-testid="atk-post-roll-bonus-breakdown">
+                            &bull; <span x-text="(atkPostRollBonusApplied >= 0 ? '+' : '') + atkPostRollBonusApplied"></span> extra bonus
+                        </div>
+                    </div>
+
+                    {# Post-roll "Extra bonus": GM-grant adjustment
+                       applied after the dice land. Sits above the
+                       HIT/MISS branch so it can flip a near-miss into
+                       a hit; the damage-extra-dice display refreshes
+                       reactively as the number changes (each +5 over
+                       TN granting another rolled damage die). No text
+                       field per the spec - just a number that affects
+                       attack total + damage. #}
+                    <div class="bg-ink/5 rounded p-3">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox"
+                                   x-model="atkPostRollBonusEnabled"
+                                   @change="atkPostRollBonusToggle($event.target.checked)"
+                                   data-testid="atk-post-roll-bonus-toggle"
+                                   class="rounded text-accent">
+                            <span class="font-medium">Extra bonus</span>
+                        </label>
+                        <div x-show="atkPostRollBonusEnabled" x-cloak
+                             class="ml-6 mt-1">
+                            <input type="number"
+                                   x-model.number="atkPostRollBonusAmount"
+                                   @input="atkPostRollBonusUpdate()"
+                                   x-ref="atkPostRollBonusInput"
+                                   data-testid="atk-post-roll-bonus-amount"
+                                   class="w-24 border rounded px-2 py-1 text-sm text-center">
                         </div>
                     </div>
 
@@ -5172,7 +5248,10 @@
                         </template>
                     </div>
                     <div class="bg-ink/5 rounded p-3">
-                        <div class="font-bold text-2xl text-accent" x-text="atkDamageTotal + ' damage'"></div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-bold text-2xl text-accent" x-text="atkDamageTotal + ' damage'"></div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
                         <template x-if="atkDamageParts.length > 0 && (atkDamageFlat > 0 || atkDamageShosuroBonus > 0 || convictionSpentThisRoll > 0)">
                             <div class="mt-1">
                                 <div class="text-xs text-ink/70">
@@ -5352,7 +5431,10 @@
                         </template>
                     </div>
                     <div class="bg-ink/5 rounded p-3">
-                        <div class="font-bold text-lg">Contested roll: <span class="text-accent" x-text="duelContestedRoll"></span></div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-bold text-lg">Contested roll: <span class="text-accent" x-text="duelContestedRoll"></span></div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
                         <div x-show="formula?.void_spent > 0" x-cloak class="text-xs text-ink/70 mt-1">
                             &bull; +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span>
                             from <span x-text="formula?.void_spent"></span> spent void point<span x-show="formula?.void_spent > 1">s</span>
@@ -5426,9 +5508,12 @@
                         </template>
                     </div>
                     <div class="bg-ink/5 rounded p-3 text-sm">
-                        <div class="font-bold text-lg">
-                            Strike roll: <span class="text-accent" x-text="duelStrikeRoll"></span>
-                            <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="duelOpponentTN"></span></span>
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-bold text-lg">
+                                Strike roll: <span class="text-accent" x-text="duelStrikeRoll"></span>
+                                <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="duelOpponentTN"></span></span>
+                            </div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
                         </div>
                         <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="duelRestartBonus"></span> from winning previous round(s)
@@ -5502,7 +5587,10 @@
                         </template>
                     </div>
                     <div class="bg-ink/5 rounded p-3">
-                        <div class="font-bold text-2xl text-accent" x-text="duelDamageTotal + ' damage'"></div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-bold text-2xl text-accent" x-text="duelDamageTotal + ' damage'"></div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
                     </div>
 
                     {# Lucky reroll for duel damage #}
@@ -5630,7 +5718,10 @@
                     {# ── INITIATIVE result ── #}
                     <div x-show="formula && formula.is_initiative" x-cloak>
                         <div class="bg-ink/5 rounded p-3 text-sm">
-                            <div class="font-bold text-lg mb-2">Action Dice</div>
+                            <div class="flex items-center justify-between mb-2 gap-3">
+                                <div class="font-bold text-lg">Action Dice</div>
+                                {% include 'character/partials/copy_roll_image_button.html' %}
+                            </div>
                             <div class="flex flex-wrap items-center gap-2 mb-2">
                                 <template x-for="(die, i) in actionDice" :key="i">
                                     <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
@@ -5714,32 +5805,7 @@
                             <div class="font-bold text-lg">
                                 Total: <span class="text-accent" x-text="baseTotal"></span>
                             </div>
-                            {# Copy-as-image button. Pre-rendered while
-                               the animation was on screen so the click
-                               handler can stay synchronous up to the
-                               clipboard.write call (Safari requires
-                               this). Hidden until the render lands or
-                               fails so the user doesn't see a flash of
-                               a non-functional button. #}
-                            <button type="button"
-                                    x-show="rollImageStatus !== 'idle'"
-                                    x-cloak
-                                    @click="copyRollImage()"
-                                    :disabled="rollImageStatus !== 'ready' && rollImageStatus !== 'copied'"
-                                    :class="(rollImageStatus === 'failed')
-                                            ? 'bg-ink/5 text-ink/40 cursor-not-allowed'
-                                            : (rollImageStatus === 'copied')
-                                              ? 'bg-accent/10 text-accent'
-                                              : 'bg-ink/10 hover:bg-ink/20 text-ink'"
-                                    class="text-xs font-medium px-2.5 py-1 rounded transition-colors disabled:opacity-40 disabled:cursor-wait"
-                                    data-action="copy-roll-image"
-                                    :data-state="rollImageStatus"
-                                    title="Copy roll result as an image for pasting into Discord">
-                                <span x-show="rollImageStatus === 'rendering'">Preparing...</span>
-                                <span x-show="rollImageStatus === 'ready'">Copy as image</span>
-                                <span x-show="rollImageStatus === 'copied'">Copied!</span>
-                                <span x-show="rollImageStatus === 'failed'">Copy failed</span>
-                            </button>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
                         </div>
                         {# Only show the breakdown list when there are flat bonuses;
                            with no bonuses, the Total line above already says
@@ -6448,11 +6514,89 @@
                 this.ffFinalDice = [];
                 this.ffTotal = 0;
                 this.ffFormulaText = '';
+                this.rollImageStatus = 'idle';
+                this.rollImageBlob = null;
+                this._rollImageReqId++;
                 this.ffOpen = true;
             },
 
             close() {
                 this.ffOpen = false;
+            },
+
+            // ----------------------------------------------------------------
+            // Copy-as-image plumbing for the freeform modal. Freeform lives
+            // in its own ``x-data`` scope (siblings to the diceRoller), so
+            // it carries a local copy of the state under the same names the
+            // shared partial expects (rollImageStatus / rollImageBlob /
+            // copyRollImage / _prerenderRollImage). Alpine resolves x-show
+            // / @click bindings against whichever scope is active at render
+            // time, so the partial template works unchanged inside either
+            // owner.
+            // ----------------------------------------------------------------
+            rollImageStatus: 'idle',
+            rollImageBlob: null,
+            _rollImageReqId: 0,
+
+            _buildFreeformImagePayload() {
+                const all = this.ffFinalDice || [];
+                const cellsFrom = (arr) => arr.map(d => ({
+                    parts: Array.isArray(d.parts) && d.parts.length
+                        ? d.parts : [d.value],
+                }));
+                return {
+                    title: 'Freeform Roll',
+                    formula: this.ffFormulaText || '',
+                    kept: cellsFrom(all.filter(d => d.kept)),
+                    dropped: cellsFrom(all.filter(d => !d.kept)),
+                    bonuses: [],
+                    total: this.ffTotal || 0,
+                };
+            },
+
+            _prerenderRollImage() {
+                const t = window._trackingBridge;
+                if (!t || !t._charId) return;
+                const reqId = ++this._rollImageReqId;
+                this.rollImageBlob = null;
+                this.rollImageStatus = 'rendering';
+                fetch('/characters/' + t._charId + '/roll-image', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(this._buildFreeformImagePayload()),
+                }).then(resp => {
+                    if (reqId !== this._rollImageReqId) return null;
+                    if (!resp.ok) throw new Error('render failed');
+                    return resp.blob();
+                }).then(blob => {
+                    if (blob === null) return;
+                    if (reqId !== this._rollImageReqId) return;
+                    this.rollImageBlob = blob;
+                    this.rollImageStatus = 'ready';
+                }).catch(() => {
+                    if (reqId !== this._rollImageReqId) return;
+                    this.rollImageStatus = 'failed';
+                });
+            },
+
+            async copyRollImage() {
+                if (!this.rollImageBlob) {
+                    this.rollImageStatus = 'failed';
+                    return;
+                }
+                try {
+                    await navigator.clipboard.write([
+                        new ClipboardItem({'image/png': this.rollImageBlob}),
+                    ]);
+                    this.rollImageStatus = 'copied';
+                    setTimeout(() => {
+                        if (this.rollImageStatus === 'copied') {
+                            this.rollImageStatus = 'ready';
+                        }
+                    }, 1800);
+                } catch (e) {
+                    this.rollImageStatus = 'failed';
+                }
             },
 
             reset() {
@@ -6490,6 +6634,7 @@
                 const keptDice = sorted.slice(sorted.length - keptCount);
                 this.ffTotal = keptDice.reduce((s, d) => s + d.value, 0);
                 this.ffPhase = 'done';
+                this._prerenderRollImage();
             },
         };
     }
@@ -6713,6 +6858,7 @@
                 this.luckyOriginalWasHigher = this.luckyPrevBaseTotal > newDiceOnly;
                 // Lucky reroll changes the attack total/hit state - refresh annotation.
                 this._annotateSpentActionDie(this._describeAttackForDie(false));
+                this._prerenderRollImage(this._buildAttackImagePayload());
             },
 
             async useLuckyDamage() {
@@ -6743,6 +6889,7 @@
                 this.atkPhase = 'damage-result';
                 this.luckyOriginalWasHigher = prevTotal > this.atkDamageTotal;
                 this._annotateSpentActionDie(this._describeAttackForDie(true));
+                this._prerenderRollImage(this._buildAttackDamageImagePayload());
             },
 
             async useLuckyDuelContested() {
@@ -6863,6 +7010,21 @@
             atkRollTotal: 0,
             atkExcess: 0,
             atkExtraDice: 0,
+            // Arbitrary GM-grant bonuses on attack rolls. Both default
+            // unchecked at modal open time (so a prior roll's
+            // selection doesn't bleed into the next attack) and feed
+            // into atkRollTotal + the damage-extra-dice math when
+            // active. The pre-roll bonus also carries a label text
+            // which surfaces in the post-roll breakdown.
+            atkExtraBonusEnabled: false,
+            atkExtraBonusAmount: 15,
+            atkExtraBonusLabel: 'surrounding',
+            atkPostRollBonusEnabled: false,
+            atkPostRollBonusAmount: 5,
+            // Tracks how much of atkPostRollBonusAmount is currently
+            // folded into atkRollTotal so we can apply deltas
+            // (toggle, edit) without double-counting.
+            atkPostRollBonusApplied: 0,
             atkRaisesSpent: 0,
             atkConvictionSpent: 0,
             atkFailedParry: false,
@@ -8250,7 +8412,13 @@
                 // Pre-render the "copy as image" PNG so the Copy button
                 // on the result panel can write to the clipboard
                 // synchronously inside the user-gesture handler.
-                this._prerenderRollImage();
+                // Initiative renders an action-dice panel rather than
+                // a keep/drop result, so it uses a separate builder.
+                this._prerenderRollImage(
+                    this.formula && this.formula.is_initiative
+                        ? this._buildInitiativeImagePayload()
+                        : this._buildRollImagePayload()
+                );
             },
 
             // Copy-as-image: build the payload, post it to the server's
@@ -8294,13 +8462,20 @@
                 };
             },
 
-            _prerenderRollImage() {
+            _prerenderRollImage(payloadOrNull) {
+                // Argument: an explicit payload from a modal-specific
+                // builder, or omitted/null to use the dice-roller
+                // default. Each modal opts in by passing its own
+                // ``_buildXImagePayload()`` result; sharing the same
+                // status / blob / reqId means only one roll's image
+                // can be "ready" at a time (which matches the user's
+                // mental model - they're in one modal at once).
                 const t = window._trackingBridge;
                 if (!t || !t._charId) return;
                 const reqId = ++this._rollImageReqId;
                 this.rollImageBlob = null;
                 this.rollImageStatus = 'rendering';
-                const payload = this._buildRollImagePayload();
+                const payload = payloadOrNull || this._buildRollImagePayload();
                 fetch('/characters/' + t._charId + '/roll-image', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -8318,6 +8493,230 @@
                     if (reqId !== this._rollImageReqId) return;
                     this.rollImageStatus = 'failed';
                 });
+            },
+
+            // ------------------------------------------------------------------
+            // Modal-specific payload builders for the Copy-as-image renderer.
+            // Each returns the same shape the dice-card service expects:
+            //   {title, formula, kept, dropped, bonuses, total, footer?}
+            // Common helpers:
+            //   _cellsFromDice(arr): converts {value, parts?} entries into the
+            //     server's ``[{parts: [n, ...]}]`` cell list, preserving any
+            //     reroll-tens chain.
+            // ------------------------------------------------------------------
+
+            _cellsFromDice(arr) {
+                return (arr || []).map(d => ({
+                    parts: Array.isArray(d.parts) && d.parts.length
+                        ? d.parts : [d.value],
+                }));
+            },
+
+            _buildInitiativeImagePayload() {
+                // Initiative renders its dice as "action dice" rather
+                // than the keep/drop split used elsewhere; treat each
+                // action die as kept for the card. The total isn't
+                // meaningful here (no single number for initiative),
+                // so display the highest die as a stand-in label.
+                const dice = (this.actionDice || []).map(d => ({
+                    parts: [d.value],
+                }));
+                const top = (this.actionDice || [])
+                    .reduce((m, d) => Math.max(m, d.value || 0), 0);
+                return {
+                    title: this.title || 'Initiative',
+                    formula: this.formulaText || '',
+                    kept: dice,
+                    dropped: [],
+                    bonuses: [],
+                    total: top,
+                    footer: 'Action dice',
+                };
+            },
+
+            _buildFreeformImagePayload() {
+                const all = (this.ffFinalDice || []);
+                return {
+                    title: 'Freeform Roll',
+                    formula: this.ffFormulaText || '',
+                    kept: this._cellsFromDice(all.filter(d => d.kept)),
+                    dropped: this._cellsFromDice(all.filter(d => !d.kept)),
+                    bonuses: [],
+                    total: this.ffTotal || 0,
+                };
+            },
+
+            _buildWoundCheckImagePayload() {
+                const bonuses = [];
+                for (const b of (this.formula?.bonuses || [])) {
+                    if (b && b.amount && b.label) {
+                        bonuses.push({label: b.label, amount: b.amount});
+                    }
+                }
+                if ((this.wcRaisesSpent || 0) > 0) {
+                    const n = this.wcRaisesSpent;
+                    bonuses.push({
+                        label: n === 1 ? 'from 1 raise spent'
+                                       : 'from ' + n + ' raises spent',
+                        amount: n * 5,
+                    });
+                }
+                if ((this.wcPostRollVpSpent || 0) > 0) {
+                    const n = this.wcPostRollVpSpent;
+                    bonuses.push({
+                        label: 'from ' + n + ' VP spent post-roll',
+                        amount: n * 5,
+                    });
+                }
+                const passed = !!this.wcPassed;
+                const margin = passed
+                    ? (this.wcRollTotal || this.baseTotal || 0) - (this.wcLightWounds || 0)
+                    : (this.wcLightWounds || 0) - (this.wcRollTotal || this.baseTotal || 0);
+                const footer = passed
+                    ? `vs TN ${this.wcLightWounds || 0} - Passed (+${margin})`
+                    : `vs TN ${this.wcLightWounds || 0} - Failed by ${margin}`;
+                return {
+                    title: 'Wound Check',
+                    formula: this.formulaText || '',
+                    kept: this._cellsFromDice(this.keptDice || []),
+                    dropped: this._cellsFromDice(this.unkeptDice || []),
+                    bonuses: bonuses,
+                    total: this.wcRollTotal || this.baseTotal || 0,
+                    footer: footer,
+                };
+            },
+
+            _buildAttackImagePayload() {
+                const bonuses = [];
+                for (const b of (this.atkFormula?.bonuses || [])) {
+                    if (b && b.amount && b.label) {
+                        bonuses.push({label: b.label, amount: b.amount});
+                    }
+                }
+                if ((this.atkRaisesSpent || 0) > 0) {
+                    const n = this.atkRaisesSpent;
+                    bonuses.push({
+                        label: n === 1 ? 'from 1 raise spent'
+                                       : 'from ' + n + ' raises spent',
+                        amount: n * 5,
+                    });
+                }
+                if ((this.atkPostRollBonusApplied || 0) !== 0) {
+                    bonuses.push({
+                        label: 'extra bonus',
+                        amount: this.atkPostRollBonusApplied,
+                    });
+                }
+                let footer;
+                if (this.atkHit) {
+                    const extras = this.atkExtraDice || 0;
+                    const noun = extras === 1 ? 'die' : 'dice';
+                    footer = `vs TN ${this.atkEffectiveTN()} - Hit (+${extras} damage ${noun})`;
+                } else {
+                    footer = `vs TN ${this.atkEffectiveTN()} - Missed by ${-(this.atkExcess || 0)}`;
+                }
+                return {
+                    title: (this.atkFormula?.label || 'Attack')
+                        .replace(/\s*\(.*\)/, ''),
+                    formula: (this.atkFormula?.rolled || 0)
+                        + 'k' + (this.atkFormula?.kept || 0),
+                    kept: this._cellsFromDice(this.keptDice || []),
+                    dropped: this._cellsFromDice(this.unkeptDice || []),
+                    bonuses: bonuses,
+                    total: this.atkRollTotal || this.baseTotal || 0,
+                    footer: footer,
+                };
+            },
+
+            _buildAttackDamageImagePayload() {
+                // The damage roll reuses ``finalDice`` after the
+                // damage tray rolls (it's the damage dice now, not
+                // the attack ones). ``atkDamageTotal`` carries the
+                // kept-sum + flat; we surface it as the trophy line.
+                // ``atkDamageParts`` is an array of strings ("+N from
+                // <source>") that we lift into named bonus entries.
+                return {
+                    title: 'Damage',
+                    formula: (this.atkDamageRolled || 0)
+                        + 'k' + (this.atkDamageKept || 0),
+                    kept: this._cellsFromDice(
+                        (this.finalDice || []).filter(d => d.kept)
+                    ),
+                    dropped: this._cellsFromDice(
+                        (this.finalDice || []).filter(d => !d.kept)
+                    ),
+                    bonuses: [],
+                    total: this.atkDamageTotal || 0,
+                };
+            },
+
+            _buildDuelContestedImagePayload() {
+                return {
+                    title: 'Iaijutsu Duel - Contested',
+                    formula: this.formulaText || '',
+                    kept: this._cellsFromDice(this.keptDice || []),
+                    dropped: this._cellsFromDice(this.unkeptDice || []),
+                    bonuses: [],
+                    total: this.duelContestedRoll || this.baseTotal || 0,
+                };
+            },
+
+            _buildDuelStrikeImagePayload() {
+                return {
+                    title: 'Iaijutsu Duel - Strike',
+                    formula: this.formulaText || '',
+                    kept: this._cellsFromDice(this.keptDice || []),
+                    dropped: this._cellsFromDice(this.unkeptDice || []),
+                    bonuses: [],
+                    total: this.duelStrikeRoll || this.baseTotal || 0,
+                };
+            },
+
+            _buildDuelDamageImagePayload() {
+                const dice = (this.duelDamageDice || this.atkDamageDice || [])
+                    .map(d => ({
+                        parts: Array.isArray(d.parts) && d.parts.length
+                            ? d.parts : [d.value],
+                    }));
+                return {
+                    title: 'Iaijutsu Duel - Damage',
+                    formula: '',
+                    kept: dice,
+                    dropped: [],
+                    bonuses: [],
+                    total: this.duelDamageTotal || this.atkDamageTotal || 0,
+                };
+            },
+
+            _buildKakita5thImagePayload() {
+                const bonuses = [];
+                if ((this.k5NoIaijutsuBonus || 0) > 0) {
+                    bonuses.push({
+                        label: '5th Dan (opponent has no iaijutsu)',
+                        amount: this.k5NoIaijutsuBonus,
+                    });
+                }
+                if ((this.k5KakitaBonus || 0) > 0) {
+                    bonuses.push({
+                        label: 'Kakita 3rd Dan',
+                        amount: this.k5KakitaBonus,
+                    });
+                }
+                if ((this.k5ContestSkillBonus || 0) > 0) {
+                    bonuses.push({
+                        label: 'contested-roll skill gap',
+                        amount: this.k5ContestSkillBonus,
+                    });
+                }
+                const all = this.k5RollDice || [];
+                return {
+                    title: 'Kakita 5th Dan Contest',
+                    formula: this.k5FormulaText || '',
+                    kept: this._cellsFromDice(all.filter(d => d.kept)),
+                    dropped: this._cellsFromDice(all.filter(d => !d.kept)),
+                    bonuses: bonuses,
+                    total: this.k5RollTotal || 0,
+                };
             },
 
             async copyRollImage() {
@@ -8870,6 +9269,10 @@
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
+                // Clear copy-as-image state so the modal opens fresh.
+                this.rollImageStatus = 'idle';
+                this.rollImageBlob = null;
+                this._rollImageReqId++;
                 this.duelOpen = true;
             },
 
@@ -8919,6 +9322,7 @@
                 this.duelContestedRoll = this.baseTotal;
                 this.duelContestedDone = true;
                 this.duelPhase = 'contested-result';
+                this._prerenderRollImage(this._buildDuelContestedImagePayload());
             },
 
             duelProceedToFocusStrike() {
@@ -8964,6 +9368,7 @@
                 this.duelStrikeHit = excess >= 0;
                 this.duelStrikeExcess = excess;
                 this.duelPhase = 'strike-result';
+                this._prerenderRollImage(this._buildDuelStrikeImagePayload());
             },
 
             duelComputeDamage() {
@@ -9002,6 +9407,7 @@
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
                 this.duelDamageTotal = this.keptSum + dmg.flat;
                 this.duelPhase = 'damage-result';
+                this._prerenderRollImage(this._buildDuelDamageImagePayload());
             },
 
             duelApplyOpponentRoll() {
@@ -9080,6 +9486,20 @@
                 this.atkFailedParry = false;
                 this.atkIsawaTnTrade = false;
                 this.atkOtakuTradeDice = false;
+                // Reset arbitrary bonuses every modal open so a prior
+                // attack's selection never leaks. Defaults match the
+                // initial Alpine state.
+                this.atkExtraBonusEnabled = false;
+                this.atkExtraBonusAmount = 15;
+                this.atkExtraBonusLabel = 'surrounding';
+                this.atkPostRollBonusEnabled = false;
+                this.atkPostRollBonusAmount = 5;
+                this.atkPostRollBonusApplied = 0;
+                // Reset the copy-as-image state so a previous roll's
+                // blob doesn't bleed under this modal's Copy button.
+                this.rollImageStatus = 'idle';
+                this.rollImageBlob = null;
+                this._rollImageReqId++;
                 this.atkDojiUntouchedTarget = false;
                 this.atkSpecApplies = this.attackSpecs.map(() => false);
                 this.atkDojiPhase = 1;
@@ -9134,6 +9554,9 @@
                 const t = window._trackingBridge;
                 if (t?.kakita5thDanUsed) return;
                 this.k5Phase = 'pre';
+                this.rollImageStatus = 'idle';
+                this.rollImageBlob = null;
+                this._rollImageReqId++;
                 this.k5OpponentHasIaijutsu = true;
                 this.k5DefenderPhase = 11;
                 this.k5OpponentSkillRank = 4;
@@ -9244,6 +9667,7 @@
                     ? `${rolled}k${kept} + ${flat}`
                     : `${rolled}k${kept}`;
                 this.k5Phase = 'result';
+                this._prerenderRollImage(this._buildKakita5thImagePayload());
             },
 
             async rollKakita5thDanDamage() {
@@ -9551,6 +9975,64 @@
                 return base;
             },
 
+            _atkExtraBonusFlat() {
+                // GM-grant pre-roll bonus: amount only counts when the
+                // checkbox is on; non-numeric input defaults to 0 so
+                // the math stays sane while the user is typing.
+                if (!this.atkExtraBonusEnabled) return 0;
+                const n = parseInt(this.atkExtraBonusAmount, 10);
+                return Number.isFinite(n) ? n : 0;
+            },
+
+            // Post-roll arbitrary bonus on the attack result panel.
+            // ``Applied`` tracks how much is currently folded into
+            // atkRollTotal so we can apply deltas without
+            // double-counting (toggle off, edit number while checked).
+            atkPostRollBonusToggle(enabled) {
+                if (enabled) {
+                    const amt = parseInt(this.atkPostRollBonusAmount, 10) || 0;
+                    if (amt !== 0) {
+                        this.atkRollTotal += amt;
+                        this.baseTotal += amt;
+                        this.atkPostRollBonusApplied = amt;
+                        this._atkUpdateHitState();
+                    } else {
+                        this.atkPostRollBonusApplied = 0;
+                    }
+                    // Auto-focus the number field with its content
+                    // selected so the user types directly to replace
+                    // the default. Wrapped in $nextTick so Alpine has
+                    // rendered the input before we ref it.
+                    this.$nextTick(() => {
+                        const el = this.$refs.atkPostRollBonusInput;
+                        if (el) { el.focus(); el.select(); }
+                    });
+                } else {
+                    if (this.atkPostRollBonusApplied !== 0) {
+                        this.atkRollTotal -= this.atkPostRollBonusApplied;
+                        this.baseTotal -= this.atkPostRollBonusApplied;
+                        this.atkPostRollBonusApplied = 0;
+                        this._atkUpdateHitState();
+                    }
+                    // Restore the default so a subsequent toggle-on
+                    // starts from +5 again.
+                    this.atkPostRollBonusAmount = 5;
+                }
+            },
+
+            atkPostRollBonusUpdate() {
+                if (!this.atkPostRollBonusEnabled) return;
+                const next = parseInt(this.atkPostRollBonusAmount, 10);
+                const newAmt = Number.isFinite(next) ? next : 0;
+                const delta = newAmt - this.atkPostRollBonusApplied;
+                if (delta !== 0) {
+                    this.atkRollTotal += delta;
+                    this.baseTotal += delta;
+                    this.atkPostRollBonusApplied = newAmt;
+                    this._atkUpdateHitState();
+                }
+            },
+
             atkHitChance(voidCount) {
                 const probs = this._atkProbsForCurrent();
                 if (!probs) return 0;
@@ -9567,8 +10049,9 @@
                 // Mantis Wave-Treader: offensive posture (+5) plus 5th Dan
                 // offensive-posture-count accumulator (+N) feed into the target.
                 const postureFlat = this._mantisLiveAttackFlat();
+                const extraBonus = this._atkExtraBonusFlat();
                 const target = Math.max(0,
-                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - dojiUntouched - shinjoPhase - kakita3rd - shosuroFlat - postureFlat - specFlat);
+                    this.atkEffectiveTN() - (probs.flat || 0) - vpFlat - dojiBonus - dojiUntouched - shinjoPhase - kakita3rd - shosuroFlat - postureFlat - specFlat - extraBonus);
                 return target < arr.length ? arr[target] : 0;
             },
 
@@ -9584,7 +10067,8 @@
                 const shosuroFlat = probs.shosuro_flats?.[rk] || 0;
                 const specFlat = this._attackSpecBonus();
                 const postureFlat = this._mantisLiveAttackFlat();
-                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + dojiUntouched + shinjoPhase + kakita3rd + shosuroFlat + postureFlat + specFlat;
+                const extraBonus = this._atkExtraBonusFlat();
+                return (probs.avgs?.[rk] || 0) + (probs.flat || 0) + vpFlat + dojiBonus + dojiUntouched + shinjoPhase + kakita3rd + shosuroFlat + postureFlat + specFlat + extraBonus;
             },
 
             atkAvgExtraDice(voidCount) {
@@ -9800,6 +10284,23 @@
                     formula.flat = (formula.flat || 0) + 5;
                     formula.bonus_sources = [...(formula.bonus_sources || []), '+5 from offensive posture'];
                     formula.bonuses = [...(formula.bonuses || []), { label: 'offensive posture', amount: 5 }];
+                }
+                // Pre-roll "Extra bonus" GM grant. Folds into the
+                // formula's flat + bonuses so the post-roll breakdown
+                // and any subsequent damage / extra-die math uses the
+                // updated total. The label has no mechanical effect -
+                // it's surfaced verbatim in the breakdown.
+                const _atkExtraBonus = this._atkExtraBonusFlat();
+                if (this.atkExtraBonusEnabled && _atkExtraBonus !== 0) {
+                    const _atkExtraLabel = (this.atkExtraBonusLabel || '').trim() || 'extra bonus';
+                    formula.flat = (formula.flat || 0) + _atkExtraBonus;
+                    const _sign = _atkExtraBonus >= 0 ? '+' : '';
+                    formula.bonus_sources = [...(formula.bonus_sources || []),
+                        `${_sign}${_atkExtraBonus} from ${_atkExtraLabel}`];
+                    formula.bonuses = [...(formula.bonuses || []), {
+                        label: _atkExtraLabel,
+                        amount: _atkExtraBonus,
+                    }];
                 }
                 // Mantis Wave-Treader 5th Dan: per-round accumulator of +N to
                 // attack where N is the count of offensive postures declared.
@@ -10065,6 +10566,7 @@
                 this.atkPhase = 'result';
                 // Annotate the auto-spent action die with this attack's result.
                 this._annotateSpentActionDie(this._describeAttackForDie(false));
+                this._prerenderRollImage(this._buildAttackImagePayload());
             },
 
             atkSpendRaise() {
@@ -10197,6 +10699,7 @@
                 // Now that damage is rolled, refresh the action die's tooltip
                 // so it includes the damage total.
                 this._annotateSpentActionDie(this._describeAttackForDie(true));
+                this._prerenderRollImage(this._buildAttackDamageImagePayload());
             },
 
             // --- Wound Check ---
@@ -10221,6 +10724,11 @@
                 this.wcDaidojiCounterattack = false;
                 this.wcIsStrike = false;
                 this.wcPhase = 'pre';
+                // Reset the copy-as-image state so a previous roll's
+                // blob can't be pasted under this one's Copy button.
+                this.rollImageStatus = 'idle';
+                this.rollImageBlob = null;
+                this._rollImageReqId++;
                 this.wcRaisesSpent = 0;
                 this.wcResultApplied = false;
                 // Reset Kitsune Warden Special Ability swap on each open.
@@ -10485,6 +10993,7 @@
 
                 this.wcResultApplied = false;
                 this.wcPhase = 'result';
+                this._prerenderRollImage(this._buildWoundCheckImagePayload());
 
                 // Auto-apply if no discretionary bonuses and failed (or iaijutsu)
                 if (!this.wcPassed && (this.wcIsStrike || !this.wcHasDiscretionary)) {
