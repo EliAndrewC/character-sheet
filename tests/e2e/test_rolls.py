@@ -137,28 +137,35 @@ def test_parry_no_void_submenu_arrow_when_no_vp(page, live_server_url):
         or not page.locator('[data-parry-void-submenu="roll"]').is_visible()
 
 
-def test_click_ring_opens_athletics_modal(page, live_server_url):
+def test_click_ring_opens_bare_ring_modal_without_athletics(page, live_server_url):
+    """A character without the athletics knack sees only one row in
+    the ring tile's picker - the bare ``(2 * Ring) k (Ring)`` roll -
+    and the resulting modal title is the ring name (no Athletics
+    prefix)."""
     _create_roller(page, live_server_url, "ClickRing")
-    page.locator('[data-roll-key="athletics:Earth"]').click()
-    # Athletics ring clicks always show the roll menu; click "Roll" to proceed
+    page.locator('[data-roll-key="ring:Earth"]').click()
     page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=5000)
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
-    menu.locator('button.font-medium:has-text("Roll")').first.click()
+    # Only the bare "Roll Earth" row; no athletics row because the
+    # character has no athletics knack.
+    assert menu.locator('[data-ring-athletics="Earth"]').count() == 0
+    menu.locator('[data-ring-bare="Earth"]').click()
     page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
     title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
-    assert "Athletics" in title and "Earth" in title
+    assert "Earth" in title
+    assert "Athletics" not in title
 
 
 def test_click_ring_always_shows_menu_even_with_zero_vp(page, live_server_url):
-    """Athletics ring click opens the roll menu (with void options) even at 0 VP."""
+    """Ring tile click opens the roll menu (with void options) even at 0 VP."""
     _create_roller(page, live_server_url, "ClickRingZeroVP")
     # _create_roller already zeroes out VP
     vp = page.evaluate("window._trackingBridge?.voidPoints")
     assert vp == 0, "precondition: test char has 0 VP"
-    page.locator('[data-roll-key="athletics:Air"]').click()
+    page.locator('[data-roll-key="ring:Air"]').click()
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
     page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=3000)
-    assert menu.is_visible(), "roll menu should appear for athletics ring click"
+    assert menu.is_visible(), "roll menu should appear for ring tile click"
     assert menu.text_content() and "Air" in menu.text_content()
 
 
@@ -173,7 +180,7 @@ def test_roll_menu_flipped_above_is_close_to_clicked_element(page, live_server_u
     # Shrink the viewport and scroll so the ring sits near the bottom edge,
     # forcing the menu to flip above.
     page.set_viewport_size({"width": 900, "height": 500})
-    ring = page.locator('[data-roll-key="athletics:Earth"]')
+    ring = page.locator('[data-roll-key="ring:Earth"]')
     ring.scroll_into_view_if_needed()
     page.evaluate(
         "el => { const r = el.getBoundingClientRect();"
@@ -200,9 +207,14 @@ def test_click_ring_shows_void_options_when_vp_available(page, live_server_url):
     # Restore VP for this test
     page.evaluate("window._trackingBridge.voidPoints = 2; window._trackingBridge.save()")
     page.wait_for_timeout(200)
-    page.locator('[data-roll-key="athletics:Earth"]').click()
+    page.locator('[data-roll-key="ring:Earth"]').click()
     page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=3000)
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    # Hover the bare-ring row to reveal the void-spending submenu
+    # (each picker row carries its own submenu, symmetric with the
+    # athletics-knack picker's per-row layout).
+    menu.locator('[data-ring-bare="Earth"]').hover()
+    page.wait_for_timeout(150)
     text = menu.text_content()
     assert "Spend 1 void point" in text
     assert "Spend 2 void points" in text
@@ -218,6 +230,49 @@ def _create_athletics_knack_char(page, live_server_url, name="AthKnack"):
     select_school(page, "togashi_ise_zumi")
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Athletics knack setup")
+
+
+def test_ring_tile_picker_with_athletics_shows_both_rows(page, live_server_url):
+    """A character with the athletics knack sees two rows in the ring
+    tile picker: a bare ``Roll <Ring>`` and ``Roll <Ring> athletics``.
+    Each row addresses a distinct formula via its own
+    ``data-ring-bare`` / ``data-ring-athletics`` selector."""
+    _create_athletics_knack_char(page, live_server_url, "RingPickerAth")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="ring:Fire"]').click()
+    page.wait_for_selector('[data-ring-picker-menu]', state='visible', timeout=3000)
+    assert page.locator('[data-ring-bare="Fire"]').count() == 1
+    assert page.locator('[data-ring-athletics="Fire"]').count() == 1
+    # Clicking the bare row produces a modal whose title is just the
+    # ring name (no Athletics prefix).
+    page.locator('[data-ring-bare="Fire"]').click()
+    page.wait_for_selector('[data-modal="dice-roller"] h3.text-accent', state='visible', timeout=5000)
+    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
+    assert "Fire" in title
+    assert "Athletics" not in title
+
+
+def test_ring_tile_picker_void_submenus_per_row(page, live_server_url):
+    """Each row in the ring tile picker has its own void-spending
+    submenu, so the player can hover the bare row OR the athletics row
+    and pick VP independently."""
+    _create_athletics_knack_char(page, live_server_url, "RingPickerVoid")
+    # Togashi starts with Void 3 so VP options exist by default.
+    vp = page.evaluate("window._trackingBridge?.voidPoints")
+    assert vp > 0, "precondition: VP available"
+    page.locator('[data-roll-key="ring:Earth"]').click()
+    page.wait_for_selector('[data-ring-picker-menu]', state='visible', timeout=3000)
+    # Bare-row submenu.
+    page.locator('[data-ring-bare="Earth"]').hover()
+    page.wait_for_selector('[data-ring-bare-void-submenu="Earth"]', state='visible', timeout=3000)
+    bare_submenu = page.locator('[data-ring-bare-void-submenu="Earth"]')
+    assert "Spend 1 void point" in bare_submenu.text_content()
+    # Athletics-row submenu.
+    page.locator('[data-ring-athletics="Earth"]').hover()
+    page.wait_for_selector('[data-ring-athletics-void-submenu="Earth"]', state='visible', timeout=3000)
+    ath_submenu = page.locator('[data-ring-athletics-void-submenu="Earth"]')
+    assert "Spend 1 void point" in ath_submenu.text_content()
 
 
 def test_athletics_knack_icon_opens_ring_picker(page, live_server_url):
@@ -489,12 +544,19 @@ def test_disable_animation_preference(page, live_server_url):
 
 
 def test_athletics_label_in_modal(page, live_server_url):
-    _create_roller(page, live_server_url, "AthleticsChar")
-    page.locator('[data-roll-key="athletics:Water"]').click()
-    # Athletics ring clicks always show the roll menu; click "Roll" to proceed
+    """A character with the athletics knack sees two rows in the ring
+    tile's picker; clicking the athletics row produces a modal whose
+    title carries both ``Athletics`` and the ring name."""
+    _create_athletics_knack_char(page, live_server_url, "AthleticsLabel")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="ring:Water"]').click()
     page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=5000)
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
-    menu.locator('button.font-medium:has-text("Roll")').first.click()
+    # Both rows visible.
+    assert menu.locator('[data-ring-bare="Water"]').count() == 1
+    assert menu.locator('[data-ring-athletics="Water"]').count() == 1
+    menu.locator('[data-ring-athletics="Water"]').click()
     page.wait_for_selector('[data-modal="dice-roller"] >> text="Total:"',
                            state='visible', timeout=5000)
     title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
@@ -1467,3 +1529,125 @@ def test_athletics_only_die_menu_restricts_to_athletics(page, live_server_url):
     assert page.locator('[data-action-die-menu-item="predeclared-parry"]').count() == 0
     # Manual mark-spent is always available.
     assert page.locator('[data-action="action-die-spent"]').count() == 1
+
+
+def test_roll_result_copy_as_image_button(page, live_server_url):
+    """The dice-roller result panel surfaces a "Copy as image" button
+    that pre-renders the dice card during the animation and writes a
+    PNG to the clipboard when clicked.
+
+    The clicktest grants clipboard permissions to the browser context,
+    rolls a skill, waits for the button to reach the 'ready' state
+    (meaning the server-rendered PNG landed and the Blob is held in
+    Alpine state), clicks it, and reads the clipboard back to confirm
+    a PNG was deposited."""
+    # Clipboard write requires a permission grant in Playwright.
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _create_roller(page, live_server_url, "CopyImg")
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_for_roll_result(page)
+    # Wait for the pre-render to land. The state machine goes
+    # 'idle' -> 'rendering' -> 'ready' (or 'failed'); the
+    # button's :data-state attribute mirrors that flag.
+    copy_btn = page.locator('[data-action="copy-roll-image"]')
+    page.wait_for_function(
+        """() => {
+            const el = document.querySelector('[data-action="copy-roll-image"]');
+            return el && el.getAttribute('data-state') === 'ready';
+        }""",
+        timeout=10000,
+    )
+    assert copy_btn.is_visible()
+    assert "Copy as image" in copy_btn.text_content()
+
+    copy_btn.click()
+    # Click flips the label to "Copied!" once the clipboard.write
+    # promise resolves.
+    page.wait_for_function(
+        """() => {
+            const el = document.querySelector('[data-action="copy-roll-image"]');
+            return el && el.getAttribute('data-state') === 'copied';
+        }""",
+        timeout=3000,
+    )
+    assert "Copied" in copy_btn.text_content()
+
+    # Read the clipboard contents back and confirm a PNG was written.
+    has_png = page.evaluate("""async () => {
+        const items = await navigator.clipboard.read();
+        for (const it of items) {
+            if (it.types.includes('image/png')) {
+                const blob = await it.getType('image/png');
+                const buf = await blob.arrayBuffer();
+                const head = new Uint8Array(buf, 0, 8);
+                return head[0] === 0x89 && head[1] === 0x50
+                    && head[2] === 0x4E && head[3] === 0x47;
+            }
+        }
+        return false;
+    }""")
+    assert has_png, "Expected a PNG to land on the clipboard"
+
+
+def test_roll_result_copy_button_hidden_during_animation(page, live_server_url):
+    """The Copy button is gated on ``rollImageStatus !== 'idle'`` so
+    a brand-new roll doesn't flash a non-functional button on screen
+    while the dice animation is still running. Confirms the button is
+    absent before the result-panel phase fires, then present after."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _create_roller(page, live_server_url, "CopyHidden")
+    # Disable the animation so the result panel appears effectively
+    # synchronously - we just need a no-animation control to confirm
+    # the button's visibility flips, not to time the animation itself.
+    page.evaluate("window._diceRoller.prefs.dice_animation_enabled = false")
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_for_roll_result(page)
+    page.wait_for_function(
+        """() => {
+            const el = document.querySelector('[data-action="copy-roll-image"]');
+            return el && el.getAttribute('data-state') !== 'idle';
+        }""",
+        timeout=5000,
+    )
+    assert page.locator('[data-action="copy-roll-image"]').is_visible()
+
+
+def test_streetwise_surfaces_as_alternative_total(page, live_server_url):
+    """Streetwise's +5 free raise is conditional on the bounty-hunter
+    authority context, so it appears as an Alternative totals row on
+    the roll modal rather than being baked into the unconditional
+    total. Verifies the row renders for all four listed skills."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "StreetwiseAlt")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_intimidation", 1)
+    page.check('input[name="camp_adv_streetwise"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Streetwise setup")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+
+    page.locator('[data-roll-key="skill:intimidation"]').click()
+    _wait_for_roll_result(page)
+    modal_text = page.locator('[data-modal="dice-roller"]').text_content() or ""
+    assert "Alternative totals" in modal_text
+    assert "when invoking bounty hunter authority" in modal_text
+    # The alternative row should show baseTotal + 5 next to the label.
+    # Pull the unconditional total + the alternative total and verify
+    # the +5 increment.
+    base_total = int(page.evaluate(
+        "() => document.querySelector('[data-modal=\"dice-roller\"] .font-bold.text-lg .text-accent').textContent"
+    ))
+    alt_total = int(page.evaluate(
+        """() => {
+            const rows = Array.from(document.querySelectorAll(
+                '[data-modal="dice-roller"] .border-t .text-sm'
+            ));
+            const row = rows.find(r => r.textContent.includes(
+                'when invoking bounty hunter authority'));
+            return parseInt(row.querySelector('.text-accent').textContent, 10);
+        }"""
+    ))
+    assert alt_total == base_total + 5

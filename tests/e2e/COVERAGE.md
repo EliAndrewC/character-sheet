@@ -767,10 +767,14 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Clicking a void option under Roll Parry rolls with void spent → `test_rolls.py::test_parry_void_submenu_click_rolls_with_void`
 - [x] Clicking a void option under Predeclared Parry rolls with +5 and void spent → `test_rolls.py::test_parry_void_submenu_click_rolls_predeclared_with_void`
 - [x] Parry menu hides void-submenu arrows when VP is 0 → `test_rolls.py::test_parry_no_void_submenu_arrow_when_no_vp`
-- [x] Click a Ring opens an Athletics roll modal → `test_rolls.py::test_click_ring_opens_athletics_modal`
+- [x] Click a Ring on a character WITHOUT the athletics knack opens the picker with one row ("Roll <Ring>") and the resulting modal title is just the ring name → `test_rolls.py::test_click_ring_opens_bare_ring_modal_without_athletics`
+- [x] Click a Ring on a character WITH the athletics knack opens the picker with two rows (bare + athletics), each addressable via dedicated data attributes; the bare row's modal title omits "Athletics" → `test_rolls.py::test_ring_tile_picker_with_athletics_shows_both_rows`
+- [x] Ring tile picker rows each carry their own void-spending submenu so the player can pick VP independently for bare vs athletics → `test_rolls.py::test_ring_tile_picker_void_submenus_per_row`
 - [x] Click a Ring always opens the roll menu (even with 0 VP) → `test_rolls.py::test_click_ring_always_shows_menu_even_with_zero_vp`
 - [x] Click a Ring with VP shows "Spend N void points" dropdown options → `test_rolls.py::test_click_ring_shows_void_options_when_vp_available`
 - [x] Roll menu flipped above the clicked element sits close to it (no large gap) → `test_rolls.py::test_roll_menu_flipped_above_is_close_to_clicked_element`
+- [x] Roll-result modal carries a "Copy as image" button that pre-renders a PNG dice card while the animation is on screen and writes it to the clipboard on click (verifies the PNG actually lands on the clipboard) → `test_rolls.py::test_roll_result_copy_as_image_button`
+- [x] Copy-as-image button is hidden during the dice animation and surfaces only once the pre-rendered PNG is ready → `test_rolls.py::test_roll_result_copy_button_hidden_during_animation`
 - [x] Athletics knack die icon opens a ring picker (Air/Fire/Water/Earth) → `test_rolls.py::test_athletics_knack_icon_opens_ring_picker`
 - [x] Selecting a ring from the athletics picker rolls that ring's Athletics formula → `test_rolls.py::test_athletics_knack_picker_rolls_selected_ring`
 - [x] Hovering a ring in the athletics picker reveals a void-spend submenu → `test_rolls.py::test_athletics_knack_picker_void_submenu`
@@ -1152,10 +1156,16 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Minor Clan Major Ally adds a ``+3.0 for <Clan>`` pill to Rank and Recognition → `test_sheet_display.py::test_status_minor_clan_major_ally_renders_for_clan_pill`
 - [x] Peasantborn campaign disadvantage renders a ``(0 in court)`` pill on the Rank row and the expanded bullet ``Peasantborn: <name> is never considered to be of peer standing with any samurai-born person.`` → `test_sheet_display.py::test_status_peasantborn_renders_zero_in_court_pill`
 - [x] Recognition displayed → `test_sheet_display.py::test_recognition_displayed`
-- [x] Stipend displayed → `test_sheet_display.py::test_stipend_displayed`
-- [x] Stipend chevron expands to show the calculation breakdown → `test_sheet_advanced.py::test_stipend_expand_shows_calculation`
-- [x] Stipend with Household Wealth → `test_sheet_advanced.py::test_stipend_with_household_wealth`
-- [x] Stipend with Merchant school → `test_sheet_advanced.py::test_stipend_with_merchant_school`
+- [x] Money row displays both stipend and on-hand koku (locked Spring equinox disbursal = ceil(stipend/4)) → `test_sheet_display.py::test_money_row_displays_stipend_and_on_hand`
+- [x] Money row chevron expands to show the stipend calculation breakdown alongside the ledger → `test_sheet_advanced.py::test_money_expand_shows_stipend_calculation`
+- [x] Household Wealth bumps the Money row's stipend and on-hand disbursal → `test_sheet_advanced.py::test_money_with_household_wealth`
+- [x] Merchant 4th Dan bumps the Money row's stipend (16 → 81) and on-hand disbursal (4 → 21) → `test_sheet_advanced.py::test_money_with_merchant_4th_dan`
+- [x] Spring equinox disbursal is locked: row renders but the × delete button is hidden → `test_sheet_advanced.py::test_money_locked_disbursal_has_no_visible_delete_button`
+- [x] Add income flow: button opens modal, submitting label + amount POSTs to /money/add and on-hand reflects the new income immediately → `test_sheet_advanced.py::test_money_add_income_flow`
+- [x] Add expense flow: amount deducts from on-hand and the entry's amount renders with a leading "-" → `test_sheet_advanced.py::test_money_add_expense_flow`
+- [x] A user-added entry can be deleted via its × button; on-hand rebases and the locked disbursal stays put → `test_sheet_advanced.py::test_money_user_entry_can_be_deleted`
+- [x] Modal client-side validation rejects a blank description without posting → `test_sheet_advanced.py::test_money_modal_rejects_blank_label`
+- [x] Modal client-side validation rejects a non-positive amount without posting → `test_sheet_advanced.py::test_money_modal_rejects_non_positive_amount`
 
 ## Character Sheet — Tracking
 
@@ -1223,6 +1233,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Unkempt -10 to Culture: appears in edit-page parenthetical AND as an "Alternative totals" row in the View Sheet roll modal (never baked into flat formula) → `test_rolls.py::test_unkempt_alternative_total_on_culture_and_edit_note`
 - [x] Alternative totals render number-first and append "if all of the above" when 2+ alts → `test_rolls.py::test_alternative_totals_render_number_first_with_all_of_the_above`
 - [x] No "if all of the above" line when only one alternative total → `test_rolls.py::test_alternative_totals_no_all_of_the_above_when_only_one`
+- [x] Streetwise +5 raise on etiquette/law/intimidation/underworld is purely conditional ("when invoking bounty hunter authority") - surfaces as an Alternative totals row, never baked into the unconditional flat → `test_rolls.py::test_streetwise_surfaces_as_alternative_total`
 
 ## Character Sheet — Advantages & Disadvantages Display
 

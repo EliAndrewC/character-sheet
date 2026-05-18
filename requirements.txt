@@ -26,3 +26,6 @@ beautifulsoup4==4.14.3
 # Character art pipeline
 Pillow==12.2.0
 opencv-python-headless==4.13.0.92
+
+# Roll-result image card (clipboard copy from the dice roller)
+cairosvg==2.9.0

@@ -28,6 +28,7 @@ from app.game_data import (
 from app.services.rolls import (
     FREE_RAISE_VALUE,
     _ADVANTAGE_SKILL_BONUSES,
+    _CAMPAIGN_ADVANTAGE_ALTERNATIVE_SKILL_BONUSES,
     _CAMPAIGN_ADVANTAGE_CONDITIONAL_SKILL_BONUSES,
     _CAMPAIGN_ADVANTAGE_SKILL_BONUSES,
     _DISCERNING_BONUSES,
@@ -462,6 +463,15 @@ def build_skill_formula(
                     "label": cond_text,
                     "extra_flat": extra_raises * FREE_RAISE_VALUE,
                 })
+        if adv_id in _CAMPAIGN_ADVANTAGE_ALTERNATIVE_SKILL_BONUSES:
+            skill_list, raises, cond_text = (
+                _CAMPAIGN_ADVANTAGE_ALTERNATIVE_SKILL_BONUSES[adv_id]
+            )
+            if skill_id in skill_list:
+                formula.alternatives.append({
+                    "label": cond_text,
+                    "extra_flat": raises * FREE_RAISE_VALUE,
+                })
 
     # --- Skill synergies (e.g. History → Culture/Law/Strategy) ---
     for source_id, (boosted, per_rank) in _SKILL_SYNERGIES.items():
@@ -781,6 +791,32 @@ def build_combat_formula(
                 "extra_flat": 2 * FREE_RAISE_VALUE,
             })
 
+    _finalize_caps(formula)
+    return formula
+
+
+def build_ring_formula(
+    ring_name: str, character_data: dict
+) -> Optional[RollFormula]:
+    """Build a bare ring roll formula for the given ring.
+
+    Formula: ``2 * Ring`` rolled, ``Ring`` kept - no athletics knack
+    bonus. Used when the GM asks for a ring roll that isn't an
+    athletics check (e.g. resisting an effect with a flat Ring
+    threshold). Void is excluded because the rules don't model a
+    standalone (2 * Void)k(Void) check that way.
+    """
+    if ring_name not in {r.value for r in Ring if r != Ring.VOID}:
+        return None
+    rings = character_data.get("rings", {})
+    ring_val = rings.get(ring_name, 2)
+    formula = RollFormula(
+        label=ring_name,
+        rolled=2 * ring_val,
+        kept=ring_val,
+        flat=0,
+        **_reroll_fields(character_data),
+    )
     _finalize_caps(formula)
     return formula
 
@@ -1509,11 +1545,24 @@ def build_all_roll_formulas(
             d = _annotate_third_dan(which, formula.to_dict())
             out[which] = _annotate_attack_type(which, d)
 
-    # Athletics on each ring
-    for ring_name in (r.value for r in Ring):
-        formula = build_athletics_formula(ring_name, character_data)
+    # Bare ring rolls: (2 * Ring)k(Ring) with no athletics bonus. Void is
+    # excluded - the L7R rules don't model standalone Void rolls this way.
+    for ring_name in (r.value for r in Ring if r != Ring.VOID):
+        formula = build_ring_formula(ring_name, character_data)
         if formula is not None:
-            out[f"athletics:{ring_name}"] = formula.to_dict()
+            out[f"ring:{ring_name}"] = formula.to_dict()
+
+    # Athletics on each ring - only emitted when the character actually
+    # has the athletics knack (rank >= 1). For characters without it the
+    # bare ``ring:<Ring>`` formula above is identical to what
+    # ``build_athletics_formula`` would have produced, and the ring
+    # tile's picker menu drops the redundant "athletics" row.
+    _ath_rank = merged_knacks(character_data).get("athletics", 0)
+    if _ath_rank >= 1:
+        for ring_name in (r.value for r in Ring):
+            formula = build_athletics_formula(ring_name, character_data)
+            if formula is not None:
+                out[f"athletics:{ring_name}"] = formula.to_dict()
 
     # Athletics used as attack/parry (rules p05 §Athletics). Only offered when
     # the character has athletics rank 1+. Attack opens the attack modal with

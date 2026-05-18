@@ -863,6 +863,211 @@ async def set_award_source(
     return JSONResponse({"ok": True})
 
 
+@router.post("/{char_id}/money/add")
+async def money_add(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Append an income or expense entry to the character's money
+    ledger. Edit permission required. The locked Spring equinox
+    disbursal isn't stored in the ledger - it's computed from the
+    current stipend at render time - so this endpoint only ever
+    handles user-added rows.
+
+    Body: ``{"kind": "income"|"expense", "label": str, "amount": int}``.
+    Returns the updated state dict (same shape as
+    ``compute_money_state``) so the client can refresh the row without
+    reloading the page."""
+    from app.services.status import (
+        compute_effective_status,
+        compute_money_state,
+        new_ledger_entry,
+    )
+
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(
+        User.discord_id == character.owner_discord_id
+    ).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"], character.owner_discord_id, all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Invalid payload"}, status_code=400)
+
+    kind = body.get("kind")
+    if kind not in ("income", "expense"):
+        return JSONResponse(
+            {"error": "kind must be 'income' or 'expense'"}, status_code=400
+        )
+    label_raw = body.get("label")
+    label = label_raw.strip() if isinstance(label_raw, str) else ""
+    if not label:
+        return JSONResponse(
+            {"error": "label is required"}, status_code=400
+        )
+    if len(label) > 200:
+        label = label[:200]
+    try:
+        amount = int(body.get("amount"))
+    except (TypeError, ValueError):
+        return JSONResponse(
+            {"error": "amount must be an integer"}, status_code=400
+        )
+    if amount <= 0:
+        return JSONResponse(
+            {"error": "amount must be positive"}, status_code=400
+        )
+
+    # Build a fresh list of fresh dicts so SQLAlchemy detects the JSON
+    # column change. (In-place mutation of nested dicts inside a JSON
+    # column does not mark the column dirty.)
+    new_ledger = [dict(e) for e in (character.money_ledger or [])]
+    new_ledger.append(new_ledger_entry(kind, label, amount))
+    character.money_ledger = new_ledger
+    db.commit()
+
+    char_dict = character.to_dict()
+    effective = compute_effective_status(char_dict)
+    return JSONResponse({
+        "ok": True,
+        "money": compute_money_state(effective.stipend, character.money_ledger),
+    })
+
+
+@router.post("/{char_id}/money/delete")
+async def money_delete(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Remove a user-added ledger entry. The locked Spring equinox
+    disbursal cannot be deleted; a request to remove it 400s rather
+    than silently no-opping so the client can surface the rule."""
+    from app.services.status import (
+        SPRING_DISBURSAL_ID,
+        compute_effective_status,
+        compute_money_state,
+    )
+
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(
+        User.discord_id == character.owner_discord_id
+    ).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"], character.owner_discord_id, all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Invalid payload"}, status_code=400)
+
+    entry_id = body.get("entry_id")
+    if not isinstance(entry_id, str) or not entry_id:
+        return JSONResponse(
+            {"error": "entry_id is required"}, status_code=400
+        )
+    if entry_id == SPRING_DISBURSAL_ID:
+        return JSONResponse(
+            {"error": "The Spring equinox disbursal cannot be deleted"},
+            status_code=400,
+        )
+
+    ledger = character.money_ledger or []
+    new_ledger = [dict(e) for e in ledger if e.get("id") != entry_id]
+    if len(new_ledger) == len(ledger):
+        return JSONResponse({"error": "Entry not found"}, status_code=404)
+    character.money_ledger = new_ledger
+    db.commit()
+
+    char_dict = character.to_dict()
+    effective = compute_effective_status(char_dict)
+    return JSONResponse({
+        "ok": True,
+        "money": compute_money_state(effective.stipend, character.money_ledger),
+    })
+
+
+@router.post("/{char_id}/roll-image")
+async def roll_image(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Render a roll-result "dice card" PNG that the client can drop
+    on the clipboard for pasting into Discord.
+
+    The client posts the result-panel data (title, kept/dropped dice,
+    bonuses, total, optional hit/pass footer) and gets back a PNG
+    matching the View Sheet's dice aesthetic. Permission mirrors the
+    View Sheet itself: anyone who can see the character can render an
+    image of its rolls (the Roll Mode read-only contract). Hidden
+    characters 404 for non-editors, same as ``GET /characters/{id}``.
+
+    Results are LRU-cached server-side, so re-clicking Copy on the
+    same roll is free."""
+    from fastapi.responses import Response
+    from app.services.dice_card import render_png
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    user = getattr(request.state, "user", None)
+    user_id = user["discord_id"] if user else None
+    owner = db.query(User).filter(
+        User.discord_id == character.owner_discord_id
+    ).first()
+    owner_granted = owner.granted_account_ids or [] if owner else []
+    viewer_can_view = can_view_drafts(
+        user_id, character.owner_discord_id, owner_granted
+    )
+    if character.is_hidden and not viewer_can_view:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(payload, dict):
+        return JSONResponse({"error": "Invalid payload"}, status_code=400)
+
+    png = render_png(payload)
+    return Response(
+        content=png,
+        media_type="image/png",
+        # Lets the browser hold the rendered PNG instead of
+        # re-fetching on each Copy click within the same session.
+        headers={"Cache-Control": "private, max-age=300"},
+    )
+
+
 @router.post("/{char_id}/show")
 async def show_character_route(
     request: Request, char_id: int, db: Session = Depends(get_db)

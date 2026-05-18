@@ -288,11 +288,20 @@ def test_recognition_displayed(page, live_server_url):
     assert page.locator('text="Recognition"').first.is_visible()
 
 
-def test_stipend_displayed(page, live_server_url):
+def test_money_row_displays_stipend_and_on_hand(page, live_server_url):
+    """The Money row replaces the legacy Stipend row. Compact display
+    shows two numbers: the annual stipend and the on-hand koku total
+    (which starts at the Spring equinox disbursal = ceil(stipend/4))."""
     _create_full_character(page, live_server_url)
-    stipend_section = page.locator('div', has=page.locator('text="Stipend"')).first
-    assert "16" in stipend_section.text_content()  # Campaign base stipend
-    assert "koku" in stipend_section.text_content().lower()
+    money_row = page.locator('[data-status-row="money"]')
+    assert money_row.is_visible()
+    body = money_row.text_content()
+    assert "Money" in body
+    # Campaign base stipend = 16; on-hand starts at ceil(16/4) = 4.
+    assert "16" in money_row.locator('[data-money-stipend]').text_content()
+    assert "koku/year stipend" in body
+    assert "4" in money_row.locator('[data-money-on-hand]').text_content()
+    assert "koku on-hand" in body
 
 
 # --- Skill Roll Display ---

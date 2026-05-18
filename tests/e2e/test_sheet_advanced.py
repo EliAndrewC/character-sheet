@@ -5,45 +5,57 @@ import pytest
 
 pytestmark = [pytest.mark.status_display, pytest.mark.xp_summary, pytest.mark.version_history, pytest.mark.tracking]
 
-def test_stipend_expand_shows_calculation(page, live_server_url):
-    """Stipend row expands on click (no longer a hover tooltip) to show
-    the calculation breakdown."""
-    create_and_apply(page, live_server_url, "Stipend Expand")
-    stipend_row = page.locator('[data-status-row="stipend"]')
-    assert stipend_row.is_visible()
-    detail = stipend_row.locator(':text("Wasp campaign base")')
+def test_money_expand_shows_stipend_calculation(page, live_server_url):
+    """The Money row (formerly Stipend) expands on click to show the
+    stipend calculation breakdown alongside the new money ledger."""
+    create_and_apply(page, live_server_url, "Money Expand")
+    money_row = page.locator('[data-status-row="money"]')
+    assert money_row.is_visible()
+    detail = money_row.locator(':text("Wasp campaign base")')
     # x-show keeps the detail in the DOM but hidden until expanded.
     assert detail.is_visible() is False
-    stipend_row.locator('div').first.click()
+    money_row.locator('div').first.click()
     page.wait_for_timeout(150)
     assert detail.is_visible()
 
 
-def test_stipend_with_household_wealth(page, live_server_url):
-    """Stipend changes with Household Wealth campaign advantage."""
+def test_money_with_household_wealth(page, live_server_url):
+    """Stipend changes with Household Wealth campaign advantage flow
+    through the Money row's stipend number AND the derived on-hand
+    Spring equinox disbursal (ceil(100/4) = 25)."""
     page.goto(live_server_url)
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
-    page.fill('input[name="name"]', "HW Stipend")
+    page.fill('input[name="name"]', "HW Money")
     select_school(page, "akodo_bushi")
     page.check('input[name="camp_adv_household_wealth"]')
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Test")
-    stipend = page.locator('div', has=page.locator('text="Stipend"')).first
-    assert "100" in stipend.text_content()  # 10^2
+    money_row = page.locator('[data-status-row="money"]')
+    assert "100" in money_row.locator('[data-money-stipend]').text_content()
+    # ceil(100 / 4) = 25 starting koku on hand.
+    assert "25" == money_row.locator('[data-money-on-hand]').text_content().strip()
 
 
-def test_stipend_with_merchant_school(page, live_server_url):
-    """Stipend changes with Merchant school."""
+def test_money_with_merchant_4th_dan(page, live_server_url):
+    """Merchant school's 4th Dan stipend bump flows through the Money
+    row's two numbers. Bumping all three Merchant school knacks to
+    rank 4 makes Dan = 4 and the bump triggers: base 4 + 5 = 9, so
+    stipend = 9^2 = 81 koku/year. The on-hand Spring equinox
+    disbursal then becomes ceil(81/4) = 21 koku."""
     page.goto(live_server_url)
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
-    page.fill('input[name="name"]', "Merchant Stipend")
+    page.fill('input[name="name"]', "Merchant Money 4")
     select_school(page, "merchant")
+    # Bump every school knack to rank 4 so the Dan-4 stipend bonus fires.
+    for kid in ("discern_honor", "oppose_knowledge", "worldliness"):
+        click_plus(page, f"knack_{kid}", 3)
     page.wait_for_selector('text="Saved"', timeout=5000)
-    apply_changes(page, "Test")
-    stipend = page.locator('div', has=page.locator('text="Stipend"')).first
-    assert "81" in stipend.text_content()  # (4+5)^2
+    apply_changes(page, "Merchant 4th Dan")
+    money_row = page.locator('[data-status-row="money"]')
+    assert money_row.locator('[data-money-stipend]').text_content().strip() == "81"
+    assert money_row.locator('[data-money-on-hand]').text_content().strip() == "21"
 
 
 def test_xp_overspend_red(page, live_server_url):
@@ -175,3 +187,137 @@ def test_unlucky_toggle(page, live_server_url):
     apply_changes(page, "Test")
     page.wait_for_selector('text="Unlucky (GM penalty)"')
     assert page.locator('text="Unlucky (GM penalty)"').is_visible()
+
+
+def test_money_locked_disbursal_has_no_visible_delete_button(page, live_server_url):
+    """The Spring equinox disbursal is locked: its row renders in the
+    ledger but the delete (×) button is hidden via ``x-show``. Alpine
+    leaves the element in the DOM, so we assert it isn't *visible*
+    rather than that it's absent."""
+    create_and_apply(page, live_server_url, "MoneyLocked")
+    money_row = page.locator('[data-status-row="money"]')
+    money_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    locked_entry = money_row.locator('[data-money-entry="spring-equinox-disbursal"]')
+    assert locked_entry.is_visible()
+    assert "Spring equinox stipend disbursal" in locked_entry.text_content()
+    delete_btn = locked_entry.locator('[data-action="money-delete-entry"]')
+    assert delete_btn.is_visible() is False
+
+
+def test_money_add_income_flow(page, live_server_url):
+    """Add Income opens the modal, submitting a label + amount
+    POSTs to /money/add and the on-hand total reflects the new
+    income immediately."""
+    create_and_apply(page, live_server_url, "MoneyIncome")
+    money_row = page.locator('[data-status-row="money"]')
+    money_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+
+    # Starting on-hand for default character = ceil(16/4) = 4 koku.
+    on_hand = money_row.locator('[data-money-on-hand]')
+    assert on_hand.text_content().strip() == "4"
+
+    money_row.locator('[data-action="money-add-income"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="money-modal-label"]').fill("Sold a horse")
+    page.locator('[data-testid="money-modal-amount"]').fill("10")
+    page.locator('[data-testid="money-modal-submit"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='hidden', timeout=3000)
+
+    # New on-hand: 4 + 10 = 14.
+    page.wait_for_function(
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '14'""",
+        timeout=3000,
+    )
+    # The new entry shows under the locked one.
+    ledger_text = money_row.text_content()
+    assert "Sold a horse" in ledger_text
+    assert "+10" in ledger_text
+
+
+def test_money_add_expense_flow(page, live_server_url):
+    """Add Expense flows symmetrically: the amount is deducted from
+    on-hand and the entry's amount is rendered with a leading '-'."""
+    create_and_apply(page, live_server_url, "MoneyExpense")
+    money_row = page.locator('[data-status-row="money"]')
+    money_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    money_row.locator('[data-action="money-add-expense"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="money-modal-label"]').fill("Inn for the night")
+    page.locator('[data-testid="money-modal-amount"]').fill("3")
+    page.locator('[data-testid="money-modal-submit"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='hidden', timeout=3000)
+    page.wait_for_function(
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '1'""",
+        timeout=3000,
+    )
+    text = money_row.text_content()
+    assert "Inn for the night" in text
+    assert "-3" in text
+
+
+def test_money_user_entry_can_be_deleted(page, live_server_url):
+    """The × delete button on a user-added entry removes it and the
+    on-hand total rebases. Locked entries are untouched."""
+    create_and_apply(page, live_server_url, "MoneyDelete")
+    money_row = page.locator('[data-status-row="money"]')
+    money_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    money_row.locator('[data-action="money-add-income"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="money-modal-label"]').fill("Reward")
+    page.locator('[data-testid="money-modal-amount"]').fill("7")
+    page.locator('[data-testid="money-modal-submit"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='hidden', timeout=3000)
+    page.wait_for_function(
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '11'""",
+        timeout=3000,
+    )
+    # Now delete it - the user row's × button removes it. The locked
+    # row also has a delete button in the DOM (hidden via x-show), so
+    # filter to the actually-visible one before clicking.
+    money_row.locator('[aria-label="Delete Reward"]').click()
+    page.wait_for_function(
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '4'""",
+        timeout=3000,
+    )
+    assert "Reward" not in money_row.text_content()
+
+
+def test_money_modal_rejects_blank_label(page, live_server_url):
+    """The modal's client-side validation surfaces an error before
+    posting an empty-label payload."""
+    create_and_apply(page, live_server_url, "MoneyBlankLabel")
+    money_row = page.locator('[data-status-row="money"]')
+    money_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    money_row.locator('[data-action="money-add-income"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="money-modal-amount"]').fill("5")
+    page.locator('[data-testid="money-modal-submit"]').click()
+    page.wait_for_timeout(150)
+    err = page.locator('[data-testid="money-modal-error"]')
+    assert err.is_visible()
+    assert "description" in err.text_content().lower()
+    # Modal stays open so the user can fix it.
+    assert page.locator('[data-modal="money-entry"]').is_visible()
+
+
+def test_money_modal_rejects_non_positive_amount(page, live_server_url):
+    """Amounts must be a positive whole number - zero and negative
+    values surface a client-side error inside the modal."""
+    create_and_apply(page, live_server_url, "MoneyZeroAmt")
+    money_row = page.locator('[data-status-row="money"]')
+    money_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    money_row.locator('[data-action="money-add-expense"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="money-modal-label"]').fill("Empty try")
+    page.locator('[data-testid="money-modal-amount"]').fill("0")
+    page.locator('[data-testid="money-modal-submit"]').click()
+    page.wait_for_timeout(150)
+    err = page.locator('[data-testid="money-modal-error"]')
+    assert err.is_visible()
+    assert "positive" in err.text_content().lower()

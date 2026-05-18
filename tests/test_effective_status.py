@@ -583,3 +583,130 @@ class TestXpBudgetDisplay:
         # The "spent" (before disadvantages) should be computable
         spent_before_dis = result["total"] - result["disadvantages"]
         assert spent_before_dis == 4  # just the skill cost
+
+
+class TestMoneyState:
+    """``compute_money_state`` derives the player-visible money snapshot
+    from the stipend + persisted ledger. The locked Spring equinox
+    disbursal is computed dynamically from current stipend, not stored
+    in the ledger."""
+
+    def test_initial_disbursal_is_quarter_of_stipend_rounded_up(self):
+        from app.services.status import spring_disbursal_amount
+        # Wasp campaign base is 4th rank -> 16 koku/year. 16/4 = 4.
+        assert spring_disbursal_amount(16) == 4
+        # User-supplied example: 81-koku stipend rounds up from 20.25 -> 21.
+        assert spring_disbursal_amount(81) == 21
+        # Boundary: 80 / 4 = 20 exactly (no rounding bump).
+        assert spring_disbursal_amount(80) == 20
+        # Stipend of 0 or negative: defensive zero.
+        assert spring_disbursal_amount(0) == 0
+        assert spring_disbursal_amount(-5) == 0
+
+    def test_locked_entry_always_present_at_front(self):
+        from app.services.status import (
+            SPRING_DISBURSAL_ID, SPRING_DISBURSAL_LABEL, compute_money_state,
+        )
+        state = compute_money_state(81, [])
+        assert state["entries"][0]["id"] == SPRING_DISBURSAL_ID
+        assert state["entries"][0]["label"] == SPRING_DISBURSAL_LABEL
+        assert state["entries"][0]["kind"] == "income"
+        assert state["entries"][0]["amount"] == 21
+        assert state["entries"][0]["locked"] is True
+
+    def test_locked_entry_present_even_when_ledger_has_other_entries(self):
+        from app.services.status import compute_money_state
+        ledger = [
+            {"id": "a", "kind": "income", "label": "Sold a horse",
+             "amount": 10},
+        ]
+        state = compute_money_state(81, ledger)
+        # Locked entry comes first; user entry follows.
+        assert state["entries"][0]["locked"] is True
+        assert state["entries"][1]["id"] == "a"
+        assert state["entries"][1]["locked"] is False
+
+    def test_on_hand_includes_initial_plus_income_minus_expenses(self):
+        from app.services.status import compute_money_state
+        ledger = [
+            {"id": "a", "kind": "income", "label": "Bounty payout", "amount": 30},
+            {"id": "b", "kind": "expense", "label": "Inn", "amount": 5},
+            {"id": "c", "kind": "expense", "label": "Provisions", "amount": 8},
+            {"id": "d", "kind": "income", "label": "Sold a sword", "amount": 12},
+        ]
+        # Stipend 81 -> disbursal 21. 21 + 30 - 5 - 8 + 12 = 50.
+        state = compute_money_state(81, ledger)
+        assert state["on_hand"] == 50
+
+    def test_empty_ledger_on_hand_equals_disbursal(self):
+        from app.services.status import compute_money_state
+        state = compute_money_state(81, [])
+        assert state["on_hand"] == 21
+
+    def test_none_ledger_treated_as_empty(self):
+        """SQLAlchemy can hand us ``None`` for a JSON column that was
+        never written; the helper must not raise."""
+        from app.services.status import compute_money_state
+        state = compute_money_state(81, None)
+        assert state["on_hand"] == 21
+        assert len(state["entries"]) == 1
+
+    def test_malformed_entries_are_skipped(self):
+        """Defensive: bad shapes inside the JSON column shouldn't
+        crash the renderer. Non-dicts, unknown ``kind`` values,
+        non-integer amounts, and negative amounts are dropped."""
+        from app.services.status import compute_money_state
+        ledger = [
+            "not a dict",
+            {"id": "x", "kind": "transfer", "label": "bad kind", "amount": 5},
+            {"id": "y", "kind": "income", "label": "bad amt", "amount": "abc"},
+            {"id": "z", "kind": "expense", "label": "negative", "amount": -10},
+            {"id": "ok", "kind": "income", "label": "real", "amount": 7},
+        ]
+        state = compute_money_state(81, ledger)
+        # Only the locked entry + the well-formed user entry are present.
+        assert len(state["entries"]) == 2
+        assert state["entries"][1]["id"] == "ok"
+        # On-hand: 21 + 7 = 28.
+        assert state["on_hand"] == 28
+
+    def test_missing_id_gets_synthesized(self):
+        """Entries persisted before id-stamping (if any) survive by
+        getting a fresh id rather than disappearing."""
+        from app.services.status import compute_money_state
+        ledger = [
+            {"kind": "income", "label": "Old entry", "amount": 5},
+        ]
+        state = compute_money_state(81, ledger)
+        assert len(state["entries"]) == 2
+        assert state["entries"][1]["id"]
+        assert state["entries"][1]["label"] == "Old entry"
+
+    def test_non_string_label_collapses_to_empty(self):
+        """Defensive: a corrupt persistent value (e.g. ``label=None``)
+        renders as an empty label rather than crashing the template."""
+        from app.services.status import compute_money_state
+        ledger = [{"id": "x", "kind": "income", "label": None, "amount": 5}]
+        state = compute_money_state(81, ledger)
+        assert state["entries"][1]["label"] == ""
+
+    def test_kind_must_be_income_or_expense(self):
+        """Unknown ``kind`` strings are dropped, not treated as income
+        or expense."""
+        from app.services.status import compute_money_state
+        ledger = [
+            {"id": "x", "kind": "loot", "label": "weird", "amount": 100},
+        ]
+        state = compute_money_state(81, ledger)
+        # Only the locked entry survives.
+        assert len(state["entries"]) == 1
+        assert state["on_hand"] == 21
+
+    def test_new_ledger_entry_carries_unique_id(self):
+        from app.services.status import new_ledger_entry
+        a = new_ledger_entry("income", "Sold a horse", 10)
+        b = new_ledger_entry("income", "Sold a horse", 10)
+        assert a["id"] and b["id"] and a["id"] != b["id"]
+        assert a["kind"] == "income"
+        assert a["label"] == "Sold a horse"
+        assert a["amount"] == 10

@@ -646,6 +646,69 @@ class TestCampaignAdvantageBonus:
         assert "Highest Regard" not in result.tooltip
 
 
+class TestStreetwiseAdvantage:
+    """Streetwise: +1 free raise on etiquette / law / intimidation /
+    underworld rolls *only* when the character is invoking their
+    authority as an Imperial bounty hunter. The bonus is purely
+    conditional - it never adds to the unconditional flat_bonus, but
+    it does surface as a tooltip note on the View Sheet and as an
+    "Alternative totals" row on the roll modal."""
+
+    def test_streetwise_does_not_add_to_flat_bonus(self):
+        """Purely conditional - never lands on the unconditional total
+        the View Sheet shows in the formula. Tested on all four
+        listed skills."""
+        for skill in ("etiquette", "law", "intimidation", "underworld"):
+            base = make_character_data(skills={skill: 1})
+            without = compute_skill_roll(skill, base).flat_bonus
+            with_streetwise = compute_skill_roll(
+                skill,
+                make_character_data(
+                    skills={skill: 1}, campaign_advantages=["streetwise"]
+                ),
+            ).flat_bonus
+            assert without == with_streetwise, (
+                f"{skill}: Streetwise should not change flat_bonus"
+            )
+
+    def test_streetwise_surfaces_as_conditional_note_per_skill(self):
+        """Each listed skill's tooltip carries a Streetwise note with
+        the +5 amount preserved (the parenthetical's redundant-amount
+        strip is dodged by avoiding the ``"+N from X"`` pattern)."""
+        for skill in ("etiquette", "law", "intimidation", "underworld"):
+            data = make_character_data(
+                skills={skill: 1},
+                campaign_advantages=["streetwise"],
+            )
+            result = compute_skill_roll(skill, data)
+            assert (
+                "+5 when invoking bounty hunter authority (Streetwise)"
+                in result.parenthetical
+            ), f"{skill}: expected note in parenthetical"
+
+    def test_streetwise_skill_off_list_unaffected(self):
+        """Streetwise only applies to its 4 listed skills - no bleed
+        onto, e.g. Tact or Sincerity."""
+        data = make_character_data(
+            skills={"tact": 1},
+            campaign_advantages=["streetwise"],
+        )
+        result = compute_skill_roll("tact", data)
+        assert "Streetwise" not in result.tooltip
+        assert "bounty hunter" not in result.tooltip
+
+    def test_streetwise_absent_when_not_taken(self):
+        """A character without Streetwise gets no note even on the
+        listed skills."""
+        data = make_character_data(
+            skills={"intimidation": 1},
+            campaign_advantages=[],
+        )
+        result = compute_skill_roll("intimidation", data)
+        assert "Streetwise" not in result.tooltip
+        assert "bounty hunter" not in result.tooltip
+
+
 class TestParenthetical:
     def test_single_bonus_strips_redundant_amount(self):
         """One bonus → drop the '+N ' prefix since N is already in the formula."""

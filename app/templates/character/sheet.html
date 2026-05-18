@@ -301,7 +301,7 @@
             {% set is_school = ring_name == character.school_ring_choice %}
             <div class="ring-node {{ pos_class }}{{ ' ring-school' if is_school else '' }}"
                  style="border-color: {{ rc.border }}; background: {{ rc.bg }};"
-                 {% if ring_name != 'Void' %}data-roll-key="athletics:{{ ring_name }}"{% endif %}>
+                 {% if ring_name != 'Void' %}data-roll-key="ring:{{ ring_name }}"{% endif %}>
                 <div class="ring-label" style="color: {{ rc.border }};">{{ ring_name }}</div>
                 <div class="ring-value">{{ ring_map[ring_name] }}</div>
                 {% if is_school %}
@@ -551,6 +551,108 @@
 
     <!-- LIVE TRACKING -->
     <script>
+        // Money row: holds the locked Spring equinox disbursal plus
+        // user-added entries, with add/delete handlers that POST to
+        // /money/add and /money/delete. The server returns the full
+        // recomputed state on each mutation so we just replace the
+        // local ``state`` field - no client-side bookkeeping of the
+        // running balance.
+        function moneyTracker() {
+            return {
+                expanded: false,
+                state: {{ money_state|tojson }},
+                canEdit: {{ 'true' if viewer_can_edit else 'false' }},
+                charId: {{ character.id }},
+                // Modal state.
+                modalOpen: false,
+                modalKind: 'income',
+                modalLabel: '',
+                modalAmount: null,
+                modalError: '',
+                modalSubmitting: false,
+
+                init() { /* nothing to wire up; state arrives via tojson */ },
+
+                openModal(kind) {
+                    this.modalKind = kind;
+                    this.modalLabel = '';
+                    this.modalAmount = null;
+                    this.modalError = '';
+                    this.modalSubmitting = false;
+                    this.modalOpen = true;
+                    // Focus the label input after Alpine renders the
+                    // modal. ``$nextTick`` ensures the ref exists.
+                    this.$nextTick(() => {
+                        if (this.$refs.modalLabelInput) {
+                            this.$refs.modalLabelInput.focus();
+                        }
+                    });
+                },
+
+                closeModal() {
+                    if (this.modalSubmitting) return;
+                    this.modalOpen = false;
+                },
+
+                async submitModal() {
+                    const label = (this.modalLabel || '').trim();
+                    const amount = parseInt(this.modalAmount, 10);
+                    if (!label) {
+                        this.modalError = 'Please enter a description.';
+                        return;
+                    }
+                    if (!Number.isFinite(amount) || amount <= 0) {
+                        this.modalError = 'Amount must be a positive whole number.';
+                        return;
+                    }
+                    this.modalError = '';
+                    this.modalSubmitting = true;
+                    try {
+                        const resp = await fetch(
+                            '/characters/' + this.charId + '/money/add',
+                            {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({
+                                    kind: this.modalKind, label, amount,
+                                }),
+                            }
+                        );
+                        if (!resp.ok) {
+                            const data = await resp.json().catch(() => ({}));
+                            this.modalError = data.error || 'Could not save - please try again.';
+                            this.modalSubmitting = false;
+                            return;
+                        }
+                        const data = await resp.json();
+                        this.state = data.money;
+                        this.modalOpen = false;
+                    } catch (e) {
+                        this.modalError = 'Could not reach the server.';
+                    } finally {
+                        this.modalSubmitting = false;
+                    }
+                },
+
+                async removeEntry(entryId) {
+                    if (!this.canEdit) return;
+                    try {
+                        const resp = await fetch(
+                            '/characters/' + this.charId + '/money/delete',
+                            {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({entry_id: entryId}),
+                            }
+                        );
+                        if (!resp.ok) return;
+                        const data = await resp.json();
+                        this.state = data.money;
+                    } catch (e) { /* leave the row in place on network failure */ }
+                },
+            };
+        }
+
         function trackingData() {
             return {
                 lightWounds: {{ character.current_light_wounds or 0 }},
@@ -2349,30 +2451,152 @@
                page (one set of rows per PC) via the partial below. #}
             {% include 'character/partials/status_rows.html' %}
 
-            {# --- Stipend --- #}
-            {% set has_stipend_detail = effective.stipend_modifiers | length > 0 %}
+            {# --- Money --- #}
+            {# Money row: replaces the legacy Stipend row. The compact
+               top line shows two numbers (annual stipend + koku
+               on-hand); clicking expands to the existing stipend
+               calculation plus a per-character ledger of income /
+               expense entries the player adds via the modal. The
+               Spring equinox disbursal (25% of stipend, ceiling) is
+               a locked entry at the top of the ledger and cannot be
+               edited or deleted - it's derived from the current
+               stipend at render time, so a stipend change updates
+               the disbursal amount retroactively. #}
             <div class="bg-parchment rounded-lg p-3"
-                 x-data="{ expanded: false }"
-                 data-status-row="stipend">
-                <div class="flex items-center justify-between gap-3 {{ 'cursor-pointer' if has_stipend_detail else '' }}"
-                     {% if has_stipend_detail %}@click="expanded = !expanded"{% endif %}>
-                    <div class="text-sm text-ink/60">Stipend</div>
-                    <div class="flex items-center gap-3 min-w-0">
-                        <div class="text-xl font-bold">{{ effective.stipend }} <span class="text-sm font-normal text-ink/50">koku/year</span></div>
-                        {% if has_stipend_detail %}
+                 x-data="moneyTracker()"
+                 x-init="init()"
+                 data-status-row="money">
+                <div class="flex items-center justify-between gap-3 cursor-pointer"
+                     @click="expanded = !expanded">
+                    <div class="text-sm text-ink/60">Money</div>
+                    <div class="flex items-center gap-3 min-w-0 flex-wrap justify-end">
+                        <div class="text-sm text-ink/60 whitespace-nowrap">
+                            <span class="font-mono font-bold text-ink"
+                                  data-money-stipend
+                                  x-text="state.stipend"></span>
+                            <span class="text-ink/50">koku/year stipend</span>
+                        </div>
+                        <div class="text-xl font-bold whitespace-nowrap">
+                            <span data-money-on-hand
+                                  x-text="state.on_hand"></span>
+                            <span class="text-sm font-normal text-ink/50">koku on-hand</span>
+                        </div>
                         <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                         </svg>
-                        {% endif %}
                     </div>
                 </div>
-                {% if has_stipend_detail %}
-                <div x-show="expanded" x-cloak class="mt-2 pt-2 border-t border-ink/10 text-sm text-ink/80 space-y-1">
-                    <p class="font-medium">Stipend calculation:</p>
-                    {% for m in effective.stipend_modifiers %}
-                    <p>{{ m.source }}: {{ m.detail }}</p>
-                    {% endfor %}
-                    <p class="font-medium">= {{ effective.stipend }} koku/year</p>
+                <div x-show="expanded" x-cloak class="mt-2 pt-2 border-t border-ink/10 text-sm text-ink/80 space-y-3">
+                    {# --- Stipend calculation: unchanged from the legacy row, just nested under Money. --- #}
+                    {% if effective.stipend_modifiers %}
+                    <div class="space-y-1">
+                        <p class="font-medium">Stipend calculation:</p>
+                        {% for m in effective.stipend_modifiers %}
+                        <p>{{ m.source }}: {{ m.detail }}</p>
+                        {% endfor %}
+                        <p class="font-medium">= {{ effective.stipend }} koku/year</p>
+                    </div>
+                    {% endif %}
+
+                    {# --- Money ledger --- #}
+                    <div class="space-y-1">
+                        <p class="font-medium">Money calculations:</p>
+                        <ul class="list-disc list-inside space-y-0.5">
+                            <template x-for="entry in state.entries" :key="entry.id">
+                                <li class="font-mono text-sm flex items-baseline gap-2"
+                                    :data-money-entry="entry.id">
+                                    <span :class="entry.kind === 'income' ? 'text-emerald-700' : 'text-rose-700'"
+                                          class="font-bold inline-block w-12 text-right shrink-0"
+                                          x-text="(entry.kind === 'income' ? '+' : '-') + entry.amount"></span>
+                                    <span class="text-ink/80 grow" x-text="entry.label"></span>
+                                    {% if viewer_can_edit %}
+                                    <button type="button"
+                                            x-show="!entry.locked"
+                                            x-cloak
+                                            @click="removeEntry(entry.id)"
+                                            class="text-xs text-ink/40 hover:text-rose-700 transition-colors px-1"
+                                            data-action="money-delete-entry"
+                                            :aria-label="'Delete ' + entry.label">&times;</button>
+                                    {% endif %}
+                                </li>
+                            </template>
+                        </ul>
+                        <p class="font-medium pt-1 border-t border-ink/10 mt-1">
+                            = <span x-text="state.on_hand"></span> koku on-hand
+                        </p>
+                    </div>
+
+                    {% if viewer_can_edit %}
+                    <div class="flex gap-2 pt-1">
+                        <button type="button"
+                                @click="openModal('income')"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium transition-colors"
+                                data-action="money-add-income">Add income</button>
+                        <button type="button"
+                                @click="openModal('expense')"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium transition-colors"
+                                data-action="money-add-expense">Add expense</button>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if viewer_can_edit %}
+                {# Add-entry modal: shared by the Add income / Add expense
+                   buttons. The kind is captured at open time and
+                   rendered in the title; amount + label are entered
+                   here, then POSTed to /money/add and the response's
+                   state dict replaces the local ``state`` so the
+                   numbers and ledger refresh without a page reload. #}
+                <div x-show="modalOpen" x-cloak
+                     @keydown.escape.window="closeModal()"
+                     @click.self="closeModal()"
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+                     data-modal="money-entry">
+                    <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4 space-y-3">
+                        <h3 class="text-lg font-bold text-accent"
+                            x-text="modalKind === 'income' ? 'Add income' : 'Add expense'"></h3>
+                        <div class="space-y-2">
+                            <label class="block">
+                                <span class="text-sm text-ink/70">Description</span>
+                                <input type="text"
+                                       x-model="modalLabel"
+                                       x-ref="modalLabelInput"
+                                       @keydown.enter="$refs.modalAmountInput.focus()"
+                                       maxlength="200"
+                                       class="w-full border rounded px-2 py-1 mt-0.5 focus:outline-none focus:ring-1 focus:ring-accent"
+                                       data-testid="money-modal-label"
+                                       :placeholder="modalKind === 'income' ? 'e.g. Sold a bounty' : 'e.g. Bought provisions'">
+                            </label>
+                            <label class="block">
+                                <span class="text-sm text-ink/70">Amount (koku)</span>
+                                <input type="number"
+                                       min="1"
+                                       step="1"
+                                       x-model.number="modalAmount"
+                                       x-ref="modalAmountInput"
+                                       @keydown.enter.prevent="submitModal()"
+                                       class="w-full border rounded px-2 py-1 mt-0.5 focus:outline-none focus:ring-1 focus:ring-accent"
+                                       data-testid="money-modal-amount">
+                            </label>
+                            <p x-show="modalError" x-cloak
+                               class="text-xs text-rose-700"
+                               data-testid="money-modal-error"
+                               x-text="modalError"></p>
+                        </div>
+                        <div class="flex justify-end gap-2 pt-1">
+                            <button type="button"
+                                    @click="closeModal()"
+                                    class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm">Cancel</button>
+                            <button type="button"
+                                    @click="submitModal()"
+                                    :disabled="modalSubmitting"
+                                    data-testid="money-modal-submit"
+                                    class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm disabled:opacity-50">
+                                <span x-show="!modalSubmitting">Add</span>
+                                <span x-show="modalSubmitting" x-cloak>Adding...</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -2960,6 +3184,69 @@
                     </template>
                 </div>
             </template>
+            {# Ring-tile picker: opened by clicking a ring node on the
+               schematic. Always offers the bare ``(2 * Ring)k(Ring)``
+               roll; if the character has athletics rank >= 1 the
+               server emits a separate ``athletics:<Ring>`` formula and
+               this menu surfaces it as a second row. Each row carries
+               its own VP-spending submenu on hover, mirroring the
+               athletics-knack picker pattern. #}
+            <template x-if="rollMenuHasRingPicker">
+                <div data-ring-picker-menu :data-ring-picker-ring="ringPickerRing">
+                    <div class="relative"
+                         @mouseenter="ringPickerHover = 'bare'"
+                         @mouseleave="ringPickerHover = null">
+                        <button type="button"
+                                :data-ring-bare="ringPickerRing"
+                                @click="executeRoll('ring:' + ringPickerRing, 0, null)"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                            <span>Roll <span x-text="ringPickerRing"></span>
+                                <span class="text-xs text-ink/50" x-text="'(' + (formulas['ring:' + ringPickerRing]?.rolled || 0) + 'k' + (formulas['ring:' + ringPickerRing]?.kept || 0) + ')'"></span>
+                            </span>
+                            <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                        </button>
+                        <div x-show="ringPickerHover === 'bare' && rollMenuOptions.length > 0"
+                             x-cloak
+                             :data-ring-bare-void-submenu="ringPickerRing"
+                             class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                            <template x-for="opt in rollMenuOptions" :key="'rb'+ringPickerRing+opt.count">
+                                <button type="button"
+                                        @click="executeRoll('ring:' + ringPickerRing, opt.count, opt)"
+                                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                    <span x-text="opt.label"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <template x-if="formulas['athletics:' + ringPickerRing]">
+                        <div class="relative border-t border-ink/10"
+                             @mouseenter="ringPickerHover = 'athletics'"
+                             @mouseleave="ringPickerHover = null">
+                            <button type="button"
+                                    :data-ring-athletics="ringPickerRing"
+                                    @click="executeRoll('athletics:' + ringPickerRing, 0, null)"
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                                <span>Roll <span x-text="ringPickerRing"></span> athletics
+                                    <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:' + ringPickerRing]?.rolled || 0) + 'k' + (formulas['athletics:' + ringPickerRing]?.kept || 0) + ')'"></span>
+                                </span>
+                                <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                            </button>
+                            <div x-show="ringPickerHover === 'athletics' && rollMenuOptions.length > 0"
+                                 x-cloak
+                                 :data-ring-athletics-void-submenu="ringPickerRing"
+                                 class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                <template x-for="opt in rollMenuOptions" :key="'ra'+ringPickerRing+opt.count">
+                                    <button type="button"
+                                            @click="executeRoll('athletics:' + ringPickerRing, opt.count, opt)"
+                                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                        <span x-text="opt.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
             <template x-if="rollMenuHasTogashiInit">
                 <div data-togashi-init-menu>
                     <button type="button"
@@ -2991,7 +3278,7 @@
                 </div>
             </template>
             <div class="relative"
-                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack"
+                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasRingPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack"
                  @mouseenter="owHoverRow = 'roll'"
                  @mouseleave="owHoverRow = null">
                 <button type="button"
@@ -3013,7 +3300,7 @@
                     </template>
                 </div>
             </div>
-            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack ? [] : rollMenuOptions)" :key="'r'+opt.count">
+            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasRingPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack ? [] : rollMenuOptions)" :key="'r'+opt.count">
                 <div class="relative"
                      @mouseenter="owHoverRow = 'r' + opt.count"
                      @mouseleave="owHoverRow = null">
@@ -3044,6 +3331,7 @@
                entries mirror the main Roll button + each VP option, but
                with the school ring substituted for the natural one. #}
             <template x-if="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker
+                            && !rollMenuHasRingPicker
                             && !rollMenuHasParry && !rollMenuHasAttackChoice
                             && !rollMenuHasMobileAttack
                             && formulas[rollMenuKey]?.kitsune_swap">
@@ -5422,8 +5710,36 @@
 
                     {# Total + structured breakdown (not shown for initiative) #}
                     <div x-show="!formula || !formula.is_initiative" class="bg-ink/5 rounded p-3 text-sm">
-                        <div class="font-bold text-lg mb-1">
-                            Total: <span class="text-accent" x-text="baseTotal"></span>
+                        <div class="flex items-center justify-between mb-1 gap-3">
+                            <div class="font-bold text-lg">
+                                Total: <span class="text-accent" x-text="baseTotal"></span>
+                            </div>
+                            {# Copy-as-image button. Pre-rendered while
+                               the animation was on screen so the click
+                               handler can stay synchronous up to the
+                               clipboard.write call (Safari requires
+                               this). Hidden until the render lands or
+                               fails so the user doesn't see a flash of
+                               a non-functional button. #}
+                            <button type="button"
+                                    x-show="rollImageStatus !== 'idle'"
+                                    x-cloak
+                                    @click="copyRollImage()"
+                                    :disabled="rollImageStatus !== 'ready' && rollImageStatus !== 'copied'"
+                                    :class="(rollImageStatus === 'failed')
+                                            ? 'bg-ink/5 text-ink/40 cursor-not-allowed'
+                                            : (rollImageStatus === 'copied')
+                                              ? 'bg-accent/10 text-accent'
+                                              : 'bg-ink/10 hover:bg-ink/20 text-ink'"
+                                    class="text-xs font-medium px-2.5 py-1 rounded transition-colors disabled:opacity-40 disabled:cursor-wait"
+                                    data-action="copy-roll-image"
+                                    :data-state="rollImageStatus"
+                                    title="Copy roll result as an image for pasting into Discord">
+                                <span x-show="rollImageStatus === 'rendering'">Preparing...</span>
+                                <span x-show="rollImageStatus === 'ready'">Copy as image</span>
+                                <span x-show="rollImageStatus === 'copied'">Copied!</span>
+                                <span x-show="rollImageStatus === 'failed'">Copy failed</span>
+                            </button>
                         </div>
                         {# Only show the breakdown list when there are flat bonuses;
                            with no bonuses, the Total line above already says
@@ -6651,6 +6967,18 @@
             rollMenuHasParry: false,
             rollMenuHasTogashiInit: false,
             rollMenuHasAthleticsPicker: false,
+            rollMenuHasRingPicker: false,
+            ringPickerRing: '',
+            ringPickerHover: null,
+            // Roll-result image clipboard state. ``rollImageBlob`` is
+            // pre-rendered by the server while the dice animation is
+            // still on screen so the Copy button can paste instantly.
+            // ``rollImageStatus`` is 'idle' | 'rendering' | 'ready' |
+            // 'failed' | 'copied' - drives both the button label and
+            // its disabled state.
+            rollImageBlob: null,
+            rollImageStatus: 'idle',
+            _rollImageReqId: 0,
             rollMenuHasAttackChoice: false,
             // Touch-only menu mode for the Attack tile: instead of opening the
             // attack modal directly the menu shows "Roll <title>" + "View
@@ -6896,6 +7224,37 @@
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = false;
                     this.rollMenuHasAthleticsPicker = true;
+                    this.rollMenuHasRingPicker = false;
+                    this.rollMenuHasAttackChoice = false;
+                    this.rollMenuOwCapacity = 0;
+                    this.owHoverRow = null;
+                    this.athHoverRow = null;
+                    this.parryHoverRow = null;
+                    this.rollMenuOpen = true;
+                    return;
+                }
+
+                // Ring tile click: bare-ring roll plus (when the
+                // character has athletics rank >= 1) an athletics-ring
+                // option. Each row carries its own VP-spending
+                // submenu. The ring tile triggers this path via
+                // ``data-roll-key="ring:<RingName>"``; characters
+                // without athletics only ever see the bare row.
+                if (key.startsWith('ring:') && this.formulas[key]) {
+                    const ring = key.slice('ring:'.length);
+                    const pos = this._computeRollMenuPos(el);
+                    this.rollMenuKey = key;
+                    this.rollMenuTitle = ring;
+                    this.rollMenuPos = pos;
+                    this.rollMenuOptions = this.schoolAbilities.merchant_post_roll_vp
+                        ? [] : this.computeVoidOptions();
+                    this.rollMenuHasStrike = false;
+                    this.rollMenuHasParry = false;
+                    this.rollMenuHasTogashiInit = false;
+                    this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuHasRingPicker = true;
+                    this.ringPickerRing = ring;
+                    this.ringPickerHover = null;
                     this.rollMenuHasAttackChoice = false;
                     this.rollMenuOwCapacity = 0;
                     this.owHoverRow = null;
@@ -6918,6 +7277,7 @@
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = true;
                     this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuHasRingPicker = false;
                     this.rollMenuHasAttackChoice = false;
                     this.rollMenuOwCapacity = 0;
                     this.owHoverRow = null;
@@ -6952,6 +7312,7 @@
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = false;
                     this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuHasRingPicker = false;
                     this.rollMenuHasAttackChoice = true;
                     this.rollMenuOwCapacity = 0;
                     this.owHoverRow = null;
@@ -6975,6 +7336,7 @@
                         this.rollMenuHasParry = false;
                         this.rollMenuHasTogashiInit = false;
                         this.rollMenuHasAthleticsPicker = false;
+                        this.rollMenuHasRingPicker = false;
                         this.rollMenuHasAttackChoice = false;
                         this.rollMenuHasMobileAttack = true;
                         this.rollMenuOwCapacity = 0;
@@ -7022,6 +7384,7 @@
                 this.rollMenuHasParry = hasParry;
                 this.rollMenuHasTogashiInit = false;
                 this.rollMenuHasAthleticsPicker = false;
+                this.rollMenuHasRingPicker = false;
                 this.rollMenuHasAttackChoice = false;
                 this.rollMenuOwCapacity = f.otherworldliness_capacity || 0;
                 this.owHoverRow = null;
@@ -7553,6 +7916,14 @@
                 this.rollMenuOpen = false;
                 this.owHoverRow = null;
                 this.parryHoverRow = null;
+                // Reset the copy-as-image state so the button hides while
+                // the animation runs and reappears once the new render
+                // lands. ``_rollImageReqId`` is bumped here so any
+                // still-in-flight render from the previous roll discards
+                // its response on arrival.
+                this.rollImageStatus = 'idle';
+                this.rollImageBlob = null;
+                this._rollImageReqId++;
                 if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
                 this.luckyUsedThisRoll = false;
                 this.togashiRerollUsed = false;
@@ -7876,6 +8247,102 @@
                 }
 
                 this.phase = 'done';
+                // Pre-render the "copy as image" PNG so the Copy button
+                // on the result panel can write to the clipboard
+                // synchronously inside the user-gesture handler.
+                this._prerenderRollImage();
+            },
+
+            // Copy-as-image: build the payload, post it to the server's
+            // SVG-to-PNG renderer, hold the resulting Blob so a later
+            // click on the Copy button can paste it to the clipboard
+            // inside a real user-gesture handler (Safari requires the
+            // Blob to already be resolved when ``clipboard.write`` is
+            // called - hence pre-rendering rather than fetching on
+            // click).
+            _buildRollImagePayload() {
+                const f = this.formula || {};
+                const kept = (this.keptDice || []).map(d => ({
+                    parts: Array.isArray(d.parts) && d.parts.length
+                        ? d.parts : [d.value],
+                }));
+                const dropped = (this.unkeptDice || []).map(d => ({
+                    parts: Array.isArray(d.parts) && d.parts.length
+                        ? d.parts : [d.value],
+                }));
+                const bonuses = [];
+                for (const b of (f.bonuses || [])) {
+                    if (b && b.amount && b.label) {
+                        bonuses.push({label: b.label, amount: b.amount});
+                    }
+                }
+                if ((this.raisesSpentThisRoll || 0) > 0) {
+                    const n = this.raisesSpentThisRoll;
+                    bonuses.push({
+                        label: n === 1 ? 'from 1 raise spent'
+                                       : 'from ' + n + ' raises spent',
+                        amount: n * 5,
+                    });
+                }
+                return {
+                    title: this.title || 'Roll',
+                    formula: this.formulaText || f.label || '',
+                    kept: kept,
+                    dropped: dropped,
+                    bonuses: bonuses,
+                    total: this.baseTotal,
+                };
+            },
+
+            _prerenderRollImage() {
+                const t = window._trackingBridge;
+                if (!t || !t._charId) return;
+                const reqId = ++this._rollImageReqId;
+                this.rollImageBlob = null;
+                this.rollImageStatus = 'rendering';
+                const payload = this._buildRollImagePayload();
+                fetch('/characters/' + t._charId + '/roll-image', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload),
+                }).then(resp => {
+                    if (reqId !== this._rollImageReqId) return null;
+                    if (!resp.ok) throw new Error('render failed');
+                    return resp.blob();
+                }).then(blob => {
+                    if (blob === null) return;       // stale request
+                    if (reqId !== this._rollImageReqId) return;
+                    this.rollImageBlob = blob;
+                    this.rollImageStatus = 'ready';
+                }).catch(() => {
+                    if (reqId !== this._rollImageReqId) return;
+                    this.rollImageStatus = 'failed';
+                });
+            },
+
+            async copyRollImage() {
+                // Clipboard.write must be called from inside a user
+                // gesture and Safari rejects gesture chains that have
+                // already awaited a network response. With the blob
+                // pre-rendered, this handler stays synchronous up to
+                // the clipboard.write call.
+                if (!this.rollImageBlob) {
+                    this.rollImageStatus = 'failed';
+                    return;
+                }
+                try {
+                    await navigator.clipboard.write([
+                        new ClipboardItem({'image/png': this.rollImageBlob}),
+                    ]);
+                    this.rollImageStatus = 'copied';
+                    setTimeout(() => {
+                        if (this.rollImageStatus === 'copied') {
+                            this.rollImageStatus = 'ready';
+                        }
+                    }, 1800);
+                } catch (e) {
+                    this.rollImageStatus = 'failed';
+                }
             },
 
             // True iff this roll has consumed any character-state resource
