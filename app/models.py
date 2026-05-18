@@ -243,6 +243,15 @@ class Character(Base):
     # it is NOT cleared by action-dice Clear or by rolling initiative) but
     # IS cleared by the per-adventure reset. Each entry is {"value": int (1-10)}.
     precepts_pool: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list)
+    # Money ledger: user-added income / expense entries the player keeps
+    # for tracking koku across the campaign. The initial Spring equinox
+    # disbursal (25% of stipend, ceiling) is NOT stored here - it's
+    # computed dynamically from ``effective.stipend`` at render time so
+    # it always reflects the current stipend. Each entry is
+    # ``{"id": str, "kind": "income"|"expense", "label": str,
+    # "amount": int}``. Lives outside the version system - editing the
+    # ledger never flips the character into Draft state.
+    money_ledger: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list)
 
     # Metadata
     notes: Mapped[str] = mapped_column(String, default="")
@@ -324,7 +333,7 @@ class Character(Base):
                 "editor_discord_ids",
                 "current_light_wounds", "current_serious_wounds",
                 "current_void_points", "current_temp_void_points",
-                "action_dice", "precepts_pool",
+                "action_dice", "precepts_pool", "money_ledger",
                 "google_sheet_id"} | METADATA_FIELDS
         # Default values for keys that may be absent from older
         # snapshots. Without an entry here, ``published_state.get(key,
@@ -340,7 +349,7 @@ class Character(Base):
                     "attack": 1, "parry": 1, "rank_locked": False,
                     "current_light_wounds": 0, "current_serious_wounds": 0,
                     "current_void_points": 0, "current_temp_void_points": 0,
-                    "action_dice": [], "precepts_pool": [],
+                    "action_dice": [], "precepts_pool": [], "money_ledger": [],
                     "notes": "", "sections": [],
                     "rank_recognition_awards": [],
                     "specializations": [], "technique_choices": {},
@@ -442,6 +451,7 @@ class Character(Base):
             "current_temp_void_points": self.current_temp_void_points,
             "action_dice": self.action_dice or [],
             "precepts_pool": self.precepts_pool or [],
+            "money_ledger": self.money_ledger or [],
             "notes": self.notes,
             "sections": self.sections or [],
             "google_sheet_id": self.google_sheet_id,

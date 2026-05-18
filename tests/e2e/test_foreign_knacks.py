@@ -197,10 +197,17 @@ def test_foreign_athletics_enables_athletics_roll_on_sheet(page, live_server_url
     _add_foreign_knack(page, "athletics")
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "athletics roll")
-    # Athletics rolls show as buttons keyed athletics:Air etc on the sheet.
-    # Verify at least one athletics roll button is present.
-    btns = page.locator('[data-roll-key^="athletics:"]')
+    # Athletics rolls are routed through the ring tile's picker menu,
+    # which is keyed ``ring:<Ring>``; the athletics-augmented row only
+    # surfaces when an ``athletics:<Ring>`` formula exists for the
+    # current character. With foreign athletics rank >= 1 the formulas
+    # emit, so opening the picker on any non-Void ring should reveal
+    # both the bare row and the athletics row.
+    btns = page.locator('[data-roll-key^="ring:"]')
     assert btns.count() >= 1
+    page.locator('[data-roll-key="ring:Air"]').click()
+    page.wait_for_selector('[data-ring-athletics="Air"]', state='visible', timeout=3000)
+    assert page.locator('[data-ring-athletics="Air"]').count() == 1
 
 
 def test_foreign_worldliness_grants_pool(page, live_server_url):

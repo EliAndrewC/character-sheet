@@ -96,6 +96,23 @@ _CAMPAIGN_ADVANTAGE_CONDITIONAL_SKILL_BONUSES = {
     "highest_regard": (["bragging", "intimidation"], 2, "vs Wasp"),
 }
 
+# Campaign advantage -> (skill_ids, free_raises, label). These bonuses are
+# *purely* conditional (no unconditional companion), so they never touch
+# the flat bonus. They surface as an "Alternative totals" row in the
+# roll modal and as a tooltip note on the View Sheet's skill panel.
+# The label is rendered straight - it should read naturally after the
+# alternative total, e.g. "<N> when invoking bounty hunter authority".
+_CAMPAIGN_ADVANTAGE_ALTERNATIVE_SKILL_BONUSES = {
+    # Streetwise: one free raise on etiquette / law / intimidation /
+    # underworld rolls "relating to anything involving your authority
+    # as Imperial bounty hunters".
+    "streetwise": (
+        ["etiquette", "law", "intimidation", "underworld"],
+        1,
+        "when invoking bounty hunter authority",
+    ),
+}
+
 # Discerning gives different bonuses to different skills
 _DISCERNING_BONUSES = {"interrogation": 1, "investigation": 2}
 
@@ -279,6 +296,24 @@ def compute_skill_roll(
             if skill_id in skill_list:
                 extra = extra_raises * FREE_RAISE_VALUE
                 bonus_parts.append((0, f"+{extra} more {cond_text}"))
+        if adv_id in _CAMPAIGN_ADVANTAGE_ALTERNATIVE_SKILL_BONUSES:
+            skill_list, raises, cond_text = (
+                _CAMPAIGN_ADVANTAGE_ALTERNATIVE_SKILL_BONUSES[adv_id]
+            )
+            if skill_id in skill_list:
+                amount = raises * FREE_RAISE_VALUE
+                # No unconditional companion, so the source name has
+                # to ride along on the conditional note - otherwise the
+                # player can't tell which advantage produced it from
+                # the View Sheet tooltip alone. The format avoids the
+                # ``"+N from X"`` pattern so the parenthetical-strip
+                # regex (which collapses single-bonus tooltips to drop
+                # a redundant flat-bonus echo) leaves the conditional
+                # row intact.
+                adv_name = CAMPAIGN_ADVANTAGES[adv_id].name
+                bonus_parts.append(
+                    (0, f"+{amount} {cond_text} ({adv_name})")
+                )
 
     # --- Higher Purpose & Specialization (conditional bonuses from advantage_details) ---
     advantage_details = character_data.get("advantage_details", {})

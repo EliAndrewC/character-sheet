@@ -43,11 +43,23 @@ def _roll_via_menu_or_direct(page, roll_key):
     a sub-button on the regular parry roll menu (gated by the athletics:parry
     formula existing). Clicking parry opens that menu; we then pick the
     Athletics Parry sub-button via its dedicated data attribute.
+
+    ``athletics:<Ring>`` (Air/Fire/Water/Earth) also has no top-level
+    data-roll-key element: the ring tile is keyed ``ring:<Ring>`` and
+    opens the bare-vs-athletics picker, where the athletics row is
+    addressable via ``data-ring-athletics="<Ring>"``.
     """
     if roll_key == "athletics:parry":
         page.locator('[data-roll-key="parry"]').click()
         page.wait_for_timeout(200)
         page.locator('[data-parry-menu-athletics]').click()
+        _wait_roll_done(page)
+        return
+    if roll_key.startswith("athletics:") and roll_key not in ("athletics:attack",):
+        ring = roll_key.split(":", 1)[1]
+        page.locator(f'[data-roll-key="ring:{ring}"]').click()
+        page.wait_for_timeout(200)
+        page.locator(f'[data-ring-athletics="{ring}"]').click()
         _wait_roll_done(page)
         return
     page.locator(f'[data-roll-key="{roll_key}"]').click()

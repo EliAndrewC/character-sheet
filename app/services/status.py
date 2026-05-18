@@ -6,8 +6,10 @@ This module computes the base values and all contextual modifiers.
 
 from __future__ import annotations
 
+import math
+import uuid
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from app.game_data import CAMPAIGN_STIPEND_RANK, GROUP_EFFECTS
 from app.services.rolls import compute_dan
@@ -335,3 +337,120 @@ def compute_effective_status(
                 })
 
     return status
+
+
+# ---------------------------------------------------------------------------
+# Money ledger
+# ---------------------------------------------------------------------------
+#
+# Players track koku across the campaign via a per-character ledger:
+# the locked "Spring equinox stipend disbursal" entry (computed from the
+# current stipend) plus any user-added income / expense rows. The
+# locked entry isn't persisted - it's derived from
+# ``effective.stipend`` at render time so it always reflects the
+# character's current stipend value.
+
+# Stable id assigned to the locked Spring equinox disbursal entry. The
+# frontend uses this to short-circuit delete attempts and the route
+# layer uses it to refuse a delete-by-id with a 400.
+SPRING_DISBURSAL_ID = "spring-equinox-disbursal"
+
+# Label rendered on the locked entry. Single source of truth so the
+# clicktest and the template can pin on the same string.
+SPRING_DISBURSAL_LABEL = "Spring equinox stipend disbursal"
+
+
+def spring_disbursal_amount(stipend: int) -> int:
+    """25% of the annual stipend, rounded UP to the nearest koku.
+
+    Example: an 81-koku stipend disburses ``ceil(81 / 4) = 21`` koku at
+    the Spring equinox.
+    """
+    if stipend <= 0:
+        return 0
+    return math.ceil(stipend / 4)
+
+
+def compute_money_state(
+    stipend: int,
+    ledger: Optional[List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    """Derive the player-visible money snapshot from the stipend and
+    the persisted ledger of user-added entries.
+
+    Returns a dict with:
+      * ``stipend``      - the annual stipend, echoed for convenience.
+      * ``on_hand``      - running koku total: locked initial disbursal
+                           plus all income entries, minus all expense
+                           entries.
+      * ``entries``      - the full ledger including the locked Spring
+                           equinox disbursal at the front. Each entry
+                           carries ``id``, ``kind``, ``label``,
+                           ``amount``, and a ``locked`` flag so the
+                           template can suppress the delete button on
+                           the disbursal row.
+
+    The locked entry is rebuilt fresh each call from the current
+    stipend; we do not persist it to the database. That means a stipend
+    change (e.g. the player gains Household Wealth) updates the
+    disbursal amount retroactively, which matches the in-world reading
+    that "this is what your next disbursal would be".
+    """
+    initial_amount = spring_disbursal_amount(stipend)
+    locked_entry: Dict[str, Any] = {
+        "id": SPRING_DISBURSAL_ID,
+        "kind": "income",
+        "label": SPRING_DISBURSAL_LABEL,
+        "amount": initial_amount,
+        "locked": True,
+    }
+    entries: List[Dict[str, Any]] = [locked_entry]
+    on_hand = initial_amount
+    for raw in (ledger or []):
+        if not isinstance(raw, dict):
+            continue
+        kind = raw.get("kind")
+        if kind not in ("income", "expense"):
+            continue
+        try:
+            amount = int(raw.get("amount", 0))
+        except (TypeError, ValueError):
+            continue
+        if amount < 0:
+            # Defensive: amounts are stored as positive integers; the
+            # sign comes from ``kind``. A negative amount is malformed.
+            continue
+        label = raw.get("label")
+        if not isinstance(label, str):
+            label = ""
+        entry_id = raw.get("id")
+        if not isinstance(entry_id, str) or not entry_id:
+            entry_id = uuid.uuid4().hex
+        entries.append({
+            "id": entry_id,
+            "kind": kind,
+            "label": label,
+            "amount": amount,
+            "locked": False,
+        })
+        if kind == "income":
+            on_hand += amount
+        else:
+            on_hand -= amount
+    return {
+        "stipend": stipend,
+        "on_hand": on_hand,
+        "entries": entries,
+    }
+
+
+def new_ledger_entry(kind: str, label: str, amount: int) -> Dict[str, Any]:
+    """Build a fresh entry dict suitable for appending to
+    ``Character.money_ledger``. Used by the add-entry route after
+    validating the inbound payload."""
+    return {
+        "id": uuid.uuid4().hex,
+        "kind": kind,
+        "label": label,
+        "amount": amount,
+    }

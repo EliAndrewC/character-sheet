@@ -456,6 +456,50 @@ class TestSkillFormula:
         assert not any(b["label"] == "Highest Regard" for b in f.bonuses)
         assert not any("Wasp" in alt.get("label", "") for alt in f.alternatives)
 
+    def test_streetwise_surfaces_as_alternative_only(self):
+        """Streetwise contributes only to ``alternatives`` (the roll
+        modal's "Alternative totals" section); it never lands on the
+        unconditional flat. All four listed skills carry the same
+        +5 conditional row."""
+        for skill in ("etiquette", "law", "intimidation", "underworld"):
+            char = make_character_data(
+                school="",
+                knacks={},
+                skills={skill: 1},
+                campaign_advantages=["streetwise"],
+            )
+            f = build_skill_formula(skill, char)
+            # No flat contribution from Streetwise.
+            assert not any(b["label"] == "Streetwise" for b in f.bonuses)
+            # Exactly one alternative row carrying the +5 conditional.
+            sw_rows = [a for a in f.alternatives
+                       if "bounty hunter authority" in a.get("label", "")]
+            assert len(sw_rows) == 1, f"{skill}: missing streetwise row"
+            assert sw_rows[0]["extra_flat"] == 5
+            assert sw_rows[0]["label"] == "when invoking bounty hunter authority"
+
+    def test_streetwise_skill_off_list_has_no_alternative(self):
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"tact": 1},
+            campaign_advantages=["streetwise"],
+        )
+        f = build_skill_formula("tact", char)
+        assert not any("bounty hunter" in a.get("label", "")
+                       for a in f.alternatives)
+
+    def test_streetwise_absent_when_not_taken(self):
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"intimidation": 1},
+            campaign_advantages=[],
+        )
+        f = build_skill_formula("intimidation", char)
+        assert not any("bounty hunter" in a.get("label", "")
+                       for a in f.alternatives)
+
     def test_unkempt_culture_is_minus10_alternative_not_flat(self):
         """Unkempt's -10 to Culture is conditional ('in the eyes of those who
         judge the unkempt') and must surface as an Alternative-totals row in
@@ -1165,13 +1209,65 @@ class TestBuildAllRollFormulas:
         # Attack/parry present
         assert "attack" in formulas
         assert "parry" in formulas
-        # Athletics for every ring
+        # Bare ring formulas for each rollable ring (Void is excluded -
+        # the rules don't model a standalone Void check this way).
+        for ring in ("Air", "Fire", "Earth", "Water"):
+            assert f"ring:{ring}" in formulas
+        assert "ring:Void" not in formulas
+        # No athletics:<Ring> formulas without the athletics knack -
+        # the ring tile's picker menu would render a redundant row
+        # otherwise. See test_athletics_ring_formulas_emitted_with_knack.
         for ring in ("Air", "Fire", "Earth", "Water", "Void"):
-            assert f"athletics:{ring}" in formulas
+            assert f"athletics:{ring}" not in formulas
         # School knacks for akodo_bushi
         assert "knack:double_attack" in formulas
         assert "knack:feint" in formulas
         assert "knack:iaijutsu" in formulas
+
+    def test_bare_ring_formula_is_2x_ring_kept_ring(self):
+        """A bare ring roll is ``(2 * Ring) k (Ring)`` regardless of
+        athletics knack. Pinning a few values guards against accidental
+        athletics-rank pollution if the helper ever shares code with
+        ``build_athletics_formula``."""
+        char = make_character_data(
+            rings={"Air": 2, "Fire": 3, "Earth": 4, "Water": 5, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        # Water 5 -> 10k5.
+        assert formulas["ring:Water"]["rolled"] == 10
+        assert formulas["ring:Water"]["kept"] == 5
+        assert formulas["ring:Water"]["label"] == "Water"
+        # Earth 4 -> 8k4.
+        assert formulas["ring:Earth"]["rolled"] == 8
+        assert formulas["ring:Earth"]["kept"] == 4
+
+    def test_bare_ring_formula_returns_none_for_void(self):
+        """``build_ring_formula`` rejects Void (and any unknown ring
+        name) since the rules don't model a standalone Void check."""
+        from app.services.dice import build_ring_formula
+        char = make_character_data()
+        assert build_ring_formula("Void", char) is None
+        assert build_ring_formula("NotARing", char) is None
+
+    def test_athletics_ring_formulas_emitted_with_knack(self):
+        """Athletics-augmented ring rolls only appear when the
+        character actually has the athletics knack. With the knack the
+        formula adds the knack rank to the rolled count; the bare
+        ``ring:<Ring>`` formula always emits in parallel so the ring
+        tile's picker can offer both rows."""
+        char = make_character_data(
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1, "athletics": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        assert "ring:Air" in formulas
+        assert "athletics:Air" in formulas
+        # Air 3 + 2 athletics rank = 8 rolled, 3 kept.
+        assert formulas["athletics:Air"]["rolled"] == 8
+        assert formulas["athletics:Air"]["kept"] == 3
+        # The bare ring formula is unchanged.
+        assert formulas["ring:Air"]["rolled"] == 6
+        assert formulas["ring:Air"]["kept"] == 3
 
     def test_missing_school_knacks_default_to_rank_one(self):
         """School knacks start at rank 1 for free, so formulas must be

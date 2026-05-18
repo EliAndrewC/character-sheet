@@ -5,8 +5,9 @@ WORKDIR /app
 # System dependencies for the character-import pipeline:
 #   antiword - legacy Microsoft .doc extraction (import-design §6)
 #   libmagic1 - file-type detection for uploaded documents
+#   libcairo2 - cairosvg backend for the dice-roll "copy as image" card
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends antiword libmagic1 \
+    && apt-get install -y --no-install-recommends antiword libmagic1 libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

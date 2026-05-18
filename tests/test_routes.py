@@ -6329,3 +6329,327 @@ class TestKitsuneWardenSwapProbs:
         )
         wp = self._read_json_script(client, cid, "wound-check-probs")
         assert "kitsune_swap" not in wp
+
+
+class TestRollImageEndpoint:
+    """``POST /characters/{id}/roll-image`` renders the roll-result
+    "copy as image" PNG card."""
+
+    def test_returns_png(self, client):
+        cid = _seed_character(client, name="ImgChar")
+        resp = client.post(
+            f"/characters/{cid}/roll-image",
+            json={
+                "title": "Bragging",
+                "formula": "7k3",
+                "kept": [{"parts": [9]}, {"parts": [8]}, {"parts": [7]}],
+                "dropped": [{"parts": [6]}, {"parts": [4]}],
+                "bonuses": [{"label": "from 1 raise spent", "amount": 5}],
+                "total": 29,
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("image/png")
+        assert resp.content.startswith(b"\x89PNG\r\n\x1a\n")
+        # The endpoint advises private caching so repeated copy
+        # clicks within the same modal session don't re-fetch.
+        assert "private" in (resp.headers.get("cache-control") or "")
+
+    def test_404_when_character_missing(self, client):
+        resp = client.post("/characters/99999/roll-image", json={})
+        assert resp.status_code == 404
+
+    def test_hidden_character_404_for_anonymous_viewer(self, client):
+        cid = _seed_character(client, name="HiddenImg", is_hidden=True,
+                              owner_discord_id="someone_else")
+        client.headers.pop("X-Test-User", None)
+        resp = client.post(f"/characters/{cid}/roll-image", json={})
+        assert resp.status_code == 404
+
+    def test_hidden_character_serves_owner(self, client):
+        """The owner (or any editor) can still copy roll images of
+        their hidden draft - matches the View Sheet permission rule."""
+        cid = _seed_character(
+            client, name="HiddenImgOwner", is_hidden=True,
+            owner_discord_id="183026066498125825",  # default test user
+        )
+        resp = client.post(
+            f"/characters/{cid}/roll-image",
+            json={"title": "T", "kept": [{"parts": [7]}], "total": 7},
+        )
+        assert resp.status_code == 200
+
+    def test_public_character_serves_anonymous_viewer(self, client):
+        """Non-hidden characters are public on the View Sheet; the
+        copy-as-image endpoint matches that policy so a logged-out
+        Roll Mode viewer can share what they rolled."""
+        cid = _seed_character(client, name="PublicImg")
+        client.headers.pop("X-Test-User", None)
+        resp = client.post(
+            f"/characters/{cid}/roll-image",
+            json={"title": "T", "kept": [{"parts": [9]}], "total": 9},
+        )
+        assert resp.status_code == 200
+        assert resp.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+    def test_malformed_json_returns_400(self, client):
+        cid = _seed_character(client, name="BadJson")
+        resp = client.post(
+            f"/characters/{cid}/roll-image",
+            content=b"{not valid json",
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code == 400
+
+    def test_non_dict_payload_returns_400(self, client):
+        cid = _seed_character(client, name="BadShape")
+        resp = client.post(
+            f"/characters/{cid}/roll-image",
+            json=["not", "a", "dict"],
+        )
+        assert resp.status_code == 400
+
+    def test_empty_payload_still_renders(self, client):
+        """Renderer is lenient by design: an empty payload produces
+        a default card rather than an error. This is intentional so
+        the client doesn't have to keep the wire format in lockstep
+        with edge-case rolls."""
+        cid = _seed_character(client, name="EmptyImg")
+        resp = client.post(f"/characters/{cid}/roll-image", json={})
+        assert resp.status_code == 200
+        assert resp.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+class TestMoneyAddEndpoint:
+    """``POST /characters/{id}/money/add`` appends an income or expense
+    entry to the character's money ledger. The Spring equinox
+    disbursal is computed, not stored, so this endpoint only ever
+    handles user-added rows."""
+
+    def test_appends_income_entry(self, client):
+        cid = _seed_character(client, name="MoneyAdd",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "income", "label": "Sold a horse", "amount": 10},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        # Locked entry + one user entry come back in the recomputed state.
+        assert data["money"]["entries"][0]["locked"] is True
+        assert data["money"]["entries"][1]["kind"] == "income"
+        assert data["money"]["entries"][1]["label"] == "Sold a horse"
+        assert data["money"]["entries"][1]["amount"] == 10
+        # The character's persisted ledger picked up the new row.
+        char = query_db(client).filter(Character.id == cid).first()
+        assert len(char.money_ledger) == 1
+
+    def test_appends_expense_entry(self, client):
+        cid = _seed_character(client, name="MoneyExp",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "expense", "label": "Inn", "amount": 5},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        entry = data["money"]["entries"][1]
+        assert entry["kind"] == "expense"
+        assert entry["amount"] == 5
+
+    def test_rejects_invalid_kind(self, client):
+        cid = _seed_character(client, name="BadKind",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "transfer", "label": "x", "amount": 5},
+        )
+        assert resp.status_code == 400
+        assert "income" in resp.json()["error"]
+
+    def test_rejects_empty_label(self, client):
+        cid = _seed_character(client, name="NoLabel",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "income", "label": "  ", "amount": 5},
+        )
+        assert resp.status_code == 400
+        assert "label" in resp.json()["error"]
+
+    def test_long_label_is_clipped(self, client):
+        cid = _seed_character(client, name="LongLabel",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "income", "label": "x" * 500, "amount": 5},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert len(char.money_ledger[0]["label"]) == 200
+
+    def test_rejects_non_integer_amount(self, client):
+        cid = _seed_character(client, name="BadAmt",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "income", "label": "x", "amount": "ten"},
+        )
+        assert resp.status_code == 400
+
+    def test_rejects_zero_or_negative_amount(self, client):
+        cid = _seed_character(client, name="NegAmt",
+                              owner_discord_id="183026066498125825")
+        for bad in (0, -3):
+            resp = client.post(
+                f"/characters/{cid}/money/add",
+                json={"kind": "income", "label": "x", "amount": bad},
+            )
+            assert resp.status_code == 400
+
+    def test_rejects_malformed_json(self, client):
+        cid = _seed_character(client, name="MalformedJson",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            content=b"{not json",
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code == 400
+
+    def test_rejects_non_dict_payload(self, client):
+        cid = _seed_character(client, name="ArrayPayload",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json=["not", "a", "dict"],
+        )
+        assert resp.status_code == 400
+
+    def test_404_when_character_missing(self, client):
+        resp = client.post(
+            "/characters/99999/money/add",
+            json={"kind": "income", "label": "x", "amount": 5},
+        )
+        assert resp.status_code == 404
+
+    def test_401_when_anonymous(self, client):
+        cid = _seed_character(client, name="MoneyAnon",
+                              owner_discord_id="183026066498125825")
+        client.headers.pop("X-Test-User", None)
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "income", "label": "x", "amount": 5},
+        )
+        assert resp.status_code == 401
+
+    def test_403_when_non_editor(self, client):
+        cid = _seed_character(client, name="MoneyNonEditor",
+                              owner_discord_id="someone_else")
+        client.headers["X-Test-User"] = "non_editor:NonEditor"
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "income", "label": "x", "amount": 5},
+        )
+        assert resp.status_code == 403
+
+
+class TestMoneyDeleteEndpoint:
+    """``POST /characters/{id}/money/delete`` removes a user-added entry
+    by id. The locked Spring equinox disbursal id cannot be deleted."""
+
+    def test_removes_user_entry(self, client):
+        cid = _seed_character(client, name="MoneyDel",
+                              owner_discord_id="183026066498125825")
+        client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "income", "label": "Sold a horse", "amount": 10},
+        )
+        char = query_db(client).filter(Character.id == cid).first()
+        entry_id = char.money_ledger[0]["id"]
+        resp = client.post(
+            f"/characters/{cid}/money/delete",
+            json={"entry_id": entry_id},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        # Only the locked entry remains in the recomputed state.
+        assert len(data["money"]["entries"]) == 1
+        assert data["money"]["entries"][0]["locked"] is True
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.money_ledger == []
+
+    def test_refuses_to_delete_locked_disbursal(self, client):
+        """The Spring equinox disbursal isn't stored in the ledger,
+        but the endpoint rejects a delete-by-its-id with a 400 so the
+        client surfaces a clear error rather than seeing a silent
+        no-op."""
+        from app.services.status import SPRING_DISBURSAL_ID
+        cid = _seed_character(client, name="MoneyLocked",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/delete",
+            json={"entry_id": SPRING_DISBURSAL_ID},
+        )
+        assert resp.status_code == 400
+        assert "cannot be deleted" in resp.json()["error"]
+
+    def test_404_when_entry_not_found(self, client):
+        cid = _seed_character(client, name="MoneyMissing",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/delete",
+            json={"entry_id": "not-a-real-id"},
+        )
+        assert resp.status_code == 404
+
+    def test_400_when_entry_id_missing(self, client):
+        cid = _seed_character(client, name="MoneyMissingId",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(f"/characters/{cid}/money/delete", json={})
+        assert resp.status_code == 400
+
+    def test_401_when_anonymous(self, client):
+        cid = _seed_character(client, name="DelAnon",
+                              owner_discord_id="183026066498125825")
+        client.headers.pop("X-Test-User", None)
+        resp = client.post(
+            f"/characters/{cid}/money/delete",
+            json={"entry_id": "x"},
+        )
+        assert resp.status_code == 401
+
+    def test_403_when_non_editor(self, client):
+        cid = _seed_character(client, name="DelNonEditor",
+                              owner_discord_id="someone_else")
+        client.headers["X-Test-User"] = "non_editor:NonEditor"
+        resp = client.post(
+            f"/characters/{cid}/money/delete",
+            json={"entry_id": "x"},
+        )
+        assert resp.status_code == 403
+
+    def test_404_when_character_missing(self, client):
+        resp = client.post(
+            "/characters/99999/money/delete",
+            json={"entry_id": "x"},
+        )
+        assert resp.status_code == 404
+
+    def test_rejects_malformed_json(self, client):
+        cid = _seed_character(client, name="DelBadJson",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/delete",
+            content=b"{nope",
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code == 400
+
+    def test_rejects_non_dict_payload(self, client):
+        cid = _seed_character(client, name="DelArray",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/delete", json=["x"]
+        )
+        assert resp.status_code == 400
