@@ -214,3 +214,34 @@ def test_iaijutsu_strike_wound_check_available(page, live_server_url):
     page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_timeout(300)
     assert page.locator('[data-action="roll-wound-check-strike"]').is_visible()
+
+
+def test_wound_check_result_has_copy_as_image_button(page, live_server_url):
+    """The wound-check result panel now carries a Copy-as-image button
+    alongside the Total line. Verifies the partial fires and reaches
+    the ``ready`` state once the prerender lands."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _create_character_with_wounds(page, live_server_url, "WCCopy",
+                                  light_wounds=10)
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.wcPhase === 'result'",
+        timeout=10000,
+    )
+    page.wait_for_function(
+        """() => {
+            const modal = document.querySelector('[data-modal="wound-check"]');
+            if (!modal) return false;
+            const btns = modal.querySelectorAll('[data-action="copy-roll-image"]');
+            for (const b of btns) {
+                if (b.getAttribute('data-state') === 'ready'
+                        && b.offsetParent !== null) {
+                    return true;
+                }
+            }
+            return false;
+        }""",
+        timeout=10000,
+    )

@@ -116,6 +116,18 @@ The three failures were:
 - [x] Lucky prev total updates reactively with post-reroll bonuses -> `test_ui_interactions.py::test_lucky_prevtotal_updates_with_post_reroll_bonus`
 - [x] Failed parry checkbox changes damage formula -> `test_ui_interactions.py::test_failed_parry_checkbox`
 - [x] Predeclared parry rolls with +5 bonus -> `test_ui_interactions.py::test_predeclared_parry_with_bonus`
+- [x] Pre-roll "Extra bonus" toggle starts unchecked with defaults (+15 / "surrounding"); inputs hidden until checked -> `test_attack_modal.py::test_extra_bonus_starts_unchecked_with_defaults`
+- [x] Pre-roll "Extra bonus" doesn't persist between modal opens (per spec) -> `test_attack_modal.py::test_extra_bonus_does_not_persist_between_modal_opens`
+- [x] Pre-roll "Extra bonus" lifts hit-chance in the probability table; live-updates as the amount changes -> `test_attack_modal.py::test_extra_bonus_lifts_hit_chance_in_probability_table`
+- [x] Pre-roll "Extra bonus" surfaces on the post-roll breakdown with its label verbatim -> `test_attack_modal.py::test_extra_bonus_surfaces_on_breakdown_after_roll`
+- [x] Pre-roll "Extra bonus" with a blank label falls back to "extra bonus" in the breakdown -> `test_attack_modal.py::test_extra_bonus_blank_label_falls_back_gracefully`
+- [x] Post-roll "Extra bonus" starts unchecked; checking reveals the field pre-populated at +5 (the spec'd default for this field; pre-roll defaults to +15) -> `test_attack_modal.py::test_post_roll_bonus_starts_unchecked_with_default_5`
+- [x] Post-roll "Extra bonus" auto-focuses the number field on toggle -> `test_attack_modal.py::test_post_roll_bonus_focuses_input_when_toggled`
+- [x] Post-roll "Extra bonus" updates atkRollTotal / baseTotal live as the field changes (no double-counting on subsequent edits) -> `test_attack_modal.py::test_post_roll_bonus_updates_attack_total_live`
+- [x] Post-roll "Extra bonus" toggle-off subtracts the applied delta back to the pre-toggle total -> `test_attack_modal.py::test_post_roll_bonus_toggle_off_subtracts_back`
+- [x] Post-roll "Extra bonus" can flip a miss to a hit reactively -> `test_attack_modal.py::test_post_roll_bonus_can_flip_miss_into_hit`
+- [x] Post-roll "Extra bonus" updates atkExtraDice (each +5 above TN grants another rolled damage die) -> `test_attack_modal.py::test_post_roll_bonus_updates_extra_damage_dice`
+- [x] Post-roll "Extra bonus" breakdown row renders only when the box is on and applied != 0 -> `test_attack_modal.py::test_post_roll_bonus_breakdown_row_shows_when_active`
 
 ## Iaijutsu Duel
 
@@ -775,6 +787,13 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Roll menu flipped above the clicked element sits close to it (no large gap) → `test_rolls.py::test_roll_menu_flipped_above_is_close_to_clicked_element`
 - [x] Roll-result modal carries a "Copy as image" button that pre-renders a PNG dice card while the animation is on screen and writes it to the clipboard on click (verifies the PNG actually lands on the clipboard) → `test_rolls.py::test_roll_result_copy_as_image_button`
 - [x] Copy-as-image button is hidden during the dice animation and surfaces only once the pre-rendered PNG is ready → `test_rolls.py::test_roll_result_copy_button_hidden_during_animation`
+- [x] Copy-as-image on the freeform-roll modal (its own Alpine scope with a local copy of the prerender state) → `test_rolls.py::test_freeform_modal_has_copy_as_image_button`
+- [x] Copy-as-image on the dice-roller initiative result (action-dice panel; uses a separate payload builder so the card shows action dice rather than a kept/dropped split) → `test_rolls.py::test_initiative_result_has_copy_as_image_button`
+- [x] Copy-as-image on the wound-check result panel → `test_wound_check.py::test_wound_check_result_has_copy_as_image_button`
+- [x] Copy-as-image on the attack-roll result panel → `test_attack_modal.py::test_attack_result_has_copy_as_image_button`
+- [x] Copy-as-image on the attack damage-result panel (fresh card built from damage dice + damage total, not the attack snapshot) → `test_attack_modal.py::test_attack_damage_result_has_copy_as_image_button`
+- [x] Copy-as-image on the iaijutsu duel contested-result panel → `test_iaijutsu_duel.py::test_duel_contested_result_has_copy_as_image_button`
+- [x] Copy-as-image on the iaijutsu duel strike-result panel → `test_iaijutsu_duel.py::test_duel_strike_result_has_copy_as_image_button`
 - [x] Athletics knack die icon opens a ring picker (Air/Fire/Water/Earth) → `test_rolls.py::test_athletics_knack_icon_opens_ring_picker`
 - [x] Selecting a ring from the athletics picker rolls that ring's Athletics formula → `test_rolls.py::test_athletics_knack_picker_rolls_selected_ring`
 - [x] Hovering a ring in the athletics picker reveals a void-spend submenu → `test_rolls.py::test_athletics_knack_picker_void_submenu`

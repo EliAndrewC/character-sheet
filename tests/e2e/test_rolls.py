@@ -1546,13 +1546,20 @@ def test_roll_result_copy_as_image_button(page, live_server_url):
     _create_roller(page, live_server_url, "CopyImg")
     page.locator('[data-roll-key="skill:bragging"]').click()
     _wait_for_roll_result(page)
-    # Wait for the pre-render to land. The state machine goes
-    # 'idle' -> 'rendering' -> 'ready' (or 'failed'); the
-    # button's :data-state attribute mirrors that flag.
-    copy_btn = page.locator('[data-action="copy-roll-image"]')
+    # Wait for the pre-render to land. Each result modal renders its
+    # own (mostly-hidden) Copy button now, so scope the lookup to the
+    # dice-roller modal explicitly - otherwise we'd race with the
+    # freeform-roll modal's button (also in the DOM, but always
+    # ``idle`` while that modal is closed).
+    # ``:visible`` filters past the initiative-panel sibling, which is
+    # also in the DOM but hidden via its parent's ``x-show`` gate.
+    copy_btn = page.locator(
+        '[data-modal="dice-roller"] [data-action="copy-roll-image"]:visible'
+    )
     page.wait_for_function(
         """() => {
-            const el = document.querySelector('[data-action="copy-roll-image"]');
+            const el = document.querySelector(
+                '[data-modal="dice-roller"] [data-action="copy-roll-image"]');
             return el && el.getAttribute('data-state') === 'ready';
         }""",
         timeout=10000,
@@ -1565,7 +1572,8 @@ def test_roll_result_copy_as_image_button(page, live_server_url):
     # promise resolves.
     page.wait_for_function(
         """() => {
-            const el = document.querySelector('[data-action="copy-roll-image"]');
+            const el = document.querySelector(
+                '[data-modal="dice-roller"] [data-action="copy-roll-image"]');
             return el && el.getAttribute('data-state') === 'copied';
         }""",
         timeout=3000,
@@ -1602,14 +1610,19 @@ def test_roll_result_copy_button_hidden_during_animation(page, live_server_url):
     page.evaluate("window._diceRoller.prefs.dice_animation_enabled = false")
     page.locator('[data-roll-key="skill:bragging"]').click()
     _wait_for_roll_result(page)
+    # Scope to the dice-roller modal's button - each result modal now
+    # carries its own Copy button (mostly idle/hidden via x-show).
     page.wait_for_function(
         """() => {
-            const el = document.querySelector('[data-action="copy-roll-image"]');
+            const el = document.querySelector(
+                '[data-modal="dice-roller"] [data-action="copy-roll-image"]');
             return el && el.getAttribute('data-state') !== 'idle';
         }""",
         timeout=5000,
     )
-    assert page.locator('[data-action="copy-roll-image"]').is_visible()
+    assert page.locator(
+        '[data-modal="dice-roller"] [data-action="copy-roll-image"]:visible'
+    ).count() == 1
 
 
 def test_streetwise_surfaces_as_alternative_total(page, live_server_url):
@@ -1651,3 +1664,64 @@ def test_streetwise_surfaces_as_alternative_total(page, live_server_url):
         }"""
     ))
     assert alt_total == base_total + 5
+
+
+# ---------------------------------------------------------------------------
+# Copy-as-image: now wired into every result modal (not just the
+# default dice-roller). Each test below opens the relevant modal,
+# triggers a roll, and confirms the partial's "Copy as image" button
+# reaches the ``ready`` state. Clipboard write itself is already
+# covered by ``test_roll_result_copy_as_image_button`` above.
+# ---------------------------------------------------------------------------
+
+
+def _wait_copy_ready(page, modal_selector, timeout=10000):
+    """Wait for a Copy button inside ``modal_selector`` to reach the
+    ``ready`` state. Selecting via the modal scope keeps the
+    assertion deterministic even when several modals have rendered
+    their copy buttons into the DOM (with ``x-show`` hiding most)."""
+    page.wait_for_function(
+        """(sel) => {
+            const modal = document.querySelector(sel);
+            if (!modal) return false;
+            const btns = modal.querySelectorAll('[data-action="copy-roll-image"]');
+            for (const b of btns) {
+                if (b.getAttribute('data-state') === 'ready'
+                        && b.offsetParent !== null) {
+                    return true;
+                }
+            }
+            return false;
+        }""",
+        arg=modal_selector, timeout=timeout,
+    )
+
+
+def test_freeform_modal_has_copy_as_image_button(page, live_server_url):
+    """Freeform modal lives in its own Alpine scope; it carries a
+    local copy of the prerender state under the same names the shared
+    partial expects, so the partial just works when included in that
+    scope."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _create_roller(page, live_server_url, "FFCopy")
+    page.locator('[data-action="open-freeform-roll"]').click()
+    page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
+    page.locator('[data-action="freeform-roll"]').click()
+    page.wait_for_function(
+        """() => {
+            const ff = document.querySelector('[x-data="freeformRoller()"]');
+            return ff && Alpine.$data(ff).ffPhase === 'done';
+        }""",
+        timeout=5000,
+    )
+    _wait_copy_ready(page, '[data-modal="freeform-roll"]')
+
+
+def test_initiative_result_has_copy_as_image_button(page, live_server_url):
+    """The dice-roller modal's initiative branch (action-dice display)
+    now exposes a Copy button next to the Action Dice header."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _create_roller(page, live_server_url, "InitCopy")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    _wait_copy_ready(page, '[data-modal="dice-roller"]')

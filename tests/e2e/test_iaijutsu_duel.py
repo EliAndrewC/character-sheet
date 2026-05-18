@@ -409,3 +409,91 @@ def test_kitsune_warden_iaijutsu_strike_has_no_swap_in_roll_menu(page, live_serv
     block = page.locator('[data-testid="kitsune-skill-swap-block"]')
     assert not block.is_visible(), \
         "Kitsune swap block should not appear on the iaijutsu knack roll menu"
+
+
+def _wait_duel_copy_ready(page, timeout=10000):
+    page.wait_for_function(
+        """() => {
+            const modal = document.querySelector('[data-modal="iaijutsu-duel"]');
+            if (!modal) return false;
+            const btns = modal.querySelectorAll('[data-action="copy-roll-image"]');
+            for (const b of btns) {
+                if (b.getAttribute('data-state') === 'ready'
+                        && b.offsetParent !== null) {
+                    return true;
+                }
+            }
+            return false;
+        }""",
+        timeout=timeout,
+    )
+
+
+def test_duel_contested_result_has_copy_as_image_button(page, live_server_url):
+    """The duel's contested-result panel exposes a Copy-as-image
+    button. Each duel sub-phase pre-renders its own card on
+    transition, so contested / strike / damage each carry their own
+    Copy at the right moment."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _create_duelist(page, live_server_url, "DuelContestCopy")
+    _wait_alpine(page)
+    _open_duel_modal(page)
+    modal = page.locator('[data-modal="iaijutsu-duel"]')
+    modal.locator('input[placeholder="e.g. 200"]').fill("200")
+    modal.locator('button:text("Proceed to Contested Roll")').click()
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(
+        state='visible', timeout=10000)
+    modal.locator('button:text("Roll Contested Iaijutsu")').click()
+    page.wait_for_function(
+        """() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.duelPhase === 'contested-result') return true;
+            }
+            return false;
+        }""",
+        timeout=15000,
+    )
+    _wait_duel_copy_ready(page)
+
+
+def test_duel_strike_result_has_copy_as_image_button(page, live_server_url):
+    """The duel's strike-result panel exposes its own Copy button
+    pre-rendered from the strike roll."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    _create_duelist(page, live_server_url, "DuelStrikeCopy")
+    _wait_alpine(page)
+    _open_duel_modal(page)
+    modal = page.locator('[data-modal="iaijutsu-duel"]')
+    modal.locator('input[placeholder="e.g. 200"]').fill("200")
+    modal.locator('button:text("Proceed to Contested Roll")').click()
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(
+        state='visible', timeout=10000)
+    modal.locator('button:text("Roll Contested Iaijutsu")').click()
+    page.wait_for_function(
+        """() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.duelPhase === 'contested-result') return true;
+            }
+            return false;
+        }""",
+        timeout=15000,
+    )
+    modal.locator('button:text("Proceed to Focus / Strike")').click()
+    page.wait_for_timeout(200)
+    modal.locator('button:text("Strike!")').click()
+    page.wait_for_function(
+        """() => {
+            const els = document.querySelectorAll('[x-data]');
+            for (const el of els) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.duelPhase === 'strike-result') return true;
+            }
+            return false;
+        }""",
+        timeout=15000,
+    )
+    _wait_duel_copy_ready(page)
