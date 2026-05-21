@@ -22,7 +22,7 @@ def test_money_expand_shows_stipend_calculation(page, live_server_url):
 def test_money_with_household_wealth(page, live_server_url):
     """Stipend changes with Household Wealth campaign advantage flow
     through the Money row's stipend number AND the derived on-hand
-    Spring equinox disbursal (ceil(100/4) = 25)."""
+    Spring equinox disbursal (100 / 4 = 25.0)."""
     page.goto(live_server_url)
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
@@ -33,16 +33,16 @@ def test_money_with_household_wealth(page, live_server_url):
     apply_changes(page, "Test")
     money_row = page.locator('[data-status-row="money"]')
     assert "100" in money_row.locator('[data-money-stipend]').text_content()
-    # ceil(100 / 4) = 25 starting koku on hand.
-    assert "25" == money_row.locator('[data-money-on-hand]').text_content().strip()
+    # 100 / 4 = 25.0 starting koku on hand (one-decimal display).
+    assert "25.0" == money_row.locator('[data-money-on-hand]').text_content().strip()
 
 
 def test_money_with_merchant_4th_dan(page, live_server_url):
     """Merchant school's 4th Dan stipend bump flows through the Money
     row's two numbers. Bumping all three Merchant school knacks to
     rank 4 makes Dan = 4 and the bump triggers: base 4 + 5 = 9, so
-    stipend = 9^2 = 81 koku/year. The on-hand Spring equinox
-    disbursal then becomes ceil(81/4) = 21 koku."""
+    stipend = 9^2 = 81 koku/year. 81 / 4 = 20.25 -> rounds to 20.3
+    at tenth-koku precision."""
     page.goto(live_server_url)
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
@@ -55,7 +55,7 @@ def test_money_with_merchant_4th_dan(page, live_server_url):
     apply_changes(page, "Merchant 4th Dan")
     money_row = page.locator('[data-status-row="money"]')
     assert money_row.locator('[data-money-stipend]').text_content().strip() == "81"
-    assert money_row.locator('[data-money-on-hand]').text_content().strip() == "21"
+    assert money_row.locator('[data-money-on-hand]').text_content().strip() == "20.3"
 
 
 def test_xp_overspend_red(page, live_server_url):
@@ -214,9 +214,9 @@ def test_money_add_income_flow(page, live_server_url):
     money_row.locator('div').first.click()
     page.wait_for_timeout(150)
 
-    # Starting on-hand for default character = ceil(16/4) = 4 koku.
+    # Starting on-hand for default character = 16/4 = 4.0 koku.
     on_hand = money_row.locator('[data-money-on-hand]')
-    assert on_hand.text_content().strip() == "4"
+    assert on_hand.text_content().strip() == "4.0"
 
     money_row.locator('[data-action="money-add-income"]').click()
     page.wait_for_selector('[data-modal="money-entry"]', state='visible', timeout=3000)
@@ -225,15 +225,15 @@ def test_money_add_income_flow(page, live_server_url):
     page.locator('[data-testid="money-modal-submit"]').click()
     page.wait_for_selector('[data-modal="money-entry"]', state='hidden', timeout=3000)
 
-    # New on-hand: 4 + 10 = 14.
+    # New on-hand: 4.0 + 10.0 = 14.0.
     page.wait_for_function(
-        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '14'""",
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '14.0'""",
         timeout=3000,
     )
     # The new entry shows under the locked one.
     ledger_text = money_row.text_content()
     assert "Sold a horse" in ledger_text
-    assert "+10" in ledger_text
+    assert "+10.0" in ledger_text
 
 
 def test_money_add_expense_flow(page, live_server_url):
@@ -250,12 +250,12 @@ def test_money_add_expense_flow(page, live_server_url):
     page.locator('[data-testid="money-modal-submit"]').click()
     page.wait_for_selector('[data-modal="money-entry"]', state='hidden', timeout=3000)
     page.wait_for_function(
-        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '1'""",
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '1.0'""",
         timeout=3000,
     )
     text = money_row.text_content()
     assert "Inn for the night" in text
-    assert "-3" in text
+    assert "-3.0" in text
 
 
 def test_money_user_entry_can_be_deleted(page, live_server_url):
@@ -272,7 +272,7 @@ def test_money_user_entry_can_be_deleted(page, live_server_url):
     page.locator('[data-testid="money-modal-submit"]').click()
     page.wait_for_selector('[data-modal="money-entry"]', state='hidden', timeout=3000)
     page.wait_for_function(
-        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '11'""",
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '11.0'""",
         timeout=3000,
     )
     # Now delete it - the user row's × button removes it. The locked
@@ -280,7 +280,7 @@ def test_money_user_entry_can_be_deleted(page, live_server_url):
     # filter to the actually-visible one before clicking.
     money_row.locator('[aria-label="Delete Reward"]').click()
     page.wait_for_function(
-        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '4'""",
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '4.0'""",
         timeout=3000,
     )
     assert "Reward" not in money_row.text_content()
@@ -306,8 +306,8 @@ def test_money_modal_rejects_blank_label(page, live_server_url):
 
 
 def test_money_modal_rejects_non_positive_amount(page, live_server_url):
-    """Amounts must be a positive whole number - zero and negative
-    values surface a client-side error inside the modal."""
+    """Amounts must be a positive number - zero and negative values
+    surface a client-side error inside the modal."""
     create_and_apply(page, live_server_url, "MoneyZeroAmt")
     money_row = page.locator('[data-status-row="money"]')
     money_row.locator('div').first.click()
@@ -321,3 +321,70 @@ def test_money_modal_rejects_non_positive_amount(page, live_server_url):
     err = page.locator('[data-testid="money-modal-error"]')
     assert err.is_visible()
     assert "positive" in err.text_content().lower()
+
+
+def test_money_fractional_amount_rounds_half_up_to_tenth(page, live_server_url):
+    """A 1.65-koku expense rounds half-up to 1.7 (not banker's-round
+    1.6). The displayed entry amount and the on-hand subtraction both
+    reflect the rounded value."""
+    create_and_apply(page, live_server_url, "MoneyFrac")
+    money_row = page.locator('[data-status-row="money"]')
+    money_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    money_row.locator('[data-action="money-add-expense"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="money-modal-label"]').fill("rice")
+    page.locator('[data-testid="money-modal-amount"]').fill("1.65")
+    page.locator('[data-testid="money-modal-submit"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='hidden', timeout=3000)
+    # Starting 4.0 - 1.7 = 2.3.
+    page.wait_for_function(
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '2.3'""",
+        timeout=3000,
+    )
+    assert "-1.7" in money_row.text_content()
+
+
+def test_money_non_editor_sees_stipend_but_not_on_hand_or_ledger(
+    page, page_nonadmin, live_server_url,
+):
+    """A logged-in non-editor viewing someone else's published sheet
+    sees the stipend (and its calculation) but never the cash on-hand
+    number, never the ledger entries, and never the Add income /
+    expense buttons. The private fields are stripped server-side so
+    even the embedded x-data JSON doesn't leak them.
+
+    The owner (``page``, admin fixture) creates a published character
+    with a uniquely-labelled ledger entry; the non-editor (``page_
+    nonadmin``) loads the same URL and asserts both the rendered
+    markup and the Alpine state are scrubbed."""
+    create_and_apply(page, live_server_url, "Money Owner")
+    money_row = page.locator('[data-status-row="money"]')
+    money_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    money_row.locator('[data-action="money-add-income"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="money-modal-label"]').fill("Sold the family heirloom")
+    page.locator('[data-testid="money-modal-amount"]').fill("42")
+    page.locator('[data-testid="money-modal-submit"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='hidden', timeout=3000)
+    sheet_url = page.url
+
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector('[data-status-row="money"]', timeout=5000)
+    body = page_nonadmin.content()
+    # Stipend stays visible.
+    assert "koku/year stipend" in body
+    # Private fields stripped from the markup.
+    assert "Sold the family heirloom" not in body
+    assert "Money calculations:" not in body
+    assert "koku on-hand" not in body
+    # And from the Alpine state, so a curious viewer can't read them
+    # via DevTools or page-source.
+    state_json = page_nonadmin.evaluate("""() => {
+        const el = document.querySelector('[data-status-row="money"]');
+        return el ? Alpine.$data(el).state : null;
+    }""")
+    assert state_json is not None
+    assert "on_hand" not in state_json
+    assert "entries" not in state_json

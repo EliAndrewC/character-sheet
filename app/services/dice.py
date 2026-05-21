@@ -142,6 +142,15 @@ class RollFormula:
     reroll_tens: bool = True
     no_reroll_reason: str = ""
     unskilled_skill_name: str = ""
+    # For skill rolls (basic / advanced only - not knacks, combat, or
+    # initiative): the character's persisted rank in this skill plus
+    # the lowercase display name. Surfaced on the Copy-as-image card
+    # so a player who saw "7k3" in chat can tell whether the rolling
+    # character has 4 ranks or 3 + a 1st-Dan extra die. Empty / 0
+    # means "not a skill roll" - the renderer suppresses the
+    # parenthetical in that case.
+    skill_rank: int = 0
+    skill_name: str = ""
     alternatives: List[dict] = field(default_factory=list)
     bonuses: List[dict] = field(default_factory=list)
     adventure_raises_max_per_roll: int = 0
@@ -378,6 +387,14 @@ def build_skill_formula(
     if swapped_from_ring:
         formula.kitsune_swap_from_ring = swapped_from_ring
         formula.kitsune_swap_to_ring = ring_name
+
+    # Skill rank + lowercase name for the Copy-as-image card's
+    # disambiguating parenthetical ("(tact skill: 3)"). Set on every
+    # skill roll - skilled and unskilled - so the card shows the
+    # rank regardless of any school-technique extra dice that
+    # inflate the rolled count downstream.
+    formula.skill_rank = rank
+    formula.skill_name = skill_def.name.lower()
 
     knacks = character_data.get("knacks", {}) or {}
     tech_choices = character_data.get("technique_choices") or {}

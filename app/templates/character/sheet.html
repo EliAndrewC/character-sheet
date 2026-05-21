@@ -599,13 +599,25 @@
 
                 async submitModal() {
                     const label = (this.modalLabel || '').trim();
-                    const amount = parseInt(this.modalAmount, 10);
+                    // Round half-up to the nearest tenth-koku on the
+                    // client too so the validation error message
+                    // matches what the server would do. The server
+                    // is still authoritative - it rounds again on
+                    // ingest - but echoing the rule client-side
+                    // avoids a confusing "looks like 1.7, server
+                    // says 1.65 is fine" round-trip.
+                    const raw = parseFloat(this.modalAmount);
                     if (!label) {
                         this.modalError = 'Please enter a description.';
                         return;
                     }
-                    if (!Number.isFinite(amount) || amount <= 0) {
-                        this.modalError = 'Amount must be a positive whole number.';
+                    if (!Number.isFinite(raw) || raw <= 0) {
+                        this.modalError = 'Amount must be a positive number (tenths of a koku ok, e.g. 1.6).';
+                        return;
+                    }
+                    const amount = Math.floor(raw * 10 + 0.5) / 10;
+                    if (amount <= 0) {
+                        this.modalError = 'Amount rounds to zero - please enter at least 0.1.';
                         return;
                     }
                     this.modalError = '';
@@ -2479,11 +2491,17 @@
                                   x-text="state.stipend"></span>
                             <span class="text-ink/50">koku/year stipend</span>
                         </div>
+                        {# Cash on-hand is private - only editors see it.
+                           The stipend on the left stays visible because it
+                           describes the character's social standing, not
+                           their finances. #}
+                        {% if viewer_can_edit %}
                         <div class="text-xl font-bold whitespace-nowrap">
                             <span data-money-on-hand
-                                  x-text="state.on_hand"></span>
+                                  x-text="state.on_hand.toFixed(1)"></span>
                             <span class="text-sm font-normal text-ink/50">koku on-hand</span>
                         </div>
+                        {% endif %}
                         <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                         </svg>
@@ -2501,7 +2519,16 @@
                     </div>
                     {% endif %}
 
-                    {# --- Money ledger --- #}
+                    {# --- Money ledger ---
+                       Private: only editors see the ledger and the
+                       cash on-hand. A non-editor's expanded view
+                       collapses to the stipend calculation above
+                       (and nothing else). The server strips the
+                       ``entries`` / ``on_hand`` fields from the
+                       state JSON when ``viewer_can_edit`` is false,
+                       so even reading page source doesn't reveal
+                       them. #}
+                    {% if viewer_can_edit %}
                     <div class="space-y-1">
                         <p class="font-medium">Money calculations:</p>
                         <ul class="list-disc list-inside space-y-0.5">
@@ -2509,10 +2536,9 @@
                                 <li class="font-mono text-sm flex items-baseline gap-2"
                                     :data-money-entry="entry.id">
                                     <span :class="entry.kind === 'income' ? 'text-emerald-700' : 'text-rose-700'"
-                                          class="font-bold inline-block w-12 text-right shrink-0"
-                                          x-text="(entry.kind === 'income' ? '+' : '-') + entry.amount"></span>
+                                          class="font-bold inline-block w-14 text-right shrink-0"
+                                          x-text="(entry.kind === 'income' ? '+' : '-') + entry.amount.toFixed(1)"></span>
                                     <span class="text-ink/80 grow" x-text="entry.label"></span>
-                                    {% if viewer_can_edit %}
                                     <button type="button"
                                             x-show="!entry.locked"
                                             x-cloak
@@ -2520,14 +2546,14 @@
                                             class="text-xs text-ink/40 hover:text-rose-700 transition-colors px-1"
                                             data-action="money-delete-entry"
                                             :aria-label="'Delete ' + entry.label">&times;</button>
-                                    {% endif %}
                                 </li>
                             </template>
                         </ul>
                         <p class="font-medium pt-1 border-t border-ink/10 mt-1">
-                            = <span x-text="state.on_hand"></span> koku on-hand
+                            = <span x-text="state.on_hand.toFixed(1)"></span> koku on-hand
                         </p>
                     </div>
+                    {% endif %}
 
                     {% if viewer_can_edit %}
                     <div class="flex gap-2 pt-1">
@@ -2571,10 +2597,10 @@
                                        :placeholder="modalKind === 'income' ? 'e.g. Sold a bounty' : 'e.g. Bought provisions'">
                             </label>
                             <label class="block">
-                                <span class="text-sm text-ink/70">Amount (koku)</span>
+                                <span class="text-sm text-ink/70">Amount (koku, tenths ok)</span>
                                 <input type="number"
-                                       min="1"
-                                       step="1"
+                                       min="0.1"
+                                       step="0.1"
                                        x-model.number="modalAmount"
                                        x-ref="modalAmountInput"
                                        @keydown.enter.prevent="submitModal()"
@@ -6517,6 +6543,7 @@
                 this.rollImageStatus = 'idle';
                 this.rollImageBlob = null;
                 this._rollImageReqId++;
+                this._lastPayloadSig = '';
                 this.ffOpen = true;
             },
 
@@ -7141,6 +7168,13 @@
             rollImageBlob: null,
             rollImageStatus: 'idle',
             _rollImageReqId: 0,
+            // Signature of the most-recent payload sent to /roll-image.
+            // The post-roll-mutation watcher compares against this to
+            // skip a redundant re-render when nothing visible actually
+            // changed (e.g., the watcher fires right after an explicit
+            // phase-transition prerender with the same payload).
+            _lastPayloadSig: '',
+            _reprerenderTimer: null,
             rollMenuHasAttackChoice: false,
             // Touch-only menu mode for the Attack tile: instead of opening the
             // attack modal directly the menu shows "Roll <title>" + "View
@@ -7354,6 +7388,40 @@
                         this.openRollMenu(el.dataset.rollKey, el);
                     });
                 });
+
+                // Re-prerender the Copy-as-image card whenever a tracked
+                // result field changes after the roll has settled. The
+                // watched list covers every total or footer-driving field
+                // that any post-roll handler mutates across the default,
+                // wound-check, attack, attack-damage, iaijutsu-duel, and
+                // Kakita 5th Dan modals: 3rd Dan free raises, conviction
+                // spends, banked Akodo / Bayushi / Hida / Matsu bonuses,
+                // Mirumoto round points, Isawa TN trade, post-roll
+                // arbitrary attack bonus, Hida / Lucky / Togashi rerolls,
+                // Bayushi 5th Dan half-LW toggle, Daidoji counterattack
+                // checkbox, etc. Each watcher routes through
+                // ``_maybeReprerender`` which debounces 200 ms and dedupes
+                // against the last-rendered payload signature.
+                const reprerender = () => this._maybeReprerender();
+                this.$watch('baseTotal', reprerender);
+                this.$watch('atkRollTotal', reprerender);
+                this.$watch('atkExtraDice', reprerender);
+                this.$watch('atkHit', reprerender);
+                this.$watch('atkDamageTotal', reprerender);
+                this.$watch('atkFailedParry', reprerender);
+                this.$watch('atkPostRollBonusApplied', reprerender);
+                this.$watch('wcRollTotal', reprerender);
+                this.$watch('wcPassed', reprerender);
+                this.$watch('wcSeriousWounds', reprerender);
+                this.$watch('wcMargin', reprerender);
+                this.$watch('wcMatsuBonusApplied', reprerender);
+                this.$watch('wcBayushiHalfLw', reprerender);
+                this.$watch('wcDaidojiCounterattack', reprerender);
+                this.$watch('duelContestedRoll', reprerender);
+                this.$watch('duelStrikeRoll', reprerender);
+                this.$watch('duelDamageTotal', reprerender);
+                this.$watch('k5RollTotal', reprerender);
+                this.$watch('shosuroLowest3Bonus', reprerender);
             },
 
             openRollMenu(key, el) {
@@ -8086,6 +8154,7 @@
                 this.rollImageStatus = 'idle';
                 this.rollImageBlob = null;
                 this._rollImageReqId++;
+                this._lastPayloadSig = '';
                 if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
                 this.luckyUsedThisRoll = false;
                 this.togashiRerollUsed = false;
@@ -8452,14 +8521,47 @@
                         amount: n * 5,
                     });
                 }
+                // Append the skill-rank parenthetical to the formula
+                // subtitle so a reader can disambiguate when a 1st
+                // Dan extra die has inflated the rolled count - e.g.
+                // "7k3 + 5 (tact skill: 3)" makes it obvious the
+                // character has Tact 3, not Tact 4. Only fires when
+                // the rolled formula carries ``skill_name`` (the
+                // server marks this exclusively on basic / advanced
+                // skill rolls; knacks, combat, initiative don't get
+                // the tag).
+                let formulaText = this.formulaText || f.label || '';
+                if (f.skill_name) {
+                    formulaText += ' (' + f.skill_name + ' skill: '
+                                 + (f.skill_rank || 0) + ')';
+                }
                 return {
                     title: this.title || 'Roll',
-                    formula: this.formulaText || f.label || '',
+                    formula: formulaText,
                     kept: kept,
                     dropped: dropped,
                     bonuses: bonuses,
                     total: this.baseTotal,
+                    alternatives: this._alternativesForPayload(f),
                 };
+            },
+
+            // Pull formula.alternatives (e.g. "vs Wasp", "for servants
+            // and the mistreated", Streetwise's bounty-hunter row) into
+            // the payload the dice-card renderer expects. Each entry
+            // is ``{label, extra_flat}``; we filter to entries that
+            // have a label so a malformed row doesn't render a blank
+            // line on the card.
+            _alternativesForPayload(formula) {
+                const alts = [];
+                for (const a of ((formula || {}).alternatives || [])) {
+                    if (!a) continue;
+                    const label = (a.label || '').trim();
+                    const extra = parseInt(a.extra_flat, 10);
+                    if (!label || !Number.isFinite(extra) || extra === 0) continue;
+                    alts.push({label: label, extra_flat: extra});
+                }
+                return alts;
             },
 
             _prerenderRollImage(payloadOrNull) {
@@ -8476,6 +8578,13 @@
                 this.rollImageBlob = null;
                 this.rollImageStatus = 'rendering';
                 const payload = payloadOrNull || this._buildRollImagePayload();
+                // Stamp the payload signature so the post-roll-mutation
+                // watcher can dedupe: a re-prerender that arrives with
+                // the same payload (e.g. the watcher firing once after
+                // the explicit phase-transition call) hits the early
+                // return in ``_maybeReprerender`` instead of spawning a
+                // redundant fetch.
+                this._lastPayloadSig = JSON.stringify(payload);
                 fetch('/characters/' + t._charId + '/roll-image', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -8583,6 +8692,7 @@
                     bonuses: bonuses,
                     total: this.wcRollTotal || this.baseTotal || 0,
                     footer: footer,
+                    alternatives: this._alternativesForPayload(this.formula),
                 };
             },
 
@@ -8625,6 +8735,7 @@
                     bonuses: bonuses,
                     total: this.atkRollTotal || this.baseTotal || 0,
                     footer: footer,
+                    alternatives: this._alternativesForPayload(this.atkFormula),
                 };
             },
 
@@ -8717,6 +8828,58 @@
                     bonuses: bonuses,
                     total: this.k5RollTotal || 0,
                 };
+            },
+
+            // Route to the right ``_buildXImagePayload`` based on whichever
+            // result modal is currently showing. Returns ``null`` when no
+            // roll has settled yet (pre / rolling phases, or every modal
+            // closed). The watcher below uses this both as the source of
+            // truth for the re-prerender payload AND as the place its
+            // reactive dependencies are read - so any field that affects
+            // a returned payload must be touched here.
+            _currentResultPayload() {
+                if (this.wcModalOpen && this.wcPhase === 'result') {
+                    return this._buildWoundCheckImagePayload();
+                }
+                if (this.atkModalOpen) {
+                    if (this.atkPhase === 'result') return this._buildAttackImagePayload();
+                    if (this.atkPhase === 'damage-result') return this._buildAttackDamageImagePayload();
+                }
+                if (this.duelOpen) {
+                    if (this.duelPhase === 'contested-result') return this._buildDuelContestedImagePayload();
+                    if (this.duelPhase === 'strike-result') return this._buildDuelStrikeImagePayload();
+                    if (this.duelPhase === 'damage-result') return this._buildDuelDamageImagePayload();
+                }
+                if (this.k5Open && this.k5Phase === 'result') {
+                    return this._buildKakita5thImagePayload();
+                }
+                if (this.open && this.phase === 'done') {
+                    return (this.formula && this.formula.is_initiative)
+                        ? this._buildInitiativeImagePayload()
+                        : this._buildRollImagePayload();
+                }
+                return null;
+            },
+
+            // Debounced entry point for post-roll mutations. Each watcher
+            // (registered in ``init()``) calls this when a tracked field
+            // changes. The 200 ms timer collapses bursts (toggling a
+            // checkbox triggers two field writes within the same tick;
+            // typing a number into the post-roll bonus input fires per
+            // keystroke) into a single re-render, and the signature
+            // dedupe avoids the redundant fire that happens right after
+            // the explicit phase-transition prerender call.
+            _maybeReprerender() {
+                if (this.rollImageStatus === 'idle') return;
+                clearTimeout(this._reprerenderTimer);
+                this._reprerenderTimer = setTimeout(() => {
+                    if (this.rollImageStatus === 'idle') return;
+                    const payload = this._currentResultPayload();
+                    if (!payload) return;
+                    const sig = JSON.stringify(payload);
+                    if (sig === this._lastPayloadSig) return;
+                    this._prerenderRollImage(payload);
+                }, 200);
             },
 
             async copyRollImage() {
@@ -9273,6 +9436,7 @@
                 this.rollImageStatus = 'idle';
                 this.rollImageBlob = null;
                 this._rollImageReqId++;
+                this._lastPayloadSig = '';
                 this.duelOpen = true;
             },
 
@@ -9500,6 +9664,7 @@
                 this.rollImageStatus = 'idle';
                 this.rollImageBlob = null;
                 this._rollImageReqId++;
+                this._lastPayloadSig = '';
                 this.atkDojiUntouchedTarget = false;
                 this.atkSpecApplies = this.attackSpecs.map(() => false);
                 this.atkDojiPhase = 1;
@@ -9557,6 +9722,7 @@
                 this.rollImageStatus = 'idle';
                 this.rollImageBlob = null;
                 this._rollImageReqId++;
+                this._lastPayloadSig = '';
                 this.k5OpponentHasIaijutsu = true;
                 this.k5DefenderPhase = 11;
                 this.k5OpponentSkillRank = 4;
@@ -10729,6 +10895,7 @@
                 this.rollImageStatus = 'idle';
                 this.rollImageBlob = null;
                 this._rollImageReqId++;
+                this._lastPayloadSig = '';
                 this.wcRaisesSpent = 0;
                 this.wcResultApplied = false;
                 // Reset Kitsune Warden Special Ability swap on each open.
