@@ -360,15 +360,29 @@ SPRING_DISBURSAL_ID = "spring-equinox-disbursal"
 SPRING_DISBURSAL_LABEL = "Spring equinox stipend disbursal"
 
 
-def spring_disbursal_amount(stipend: int) -> int:
-    """25% of the annual stipend, rounded UP to the nearest koku.
+# Half-up rounding to the nearest tenth-koku. Used for every koku
+# amount the player sees on the Money widget: the Spring equinox
+# disbursal AND every ledger entry. ``round(x, 1)`` is unsuitable -
+# it uses banker's rounding and is sensitive to binary-float
+# representation (``round(1.65, 1) == 1.6``), neither of which match
+# the player-visible rule we want ("1.65 rounds up to 1.7"). The
+# floor-after-shift trick gives clean half-up behaviour on every
+# value the UI can emit.
+def round_to_tenth(amount: float) -> float:
+    """Round ``amount`` half-up to the nearest tenth. 1.65 -> 1.7,
+    1.64 -> 1.6, 20.25 -> 20.3, 0 -> 0.0."""
+    return math.floor(float(amount) * 10 + 0.5) / 10
 
-    Example: an 81-koku stipend disburses ``ceil(81 / 4) = 21`` koku at
-    the Spring equinox.
+
+def spring_disbursal_amount(stipend: int) -> float:
+    """25% of the annual stipend, rounded to the nearest tenth-koku.
+
+    Example: an 81-koku stipend disburses ``round(81 / 4) = 20.3``
+    koku at the Spring equinox; a 16-koku stipend disburses 4.0.
     """
     if stipend <= 0:
-        return 0
-    return math.ceil(stipend / 4)
+        return 0.0
+    return round_to_tenth(stipend / 4)
 
 
 def compute_money_state(
@@ -405,7 +419,10 @@ def compute_money_state(
         "locked": True,
     }
     entries: List[Dict[str, Any]] = [locked_entry]
-    on_hand = initial_amount
+    # Accumulate in tenth-koku integer units so a long ledger of
+    # 0.1 / 0.2 / etc. entries doesn't drift via float addition.
+    # Convert back at the end.
+    on_hand_tenths = int(round(initial_amount * 10))
     for raw in (ledger or []):
         if not isinstance(raw, dict):
             continue
@@ -413,12 +430,13 @@ def compute_money_state(
         if kind not in ("income", "expense"):
             continue
         try:
-            amount = int(raw.get("amount", 0))
+            amount = round_to_tenth(raw.get("amount", 0))
         except (TypeError, ValueError):
             continue
-        if amount < 0:
-            # Defensive: amounts are stored as positive integers; the
-            # sign comes from ``kind``. A negative amount is malformed.
+        if amount <= 0:
+            # Defensive: amounts are stored as positive numbers; the
+            # sign comes from ``kind``. Zero is also malformed (a
+            # zero entry is meaningless) and a negative is corrupt.
             continue
         label = raw.get("label")
         if not isinstance(label, str):
@@ -433,24 +451,39 @@ def compute_money_state(
             "amount": amount,
             "locked": False,
         })
+        delta_tenths = int(round(amount * 10))
         if kind == "income":
-            on_hand += amount
+            on_hand_tenths += delta_tenths
         else:
-            on_hand -= amount
+            on_hand_tenths -= delta_tenths
     return {
         "stipend": stipend,
-        "on_hand": on_hand,
+        "on_hand": on_hand_tenths / 10,
         "entries": entries,
     }
 
 
-def new_ledger_entry(kind: str, label: str, amount: int) -> Dict[str, Any]:
+def public_money_state(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a stipend-only view of ``state`` for non-editor viewers.
+
+    The stipend (and its calculation, which the template renders
+    separately from this dict) is public information about a
+    character; the cash-on-hand and the ledger of income / expense
+    entries are private. Strip everything but the stipend before the
+    state crosses into the rendered HTML, so a non-editor can't read
+    the private fields from page source or DevTools.
+    """
+    return {"stipend": int(state.get("stipend", 0))}
+
+
+def new_ledger_entry(kind: str, label: str, amount: float) -> Dict[str, Any]:
     """Build a fresh entry dict suitable for appending to
     ``Character.money_ledger``. Used by the add-entry route after
-    validating the inbound payload."""
+    validating the inbound payload. The amount is rounded half-up to
+    the nearest tenth-koku so a 1.64 input persists as 1.6."""
     return {
         "id": uuid.uuid4().hex,
         "kind": kind,
         "label": label,
-        "amount": amount,
+        "amount": round_to_tenth(amount),
     }

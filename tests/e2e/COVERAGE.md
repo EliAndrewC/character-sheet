@@ -794,6 +794,10 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Copy-as-image on the attack damage-result panel (fresh card built from damage dice + damage total, not the attack snapshot) → `test_attack_modal.py::test_attack_damage_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel contested-result panel → `test_iaijutsu_duel.py::test_duel_contested_result_has_copy_as_image_button`
 - [x] Copy-as-image on the iaijutsu duel strike-result panel → `test_iaijutsu_duel.py::test_duel_strike_result_has_copy_as_image_button`
+- [x] Spending a 3rd Dan free raise on a settled skill roll re-prerenders the Copy-as-image card with the bumped total → `test_rolls.py::test_spend_3rd_dan_raise_reprerenders_copy_image`
+- [x] Undoing a free raise re-prerenders the card back to the original total → `test_rolls.py::test_undo_raise_reprerenders_back_to_original_total`
+- [x] Toggling the post-roll arbitrary attack bonus on the attack result panel re-prerenders the attack card → `test_rolls.py::test_post_roll_attack_bonus_reprerenders_attack_card`
+- [x] Spend-then-undo (net-zero state change) hits the payload-signature dedupe and does NOT spawn a redundant prerender → `test_rolls.py::test_identical_payload_does_not_trigger_redundant_prerender`
 - [x] Athletics knack die icon opens a ring picker (Air/Fire/Water/Earth) → `test_rolls.py::test_athletics_knack_icon_opens_ring_picker`
 - [x] Selecting a ring from the athletics picker rolls that ring's Athletics formula → `test_rolls.py::test_athletics_knack_picker_rolls_selected_ring`
 - [x] Hovering a ring in the athletics picker reveals a void-spend submenu → `test_rolls.py::test_athletics_knack_picker_void_submenu`
@@ -1175,16 +1179,18 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Minor Clan Major Ally adds a ``+3.0 for <Clan>`` pill to Rank and Recognition → `test_sheet_display.py::test_status_minor_clan_major_ally_renders_for_clan_pill`
 - [x] Peasantborn campaign disadvantage renders a ``(0 in court)`` pill on the Rank row and the expanded bullet ``Peasantborn: <name> is never considered to be of peer standing with any samurai-born person.`` → `test_sheet_display.py::test_status_peasantborn_renders_zero_in_court_pill`
 - [x] Recognition displayed → `test_sheet_display.py::test_recognition_displayed`
-- [x] Money row displays both stipend and on-hand koku (locked Spring equinox disbursal = ceil(stipend/4)) → `test_sheet_display.py::test_money_row_displays_stipend_and_on_hand`
+- [x] Money row displays both stipend and on-hand koku (locked Spring equinox disbursal rounded to the nearest tenth) → `test_sheet_display.py::test_money_row_displays_stipend_and_on_hand`
 - [x] Money row chevron expands to show the stipend calculation breakdown alongside the ledger → `test_sheet_advanced.py::test_money_expand_shows_stipend_calculation`
 - [x] Household Wealth bumps the Money row's stipend and on-hand disbursal → `test_sheet_advanced.py::test_money_with_household_wealth`
-- [x] Merchant 4th Dan bumps the Money row's stipend (16 → 81) and on-hand disbursal (4 → 21) → `test_sheet_advanced.py::test_money_with_merchant_4th_dan`
+- [x] Merchant 4th Dan bumps the Money row's stipend (16 → 81) and on-hand disbursal rounds 81/4 = 20.25 to 20.3 → `test_sheet_advanced.py::test_money_with_merchant_4th_dan`
 - [x] Spring equinox disbursal is locked: row renders but the × delete button is hidden → `test_sheet_advanced.py::test_money_locked_disbursal_has_no_visible_delete_button`
-- [x] Add income flow: button opens modal, submitting label + amount POSTs to /money/add and on-hand reflects the new income immediately → `test_sheet_advanced.py::test_money_add_income_flow`
-- [x] Add expense flow: amount deducts from on-hand and the entry's amount renders with a leading "-" → `test_sheet_advanced.py::test_money_add_expense_flow`
+- [x] Add income flow: button opens modal, submitting label + amount POSTs to /money/add and on-hand reflects the new income immediately (one-decimal display) → `test_sheet_advanced.py::test_money_add_income_flow`
+- [x] Add expense flow: amount deducts from on-hand and the entry's amount renders with a leading "-" (one-decimal display) → `test_sheet_advanced.py::test_money_add_expense_flow`
 - [x] A user-added entry can be deleted via its × button; on-hand rebases and the locked disbursal stays put → `test_sheet_advanced.py::test_money_user_entry_can_be_deleted`
 - [x] Modal client-side validation rejects a blank description without posting → `test_sheet_advanced.py::test_money_modal_rejects_blank_label`
 - [x] Modal client-side validation rejects a non-positive amount without posting → `test_sheet_advanced.py::test_money_modal_rejects_non_positive_amount`
+- [x] A fractional amount rounds half-up to the nearest tenth (1.65 → 1.7) and the rounded value is what flows into on-hand and the ledger row → `test_sheet_advanced.py::test_money_fractional_amount_rounds_half_up_to_tenth`
+- [x] Non-editor viewing someone else's published sheet sees the stipend but not the cash on-hand, the ledger entries, or the add-income/expense buttons; the private fields are also stripped from the embedded Alpine state so they can't be read via DevTools → `test_sheet_advanced.py::test_money_non_editor_sees_stipend_but_not_on_hand_or_ledger`
 
 ## Character Sheet — Tracking
 

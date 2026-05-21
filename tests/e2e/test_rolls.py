@@ -1725,3 +1725,216 @@ def test_initiative_result_has_copy_as_image_button(page, live_server_url):
     page.locator('[data-roll-key="initiative"]').click()
     _wait_for_roll_result(page)
     _wait_copy_ready(page, '[data-modal="dice-roller"]')
+
+
+def test_skill_roll_image_payload_carries_skill_rank_parenthetical(page, live_server_url):
+    """For a basic / advanced skill roll, the formula subtitle in the
+    image payload appends ``(<skill> skill: N)`` so a reader who
+    sees ``7k3`` in chat can tell whether the rolling character has
+    4 ranks or 3 + a 1st-Dan extra die. We assert the appended
+    parenthetical by intercepting the POST body the client sends to
+    ``/roll-image``."""
+    _create_roller(page, live_server_url, "SkillParen")
+    page.evaluate("window.__capturedRollImagePayload = null")
+    # Stub fetch so we can capture the payload without waiting on the
+    # real render.
+    page.evaluate("""() => {
+        const origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            if (typeof url === 'string'
+                    && url.indexOf('/roll-image') !== -1
+                    && opts && opts.body) {
+                try {
+                    window.__capturedRollImagePayload = JSON.parse(opts.body);
+                } catch (e) { /* ignore */ }
+            }
+            return origFetch.apply(this, arguments);
+        };
+    }""")
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_for_roll_result(page)
+    payload = page.evaluate("() => window.__capturedRollImagePayload")
+    assert payload is not None, "Expected a /roll-image POST to be captured"
+    # _create_roller buys 1 rank of bragging (start 0 -> 1), so the
+    # parenthetical reads "(bragging skill: 1)".
+    assert "(bragging skill: 1)" in payload["formula"], (
+        f"Expected '(bragging skill: 1)' in formula, got: {payload['formula']!r}"
+    )
+
+
+def test_knack_roll_image_payload_omits_skill_rank_parenthetical(page, live_server_url):
+    """Knack rolls (and other non-skill roll types) don't get the
+    parenthetical - only basic/advanced skills do. Use Iaijutsu (a
+    knack on Akodo Bushi) and confirm the formula subtitle stays
+    clean."""
+    _create_roller(page, live_server_url, "KnackNoParen")
+    page.evaluate("window.__capturedRollImagePayload = null")
+    page.evaluate("""() => {
+        const origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            if (typeof url === 'string'
+                    && url.indexOf('/roll-image') !== -1
+                    && opts && opts.body) {
+                try {
+                    window.__capturedRollImagePayload = JSON.parse(opts.body);
+                } catch (e) { /* ignore */ }
+            }
+            return origFetch.apply(this, arguments);
+        };
+    }""")
+    # ``knack:iaijutsu`` opens the iaijutsu roll-menu (Duel / Strike).
+    # Click the knack dice button then "Iaijutsu Strike" to roll a
+    # plain knack-roll variant.
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.wait_for_timeout(200)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    if menu.is_visible():
+        menu.locator('button:text("Iaijutsu Strike")').click()
+    _wait_for_roll_result(page)
+    payload = page.evaluate("() => window.__capturedRollImagePayload")
+    assert payload is not None
+    # No "skill: N" parenthetical on a knack roll.
+    assert " skill: " not in payload["formula"], (
+        f"Expected no skill parenthetical on a knack roll, got: {payload['formula']!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Post-roll mutations re-render the Copy-as-image card
+# ---------------------------------------------------------------------------
+#
+# Any action that mutates the displayed result after the roll has settled
+# (3rd Dan free raises, banked Akodo / Bayushi / Hida / Matsu bonuses,
+# conviction spends, Mirumoto round points, Isawa TN-trade toggle,
+# post-roll arbitrary attack bonus, Hida / Lucky / Togashi rerolls,
+# Bayushi 5th Dan half-LW toggle, etc.) must re-prerender the card so the
+# Copy button doesn't hand the user a stale PNG. The mechanism is a single
+# Alpine ``$watch`` per driver field that routes through
+# ``_maybeReprerender`` (debounced 200 ms, dedupes against the last
+# rendered payload signature).
+#
+# The tests below cover the broad mechanism, not every individual
+# mutation site - the watcher is generalized so a passing test for the
+# default-dice-roller / attack / freeform branches verifies the entire
+# fan-out.
+
+
+def _install_roll_image_post_capture(page):
+    """Capture every POST to ``/roll-image`` into ``window.__rollImagePosts``
+    so a test can count and inspect them. Must run after the page has
+    loaded but BEFORE the first roll, since the initial prerender also
+    counts."""
+    page.evaluate("""() => {
+        window.__rollImagePosts = [];
+        const origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            if (typeof url === 'string'
+                    && url.indexOf('/roll-image') !== -1
+                    && opts && opts.body) {
+                try {
+                    window.__rollImagePosts.push(JSON.parse(opts.body));
+                } catch (e) { /* ignore */ }
+            }
+            return origFetch.apply(this, arguments);
+        };
+    }""")
+
+
+def _wait_post_count(page, expected, timeout=3000):
+    page.wait_for_function(
+        f"() => (window.__rollImagePosts || []).length >= {expected}",
+        timeout=timeout,
+    )
+
+
+def test_spend_3rd_dan_raise_reprerenders_copy_image(page, live_server_url):
+    """Spending an Adventure (3rd Dan) free raise on a settled skill roll
+    fires a second /roll-image POST with the bumped total, so the Copy
+    button never hands out a stale PNG."""
+    _create_3rd_dan_courtier(page, live_server_url, "RaiseRerender")
+    _install_roll_image_post_capture(page)
+    page.locator('[data-roll-key="skill:manipulation"]').click()
+    _wait_for_roll_result(page)
+    _wait_post_count(page, 1)
+    initial = page.evaluate("() => window.__rollImagePosts[0]")
+    initial_total = initial["total"]
+    page.locator('[data-action="spend-raise"]').click()
+    _wait_post_count(page, 2)
+    second = page.evaluate("() => window.__rollImagePosts[1]")
+    assert second["total"] == initial_total + 5, (
+        f"Expected re-prerender with total +5; got initial={initial_total}, "
+        f"second={second['total']}"
+    )
+
+
+def test_undo_raise_reprerenders_back_to_original_total(page, live_server_url):
+    """The undo path mirrors the spend path: a /roll-image POST with the
+    original total fires after Undo."""
+    _create_3rd_dan_courtier(page, live_server_url, "UndoRerender")
+    _install_roll_image_post_capture(page)
+    page.locator('[data-roll-key="skill:manipulation"]').click()
+    _wait_for_roll_result(page)
+    _wait_post_count(page, 1)
+    initial_total = page.evaluate("() => window.__rollImagePosts[0].total")
+    page.locator('[data-action="spend-raise"]').click()
+    _wait_post_count(page, 2)
+    page.locator('[data-action="undo-raise"]').click()
+    _wait_post_count(page, 3)
+    third = page.evaluate("() => window.__rollImagePosts[2]")
+    assert third["total"] == initial_total, (
+        f"Undo should restore the original total {initial_total}; "
+        f"got {third['total']}"
+    )
+
+
+def test_post_roll_attack_bonus_reprerenders_attack_card(page, live_server_url):
+    """Toggling the post-roll arbitrary bonus on the attack result panel
+    re-prerenders the attack card with the bonus reflected in the total."""
+    _create_roller(page, live_server_url, "AtkPostRoll")
+    _install_roll_image_post_capture(page)
+    # Open the attack modal and roll. Akodo Bushi has a Katana so the
+    # Attack tile is rollable straight from a fresh setup.
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-attack"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.atkPhase === 'result'",
+        timeout=10000,
+    )
+    _wait_post_count(page, 1)
+    initial_total = page.evaluate("() => window.__rollImagePosts[0].total")
+    # Toggle the post-roll bonus checkbox on. Default amount is +5.
+    page.locator('[data-testid="atk-post-roll-bonus-toggle"]').check()
+    _wait_post_count(page, 2, timeout=4000)
+    second = page.evaluate("() => window.__rollImagePosts[1]")
+    assert second["total"] == initial_total + 5, (
+        f"Toggling post-roll +5 should bump the card total; "
+        f"initial={initial_total}, second={second['total']}"
+    )
+
+
+def test_identical_payload_does_not_trigger_redundant_prerender(page, live_server_url):
+    """Spending then immediately undoing a raise within the 200 ms debounce
+    collapses to a single re-render that hits the signature dedupe (because
+    the resulting payload is identical to the initial), so the post count
+    stays at 1. This guards against the watcher firing redundantly for
+    no-op state churn."""
+    _create_3rd_dan_courtier(page, live_server_url, "DedupeTest")
+    _install_roll_image_post_capture(page)
+    page.locator('[data-roll-key="skill:manipulation"]').click()
+    _wait_for_roll_result(page)
+    _wait_post_count(page, 1)
+    # Spend and immediately undo within the 200 ms debounce so the watcher
+    # sees the final payload === initial payload.
+    page.evaluate("""() => {
+        const d = window._diceRoller;
+        d.spendRaise();
+        d.undoRaise();
+    }""")
+    # Wait past the debounce + a buffer so any spurious post would land.
+    page.wait_for_timeout(500)
+    count = page.evaluate("() => window.__rollImagePosts.length")
+    assert count == 1, (
+        f"Spend+undo (net zero) should not spawn a redundant prerender; "
+        f"got {count} POSTs (expected 1)"
+    )

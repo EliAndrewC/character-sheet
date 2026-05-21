@@ -65,11 +65,20 @@ BONUS_AMOUNT_LABEL_GAP = 8
 BONUS_INTER_COL_GAP = 32
 BONUS_WRAP_THRESHOLD = 5          # 5+ bonuses fan into two columns
 
+# Alternative-totals typography. A touch smaller than the bonuses
+# block since this section is supporting context rather than the
+# primary breakdown.
+ALT_FONT_SIZE = 14
+ALT_ROW_HEIGHT = 20
+ALT_AMOUNT_LABEL_GAP = 8
+ALT_IF_ALL_LABEL = "if all of the above"
+
 # Limits applied to incoming payloads - prevent abuse (huge SVGs) and
 # clip patently invalid input rather than failing later.
 MAX_DICE_PER_ROW = 30
 MAX_CHAIN_PER_CELL = 12
 MAX_BONUSES = 30
+MAX_ALTERNATIVES = 20
 MAX_TEXT_LEN = 200
 
 # In-memory LRU. Each PNG is small (~30-50 KB); the cap keeps total
@@ -108,6 +117,18 @@ class Bonus:
 
 
 @dataclass(frozen=True)
+class Alternative:
+    """One "Alternative totals" row. ``extra_flat`` is the delta applied
+    on top of the unconditional roll total when the condition holds
+    (e.g. ``+10 vs Wasp``, ``-10 in the eyes of those who judge the
+    unkempt``). The card renders ``total + extra_flat`` next to the
+    label and, when 2+ rows are present, an "if all of the above"
+    summing row."""
+    label: str
+    extra_flat: int
+
+
+@dataclass(frozen=True)
 class RollCard:
     title: str
     formula: str
@@ -116,6 +137,7 @@ class RollCard:
     bonuses: Tuple[Bonus, ...] = field(default_factory=tuple)
     total: int = 0
     footer: Optional[str] = None
+    alternatives: Tuple[Alternative, ...] = field(default_factory=tuple)
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +226,27 @@ def _coerce_bonuses(raw_list) -> Tuple[Bonus, ...]:
     return tuple(out)
 
 
+def _coerce_alternatives(raw_list) -> Tuple[Alternative, ...]:
+    """Normalise a list of conditional ``{label, extra_flat}`` entries.
+
+    Mirrors ``_coerce_bonuses`` but uses ``extra_flat`` (not ``amount``)
+    to match the existing wire format on the View Sheet. Entries with
+    no label or no delta are dropped - those would render as
+    contentless rows."""
+    if not isinstance(raw_list, list):
+        return ()
+    out: List[Alternative] = []
+    for raw in raw_list[:MAX_ALTERNATIVES]:
+        if not isinstance(raw, dict):
+            continue
+        extra = _coerce_int(raw.get("extra_flat"), 0)
+        label = _coerce_text(raw.get("label"))
+        if extra == 0 and not label:
+            continue
+        out.append(Alternative(label=label, extra_flat=extra))
+    return tuple(out)
+
+
 def parse_payload(payload: dict) -> RollCard:
     """Build a ``RollCard`` from an untrusted client payload.
 
@@ -221,6 +264,7 @@ def parse_payload(payload: dict) -> RollCard:
         bonuses=_coerce_bonuses(payload.get("bonuses")),
         total=_coerce_int(payload.get("total"), 0),
         footer=_coerce_text(payload.get("footer")) or None,
+        alternatives=_coerce_alternatives(payload.get("alternatives")),
     )
 
 
@@ -385,7 +429,49 @@ def _plan_bonus_layout(card: RollCard) -> dict:
     }
 
 
-def _content_width(card: RollCard, bonus_plan: dict) -> float:
+def _plan_alternative_layout(card: RollCard) -> dict:
+    """Compute the alternative-totals block geometry. Each row reads
+    "[total + extra_flat] [label]"; with 2+ alts a summing "if all of
+    the above" row is appended. Returns ``{"rows": N, "block_w": W}``
+    where ``rows`` is the visible row count and ``block_w`` is the
+    widest row's pixel span (so the card-width pass can include it)."""
+    alts = card.alternatives
+    if not alts:
+        return {"rows": 0, "block_w": 0.0, "max_amount_w": 0.0}
+    base = card.total
+    # Width of each row's left column = mono total. Both the per-alt
+    # rows and the "if all" row contribute candidate widths.
+    amount_widths = [
+        _measure_text(str(base + a.extra_flat), ALT_FONT_SIZE,
+                      weight=700, family="mono")
+        for a in alts
+    ]
+    label_widths = [
+        _measure_text(a.label, ALT_FONT_SIZE, weight=400, family="serif")
+        for a in alts
+    ]
+    rows = len(alts)
+    if len(alts) > 1:
+        total_all = base + sum(a.extra_flat for a in alts)
+        amount_widths.append(
+            _measure_text(str(total_all), ALT_FONT_SIZE,
+                          weight=700, family="mono")
+        )
+        label_widths.append(
+            _measure_text(ALT_IF_ALL_LABEL, ALT_FONT_SIZE,
+                          weight=400, family="serif")
+        )
+        rows += 1
+    max_amount = max(amount_widths)
+    max_label = max(label_widths)
+    return {
+        "rows": rows,
+        "max_amount_w": max_amount,
+        "block_w": max_amount + ALT_AMOUNT_LABEL_GAP + max_label,
+    }
+
+
+def _content_width(card: RollCard, bonus_plan: dict, alt_plan: dict) -> float:
     return max(
         _measure_text(card.title, 34, weight=700, family="serif"),
         _measure_text(card.formula, 18, weight=400, family="serif"),
@@ -394,6 +480,7 @@ def _content_width(card: RollCard, bonus_plan: dict) -> float:
         bonus_plan["block_w"],
         _measure_text(str(card.total), 56, weight=700, family="serif"),
         _measure_text(card.footer or "", 14, weight=400, family="serif"),
+        alt_plan["block_w"],
     )
 
 
@@ -415,10 +502,23 @@ def _bonus_line_svg(anchor_x: float, y: float, bonus: Bonus) -> str:
     )
 
 
+def _alt_line_svg(anchor_x: float, y: float, total_str: str, label: str) -> str:
+    """One alternative-totals row. Total in mono accent right-anchored
+    before the gap; label in serif left-anchored at the anchor."""
+    return (
+        _text(anchor_x - ALT_AMOUNT_LABEL_GAP, y, total_str,
+              size=ALT_FONT_SIZE, weight=700, anchor="end",
+              family="mono", fill=ACCENT)
+        + _text(anchor_x, y, label, size=ALT_FONT_SIZE,
+                weight=400, anchor="start")
+    )
+
+
 def build_svg(card: RollCard) -> str:
     """Compose the SVG document for one card."""
     bonus_plan = _plan_bonus_layout(card)
-    card_w = int(_content_width(card, bonus_plan) + 2 * PAD)
+    alt_plan = _plan_alternative_layout(card)
+    card_w = int(_content_width(card, bonus_plan, alt_plan) + 2 * PAD)
     cx = card_w / 2
     parts: List[str] = []
 
@@ -497,6 +597,32 @@ def build_svg(card: RollCard) -> str:
         bottom_y = total_value_y + 22
         parts.append(_text(cx, bottom_y, card.footer, size=14, weight=400,
                            opacity=0.6, family="serif"))
+
+    # Alternative totals (conditional bonuses). Mirrors the View
+    # Sheet's "Alternative totals:" block - each row shows
+    # ``total + extra_flat`` next to its condition label, with an "if
+    # all of the above" summing row when 2+ alts are present.
+    if alt_plan["rows"] > 0:
+        alt_top = bottom_y + 14
+        parts.append(_hr(alt_top, card_w))
+        alt_label_y = alt_top + 22
+        parts.append(_text(cx, alt_label_y, "ALTERNATIVE TOTALS",
+                           size=11, weight=600, opacity=0.55,
+                           letter_spacing=2.5, family="sans"))
+        block_left = cx - alt_plan["block_w"] / 2
+        anchor = block_left + alt_plan["max_amount_w"] + ALT_AMOUNT_LABEL_GAP
+        row_y = alt_label_y + 22
+        for a in card.alternatives:
+            total_str = str(card.total + a.extra_flat)
+            parts.append(_alt_line_svg(anchor, row_y, total_str, a.label))
+            row_y += ALT_ROW_HEIGHT
+        if len(card.alternatives) > 1:
+            total_all = card.total + sum(a.extra_flat for a in card.alternatives)
+            parts.append(
+                _alt_line_svg(anchor, row_y, str(total_all), ALT_IF_ALL_LABEL)
+            )
+            row_y += ALT_ROW_HEIGHT
+        bottom_y = row_y - ALT_ROW_HEIGHT + 14
 
     card_h = int(bottom_y + PAD)
     frame = (

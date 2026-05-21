@@ -33,7 +33,11 @@ from app.services.auth import can_edit_character, can_view_drafts, format_editor
 from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.rolls import compute_skill_roll
-from app.services.status import compute_effective_status, compute_money_state
+from app.services.status import (
+    compute_effective_status,
+    compute_money_state,
+    public_money_state,
+)
 from app.services.versions import compute_version_diff
 from app.services.xp import calculate_total_xp, calculate_xp_breakdown, validate_character
 
@@ -1014,8 +1018,19 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "adventure_state": character.adventure_state or {},
             "action_dice": character.action_dice or [],
             "precepts_pool": character.precepts_pool or [],
-            "money_state": compute_money_state(
-                effective.stipend, character.money_ledger or []
+            # Cash on-hand and the ledger of income / expense entries
+            # are private - only the character's editors see them. The
+            # stipend (and its calculation) stay public because they
+            # describe the character's social standing rather than
+            # their day-to-day finances. ``public_money_state``
+            # strips everything but the stipend so the private fields
+            # never reach a non-editor's page source or DevTools.
+            "money_state": (
+                compute_money_state(effective.stipend, character.money_ledger or [])
+                if viewer_can_edit
+                else public_money_state(
+                    compute_money_state(effective.stipend, character.money_ledger or [])
+                )
             ),
             "all_groups": all_groups,
             "roll_formulas": roll_formulas,

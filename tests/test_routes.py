@@ -5923,6 +5923,66 @@ class TestSheetHiddenIndicator:
         assert 'data-testid="sheet-hidden-indicator"' not in resp.text
 
 
+class TestMoneyPrivacy:
+    """The Money widget exposes stipend (and its calculation) to every
+    viewer, but cash on-hand and the ledger entries are private. The
+    server must strip private fields from the embedded ``money_state``
+    JSON before it reaches a non-editor's page source - gating only
+    the visible markup isn't enough, since the Alpine x-data blob
+    would still leak the numbers via DevTools."""
+
+    def _seed_with_ledger(self, client):
+        from app.models import User
+        session = client._test_session_factory()
+        if not session.query(User).filter(User.discord_id == "other_owner").first():
+            session.add(User(discord_id="other_owner",
+                             discord_name="oo", display_name="OO"))
+            session.commit()
+        return _seed_character(
+            client, name="Money Privacy", owner_discord_id="other_owner",
+            is_published=True,
+            money_ledger=[{
+                "id": "secret-row", "kind": "income",
+                "label": "Sold the family heirloom", "amount": 99,
+            }],
+        )
+
+    def test_non_editor_sheet_strips_on_hand_and_entries(self, client):
+        cid = self._seed_with_ledger(client)
+        resp = client.get(f"/characters/{cid}",
+                          headers={"X-Test-User": "test_user_1:T1"})
+        assert resp.status_code == 200
+        # Stipend stays visible.
+        assert "koku/year stipend" in resp.text
+        # The private fields must not be present in the embedded
+        # money_state JSON. The label is a unique sentinel for the
+        # ledger entry.
+        assert "Sold the family heirloom" not in resp.text
+        # The "Money calculations:" header is the title of the
+        # ledger section the template gates behind viewer_can_edit.
+        assert "Money calculations:" not in resp.text
+        # The "koku on-hand" suffix only renders inside the gated
+        # on-hand block. (The Money row label stays "Money".)
+        assert "koku on-hand" not in resp.text
+
+    def test_editor_sheet_includes_on_hand_and_entries(self, client):
+        cid = _seed_character(
+            client, name="Money Owner View",
+            is_published=True,
+            money_ledger=[{
+                "id": "row-1", "kind": "income",
+                "label": "Sold a horse", "amount": 10,
+            }],
+        )
+        resp = client.get(f"/characters/{cid}",
+                          headers={"X-Test-User": f"{OWNER_ID}:owner"})
+        assert resp.status_code == 200
+        # Editor sees the on-hand block AND the ledger entry.
+        assert "koku on-hand" in resp.text
+        assert "Sold a horse" in resp.text
+        assert "Money calculations:" in resp.text
+
+
 class TestHiddenPartyMemberFiltering:
     """Hidden characters do not contribute to other characters' party-effect
     data unless the viewer has edit access to them."""
@@ -6439,7 +6499,7 @@ class TestMoneyAddEndpoint:
         assert data["money"]["entries"][0]["locked"] is True
         assert data["money"]["entries"][1]["kind"] == "income"
         assert data["money"]["entries"][1]["label"] == "Sold a horse"
-        assert data["money"]["entries"][1]["amount"] == 10
+        assert data["money"]["entries"][1]["amount"] == 10.0
         # The character's persisted ledger picked up the new row.
         char = query_db(client).filter(Character.id == cid).first()
         assert len(char.money_ledger) == 1
@@ -6455,7 +6515,7 @@ class TestMoneyAddEndpoint:
         data = resp.json()
         entry = data["money"]["entries"][1]
         assert entry["kind"] == "expense"
-        assert entry["amount"] == 5
+        assert entry["amount"] == 5.0
 
     def test_rejects_invalid_kind(self, client):
         cid = _seed_character(client, name="BadKind",
@@ -6488,12 +6548,58 @@ class TestMoneyAddEndpoint:
         char = query_db(client).filter(Character.id == cid).first()
         assert len(char.money_ledger[0]["label"]) == 200
 
-    def test_rejects_non_integer_amount(self, client):
+    def test_rejects_non_numeric_amount(self, client):
         cid = _seed_character(client, name="BadAmt",
                               owner_discord_id="183026066498125825")
         resp = client.post(
             f"/characters/{cid}/money/add",
             json={"kind": "income", "label": "x", "amount": "ten"},
+        )
+        assert resp.status_code == 400
+
+    def test_rejects_bool_amount(self, client):
+        """``True``/``False`` are technically integers in Python but
+        clearly malformed for a koku field. The validator rejects
+        them so a posted ``true`` doesn't persist as 1.0."""
+        cid = _seed_character(client, name="BoolAmt",
+                              owner_discord_id="183026066498125825")
+        for bad in (True, False):
+            resp = client.post(
+                f"/characters/{cid}/money/add",
+                json={"kind": "income", "label": "x", "amount": bad},
+            )
+            assert resp.status_code == 400
+
+    def test_accepts_fractional_amount_rounded_to_tenth(self, client):
+        """A 1.64-koku expense persists as 1.6; a 1.65 persists as 1.7
+        (half-up). The route rounds before storing so the ledger
+        never accumulates sub-tenth precision."""
+        cid = _seed_character(client, name="FracAmt",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "expense", "label": "rice", "amount": 1.64},
+        )
+        assert resp.status_code == 200
+        entry = resp.json()["money"]["entries"][1]
+        assert entry["amount"] == 1.6
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "expense", "label": "sake", "amount": 1.65},
+        )
+        assert resp.status_code == 200
+        entry = resp.json()["money"]["entries"][2]
+        assert entry["amount"] == 1.7
+
+    def test_rejects_amount_that_rounds_to_zero(self, client):
+        """0.04 rounds to 0.0 - the validator catches this *after*
+        rounding so a tiny positive input doesn't sneak past the
+        "amount must be positive" gate."""
+        cid = _seed_character(client, name="TinyAmt",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "income", "label": "x", "amount": 0.04},
         )
         assert resp.status_code == 400
 

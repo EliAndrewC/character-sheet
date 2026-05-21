@@ -948,6 +948,82 @@ class TestSkillFormula:
         assert f.unskilled_skill_name == "Underworld"
 
 
+class TestSkillRankExposed:
+    """The skill rank + lowercase display name are surfaced on skill
+    formulas so the Copy-as-image card can render a disambiguating
+    parenthetical ("(tact skill: 3)") - important when a school
+    technique's extra die inflates the rolled count past the
+    rank+ring sum."""
+
+    def test_skilled_carries_rank_and_lowercase_name(self):
+        from app.services.dice import build_skill_formula
+        char = make_character_data(
+            school="", knacks={},
+            skills={"tact": 3},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        f = build_skill_formula("tact", char)
+        assert f.skill_rank == 3
+        assert f.skill_name == "tact"
+
+    def test_unskilled_carries_zero_rank(self):
+        """Unskilled rolls also carry the field (rank 0). The card's
+        parenthetical lets readers see ``(tact skill: 0)`` so they
+        know it was an unskilled attempt."""
+        from app.services.dice import build_skill_formula
+        char = make_character_data(school="", knacks={}, skills={})
+        f = build_skill_formula("tact", char)
+        assert f.skill_rank == 0
+        assert f.skill_name == "tact"
+
+    def test_skill_name_is_lowercased(self):
+        """The card's parenthetical reads ``(<skill> skill: N)`` with
+        the skill name lowercased, so it flows naturally regardless of
+        whether the canonical display capitalises it."""
+        from app.services.dice import build_skill_formula
+        from app.game_data import SKILLS
+        # ``Bragging`` -> ``bragging``.
+        assert SKILLS["bragging"].name == "Bragging"
+        char = make_character_data(
+            school="", knacks={}, skills={"bragging": 2},
+        )
+        f = build_skill_formula("bragging", char)
+        assert f.skill_name == "bragging"
+        assert f.skill_rank == 2
+
+    def test_rank_reflects_extra_dice_via_1st_dan(self):
+        """Ikoma Bard 1st Dan grants +1 rolled die on bragging. The
+        formula's ``rolled`` exceeds rank + ring, which is exactly
+        the case the Copy-as-image parenthetical exists to
+        disambiguate. ``skill_rank`` stays the raw skill rank."""
+        from app.services.dice import build_skill_formula
+        char = make_character_data(
+            school="ikoma_bard",
+            knacks={"discern_honor": 1, "oppose_knowledge": 1, "oppose_social": 1},
+            skills={"bragging": 3},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        f = build_skill_formula("bragging", char)
+        # 3 rank + 3 Air = 6, plus 1st Dan extra die = 7 rolled.
+        assert f.rolled == 7
+        # ``skill_rank`` is the raw skill rank (3), not the rolled
+        # count - that's the whole point of the parenthetical.
+        assert f.skill_rank == 3
+
+    def test_knack_formulas_do_not_carry_skill_rank(self):
+        """Knacks aren't skills - their formulas leave skill_rank /
+        skill_name unset so the Copy-as-image card omits the
+        parenthetical."""
+        from app.services.dice import build_knack_formula
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 3, "feint": 1, "iaijutsu": 1},
+        )
+        f = build_knack_formula("double_attack", char)
+        assert f.skill_rank == 0
+        assert f.skill_name == ""
+
+
 # ---------------------------------------------------------------------------
 # build_knack_formula
 # ---------------------------------------------------------------------------

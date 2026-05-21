@@ -9,6 +9,7 @@ import pytest
 
 from app.services import dice_card
 from app.services.dice_card import (
+    Alternative,
     Bonus,
     Die,
     DieCell,
@@ -176,6 +177,69 @@ class TestParsePayload:
         card = parse_payload({"title": "T", "kept": [{"parts": [-3]}]})
         assert card.kept == ()
 
+    def test_alternatives_parsed_with_label_and_extra_flat(self):
+        card = parse_payload(_basic_payload(alternatives=[
+            {"label": "vs Wasp", "extra_flat": 10},
+            {"label": "in court (Streetwise)", "extra_flat": 5},
+        ]))
+        assert len(card.alternatives) == 2
+        assert card.alternatives[0].label == "vs Wasp"
+        assert card.alternatives[0].extra_flat == 10
+        assert card.alternatives[1].extra_flat == 5
+
+    def test_alternatives_default_to_empty_when_omitted(self):
+        card = parse_payload(_basic_payload())
+        assert card.alternatives == ()
+
+    def test_alternatives_negative_extra_flat_is_preserved(self):
+        """Conditional penalties (e.g. Unkempt -10 to Culture in the
+        eyes of those who judge the unkempt) need their negative
+        deltas preserved."""
+        card = parse_payload({
+            "title": "T", "kept": [{"parts": [9]}], "total": 9,
+            "alternatives": [
+                {"label": "in the eyes of those who judge the unkempt",
+                 "extra_flat": -10},
+            ],
+        })
+        assert card.alternatives[0].extra_flat == -10
+
+    def test_alternatives_zero_with_no_label_dropped(self):
+        """Symmetric with how bonuses drop empty rows."""
+        card = parse_payload({
+            "title": "T", "kept": [{"parts": [9]}], "total": 9,
+            "alternatives": [
+                {"label": "", "extra_flat": 0},
+                {"label": "real", "extra_flat": 5},
+            ],
+        })
+        assert len(card.alternatives) == 1
+        assert card.alternatives[0].label == "real"
+
+    def test_alternatives_clipped_to_max(self):
+        too_many = [{"label": f"a{i}", "extra_flat": 1}
+                    for i in range(dice_card.MAX_ALTERNATIVES + 5)]
+        card = parse_payload({"title": "T", "alternatives": too_many})
+        assert len(card.alternatives) == dice_card.MAX_ALTERNATIVES
+
+    def test_alternatives_invalid_inner_shapes_skipped(self):
+        card = parse_payload({
+            "title": "T",
+            "alternatives": [None, "nope", {"label": "ok", "extra_flat": 3}],
+        })
+        assert len(card.alternatives) == 1
+        assert card.alternatives[0].label == "ok"
+
+    def test_alternatives_non_int_extra_flat_treated_as_zero(self):
+        card = parse_payload({
+            "title": "T",
+            "alternatives": [{"label": "labeled", "extra_flat": "five"}],
+        })
+        # ``extra_flat`` coerces to 0; ``label`` survives so the entry
+        # isn't dropped (the renderer will show "[total] labeled").
+        assert len(card.alternatives) == 1
+        assert card.alternatives[0].extra_flat == 0
+
 
 class TestBuildSvg:
     def test_emits_dice_kite_path(self):
@@ -277,6 +341,79 @@ class TestBuildSvg:
         assert svg.count(f'stroke="{dice_card.GOLD_STROKE}"') == 2
         # Plain die has the default white fill.
         assert f'fill="#ffffff"' in svg
+
+    def test_no_alternatives_section_when_empty(self):
+        svg = build_svg(parse_payload(_basic_payload()))
+        assert "ALTERNATIVE TOTALS" not in svg
+
+    def test_alternatives_section_renders_each_alt(self):
+        """The section header surfaces, each alt's running total is
+        ``total + extra_flat`` rendered in mono accent, and the label
+        is rendered verbatim."""
+        svg = build_svg(parse_payload(_basic_payload(
+            total=29,
+            alternatives=[
+                {"label": "vs Wasp", "extra_flat": 10},
+                {"label": "in court (Streetwise)", "extra_flat": 5},
+            ],
+        )))
+        assert "ALTERNATIVE TOTALS" in svg
+        # 29 + 10 = 39 and 29 + 5 = 34 should both appear as alt totals.
+        assert ">39</text>" in svg
+        assert ">34</text>" in svg
+        # Labels rendered verbatim.
+        assert ">vs Wasp</text>" in svg
+        assert ">in court (Streetwise)</text>" in svg
+
+    def test_alternatives_if_all_of_the_above_row_with_two_plus(self):
+        """When 2+ alts are present, a summing "if all of the above"
+        row reports total + sum(extra_flat)."""
+        svg = build_svg(parse_payload(_basic_payload(
+            total=29,
+            alternatives=[
+                {"label": "vs Wasp", "extra_flat": 10},
+                {"label": "in court", "extra_flat": 5},
+            ],
+        )))
+        assert "if all of the above" in svg
+        # 29 + 10 + 5 = 44.
+        assert ">44</text>" in svg
+
+    def test_alternatives_no_if_all_with_single_alt(self):
+        """A single alternative doesn't get the summing row - there's
+        nothing to add."""
+        svg = build_svg(parse_payload(_basic_payload(
+            total=29,
+            alternatives=[{"label": "vs Wasp", "extra_flat": 10}],
+        )))
+        assert "if all of the above" not in svg
+
+    def test_alternatives_negative_delta_renders_lower_total(self):
+        """The Unkempt -10 culture penalty case: the alt total is
+        below the unconditional total."""
+        svg = build_svg(parse_payload({
+            "title": "Culture", "formula": "5k3",
+            "kept": [{"parts": [9]}], "total": 25,
+            "alternatives": [
+                {"label": "in the eyes of those who judge the unkempt",
+                 "extra_flat": -10},
+            ],
+        }))
+        # 25 - 10 = 15.
+        assert ">15</text>" in svg
+
+    def test_alternatives_xml_escape_label(self):
+        """The same XML-escaping policy that covers bonus labels also
+        covers alternative labels."""
+        svg = build_svg(parse_payload({
+            "title": "T", "kept": [{"parts": [9]}], "total": 9,
+            "alternatives": [
+                {"label": "</text><script>alert(1)</script>",
+                 "extra_flat": 5},
+            ],
+        }))
+        assert "<script>" not in svg
+        assert "&lt;script&gt;" in svg or "&lt;/text&gt;" in svg
 
 
 class TestMeasureText:
@@ -392,3 +529,8 @@ class TestDataclasses:
         b = Bonus(label="x", amount=1)
         with pytest.raises(Exception):
             b.amount = 2  # type: ignore[misc]
+
+    def test_alternative_is_frozen(self):
+        a = Alternative(label="x", extra_flat=5)
+        with pytest.raises(Exception):
+            a.extra_flat = 6  # type: ignore[misc]

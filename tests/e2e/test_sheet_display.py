@@ -291,16 +291,17 @@ def test_recognition_displayed(page, live_server_url):
 def test_money_row_displays_stipend_and_on_hand(page, live_server_url):
     """The Money row replaces the legacy Stipend row. Compact display
     shows two numbers: the annual stipend and the on-hand koku total
-    (which starts at the Spring equinox disbursal = ceil(stipend/4))."""
+    (which starts at the Spring equinox disbursal, rounded to the
+    nearest tenth-koku)."""
     _create_full_character(page, live_server_url)
     money_row = page.locator('[data-status-row="money"]')
     assert money_row.is_visible()
     body = money_row.text_content()
     assert "Money" in body
-    # Campaign base stipend = 16; on-hand starts at ceil(16/4) = 4.
+    # Campaign base stipend = 16; on-hand starts at 16/4 = 4.0.
     assert "16" in money_row.locator('[data-money-stipend]').text_content()
     assert "koku/year stipend" in body
-    assert "4" in money_row.locator('[data-money-on-hand]').text_content()
+    assert "4.0" == money_row.locator('[data-money-on-hand]').text_content().strip()
     assert "koku on-hand" in body
 
 

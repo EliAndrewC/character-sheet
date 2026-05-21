@@ -591,17 +591,33 @@ class TestMoneyState:
     disbursal is computed dynamically from current stipend, not stored
     in the ledger."""
 
-    def test_initial_disbursal_is_quarter_of_stipend_rounded_up(self):
+    def test_initial_disbursal_rounds_to_nearest_tenth(self):
         from app.services.status import spring_disbursal_amount
-        # Wasp campaign base is 4th rank -> 16 koku/year. 16/4 = 4.
-        assert spring_disbursal_amount(16) == 4
-        # User-supplied example: 81-koku stipend rounds up from 20.25 -> 21.
-        assert spring_disbursal_amount(81) == 21
-        # Boundary: 80 / 4 = 20 exactly (no rounding bump).
-        assert spring_disbursal_amount(80) == 20
+        # Wasp campaign base is 4th rank -> 16 koku/year. 16/4 = 4.0.
+        assert spring_disbursal_amount(16) == 4.0
+        # 81-koku stipend disburses 81/4 = 20.25 -> rounds half-up
+        # to the nearest tenth = 20.3 koku.
+        assert spring_disbursal_amount(81) == 20.3
+        # Boundary: 80 / 4 = 20 exactly.
+        assert spring_disbursal_amount(80) == 20.0
         # Stipend of 0 or negative: defensive zero.
-        assert spring_disbursal_amount(0) == 0
-        assert spring_disbursal_amount(-5) == 0
+        assert spring_disbursal_amount(0) == 0.0
+        assert spring_disbursal_amount(-5) == 0.0
+
+    def test_round_to_tenth_half_up_examples(self):
+        """The user-facing rule is "1.65 rounds to 1.7, 1.64 rounds to
+        1.6" - i.e. half-up, not banker's rounding. ``round(1.65, 1)``
+        in stdlib Python returns 1.6 because of float representation;
+        the project's helper must give 1.7."""
+        from app.services.status import round_to_tenth
+        assert round_to_tenth(1.65) == 1.7
+        assert round_to_tenth(1.64) == 1.6
+        assert round_to_tenth(0.05) == 0.1
+        assert round_to_tenth(0.04) == 0.0
+        assert round_to_tenth(20.25) == 20.3
+        # Already-rounded values stay put.
+        assert round_to_tenth(1.6) == 1.6
+        assert round_to_tenth(0) == 0.0
 
     def test_locked_entry_always_present_at_front(self):
         from app.services.status import (
@@ -611,7 +627,7 @@ class TestMoneyState:
         assert state["entries"][0]["id"] == SPRING_DISBURSAL_ID
         assert state["entries"][0]["label"] == SPRING_DISBURSAL_LABEL
         assert state["entries"][0]["kind"] == "income"
-        assert state["entries"][0]["amount"] == 21
+        assert state["entries"][0]["amount"] == 20.3
         assert state["entries"][0]["locked"] is True
 
     def test_locked_entry_present_even_when_ledger_has_other_entries(self):
@@ -634,41 +650,66 @@ class TestMoneyState:
             {"id": "c", "kind": "expense", "label": "Provisions", "amount": 8},
             {"id": "d", "kind": "income", "label": "Sold a sword", "amount": 12},
         ]
-        # Stipend 81 -> disbursal 21. 21 + 30 - 5 - 8 + 12 = 50.
+        # Stipend 81 -> disbursal 20.3. 20.3 + 30 - 5 - 8 + 12 = 49.3.
         state = compute_money_state(81, ledger)
-        assert state["on_hand"] == 50
+        assert state["on_hand"] == 49.3
+
+    def test_on_hand_handles_fractional_amounts_without_float_drift(self):
+        """A long ledger of tenths must sum cleanly. Accumulating in
+        tenth-koku integer units (rather than via float addition)
+        prevents the classic 0.1 + 0.2 != 0.3 drift."""
+        from app.services.status import compute_money_state
+        ledger = [
+            {"id": "a", "kind": "expense", "label": "rice", "amount": 0.1}
+            for _ in range(10)
+        ]
+        # Stipend 16 -> disbursal 4.0. Ten 0.1-koku expenses = 1.0.
+        # On-hand = 3.0 exactly.
+        state = compute_money_state(16, ledger)
+        assert state["on_hand"] == 3.0
+
+    def test_fractional_amount_persists_at_tenth_precision(self):
+        """A 1.64-koku entry rounds to 1.6 on ingest so the persisted
+        ledger never accumulates sub-tenth precision."""
+        from app.services.status import compute_money_state
+        ledger = [
+            {"id": "a", "kind": "expense", "label": "rice", "amount": 1.64},
+        ]
+        state = compute_money_state(16, ledger)
+        assert state["entries"][1]["amount"] == 1.6
 
     def test_empty_ledger_on_hand_equals_disbursal(self):
         from app.services.status import compute_money_state
         state = compute_money_state(81, [])
-        assert state["on_hand"] == 21
+        assert state["on_hand"] == 20.3
 
     def test_none_ledger_treated_as_empty(self):
         """SQLAlchemy can hand us ``None`` for a JSON column that was
         never written; the helper must not raise."""
         from app.services.status import compute_money_state
         state = compute_money_state(81, None)
-        assert state["on_hand"] == 21
+        assert state["on_hand"] == 20.3
         assert len(state["entries"]) == 1
 
     def test_malformed_entries_are_skipped(self):
         """Defensive: bad shapes inside the JSON column shouldn't
         crash the renderer. Non-dicts, unknown ``kind`` values,
-        non-integer amounts, and negative amounts are dropped."""
+        non-numeric amounts, and negative amounts are dropped."""
         from app.services.status import compute_money_state
         ledger = [
             "not a dict",
             {"id": "x", "kind": "transfer", "label": "bad kind", "amount": 5},
             {"id": "y", "kind": "income", "label": "bad amt", "amount": "abc"},
             {"id": "z", "kind": "expense", "label": "negative", "amount": -10},
+            {"id": "zz", "kind": "income", "label": "zero", "amount": 0},
             {"id": "ok", "kind": "income", "label": "real", "amount": 7},
         ]
         state = compute_money_state(81, ledger)
         # Only the locked entry + the well-formed user entry are present.
         assert len(state["entries"]) == 2
         assert state["entries"][1]["id"] == "ok"
-        # On-hand: 21 + 7 = 28.
-        assert state["on_hand"] == 28
+        # On-hand: 20.3 + 7 = 27.3.
+        assert state["on_hand"] == 27.3
 
     def test_missing_id_gets_synthesized(self):
         """Entries persisted before id-stamping (if any) survive by
@@ -700,7 +741,28 @@ class TestMoneyState:
         state = compute_money_state(81, ledger)
         # Only the locked entry survives.
         assert len(state["entries"]) == 1
-        assert state["on_hand"] == 21
+        assert state["on_hand"] == 20.3
+
+    def test_public_money_state_strips_private_fields(self):
+        """``public_money_state`` is the view shown to non-editors:
+        stipend only, no on-hand and no ledger entries (which would
+        leak cash flow on top of the public stipend)."""
+        from app.services.status import compute_money_state, public_money_state
+        ledger = [
+            {"id": "a", "kind": "income", "label": "Bounty", "amount": 30},
+            {"id": "b", "kind": "expense", "label": "Inn", "amount": 5},
+        ]
+        full = compute_money_state(81, ledger)
+        public = public_money_state(full)
+        assert public == {"stipend": 81}
+        assert "on_hand" not in public
+        assert "entries" not in public
+
+    def test_public_money_state_defaults_missing_stipend_to_zero(self):
+        """Defensive: a bad call with a state dict that lacks
+        ``stipend`` produces ``{stipend: 0}`` rather than raising."""
+        from app.services.status import public_money_state
+        assert public_money_state({}) == {"stipend": 0}
 
     def test_new_ledger_entry_carries_unique_id(self):
         from app.services.status import new_ledger_entry
@@ -709,4 +771,11 @@ class TestMoneyState:
         assert a["id"] and b["id"] and a["id"] != b["id"]
         assert a["kind"] == "income"
         assert a["label"] == "Sold a horse"
-        assert a["amount"] == 10
+        assert a["amount"] == 10.0
+
+    def test_new_ledger_entry_rounds_amount_to_tenth(self):
+        """The helper rounds half-up so a 1.65 input persists as 1.7,
+        matching the rule the modal echoes to the user."""
+        from app.services.status import new_ledger_entry
+        assert new_ledger_entry("expense", "rice", 1.65)["amount"] == 1.7
+        assert new_ledger_entry("expense", "rice", 1.64)["amount"] == 1.6
