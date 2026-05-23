@@ -2,31 +2,38 @@
 
 Companion to ``shosuro_fifth_dan_bonuses.py``. Where that script reads
 the precomputed mean tables, this one runs a fresh simulation to
-capture the *spread* of outcomes - the 10th / 50th / 90th percentiles
-of each quantity. The Shosuro 5th Dan bonus is one of the swingier
-5th-Dan abilities in the system (anywhere from +3 on a 3k3 of all 1s
-up to ~+40 when both 10s in a 3k3 chain through to 10s themselves),
-and the percentile spread is the right lens for "how reliable is this
-bonus".
+report what the Shosuro bonus (and the +1k0 deltas) *typically look
+like* when the XkY roll lands at the 10th / 50th / 90th percentile
+of its distribution.
+
+This is NOT the marginal distribution of each metric. It's a
+CONDITIONAL view: the "p90" column shows the average bonus on
+trials whose XkY roll came out to the 90th-percentile value, not
+the 90th-percentile value of the bonus distribution itself. So
+for 3k3 (where roll == bonus by construction) the roll columns
+and bonus columns are identical - a useful sanity check.
 
 Per-trial structure: each trial samples ``rolled + 1`` dice (one for
 the base pool, one extra for the "+1k0" comparison). The five tracked
-quantities are computed on each trial and the percentiles taken at
-the end:
+quantities are computed on each trial:
 
   avg_roll        - sum of top ``kept`` of the base pool
   shosuro_bonus   - sum of bottom min(3, rolled) of the base pool
   gain_+1k0       - top-kept(full pool) - top-kept(base pool)
   shosuro_change  - bottom-3(full pool) - bottom-3(base pool)
-  net_+1k0        - gain + shosuro_change, computed PER-TRIAL
-                    (NOT p_x(gain) + p_x(shosuro_change), which would
-                     overstate the spread since percentiles don't add)
+  net_+1k0        - gain + shosuro_change, per-trial
 
-Pairing matters: ``gain`` and ``shosuro_change`` are negatively
-correlated within a trial (an extra die that bumps the roll average
-is the same die that might displace the shosuro bottom-3), so the
-net distribution has substantially less variance than its two
-addends measured independently would suggest.
+Procedure for each (rolled, kept) cell:
+  1. V_p = percentile(roll_distribution, p) for p in {10, 50, 90}
+     via ``np.percentile(..., method='nearest')``, returning an
+     actual observed integer roll value.
+  2. For each metric M (bonus / gain / sh_change / net), report
+     ``mean(M | roll == V_p)`` - the average of M over trials
+     whose XkY roll came out to V_p.
+
+So the roll columns are integers (observed sample values); the
+other columns are conditional means and will typically be
+fractional - that's real signal, not rounding noise.
 
 Rolled=10 rows skip the +1k0 columns - the L7R overflow rule
 ("rolled > 10 -> kept += overflow") prevents an 11th rolled die.
@@ -60,39 +67,46 @@ CSV_PATH = HERE / "ShosuroFifthDanBonusesByPercentile.csv"
 MD_PATH = HERE / "ShosuroFifthDanBonusesByPercentile.md"
 
 MD_INTRO = f"""\
-# Shosuro Actor 5th Dan: distributional spread of the marginal value
+# Shosuro Actor 5th Dan: conditional value given the XkY roll percentile
 
-Companion to `ShosuroFifthDan.md`, which shows means. This file
-shows the **10th / 50th / 90th percentile** of each quantity, so
-you can see how reliable (or swingy) each effect is. Each cell
-reads `p10 / p50 / p90`.
+Companion to `ShosuroFifthDan.md`, which shows unconditional means.
+This file answers a different question:
+
+> *"When my XkY roll lands at the 10th / 50th / 90th percentile of
+> its distribution, what does the Shosuro bonus (and the +1k0
+> deltas) typically look like?"*
+
+This is a **conditional** view, not a marginal one. The `bonus p90`
+column does NOT mean "the 90th-percentile of the Shosuro bonus
+distribution"; it means "the average Shosuro bonus on trials
+whose XkY roll equals the 90th-percentile roll value". Conditioning
+on the roll lets you see how the bonus varies with how lucky your
+underlying roll was.
+
+For `3k3` (where roll = bonus by construction, since you keep all 3
+dice AND the bonus sums all 3 lowest = all 3) the roll columns and
+the bonus columns are identical, a sanity check that the
+conditioning is wired correctly.
 
 For each `(rolled, kept)` dice pool the table below shows:
 
-- **avg roll** - spread of the `XkY` roll.
-- **Shosuro bonus** - spread of the Shosuro Actor 5th Dan bonus
-  (sum of the lowest three rolled dice; or all of them when
-  `rolled < 3`).
-- **gain from +1k0** - spread of `top-kept(N+1 dice) - top-kept(N dice)`,
-  measured on the same trial.
-- **Shosuro change per +1 rolled** - spread of the same delta on
-  the Shosuro bonus. Hard ceiling at 0 for `rolled >= 3` (extra
-  die either displaces something low or does nothing).
-- **net +1k0** - sum of the previous two columns, **computed per
-  trial** (NOT `p_x(gain) + p_x(shosuro_change)`, which doesn't
-  add for percentiles). Pairing matters: the two effects are
-  negatively correlated within a trial, so the net spread is
-  tighter than independent addition would suggest.
+- **roll p10 / p50 / p90** - actual observed roll values at the
+  10th, 50th, 90th percentile of the XkY distribution (integer).
+- **bonus p10 / p50 / p90** - mean Shosuro bonus across trials
+  whose roll equals the corresponding roll percentile value.
+  Conditional means, generally fractional.
+- **gain p10 / p50 / p90** - mean of `top-kept(N+1) - top-kept(N)`
+  conditional on the base roll's percentile. Tells you the
+  expected `+1k0` gain on a roll of that calibre.
+- **sh chg p10 / p50 / p90** - mean change in the Shosuro bonus
+  from adding a rolled die, conditional on the base roll's
+  percentile.
+- **net p10 / p50 / p90** - sum of `gain` and `sh chg`, same
+  conditioning.
 
 The `rolled = 10` rows have no `+1k0` columns: the L7R overflow
 rule (`rolled > 10 -> kept += overflow`) prevents an 11th rolled
 die.
-
-All values are integers. This is not a rounding artifact - dice
-sums are integer-valued, and at {N_TRIALS:,} trials per cell the
-sample at any percentile rank is essentially always equal to its
-neighbors, so the percentile lands on an actual observed integer
-(`np.percentile(..., method='nearest')`).
 
 Generated by `analysis/shosuro_fifth_dan_bonuses_by_percentile.py`
 with {N_TRIALS:,} trials per cell, seed = {SEED}.
@@ -146,23 +160,27 @@ def simulate_cell(rng, reroll, rolled, kept, n_trials):
     return out
 
 
-def pcts(arr):
-    """Return (p10, p50, p90) of ``arr`` as ints, or
-    (None, None, None) when arr is None (cell skipped).
+def roll_percentile_values(base_roll):
+    """The observed XkY roll value at the 10th / 50th / 90th
+    percentile of the roll distribution. ``method='nearest'``
+    guarantees we land on an actual sample value (an integer),
+    which we then use to slice trials for the conditional means."""
+    return tuple(
+        int(v) for v in np.percentile(base_roll, PERCENTILES, method="nearest")
+    )
 
-    ``method='nearest'`` returns the actual observed value at the
-    requested rank rather than linearly interpolating between
-    neighbors. With 200k samples of a discrete (integer-valued)
-    distribution like "sum of N d10", any two adjacent ranks are
-    almost always identical, so linear interpolation degenerates
-    to "always integer-valued" output that *looks* like a rounding
-    bug. ``method='nearest'`` makes the integer nature explicit
-    and lets us format as plain ints downstream.
-    """
-    if arr is None:
-        return (None, None, None)
-    p = np.percentile(arr, PERCENTILES, method="nearest")
-    return tuple(int(x) for x in p)
+
+def conditional_means(metric_arr, base_roll, roll_pvals):
+    """For each roll percentile value V in ``roll_pvals``, return
+    the mean of ``metric_arr`` over trials whose ``base_roll == V``.
+    Returns a triple of floats."""
+    out = []
+    for v in roll_pvals:
+        mask = base_roll == v
+        # Every V is an actual observed roll value, so at least one
+        # trial matches; no guard needed.
+        out.append(float(metric_arr[mask].mean()))
+    return tuple(out)
 
 
 def build_rows():
@@ -172,25 +190,40 @@ def build_rows():
         for kept in KEPT_RANGE:
             for rolled in range(kept, ROLLED_CAP + 1):
                 cell = simulate_cell(rng, reroll, rolled, kept, N_TRIALS)
-                rows.append({
+                base_roll = cell["avg_roll"]
+                roll_pvals = roll_percentile_values(base_roll)
+                row = {
                     "reroll": reroll,
                     "rolled": rolled,
                     "kept": kept,
-                    "avg_roll": pcts(cell.get("avg_roll")),
-                    "shosuro_bonus": pcts(cell.get("shosuro_bonus")),
-                    "gain": pcts(cell.get("gain")),
-                    "sh_change": pcts(cell.get("sh_change")),
-                    "net": pcts(cell.get("net")),
-                })
+                    "avg_roll": roll_pvals,
+                    "shosuro_bonus": conditional_means(
+                        cell["shosuro_bonus"], base_roll, roll_pvals
+                    ),
+                }
+                if "gain" in cell:
+                    row["gain"] = conditional_means(
+                        cell["gain"], base_roll, roll_pvals
+                    )
+                    row["sh_change"] = conditional_means(
+                        cell["sh_change"], base_roll, roll_pvals
+                    )
+                    row["net"] = conditional_means(
+                        cell["net"], base_roll, roll_pvals
+                    )
+                else:
+                    row["gain"] = row["sh_change"] = row["net"] = (
+                        None, None, None,
+                    )
+                rows.append(row)
     return rows
 
 
 def write_csv(rows, path):
-    def fmt(v):
-        # All percentile values are int (see ``pcts``). The CSV
-        # emits them as integers too - any consumer that wants
-        # floats can cast trivially.
+    def fmt_int(v):
         return "" if v is None else str(v)
+    def fmt_float(v):
+        return "" if v is None else f"{v:.3f}"
     with path.open("w", newline="") as f:
         w = csv.writer(f)
         header = ["reroll_tens", "rolled", "kept"]
@@ -203,10 +236,14 @@ def write_csv(rows, path):
         w.writerow(header)
         for r in rows:
             row = [str(r["reroll"]), r["rolled"], r["kept"]]
-            for key in ("avg_roll", "shosuro_bonus",
-                        "gain", "sh_change", "net"):
+            # avg_roll is the conditioning variable - actual observed
+            # integer roll values. The other metrics are conditional
+            # means and are generally fractional.
+            for v in r["avg_roll"]:
+                row.append(fmt_int(v))
+            for key in ("shosuro_bonus", "gain", "sh_change", "net"):
                 for v in r[key]:
-                    row.append(fmt(v))
+                    row.append(fmt_float(v))
             w.writerow(row)
 
 
@@ -215,30 +252,28 @@ def format_markdown(rows):
     tables - as a single string. Used for both the file write and
     stdout, so they stay in lockstep.
 
-    Each percentile gets its own column (17 columns total per
-    table). Values render as integers because the underlying
-    dice-sum distributions are integer-valued and
-    ``method='nearest'`` returns actual observed values.
+    The roll columns (avg_roll p10/p50/p90) are integer-valued
+    observed sample values; every other column is a conditional
+    mean and renders with one decimal place.
     """
-    def cell(v, signed=False):
+    def cell_int(v, signed=False):
         if v is None:
             return "—"
         return f"{v:+d}" if signed else f"{v:d}"
-    # 5 metrics x 3 percentiles = 15 numeric columns, plus rolled
-    # and kept. Headers stack the metric name above the p-suffix
-    # via two header rows isn't supported in Markdown, so we
-    # inline the metric prefix on each column to keep it readable
-    # in a single header line.
+    def cell_float(v, signed=False):
+        if v is None:
+            return "—"
+        return f"{v:+.1f}" if signed else f"{v:.1f}"
     header_cols = ["rolled", "kept"]
     align_cols = ["-------:", "-----:"]
     metric_specs = [
-        ("roll", False),        # avg_roll
-        ("bonus", False),       # shosuro_bonus
-        ("gain", True),         # gain
-        ("sh chg", True),       # sh_change
-        ("net", True),          # net
+        ("roll", False, False),   # int, unsigned
+        ("bonus", True, False),   # float, unsigned
+        ("gain", True, True),     # float, signed
+        ("sh chg", True, True),
+        ("net", True, True),
     ]
-    for prefix, _ in metric_specs:
+    for prefix, _is_float, _signed in metric_specs:
         for p in PERCENTILES:
             header_cols.append(f"{prefix} p{p}")
             align_cols.append("------:")
@@ -252,12 +287,15 @@ def format_markdown(rows):
             if r["reroll"] != reroll:
                 continue
             row_cells = [str(r["rolled"]), str(r["kept"])]
-            for metric_key, (_, signed) in zip(
+            for metric_key, (_, is_float, signed) in zip(
                 ["avg_roll", "shosuro_bonus", "gain", "sh_change", "net"],
                 metric_specs,
             ):
                 for v in r[metric_key]:
-                    row_cells.append(cell(v, signed=signed))
+                    if is_float:
+                        row_cells.append(cell_float(v, signed=signed))
+                    else:
+                        row_cells.append(cell_int(v, signed=signed))
             out.append("| " + " | ".join(row_cells) + " |")
     return "\n".join(out) + "\n"
 
