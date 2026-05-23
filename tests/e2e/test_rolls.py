@@ -1727,6 +1727,55 @@ def test_initiative_result_has_copy_as_image_button(page, live_server_url):
     _wait_copy_ready(page, '[data-modal="dice-roller"]')
 
 
+def test_initiative_image_payload_includes_dropped_dice_and_no_total(page, live_server_url):
+    """The initiative card POSTs ``show_total: false`` (no meaningful
+    sum across action dice) AND carries the dropped dice from the
+    roll alongside the kept action dice. Regression: the builder
+    used to emit ``dropped: []`` and a stand-in ``total`` so the
+    rendered card showed "TOTAL N" with N == the highest die.
+    """
+    _create_roller(page, live_server_url, "InitDropped")
+    page.evaluate("window.__capturedRollImagePayload = null")
+    page.evaluate("""() => {
+        const origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            if (typeof url === 'string'
+                    && url.indexOf('/roll-image') !== -1
+                    && opts && opts.body) {
+                try {
+                    window.__capturedRollImagePayload = JSON.parse(opts.body);
+                } catch (e) { /* ignore */ }
+            }
+            return origFetch.apply(this, arguments);
+        };
+    }""")
+    page.locator('[data-roll-key="initiative"]').click()
+    _wait_for_roll_result(page)
+    payload = page.evaluate("() => window.__capturedRollImagePayload")
+    assert payload is not None
+    assert payload["title"].startswith("Initiative")
+    assert payload.get("show_total") is False
+    # Akodo Bushi default initiative formula is at least 3k2, so the
+    # kept and dropped lists are both non-empty.
+    counts = page.evaluate("""() => ({
+        action: (window._diceRoller.actionDice || []).length,
+        unkept: (window._diceRoller.unkeptDice || []).length,
+    })""")
+    assert len(payload["kept"]) == counts["action"], (
+        f"KEPT row should match actionDice count {counts['action']}; "
+        f"got payload kept of length {len(payload['kept'])}"
+    )
+    assert len(payload["dropped"]) == counts["unkept"], (
+        f"DROPPED row should mirror unkeptDice count {counts['unkept']}; "
+        f"got payload dropped of length {len(payload['dropped'])}"
+    )
+    assert counts["unkept"] > 0, (
+        "Test premise: initiative roll should produce at least one "
+        "dropped die (Akodo Bushi rolls > keeps); without that this "
+        "test wouldn't be checking the regression case."
+    )
+
+
 def test_skill_roll_image_payload_carries_skill_rank_parenthetical(page, live_server_url):
     """For a basic / advanced skill roll, the formula subtitle in the
     image payload appends ``(<skill> skill: N)`` so a reader who

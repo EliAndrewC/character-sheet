@@ -86,10 +86,14 @@
             fill: #8b0000;
         }
         svg.die.unkept { opacity: 0.4; }
-        svg.die.reroll .die-shape {
-            fill: #ffe9e9;
-            stroke: #b06060;
-        }
+        /* The ``.reroll`` class still tags dice produced from a reroll
+           (the JS adds it so reroll-only animation behavior could
+           latch onto it later), but it intentionally carries no
+           coloring of its own. A rerolled 10 picks up gold via
+           ``.is-ten`` like any other 10, and a rerolled 1-9 looks
+           identical to an initially-rolled 1-9 - so the visual
+           highlight stays anchored to the *value* rather than the
+           *provenance* of the die. */
         .die-cell { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
 
         /* Action-dice variant: same kite shape as the roll-animation die,

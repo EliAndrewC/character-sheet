@@ -8623,23 +8623,29 @@
 
             _buildInitiativeImagePayload() {
                 // Initiative renders its dice as "action dice" rather
-                // than the keep/drop split used elsewhere; treat each
-                // action die as kept for the card. The total isn't
-                // meaningful here (no single number for initiative),
-                // so display the highest die as a stand-in label.
-                const dice = (this.actionDice || []).map(d => ({
+                // than the keep/drop split used elsewhere - the KEPT
+                // row uses ``actionDice`` (post-school-transform: e.g.
+                // Kakita 10s become 0, Hiruma 4th Dan lowers each by
+                // 2, Togashi appends an athletics-only bonus die)
+                // rather than the raw kept dice from the roll.
+                // The DROPPED row mirrors the regular roll's
+                // ``unkeptDice`` so a reader can see the discarded
+                // high dice. ``show_total: false`` suppresses the
+                // "TOTAL <n>" trophy at the bottom of the card -
+                // initiative has no meaningful sum across action
+                // dice; each die is its own standalone phase number.
+                const kept = (this.actionDice || []).map(d => ({
                     parts: [d.value],
                 }));
-                const top = (this.actionDice || [])
-                    .reduce((m, d) => Math.max(m, d.value || 0), 0);
                 return {
                     title: this.title || 'Initiative',
                     formula: this.formulaText || '',
-                    kept: dice,
-                    dropped: [],
+                    kept: kept,
+                    dropped: this._cellsFromDice(this.unkeptDice || []),
                     bonuses: [],
-                    total: top,
+                    total: 0,
                     footer: 'Action dice',
+                    show_total: false,
                 };
             },
 
@@ -8684,9 +8690,21 @@
                 const footer = passed
                     ? `vs TN ${this.wcLightWounds || 0} - Passed (+${margin})`
                     : `vs TN ${this.wcLightWounds || 0} - Failed by ${margin}`;
+                // Derive the formula subtitle from ``this.formula`` (which
+                // ``rollWoundCheck`` sets fresh on every roll). The shared
+                // ``this.formulaText`` field is only stamped by the
+                // generic skill-roll path - so reading it here would let
+                // a prior "6k3 + 5" bleed onto a 4k3 wound-check card.
+                const wcF = this.formula || {};
+                let wcFormulaText = '';
+                if (wcF.rolled && wcF.kept) {
+                    wcFormulaText = (wcF.flat || 0) > 0
+                        ? `${wcF.rolled}k${wcF.kept} + ${wcF.flat}`
+                        : `${wcF.rolled}k${wcF.kept}`;
+                }
                 return {
                     title: 'Wound Check',
-                    formula: this.formulaText || '',
+                    formula: wcFormulaText,
                     kept: this._cellsFromDice(this.keptDice || []),
                     dropped: this._cellsFromDice(this.unkeptDice || []),
                     bonuses: bonuses,

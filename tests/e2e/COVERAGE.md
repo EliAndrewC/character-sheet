@@ -80,6 +80,7 @@ The three failures were:
 - [x] Take 1 Serious resets light wounds to 0 → `test_wound_check.py::test_wound_check_take_serious_resets_light`
 - [x] Iaijutsu strike wound check button present → `test_wound_check.py::test_iaijutsu_strike_wound_check_available`
 - [x] Regular roll also shows dice animation → `test_wound_check.py::test_regular_roll_shows_dice_animation`
+- [x] Copy-as-image payload's formula subtitle reflects the wound check's own ``{rolled}k{kept}[+flat]``, not whatever the prior skill roll left in ``this.formulaText`` (regression: WC card used to show the previous roll's rolled/kept count) → `test_wound_check.py::test_wc_image_payload_uses_wc_formula_not_prior_roll`
 - [x] Accept Result button applies wound check failure -> `test_ui_interactions.py::test_wc_accept_result_applies_failure`
 - [x] Keep Light Wounds closes modal without changes -> `test_ui_interactions.py::test_wc_keep_light_wounds_closes`
 - [x] Take 1 Serious Wound adds SW and resets LW -> `test_ui_interactions.py::test_wc_take_serious_resets_and_adds_sw`
@@ -788,7 +789,8 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Roll-result modal carries a "Copy as image" button that pre-renders a PNG dice card while the animation is on screen and writes it to the clipboard on click (verifies the PNG actually lands on the clipboard) → `test_rolls.py::test_roll_result_copy_as_image_button`
 - [x] Copy-as-image button is hidden during the dice animation and surfaces only once the pre-rendered PNG is ready → `test_rolls.py::test_roll_result_copy_button_hidden_during_animation`
 - [x] Copy-as-image on the freeform-roll modal (its own Alpine scope with a local copy of the prerender state) → `test_rolls.py::test_freeform_modal_has_copy_as_image_button`
-- [x] Copy-as-image on the dice-roller initiative result (action-dice panel; uses a separate payload builder so the card shows action dice rather than a kept/dropped split) → `test_rolls.py::test_initiative_result_has_copy_as_image_button`
+- [x] Copy-as-image on the dice-roller initiative result (action-dice panel) → `test_rolls.py::test_initiative_result_has_copy_as_image_button`
+- [x] Initiative card carries dropped dice alongside the action dice AND passes ``show_total: false`` so the renderer skips the misleading "TOTAL <n>" trophy → `test_rolls.py::test_initiative_image_payload_includes_dropped_dice_and_no_total`
 - [x] Copy-as-image on the wound-check result panel → `test_wound_check.py::test_wound_check_result_has_copy_as_image_button`
 - [x] Copy-as-image on the attack-roll result panel → `test_attack_modal.py::test_attack_result_has_copy_as_image_button`
 - [x] Copy-as-image on the attack damage-result panel (fresh card built from damage dice + damage total, not the attack snapshot) → `test_attack_modal.py::test_attack_damage_result_has_copy_as_image_button`

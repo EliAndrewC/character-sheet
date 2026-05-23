@@ -245,3 +245,83 @@ def test_wound_check_result_has_copy_as_image_button(page, live_server_url):
         }""",
         timeout=10000,
     )
+
+
+def test_wc_image_payload_uses_wc_formula_not_prior_roll(page, live_server_url):
+    """The Copy-as-image payload's formula subtitle must reflect the
+    wound check's own ``rolled``k``kept`` shape, not whatever the
+    previous skill roll happened to leave in ``this.formulaText``.
+
+    Regression: ``_buildWoundCheckImagePayload`` used to read
+    ``this.formulaText``, which only the regular-skill-roll path
+    stamped. After a 6k3 Bragging roll the WC card would display
+    "6k3 + 5" even though the actual wound check rolled 4k3, making
+    the rendered card show the wrong number of dice in its subtitle.
+    """
+    sheet_url = _create_character_with_wounds(
+        page, live_server_url, "WCFormulaText", light_wounds=10,
+    )
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(150)
+
+    # First roll: a regular skill that bakes a "6k3 + something"
+    # formulaText into the shared state.
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.phase === 'done'",
+        timeout=10000,
+    )
+    skill_formula_text = page.evaluate("() => window._diceRoller.formulaText")
+    assert skill_formula_text, "skill roll should have stamped formulaText"
+    # Close the skill roll modal.
+    page.locator('[data-modal="dice-roller"] button:has-text("Close")').first.click()
+    page.wait_for_timeout(200)
+
+    # Capture the next /roll-image POST so we can inspect what the WC
+    # builder sent. Install the hook BEFORE triggering the WC roll.
+    page.evaluate("""() => {
+        window.__lastRollImagePayload = null;
+        const origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            if (typeof url === 'string'
+                    && url.indexOf('/roll-image') !== -1
+                    && opts && opts.body) {
+                try { window.__lastRollImagePayload = JSON.parse(opts.body); }
+                catch (e) { /* ignore */ }
+            }
+            return origFetch.apply(this, arguments);
+        };
+    }""")
+
+    # Now roll a wound check via its data-action selector.
+    page.locator('[data-action="roll-wound-check"]').click()
+    page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.wcPhase === 'result'",
+        timeout=10000,
+    )
+    page.wait_for_function(
+        "() => window.__lastRollImagePayload !== null",
+        timeout=3000,
+    )
+    payload = page.evaluate("() => window.__lastRollImagePayload")
+    assert payload["title"] == "Wound Check", (
+        f"Expected the WC payload, got: {payload!r}"
+    )
+    # The subtitle must match the WC's *own* ``{rolled}k{kept}[+flat]``,
+    # not whatever the prior skill roll left in ``this.formulaText``.
+    wc_formula = page.evaluate("""() => {
+        const f = window._diceRoller.formula || {};
+        return { rolled: f.rolled, kept: f.kept, flat: f.flat || 0 };
+    }""")
+    expected_subtitle = f"{wc_formula['rolled']}k{wc_formula['kept']}"
+    if wc_formula["flat"] > 0:
+        expected_subtitle += f" + {wc_formula['flat']}"
+    assert payload["formula"] == expected_subtitle, (
+        f"WC card subtitle should be {expected_subtitle!r}, got: "
+        f"{payload['formula']!r}. (Prior skill roll formulaText was: "
+        f"{skill_formula_text!r})"
+    )
+    # And specifically must NOT carry the prior roll's formula.
+    assert payload["formula"] != skill_formula_text

@@ -415,6 +415,50 @@ class TestBuildSvg:
         assert "<script>" not in svg
         assert "&lt;script&gt;" in svg or "&lt;/text&gt;" in svg
 
+    def test_show_total_false_suppresses_total_block(self):
+        """Initiative payloads pass ``show_total: false`` because there
+        is no meaningful sum across action dice. The "TOTAL" label and
+        the big trophy value must not appear; the footer still
+        renders below the dice as a row label."""
+        svg = build_svg(parse_payload({
+            "title": "Initiative", "formula": "5k3",
+            "kept": [{"parts": [2]}, {"parts": [4]}, {"parts": [7]}],
+            "dropped": [{"parts": [8]}, {"parts": [10, 5]}],
+            "total": 0,
+            "footer": "Action dice",
+            "show_total": False,
+        }))
+        assert ">TOTAL<" not in svg
+        # The footer still labels the dice block.
+        assert ">Action dice<" in svg
+        # The DROPPED row IS rendered (dice values appear in <text>
+        # tags) - new behaviour for initiative cards.
+        for v in (8, 10, 5):
+            assert f">{v}</text>" in svg
+
+    def test_show_total_false_with_no_footer_omits_both(self):
+        """``show_total: false`` AND no footer: card just ends at the
+        dice block. No trophy, no orphaned label, no crash."""
+        svg = build_svg(parse_payload({
+            "title": "T", "formula": "",
+            "kept": [{"parts": [7]}],
+            "total": 0,
+            "show_total": False,
+        }))
+        assert ">TOTAL<" not in svg
+        assert ">7</text>" in svg
+
+    def test_show_total_true_default_renders_trophy(self):
+        """When ``show_total`` is absent from the payload (every
+        non-initiative card today), the renderer keeps emitting the
+        TOTAL trophy. Belt-and-braces against accidentally inverting
+        the default."""
+        svg = build_svg(parse_payload({
+            "title": "T", "kept": [{"parts": [9]}], "total": 14,
+        }))
+        assert ">TOTAL<" in svg
+        assert ">14</text>" in svg
+
 
 class TestMeasureText:
     """Sanity-test the layout estimator. Real font metrics aren't
