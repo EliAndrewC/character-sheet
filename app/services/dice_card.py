@@ -138,6 +138,13 @@ class RollCard:
     total: int = 0
     footer: Optional[str] = None
     alternatives: Tuple[Alternative, ...] = field(default_factory=tuple)
+    # Whether to render the "TOTAL <n>" trophy block at the bottom of
+    # the card. Initiative rolls suppress this because there's no
+    # meaningful sum across action dice - each die is its own
+    # standalone phase number. The ``footer`` still renders below
+    # where the trophy would have been so callers can label the dice
+    # rows ("Action dice").
+    show_total: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +272,10 @@ def parse_payload(payload: dict) -> RollCard:
         total=_coerce_int(payload.get("total"), 0),
         footer=_coerce_text(payload.get("footer")) or None,
         alternatives=_coerce_alternatives(payload.get("alternatives")),
+        # Default True so all existing roll types keep their TOTAL
+        # trophy. Initiative payloads pass ``show_total: false`` to
+        # suppress it.
+        show_total=payload.get("show_total") is not False,
     )
 
 
@@ -584,19 +595,34 @@ def build_svg(card: RollCard) -> str:
     else:
         post_bonuses_y = post_dice_y + 4
 
-    # Total trophy
-    parts.append(_hr(post_bonuses_y, card_w))
-    total_label_y = post_bonuses_y + 28
-    total_value_y = total_label_y + 50
-    parts.append(_text(cx, total_label_y, "TOTAL", size=12, weight=600,
-                       opacity=0.55, letter_spacing=5, family="sans"))
-    parts.append(_text(cx, total_value_y, str(card.total), size=56,
-                       weight=700, fill=ACCENT, family="serif"))
-    bottom_y = total_value_y
-    if card.footer:
-        bottom_y = total_value_y + 22
+    # Total trophy - suppressed for initiative rolls where no
+    # meaningful sum exists across action dice. The footer still
+    # renders below the dice block in that case so callers can label
+    # the row ("Action dice").
+    if card.show_total:
+        parts.append(_hr(post_bonuses_y, card_w))
+        total_label_y = post_bonuses_y + 28
+        total_value_y = total_label_y + 50
+        parts.append(_text(cx, total_label_y, "TOTAL", size=12, weight=600,
+                           opacity=0.55, letter_spacing=5, family="sans"))
+        parts.append(_text(cx, total_value_y, str(card.total), size=56,
+                           weight=700, fill=ACCENT, family="serif"))
+        bottom_y = total_value_y
+        if card.footer:
+            bottom_y = total_value_y + 22
+            parts.append(_text(cx, bottom_y, card.footer, size=14, weight=400,
+                               opacity=0.6, family="serif"))
+    elif card.footer:
+        # No trophy: place the footer just below the dice block (with
+        # the same hr separator the trophy would have used) so it
+        # still reads as a label on the dice rather than orphaned
+        # whitespace.
+        parts.append(_hr(post_bonuses_y, card_w))
+        bottom_y = post_bonuses_y + 28
         parts.append(_text(cx, bottom_y, card.footer, size=14, weight=400,
                            opacity=0.6, family="serif"))
+    else:
+        bottom_y = post_bonuses_y
 
     # Alternative totals (conditional bonuses). Mirrors the View
     # Sheet's "Alternative totals:" block - each row shows

@@ -147,7 +147,7 @@
         if (playSound) playSound(dice.length);
         await sleep(ROLLING_MS);
 
-        // Settle each die's first value. The red "is-ten" highlight is a
+        // Settle each die's first value. The gold "is-ten" highlight is a
         // signal that the die WILL reroll - so only apply it when rerolls
         // are on. On initiative, iaijutsu strike, impaired rolls, etc., a
         // 10 is just a 10 and shouldn't stand out.
