@@ -128,12 +128,20 @@ class CharacterVersion(Base):
 #: into "unpublished changes" state, do NOT appear in revision-history
 #: diffs / Discard-Changes preview, and are NOT reverted by Discard /
 #: Revert. They live on the row but sit outside the version system.
+#:
+#: ``sections`` (rich-text Notes/Backstory/Allies blocks) and the legacy
+#: single-textarea ``notes`` field are freeform prose with no mechanical
+#: effect on the character, so they follow the same contract as name/age -
+#: the player can rewrite their backstory at any time without it counting
+#: as a build change.
 METADATA_FIELDS = frozenset({
     "name",
     "name_explanation",
     "player_name",
     "age",
     "lineage",
+    "sections",
+    "notes",
 })
 
 
@@ -232,6 +240,17 @@ class Character(Base):
     current_serious_wounds: Mapped[int] = mapped_column(default=0)
     current_void_points: Mapped[int] = mapped_column(default=0)
     current_temp_void_points: Mapped[int] = mapped_column(default=0)
+    # Night's Rest healing-cadence flags. Updated by the /track endpoint
+    # whenever SW changes, and by the Night's Rest endpoint. Excluded from
+    # the version diff (live session state, not part of the character build).
+    # received_new_since_rest fires the Quick Healer bonus on the next rest;
+    # became_injured_since_rest fires the Slow Healer suppression but ONLY on
+    # the 0->positive transition (not subsequent SW increases mid-cadence);
+    # last_rest_was_healing_night drives the 1/0/1/0 alternating cadence.
+    # All three are cleared when SW returns to 0.
+    sw_healing_received_new_since_rest: Mapped[bool] = mapped_column(default=False)
+    sw_healing_became_injured_since_rest: Mapped[bool] = mapped_column(default=False)
+    sw_healing_last_rest_was_healing_night: Mapped[bool] = mapped_column(default=False)
     # Per-adventure state: {"lucky_used": false, "unlucky_used": false,
     #   "adventure_raises_used": 0, "conviction_used": 0, ...}
     adventure_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
@@ -334,6 +353,9 @@ class Character(Base):
                 "current_light_wounds", "current_serious_wounds",
                 "current_void_points", "current_temp_void_points",
                 "action_dice", "precepts_pool", "money_ledger",
+                "sw_healing_received_new_since_rest",
+                "sw_healing_became_injured_since_rest",
+                "sw_healing_last_rest_was_healing_night",
                 "google_sheet_id"} | METADATA_FIELDS
         # Default values for keys that may be absent from older
         # snapshots. Without an entry here, ``published_state.get(key,
@@ -350,6 +372,9 @@ class Character(Base):
                     "current_light_wounds": 0, "current_serious_wounds": 0,
                     "current_void_points": 0, "current_temp_void_points": 0,
                     "action_dice": [], "precepts_pool": [], "money_ledger": [],
+                    "sw_healing_received_new_since_rest": False,
+                    "sw_healing_became_injured_since_rest": False,
+                    "sw_healing_last_rest_was_healing_night": False,
                     "notes": "", "sections": [],
                     "rank_recognition_awards": [],
                     "specializations": [], "technique_choices": {},

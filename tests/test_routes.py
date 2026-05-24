@@ -3783,40 +3783,35 @@ class TestDraftDiffRoute:
         assert resp.status_code == 200
         assert resp.json()["lines"] == []
 
-    def test_returns_diff_lines_for_notes_change(self, client):
-        """Regression: editing a field that ``has_unpublished_changes``
-        treats as significant but the older sparse ``compute_diff_summary``
-        didn't enumerate (notes, sections, name_explanation, foreign_knacks,
-        advantage_details, technique_choices, etc.) used to produce a
-        false-empty diff in the Discard modal even though the character
-        showed "Draft changes"."""
-        cid = _seed_character(client, name="Notes Only", is_published=False)
-        client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
-        # Notes is one of the fields the legacy summary skipped.
-        client.post(f"/characters/{cid}/autosave",
-                    json={"notes": "Something I added later."})
-        char = query_db(client).filter(Character.id == cid).first()
-        assert char.has_unpublished_changes
-        resp = client.get(f"/characters/{cid}/draft-diff")
-        assert resp.status_code == 200
-        lines = resp.json()["lines"]
-        # Some signal of the change must be present - the player should not
-        # see "(no changes since the last Apply Changes)" while the badge
-        # screams "Draft changes" at them.
-        assert lines, (
-            "Expected at least one diff line when the character is in the "
-            "modified state; got an empty list."
-        )
+    def test_notes_and_sections_are_metadata_and_do_not_flip_badge(self, client):
+        """Notes and sections are freeform metadata - editing them must
+        NOT flip the character into "Draft changes" state, and must NOT
+        produce any diff lines. They're treated like name / age."""
+        for change in (
+            {"notes": "Something I added later."},
+            {"sections": [{"label": "Backstory", "html": "<p>hi</p>"}]},
+        ):
+            cid = _seed_character(client, name=f"Meta {list(change)[0]}",
+                                  is_published=False)
+            client.post(f"/characters/{cid}/publish",
+                        json={"summary": "Initial"})
+            client.post(f"/characters/{cid}/autosave", json=change)
+            char = query_db(client).filter(Character.id == cid).first()
+            assert not char.has_unpublished_changes, (
+                f"has_unpublished_changes must NOT flip for metadata field {change!r}"
+            )
+            resp = client.get(f"/characters/{cid}/draft-diff")
+            assert resp.status_code == 200
+            assert resp.json()["lines"] == []
 
     def test_diff_lines_track_has_unpublished_changes_for_misc_fields(self, client):
         """A handful of the fields previously missing from the summary
         each produce at least one diff line so the modal stays in sync
         with the badge. Excludes metadata fields (name, name_explanation,
-        player_name, age) which are intentionally outside the version
-        system."""
+        player_name, age, lineage, notes, sections) which are intentionally
+        outside the version system."""
         for change in (
             {"foreign_knacks": {"athletics": 2}},
-            {"sections": [{"label": "Backstory", "html": "<p>hi</p>"}]},
             {"technique_choices": {"second_dan_choice": "bragging"}},
         ):
             cid = _seed_character(client, name=f"Field {list(change)[0]}",

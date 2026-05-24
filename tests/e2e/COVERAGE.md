@@ -1234,6 +1234,25 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Non-per-day counter has no per-ability reset button → `test_tracking_advanced.py::test_non_per_day_counter_has_no_reset_button`
 - [x] Tracking buttons hidden for non-editors → `test_permissions.py::test_tracking_buttons_hidden_for_nonadmin`
 
+### Night's Rest
+
+- [x] Night's Rest button renders to the right of Reset when both are present → `test_tracking_advanced.py::test_nights_rest_button_renders_next_to_reset`
+- [x] Night's Rest button renders for characters with no per-adventure abilities → `test_tracking_advanced.py::test_nights_rest_button_renders_without_per_adventure`
+- [x] Night's Rest button hidden for non-editors → `test_tracking_advanced.py::test_nights_rest_button_hidden_for_non_editor`
+- [x] "Nothing to restore" modal when nothing would change → `test_tracking_advanced.py::test_nights_rest_nothing_modal_when_no_changes`
+- [x] Confirm modal lists effect bullets (Heal N LW, Restore N VP, etc) → `test_tracking_advanced.py::test_nights_rest_confirm_modal_lists_effects`
+- [x] Confirm applies LW=0 and VP regen for a non-Ishi (1 VP per night) → `test_tracking_advanced.py::test_nights_rest_confirm_applies_heal_lw_and_vp`
+- [x] Cancel button closes modal and leaves state unchanged → `test_tracking_advanced.py::test_nights_rest_cancel_leaves_state_unchanged`
+- [x] Accelerate checkbox visible only when SW remains after the default heal → `test_tracking_advanced.py::test_nights_rest_accelerate_visible_only_with_sw_remaining`
+- [x] Accelerate checkbox updates the displayed SW heal count in place → `test_tracking_advanced.py::test_nights_rest_accelerate_updates_heal_count_in_place`
+- [x] Isawa Ishi VP regen = lowest ring (modal label) → `test_tracking_advanced.py::test_nights_rest_isawa_ishi_lists_lowest_ring_vp`
+- [x] Refreshes Absorb Void for Isawa Ishi (per-day for that school only) → `test_tracking_advanced.py::test_nights_rest_refreshes_absorb_void_only_for_ishi`
+- [x] Does NOT refresh Absorb Void for non-Ishi (Kitsune Warden: per-adventure) → `test_tracking_advanced.py::test_nights_rest_does_NOT_refresh_absorb_void_for_kitsune`
+- [x] Does NOT clear Lucky toggle (per-adventure, not per-day) → `test_tracking_advanced.py::test_nights_rest_does_not_clear_lucky_toggle`
+- [x] Clears leftover action dice and announces the count in the modal → `test_tracking_advanced.py::test_nights_rest_clears_action_dice`
+- [x] Quick Healer heals 2 SW on the first night after becoming injured → `test_tracking_advanced.py::test_nights_rest_quick_healer_heals_2_on_first_night`
+- [x] Slow Healer heals 0 SW on the first night after becoming injured (suppression) → `test_tracking_advanced.py::test_nights_rest_slow_healer_heals_0_on_first_night`
+
 ## Character Sheet — Skill Roll Display
 
 - [x] Skills with rank show roll → `test_sheet_display.py::test_skill_with_rank_shows_roll`
@@ -1311,7 +1330,8 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Show changes button hidden on first version → `test_version_diff.py::test_show_changes_button_hidden_on_first_version`
 - [x] Show changes loads diff partial via HTMX → `test_version_diff.py::test_show_changes_loads_diff_partial`
 - [x] Diff entries grouped by category headers → `test_version_diff.py::test_show_changes_groups_by_category`
-- [x] Rich-text section change shown as content updated → `test_version_diff.py::test_show_changes_section_edit_renders_as_content_updated`
+- [x] Sections are metadata: never appear in the version diff drill-down → `test_version_diff.py::test_sections_are_metadata_and_omitted_from_version_diff`
+- [x] Section edits on a published character do NOT flip it to Draft → `test_version_diff.py::test_section_edit_does_not_flip_character_to_draft`
 - [x] Toggle collapses on second click → `test_version_diff.py::test_show_changes_collapses_on_second_click`
 - [x] Diff endpoint 403 for non-editor → `test_version_diff.py::test_diff_endpoint_returns_403_for_non_editor`
 - [x] Diff endpoint 404 for first version → `test_version_diff.py::test_diff_endpoint_returns_404_for_first_version`

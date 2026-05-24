@@ -108,18 +108,24 @@ def _flush_autosave(page):
     page.wait_for_timeout(200)
 
 
-def test_show_changes_section_edit_renders_as_content_updated(page, live_server_url):
-    """Editing a rich-text section between two versions must show as
-    'section content updated' in the diff, not as a dumped HTML blob.
-    Rich-text edits are too noisy to render verbatim."""
+def test_sections_are_metadata_and_omitted_from_version_diff(
+    page, live_server_url,
+):
+    """Adding a rich-text section between two versions does NOT register
+    in the diff drill-down - sections are freeform metadata, no different
+    from name or age, so they don't show up in version history."""
     page.goto(live_server_url)
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
-    page.fill('input[name="name"]', "SectionEdit")
+    page.fill('input[name="name"]', "SectionMeta")
     select_school(page, "akodo_bushi")
     page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Initial v1")
 
-    # Add a section with content, publish v1.
+    # Edit the published character: add a section AND bump a real stat
+    # (so v2 has a real change to anchor the diff drill-down on).
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('#add-section-btn')
     page.locator('#add-section-btn').click()
     page.wait_for_function(
         "document.querySelectorAll('#sections-container > div').length === 1"
@@ -128,28 +134,53 @@ def test_show_changes_section_edit_renders_as_content_updated(page, live_server_
     card.locator('input.section-label').fill("Backstory")
     card.locator('.ql-editor').click()
     card.locator('.ql-editor').fill("Born in winter.")
+    click_plus(page, "ring_air", 1)
     _flush_autosave(page)
-    apply_changes(page, "Initial with Backstory")
-
-    # Edit the section's body, publish v2.
-    page.locator('a:text-is("Edit")').click()
-    page.wait_for_selector('#add-section-btn')
-    card = page.locator('#sections-container > div').first
-    card.locator('.ql-editor').click()
-    card.locator('.ql-editor').fill("Adopted by Akodo.")
-    _flush_autosave(page)
-    apply_changes(page, "Updated Backstory")
+    apply_changes(page, "Air up, plus a Backstory")
 
     _expand_version_history(page)
     page.locator('[data-action="show-changes"]').click()
     page.wait_for_selector('[data-version-diff]', timeout=3000)
-
     body = page.locator('[data-version-diff]').inner_text()
-    assert "Backstory" in body
-    assert "section content updated" in body
-    # Crucially, neither the old nor the new prose appears.
-    assert "Born in winter" not in body
-    assert "Adopted by Akodo" not in body
+    # The Air change appears, the Backstory addition does not.
+    assert "Air" in body
+    assert "Backstory" not in body
+
+
+def test_section_edit_does_not_flip_character_to_draft(page, live_server_url):
+    """A published character that has a rich-text section edited must
+    stay in 'published' state, not flip to Draft. Sections are metadata,
+    so the Apply / Discard Changes buttons stay hidden."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "SectionDraft")
+    select_school(page, "akodo_bushi")
+    page.locator('#add-section-btn').click()
+    page.wait_for_function(
+        "document.querySelectorAll('#sections-container > div').length === 1"
+    )
+    card = page.locator('#sections-container > div').first
+    card.locator('input.section-label').fill("Backstory")
+    card.locator('.ql-editor').click()
+    card.locator('.ql-editor').fill("Original prose.")
+    _flush_autosave(page)
+    apply_changes(page, "Published with Backstory")
+
+    # Edit the section body on the published character.
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('#add-section-btn')
+    card = page.locator('#sections-container > div').first
+    card.locator('.ql-editor').click()
+    card.locator('.ql-editor').fill("Revised prose.")
+    _flush_autosave(page)
+    # After a section-only edit on a published character, neither
+    # Apply Changes nor Discard Changes should be visible -- both are
+    # x-show-gated on hasUnpublishedChanges, which the server now
+    # returns as False for section-only edits.
+    page.wait_for_timeout(300)
+    assert not page.locator('[data-action="apply-changes"]').is_visible()
+    assert not page.locator('[data-action="discard-changes"]').is_visible()
 
 
 def test_show_changes_collapses_on_second_click(page, live_server_url):

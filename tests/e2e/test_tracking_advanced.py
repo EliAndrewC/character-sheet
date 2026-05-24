@@ -365,3 +365,362 @@ def test_reset_modal_lists_abilities_to_restore(page, live_server_url):
     assert "Lucky" in body
     # Close without resetting
     page.keyboard.press("Escape")
+
+
+# ===========================================================================
+# Night's Rest
+# ===========================================================================
+
+
+def _create_basic_akodo(page, live_server_url, *, name="Restful"):
+    """Create + apply a minimal Akodo character so non-editor tests can see
+    the published sheet, and the editor has a working tracking section.
+    NB: a bare Akodo has no per-adventure abilities, so the Reset button is
+    NOT rendered - but the Night's Rest button always is (for editors)."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, "akodo_bushi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Setup")
+    page.wait_for_selector(
+        '[data-action="open-nights-rest-modal"]', timeout=10000,
+    )
+
+
+def test_nights_rest_button_renders_next_to_reset(page, live_server_url):
+    """When a per-adventure ability exists, both buttons render and the
+    Night's Rest button sits to the right of the Reset button."""
+    _create_character_with_lucky(page, live_server_url)
+    page.wait_for_selector('[data-action="open-reset-modal"]', timeout=10000)
+    reset_btn = page.locator('[data-action="open-reset-modal"]')
+    nr_btn = page.locator('[data-action="open-nights-rest-modal"]')
+    assert nr_btn.count() == 1
+    assert nr_btn.is_visible()
+    reset_box = reset_btn.bounding_box()
+    nr_box = nr_btn.bounding_box()
+    assert reset_box and nr_box
+    assert nr_box["x"] > reset_box["x"]
+
+
+def test_nights_rest_button_renders_without_per_adventure(page, live_server_url):
+    """A vanilla character with no per-adventure abilities still gets the
+    Night's Rest button - it always has something to do (LW/VP/SW/etc)."""
+    _create_basic_akodo(page, live_server_url)
+    assert page.locator('[data-action="open-reset-modal"]').count() == 0
+    assert page.locator('[data-action="open-nights-rest-modal"]').is_visible()
+
+
+def test_nights_rest_button_hidden_for_non_editor(
+    page, page_nonadmin, live_server_url
+):
+    """A non-editor visiting a published sheet must not see the button."""
+    _create_basic_akodo(page, live_server_url, name="Public NR")
+    sheet_url = page.url
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector('text="Tracking"', timeout=10000)
+    assert page_nonadmin.locator(
+        '[data-action="open-nights-rest-modal"]'
+    ).count() == 0
+
+
+def test_nights_rest_nothing_modal_when_no_changes(page, live_server_url):
+    """Fresh character: no LW, full VP, nothing to clear -> Nothing modal."""
+    _create_basic_akodo(page, live_server_url)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector(
+        '[data-action="close-nights-rest-nothing"]',
+        state='visible', timeout=5000,
+    )
+    body = page.text_content("body")
+    assert "nothing to restore" in body.lower()
+    # Confirm modal should NOT be open
+    assert not page.locator('[data-action="confirm-nights-rest"]').is_visible()
+
+
+def test_nights_rest_confirm_modal_lists_effects(page, live_server_url):
+    """Take some LW + spend a VP, modal lists both effects."""
+    _create_basic_akodo(page, live_server_url)
+    # Bring LW to 4 and VP to 1 via the tracking bridge
+    page.evaluate("""
+        window._trackingBridge.lightWounds = 4;
+        window._trackingBridge.voidPoints = 1;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector(
+        '[data-action="confirm-nights-rest"]',
+        state='visible', timeout=5000,
+    )
+    body = page.text_content('[data-testid="nights-rest-effects"]')
+    assert "Heal 4 light wounds" in body
+    assert "Restore 1 void point" in body
+
+
+def test_nights_rest_confirm_applies_heal_lw_and_vp(page, live_server_url):
+    """Clicking Confirm zeroes LW and regenerates 1 VP for a non-Ishi."""
+    _create_basic_akodo(page, live_server_url)
+    page.evaluate("""
+        window._trackingBridge.lightWounds = 5;
+        window._trackingBridge.voidPoints = 0;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    page.locator('[data-action="confirm-nights-rest"]').click()
+    # The frontend reloads on success; wait for tracking to remount.
+    page.wait_for_selector('text="Tracking"', timeout=10000)
+    page.wait_for_function(
+        "window._trackingBridge && window._trackingBridge.lightWounds === 0",
+        timeout=10000,
+    )
+    assert page.evaluate("window._trackingBridge.voidPoints") == 1
+
+
+def test_nights_rest_cancel_leaves_state_unchanged(page, live_server_url):
+    """Cancel button closes modal without persisting any changes."""
+    _create_basic_akodo(page, live_server_url)
+    page.evaluate("""
+        window._trackingBridge.lightWounds = 3;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="cancel-nights-rest"]', timeout=5000)
+    page.locator('[data-action="cancel-nights-rest"]').click()
+    page.wait_for_timeout(300)
+    assert page.evaluate("window._trackingBridge.lightWounds") == 3
+
+
+def test_nights_rest_accelerate_visible_only_with_sw_remaining(
+    page, live_server_url,
+):
+    """Accelerate checkbox only renders when SW will remain after heal."""
+    _create_basic_akodo(page, live_server_url)
+    # SW=3, fresh injury -> heals 1, leaves 2; checkbox should appear.
+    page.evaluate("""
+        window._trackingBridge.seriousWounds = 3;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    assert page.locator('[data-action="nights-rest-accelerate"]').is_visible()
+    page.locator('[data-action="cancel-nights-rest"]').click()
+    page.wait_for_timeout(200)
+    # SW=1 -> heals 1, leaves 0; checkbox should NOT appear.
+    page.evaluate("""
+        window._trackingBridge.seriousWounds = 1;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    assert not page.locator('[data-action="nights-rest-accelerate"]').is_visible()
+
+
+def test_nights_rest_accelerate_updates_heal_count_in_place(
+    page, live_server_url,
+):
+    """Toggling the accelerate checkbox rewrites the displayed SW heal
+    count from the alt_effects diff, without re-fetching."""
+    _create_basic_akodo(page, live_server_url)
+    page.evaluate("""
+        window._trackingBridge.seriousWounds = 3;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    body_before = page.text_content('[data-testid="nights-rest-effects"]')
+    assert "Heal 1 serious wound" in body_before
+    page.locator('[data-action="nights-rest-accelerate"]').check()
+    page.wait_for_timeout(150)
+    body_after = page.text_content('[data-testid="nights-rest-effects"]')
+    # Accelerate flips QH/normal first-night 1 -> 0 (the bonus follows the base).
+    assert "Heal 0 serious wounds" in body_after
+
+
+def test_nights_rest_isawa_ishi_lists_lowest_ring_vp(page, live_server_url):
+    """Ishi VP regen = lowest ring; modal should reflect that amount."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Ishi NR")
+    select_school(page, "isawa_ishi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Ishi setup")
+    # Default rings on Isawa Ishi: lowest ring is 2 -> regen 2.
+    # Spend VP all the way down so the modal definitely shows the bullet.
+    page.evaluate("""
+        window._trackingBridge.voidPoints = 0;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    body = page.text_content('[data-testid="nights-rest-effects"]')
+    assert "Restore 2 void points" in body
+
+
+def test_nights_rest_refreshes_absorb_void_only_for_ishi(
+    page, live_server_url,
+):
+    """Ishi: Absorb Void is per-day, so a use shows up as 'Refresh Absorb Void'.
+    Kitsune Warden: Absorb Void is per-adventure and should NOT appear."""
+    # Ishi case
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Ishi AV")
+    select_school(page, "isawa_ishi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Ishi setup")
+    page.wait_for_selector('text="Absorb Void"', timeout=10000)
+    # Spend a VP and use Absorb Void to set absorb_void_used=1
+    page.evaluate("""
+        window._trackingBridge.voidPoints = 0;
+        window._trackingBridge.setCount('absorb_void', 1);
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    body = page.text_content('[data-testid="nights-rest-effects"]')
+    assert "Absorb Void" in body
+    page.locator('[data-action="cancel-nights-rest"]').click()
+
+
+def test_nights_rest_does_NOT_refresh_absorb_void_for_kitsune(
+    page, live_server_url,
+):
+    """Kitsune Warden gets Absorb Void as per-adventure, NOT per-day."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Kitsune AV")
+    select_school(page, "kitsune_warden")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Kitsune setup")
+    page.wait_for_selector('text="Absorb Void"', timeout=10000)
+    page.evaluate("""
+        window._trackingBridge.voidPoints = 0;
+        window._trackingBridge.setCount('absorb_void', 1);
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    # There WILL be a confirm modal (VP regen needed) - but Absorb Void
+    # must NOT appear in the bullet list.
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    body = page.text_content('[data-testid="nights-rest-effects"]')
+    assert "Absorb Void" not in body
+
+
+def test_nights_rest_does_not_clear_lucky_toggle(page, live_server_url):
+    """Lucky is per-adventure; Night's Rest must leave it 'used'."""
+    _create_character_with_lucky(page, live_server_url)
+    page.wait_for_selector('text="Lucky (re-roll)"')
+    section = page.locator('text="Lucky (re-roll)"').locator('..')
+    section.locator('button:text("Mark as used")').click()
+    page.wait_for_timeout(300)
+    # Also bring LW > 0 so the rest actually does something visible.
+    page.evaluate("""
+        window._trackingBridge.lightWounds = 2;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    page.locator('[data-action="confirm-nights-rest"]').click()
+    page.wait_for_selector('text="Tracking"', timeout=10000)
+    page.wait_for_function(
+        "window._trackingBridge && window._trackingBridge.lightWounds === 0",
+        timeout=10000,
+    )
+    # Lucky should STILL be marked used.
+    section = page.locator('text="Lucky (re-roll)"').locator('..')
+    assert "used" in section.text_content()
+    assert section.locator('button:text("Undo")').is_visible()
+
+
+def test_nights_rest_clears_action_dice(page, live_server_url):
+    """Leftover action dice are stale combat-in-progress state; cleared."""
+    _create_basic_akodo(page, live_server_url)
+    page.evaluate("""
+        window._trackingBridge.actionDice = [
+            {value: 4, spent: false},
+            {value: 7, spent: false},
+        ];
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(200)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    body = page.text_content('[data-testid="nights-rest-effects"]')
+    assert "2 initiative dice" in body
+    page.locator('[data-action="confirm-nights-rest"]').click()
+    page.wait_for_selector('text="Tracking"', timeout=10000)
+    page.wait_for_function(
+        "window._trackingBridge && window._trackingBridge.actionDice.length === 0",
+        timeout=10000,
+    )
+
+
+def test_nights_rest_quick_healer_heals_2_on_first_night(page, live_server_url):
+    """Quick Healer + first night after injury = 2 SW healed."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "QH NR")
+    select_school(page, "akodo_bushi")
+    page.check('input[name="adv_quick_healer"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "QH setup")
+    # Take 3 SW - this triggers /track to set received_new + became_injured
+    page.evaluate("""
+        window._trackingBridge.seriousWounds = 3;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(300)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    body = page.text_content('[data-testid="nights-rest-effects"]')
+    assert "Heal 2 serious wounds" in body
+    page.locator('[data-action="confirm-nights-rest"]').click()
+    page.wait_for_selector('text="Tracking"', timeout=10000)
+    page.wait_for_function(
+        "window._trackingBridge && window._trackingBridge.seriousWounds === 1",
+        timeout=10000,
+    )
+
+
+def test_nights_rest_slow_healer_heals_0_on_first_night(page, live_server_url):
+    """Slow Healer suppresses the first night's heal after becoming injured."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "SH NR")
+    select_school(page, "akodo_bushi")
+    page.check('input[name="dis_slow_healer"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "SH setup")
+    page.evaluate("""
+        window._trackingBridge.seriousWounds = 3;
+        window._trackingBridge.save();
+    """)
+    page.wait_for_timeout(300)
+    page.locator('[data-action="open-nights-rest-modal"]').click()
+    page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    body = page.text_content('[data-testid="nights-rest-effects"]')
+    assert "Heal 0 serious wounds" in body
+    page.locator('[data-action="confirm-nights-rest"]').click()
+    page.wait_for_selector('text="Tracking"', timeout=10000)
+    # SW stays at 3 since SH suppressed
+    page.wait_for_function(
+        "window._trackingBridge && window._trackingBridge.seriousWounds === 3",
+        timeout=10000,
+    )

@@ -75,7 +75,11 @@ class TestCharacterVersionModel:
 
         assert version.id is not None
         assert version.version_number == 1
-        assert version.state["name"] == "Test"
+        # This test inserts a CharacterVersion directly (not via
+        # publish_character) and stores the raw to_dict output, which
+        # still includes metadata. The published-path strips metadata
+        # via _snapshot_state - see TestPublishCharacter below.
+        assert version.state["school"] == "akodo_bushi"
         assert version.summary == "Initial creation"
 
     def test_character_is_published_flag(self, db):
@@ -357,7 +361,18 @@ class TestPublishCharacter:
 
         assert char.is_published is True
         assert char.published_state is not None
-        assert char.published_state["name"] == "Publish Test"
+        # Metadata fields (name, age, lineage, sections, notes, etc.) are
+        # stripped from snapshots - they live on the character row but
+        # are not part of the versioned build. The character's live name
+        # is unchanged, just absent from the stored snapshot.
+        assert char.name == "Publish Test"
+        assert "name" not in char.published_state
+        assert "age" not in char.published_state
+        assert "lineage" not in char.published_state
+        assert "sections" not in char.published_state
+        assert "notes" not in char.published_state
+        # Mechanical fields are still snapshotted as before.
+        assert char.published_state["school"] == "akodo_bushi"
         assert version.version_number == 1
         assert version.summary  # should have some summary text
 
@@ -1158,41 +1173,34 @@ class TestComputeVersionDiff:
         assert match["kind"] == "remove"
         assert match["label"] == "Old award"
 
-    def test_notes_change_renders_as_content_updated(self):
-        entries = compute_version_diff(
-            {"notes": "old"}, {"notes": "new"},
-        )
-        match = next(e for e in entries if e["label"] == "Notes")
-        assert match["category"] == "Sections"
-        assert match["kind"] == "section_updated"
-        # No raw text in the diff.
-        assert "old" not in str(match) and "new" not in str(match)
-
-    def test_section_added(self):
+    def test_sections_are_metadata_and_filtered_from_diff(self):
+        """Sections are freeform metadata, like name/age - no diff entry."""
         entries = compute_version_diff(
             {"sections": []},
             {"sections": [{"label": "Backstory", "html": "<p>x</p>"}]},
         )
-        match = next(e for e in entries if e["label"] == "Backstory")
-        assert match["category"] == "Sections" and match["kind"] == "add"
+        assert entries == []
 
-    def test_section_removed(self):
-        entries = compute_version_diff(
-            {"sections": [{"label": "Allies", "html": "<p>x</p>"}]},
-            {"sections": []},
-        )
-        match = next(e for e in entries if e["label"] == "Allies")
-        assert match["kind"] == "remove"
-
-    def test_section_html_only_change(self):
+    def test_section_edits_filtered_from_diff(self):
         entries = compute_version_diff(
             {"sections": [{"label": "Backstory", "html": "<p>old</p>"}]},
             {"sections": [{"label": "Backstory", "html": "<p>new</p>"}]},
         )
-        match = next(e for e in entries if e["label"] == "Backstory")
-        assert match["kind"] == "section_updated"
-        # Body text isn't dumped.
-        assert "old" not in str(match) and "new" not in str(match)
+        assert entries == []
+
+    def test_section_removal_filtered_from_diff(self):
+        entries = compute_version_diff(
+            {"sections": [{"label": "Allies", "html": "<p>x</p>"}]},
+            {"sections": []},
+        )
+        assert entries == []
+
+    def test_notes_filtered_from_diff(self):
+        """Legacy notes textarea is also freeform; no diff entry."""
+        entries = compute_version_diff(
+            {"notes": "old"}, {"notes": "new"},
+        )
+        assert entries == []
 
     def test_session_state_filtered_out(self):
         # Mutable per-session fields must never appear in a version diff.
@@ -1212,9 +1220,10 @@ class TestComputeVersionDiff:
                "owner_discord_id": "b", "google_sheet_id": "y"}
         assert compute_version_diff(prev, new) == []
 
-    def test_missing_prev_field_treats_new_entries_as_added(self):
-        # An older snapshot lacks the ``sections`` key entirely. Every
-        # entry in the new sections list should appear as an "add".
+    def test_missing_prev_section_field_still_filtered(self):
+        # An older snapshot may lack the ``sections`` key entirely.
+        # Since sections are now metadata, no entry is emitted even
+        # for a wholly-new sections list.
         entries = compute_version_diff(
             {"name": "x"},
             {"name": "x", "sections": [
@@ -1222,9 +1231,8 @@ class TestComputeVersionDiff:
                 {"label": "Allies", "html": "<p>...</p>"},
             ]},
         )
-        secs = [e for e in entries if e["category"] == "Sections"]
-        assert {e["label"] for e in secs} == {"Backstory", "Allies"}
-        assert all(e["kind"] == "add" for e in secs)
+        secs = [e for e in entries if e.get("category") == "Sections"]
+        assert secs == []
 
     def test_unknown_skill_id_falls_back_to_label_case(self):
         # An imported character may carry skill ids the codebase doesn't
