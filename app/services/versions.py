@@ -17,10 +17,25 @@ from app.game_data import (
 from app.models import (
     Character,
     CharacterVersion,
+    METADATA_FIELDS,
     advantage_details_for_diff,
     award_deltas_for_diff,
 )
 from app.services.rolls import compute_dan
+
+
+def _snapshot_state(character: Character) -> Dict[str, Any]:
+    """Build a versioned snapshot of the character's state.
+
+    Strips METADATA_FIELDS - name, age, lineage, sections, notes, etc.
+    live on the row but are NOT part of the versioned character build.
+    They can be edited freely without flipping the character to Draft and
+    are never restored by Discard / Revert, so they don't belong in the
+    stored snapshot either. See METADATA_FIELDS in app/models.py.
+    """
+    return {
+        k: v for k, v in character.to_dict().items() if k not in METADATA_FIELDS
+    }
 
 
 def _label(key: str) -> str:
@@ -230,7 +245,6 @@ DIFF_CATEGORIES = (
     "Status",
     "XP",
     "Awards",
-    "Sections",
 )
 
 # Display ordering for the four core rings + Void.
@@ -554,26 +568,11 @@ def compute_version_diff(
                 "change",
             ))
 
-    # ---- Sections (notes + rich-text sections) ---------------------------
-    if prev_state.get("notes", "") != new_state.get("notes", ""):
-        entries.append(_entry("Sections", "Notes",
-                              None, "updated", "section_updated"))
-
-    old_sections = prev_state.get("sections", []) or []
-    new_sections = new_state.get("sections", []) or []
-    old_by_label = {s.get("label", ""): s for s in old_sections}
-    new_by_label = {s.get("label", ""): s for s in new_sections}
-    for label in sorted(set(new_by_label) - set(old_by_label)):
-        entries.append(_entry("Sections", label or "(unnamed)",
-                              None, "added", "add"))
-    for label in sorted(set(old_by_label) - set(new_by_label)):
-        entries.append(_entry("Sections", label or "(unnamed)",
-                              "present", None, "remove"))
-    for label in sorted(set(old_by_label) & set(new_by_label)):
-        if old_by_label[label].get("html", "") != new_by_label[label].get("html", ""):
-            entries.append(_entry("Sections", label or "(unnamed)",
-                                  None, "section content updated", "section_updated"))
-
+    # Notes (legacy single-textarea) and ``sections`` (rich-text blocks)
+    # are freeform metadata, not mechanical character state, so they
+    # don't appear in version diffs - see METADATA_FIELDS in models.py.
+    # Players can rewrite their backstory between versions without it
+    # showing up in history.
     return entries
 
 
@@ -711,7 +710,7 @@ def publish_character(
     Apply Changes modal can offer the reveal as an explicit checkbox
     rather than a silent side effect.
     """
-    current_state = character.to_dict()
+    current_state = _snapshot_state(character)
     old_state = character.published_state or {}
 
     # Use provided summary, or auto-generate from diff
@@ -832,10 +831,10 @@ def _restore_character_from_state(character: Character, state: Dict[str, Any]):
     Mirrors ``Character.to_dict``'s set of snapshotted fields. Tracking
     state (current wounds/VP, adventure_state, action_dice, precepts_pool)
     is NOT in ``state`` and stays untouched - it's per-session, not
-    per-version. Metadata fields (METADATA_FIELDS - name, name_explanation,
-    player_name, age) are also intentionally NOT restored: they live
-    outside the version system, so Discard / Revert preserves the player's
-    current values.
+    per-version. Metadata fields in METADATA_FIELDS (name, name_explanation,
+    player_name, age, lineage, sections) and the legacy notes textarea are
+    also intentionally NOT restored: they live outside the version system,
+    so Discard / Revert preserves the player's current values.
     """
     character.school = state.get("school", "")
     character.school_ring_choice = state.get("school_ring_choice", "")
@@ -867,8 +866,6 @@ def _restore_character_from_state(character: Character, state: Dict[str, Any]):
     character.rank_recognition_awards = state.get("rank_recognition_awards", [])
     character.starting_xp = state.get("starting_xp", 150)
     character.earned_xp = state.get("earned_xp", 0)
-    character.notes = state.get("notes", "")
-    character.sections = state.get("sections", [])
 
 
 def discard_draft_changes(character: Character, db: Session) -> bool:

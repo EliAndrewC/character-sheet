@@ -127,6 +127,14 @@ def _migrate_add_columns():
         ("age", "INTEGER", "NULL"),
         ("lineage", "TEXT", "''"),
         ("money_ledger", "TEXT", "'[]'"),
+        # Night's Rest SW-healing cadence flags. Defaulting all to 0 means
+        # pre-feature characters with existing SW will be treated as "no new
+        # injuries since last rest", entering the alternating cadence from
+        # last_was_healing_night=False -- so their first Night's Rest after
+        # this feature ships heals 1 SW, which is the expected behavior.
+        ("sw_healing_received_new_since_rest", "BOOLEAN", "0"),
+        ("sw_healing_became_injured_since_rest", "BOOLEAN", "0"),
+        ("sw_healing_last_rest_was_healing_night", "BOOLEAN", "0"),
     ]
 
     # Migration bodies below are defensive first-run-on-old-schema branches.

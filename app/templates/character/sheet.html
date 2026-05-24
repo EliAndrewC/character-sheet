@@ -725,6 +725,17 @@
                 _charId: {{ character.id }},
                 _saving: false,
                 showResetModal: false,
+                // Night's Rest state. Populated by openNightsRestModal()
+                // from the server's /nights-rest/preview response so the
+                // SW cadence math, per-day pool detection, and Isawa Ishi
+                // VP refund all stay in one place (server-side).
+                showNightsRestModal: false,
+                showNightsRestNothingModal: false,
+                nightsRestEffects: [],
+                nightsRestAltEffects: [],
+                nightsRestSwRemaining: 0,
+                nightsRestAccelerate: false,
+                nightsRestConfirming: false,
                 // Read-only roll mode: when canEdit is false, every save()
                 // short-circuits so nothing persists. Banner copy and the
                 // login link come from the same flags.
@@ -1237,6 +1248,59 @@
                     delete this.adventureState.hida_banked_wc_bonus;
                     this.save();
                     window.dispatchEvent(new CustomEvent('adventure-state-changed'));
+                },
+
+                async openNightsRestModal() {
+                    // Read-only Roll Mode: button is gated by viewer_can_edit
+                    // server-side, but belt-and-braces here too. The
+                    // /nights-rest/preview endpoint will also 403 a non-editor.
+                    if (!this.canEdit) return;
+                    this.nightsRestAccelerate = false;
+                    try {
+                        const resp = await fetch(
+                            '/characters/' + this._charId + '/nights-rest/preview'
+                        );
+                        if (!resp.ok) return;
+                        const data = await resp.json();
+                        if (!data.would_change) {
+                            this.showNightsRestNothingModal = true;
+                            return;
+                        }
+                        this.nightsRestEffects = data.effects || [];
+                        this.nightsRestAltEffects = data.alt_effects || [];
+                        this.nightsRestSwRemaining = data.sw_remaining_after || 0;
+                        this.showNightsRestModal = true;
+                    } catch (e) { /* network error: silently no-op */ }
+                },
+                displayedNightsRestEffects() {
+                    // Overlay alt_effects (currently only the SW heal line
+                    // ever differs) onto effects[] by key when the accelerate
+                    // checkbox is checked. This is what the modal x-for
+                    // iterates so the bullet list updates in-place.
+                    if (!this.nightsRestAccelerate) return this.nightsRestEffects;
+                    const byKey = {};
+                    for (const e of this.nightsRestAltEffects) byKey[e.key] = e;
+                    return this.nightsRestEffects.map(e => byKey[e.key] || e);
+                },
+                async confirmNightsRest() {
+                    if (this.nightsRestConfirming) return;
+                    this.nightsRestConfirming = true;
+                    try {
+                        const resp = await fetch(
+                            '/characters/' + this._charId + '/nights-rest',
+                            {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({
+                                    accelerate_cadence: this.nightsRestAccelerate,
+                                }),
+                            }
+                        );
+                        this.showNightsRestModal = false;
+                        if (resp.ok) window.location.reload();
+                    } finally {
+                        this.nightsRestConfirming = false;
+                    }
                 },
 
                 // Light wound modals
@@ -2298,6 +2362,82 @@
             </div>
             {% endif %}
             {% endif %} {# end: if per_adventure #}
+
+            {# Night's Rest: always available for editors, regardless of
+               per_adventure abilities (button + 2 modals). Whether or not
+               the per-adventure reset button is rendered depends on the
+               character's school, but Night's Rest always has something it
+               could do: clear LW/VP/temp-VP, refresh per-day pools, advance
+               the SW healing cadence, etc. #}
+            {% if viewer_can_edit %}
+            <button @click="openNightsRestModal()" data-action="open-nights-rest-modal"
+                    class="{% if per_adventure %}ml-2{% else %}mt-4{% endif %} text-sm bg-ink/10 hover:bg-ink/20 px-3 py-1.5 rounded transition-colors">
+                Night's Rest
+            </button>
+
+            {# Night's Rest "nothing would change" modal #}
+            <div x-show="showNightsRestNothingModal" x-cloak
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+                 @click.self="showNightsRestNothingModal = false"
+                 @keydown.escape="showNightsRestNothingModal = false">
+                <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4">
+                    <h3 class="text-lg font-bold text-accent mb-3">Night's Rest</h3>
+                    <p class="text-sm text-ink/70 mb-4">
+                        There is nothing to restore right now - light wounds are 0,
+                        void points are full, no per-day abilities have been used,
+                        and there are no serious wounds to heal.
+                    </p>
+                    <div class="flex justify-end">
+                        <button type="button" data-action="close-nights-rest-nothing"
+                                @click="showNightsRestNothingModal = false"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {# Night's Rest confirmation modal #}
+            <div x-show="showNightsRestModal" x-cloak
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+                 @click.self="showNightsRestModal = false"
+                 @keydown.escape="showNightsRestModal = false">
+                <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4">
+                    <h3 class="text-lg font-bold text-accent mb-3">Night's Rest</h3>
+                    <p class="text-sm text-ink/70 mb-3">The following will happen:</p>
+                    <ul class="text-sm space-y-1 mb-4" data-testid="nights-rest-effects">
+                        <template x-for="item in displayedNightsRestEffects()" :key="item.key">
+                            <li class="flex items-center gap-2">
+                                <span class="text-accent font-bold">&bull;</span>
+                                <span x-text="item.label"></span>
+                            </li>
+                        </template>
+                    </ul>
+                    <label x-show="nightsRestSwRemaining > 0" x-cloak
+                           class="flex items-start gap-2 text-sm text-ink/80 mb-4 cursor-pointer"
+                           title="Use this if you adjusted serious wounds manually between rests, so the tracked cadence is off by one day.">
+                        <input type="checkbox" x-model="nightsRestAccelerate"
+                               data-action="nights-rest-accelerate"
+                               class="mt-1">
+                        <span>
+                            Treat last night as the alternate type
+                            (accelerate or delay healing by 1 day)
+                        </span>
+                    </label>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" data-action="cancel-nights-rest"
+                                @click="showNightsRestModal = false"
+                                class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm">Cancel</button>
+                        <button type="button" data-action="confirm-nights-rest"
+                                @click="confirmNightsRest()"
+                                :disabled="nightsRestConfirming"
+                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-50">
+                            Confirm
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
         </div> {# close flex flex-col md:flex-row #}
     </section>

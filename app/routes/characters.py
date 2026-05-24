@@ -1477,7 +1477,23 @@ async def track_state(
     if "current_light_wounds" in body:
         character.current_light_wounds = max(0, int(body["current_light_wounds"]))
     if "current_serious_wounds" in body:
-        character.current_serious_wounds = max(0, int(body["current_serious_wounds"]))
+        # SW-transition tracking for Night's Rest healing cadence: detect
+        # 0->positive (Slow Healer suppress trigger + Quick Healer trigger),
+        # positive->higher-positive (Quick Healer re-trigger only), and
+        # ->0 (full reset of all three flags). Manual decrements that don't
+        # land at 0 leave the flags untouched - they don't advance the
+        # cadence; only a confirmed Night's Rest does.
+        old_sw = character.current_serious_wounds or 0
+        new_sw = max(0, int(body["current_serious_wounds"]))
+        character.current_serious_wounds = new_sw
+        if new_sw > old_sw:
+            character.sw_healing_received_new_since_rest = True
+            if old_sw == 0:
+                character.sw_healing_became_injured_since_rest = True
+        elif new_sw == 0 and old_sw > 0:
+            character.sw_healing_received_new_since_rest = False
+            character.sw_healing_became_injured_since_rest = False
+            character.sw_healing_last_rest_was_healing_night = False
     if "current_void_points" in body:
         character.current_void_points = max(0, int(body["current_void_points"]))
     if "current_temp_void_points" in body:
@@ -1501,6 +1517,65 @@ async def track_state(
 
     db.commit()
     return JSONResponse({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# Night's Rest (per-night refresh of LW, VP, per-day pools, SW healing)
+# ---------------------------------------------------------------------------
+
+
+def _nights_rest_auth(request: Request, char_id: int, db: Session):
+    """Shared auth scaffold for both Night's Rest endpoints. Returns
+    ``(character, None)`` on success or ``(None, JSONResponse)`` on
+    failure - mirrors the structure of the existing /track endpoint."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return None, JSONResponse({"error": "Not authenticated"}, status_code=401)
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return None, JSONResponse({"error": "Not found"}, status_code=404)
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"], character.owner_discord_id, all_editors,
+    ):
+        return None, JSONResponse({"error": "Forbidden"}, status_code=403)
+    return character, None
+
+
+@router.get("/{char_id}/nights-rest/preview")
+async def nights_rest_preview(
+    request: Request, char_id: int, db: Session = Depends(get_db),
+):
+    """Compute the modal preview for a Night's Rest without persisting."""
+    from app.services.nights_rest import compute_nights_rest_plan
+
+    character, err = _nights_rest_auth(request, char_id, db)
+    if err is not None:
+        return err
+    plan = compute_nights_rest_plan(character, accelerate=False)
+    return JSONResponse(plan)
+
+
+@router.post("/{char_id}/nights-rest")
+async def nights_rest_apply(
+    request: Request, char_id: int, db: Session = Depends(get_db),
+):
+    """Apply a Night's Rest: LW->0, VP regen, per-day pool refresh,
+    SW heal per the cadence, combat-in-progress wipe."""
+    from app.services.nights_rest import apply_nights_rest
+
+    character, err = _nights_rest_auth(request, char_id, db)
+    if err is not None:
+        return err
+    body = await request.json() if (await request.body()) else {}
+    accelerate = bool(body.get("accelerate_cadence", False))
+    summary = apply_nights_rest(character, accelerate=accelerate)
+    db.commit()
+    return JSONResponse({"status": "ok", "applied": summary})
 
 
 def _sanitize_action_dice(raw: Any) -> list:
