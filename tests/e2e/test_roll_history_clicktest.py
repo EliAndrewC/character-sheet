@@ -909,6 +909,135 @@ def test_readonly_modal_explainer_panel(page, live_server_url):
     assert "skill" in text.lower()
 
 
+def test_result_chip_reflects_pass_fail(page, live_server_url):
+    """Redesign: a TN roll that meets/beats its TN gets the gold 'hit' chip
+    (reusing the sheet's 10-die colors), a miss gets a muted chip, and a roll
+    with no TN renders as a plain number with no chip background."""
+    _create_owner_character(page, live_server_url, name="ChipStyle")
+    cid = _char_id(page)
+
+    def _post(body):
+        page.evaluate(
+            f"""b => fetch('/characters/{cid}/rolls', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify(b),
+            }})""",
+            body,
+        )
+
+    _post({"roll_key": "attack", "roll_label": "Attack",
+           "payload": {"title": "Attack", "total": 30, "formula": "5k3"},
+           "impaired_at_roll": False, "tn": 20})   # hit: 30 >= 20
+    _post({"roll_key": "attack", "roll_label": "Attack",
+           "payload": {"title": "Attack", "total": 25, "formula": "5k3"},
+           "impaired_at_roll": False, "tn": 40})   # miss: 25 < 40
+    _post({"roll_key": "skill:bragging", "roll_label": "Bragging",
+           "payload": {"title": "Bragging", "total": 18, "formula": "5k3"},
+           "impaired_at_roll": False})             # no TN
+    page.wait_for_timeout(300)
+    _open_roll_history_page(page)
+
+    rows = page.evaluate(
+        """() => [...document.querySelectorAll('[data-roll-id]')].map(row => ({
+            tn: row.querySelector('[data-testid="roll-tn"]').textContent.trim(),
+            cls: row.querySelector('[data-testid="roll-result"]').className,
+        }))"""
+    )
+    by_tn = {r["tn"]: r["cls"] for r in rows}
+    # Hit -> gold chip
+    assert "bg-[#fff7e0]" in by_tn["TN 20"]
+    assert "text-accent" in by_tn["TN 20"]
+    # Miss -> muted chip
+    assert "bg-ink/5" in by_tn["TN 40"]
+    assert "text-ink/45" in by_tn["TN 40"]
+    # No TN -> plain number, no chip background of either kind
+    assert "bg-[#fff7e0]" not in by_tn[""]
+    assert "bg-ink/5" not in by_tn[""]
+
+
+def test_roll_history_no_horizontal_overflow_on_mobile(page, live_server_url):
+    """Redesign: rows stack into cards at phone width instead of forcing the
+    old fixed multi-column grid to overflow. No horizontal scroll at 390px."""
+    _create_owner_character(page, live_server_url, name="RHOverflow")
+    cid = _char_id(page)
+    page.evaluate(
+        f"""() => fetch('/characters/{cid}/rolls', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{
+                roll_key: 'attack', roll_label: 'Attack',
+                payload: {{title: 'Attack', total: 41, formula: '6k4'}},
+                impaired_at_roll: true, tn: 35
+            }})
+        }})"""
+    )
+    page.wait_for_timeout(300)
+    page.set_viewport_size({"width": 390, "height": 800})
+    _open_roll_history_page(page)
+    overflow = page.evaluate(
+        "() => document.documentElement.scrollWidth"
+        " - document.documentElement.clientWidth"
+    )
+    assert overflow <= 1, f"horizontal overflow of {overflow}px at phone width"
+
+
+def test_row_click_opens_modal(page, live_server_url):
+    """Redesign: clicking a roll row (a non-interactive cell) opens the
+    read-only results modal - there's no separate 'View' button anymore."""
+    _create_owner_character(page, live_server_url, name="RowClickOpen")
+    _make_skill_roll_and_wait(page)
+    _open_roll_history_page(page)
+    # The time cell is plain text, not a button/input/tooltip trigger.
+    page.locator('[data-roll-id]').first.locator('[data-testid="roll-time"]').click()
+    page.wait_for_selector(
+        '[data-testid="readonly-roll-modal"]', state="visible", timeout=5_000,
+    )
+
+
+def test_clicking_note_input_does_not_open_modal(page, live_server_url):
+    """The note input is excluded from the row's open-modal click handler so
+    you can edit a note without the modal popping up; it just focuses."""
+    _create_owner_character(page, live_server_url, name="NoteNoModal")
+    _make_skill_roll_and_wait(page)
+    _open_roll_history_page(page)
+    page.locator('[data-action="annotation-input"]').first.click()
+    page.wait_for_timeout(300)
+    assert not page.locator('[data-testid="readonly-roll-modal"]').is_visible()
+    # The click should have focused the note input, not been swallowed.
+    focused = page.evaluate(
+        "() => document.activeElement && document.activeElement.getAttribute('data-action')"
+    )
+    assert focused == "annotation-input"
+
+
+def test_impaired_tag_tooltip(page, live_server_url):
+    """An impaired roll shows an 'impaired' tag whose own tooltip names the
+    character and explains the 10s-reroll restriction."""
+    _create_owner_character(page, live_server_url, name="ImpairedChar")
+    cid = _char_id(page)
+    page.evaluate(f"""
+        () => fetch('/characters/{cid}/rolls', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{
+                roll_key: 'attack', roll_label: 'Attack',
+                payload: {{title: 'Attack', total: 20, formula: '5k3'}},
+                impaired_at_roll: true, tn: 25
+            }})
+        }})
+    """)
+    page.wait_for_timeout(300)
+    _open_roll_history_page(page)
+    assert page.locator('[data-testid="impaired-tag"]').count() == 1
+    # The explainer node is always in the DOM (visibility-toggled), so its
+    # text is readable without hovering.
+    text = page.locator('[data-testid="impaired-explainer"]').first.text_content()
+    assert "ImpairedChar" in text
+    assert "Impaired" in text
+    assert "could not reroll 10s" in text
+
+
 def test_discretionary_bonus_updates_row(page, live_server_url):
     """Spending raises after the roll updates the same row in place."""
     _create_owner_character(page, live_server_url, name="DiscBonus")

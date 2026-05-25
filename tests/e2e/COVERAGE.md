@@ -1368,6 +1368,11 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Readonly modal hides TN line for skill rolls → `test_roll_history_clicktest.py::test_readonly_modal_hides_tn_for_skill`
 - [x] Readonly modal initiative variant renders action dice → `test_roll_history_clicktest.py::test_readonly_modal_initiative_renders_action_dice`
 - [x] Readonly modal explainer panel renders the underlying-mechanic rules text → `test_roll_history_clicktest.py::test_readonly_modal_explainer_panel`
+- [x] Result chip is gold for a TN hit, muted for a miss, plain for no-TN rolls → `test_roll_history_clicktest.py::test_result_chip_reflects_pass_fail`
+- [x] Rows stack into cards at phone width with no horizontal overflow → `test_roll_history_clicktest.py::test_roll_history_no_horizontal_overflow_on_mobile`
+- [x] Clicking a roll row opens the read-only results modal (no separate View button) → `test_roll_history_clicktest.py::test_row_click_opens_modal`
+- [x] Clicking the note input focuses it and does NOT open the modal → `test_roll_history_clicktest.py::test_clicking_note_input_does_not_open_modal`
+- [x] Impaired tag has its own tooltip naming the character and the 10s-reroll restriction → `test_roll_history_clicktest.py::test_impaired_tag_tooltip`
 
 ## Character Sheet — View as Non-Editor
 
