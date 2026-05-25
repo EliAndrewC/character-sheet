@@ -88,7 +88,7 @@ def test_disadvantages_green(page, live_server_url):
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Test")
     html = page.inner_html("body")
-    assert "text-green" in html
+    assert "text-success" in html
 
 
 def test_disadvantage_listed_on_sheet(page, live_server_url):

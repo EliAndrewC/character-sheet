@@ -93,7 +93,7 @@
                      @click.outside="menuOpen = false">
                     <button type="button"
                             :class="used
-                                    ? 'bg-gray-300 text-gray-600 line-through cursor-default'
+                                    ? 'bg-ink/20 text-ink/60 line-through cursor-default'
                                     : (canEdit
                                         ? 'bg-amber-200 text-amber-900 hover:bg-amber-300 cursor-pointer'
                                         : 'bg-amber-200 text-amber-900 cursor-default')"
@@ -191,7 +191,7 @@
                     {%- if ns.need_sep %} &middot; {% endif -%}
                     {% if has_virtue or has_unconv %}
                     {%- if has_virtue -%}
-                    {% set _honor_class = 'text-blue-700 font-semibold' %}
+                    {% set _honor_class = 'text-info font-semibold' %}
                     {%- else -%}
                     {% set _honor_class = 'text-orange-600 font-semibold' %}
                     {%- endif -%}
@@ -221,11 +221,11 @@
                     {% set has_detail = detail.get('text') or (detail.get('player') and detail.player in player_names) %}
                     {% set chip_label = social_chip_labels.get(aid, adv.name) %}
                     {% if has_detail %}
-                    <span class="tooltip-trigger relative inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-emerald-100 text-emerald-900 text-xs font-medium cursor-help align-middle"
+                    <span class="tooltip-trigger relative inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-success/10 text-success text-xs font-medium cursor-help align-middle"
                           data-adv-id="{{ aid }}">{{ chip_label }}<span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-pre-line font-normal text-left">{%- if detail.get('text') -%}{{ detail.text }}{%- endif -%}{%- if detail.get('text') and detail.get('player') and detail.player in player_names %}
 {% endif %}{%- if detail.get('player') and detail.player in player_names -%}(known by {{ player_names[detail.player] }}){%- endif -%}</span></span>
                     {% else %}
-                    <span class="inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-emerald-100 text-emerald-900 text-xs font-medium align-middle"
+                    <span class="inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-success/10 text-success text-xs font-medium align-middle"
                           data-adv-id="{{ aid }}">{{ chip_label }}</span>
                     {% endif %}
                     {% endif %}

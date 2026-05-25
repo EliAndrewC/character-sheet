@@ -300,6 +300,36 @@
             75%  { transform: rotate(270deg) translateY(-3px); }
             100% { transform: rotate(360deg) translateY(0); }
         }
+
+        /* ── Display / titling font (self-hosted, OFL). The family is set via
+           the --font-display variable so the chosen face can be swapped in one
+           place. Headings and any .font-display element pick it up. ── */
+        @font-face {
+            /* Spectral (SIL OFL, self-hosted; see app/static/fonts/OFL.txt). */
+            font-family: 'L7R Display';
+            src: url('/static/fonts/spectral-600.woff2') format('woff2');
+            font-weight: 400 700;
+            font-style: normal;
+            font-display: swap;
+        }
+        :root { --font-display: 'L7R Display'; }
+        h1, h2, h3, .font-display {
+            font-family: var(--font-display), Georgia, Cambria, serif;
+        }
+
+        /* ── Subtle parchment grain: a tiny tiling grayscale-noise SVG at very
+           low opacity, layered over the parchment background colour. Pure CSS,
+           no external asset. ── */
+        body.bg-parchment {
+            background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27180%27%20height%3D%27180%27%3E%3Cfilter%20id%3D%27n%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.85%27%20numOctaves%3D%272%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20type%3D%27saturate%27%20values%3D%270%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27180%27%20height%3D%27180%27%20filter%3D%27url%28%23n%29%27%20opacity%3D%270.05%27%2F%3E%3C%2Fsvg%3E");
+        }
+
+        /* Tabular figures so stat columns line up. */
+        .ring-value, .skill-row__roll { font-variant-numeric: tabular-nums; }
+
+        /* Accent-tinted focus ring fallback for any control that lacks an
+           explicit focus style (most inputs/buttons already set their own). */
+        :focus-visible { outline: 2px solid rgba(139, 0, 0, 0.45); outline-offset: 2px; }
     </style>
     <script>
         tailwind.config = {
@@ -310,7 +340,27 @@
                         ink: '#2c1810',
                         accent: '#8b0000',
                         gold: '#b8860b',
-                    }
+                        // Semantic state colours, desaturated to sit on warm
+                        // parchment instead of bright default Tailwind hues.
+                        // Use opacity modifiers for light fills (e.g.
+                        // bg-success/10) and the -dark variant for button hovers.
+                        success: { DEFAULT: '#4d6b46', dark: '#3a5235' },
+                        info: { DEFAULT: '#3f5d70', dark: '#324a5a' },
+                    },
+                    fontFamily: {
+                        // Heading / titling face. The actual family is set via
+                        // the --font-display CSS variable (see <style>), so it
+                        // can be swapped without touching utility usages.
+                        display: ['var(--font-display)', 'Georgia', 'Cambria', 'serif'],
+                    },
+                    boxShadow: {
+                        // Warm, ink-tinted elevation replacing black-based
+                        // defaults; applies to every existing shadow* utility.
+                        sm: '0 1px 2px 0 rgba(44,24,16,0.07)',
+                        DEFAULT: '0 1px 3px 0 rgba(44,24,16,0.10), 0 1px 2px -1px rgba(44,24,16,0.08)',
+                        md: '0 4px 6px -1px rgba(44,24,16,0.10), 0 2px 4px -2px rgba(44,24,16,0.08)',
+                        lg: '0 10px 15px -3px rgba(44,24,16,0.13), 0 4px 6px -4px rgba(44,24,16,0.10)',
+                    },
                 }
             }
         }

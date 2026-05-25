@@ -20,7 +20,7 @@
             {% for entry in items %}
             <li data-diff-kind="{{ entry.kind }}" class="text-ink/80 wrap-anywhere">
                 {%- if entry.kind == "add" -%}
-                <span class="text-green-700 font-semibold">+</span>
+                <span class="text-success font-semibold">+</span>
                 <span class="font-medium">{{ entry.label }}</span>
                     {%- if entry.after is not none -%}
                         : {{ entry.after }}

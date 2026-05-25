@@ -1,0 +1,13 @@
+{# Shared, reusable presentational macros.
+
+   section_header: a section title in the display face, trailed by a fading
+   gold hairline - the "chronicle" motif first used on the Roll History page,
+   promoted here so section headers across the app share one look. Import with
+   {% from "_macros.html" import section_header %} and call {{ section_header("Rings") }}.
+#}
+{% macro section_header(title) %}
+<div class="flex items-center gap-3 mb-2">
+    <h2 class="text-xl font-bold text-accent shrink-0">{{ title }}</h2>
+    <span class="h-px flex-1 bg-gradient-to-r from-gold/50 to-transparent"></span>
+</div>
+{% endmacro %}

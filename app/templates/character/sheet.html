@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import section_header %}
 
 {% block title %}L7R - {{ character.name }}{% endblock %}
 
@@ -114,7 +115,7 @@
         <strong>Draft</strong> - This is a new character draft. No versions have been applied yet.
     </div>
     {% elif character.has_unpublished_changes %}
-    <div class="bg-blue-100 border border-blue-400 text-blue-800 rounded px-4 py-2 text-sm">
+    <div class="bg-info/10 border border-info/50 text-info rounded px-4 py-2 text-sm">
         <strong>Draft changes</strong> - This character has been edited since the last time changes were applied.
     </div>
     {% endif %}
@@ -186,7 +187,7 @@
         <div class="flex gap-2 flex-wrap">
             <a href="/characters/{{ character.id }}/roll-history"
                data-action="roll-history"
-               class="bg-blue-700 hover:bg-blue-800 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+               class="bg-info hover:bg-info-dark text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
                 Roll History
             </a>
             <a href="/characters/{{ character.id }}/edit"
@@ -239,7 +240,7 @@
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <div class="flex items-baseline gap-4 mb-4">
             {% if school %}
-            <h2 class="text-xl font-bold text-accent">{{ school.name }}</h2>
+            {{ section_header(school.name) }}
             <span class="text-sm bg-accent/10 text-accent rounded-full px-3 py-0.5 font-medium text-center">
                 {{ dan }}{{ 'st' if dan == 1 else ('nd' if dan == 2 else ('rd' if dan == 3 else 'th')) }} Dan
             </span>
@@ -270,7 +271,7 @@
     <section x-data="freeformRoller()" x-init="init()"
              class="bg-white rounded-lg shadow p-6 border border-ink/10">
         <div class="flex items-center justify-between mb-4 gap-2 flex-wrap">
-            <h2 class="text-xl font-bold text-accent">Rings</h2>
+            {{ section_header("Rings") }}
             <button type="button"
                     @click="openModal()"
                     data-action="open-freeform-roll"
@@ -2308,7 +2309,7 @@
                     <span class="text-sm font-medium">{{ ability.name }}</span>
                     <div class="flex items-center gap-2 text-sm">
                         <span x-text="getToggle('{{ ability.id }}') ? '{{ ability.name }}: used' : '{{ ability.name }}: unused'"
-                              :class="getToggle('{{ ability.id }}') ? 'text-red-700 font-medium' : 'text-green-700 font-medium'"
+                              :class="getToggle('{{ ability.id }}') ? 'text-red-700 font-medium' : 'text-success font-medium'"
                               class="text-xs"></span>
                         {% if viewer_can_edit %}
                         <button x-show="!getToggle('{{ ability.id }}')"
@@ -2673,7 +2674,7 @@
                             <template x-for="entry in state.entries" :key="entry.id">
                                 <li class="font-mono text-sm flex items-baseline gap-2"
                                     :data-money-entry="entry.id">
-                                    <span :class="entry.kind === 'income' ? 'text-emerald-700' : 'text-rose-700'"
+                                    <span :class="entry.kind === 'income' ? 'text-success' : 'text-rose-700'"
                                           class="font-bold inline-block w-14 text-right shrink-0"
                                           x-text="(entry.kind === 'income' ? '+' : '-') + entry.amount.toFixed(1)"></span>
                                     <span class="text-ink/80 grow" x-text="entry.label"></span>
@@ -2950,7 +2951,7 @@
                  {% if dis_clickable %}@click="expanded = expanded === 'disadvantages' ? null : 'disadvantages'"
                  :class="expanded === 'disadvantages' ? 'ring-2 ring-accent' : ''"{% endif %}>
                 <span>Disadvantages</span>
-                <span class="font-mono font-bold text-green-700">{{ dis_section.total }}</span>
+                <span class="font-mono font-bold text-success">{{ dis_section.total }}</span>
             </div>
         </div>
 
@@ -2989,7 +2990,7 @@
                 <span class="text-xs text-ink/50">({{ character.starting_xp }} starting + {{ character.earned_xp }} earned + {{ dis_xp }} disadvantages)</span>
                 {% endif %}
             </span>
-            <span class="{{ 'text-green-700' if remaining >= 0 else 'text-red-600 font-bold' }}">
+            <span class="{{ 'text-success' if remaining >= 0 else 'text-red-600 font-bold' }}">
                 Unspent: <span class="font-mono">{{ remaining }}</span>
             </span>
         </div>
@@ -3010,7 +3011,7 @@
     {% for sec in (character.sections or []) %}
     {% if not sec.get('restricted') or viewer_can_edit %}
     <section data-restricted="{{ '1' if sec.get('restricted') else '0' }}"
-             class="{{ 'bg-gray-200' if sec.get('restricted') else 'bg-white' }} rounded-lg shadow p-6 border border-ink/10">
+             class="{{ 'bg-ink/10' if sec.get('restricted') else 'bg-white' }} rounded-lg shadow p-6 border border-ink/10">
         <h2 class="text-xl font-bold mb-4 text-accent">
             {{ sec.label or "Section" }}
             {% if sec.get('restricted') and viewer_can_edit %}
@@ -3102,16 +3103,16 @@
                so they stay in sync. #}
             {% if draft_diff %}
             <div data-draft-diff
-                 class="bg-blue-50 border-l-4 border-blue-400 rounded p-3 text-sm">
-                <h3 class="text-sm font-bold text-blue-900 mb-2">Draft changes (not yet applied)</h3>
+                 class="bg-info/5 border-l-4 border-info/50 rounded p-3 text-sm">
+                <h3 class="text-sm font-bold text-info mb-2">Draft changes (not yet applied)</h3>
                 {% for category, items in draft_diff|groupby('category') %}
                 <div class="mb-2 last:mb-0" data-draft-diff-category="{{ category }}">
-                    <h4 class="text-xs font-bold uppercase tracking-wide text-blue-800/80 mb-1">{{ category }}</h4>
+                    <h4 class="text-xs font-bold uppercase tracking-wide text-info/80 mb-1">{{ category }}</h4>
                     <ul class="space-y-1 ml-1">
                         {% for entry in items %}
                         <li data-diff-kind="{{ entry.kind }}" class="text-ink/80 wrap-anywhere">
                             {%- if entry.kind == "add" -%}
-                            <span class="text-green-700 font-semibold">+</span>
+                            <span class="text-success font-semibold">+</span>
                             <span class="font-medium">{{ entry.label }}</span>
                                 {%- if entry.after is not none -%}
                                     : {{ entry.after }}
@@ -3769,7 +3770,7 @@
                         <span class="font-bold text-lg" x-text="wcLightWounds"></span>
                         <span class="text-ink/60 ml-2">TN:</span>
                         <span class="font-bold" x-text="wcLightWounds"></span>
-                        <span x-show="wcProbs.flat > 0" x-cloak class="text-green-700 text-xs ml-1"
+                        <span x-show="wcProbs.flat > 0" x-cloak class="text-success text-xs ml-1"
                               x-text="'(+' + wcProbs.flat + ' flat bonus)'"></span>
                     </div>
 
@@ -3829,7 +3830,7 @@
                                     <tr class="border-b border-ink/5"
                                         :class="v === wcVoidSelected ? 'bg-accent/10 font-medium' : ''">
                                         <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
-                                        <td class="text-right py-1 px-2 text-green-700"
+                                        <td class="text-right py-1 px-2 text-success"
                                             x-text="wcProbRow(v) ? Math.round(wcProbRow(v).passChance * 100) + '%' : '-'"></td>
                                         <template x-for="sw in [1,2,3]" :key="sw">
                                             <td class="text-right py-1 px-2"
@@ -3991,19 +3992,19 @@
                     </div>
 
                     {# PASSED #}
-                    <div x-show="wcPassed" x-cloak class="bg-green-50 border border-green-300 rounded p-3">
-                        <div class="font-bold text-green-800 mb-2">Wound check PASSED</div>
-                        <p class="text-sm text-green-700 mb-3">
+                    <div x-show="wcPassed" x-cloak class="bg-success/5 border border-success/40 rounded p-3">
+                        <div class="font-bold text-success mb-2">Wound check PASSED</div>
+                        <p class="text-sm text-success mb-3">
                             You may keep your light wounds or choose to take 1 serious wound and reset light wounds to 0.
                         </p>
                         {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each (increases margin for 3rd Dan banking) #}
                         <div x-show="voidSpendConfig.wc_vp_free_raise" x-cloak
-                             class="mb-3 pt-2 border-t border-green-200">
+                             class="mb-3 pt-2 border-t border-success/30">
                             <div class="flex flex-wrap items-center gap-2">
                                 <button type="button"
                                         x-show="(window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
                                         @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) src = 'temp'; else if ((t.voidPoints || 0) > 0) src = 'regular'; else src = 'worldliness'; if (t.canEdit) { if (src === 'temp') t.tempVoidPoints--; else if (src === 'regular') t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); t.save(); } wcPostRollVpSources.push(src); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; wcMargin = wcRollTotal - wcLightWounds;"
-                                        class="bg-green-700 hover:bg-green-800 text-white px-3 py-1.5 rounded text-sm font-medium">
+                                        class="bg-success hover:bg-success-dark text-white px-3 py-1.5 rounded text-sm font-medium">
                                     Spend VP (+5)
                                 </button>
                                 <button type="button"
@@ -4012,14 +4013,14 @@
                                         class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm font-medium">
                                     Undo VP
                                 </button>
-                                <span x-show="wcPostRollVpSpent > 0" x-cloak class="text-xs text-green-700">
+                                <span x-show="wcPostRollVpSpent > 0" x-cloak class="text-xs text-success">
                                     +<span x-text="wcPostRollVpSpent * 5"></span> from <span x-text="wcPostRollVpSpent"></span> VP (4th Dan)
                                 </span>
                             </div>
                         </div>
                         <div class="flex gap-2">
                             <button type="button" @click="wcKeepLightWounds()"
-                                    class="bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded text-sm font-medium">
+                                    class="bg-success hover:bg-success-dark text-white px-4 py-2 rounded text-sm font-medium">
                                 Keep Light Wounds
                             </button>
                             <button type="button" @click="wcTakeSeriousAndReset()"
@@ -4349,7 +4350,7 @@
                     <div x-show="k5OpponentRoll > 0" x-cloak
                          class="text-sm"
                          data-testid="kakita-5th-outcome">
-                        <span x-show="k5RollTotal > k5OpponentRoll" class="text-green-700 font-medium">
+                        <span x-show="k5RollTotal > k5OpponentRoll" class="text-success font-medium">
                             Won by <span x-text="k5RollTotal - k5OpponentRoll"></span>.
                         </span>
                         <span x-show="k5RollTotal < k5OpponentRoll" class="text-red-700 font-medium">
@@ -4386,7 +4387,7 @@
                         <div x-show="k5DamageDiceAdjust !== 0" x-cloak
                              data-testid="kakita-5th-damage-adjust">
                             Damage dice adjustment:
-                            <span class="font-bold" :class="k5DamageDiceAdjust > 0 ? 'text-green-700' : 'text-red-700'"
+                            <span class="font-bold" :class="k5DamageDiceAdjust > 0 ? 'text-success' : 'text-red-700'"
                                   x-text="(k5DamageDiceAdjust > 0 ? '+' : '') + k5DamageDiceAdjust"></span>
                         </div>
                     </div>
@@ -4557,13 +4558,13 @@
 
                     {# Ide Special: banked TN reduction #}
                     <div x-show="ideBankedTnReduce > 0" x-cloak
-                         class="bg-green-50 border border-green-300 rounded p-2 text-sm text-green-800">
+                         class="bg-success/5 border border-success/40 rounded p-2 text-sm text-success">
                         Ide feint bonus: TN reduced by <span x-text="ideBankedTnReduce"></span> (effective TN: <span x-text="Math.max(0, atkEffectiveTN() - ideBankedTnReduce)"></span>)
                     </div>
 
                     {# Banked bonus indicators #}
                     <div x-show="hirumaBankedAttackBonus > 0 || (akodoBankedBonuses || []).some(b => !b.spent) || bayushiBankedFeintRaise > 0" x-cloak
-                         class="bg-green-50 border border-green-300 rounded p-2 text-xs text-green-800 space-y-0.5">
+                         class="bg-success/5 border border-success/40 rounded p-2 text-xs text-success space-y-0.5">
                         <div x-show="hirumaBankedAttackBonus > 0" x-cloak>Hiruma post-parry bonus: +<span x-text="hirumaBankedAttackBonus"></span> (auto-applied to attack and damage)</div>
                         <template x-for="(b, i) in (akodoBankedBonuses || []).filter(b => !b.spent)" :key="'ab'+i">
                             <div>Akodo banked bonus: +<span x-text="b.amount"></span> (discretionary, applied after roll)</div>
@@ -4756,7 +4757,7 @@
                                         <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
                                         <td class="text-right py-1 px-2 font-mono text-xs text-ink/70"
                                             x-text="((atkKitsuneSwap && atkProbs[atkKey]?.kitsune_swap?.void_keys?.[String(v)]) || atkProbs[atkKey]?.void_keys?.[String(v)] || '').replace(',', 'k')"></td>
-                                        <td class="text-right py-1 px-2 text-green-700"
+                                        <td class="text-right py-1 px-2 text-success"
                                             x-text="Math.round(atkHitChance(v) * 100) + '%'"></td>
                                         <td class="text-right py-1 px-2"
                                             x-text="atkAvgExtraDice(v)"></td>
@@ -4968,8 +4969,8 @@
                     </div>
 
                     {# HIT #}
-                    <div x-show="atkHit" x-cloak class="bg-green-50 border border-green-300 rounded p-3">
-                        <div class="font-bold text-green-800 mb-2">
+                    <div x-show="atkHit" x-cloak class="bg-success/5 border border-success/40 rounded p-3">
+                        <div class="font-bold text-success mb-2">
                             <template x-if="atkNearMiss">
                                 <span>HIT (4th Dan) - missed TN by <span x-text="Math.abs(atkExcess)"></span>, Matsu 4th Dan turns near-miss into a hit (no extra damage)</span>
                             </template>
@@ -5007,7 +5008,7 @@
                         </div>
 
                         {# Discretionary bonuses (3rd Dan) #}
-                        <div x-show="atkFormula?.adventure_raises_max_per_roll > 0" x-cloak class="mt-2 pt-2 border-t border-green-200">
+                        <div x-show="atkFormula?.adventure_raises_max_per_roll > 0" x-cloak class="mt-2 pt-2 border-t border-success/30">
                             <div class="flex items-center gap-2 text-sm">
                                 <button type="button" @click="atkSpendRaise()"
                                         :disabled="atkRaisesSpent >= (atkFormula?.adventure_raises_max_per_roll || 0)"
@@ -5030,7 +5031,7 @@
                         <div x-show="atkFormula?.is_athletics_attack
                                      && schoolAbilities.togashi_daily_athletics_raises
                                      && (togashiRaisesPoolAvail() > 0 || togashiRaisesSpentThisRoll > 0)"
-                             x-cloak class="mt-2 pt-2 border-t border-green-200">
+                             x-cloak class="mt-2 pt-2 border-t border-success/30">
                             <div class="flex items-center gap-2 flex-wrap text-sm">
                                 <button type="button" @click="atkSpendTogashiRaise()"
                                         :disabled="!canSpendTogashiRaise()"
@@ -5053,7 +5054,7 @@
 
                         {# Conviction: +1 per point spent (attack) #}
                         <div x-show="convictionConfig.rank > 0 && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
-                             x-cloak class="mt-2 pt-2 border-t border-green-200" data-conviction-block-atk>
+                             x-cloak class="mt-2 pt-2 border-t border-success/30" data-conviction-block-atk>
                             <div class="flex items-center gap-2 text-sm">
                                 <button type="button" @click="spendConviction('attack')"
                                         :disabled="!canSpendConviction()"
@@ -5076,7 +5077,7 @@
 
                         {# Priest 5th Dan ally (attack): spend from a party Priest's pool #}
                         <template x-for="priest in priestAllies" :key="'atk-p-' + priest.priest_id">
-                            <div class="mt-2 pt-2 border-t border-green-200"
+                            <div class="mt-2 pt-2 border-t border-success/30"
                                  x-show="priestAllyPoolAvail(priest) > 0 || priestAllySpent(priest.priest_id) > 0"
                                  x-cloak :data-priest-ally-block-atk="priest.priest_id">
                                 <div class="flex items-center gap-2 text-sm">
@@ -5103,7 +5104,7 @@
                         </template>
 
                         {# Mirumoto 3rd Dan: spend points for +2 on attack #}
-                        <div x-show="schoolAbilities.mirumoto_round_points && ((window._trackingBridge?.mirumotoRoundPoints || 0) > 0 || mirumotoPointsSpentThisRoll > 0)" x-cloak class="mt-2 pt-2 border-t border-green-200">
+                        <div x-show="schoolAbilities.mirumoto_round_points && ((window._trackingBridge?.mirumotoRoundPoints || 0) > 0 || mirumotoPointsSpentThisRoll > 0)" x-cloak class="mt-2 pt-2 border-t border-success/30">
                             <div class="flex items-center gap-2 text-sm">
                                 <button type="button"
                                         @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { if (t.canEdit) { t.mirumotoRoundPoints--; } mirumotoPointsSpentThisRoll++; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState(); }"
@@ -5123,7 +5124,7 @@
 
                         {# Akodo 3rd Dan: spend banked bonuses on attack #}
                         <div x-show="schoolAbilities.akodo_wc_attack_bonus && ((akodoBankedBonuses || []).some(b => !b.spent) || akodoSpentThisRoll > 0)" x-cloak
-                             class="mt-2 pt-2 border-t border-green-200">
+                             class="mt-2 pt-2 border-t border-success/30">
                             <div class="text-sm font-medium mb-1">Akodo 3rd Dan - Banked Bonuses</div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <template x-for="(b, i) in akodoBankedBonuses" :key="'akb'+i">
@@ -5143,7 +5144,7 @@
 
                         {# Bayushi 4th Dan: spend banked feint raises on attack #}
                         <div x-show="schoolAbilities.bayushi_post_feint_raise && (bayushiBankedFeintRaise > 0 || bayushiRaisesSpentThisRoll > 0)" x-cloak
-                             class="mt-2 pt-2 border-t border-green-200">
+                             class="mt-2 pt-2 border-t border-success/30">
                             <div class="text-sm font-medium mb-1">Bayushi 4th Dan - Banked Feint Raises</div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <button x-show="bayushiBankedFeintRaise > 0" type="button"
@@ -5161,7 +5162,7 @@
 
                         {# Isawa Duelist 3rd Dan: post-roll TN trade toggle #}
                         <div x-show="schoolAbilities.isawa_tn_trade" x-cloak
-                             class="mt-2 pt-2 border-t border-green-200">
+                             class="mt-2 pt-2 border-t border-success/30">
                             <label class="flex items-center gap-2 text-sm cursor-pointer">
                                 <input type="checkbox" x-model="atkIsawaTnTrade"
                                        @change="const amt = schoolAbilities.isawa_tn_trade_bonus || 0; if (atkIsawaTnTrade) { atkRollTotal += amt; baseTotal += amt; } else { atkRollTotal -= amt; baseTotal -= amt; } _atkUpdateHitState();"
@@ -5175,7 +5176,7 @@
                              class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                             <button type="button"
                                     @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
-                                    class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
+                                    class="bg-success hover:bg-success-dark text-white px-3 py-1 rounded text-xs">
                                 Gain 1 temp VP (Courtier 4th Dan - once per target)
                             </button>
                         </div>
@@ -5188,7 +5189,7 @@
 
                         {# Hida 5th Dan: counterattack excess banked for wound check #}
                         <div x-show="schoolAbilities.hida_counterattack_wc_bonus && atkFormula?.attack_variant === 'counterattack'" x-cloak
-                             class="mt-2 bg-green-50 border border-green-300 rounded p-2 text-xs text-ink/70"
+                             class="mt-2 bg-success/5 border border-success/40 rounded p-2 text-xs text-ink/70"
                              data-testid="hida-5th-dan-banked-note">
                             Hida 5th Dan: banked +<span x-text="atkExcess"></span> for your next wound check (counterattack excess over TN).
                         </div>
@@ -5573,7 +5574,7 @@
                 {# ── CONTESTED ROLL ── #}
                 <div x-show="duelPhase === 'contested'" class="space-y-4">
                     <p class="text-sm text-ink/70">Roll iaijutsu to determine who gets the first option to focus or strike.</p>
-                    <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-green-700 bg-green-50 rounded p-2">
+                    <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-success bg-success/5 rounded p-2">
                         +<span x-text="duelRestartBonus"></span> bonus from winning previous round(s)
                     </div>
                     <div class="flex items-center gap-3">
@@ -5654,7 +5655,7 @@
                             <div class="text-2xl font-bold" x-text="duelOpponentTN"></div>
                         </div>
                     </div>
-                    <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-green-700 bg-green-50 rounded p-2">
+                    <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-success bg-success/5 rounded p-2">
                         +<span x-text="duelRestartBonus"></span> bonus from winning previous round(s)
                     </div>
                     <div class="flex justify-between">
@@ -5709,8 +5710,8 @@
                     </div>
 
                     {# HIT #}
-                    <div x-show="duelStrikeHit" x-cloak class="bg-green-50 border border-green-300 rounded p-3">
-                        <div class="font-bold text-green-800 mb-2">
+                    <div x-show="duelStrikeHit" x-cloak class="bg-success/5 border border-success/40 rounded p-3">
+                        <div class="font-bold text-success mb-2">
                             HIT - exceeded TN by <span x-text="duelStrikeExcess"></span>
                             (<span x-text="duelStrikeExcess"></span> extra damage dice!)
                         </div>
@@ -5821,7 +5822,7 @@
                         <div class="font-bold text-ink mb-2">Both duelists missed - resheathe and restart</div>
                         <p class="text-sm text-ink/70">
                             <template x-if="duelStrikeRoll >= parseInt(duelOpponentRoll || '0')">
-                                <span class="text-green-700 font-medium">You rolled higher - you receive a free raise (+5) on future iaijutsu rolls.</span>
+                                <span class="text-success font-medium">You rolled higher - you receive a free raise (+5) on future iaijutsu rolls.</span>
                             </template>
                             <template x-if="duelStrikeRoll < parseInt(duelOpponentRoll || '0')">
                                 <span class="text-red-700 font-medium">Opponent rolled higher - they receive the bonus.</span>
@@ -5935,10 +5936,10 @@
                                 <div class="text-ink/70 italic">Hiruma 4th Dan: all action dice lowered by 2 (min 1).</div>
                             </template>
                             <template x-if="actionDice.some(d => d.athletics_only && !d.mantis_4th_dan)">
-                                <div class="text-sky-700 italic">Togashi Special: the blue action die is a bonus die that may only be spent on athletics actions.</div>
+                                <div class="text-info italic">Togashi Special: the blue action die is a bonus die that may only be spent on athletics actions.</div>
                             </template>
                             <template x-if="actionDice.some(d => d.mantis_4th_dan)">
-                                <div class="text-sky-700 italic">Mantis 4th Dan: the blue action die may only be spent on movement, athletics actions, or the Mantis 3rd Dan technique.</div>
+                                <div class="text-info italic">Mantis 4th Dan: the blue action die may only be spent on movement, athletics actions, or the Mantis 3rd Dan technique.</div>
                             </template>
                         </div>
                         <div x-show="perRoundResetMessages.length > 0" x-cloak
@@ -6342,7 +6343,7 @@
                         <div class="flex gap-2">
                             <button type="button"
                                     @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 4; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
-                                    class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
+                                    class="bg-success hover:bg-success-dark text-white px-3 py-1 rounded text-xs">
                                 Succeeded (+4 temp VP)
                             </button>
                             <button type="button"
@@ -6398,7 +6399,7 @@
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <button type="button"
                                 @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
-                                class="bg-green-700 hover:bg-green-800 text-white px-3 py-1 rounded text-xs">
+                                class="bg-success hover:bg-success-dark text-white px-3 py-1 rounded text-xs">
                             Gain 1 temp VP (Courtier 4th Dan - once per target)
                         </button>
                     </div>

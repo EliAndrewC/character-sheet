@@ -543,5 +543,5 @@ def test_group_summary_unlucky_chips_render_correct_styling_per_character(
     beta_classes = beta_chip.get_attribute("class") or ""
     assert "bg-amber-200" in alpha_classes
     assert "line-through" not in alpha_classes
-    assert "bg-gray-300" in beta_classes
+    assert "bg-ink/20" in beta_classes
     assert "line-through" in beta_classes

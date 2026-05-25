@@ -207,7 +207,7 @@ class TestGroupSummaryPage:
         resp = client.get(f"/groups/{gid}")
         body = resp.text
         assert 'data-honor-mod="virtue"' in body
-        assert "text-blue-700" in body
+        assert "text-info" in body
         # Detail text surfaces in the tooltip-content.
         assert "Virtue: Courage" in body
 
@@ -306,7 +306,7 @@ class TestGroupSummaryPage:
         # the line-through + cursor-default plus the gray background.
         assert "line-through" in body
         assert "cursor-default" in body
-        assert "bg-gray-300" in body
+        assert "bg-ink/20" in body
         # The explanation tooltip is wired up via the standard
         # tooltip-trigger / tooltip-content pattern.
         assert 'data-testid="card-unlucky-used-tooltip"' in body
