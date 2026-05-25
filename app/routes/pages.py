@@ -1064,7 +1064,7 @@ def roll_history_page(
     """
     from app.models import RollHistory
     from app.routes.rolls import _iso_utc
-    from app.services.roll_descriptions import describe_roll
+    from app.services.roll_descriptions import describe_roll, label_for_roll
 
     user = getattr(request.state, "user", None)
     if not user:
@@ -1119,7 +1119,7 @@ def roll_history_page(
         {
             "id": r.id,
             "roll_key": r.roll_key,
-            "roll_label": r.roll_label,
+            "roll_label": label_for_roll(r.roll_key, r.payload),
             "payload": r.payload or {},
             "tn": r.tn,
             "impaired_at_roll": bool(r.impaired_at_roll),

@@ -295,8 +295,9 @@ The three failures were:
 - [x] 1st Dan picks persist across reload -> `test_school_abilities.py::test_isawa_ishi_1st_dan_picks_persist_across_reload`
 - [x] 2nd Dan skill selection dropdown -> `test_school_abilities.py::test_isawa_ishi_2nd_dan_skill_selection`
 - [x] VP max display and spend cap behavioral -> `test_school_abilities.py::test_isawa_ishi_vp_max_behavioral`
-- [x] 3rd Dan add-to-roll button visible -> `test_school_abilities.py::test_ishi_3rd_dan_add_button_visible` (xfail: Isawa Ishi e2e creation issue)
-- [x] 3rd Dan add-to-roll button deducts VP and opens modal -> `test_school_abilities.py::test_ishi_3rd_dan_add_roll` (xfail: Isawa Ishi e2e creation issue)
+- [x] 3rd Dan add-to-roll button visible -> `test_school_abilities.py::test_ishi_3rd_dan_add_button_visible`
+- [x] 3rd Dan add-to-roll button deducts VP, opens modal, and records to Roll History -> `test_school_abilities.py::test_ishi_3rd_dan_add_roll`
+- [x] Spend-VP Xk1 roll (Ide/Ishi 3rd Dan) is recorded to Roll History -> `test_school_abilities.py::test_spend_vp_xk1_roll_recorded_in_history`
 - [x] Absorb Void is per-day for Isawa Ishi (Reset button rendered with the per-day tooltip) -> `test_school_abilities.py::test_isawa_ishi_absorb_void_has_per_day_reset_button`
 
 ### Kakita

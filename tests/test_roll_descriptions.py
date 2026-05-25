@@ -1,7 +1,28 @@
 """Unit tests for the roll-key -> explainer resolver."""
 
 from app.game_data import SCHOOL_KNACKS, SCHOOLS, SKILLS
-from app.services.roll_descriptions import describe_roll
+from app.services.roll_descriptions import describe_roll, label_for_roll
+
+
+def test_label_from_payload_title():
+    """The display label is the title captured in the payload (the value that
+    used to be duplicated into the dropped roll_label column)."""
+    assert label_for_roll("skill:bragging", {"title": "Bragging"}) == "Bragging"
+    assert label_for_roll("spend_vp_xk1:ide_diplomat", {"title": "Ide 3rd Dan"}) == "Ide 3rd Dan"
+    assert label_for_roll("attack:damage", {"title": "Damage"}) == "Damage"
+
+
+def test_label_falls_back_to_key_explainer_when_payload_has_no_title():
+    # Defensive: a malformed payload (no real roller produces this) falls back
+    # to the explainer title for the key, then the raw key.
+    assert "Wound Check" in label_for_roll("wound_check", {})
+    assert "Wound Check" in label_for_roll("wound_check", None)
+    assert label_for_roll("totally_unknown", {}) == "totally_unknown"
+
+
+def test_label_empty_key_and_payload():
+    assert label_for_roll("", None) == "Roll"
+    assert label_for_roll(None, {}) == "Roll"
 
 
 def test_unknown_key_falls_back():
@@ -66,6 +87,30 @@ def test_hardcoded_freeform():
 def test_hardcoded_spend_vp_xk1():
     out = describe_roll("spend_vp_xk1")
     assert "Void" in out["title"]
+
+
+def test_spend_vp_xk1_school_keyed_shows_isawa_ishi_3rd_dan():
+    """The ":<school>" suffix resolves to that school's actual 3rd Dan rules
+    text so the Roll History tooltip explains the real mechanic."""
+    out = describe_roll("spend_vp_xk1:isawa_ishi")
+    assert "Isawa Ishi" in out["title"]
+    assert "3rd Dan" in out["title"]
+    # Body is the canonical 3rd Dan technique text, not the generic blurb.
+    assert out["body"] == SCHOOLS["isawa_ishi"].techniques[3]
+    assert "precepts" in out["body"]
+
+
+def test_spend_vp_xk1_school_keyed_shows_ide_diplomat_3rd_dan():
+    out = describe_roll("spend_vp_xk1:ide_diplomat")
+    assert "Ide Diplomat" in out["title"]
+    assert out["body"] == SCHOOLS["ide_diplomat"].techniques[3]
+    assert "subtract" in out["body"].lower()
+    assert "tact" in out["body"]
+
+
+def test_spend_vp_xk1_unknown_school_falls_back_to_generic():
+    out = describe_roll("spend_vp_xk1:not_a_real_school")
+    assert "Void" in out["title"]  # generic _HARDCODED blurb
 
 
 def test_skill_resolves_via_game_data():

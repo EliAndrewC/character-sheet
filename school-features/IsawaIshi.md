@@ -83,12 +83,21 @@
 
 > After another character makes a roll for which void points may be spent, you may spend one void point to roll Xk1 and add the result to their total, where X is your precepts skill. You may only do this once per roll.
 
-**Status:** Out of scope - requires cross-sheet interaction (adding roll results to another character's total).
+**Status:** Implemented on the Isawa's side; the cross-sheet auto-add stays manual.
+- `school_abilities` exposes `ishi_add_roll` (true when `school == "isawa_ishi"` and Dan >= 3) and `ishi_add_x` (= precepts skill rank) in `app/routes/pages.py:721-723`.
+- The Isawa's sheet shows a "Isawa Ishi 3rd Dan - Add to Roll" button ("Spend 1 VP to add Xk1"); clicking it calls `rollSpendVPForXk1({ x, title })` in `app/templates/character/sheet.html`, which deducts 1 VP (temp > regular > worldliness) and rolls Xk1 (10s reroll on).
+- The roll **is recorded to Roll History** with `roll_key = "spend_vp_xk1:isawa_ishi"` and label "Isawa Ishi 3rd Dan". The history tooltip resolves that key to this school's actual 3rd Dan technique rules text via the `spend_vp_xk1:<school_id>` branch in `app/services/roll_descriptions.py` (which reads `school.techniques[3]`); a bare `spend_vp_xk1` key falls back to a generic blurb. (Before the fix, `rollSpendVPForXk1` filled the modal but never called `_saveRollHistoryCreate()`, so these rolls never appeared in the history at all.)
+- Still manual / out of scope: actually adding the rolled result to the *other* character's total is a cross-sheet interaction; the Isawa player relays the result verbally. Same shape as the Ide Diplomat 3rd Dan subtract-from-roll (which shares `rollSpendVPForXk1`).
 
 **Questions (ANSWERED):**
 - Triggered from the Isawa's side (the Isawa decides to spend their VP to help another character).
 - Uses the Isawa's precepts skill rank for X.
 - "Once per roll" means each roll can only receive this bonus once.
+
+**Clicktests:**
+- `test_school_abilities.py::test_ishi_3rd_dan_add_button_visible`
+- `test_school_abilities.py::test_ishi_3rd_dan_add_roll` (deducts VP, opens modal, records to history)
+- `test_school_abilities.py::test_spend_vp_xk1_roll_recorded_in_history` (shared recording path, via the Ide button)
 
 ---
 

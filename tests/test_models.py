@@ -632,7 +632,6 @@ class TestRollHistory:
         roll = RollHistory(
             character_id=char.id,
             roll_key="skill:bragging",
-            roll_label="Bragging",
             actor_discord_id="o1",
             is_owner_roll=True,
             impaired_at_roll=False,
@@ -667,7 +666,6 @@ class TestRollHistory:
         roll = RollHistory(
             character_id=char.id,
             roll_key="skill:bragging",
-            roll_label="Bragging",
             actor_discord_id="o1",
             is_owner_roll=True,
             impaired_at_roll=False,
@@ -685,13 +683,13 @@ class TestRollHistory:
         db.flush()
         # Attack roll: TN known
         attack = RollHistory(
-            character_id=char.id, roll_key="attack", roll_label="Attack",
+            character_id=char.id, roll_key="attack",
             actor_discord_id="o1", is_owner_roll=True,
             impaired_at_roll=False, tn=35, payload={"total": 40},
         )
         # Skill roll: TN unknown
         skill = RollHistory(
-            character_id=char.id, roll_key="skill:bragging", roll_label="Bragging",
+            character_id=char.id, roll_key="skill:bragging",
             actor_discord_id="o1", is_owner_roll=True,
             impaired_at_roll=False, tn=None, payload={"total": 20},
         )
@@ -707,7 +705,7 @@ class TestRollHistory:
         db.flush()
         roll = RollHistory(
             character_id=char.id, roll_key="skill:bragging",
-            roll_label="Bragging", actor_discord_id="o1",
+            actor_discord_id="o1",
             is_owner_roll=True, impaired_at_roll=False, payload={},
         )
         db.add(roll)
@@ -724,7 +722,7 @@ class TestRollHistory:
         db.flush()
         roll = RollHistory(
             character_id=char.id, roll_key="initiative",
-            roll_label="Initiative", actor_discord_id="o1",
+            actor_discord_id="o1",
             is_owner_roll=True, impaired_at_roll=False, payload={},
         )
         db.add(roll)

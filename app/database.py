@@ -36,8 +36,9 @@ def init_db():
 
     Base.metadata.create_all(bind=engine)
 
-    # Simple migration: add columns that may be missing from older schemas.
-    # SQLite supports ADD COLUMN but not ALTER/DROP, which is fine for us.
+    # Simple migration: add columns missing from older schemas (and drop the
+    # retired roll_history.roll_label column). Modern SQLite (>=3.35) supports
+    # both ADD COLUMN and DROP COLUMN.
     _migrate_add_columns()
     _migrate_legacy_specializations(SessionLocal())
 
@@ -167,6 +168,17 @@ def _migrate_add_columns():
             cursor.execute(
                 f"ALTER TABLE users ADD COLUMN {col_name} {col_type} DEFAULT {default}"
             )
+
+    # Roll History: roll_label was dropped in favour of deriving the display
+    # label from payload.title at read time (see
+    # app/services/roll_descriptions.label_for_roll). Drop the now-unused column
+    # from older DBs that still have it. Idempotent - only fires when present,
+    # which on a fresh test DB it never is (create_all builds the table without
+    # it), so this branch is exercised only against the persistent prod volume.
+    cursor.execute("PRAGMA table_info(roll_history)")
+    rh_cols = {row[1] for row in cursor.fetchall()}
+    if "roll_label" in rh_cols:  # pragma: no cover
+        cursor.execute("ALTER TABLE roll_history DROP COLUMN roll_label")
 
     # Seed initial gaming groups if the table is empty (first deploy only).
     cursor.execute("SELECT COUNT(*) FROM gaming_groups")
