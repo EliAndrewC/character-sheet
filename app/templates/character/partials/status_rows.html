@@ -31,7 +31,7 @@
          {% if has_honor_perception %}@click="expanded = !expanded"{% endif %}>
         <div class="text-sm text-ink/60">Honor</div>
         <div class="flex items-center gap-3 min-w-0">
-            <div class="text-xl font-bold">{{ character.honor }}</div>
+            <div class="text-xl font-bold tabular-nums">{{ character.honor }}</div>
             {% if has_honor_perception %}
             <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -81,7 +81,7 @@
         </span>
         {% endif %}
         <div class="flex items-center gap-2 shrink-0 ml-auto">
-            <span class="text-xl font-bold">{{ character.rank }}</span>
+            <span class="text-xl font-bold tabular-nums">{{ character.rank }}</span>
             {% if has_rank_detail %}
             <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -138,7 +138,7 @@
         </span>
         {% endif %}
         <div class="flex items-center gap-2 shrink-0 ml-auto">
-            <span class="text-xl font-bold">{{ character.recognition }}</span>
+            <span class="text-xl font-bold tabular-nums">{{ character.recognition }}</span>
             {% if has_recog_detail %}
             <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>

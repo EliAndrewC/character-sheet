@@ -258,7 +258,7 @@
 
     <!-- GOOGLE SHEETS EXPORT BANNERS -->
     {% if request.query_params.get('sheets_url') %}
-    <div class="bg-green-100 border border-green-400 text-green-800 rounded px-4 py-2 text-sm flex items-center justify-between mb-4">
+    <div class="bg-success/10 border border-success/50 text-success rounded px-4 py-2 text-sm flex items-center justify-between mb-4">
         <span>Character exported to Google Sheets.</span>
         <a href="{{ request.query_params.get('sheets_url') }}" target="_blank" rel="noopener"
            class="underline font-medium ml-2 whitespace-nowrap">Open Sheet</a>
@@ -280,13 +280,13 @@
 
     <!-- CHARACTER ART BANNERS -->
     {% if request.query_params.get('art_saved') %}
-    <div class="bg-green-100 border border-green-400 text-green-800 rounded px-4 py-2 text-sm mb-4"
+    <div class="bg-success/10 border border-success/50 text-success rounded px-4 py-2 text-sm mb-4"
          data-testid="art-saved-banner">
         Character art saved.
     </div>
     {% endif %}
     {% if request.query_params.get('art_deleted') %}
-    <div class="bg-green-100 border border-green-400 text-green-800 rounded px-4 py-2 text-sm mb-4"
+    <div class="bg-success/10 border border-success/50 text-success rounded px-4 py-2 text-sm mb-4"
          data-testid="art-deleted-banner">
         Character art removed.
     </div>
@@ -328,7 +328,7 @@
                 :data-state="isHidden ? 'hidden' : 'visible'"
                 :class="isHidden
                     ? 'bg-amber-100 hover:bg-amber-200 border-amber-400 text-amber-900'
-                    : 'bg-emerald-100 hover:bg-emerald-200 border-emerald-400 text-emerald-900'"
+                    : 'bg-success/10 hover:bg-success/20 border-success/50 text-success'"
                 :title="isHidden
                     ? 'Hidden - only editors can see this character. Click to make visible.'
                     : 'Visible to everyone in your gaming groups. Click to hide.'"
@@ -995,7 +995,7 @@
                                 <template x-if="award.type === 'good_reputation' || award.type === 'bad_reputation'">
                                     <span class="text-xs font-bold px-2 py-0.5 rounded"
                                           :class="award.type === 'good_reputation'
-                                              ? 'bg-green-100 text-green-800'
+                                              ? 'bg-success/10 text-success'
                                               : 'bg-red-100 text-red-800'"
                                           x-text="award.type === 'good_reputation' ? 'Good Reputation' : 'Bad Reputation'"></span>
                                 </template>
@@ -1081,7 +1081,7 @@
                         <div class="flex gap-2">
                             <button type="button" @click="awardModalRepType = 'good_reputation'"
                                     data-action="award-rep-good"
-                                    :class="awardModalRepType === 'good_reputation' ? 'bg-green-100 border-green-500 font-bold' : 'bg-ink/5 border-ink/20'"
+                                    :class="awardModalRepType === 'good_reputation' ? 'bg-success/10 border-success/60 font-bold' : 'bg-ink/5 border-ink/20'"
                                     class="flex-1 text-sm border rounded px-3 py-2 transition-colors">
                                 Good Reputation
                                 <div class="text-xs text-ink/50 font-normal mt-0.5">+2.0 Rank, +1.0 Recognition</div>
@@ -1332,7 +1332,7 @@
                                            :disabled="{% if did == 'poor' %}true{% else %}exclusionReason('{{ did }}') !== null{% endif %}"
                                            class="rounded text-accent">
                                     <span>{{ dis.name }}</span>
-                                    <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
+                                    <span class="text-xs text-success ml-auto">+{{ dis.xp_value }} XP</span>
                                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
                                          x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
                                         {{ dis.description }}
@@ -1440,7 +1440,7 @@
                                            :disabled="exclusionReason('{{ did }}') !== null"
                                            class="rounded text-accent">
                                     <span>{{ dis.name }}</span>
-                                    <span class="text-xs text-green-700 ml-auto">+{{ dis.xp_value }} XP</span>
+                                    <span class="text-xs text-success ml-auto">+{{ dis.xp_value }} XP</span>
                                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
                                          x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
                                         {{ dis.description }}
@@ -1561,7 +1561,7 @@
                                   x-text="'(' + 150 + ' starting + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
                         </span>
                         <span class="mx-1 sm:mx-2">-</span>
-                        <span :class="remainingXp() >= 0 ? 'text-green-700' : 'text-red-600 font-bold'">
+                        <span :class="remainingXp() >= 0 ? 'text-success' : 'text-red-600 font-bold'">
                             Unspent: <strong class="font-mono" x-text="remainingXp()"></strong>
                         </span>
                     </div>
@@ -1574,7 +1574,7 @@
                     </button>
                     <div class="relative">
                         <button type="button" @click="sheetsMenu = !sheetsMenu"
-                                class="bg-green-700 hover:bg-green-800 text-parchment px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm flex items-center gap-1">
+                                class="bg-success hover:bg-success-dark text-parchment px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm flex items-center gap-1">
                             Google Sheets
                             <svg class="w-3 h-3" :class="sheetsMenu ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </button>
@@ -1611,7 +1611,7 @@
                     <div class="relative"
                          x-data="{ artMenu: false, confirmOverwrite: false, confirmingDelete: false }">
                         <button type="button" @click="artMenu = !artMenu"
-                                class="bg-indigo-700 hover:bg-indigo-800 text-parchment px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm flex items-center gap-1"
+                                class="bg-info hover:bg-info-dark text-parchment px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm flex items-center gap-1"
                                 data-action="character-art-menu">
                             Character Art
                             <svg class="w-3 h-3" :class="artMenu ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>

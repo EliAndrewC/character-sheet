@@ -224,12 +224,13 @@ def test_anonymous_roll_does_not_persist(page, page_anon, live_server_url):
 
 
 def test_roll_history_button_visible_for_editor(page, live_server_url):
-    """Owner (editor) sees a blue Roll History button in the top-right."""
+    """Owner (editor) sees the Roll History button (brand 'info' colour) in the
+    top-right."""
     _create_owner_character(page, live_server_url, name="RHBtnEditor")
     btn = page.locator('[data-action="roll-history"]')
     assert btn.is_visible()
     cls = btn.get_attribute("class") or ""
-    assert "bg-blue-700" in cls, f"button should be blue, got class={cls}"
+    assert "bg-info" in cls, f"button should use the info colour, got class={cls}"
 
 
 def test_roll_history_button_hidden_for_anonymous(page, page_anon, live_server_url):
