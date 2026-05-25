@@ -858,6 +858,9 @@ def test_roll_history_page_200_for_editor(client):
     resp = client.get(f"/characters/{char.id}/roll-history")
     assert resp.status_code == 200
     assert "Roll History" in resp.text
+    # The roll-type column header reads "Type of Roll" (not just "Roll", which
+    # is ambiguous with the roll's result).
+    assert "Type of Roll" in resp.text
 
 
 def test_roll_history_page_embeds_rolls_json(client):

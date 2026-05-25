@@ -2,25 +2,102 @@
 
 {% block title %}{{ character.name }} - Roll History{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* ── Roll History page (scoped: rh- prefix) ──────────────────────
+       Desktop is an aligned table (header row + data rows share one grid
+       template); mobile collapses each row into a stacked card. This keeps
+       the familiar tabular layout the page always had while fixing the
+       horizontal overflow the old fixed 7-column grid caused on phones. */
+    .rh-head { display: none; }
+    .rh-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "roll  result"
+            "time  tn"
+            "note  note"
+            "acts  acts";
+        column-gap: 0.75rem;
+        row-gap: 0.3rem;
+        align-items: center;
+    }
+    .rh-row__time   { grid-area: time;   }
+    .rh-row__roll   { grid-area: roll;   min-width: 0; }
+    .rh-row__tn     { grid-area: tn;     justify-self: end; text-align: right; }
+    .rh-row__result { grid-area: result; justify-self: end; text-align: right; overflow-wrap: anywhere; }
+    .rh-row__note   { grid-area: note;   }
+    .rh-row__acts   { grid-area: acts;   justify-self: end; }
+
+    @media (min-width: 640px) {
+        /* Header and data rows are independent grids, so their column
+           templates must resolve to identical widths or they drift. That
+           means a shared column-gap AND a fixed (not content-sized `auto`)
+           last column - otherwise the empty header cell and the button-
+           filled row cell size differently and shift everything. */
+        .rh-head { display: grid; }
+        .rh-head, .rh-row {
+            grid-template-columns: 4.5rem minmax(9rem, 1fr) 4rem 5rem minmax(7rem, 1.3fr) 6.5rem;
+            grid-template-areas: "time roll tn result note acts";
+            column-gap: 0.75rem;
+            align-items: center;
+            row-gap: 0;
+        }
+    }
+
+    /* Ghost note input: invisible until you hover or focus it, so empty
+       notes don't add table clutter. */
+    .rh-note-input {
+        background: transparent;
+        border: 0;
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+    .rh-note-input::placeholder { color: rgba(44, 24, 16, 0.3); }
+    .rh-note-input:hover  { border-bottom-color: rgba(44, 24, 16, 0.15); }
+    .rh-note-input:focus  { outline: none; border-bottom-color: #8b0000; }
+
+    /* Gentle staggered load-in for each date section. */
+    @keyframes rh-fade-up {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: none; }
+    }
+    .rh-section { animation: rh-fade-up 0.35s ease both; }
+    @media (prefers-reduced-motion: reduce) {
+        .rh-section { animation: none; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="max-w-6xl mx-auto"
+<div class="max-w-4xl mx-auto"
      x-data="rollHistoryPage()"
      x-init="init()"
      data-testid="roll-history-page">
 
-    <div class="flex items-center justify-between gap-4 mb-4">
-        <div>
-            <a href="/characters/{{ character.id }}"
-               class="text-sm text-ink/60 hover:text-ink">&larr; Back to {{ character.name }}</a>
-            <h1 class="text-3xl font-bold mt-1">Roll History</h1>
+    {# ── Header ────────────────────────────────────────────────── #}
+    <header class="mb-5">
+        <a href="/characters/{{ character.id }}"
+           class="inline-flex items-center gap-1 text-sm text-ink/55 hover:text-accent transition-colors">
+            <span aria-hidden="true">&larr;</span> Back to {{ character.name }}
+        </a>
+        <div class="flex flex-wrap items-end justify-between gap-3 mt-2">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight">Roll History</h1>
+                <p class="text-sm text-ink/45 mt-0.5" x-show="rolls.length" x-cloak>
+                    <span x-text="rolls.length"></span> roll<span x-show="rolls.length !== 1">s</span> recorded
+                </p>
+            </div>
+            <label class="flex items-center gap-2 text-xs font-medium text-ink/60 cursor-pointer select-none
+                          bg-white border border-ink/15 rounded-full px-3 py-1.5 shadow-sm hover:border-ink/30 transition-colors">
+                <input type="checkbox" x-model="showHidden"
+                       data-action="toggle-show-hidden"
+                       class="rounded accent-accent text-accent">
+                <span>Show hidden rolls</span>
+            </label>
         </div>
-        <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" x-model="showHidden"
-                   data-action="toggle-show-hidden"
-                   class="rounded text-accent">
-            <span>Show hidden rolls</span>
-        </label>
-    </div>
+        <div class="mt-3 h-px bg-gradient-to-r from-gold/50 via-ink/10 to-transparent"></div>
+    </header>
 
     {# JSON blob: the server passes the full roll list, including hidden
        rolls. Client-side grouping and filtering keep the toggle snappy. #}
@@ -28,71 +105,128 @@
     <script type="application/json" id="viewer-data">{{ {"discord_id": viewer_discord_id}|tojson }}</script>
 
     <template x-if="visibleGroups().length === 0">
-        <p class="text-ink/60 italic py-8 text-center" data-testid="empty-state">
-            No rolls recorded yet.
-        </p>
+        <div data-testid="empty-state"
+             class="text-center py-16 px-4 border border-dashed border-ink/15 rounded-lg bg-white/40">
+            <svg viewBox="0 0 40 46" class="w-10 h-12 mx-auto opacity-25" aria-hidden="true">
+                <polygon points="20,2 38,16 31,44 9,44 2,16"
+                         fill="none" stroke="#2c1810" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+            <p class="text-ink/55 italic mt-3">No rolls recorded yet.</p>
+            <p class="text-ink/35 text-sm mt-1">Rolls you make on the character sheet will appear here.</p>
+        </div>
     </template>
 
-    <template x-for="group in visibleGroups()" :key="group.dateLabel">
-        <section class="mb-6">
-            <h2 class="text-lg font-bold text-accent mb-2" x-text="group.dateLabel"
-                data-testid="date-section-header"></h2>
-            <div class="bg-white rounded-lg shadow border border-ink/10 divide-y divide-ink/10">
-                <template x-for="r in group.items" :key="r.id">
-                    <div :class="r.is_hidden ? 'opacity-50 line-through bg-gray-50' : ''"
-                         class="grid grid-cols-[5rem_minmax(8rem,1fr)_4rem_5rem_5rem_minmax(10rem,2fr)_5rem] gap-2 items-center px-3 py-2 text-sm"
-                         :data-roll-id="r.id"
-                         :data-is-hidden="r.is_hidden ? '1' : '0'">
+    <template x-for="(group, gi) in visibleGroups()" :key="group.dateLabel">
+        <section class="rh-section mb-7" :style="'animation-delay:' + (gi * 50) + 'ms'">
 
-                        <div class="font-mono" x-text="formatLocalTime(r.created_at)"
+            {# Chronicle-style date divider: small-caps label trailing into a
+               fading gold hairline. #}
+            <div class="flex items-center gap-3 mb-2">
+                <h2 class="text-xs font-bold uppercase tracking-[0.18em] text-accent shrink-0"
+                    x-text="group.dateLabel"
+                    data-testid="date-section-header"></h2>
+                <span class="h-px flex-1 bg-gradient-to-r from-gold/40 to-transparent"></span>
+            </div>
+
+            {# No overflow-hidden here: it would clip the row tooltips, which
+               are absolutely positioned and need to spill over the card. #}
+            <div class="bg-white rounded-lg shadow-sm border border-ink/10 divide-y divide-ink/[0.07]">
+
+                {# Column headers (desktop only). The card's divide-y draws the
+                   rule below this row, so no explicit border-b here. #}
+                <div class="rh-head rounded-t-lg px-4 py-2 bg-ink/[0.03]
+                            text-[10px] font-semibold uppercase tracking-[0.12em] text-ink/40">
+                    <span>Time</span>
+                    <span>Type of Roll</span>
+                    <span class="text-right">TN</span>
+                    <span class="text-right">Result</span>
+                    <span class="pl-3">Note</span>
+                    <span></span>
+                </div>
+
+                <template x-for="r in group.items" :key="r.id">
+                    <div class="rh-row group px-4 py-3 text-sm cursor-pointer hover:bg-ink/[0.02] transition-colors"
+                         :class="r.is_hidden ? 'opacity-50' : ''"
+                         :data-roll-id="r.id"
+                         :data-is-hidden="r.is_hidden ? '1' : '0'"
+                         @click="rowClick(r, $event)">
+
+                        <div class="rh-row__time font-mono text-xs text-ink/50 tabular-nums"
+                             x-text="formatLocalTime(r.created_at)"
                              data-testid="roll-time"></div>
 
-                        <div class="tooltip-trigger relative" data-testid="roll-type">
-                            <span x-text="r.roll_label || r.roll_key"></span>
+                        {# Flex container, NOT itself a tooltip trigger: the
+                           roll-type label and the Impaired tag are separate
+                           triggers so each shows only its own tooltip. #}
+                        <div class="rh-row__roll flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
+                            <span class="tooltip-trigger relative font-medium text-ink cursor-help"
+                                  data-tooltip-clamp data-testid="roll-type">
+                                <span x-text="r.roll_label || r.roll_key"></span>
+                                <div class="tooltip-content absolute left-0 top-full z-20 mt-1 p-3 bg-ink text-parchment text-xs font-normal leading-snug rounded shadow-lg w-72 whitespace-pre-line"
+                                     data-testid="roll-explainer">
+                                    <strong x-text="r.description.title"></strong>
+                                    <template x-if="r.description.body">
+                                        <p class="mt-1" x-text="r.description.body"></p>
+                                    </template>
+                                </div>
+                            </span>
+                            <template x-if="r.impaired_at_roll">
+                                <span class="tooltip-trigger relative align-middle cursor-help
+                                             text-[10px] uppercase tracking-wide
+                                             text-accent/80 border border-accent/30 rounded px-1"
+                                      data-tooltip-clamp data-testid="impaired-tag">
+                                    impaired
+                                    <div class="tooltip-content absolute left-0 top-full z-20 mt-1 p-3 bg-ink text-parchment text-xs font-normal normal-case tracking-normal leading-snug rounded shadow-lg w-64"
+                                         data-testid="impaired-explainer">{{ character.name }} was Impaired when making this roll and could not reroll 10s.</div>
+                                </span>
+                            </template>
+                            <template x-if="r.is_hidden">
+                                <span class="align-middle text-[10px] uppercase tracking-wide
+                                             text-ink/40 border border-ink/20 rounded px-1">hidden</span>
+                            </template>
                             <template x-if="!r.is_owner_roll">
-                                <span class="ml-2 text-xs text-ink/50"
+                                <span class="text-xs text-ink/50"
                                       data-testid="non-owner-badge"
                                       x-text="'[by ' + r.actor_name + ']'"></span>
                             </template>
-                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
-                                 data-testid="roll-explainer">
-                                <strong x-text="r.description.title"></strong>
-                                <template x-if="r.description.body">
-                                    <p class="mt-1" x-text="r.description.body"></p>
-                                </template>
-                            </div>
                         </div>
 
-                        <div class="font-mono text-right text-ink/60"
+                        <div class="rh-row__tn font-mono text-xs text-ink/45 tabular-nums"
                              x-text="(r.tn !== null && r.tn !== undefined) ? ('TN ' + r.tn) : ''"
                              data-testid="roll-tn"></div>
 
-                        <div class="font-mono text-right" x-text="resultText(r)"
-                             data-testid="roll-result"></div>
-
-                        <div>
-                            <button type="button" data-action="view-roll"
-                                    @click="openRoll(r)"
-                                    class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">
-                                View
-                            </button>
+                        <div class="rh-row__result">
+                            <span :class="resultClass(r)" x-text="resultText(r)"
+                                  data-testid="roll-result"></span>
                         </div>
 
-                        <div>
-                            <input type="text" rows="1"
+                        <div class="rh-row__note">
+                            <input type="text"
                                    x-model="r.annotation"
                                    @input="scheduleAnnotationSave(r)"
                                    data-action="annotation-input"
                                    placeholder="Add a note..."
-                                   class="w-full text-xs border border-ink/20 rounded px-2 py-1">
+                                   class="rh-note-input w-full text-xs text-ink/70 px-0 py-1 cursor-text">
                         </div>
 
-                        <div>
+                        <div class="rh-row__acts flex items-center justify-end gap-2">
                             <button type="button"
                                     :data-action="r.is_hidden ? 'unhide-roll' : 'hide-roll'"
-                                    @click="toggleHide(r)"
-                                    class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded"
+                                    @click.stop="toggleHide(r)"
+                                    class="text-xs text-ink/55 border border-ink/15 hover:bg-ink/5
+                                           px-2.5 py-1 rounded transition-colors"
                                     x-text="r.is_hidden ? 'Unhide' : 'Hide'">
+                            </button>
+                            {# Keyboard-accessible "open details" affordance; the
+                               whole row is also clickable (see rowClick). #}
+                            <button type="button" data-action="view-roll"
+                                    @click.stop="openRoll(r)"
+                                    title="View roll details" aria-label="View roll details"
+                                    class="shrink-0 p-1 rounded text-ink/30 group-hover:text-ink/55
+                                           hover:!text-accent hover:bg-accent/10 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
                             </button>
                         </div>
                     </div>
@@ -168,6 +302,32 @@
                 return '';
             },
 
+            hasTn(r) {
+                return r.tn !== null && r.tn !== undefined;
+            },
+
+            isSuccess(r) {
+                // A roll "succeeds" when it has a target number and the
+                // recorded total meets or beats it. Only TN-bearing rolls
+                // (attacks, wound checks) get the pass/fail treatment.
+                if (!this.hasTn(r)) return false;
+                const t = (r.payload && typeof r.payload.total === 'number')
+                    ? r.payload.total : null;
+                return t !== null && t >= r.tn;
+            },
+
+            resultClass(r) {
+                // Every result uses the same padded box so the digits line up
+                // whether or not there's a TN. Only the fill/colour varies:
+                // a TN hit reuses the sheet's "gold 10-die" colours, a miss is
+                // muted, and a no-TN roll is a plain number on a clear box.
+                const box = 'inline-block font-mono font-bold tabular-nums px-2 py-0.5 rounded-md ';
+                if (!this.hasTn(r)) return box + 'text-ink';
+                return box + (this.isSuccess(r)
+                    ? 'bg-[#fff7e0] text-accent ring-1 ring-gold/40'
+                    : 'bg-ink/5 text-ink/45');
+            },
+
             visibleGroups() {
                 const filtered = this.showHidden
                     ? this.rolls
@@ -187,6 +347,17 @@
                 // Newest date first.
                 return Array.from(byDate.values())
                     .sort((a, b) => b.sortKey - a.sortKey);
+            },
+
+            rowClick(r, ev) {
+                // The whole row opens the read-only results modal, EXCEPT when
+                // the click lands on something with its own behaviour: the note
+                // input, a button (Hide / the details chevron), or a tooltip
+                // trigger (the roll-type label, the Impaired tag). We do NOT
+                // stopPropagation there, so tap-to-toggle tooltips still work on
+                // touch devices.
+                if (ev.target.closest('input, button, .tooltip-trigger')) return;
+                this.openRoll(r);
             },
 
             openRoll(r) {
