@@ -1339,6 +1339,36 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Draft-changes preview block visible with categories after editing → `test_version_diff.py::test_draft_diff_visible_after_editing_without_apply`
 - [x] Draft-changes preview block has distinct (blue) styling → `test_version_diff.py::test_draft_diff_has_distinct_visual_styling`
 
+## Roll History
+
+- [x] Roll History button visible to owner (blue, top-right) → `test_roll_history_clicktest.py::test_roll_history_button_visible_for_editor`
+- [x] Roll History button hidden for anonymous viewer → `test_roll_history_clicktest.py::test_roll_history_button_hidden_for_anonymous`
+- [x] Roll History button hidden for non-editor logged-in user → `test_roll_history_clicktest.py::test_roll_history_button_hidden_for_non_editor`
+- [x] Delete button removed from View Sheet top-right → `test_roll_history_clicktest.py::test_delete_button_moved_off_top_bar`
+- [x] Delete button rendered red, floated right on Version History header row → `test_roll_history_clicktest.py::test_delete_button_in_version_history_row`
+- [x] Delete still works from new location → `test_roll_history_clicktest.py::test_delete_button_works_from_version_history`
+- [x] Owner roll is recorded server-side → `test_roll_history_clicktest.py::test_owner_roll_persists`
+- [x] Admin/GM rolling on someone else's sheet is NOT recorded (even if also an editor) → `test_roll_history_clicktest.py::test_gm_roll_does_not_persist`
+- [x] Anonymous viewer's roll attempt is NOT recorded → `test_roll_history_clicktest.py::test_anonymous_roll_does_not_persist`
+- [ ] Non-owner editor's roll IS recorded with is_owner_roll=false → `test_roll_history_clicktest.py::test_non_owner_editor_roll_tagged` *(skipped: clicktest editor-grant plumbing TODO; Python unit covers the same behavior)*
+- [x] Discretionary bonus toggle updates the saved row in place → `test_roll_history_clicktest.py::test_discretionary_bonus_updates_row`
+- [x] /roll-history page renders empty state when no rolls → `test_roll_history_clicktest.py::test_roll_history_page_renders_empty_state`
+- [x] /roll-history page groups rolls by local date → `test_roll_history_clicktest.py::test_roll_history_page_renders_rolls`
+- [x] Time column uses "h:mmam/pm" local format → `test_roll_history_clicktest.py::test_local_time_format`
+- [x] TN column populated for attack rolls → `test_roll_history_clicktest.py::test_tn_column_shown_for_attack_roll`
+- [x] TN column blank for skill rolls (no known TN) → `test_roll_history_clicktest.py::test_tn_column_blank_for_skill_roll`
+- [x] Type column shows tooltip/explainer with underlying mechanic's rules text → `test_roll_history_clicktest.py::test_explainer_tooltip_renders`
+- [x] Show-hidden toggle defaults OFF; hidden rolls appear faded when ON → `test_roll_history_clicktest.py::test_show_hidden_toggle_default_off`
+- [x] Hide-and-unhide flow toggles is_hidden round-trip → `test_roll_history_clicktest.py::test_hide_unhide_flow`
+- [x] Annotation autosaves and persists across reload → `test_roll_history_clicktest.py::test_annotation_autosave`
+- [x] Readonly modal opens from the View button → `test_roll_history_clicktest.py::test_readonly_modal_opens`
+- [x] Readonly modal only exposes Close + Copy as image → `test_roll_history_clicktest.py::test_readonly_modal_only_close_and_copy`
+- [x] Readonly modal Copy-as-image pre-render completes → `test_roll_history_clicktest.py::test_readonly_modal_copy_image_status_reaches_ready`
+- [x] Readonly modal shows TN line for attack rolls → `test_roll_history_clicktest.py::test_readonly_modal_shows_tn_for_attack`
+- [x] Readonly modal hides TN line for skill rolls → `test_roll_history_clicktest.py::test_readonly_modal_hides_tn_for_skill`
+- [x] Readonly modal initiative variant renders action dice → `test_roll_history_clicktest.py::test_readonly_modal_initiative_renders_action_dice`
+- [x] Readonly modal explainer panel renders the underlying-mechanic rules text → `test_roll_history_clicktest.py::test_readonly_modal_explainer_panel`
+
 ## Character Sheet — View as Non-Editor
 
 - [x] Edit hidden → `test_permissions.py::test_edit_delete_hidden_for_nonadmin`
@@ -1388,6 +1418,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `groups` | Gaming groups, party effects, admin manage groups | `test_groups.py` |
 | `rolls` | Click-to-roll dice, attack modal, wound check, iaijutsu, school abilities | `test_rolls.py`, `test_attack_modal.py`, `test_wound_check.py`, `test_iaijutsu_duel.py`, `test_sheet_js_errors.py`, `test_void_spending.py`, `test_school_abilities.py` |
 | `sections` | Rich-text freeform sections | `test_sections.py` |
+| `roll_history` | Roll persistence, Roll History page, readonly modal, hide/unhide, annotation autosave | `test_roll_history_clicktest.py` |
 
 Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pytestmark` at module level and add it to this table.
 

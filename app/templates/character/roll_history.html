@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}{{ character.name }} - Roll History{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto"
+     x-data="rollHistoryPage()"
+     x-init="init()"
+     data-testid="roll-history-page">
+
+    <div class="flex items-center justify-between gap-4 mb-4">
+        <div>
+            <a href="/characters/{{ character.id }}"
+               class="text-sm text-ink/60 hover:text-ink">&larr; Back to {{ character.name }}</a>
+            <h1 class="text-3xl font-bold mt-1">Roll History</h1>
+        </div>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" x-model="showHidden"
+                   data-action="toggle-show-hidden"
+                   class="rounded text-accent">
+            <span>Show hidden rolls</span>
+        </label>
+    </div>
+
+    {# JSON blob: the server passes the full roll list, including hidden
+       rolls. Client-side grouping and filtering keep the toggle snappy. #}
+    <script type="application/json" id="rolls-data">{{ rolls_json|tojson }}</script>
+    <script type="application/json" id="viewer-data">{{ {"discord_id": viewer_discord_id}|tojson }}</script>
+
+    <template x-if="visibleGroups().length === 0">
+        <p class="text-ink/60 italic py-8 text-center" data-testid="empty-state">
+            No rolls recorded yet.
+        </p>
+    </template>
+
+    <template x-for="group in visibleGroups()" :key="group.dateLabel">
+        <section class="mb-6">
+            <h2 class="text-lg font-bold text-accent mb-2" x-text="group.dateLabel"
+                data-testid="date-section-header"></h2>
+            <div class="bg-white rounded-lg shadow border border-ink/10 divide-y divide-ink/10">
+                <template x-for="r in group.items" :key="r.id">
+                    <div :class="r.is_hidden ? 'opacity-50 line-through bg-gray-50' : ''"
+                         class="grid grid-cols-[5rem_minmax(8rem,1fr)_4rem_5rem_5rem_minmax(10rem,2fr)_5rem] gap-2 items-center px-3 py-2 text-sm"
+                         :data-roll-id="r.id"
+                         :data-is-hidden="r.is_hidden ? '1' : '0'">
+
+                        <div class="font-mono" x-text="formatLocalTime(r.created_at)"
+                             data-testid="roll-time"></div>
+
+                        <div class="tooltip-trigger relative" data-testid="roll-type">
+                            <span x-text="r.roll_label || r.roll_key"></span>
+                            <template x-if="!r.is_owner_roll">
+                                <span class="ml-2 text-xs text-ink/50"
+                                      data-testid="non-owner-badge"
+                                      x-text="'[by ' + r.actor_name + ']'"></span>
+                            </template>
+                            <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line"
+                                 data-testid="roll-explainer">
+                                <strong x-text="r.description.title"></strong>
+                                <template x-if="r.description.body">
+                                    <p class="mt-1" x-text="r.description.body"></p>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="font-mono text-right text-ink/60"
+                             x-text="(r.tn !== null && r.tn !== undefined) ? ('TN ' + r.tn) : ''"
+                             data-testid="roll-tn"></div>
+
+                        <div class="font-mono text-right" x-text="resultText(r)"
+                             data-testid="roll-result"></div>
+
+                        <div>
+                            <button type="button" data-action="view-roll"
+                                    @click="openRoll(r)"
+                                    class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded">
+                                View
+                            </button>
+                        </div>
+
+                        <div>
+                            <input type="text" rows="1"
+                                   x-model="r.annotation"
+                                   @input="scheduleAnnotationSave(r)"
+                                   data-action="annotation-input"
+                                   placeholder="Add a note..."
+                                   class="w-full text-xs border border-ink/20 rounded px-2 py-1">
+                        </div>
+
+                        <div>
+                            <button type="button"
+                                    :data-action="r.is_hidden ? 'unhide-roll' : 'hide-roll'"
+                                    @click="toggleHide(r)"
+                                    class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-1 rounded"
+                                    x-text="r.is_hidden ? 'Unhide' : 'Hide'">
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </section>
+    </template>
+
+    {# Readonly roll-results modal (Phase 6 will fill in the body). #}
+    {% include 'character/partials/readonly_roll_modal.html' %}
+</div>
+
+<script>
+    function rollHistoryPage() {
+        return {
+            _charId: {{ character.id }},
+            rolls: [],
+            showHidden: false,
+            viewerDiscordId: '',
+            _annoTimers: {},
+
+            init() {
+                try {
+                    this.rolls = JSON.parse(
+                        document.getElementById('rolls-data').textContent || '[]'
+                    );
+                } catch (e) { this.rolls = []; }
+                try {
+                    const v = JSON.parse(
+                        document.getElementById('viewer-data').textContent || '{}'
+                    );
+                    this.viewerDiscordId = v.discord_id || '';
+                } catch (e) { /* no-op */ }
+            },
+
+            formatLocalTime(iso) {
+                // Exact "9:23pm" format - lowercase am/pm, no spaces / periods.
+                if (!iso) return '';
+                const d = new Date(iso);
+                let h = d.getHours();
+                const m = String(d.getMinutes()).padStart(2, '0');
+                const ampm = h >= 12 ? 'pm' : 'am';
+                h = h % 12;
+                if (h === 0) h = 12;
+                return h + ':' + m + ampm;
+            },
+
+            _localDateKey(iso) {
+                const d = new Date(iso);
+                return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+            },
+
+            _formatDateHeader(iso) {
+                const d = new Date(iso);
+                const now = new Date();
+                const opts = (d.getFullYear() === now.getFullYear())
+                    ? { month: 'short', day: 'numeric' }
+                    : { month: 'short', day: 'numeric', year: 'numeric' };
+                return d.toLocaleDateString(undefined, opts);
+            },
+
+            resultText(r) {
+                // Initiative-style rolls: the action-dice values joined with commas.
+                // Everything else: payload.total.
+                const k = r.roll_key || '';
+                if (k === 'initiative' || k.startsWith('initiative:')) {
+                    const ad = (r.payload && r.payload.action_dice) || [];
+                    return ad.map(d => d.value).join(', ');
+                }
+                if (r.payload && typeof r.payload.total === 'number') {
+                    return String(r.payload.total);
+                }
+                return '';
+            },
+
+            visibleGroups() {
+                const filtered = this.showHidden
+                    ? this.rolls
+                    : this.rolls.filter(r => !r.is_hidden);
+                const byDate = new Map();
+                for (const r of filtered) {
+                    const key = this._localDateKey(r.created_at);
+                    if (!byDate.has(key)) {
+                        byDate.set(key, {
+                            dateLabel: this._formatDateHeader(r.created_at),
+                            sortKey: new Date(r.created_at).getTime(),
+                            items: [],
+                        });
+                    }
+                    byDate.get(key).items.push(r);
+                }
+                // Newest date first.
+                return Array.from(byDate.values())
+                    .sort((a, b) => b.sortKey - a.sortKey);
+            },
+
+            openRoll(r) {
+                window.dispatchEvent(new CustomEvent('open-readonly-roll', {
+                    detail: r,
+                }));
+            },
+
+            scheduleAnnotationSave(r) {
+                clearTimeout(this._annoTimers[r.id]);
+                this._annoTimers[r.id] = setTimeout(() => {
+                    fetch(`/characters/${this._charId}/rolls/${r.id}/annotation`, {
+                        method: 'PATCH',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({annotation: r.annotation || ''}),
+                    }).catch(() => { /* non-fatal */ });
+                }, 600);
+            },
+
+            async toggleHide(r) {
+                const action = r.is_hidden ? 'unhide' : 'hide';
+                const resp = await fetch(
+                    `/characters/${this._charId}/rolls/${r.id}/${action}`,
+                    { method: 'POST' },
+                );
+                if (resp.ok) {
+                    r.is_hidden = !r.is_hidden;
+                }
+            },
+        };
+    }
+</script>
+{% endblock %}

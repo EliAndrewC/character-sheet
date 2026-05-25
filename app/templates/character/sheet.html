@@ -184,17 +184,15 @@
         </div>
         {% if viewer_can_edit %}
         <div class="flex gap-2 flex-wrap">
+            <a href="/characters/{{ character.id }}/roll-history"
+               data-action="roll-history"
+               class="bg-blue-700 hover:bg-blue-800 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                Roll History
+            </a>
             <a href="/characters/{{ character.id }}/edit"
                class="bg-ink hover:bg-ink/80 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
                 Edit
             </a>
-            <form method="POST" action="/characters/{{ character.id }}/delete"
-                  onsubmit="return confirm('Delete this character?')">
-                <button type="submit"
-                        class="bg-red-800 hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
-                    Delete
-                </button>
-            </form>
         </div>
         {% endif %}
     </div>
@@ -3025,7 +3023,12 @@
     {% endfor %}
 
     <!-- VERSION HISTORY -->
-    {% if viewer_can_edit and versions %}
+    {# Gated on viewer_can_edit only - the section needs to render even
+       on a zero-version character because it hosts the Delete button,
+       which used to live in the top-right button row. The version-list
+       collapse below is itself further gated on ``versions`` being
+       non-empty. #}
+    {% if viewer_can_edit %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
              x-data="{
                 open: {{ 'true' if draft_diff else 'false' }},
@@ -3071,12 +3074,23 @@
                     window.location.reload();
                 },
              }">
-        <h2 class="text-xl font-bold text-accent cursor-pointer flex items-center gap-2"
-            @click="open = !open">
-            <span x-text="open ? '▾' : '▸'" class="text-sm"></span>
-            Version History
-            <span class="text-sm font-normal text-ink/50">({{ versions|length }})</span>
-        </h2>
+        <div class="flex items-center justify-between gap-2">
+            <h2 class="text-xl font-bold text-accent cursor-pointer flex items-center gap-2"
+                @click="open = !open">
+                <span x-text="open ? '▾' : '▸'" class="text-sm"></span>
+                Version History
+                <span class="text-sm font-normal text-ink/50">({{ versions|length }})</span>
+            </h2>
+            <form method="POST" action="/characters/{{ character.id }}/delete"
+                  onsubmit="return confirm('Delete this character?')"
+                  class="shrink-0">
+                <button type="submit"
+                        data-action="delete-character"
+                        class="bg-red-800 hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium transition-colors">
+                    Delete
+                </button>
+            </form>
+        </div>
         <div x-show="open" x-cloak class="space-y-2 mt-4">
             {# Draft-changes preview. Visually distinct from the v# rows
                below (blue accent matching the top-of-sheet "Draft changes"
@@ -6705,6 +6719,30 @@
             rollImageBlob: null,
             _rollImageReqId: 0,
 
+            _rollHistoryReqId: 0,
+
+            _saveFreeformRollHistory() {
+                const t = window._trackingBridge;
+                if (!t || !t._charId) return;
+                const reqId = ++this._rollHistoryReqId;
+                const payload = this._buildFreeformImagePayload();
+                fetch('/characters/' + t._charId + '/rolls', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        roll_key: 'freeform',
+                        roll_label: 'Freeform Roll',
+                        payload: payload,
+                        impaired_at_roll: this._impairedNow(),
+                        tn: null,
+                        action_die_spent: null,
+                    }),
+                }).catch(() => { /* non-fatal */ });
+                // Freeform has no post-roll discretionary changes, so we
+                // don't need to capture the row id for later PATCH.
+                void reqId;
+            },
+
             _buildFreeformImagePayload() {
                 const all = this.ffFinalDice || [];
                 const cellsFrom = (arr) => arr.map(d => ({
@@ -6802,6 +6840,7 @@
                 this.ffTotal = keptDice.reduce((s, d) => s + d.value, 0);
                 this.ffPhase = 'done';
                 this._prerenderRollImage();
+                this._saveFreeformRollHistory();
             },
         };
     }
@@ -7286,6 +7325,14 @@
             wcMaxRaisesPerRoll: 0,
             wcHasDiscretionary: false,
             wcResultApplied: false,
+            // Captures which post-roll choice the player made so the
+            // saved roll-history row reflects the actual outcome (not
+            // just the pre-choice "Passed/Failed" footer). One of:
+            //   ''               - no choice made yet
+            //   'keep_lw'        - PASSED: chose Keep Light Wounds
+            //   'take_1_sw'      - PASSED: chose Take 1 Serious Wound
+            //   'failure_applied' - FAILED: failure applied (sw_taken = wcSeriousWounds)
+            wcResultChoice: '',
             // Roll menu (void spending)
             rollMenuOpen: false,
             rollMenuKey: '',
@@ -7315,6 +7362,27 @@
             // phase-transition prerender with the same payload).
             _lastPayloadSig: '',
             _reprerenderTimer: null,
+
+            // Roll History plumbing. ``_rollHistoryId`` holds the row id
+            // returned by the POST that fires at runRoll end; subsequent
+            // discretionary-bonus changes PATCH that same row. Null between
+            // rolls and whenever the server returned 204 (non-recording user
+            // - admin/GM on someone else's char, non-editor, etc.).
+            // ``_rollHistoryReqId`` mirrors _rollImageReqId so a stale POST
+            // response from a previous roll discards its id assignment.
+            _rollHistoryId: null,
+            _rollHistoryReqId: 0,
+            _lastRollHistorySig: '',
+            _rollHistoryUpdateTimer: null,
+            // When a flush is requested before the create POST has landed,
+            // we snapshot the payload here. The create's response handler
+            // PATCHes with the snapshot, immune to the modal closing
+            // between the flush request and the POST resolving (a real
+            // race: the user can click Close on the failure modal before
+            // the create POST returns, in which case _currentResultPayload
+            // would otherwise return null at deferred-flush time).
+            _rollHistoryPendingPayload: null,
+
             rollMenuHasAttackChoice: false,
             // Touch-only menu mode for the Attack tile: instead of opening the
             // attack modal directly the menu shows "Roll <title>" + "View
@@ -7542,7 +7610,10 @@
                 // checkbox, etc. Each watcher routes through
                 // ``_maybeReprerender`` which debounces 200 ms and dedupes
                 // against the last-rendered payload signature.
-                const reprerender = () => this._maybeReprerender();
+                const reprerender = () => {
+                    this._maybeReprerender();
+                    this._maybeUpdateRollHistory();
+                };
                 this.$watch('baseTotal', reprerender);
                 this.$watch('atkRollTotal', reprerender);
                 this.$watch('atkExtraDice', reprerender);
@@ -8295,6 +8366,12 @@
                 this.rollImageBlob = null;
                 this._rollImageReqId++;
                 this._lastPayloadSig = '';
+                // Reset roll-history state so a stale PATCH timer can't
+                // overwrite the previous roll's row with this new roll's
+                // mid-animation payload. _saveRollHistoryCreate fires after
+                // runRoll finishes and sets _rollHistoryId again.
+                this._rollHistoryId = null;
+                clearTimeout(this._rollHistoryUpdateTimer);
                 if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
                 this.luckyUsedThisRoll = false;
                 this.togashiRerollUsed = false;
@@ -8628,6 +8705,10 @@
                         ? this._buildInitiativeImagePayload()
                         : this._buildRollImagePayload()
                 );
+                // Persist the roll to the character's Roll History (the
+                // server gates on the owner/non-admin-editor rule; non-
+                // recording cases get 204 and _rollHistoryId stays null).
+                this._saveRollHistoryCreate();
             },
 
             // Copy-as-image: build the payload, post it to the server's
@@ -8637,6 +8718,120 @@
             // Blob to already be resolved when ``clipboard.write`` is
             // called - hence pre-rendering rather than fetching on
             // click).
+            // Context-only bullets that aren't flat numeric "bonuses" but
+            // belong in the result modal's breakdown. Mirrors the x-show'd
+            // <div> rows in the live result modals.
+            //
+            // ``formula`` provides the formula-derived bullets (VP spent,
+            // OW spent, overflow, combat-VP bonus). Damage rolls do NOT
+            // accept VP/OW/etc, so pass an empty formula (``{}``) for the
+            // damage builder - the attack's VP would otherwise leak into
+            // the damage row's breakdown.
+            //
+            // The dice-card SVG renderer ignores this field; only the
+            // readonly Roll History modal reads it.
+            _extraBonusBullets(formula) {
+                const f = formula || this.formula || {};
+                const extras = [];
+                const v = f.void_spent || 0;
+                if (v > 0) {
+                    extras.push(
+                        'Rolled +' + v + 'k' + v + ' from ' + v
+                        + ' spent void point' + (v > 1 ? 's' : '')
+                    );
+                }
+                const ow = f.ow_spent || 0;
+                if (ow > 0) {
+                    extras.push('Skill raised by ' + ow + ' by Otherworldliness');
+                }
+                const combatVp = (this.voidSpendConfig || {}).combat_vp_flat_bonus || 0;
+                if (v > 0 && combatVp > 0) {
+                    extras.push(
+                        '+' + (v * combatVp) + ' from 5th Dan (+'
+                        + combatVp + ' per VP on combat rolls)'
+                    );
+                }
+                if ((f.void_overflow_bonus || 0) > 0) {
+                    extras.push(
+                        '+' + f.void_overflow_bonus
+                        + ' from rolling above 10k10 (+2 per extra die above 10)'
+                    );
+                }
+                if (f.merchant_5th_dan_used) {
+                    const m = f.merchant_5th_dan_bonus || 0;
+                    extras.push(
+                        ((m >= 0 ? '+' : '') + m)
+                        + ' from Merchant 5th Dan reroll'
+                    );
+                }
+                if ((this.shosuroLowest3Bonus || 0) > 0) {
+                    extras.push(
+                        '+' + this.shosuroLowest3Bonus
+                        + ' from 5th Dan (lowest 3 dice added to result)'
+                    );
+                }
+                if ((this.mirumotoPointsSpentThisRoll || 0) > 0) {
+                    const n = this.mirumotoPointsSpentThisRoll;
+                    extras.push(
+                        '+' + (n * 2) + ' from ' + n + ' 3rd Dan point'
+                        + (n > 1 ? 's' : '')
+                    );
+                }
+                if ((this.convictionSpentThisRoll || 0) > 0) {
+                    const n = this.convictionSpentThisRoll;
+                    extras.push(
+                        '+' + n + ' from ' + n + ' Conviction point'
+                        + (n > 1 ? 's' : '')
+                    );
+                }
+                if ((this.togashiRaisesSpentThisRoll || 0) > 0) {
+                    const n = this.togashiRaisesSpentThisRoll;
+                    extras.push(
+                        '+' + (n * 5) + ' from ' + n
+                        + ' Togashi daily athletics raise' + (n > 1 ? 's' : '')
+                    );
+                }
+                if (this.luckyUsedThisRoll) {
+                    extras.push('Lucky reroll used');
+                }
+                if (this.togashiRerollUsed) {
+                    extras.push('Togashi reroll used');
+                }
+                return extras;
+            },
+
+            // Damage-roll extras. Includes:
+            // - ``atkDamageParts`` (pre-formatted dice-composition strings
+            //   like "3k2 weapon", "+3k0 from Fire", "+4k0 extra from
+            //   attack roll", "+4 flat bonus") - these explain HOW the
+            //   damage roll's XkY formula was assembled. The live damage
+            //   modal renders them as bullets just below the kept-sum.
+            // - Shosuro 5th Dan damage bonus
+            // - Conviction spent on the damage roll
+            //
+            // Damage rolls do NOT accept VP/OW/overflow - those live on
+            // the preceding attack roll, not on damage.
+            _damageExtraBonusBullets() {
+                const extras = [];
+                for (const p of (this.atkDamageParts || [])) {
+                    if (p) extras.push(String(p));
+                }
+                if ((this.atkDamageShosuroBonus || 0) > 0) {
+                    extras.push(
+                        '+' + this.atkDamageShosuroBonus
+                        + ' from Shosuro 5th Dan (lowest 3 dice added to damage)'
+                    );
+                }
+                if ((this.convictionSpentThisRoll || 0) > 0) {
+                    const n = this.convictionSpentThisRoll;
+                    extras.push(
+                        '+' + n + ' from ' + n + ' Conviction point'
+                        + (n > 1 ? 's' : '')
+                    );
+                }
+                return extras;
+            },
+
             _buildRollImagePayload() {
                 const f = this.formula || {};
                 const kept = (this.keptDice || []).map(d => ({
@@ -8681,6 +8876,8 @@
                     kept: kept,
                     dropped: dropped,
                     bonuses: bonuses,
+                    extras: this._extraBonusBullets(f),
+                    kept_sum: this.keptSum || 0,
                     total: this.baseTotal,
                     alternatives: this._alternativesForPayload(f),
                 };
@@ -8842,12 +9039,35 @@
                         ? `${wcF.rolled}k${wcF.kept} + ${wcF.flat}`
                         : `${wcF.rolled}k${wcF.kept}`;
                 }
+                const extras = this._extraBonusBullets(this.formula);
+                // Append the post-roll outcome bullet once the player has
+                // chosen (Keep LW / Take 1 SW on pass, or auto/manual apply
+                // on fail). Captured here so the readonly Roll History
+                // modal can show what actually happened to the character.
+                const lw = this.wcLightWounds || 0;
+                if (this.wcResultChoice === 'keep_lw') {
+                    extras.push(
+                        'Kept ' + lw + ' light wound' + (lw === 1 ? '' : 's')
+                    );
+                } else if (this.wcResultChoice === 'take_1_sw') {
+                    extras.push(
+                        'Took 1 serious wound; light wounds reset to 0'
+                    );
+                } else if (this.wcResultChoice === 'failure_applied') {
+                    const sw = this.wcSeriousWounds || 0;
+                    extras.push(
+                        'Took ' + sw + ' serious wound' + (sw === 1 ? '' : 's')
+                        + '; light wounds reset to 0'
+                    );
+                }
                 return {
                     title: 'Wound Check',
                     formula: wcFormulaText,
                     kept: this._cellsFromDice(this.keptDice || []),
                     dropped: this._cellsFromDice(this.unkeptDice || []),
                     bonuses: bonuses,
+                    extras: extras,
+                    kept_sum: this.keptSum || 0,
                     total: this.wcRollTotal || this.baseTotal || 0,
                     footer: footer,
                     alternatives: this._alternativesForPayload(this.formula),
@@ -8891,6 +9111,8 @@
                     kept: this._cellsFromDice(this.keptDice || []),
                     dropped: this._cellsFromDice(this.unkeptDice || []),
                     bonuses: bonuses,
+                    extras: this._extraBonusBullets(this.atkFormula),
+                    kept_sum: this.keptSum || 0,
                     total: this.atkRollTotal || this.baseTotal || 0,
                     footer: footer,
                     alternatives: this._alternativesForPayload(this.atkFormula),
@@ -8915,6 +9137,10 @@
                         (this.finalDice || []).filter(d => !d.kept)
                     ),
                     bonuses: [],
+                    // Damage rolls don't accept VP/OW/etc - pull from the
+                    // narrow damage-only extras helper.
+                    extras: this._damageExtraBonusBullets(),
+                    kept_sum: this.keptSum || 0,
                     total: this.atkDamageTotal || 0,
                 };
             },
@@ -8926,6 +9152,8 @@
                     kept: this._cellsFromDice(this.keptDice || []),
                     dropped: this._cellsFromDice(this.unkeptDice || []),
                     bonuses: [],
+                    extras: this._extraBonusBullets(this.formula),
+                    kept_sum: this.keptSum || 0,
                     total: this.duelContestedRoll || this.baseTotal || 0,
                 };
             },
@@ -8937,6 +9165,8 @@
                     kept: this._cellsFromDice(this.keptDice || []),
                     dropped: this._cellsFromDice(this.unkeptDice || []),
                     bonuses: [],
+                    extras: this._extraBonusBullets(this.formula),
+                    kept_sum: this.keptSum || 0,
                     total: this.duelStrikeRoll || this.baseTotal || 0,
                 };
             },
@@ -8953,6 +9183,9 @@
                     kept: dice,
                     dropped: [],
                     bonuses: [],
+                    // Damage rolls don't accept VP/OW; reuse the narrow helper.
+                    extras: this._damageExtraBonusBullets(),
+                    kept_sum: this.keptSum || 0,
                     total: this.duelDamageTotal || this.atkDamageTotal || 0,
                 };
             },
@@ -8978,12 +9211,16 @@
                     });
                 }
                 const all = this.k5RollDice || [];
+                const keptSum = all.filter(d => d.kept)
+                    .reduce((s, d) => s + (d.value || 0), 0);
                 return {
                     title: 'Kakita 5th Dan Contest',
                     formula: this.k5FormulaText || '',
                     kept: this._cellsFromDice(all.filter(d => d.kept)),
                     dropped: this._cellsFromDice(all.filter(d => !d.kept)),
                     bonuses: bonuses,
+                    extras: this._extraBonusBullets(this.formula),
+                    kept_sum: keptSum,
                     total: this.k5RollTotal || 0,
                 };
             },
@@ -9017,6 +9254,211 @@
                         : this._buildRollImagePayload();
                 }
                 return null;
+            },
+
+            // ----------------------------------------------------------------
+            // Roll History persistence. See app/services/rolls_history.py for
+            // the server-side recording gate (owner-only + non-admin-editor;
+            // admins NEVER record on someone else's char). The client posts
+            // unconditionally; non-recording cases get a 204 and
+            // _rollHistoryId stays null so the PATCH path is a no-op.
+            // ----------------------------------------------------------------
+
+            _impairedNow() {
+                const t = window._trackingBridge;
+                const sw = (t && typeof t.seriousWounds === 'number')
+                    ? t.seriousWounds
+                    : {{ character.current_serious_wounds or 0 }};
+                return sw >= {{ ring_map['Earth'] }};
+            },
+
+            _currentTn() {
+                // TN is captured only when the rolling character's own state
+                // determines it (attack TN derived from defender Parry; WC TN
+                // is the current LW). Parry rolls intentionally skip TN -
+                // their TN is the attacker's roll result, which the parry
+                // modal doesn't track. Damage rolls have NO TN even though
+                // they reuse atkModalOpen (only the attack roll's TN matters,
+                // and we capture it during atkPhase === 'result'). All other
+                // roll types return null.
+                if (this.wcModalOpen && this.wcPhase === 'result') {
+                    return (this.wcLightWounds > 0) ? this.wcLightWounds : null;
+                }
+                if (this.atkModalOpen && this.atkPhase === 'result') {
+                    return (this.atkTN > 0) ? this.atkTN : null;
+                }
+                return null;
+            },
+
+            _currentActionDieSpent() {
+                const i = this._actionDieSpentIndex;
+                if (i == null || i < 0) return null;
+                const t = window._trackingBridge;
+                if (!t || !Array.isArray(t.actionDice) || !t.actionDice[i]) return null;
+                return {
+                    value: t.actionDice[i].value,
+                    source: this.currentRollKey || '',
+                };
+            },
+
+            _currentRollHistoryPayload() {
+                // Derive key + label from whichever modal is in a result
+                // phase. The dice-roller's ``this.title`` / ``currentRollKey``
+                // are only updated by its OWN main path (executeRoll /
+                // executeRollWithExtraFlat / rollBless); modal-specific
+                // result phases (attack, attack damage, WC, duel, K5)
+                // leave those fields untouched, which would otherwise
+                // re-record the previous skill roll's key for an attack.
+                const payload = this._currentResultPayload() || {};
+                const {key, label} = this._currentRollHistoryKeyAndLabel(payload);
+                return {
+                    roll_key: key,
+                    roll_label: label,
+                    payload: payload,
+                    impaired_at_roll: this._impairedNow(),
+                    tn: this._currentTn(),
+                    action_die_spent: this._currentActionDieSpent(),
+                };
+            },
+
+            _currentRollHistoryKeyAndLabel(payload) {
+                // Mirror the routing in ``_currentResultPayload``.
+                if (this.wcModalOpen && this.wcPhase === 'result') {
+                    return {key: 'wound_check', label: 'Wound Check'};
+                }
+                if (this.atkModalOpen) {
+                    if (this.atkPhase === 'result') {
+                        return {
+                            key: this.atkKey || 'attack',
+                            label: (payload && payload.title) || 'Attack',
+                        };
+                    }
+                    if (this.atkPhase === 'damage-result') {
+                        // Damage is a follow-on to the attack; namespace
+                        // its key off the attack's key so the history can
+                        // tell which weapon (knack) the damage came from.
+                        const base = this.atkKey || 'attack';
+                        return {
+                            key: base + ':damage',
+                            label: (payload && payload.title) || 'Damage',
+                        };
+                    }
+                }
+                if (this.duelOpen) {
+                    if (this.duelPhase === 'contested-result') {
+                        return {
+                            key: 'iaijutsu:contested',
+                            label: (payload && payload.title) || 'Iaijutsu Contested',
+                        };
+                    }
+                    if (this.duelPhase === 'strike-result') {
+                        return {
+                            key: 'iaijutsu:strike',
+                            label: (payload && payload.title) || 'Iaijutsu Strike',
+                        };
+                    }
+                    if (this.duelPhase === 'damage-result') {
+                        return {
+                            key: 'iaijutsu:damage',
+                            label: (payload && payload.title) || 'Iaijutsu Damage',
+                        };
+                    }
+                }
+                if (this.k5Open && this.k5Phase === 'result') {
+                    return {
+                        key: 'kakita_5th_dan',
+                        label: (payload && payload.title) || 'Kakita 5th Dan',
+                    };
+                }
+                // Default path: the dice-roller's own roll (skill, initiative,
+                // knack, ring, bless, etc.). currentRollKey + title were set
+                // by executeRoll / executeRollWithExtraFlat / rollBless.
+                return {
+                    key: this.currentRollKey || '',
+                    label: this.title || '',
+                };
+            },
+
+            _saveRollHistoryCreate() {
+                const t = window._trackingBridge;
+                if (!t || !t._charId) return;
+                const reqId = ++this._rollHistoryReqId;
+                this._rollHistoryId = null;
+                this._lastRollHistorySig = '';
+                this._rollHistoryPendingPayload = null;
+                const body = this._currentRollHistoryPayload();
+                fetch('/characters/' + t._charId + '/rolls', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body),
+                }).then(r => (r.status === 204 ? null : r.json()))
+                  .then(data => {
+                      if (reqId !== this._rollHistoryReqId) return;  // stale
+                      if (data && data.id) {
+                          this._rollHistoryId = data.id;
+                          this._lastRollHistorySig = JSON.stringify(body.payload);
+                          // A choice handler (Keep LW / Take 1 SW / failure
+                          // auto-apply) may have fired AND captured a
+                          // snapshot BEFORE this POST returned. PATCH with
+                          // the snapshot directly - it's immune to the
+                          // modal having closed in the meantime.
+                          if (this._rollHistoryPendingPayload) {
+                              const pending = this._rollHistoryPendingPayload;
+                              this._rollHistoryPendingPayload = null;
+                              this._patchRollHistory(pending);
+                          }
+                      }
+                  })
+                  .catch(() => { /* non-fatal: roll-history write is best-effort */ });
+            },
+
+            _maybeUpdateRollHistory() {
+                if (!this._rollHistoryId) {
+                    // Create POST hasn't resolved yet - snapshot the
+                    // current payload so the deferred PATCH can use it
+                    // even if the modal closes in the meantime.
+                    if (this._currentResultPayload()) {
+                        this._rollHistoryPendingPayload = this._currentRollHistoryPayload();
+                    }
+                    return;
+                }
+                clearTimeout(this._rollHistoryUpdateTimer);
+                this._rollHistoryUpdateTimer = setTimeout(
+                    () => this._flushRollHistoryUpdate(), 200,
+                );
+            },
+
+            _flushRollHistoryUpdate() {
+                clearTimeout(this._rollHistoryUpdateTimer);
+                if (!this._rollHistoryId) {
+                    if (this._currentResultPayload()) {
+                        this._rollHistoryPendingPayload = this._currentRollHistoryPayload();
+                    }
+                    return;
+                }
+                // If no result modal is currently showing a payload, skip:
+                // a stale timer firing mid-animation of the next roll would
+                // otherwise wipe the previous row's payload with {}.
+                const inner = this._currentResultPayload();
+                if (!inner) return;
+                this._patchRollHistory(this._currentRollHistoryPayload());
+            },
+
+            _patchRollHistory(body) {
+                if (!body) return;
+                const sig = JSON.stringify(body.payload);
+                if (sig === this._lastRollHistorySig) return;
+                const t = window._trackingBridge;
+                if (!t || !t._charId || !this._rollHistoryId) return;
+                this._lastRollHistorySig = sig;
+                fetch('/characters/' + t._charId + '/rolls/' + this._rollHistoryId, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        payload: body.payload,
+                        action_die_spent: body.action_die_spent,
+                    }),
+                }).catch(() => { /* non-fatal */ });
             },
 
             // Debounced entry point for post-roll mutations. Each watcher
@@ -9645,6 +10087,7 @@
                 this.duelContestedDone = true;
                 this.duelPhase = 'contested-result';
                 this._prerenderRollImage(this._buildDuelContestedImagePayload());
+                this._saveRollHistoryCreate();
             },
 
             duelProceedToFocusStrike() {
@@ -9691,6 +10134,7 @@
                 this.duelStrikeExcess = excess;
                 this.duelPhase = 'strike-result';
                 this._prerenderRollImage(this._buildDuelStrikeImagePayload());
+                this._saveRollHistoryCreate();
             },
 
             duelComputeDamage() {
@@ -9730,6 +10174,7 @@
                 this.duelDamageTotal = this.keptSum + dmg.flat;
                 this.duelPhase = 'damage-result';
                 this._prerenderRollImage(this._buildDuelDamageImagePayload());
+                this._saveRollHistoryCreate();
             },
 
             duelApplyOpponentRoll() {
@@ -9992,6 +10437,7 @@
                     : `${rolled}k${kept}`;
                 this.k5Phase = 'result';
                 this._prerenderRollImage(this._buildKakita5thImagePayload());
+                this._saveRollHistoryCreate();
             },
 
             async rollKakita5thDanDamage() {
@@ -10891,6 +11337,7 @@
                 // Annotate the auto-spent action die with this attack's result.
                 this._annotateSpentActionDie(this._describeAttackForDie(false));
                 this._prerenderRollImage(this._buildAttackImagePayload());
+                this._saveRollHistoryCreate();
             },
 
             atkSpendRaise() {
@@ -11024,6 +11471,7 @@
                 // so it includes the damage total.
                 this._annotateSpentActionDie(this._describeAttackForDie(true));
                 this._prerenderRollImage(this._buildAttackDamageImagePayload());
+                this._saveRollHistoryCreate();
             },
 
             // --- Wound Check ---
@@ -11317,8 +11765,10 @@
                 }
 
                 this.wcResultApplied = false;
+                this.wcResultChoice = '';
                 this.wcPhase = 'result';
                 this._prerenderRollImage(this._buildWoundCheckImagePayload());
+                this._saveRollHistoryCreate();
 
                 // Auto-apply if no discretionary bonuses and failed (or iaijutsu)
                 if (!this.wcPassed && (this.wcIsStrike || !this.wcHasDiscretionary)) {
@@ -11437,6 +11887,8 @@
                     window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                 }
                 this.wcResultApplied = true;
+                this.wcResultChoice = 'failure_applied';
+                this._flushRollHistoryUpdate();
             },
 
             wcKeepLightWounds() {
@@ -11454,6 +11906,8 @@
                     }
                     if (t.saveBankedBonuses) t.saveBankedBonuses();
                 }
+                this.wcResultChoice = 'keep_lw';
+                this._flushRollHistoryUpdate();
                 this.wcModalOpen = false;
             },
 
@@ -11471,6 +11925,8 @@
                     t.save();
                     window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                 }
+                this.wcResultChoice = 'take_1_sw';
+                this._flushRollHistoryUpdate();
                 this.wcModalOpen = false;
             },
 
@@ -11635,6 +12091,10 @@
             },
 
             close() {
+                // Flush any debounced roll-history PATCH so a quick close
+                // immediately after toggling a discretionary bonus still
+                // lands the final state.
+                this._flushRollHistoryUpdate();
                 this.open = false;
                 this.phase = 'idle';
             },

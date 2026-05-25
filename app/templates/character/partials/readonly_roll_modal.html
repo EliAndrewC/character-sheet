@@ -1,0 +1,193 @@
+{# Readonly roll-results modal. Opened by dispatching the
+   ``open-readonly-roll`` window event with the roll dict as detail.
+   Allowed actions: Close + Copy as image. No discretionary controls.
+   Phase 6: this is a minimal stub - the dice display + copy-image
+   plumbing will be wired here. #}
+<div x-data="readonlyRollModal()" x-init="init()">
+    <div x-show="open" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+         @click.self="close()"
+         @keydown.escape.window="close()"
+         data-testid="readonly-roll-modal">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4">
+            <div class="flex items-start justify-between mb-3">
+                <h3 class="text-lg font-bold text-accent"
+                    x-text="(payload && payload.title) || 'Roll'"></h3>
+                <button type="button" @click="close()" data-action="close-readonly-roll"
+                        class="text-ink/40 hover:text-ink text-xl leading-none">&times;</button>
+            </div>
+
+            <template x-if="description && (description.title || description.body)">
+                <details class="mb-3 text-sm bg-parchment rounded p-2"
+                         data-testid="readonly-explainer">
+                    <summary class="cursor-pointer font-medium"
+                             x-text="description.title || 'What is this roll?'"></summary>
+                    <p class="mt-2 text-ink/80 whitespace-pre-line"
+                       x-text="description.body || ''"></p>
+                </details>
+            </template>
+
+            <p class="text-sm text-ink/60 mb-2"
+               x-text="(payload && payload.formula) || ''"></p>
+
+            <template x-if="tn !== null && tn !== undefined">
+                <p class="text-sm font-bold mb-2" data-testid="readonly-tn">
+                    TN <span x-text="tn"></span>
+                </p>
+            </template>
+
+            <div class="mb-3 text-sm">
+                <template x-if="(payload && payload.show_total !== false)">
+                    <p class="font-bold text-base mb-2"
+                       data-testid="readonly-total">
+                        Total: <span class="text-accent" x-text="payload.total"></span>
+                    </p>
+                </template>
+
+                {# Bulleted breakdown: kept-dice sum + each flat bonus from
+                   ``bonuses`` + each context bullet from ``extras``. Mirrors
+                   the breakdown rendered on the live result modal. #}
+                <template x-if="breakdownItems().length > 0">
+                    <ul class="list-disc list-inside text-xs text-ink/70 space-y-0.5 mb-2"
+                        data-testid="readonly-breakdown">
+                        <template x-for="(item, i) in breakdownItems()" :key="i">
+                            <li x-text="item"></li>
+                        </template>
+                    </ul>
+                </template>
+
+                <template x-if="payload && payload.action_dice && payload.action_dice.length">
+                    <p data-testid="readonly-action-dice">
+                        Action dice:
+                        <span x-text="payload.action_dice.map(d => d.value).join(', ')"></span>
+                    </p>
+                </template>
+
+                <template x-if="payload && payload.alternatives && payload.alternatives.length">
+                    <div class="mt-2 pt-2 border-t border-ink/10"
+                         data-testid="readonly-alternatives">
+                        <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
+                        <template x-for="(alt, i) in payload.alternatives" :key="i">
+                            <div class="text-sm">
+                                <span class="font-bold text-accent"
+                                      x-text="(payload.total || 0) + (alt.extra_flat || 0)"></span>
+                                <span x-text="alt.label"></span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <button type="button" @click="copyRollImage()"
+                        :disabled="rollImageStatus !== 'ready'"
+                        data-action="copy-readonly-roll-image"
+                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm disabled:opacity-30">
+                    <span x-show="rollImageStatus !== 'copied'">Copy as image</span>
+                    <span x-show="rollImageStatus === 'copied'" x-cloak>Copied!</span>
+                </button>
+                <button type="button" @click="close()" data-action="close-readonly-roll-footer"
+                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function readonlyRollModal() {
+        return {
+            open: false,
+            payload: null,
+            description: null,
+            tn: null,
+            rollImageStatus: 'idle',
+            rollImageBlob: null,
+            _rollImageReqId: 0,
+            _charId: {{ character.id }},
+
+            init() {
+                window.addEventListener('open-readonly-roll', (e) => {
+                    const r = e.detail || {};
+                    this.payload = r.payload || {};
+                    this.description = r.description || null;
+                    this.tn = (r.tn !== undefined) ? r.tn : null;
+                    this.rollImageStatus = 'idle';
+                    this.rollImageBlob = null;
+                    this.open = true;
+                    this._prerender();
+                });
+            },
+
+            breakdownItems() {
+                // Returns a unified list of bullet strings: kept-sum,
+                // each numeric bonus (label + signed amount), then each
+                // descriptive extra (VP spent, OW spent, etc).
+                const p = this.payload || {};
+                const out = [];
+                const bonuses = Array.isArray(p.bonuses) ? p.bonuses : [];
+                const extras = Array.isArray(p.extras) ? p.extras : [];
+                // Only emit kept-sum if there's a breakdown to compare it
+                // against (otherwise the Total line already conveys it).
+                if ((bonuses.length + extras.length) > 0
+                    && typeof p.kept_sum === 'number') {
+                    out.push(p.kept_sum + ' from the kept dice');
+                }
+                for (const b of bonuses) {
+                    if (!b) continue;
+                    const amt = (typeof b.amount === 'number') ? b.amount : 0;
+                    const sign = amt >= 0 ? '+' : '';
+                    const label = b.label || '';
+                    out.push(`${sign}${amt}${label ? ' ' + label : ''}`);
+                }
+                for (const s of extras) {
+                    if (s) out.push(String(s));
+                }
+                return out;
+            },
+
+            close() {
+                this.open = false;
+            },
+
+            _prerender() {
+                if (!this.payload) return;
+                const reqId = ++this._rollImageReqId;
+                this.rollImageStatus = 'rendering';
+                fetch('/characters/' + this._charId + '/roll-image', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(this.payload),
+                }).then(r => r.ok ? r.blob() : null)
+                  .then(blob => {
+                      if (reqId !== this._rollImageReqId) return;
+                      if (!blob) { this.rollImageStatus = 'failed'; return; }
+                      this.rollImageBlob = blob;
+                      this.rollImageStatus = 'ready';
+                  })
+                  .catch(() => { this.rollImageStatus = 'failed'; });
+            },
+
+            async copyRollImage() {
+                if (!this.rollImageBlob) {
+                    this.rollImageStatus = 'failed';
+                    return;
+                }
+                try {
+                    await navigator.clipboard.write([
+                        new ClipboardItem({'image/png': this.rollImageBlob}),
+                    ]);
+                    this.rollImageStatus = 'copied';
+                    setTimeout(() => {
+                        if (this.rollImageStatus === 'copied') {
+                            this.rollImageStatus = 'ready';
+                        }
+                    }, 1800);
+                } catch (e) {
+                    this.rollImageStatus = 'failed';
+                }
+            },
+        };
+    }
+</script>

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import JSON, Float, ForeignKey, String, func
+from sqlalchemy import JSON, Float, ForeignKey, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -321,6 +321,15 @@ class Character(Base):
         passive_deletes=False,
     )
 
+    # Roll history: one row per dice roll made on this character's sheet.
+    # Cascade-on-delete so deleting the character removes its rolls too
+    # (mirrors the CharacterVersion relationship). See RollHistory below.
+    roll_history: Mapped[List["RollHistory"]] = relationship(
+        "RollHistory",
+        cascade="all, delete-orphan",
+        passive_deletes=False,
+    )
+
     # ------------------------------------------------------------------
     # Convenience helpers
     # ------------------------------------------------------------------
@@ -553,3 +562,68 @@ class Character(Base):
             notes=data.get("notes", ""),
             technique_choices=data.get("technique_choices", {}),
         )
+
+
+class RollHistory(Base):
+    """One row per dice roll made on a character's sheet.
+
+    Created when a roll's result modal first opens (POST /characters/{id}/rolls),
+    updated in place as the player toggles post-roll discretionary bonuses
+    (PATCH /characters/{id}/rolls/{roll_id}). Recording is owner-only with the
+    GM/admin blanket exclusion described in app/services/rolls_history.py;
+    viewing and editing (annotation, hide/unhide) is open to any editor.
+
+    Schema note: a brand-new table is created on first startup by
+    Base.metadata.create_all in init_db(). The _migrate_add_columns helper
+    only handles new columns on EXISTING tables; new tables need no entry there.
+    """
+
+    __tablename__ = "roll_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.id"), nullable=False, index=True,
+    )
+    # Canonical roll key from build_all_roll_formulas (e.g. "skill:bragging",
+    # "knack:iaijutsu", "attack", "parry", "wound_check", "initiative",
+    # "initiative:athletics", "ring:Fire") or a synthesized key for the
+    # special rollers ("bless", "freeform", "spend_vp_xk1").
+    roll_key: Mapped[str] = mapped_column(String, nullable=False)
+    # Display label snapshotted at roll time so the list page doesn't have
+    # to redo the formula lookup or know about every roll-key suffix.
+    roll_label: Mapped[str] = mapped_column(String, default="")
+    # Discord id of whoever clicked the roll button. The server gates
+    # recording, so this will always be either the owner or a non-admin
+    # editor of the character.
+    actor_discord_id: Mapped[str] = mapped_column(String, nullable=False)
+    # True iff actor_discord_id was the character's owner at record time.
+    # Stored (not computed) so a later owner change doesn't reclassify history.
+    is_owner_roll: Mapped[bool] = mapped_column(default=False)
+    impaired_at_roll: Mapped[bool] = mapped_column(default=False)
+    # Known TN at roll time. NULL when the roll has no auto-derivable TN
+    # (skill rolls, initiative, contested rolls before the opposing roll
+    # lands, parry rolls).
+    tn: Mapped[Optional[int]] = mapped_column(default=None, nullable=True)
+    # Full roll-results modal payload. Superset of _buildRollImagePayload()'s
+    # output: title, formula, kept, dropped, bonuses, alternatives, total,
+    # footer, show_total, action_dice. The dice-card renderer reads from
+    # this shape directly so the readonly modal needs no transformation.
+    payload: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
+    # Which action die was spent for this roll, if any. None when the roll
+    # didn't consume one (e.g. initiative itself).
+    action_die_spent: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON, default=None, nullable=True,
+    )
+    # Player-toggleable hide flag, plus a freeform annotation. Both are
+    # writeable by any editor regardless of who originally rolled.
+    is_hidden: Mapped[bool] = mapped_column(default=False)
+    annotation: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        server_default=func.now(), onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        # Newest-first within a character is the canonical list query.
+        Index("ix_roll_history_char_created", "character_id", "created_at"),
+    )

@@ -1050,6 +1050,101 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     )
 
 
+@router.get("/characters/{char_id}/roll-history", response_class=HTMLResponse)
+def roll_history_page(
+    request: Request, char_id: int, db: Session = Depends(get_db),
+):
+    """Render the editor-only Roll History page.
+
+    401 redirect to login for anonymous, 404 for missing characters and
+    for hidden characters viewed by non-editors, 403 for logged-in
+    non-editors. The page itself lists all rolls (including hidden) -
+    the show-hidden toggle is client-side, so flipping it doesn't
+    round-trip.
+    """
+    from app.models import RollHistory
+    from app.routes.rolls import _iso_utc
+    from app.services.roll_descriptions import describe_roll
+
+    user = getattr(request.state, "user", None)
+    if not user:
+        return RedirectResponse("/auth/login", status_code=303)
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return HTMLResponse("Character not found", status_code=404)
+    owner = (
+        db.query(UserModel)
+        .filter(UserModel.discord_id == character.owner_discord_id)
+        .first()
+    )
+    owner_granted = (owner.granted_account_ids or []) if owner else []
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [], owner_granted,
+    )
+    can_edit = can_edit_character(
+        user["discord_id"], character.owner_discord_id, all_editors,
+    )
+    # Mirror view_character's hidden-character gate: hidden + non-editor -> 404
+    if character.is_hidden and not can_edit:
+        return HTMLResponse("Character not found", status_code=404)
+    if not can_edit:
+        return HTMLResponse("Forbidden", status_code=403)
+
+    rolls = (
+        db.query(RollHistory)
+        .filter(RollHistory.character_id == char_id)
+        .order_by(
+            RollHistory.created_at.desc(), RollHistory.id.desc(),
+        )
+        .all()
+    )
+
+    # Resolve display names for every actor that appears in the list.
+    actor_ids = sorted({r.actor_discord_id for r in rolls if r.actor_discord_id})
+    actor_users = (
+        db.query(UserModel)
+        .filter(UserModel.discord_id.in_(actor_ids))
+        .all()
+    ) if actor_ids else []
+    actor_names = {
+        u.discord_id: (u.display_name or u.discord_name or u.discord_id)
+        for u in actor_users
+    }
+    # Fall back to the raw id when no User row exists.
+    for aid in actor_ids:
+        actor_names.setdefault(aid, aid)
+
+    # Serialize rolls + explainers for the client JSON blob.
+    rolls_json = [
+        {
+            "id": r.id,
+            "roll_key": r.roll_key,
+            "roll_label": r.roll_label,
+            "payload": r.payload or {},
+            "tn": r.tn,
+            "impaired_at_roll": bool(r.impaired_at_roll),
+            "is_hidden": bool(r.is_hidden),
+            "annotation": r.annotation or "",
+            "actor_discord_id": r.actor_discord_id,
+            "actor_name": actor_names.get(r.actor_discord_id, r.actor_discord_id),
+            "is_owner_roll": bool(r.is_owner_roll),
+            "created_at": _iso_utc(r.created_at),
+            "description": describe_roll(r.roll_key),
+        }
+        for r in rolls
+    ]
+
+    return _templates().TemplateResponse(
+        request=request,
+        name="character/roll_history.html",
+        context={
+            "character": character,
+            "rolls_json": rolls_json,
+            "viewer_discord_id": user["discord_id"],
+        },
+    )
+
+
 @router.get("/characters/{char_id}/edit", response_class=HTMLResponse)
 def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)):
     user = getattr(request.state, "user", None)
