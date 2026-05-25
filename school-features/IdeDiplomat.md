@@ -68,12 +68,15 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `ide_subtract_roll: true` and `ide_subtract_x: tact_skill` in school_abilities.
-- Client: tracking section shows "Ide 3rd Dan - Subtract from Roll" button. Spending 1 VP rolls Xk1 (X = tact skill) and displays the result to subtract from an opponent's roll.
+- Client: tracking section shows "Ide 3rd Dan - Subtract from Roll" button. Spending 1 VP calls `rollSpendVPForXk1` in `app/templates/character/sheet.html`, which rolls Xk1 (X = tact skill) and displays the result to subtract from an opponent's roll. (Shares `rollSpendVPForXk1` with the Isawa Ishi 3rd Dan add-to-roll.)
+- The roll **is recorded to Roll History** with `roll_key = "spend_vp_xk1:ide_diplomat"` and label "Ide 3rd Dan". The history tooltip resolves that key to this school's actual 3rd Dan technique rules text (via the `spend_vp_xk1:<school_id>` branch in `app/services/roll_descriptions.py`). Before the fix, this roll filled the modal but never POSTed, so it never appeared in the history.
 - "You know the result of all TN and contested rolls except sincerity and interrogation" is an information display mechanic (not encoded).
 
 **Clicktests:**
 - `test_school_abilities.py::test_ide_3rd_dan_subtract_button`
 - `test_school_abilities.py::test_ide_subtract_button_visible`
+- `test_school_abilities.py::test_ide_3rd_dan_subtract_behavioral`
+- `test_school_abilities.py::test_spend_vp_xk1_roll_recorded_in_history` (records to Roll History)
 
 **Questions (ANSWERED):**
 - X is the tact skill rank (as stated in the rules text).

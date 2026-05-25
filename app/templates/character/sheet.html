@@ -1685,7 +1685,7 @@
                 <div class="text-sm text-ink/60 mb-1">Ide 3rd Dan - Subtract from Roll</div>
                 <div class="flex items-center gap-2">
                     <button type="button"
-                            @click="const t = window._trackingBridge; if (!t || (t.anyVPAvailable?.() || 0) <= 0) return; window._diceRoller?.rollSpendVPForXk1({ x: {{ school_abilities.get('ide_subtract_x', 0) }}, title: 'Ide 3rd Dan - Subtract from Roll' })"
+                            @click="const t = window._trackingBridge; if (!t || (t.anyVPAvailable?.() || 0) <= 0) return; window._diceRoller?.rollSpendVPForXk1({ x: {{ school_abilities.get('ide_subtract_x', 0) }}, title: 'Ide 3rd Dan' })"
                             :disabled="(window._trackingBridge?.anyVPAvailable?.() || 0) <= 0"
                             class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                         Spend 1 VP to subtract <span>{{ school_abilities.get('ide_subtract_x', 0) }}</span>k1
@@ -1698,7 +1698,7 @@
                 <div class="text-sm text-ink/60 mb-1">Isawa Ishi 3rd Dan - Add to Roll</div>
                 <div class="flex items-center gap-2">
                     <button type="button"
-                            @click="const t = window._trackingBridge; if (!t || (t.anyVPAvailable?.() || 0) <= 0) return; window._diceRoller?.rollSpendVPForXk1({ x: {{ school_abilities.get('ishi_add_x', 0) }}, title: 'Isawa Ishi 3rd Dan - Add to Roll' })"
+                            @click="const t = window._trackingBridge; if (!t || (t.anyVPAvailable?.() || 0) <= 0) return; window._diceRoller?.rollSpendVPForXk1({ x: {{ school_abilities.get('ishi_add_x', 0) }}, title: 'Isawa Ishi 3rd Dan' })"
                             :disabled="(window._trackingBridge?.anyVPAvailable?.() || 0) <= 0"
                             class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                         Spend 1 VP to add <span>{{ school_abilities.get('ishi_add_x', 0) }}</span>k1
@@ -12058,6 +12058,13 @@
                 this.deductVoidPoints({ fromRegular, fromTemp, fromWorldliness });
 
                 this.title = title;
+                // Roll-history key (see roll_descriptions.py: "spend_vp_xk1").
+                // The ":<school>" suffix lets the explainer tooltip resolve to
+                // that school's actual 3rd Dan technique rules text (Isawa Ishi,
+                // Ide Diplomat, etc.); the bare key falls back to generic text.
+                // Without setting this at all, the row would inherit the
+                // previous roll's key and the create POST would never fire.
+                this.currentRollKey = 'spend_vp_xk1:' + ({{ character.school|tojson }} || '');
                 this.formulaText = `${x}k1`;
                 this.formula = { rolled: x, kept: 1, flat: 0, reroll_tens: true, is_initiative: false };
                 this.raisesSpentThisRoll = 0;
@@ -12088,6 +12095,11 @@
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
                 this.baseTotal = this.keptSum;
                 this.phase = 'done';
+                // Pre-render the copy-as-image PNG and persist to Roll History,
+                // exactly like the standard roll path (runRoll). Previously this
+                // roll was never recorded, so it never appeared in the history.
+                this._prerenderRollImage(this._buildRollImagePayload());
+                this._saveRollHistoryCreate();
             },
 
             close() {

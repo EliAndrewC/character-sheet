@@ -116,6 +116,28 @@ _HARDCODED: Dict[str, Dict[str, str]] = {
 }
 
 
+def label_for_roll(
+    roll_key: Optional[str], payload: Optional[Dict] = None
+) -> str:
+    """Return the short display label for a roll (the "Type of Roll" column).
+
+    The label is NOT stored on the row; it is the title captured in the roll's
+    payload at roll time (``payload['title']``), which every roller records and
+    which used to be duplicated into the dropped ``roll_label`` column. For the
+    rare/defensive case of a payload with no title, fall back to the explainer
+    title for the key, then the raw key, then a generic "Roll".
+    """
+    title = (payload or {}).get("title")
+    if title:
+        return str(title)
+    if roll_key:
+        # describe_roll's title is a reasonable last-resort label (it carries
+        # decorations like "(skill)", but this path only fires for a malformed
+        # payload, which no real roller produces).
+        return describe_roll(roll_key).get("title") or roll_key
+    return "Roll"
+
+
 def describe_roll(roll_key: Optional[str]) -> Dict[str, str]:
     """Return ``{'title': str, 'body': str}`` for a roll_key.
 
@@ -193,6 +215,22 @@ def describe_roll(roll_key: Optional[str]) -> Dict[str, str]:
                 "for movement, jumping, climbing, and dodging."
             ),
         }
+
+    if roll_key.startswith("spend_vp_xk1:"):
+        # "spend_vp_xk1:<school_id>" - the Ide Diplomat / Isawa Ishi style 3rd
+        # Dan "spend a VP to add/subtract Xk1 from a roll" technique. Show that
+        # school's actual 3rd Dan rules text; fall back to the generic blurb if
+        # the school is unknown or has no 3rd Dan text recorded. (A bare
+        # "spend_vp_xk1" key from before this was school-aware is handled by the
+        # _HARDCODED lookup above.)
+        school_id = roll_key.split(":", 1)[1]
+        school = SCHOOLS.get(school_id)
+        if school is not None and 3 in school.techniques:
+            return {
+                "title": f"{school.name} 3rd Dan technique",
+                "body": school.techniques[3] or "",
+            }
+        return dict(_HARDCODED["spend_vp_xk1"])
 
     if roll_key.startswith("school:"):
         # Format: "school:<school_id>:<dan>" or "school:<school_id>:special"

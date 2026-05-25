@@ -20,6 +20,7 @@ from app.services.auth import (
     get_admin_ids,
     get_all_editors,
 )
+from app.services.roll_descriptions import label_for_roll
 from app.services.rolls_history import (
     coerce_action_die_spent,
     coerce_annotation,
@@ -93,7 +94,7 @@ def _serialize_roll(r: RollHistory) -> dict:
     return {
         "id": r.id,
         "roll_key": r.roll_key,
-        "roll_label": r.roll_label,
+        "roll_label": label_for_roll(r.roll_key, r.payload),
         "payload": r.payload or {},
         "impaired_at_roll": bool(r.impaired_at_roll),
         "tn": r.tn,
@@ -149,13 +150,14 @@ async def create_roll(
     action_die = coerce_action_die_spent(body.get("action_die_spent"))
     tn = coerce_tn(body.get("tn"))
     roll_key = (body.get("roll_key") or "")[:200]
-    roll_label = (body.get("roll_label") or "")[:200]
+    # roll_label is intentionally NOT stored - the display label is derived from
+    # payload.title at read time (see _serialize_roll / label_for_roll). Clients
+    # may still send it; we ignore it.
     impaired = bool(body.get("impaired_at_roll", False))
 
     row = RollHistory(
         character_id=character.id,
         roll_key=roll_key,
-        roll_label=roll_label,
         actor_discord_id=user["discord_id"],
         is_owner_roll=is_owner_roll,
         impaired_at_roll=impaired,

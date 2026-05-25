@@ -589,9 +589,10 @@ class RollHistory(Base):
     # "initiative:athletics", "ring:Fire") or a synthesized key for the
     # special rollers ("bless", "freeform", "spend_vp_xk1").
     roll_key: Mapped[str] = mapped_column(String, nullable=False)
-    # Display label snapshotted at roll time so the list page doesn't have
-    # to redo the formula lookup or know about every roll-key suffix.
-    roll_label: Mapped[str] = mapped_column(String, default="")
+    # NOTE: the display label is NOT stored. It is derived at read time from
+    # payload.title (see app/services/roll_descriptions.label_for_roll), which
+    # every roll records. The old roll_label column was dropped (database.py
+    # migration) to avoid duplicating the label in two places.
     # Discord id of whoever clicked the roll button. The server gates
     # recording, so this will always be either the owner or a non-admin
     # editor of the character.

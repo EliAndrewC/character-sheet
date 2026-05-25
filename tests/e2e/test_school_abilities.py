@@ -5634,6 +5634,38 @@ def test_ide_3rd_dan_subtract_behavioral(page, live_server_url):
     assert subtract_btn.is_visible()
 
 
+def test_spend_vp_xk1_roll_recorded_in_history(page, live_server_url):
+    """Regression: the 'spend 1 VP to add/subtract Xk1' roll (Ide Diplomat and
+    Isawa Ishi 3rd Dan, both via rollSpendVPForXk1) must be written to Roll
+    History like every other roll. It used to fill the modal but never POST, so
+    it never appeared in the history. Verified on the Ide path because the
+    Isawa Ishi e2e char-creation has a separate pre-existing issue (xfail), but
+    the recording code is shared."""
+    import re
+    _create_char(page, live_server_url, "Xk1Hist", "ide_diplomat",
+                 knack_overrides={"double_attack": 3, "feint": 3, "worldliness": 3},
+                 skill_overrides={"tact": 2})
+    cid = int(re.search(r"/characters/(\d+)", page.url).group(1))
+    page.evaluate("window._trackingBridge.voidPoints = 1")
+    page.wait_for_timeout(200)
+    page.locator('button:has-text("Spend 1 VP to subtract")').click()
+    _wait_roll_done(page)
+    # Let the create POST land; close() also flushes any pending write.
+    page.wait_for_timeout(500)
+    page.evaluate("window._diceRoller.close()")
+    page.wait_for_timeout(300)
+    rolls = page.evaluate(
+        f"""async () => {{
+            const r = await fetch('/characters/{cid}/rolls');
+            return r.ok ? (await r.json()).rolls : null;
+        }}"""
+    )
+    assert rolls and len(rolls) == 1, f"expected 1 recorded roll, got {rolls!r}"
+    assert rolls[0]["roll_key"] == "spend_vp_xk1:ide_diplomat"
+    assert rolls[0]["roll_label"] == "Ide 3rd Dan"
+    assert rolls[0]["payload"]["total"] > 0
+
+
 def test_ide_4th_dan_regen_tooltip(page, live_server_url):
     """Ide 4th Dan: +2/night label has tooltip explaining the extra VP regen."""
     _create_char(page, live_server_url, "Ide4Tip", "ide_diplomat",
@@ -7452,7 +7484,6 @@ def test_hida_below_5th_dan_no_counterattack_wc_bonus(page, live_server_url):
     _restore_dice(page)
 
 
-@pytest.mark.xfail(reason="Pre-existing Isawa Ishi character creation issue in e2e tests")
 def test_ishi_3rd_dan_add_button_visible(page, live_server_url):
     """Isawa Ishi 3rd Dan: add-to-roll button visible on sheet."""
     _create_char(page, live_server_url, "Ishi3Add", "isawa_ishi",
@@ -7464,12 +7495,14 @@ def test_ishi_3rd_dan_add_button_visible(page, live_server_url):
     assert "2k1" in btn.text_content()
 
 
-@pytest.mark.xfail(reason="Pre-existing Isawa Ishi character creation issue in e2e tests")
 def test_ishi_3rd_dan_add_roll(page, live_server_url):
-    """Isawa Ishi 3rd Dan: clicking add button deducts VP and opens roll results modal."""
+    """Isawa Ishi 3rd Dan: clicking add button deducts VP, opens the roll
+    results modal, AND records the Xk1 roll to Roll History."""
+    import re
     _create_char(page, live_server_url, "Ishi3Roll", "isawa_ishi",
                  knack_overrides={"absorb_void": 3, "kharmic_spin": 3, "otherworldliness": 3},
                  skill_overrides={"precepts": 2})
+    cid = int(re.search(r"/characters/(\d+)", page.url).group(1))
     page.evaluate("window._trackingBridge.voidPoints = 1")
     page.wait_for_timeout(200)
     btn = page.locator('button:has-text("Spend 1 VP to add")')
@@ -7483,6 +7516,19 @@ def test_ishi_3rd_dan_add_roll(page, live_server_url):
     assert "2k1" in modal.text_content()
     total = page.evaluate("window._diceRoller.baseTotal")
     assert total > 0
+    # The roll must land in Roll History (regression: it used to never POST).
+    page.wait_for_timeout(500)
+    page.evaluate("window._diceRoller.close()")
+    page.wait_for_timeout(300)
+    rolls = page.evaluate(
+        f"""async () => {{
+            const r = await fetch('/characters/{cid}/rolls');
+            return r.ok ? (await r.json()).rolls : null;
+        }}"""
+    )
+    assert rolls and len(rolls) == 1, f"expected 1 recorded roll, got {rolls!r}"
+    assert rolls[0]["roll_key"] == "spend_vp_xk1:isawa_ishi"
+    assert rolls[0]["roll_label"] == "Isawa Ishi 3rd Dan"
 
 
 def test_oppose_social_roll_shows_penalty(page, live_server_url):
