@@ -123,6 +123,23 @@ def format_editor_list_text(
     return "you, the GM, " + ", ".join(extras[:-1]) + f", and {extras[-1]}"
 
 
+def is_owning_player(
+    user_discord_id: Optional[str],
+    character_owner_id: Optional[str],
+) -> bool:
+    """True iff the user is the character's owner.
+
+    Distinct from ``can_edit_character``: admins and granted editors are
+    NOT owning players. Used to gate roll-history *recording* (writing
+    is owner-only with a non-owner-editor branch and a blanket admin
+    exclusion); roll-history *viewing* uses the broader
+    ``can_edit_character``.
+    """
+    if not user_discord_id or not character_owner_id:
+        return False
+    return user_discord_id == character_owner_id
+
+
 def can_edit_character(
     user_discord_id: Optional[str],
     character_owner_id: Optional[str],

@@ -20,7 +20,7 @@ configure_logging()
 
 from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
-from app.routes import art, auth, characters, google_sheets, import_char, names, pages
+from app.routes import art, auth, characters, google_sheets, import_char, names, pages, rolls
 from app.services.auth import is_admin
 from app.services.import_rate_limit import import_enabled
 
@@ -274,6 +274,7 @@ app.include_router(google_sheets.router)
 app.include_router(import_char.router)
 app.include_router(art.router)
 app.include_router(names.router)
+app.include_router(rolls.router)
 
 
 # Global backup status (read by routes for admin banner)

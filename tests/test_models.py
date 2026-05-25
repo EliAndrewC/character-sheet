@@ -616,3 +616,118 @@ class TestCharacterDB:
         db.commit()
 
         assert db.query(Character).filter(Character.id == char_id).first() is None
+
+
+class TestRollHistory:
+    """The RollHistory table records one row per dice roll a player makes on
+    the View Sheet. Owned by the character via a cascade-on-delete
+    relationship so a character delete takes its rolls with it.
+    """
+
+    def test_create_and_query(self, db):
+        from app.models import RollHistory
+        char = Character(name="Roller", owner_discord_id="o1")
+        db.add(char)
+        db.flush()
+        roll = RollHistory(
+            character_id=char.id,
+            roll_key="skill:bragging",
+            roll_label="Bragging",
+            actor_discord_id="o1",
+            is_owner_roll=True,
+            impaired_at_roll=False,
+            tn=None,
+            payload={"total": 25, "formula": "5k3"},
+        )
+        db.add(roll)
+        db.flush()
+        assert roll.id is not None
+        assert roll.is_hidden is False
+        assert roll.annotation == ""
+        # SQLAlchemy server defaults for created_at/updated_at fire on commit
+        db.commit()
+        assert roll.created_at is not None
+
+    def test_payload_round_trips(self, db):
+        from app.models import RollHistory
+        char = Character(name="JSON", owner_discord_id="o1")
+        db.add(char)
+        db.flush()
+        payload = {
+            "title": "Bragging",
+            "formula": "7k3 + 5",
+            "kept": [{"parts": [9]}, {"parts": [10, 7]}, {"parts": [5]}],
+            "dropped": [{"parts": [3]}, {"parts": [2]}, {"parts": [1]}, {"parts": [4]}],
+            "bonuses": [{"label": "Honor", "amount": 5}],
+            "alternatives": [],
+            "total": 36,
+            "footer": None,
+            "show_total": True,
+        }
+        roll = RollHistory(
+            character_id=char.id,
+            roll_key="skill:bragging",
+            roll_label="Bragging",
+            actor_discord_id="o1",
+            is_owner_roll=True,
+            impaired_at_roll=False,
+            payload=payload,
+        )
+        db.add(roll)
+        db.commit()
+        fetched = db.query(RollHistory).filter_by(id=roll.id).first()
+        assert fetched.payload == payload
+
+    def test_tn_optional(self, db):
+        from app.models import RollHistory
+        char = Character(name="TN", owner_discord_id="o1")
+        db.add(char)
+        db.flush()
+        # Attack roll: TN known
+        attack = RollHistory(
+            character_id=char.id, roll_key="attack", roll_label="Attack",
+            actor_discord_id="o1", is_owner_roll=True,
+            impaired_at_roll=False, tn=35, payload={"total": 40},
+        )
+        # Skill roll: TN unknown
+        skill = RollHistory(
+            character_id=char.id, roll_key="skill:bragging", roll_label="Bragging",
+            actor_discord_id="o1", is_owner_roll=True,
+            impaired_at_roll=False, tn=None, payload={"total": 20},
+        )
+        db.add_all([attack, skill])
+        db.commit()
+        assert attack.tn == 35
+        assert skill.tn is None
+
+    def test_cascade_on_character_delete(self, db):
+        from app.models import RollHistory
+        char = Character(name="DelChar", owner_discord_id="o1")
+        db.add(char)
+        db.flush()
+        roll = RollHistory(
+            character_id=char.id, roll_key="skill:bragging",
+            roll_label="Bragging", actor_discord_id="o1",
+            is_owner_roll=True, impaired_at_roll=False, payload={},
+        )
+        db.add(roll)
+        db.commit()
+        roll_id = roll.id
+        db.delete(char)
+        db.commit()
+        assert db.query(RollHistory).filter_by(id=roll_id).first() is None
+
+    def test_hide_and_annotation_defaults(self, db):
+        from app.models import RollHistory
+        char = Character(name="Defaults", owner_discord_id="o1")
+        db.add(char)
+        db.flush()
+        roll = RollHistory(
+            character_id=char.id, roll_key="initiative",
+            roll_label="Initiative", actor_discord_id="o1",
+            is_owner_roll=True, impaired_at_roll=False, payload={},
+        )
+        db.add(roll)
+        db.commit()
+        assert roll.is_hidden is False
+        assert roll.annotation == ""
