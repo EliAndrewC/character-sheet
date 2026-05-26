@@ -2358,17 +2358,13 @@ class TestEditPageXpLabelsSaySpent:
     "X XP" / "+X XP" because they ARE per-item costs, not running totals."""
 
     def test_skill_total_label_says_spent(self, client):
-        """The skillXpLabel JS helper is the single source for every skill
-        row's XP-total label. Its return string must read "N XP spent"."""
+        """Each skill row's XP-total label reads "N XP spent" (server-computed
+        via xp.costs), so players don't mistake the running total for the next
+        increment's cost. The skill label is conditional (hidden at rank 0)."""
         cid = _seed_character(client, name="Lbl")
         body = client.get(f"/characters/{cid}/edit").text
-        # Find the skillXpLabel function definition and assert it returns
-        # totalSkillCost(...) + ' XP spent'
-        idx = body.index("skillXpLabel(skillId, isAdvanced)")
-        body_tail = body[idx:idx + 400]
-        assert "totalSkillCost(rank, isAdvanced) + ' XP spent'" in body_tail, (
-            f"skillXpLabel must return a 'XP spent' string; got: {body_tail!r}"
-        )
+        assert "xp.costs['skill:" in body
+        assert "' XP spent'" in body
 
     def _assert_xtext_says_spent(self, body: str, expr_substr: str):
         """Find an x-text attribute containing expr_substr and assert it
@@ -2386,29 +2382,29 @@ class TestEditPageXpLabelsSaySpent:
     def test_school_knack_label_says_spent(self, client):
         cid = _seed_character(client, name="Lbl2")
         body = client.get(f"/characters/{cid}/edit").text
-        self._assert_xtext_says_spent(body, "totalKnackCostSingle(")
+        self._assert_xtext_says_spent(body, "xp.costs['knack:")
 
     def test_ring_label_says_spent(self, client):
         cid = _seed_character(client, name="Lbl3")
         body = client.get(f"/characters/{cid}/edit").text
-        self._assert_xtext_says_spent(body, "ringCost(")
+        self._assert_xtext_says_spent(body, "xp.costs['ring:")
 
     def test_attack_label_says_spent(self, client):
         cid = _seed_character(client, name="Lbl4")
         body = client.get(f"/characters/{cid}/edit").text
-        self._assert_xtext_says_spent(body, "combatSkillXp(attack)")
+        self._assert_xtext_says_spent(body, "xp.costs['combat:attack']")
 
     def test_parry_label_says_spent(self, client):
         cid = _seed_character(client, name="Lbl5")
         body = client.get(f"/characters/{cid}/edit").text
-        self._assert_xtext_says_spent(body, "combatSkillXp(parry)")
+        self._assert_xtext_says_spent(body, "xp.costs['combat:parry']")
 
     def test_foreign_knack_label_says_spent(self, client):
         cid = _seed_character(
             client, name="Lbl6", foreign_knacks={"athletics": 1},
         )
         body = client.get(f"/characters/{cid}/edit").text
-        self._assert_xtext_says_spent(body, "foreignKnackTotalCost(")
+        self._assert_xtext_says_spent(body, "xp.costs['foreign_knack:")
 
     def test_advantage_xp_label_unchanged(self, client):
         """Advantages still read "N XP" (no "spent"), since each row shows
@@ -2433,7 +2429,9 @@ class TestUpdateCharacter:
     def test_update_changes_fields(self, client):
         cid = _seed_character(client, name="Original")
 
-        form = make_character_form(name="Updated", ring_air="4", honor="3.0")
+        form = make_character_form(
+            name="Updated", ring_air="4", honor="3.0", skill_bragging="2",
+        )
         resp = client.post(f"/characters/{cid}", data=form, follow_redirects=False)
         assert resp.status_code == 303
 
@@ -2441,6 +2439,7 @@ class TestUpdateCharacter:
         assert char.name == "Updated"
         assert char.ring_air == 4
         assert char.honor == 3.0
+        assert (char.skills or {}).get("bragging") == 2  # non-zero skill persisted
 
     def test_update_nonexistent_404(self, client):
         form = make_character_form()
@@ -4176,12 +4175,60 @@ class TestConvictionResetButtonPosition:
         assert reset_idx < dec_idx
 
 
-class TestXPCalcPartial:
-    def test_xp_calc_returns_breakdown(self, client):
-        form = make_character_form(ring_fire="3", skill_precepts="3")
-        resp = client.post("/characters/api/xp-calc", data=form)
+class TestCharacterXpEndpoint:
+    """POST /characters/{id}/xp - server-computed XP for the editor's live
+    display (the single source of truth that replaced the client-side calc)."""
+
+    def _body(self, **over):
+        body = {
+            "school": "akodo_bushi", "school_ring_choice": "Water",
+            "rings": {"Air": 2, "Fire": 3, "Earth": 2, "Water": 3, "Void": 2},
+            "attack": 1, "parry": 1, "skills": {"bragging": 2}, "knacks": {},
+            "foreign_knacks": {}, "advantages": [], "disadvantages": [],
+            "campaign_advantages": [], "campaign_disadvantages": [],
+            "specializations": [], "honor": 1.0, "rank": 7.5, "rank_locked": True,
+            "recognition": 7.5, "recognition_halved": False, "earned_xp": 0,
+        }
+        body.update(over)
+        return body
+
+    def test_returns_totals_costs_and_marginal(self, client):
+        cid = _seed_character(client)
+        resp = client.post(f"/characters/{cid}/xp", json=self._body())
         assert resp.status_code == 200
-        assert "Unspent" in resp.text
+        data = resp.json()
+        # Fire 2->3 = 15, bragging basic 0->2 = 4.
+        assert data["costs"]["ring:Fire"] == 15
+        assert data["costs"]["skill:bragging"] == 4
+        assert data["spent"] == 19
+        assert data["remaining"] == data["budget"] - data["spent"]
+        assert data["marginal"]["ring:Fire"]["up"] == 20  # 3->4 = 20
+
+    def test_falls_back_to_persisted_state_for_omitted_fields(self, client):
+        # An empty body still computes from the persisted character (no 500).
+        cid = _seed_character(client)
+        resp = client.post(f"/characters/{cid}/xp", json={})
+        assert resp.status_code == 200
+        assert "spent" in resp.json()
+
+    def test_requires_auth(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/xp", json={}, headers={"X-Test-User": ""}
+        )
+        assert resp.status_code == 401
+
+    def test_forbidden_for_non_editor(self, client):
+        cid = _seed_character(client)
+        resp = client.post(
+            f"/characters/{cid}/xp", json={},
+            headers={"X-Test-User": "test_user_2:NonEditor"},
+        )
+        assert resp.status_code == 403
+
+    def test_404_for_missing_character(self, client):
+        resp = client.post("/characters/999999/xp", json={})
+        assert resp.status_code == 404
 
 
 class TestAutosaveAllFieldSetters:

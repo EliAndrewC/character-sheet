@@ -40,26 +40,38 @@ def test_character_visible_to_nonadmin(page, page_nonadmin, live_server_url):
 
 
 def test_tracking_buttons_local_only_for_nonadmin(page, page_nonadmin, live_server_url):
-    """Read-only Roll Mode (Phases 2-4): Tracking +/- buttons RENDER for
-    non-editor viewers, but mutations are client-local only - the
-    Phase 1 save shim short-circuits the /track POST and the read-only
-    banner partial is carried in the DOM for roll-result modals.
+    """Read-only Roll Mode: a non-editor viewing a published sheet sees the
+    tracking VALUES but cannot mutate the persisted counters from the tracking
+    section. Per the read-only design (see CLAUDE.md "Read-only Roll Mode"),
+    the discretionary counter buttons (SW +/-, VP +/-, Temp Void +/-) are
+    hidden for non-editors; LW - stays in the DOM but disabled (layout
+    stability); LW + stays clickable because it only feeds a hypothetical
+    amount into the wound-check walk-through without ever touching the
+    persisted lightWounds. The read-only banner partial is carried (hidden) in
+    the DOM for roll-result modals, and the trackingData bridge reports
+    canEdit=false so its save() shim short-circuits. The backend 403 on /track
+    is the defence-in-depth layer (test_track_endpoint_forbidden_for_nonadmin).
 
-    The previous invariant (buttons hidden for non-editors) was replaced
-    by the Phase 2-4 un-gating: viewers now drive their own rolls and
-    resource spends without persisting anything. The backend 403 on
-    /track is still enforced by
-    ``test_track_endpoint_forbidden_for_nonadmin`` below as the
-    defence-in-depth layer."""
+    NOTE: this asserts the opposite of an earlier "Phases 2-4 un-gating"
+    iteration that briefly rendered the SW/VP buttons for viewers; the design
+    settled on keeping the displayed counters anchored to the persisted server
+    values, so those buttons are gated out again."""
     url = create_and_apply(page, live_server_url, "Track Read Only")
     page_nonadmin.goto(url)
     page_nonadmin.wait_for_selector('text="Tracking"')
     # Values still visible.
-    serious = page_nonadmin.locator('text="Serious Wounds"').locator('..').locator('span.font-bold')
+    serious = page_nonadmin.locator('text="Serious Wounds"').first.locator('..').locator('span.font-bold')
     assert serious.first.text_content().strip() == "0"
-    # +/- buttons now render (un-gated in Phases 3-4).
-    assert page_nonadmin.locator('text="Serious Wounds"').locator('..').locator('button', has_text="+").count() > 0
-    assert page_nonadmin.locator('text="Light Wounds"').locator('..').locator('button', has_text="+").count() > 0
+    # Serious Wounds +/- buttons are HIDDEN for non-editors: the row carries
+    # only the value, no mutation buttons.
+    sw_row = page_nonadmin.locator('text="Serious Wounds"').first.locator('..')
+    assert sw_row.locator("button").count() == 0
+    # Light Wounds: '+' stays clickable (scenario-only, feeds the WC modal);
+    # '-' is present but disabled for non-editors.
+    lw_plus = page_nonadmin.locator('[data-action="lw-plus"]')
+    assert lw_plus.count() == 1 and lw_plus.is_enabled()
+    lw_minus = page_nonadmin.locator('[data-action="lw-minus"]')
+    assert lw_minus.count() == 1 and lw_minus.is_disabled()
     # Read-only banner partial is present in the DOM (hidden until a
     # roll modal opens). Confirms the Phase 1 infrastructure is wired
     # for this viewer.

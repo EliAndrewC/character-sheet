@@ -1,0 +1,811 @@
+{% from "character/partials/sheet/_macros.html" import precepts_pool_block %}
+        <div x-show="open" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="dice-roller"
+             @click.self="close()">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent" x-text="title"></h3>
+                    <button type="button" @click="close()"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+
+                {# Animated dice tray (visible while rolling, only if animation enabled) #}
+                <div x-show="prefs.dice_animation_enabled && (phase === 'rolling' || phase === 'sub-damage-rolling')" x-cloak
+                     id="dice-animation"
+                     class="mb-4 min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+
+                {# Result panel (visible when phase === 'done') #}
+                <div x-show="phase === 'done'" x-cloak class="space-y-3">
+                    {# Formula header (e.g. "10k7 + 11") #}
+                    <div class="text-base font-mono font-bold text-ink/80" x-text="formulaText"></div>
+
+                    {# Kitsune Warden Special Ability annotation #}
+                    <div x-show="formula && formula.kitsune_swap_to_ring" x-cloak
+                         data-testid="kitsune-swap-result-annotation"
+                         class="text-xs italic text-accent">
+                        Kitsune Warden Special Ability: rolled with
+                        <span class="font-bold" x-text="formula?.kitsune_swap_to_ring"></span>
+                        instead of <span x-text="formula?.kitsune_swap_from_ring"></span>.
+                    </div>
+
+                    {# Read-only banner (non-editors only). Unlike the attack
+                       and WC modals which always show this, the dice-roller
+                       modal handles skill/ring/knack rolls where VP and
+                       other resources are chosen up-front via the roll
+                       menu - so we only show the banner if the non-editor
+                       actually consumed something. The condition is also
+                       reactive to post-roll spends (raises, conviction,
+                       priest pool, etc). #}
+                    <div x-show="_resourcesSpentForBanner()" x-cloak>
+                        {% include 'character/partials/read_only_roll_banner.html' %}
+                    </div>
+
+                    {# Inline dice list (sorted ascending), kept ones bold, unkept struck through #}
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+
+                    {# ── INITIATIVE result ── #}
+                    <div x-show="formula && formula.is_initiative" x-cloak>
+                        <div class="bg-ink/5 rounded p-3 text-sm">
+                            <div class="flex items-center justify-between mb-2 gap-3">
+                                <div class="font-bold text-lg">Action Dice</div>
+                                {% include 'character/partials/copy_roll_image_button.html' %}
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 mb-2">
+                                <template x-for="(die, i) in actionDice" :key="i">
+                                    <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
+                                         class="die action-die"
+                                         :class="(die.athletics_only ? 'athletics-only ' : '') + (die.value === 0 ? 'phase-zero ' : '') + (die.value === 10 ? 'two-digit' : '')">
+                                        <template x-if="die.mantis_4th_dan">
+                                            <title>Mantis 4th Dan athletics die. May only be spent on movement, athletics, or the Mantis 3rd Dan technique.</title>
+                                        </template>
+                                        <template x-if="die.athletics_only && !die.mantis_4th_dan">
+                                            <title>Athletics-only action die (Togashi special ability)</title>
+                                        </template>
+                                        <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+                                        <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
+                                              x-text="die.value"></text>
+                                    </svg>
+                                </template>
+                            </div>
+                            <div class="text-xs text-ink/60">
+                                Each action die may be spent in or after its phase to perform an action.
+                            </div>
+                        </div>
+                        {# School-specific notes #}
+                        <div class="space-y-1 mt-2 text-xs">
+                            <template x-if="formula && formula.kakita_phase_zero && actionDice.some(d => d.value === 0)">
+                                <div class="text-gold font-medium">Phase 0: Kakita interrupt attack (10s on initiative become Phase 0).</div>
+                            </template>
+                            <template x-if="formula && formula.shinjo_4th_dan">
+                                <div class="text-ink/70 italic">Shinjo 4th Dan: highest action die was set to 1.</div>
+                            </template>
+                            <template x-if="formula && formula.hiruma_4th_dan">
+                                <div class="text-ink/70 italic">Hiruma 4th Dan: all action dice lowered by 2 (min 1).</div>
+                            </template>
+                            <template x-if="actionDice.some(d => d.athletics_only && !d.mantis_4th_dan)">
+                                <div class="text-info italic">Togashi Special: the blue action die is a bonus die that may only be spent on athletics actions.</div>
+                            </template>
+                            <template x-if="actionDice.some(d => d.mantis_4th_dan)">
+                                <div class="text-info italic">Mantis 4th Dan: the blue action die may only be spent on movement, athletics actions, or the Mantis 3rd Dan technique.</div>
+                            </template>
+                        </div>
+                        <div x-show="perRoundResetMessages.length > 0" x-cloak
+                             data-testid="per-round-reset-messages"
+                             class="mt-2 bg-accent/5 border border-accent/30 rounded p-2 text-xs text-accent space-y-0.5">
+                            <template x-for="msg in perRoundResetMessages" :key="msg">
+                                <div x-text="msg"></div>
+                            </template>
+                        </div>
+                    </div>
+
+                    {# ── NORMAL (non-initiative) result: Pool view ── #}
+                    <div x-show="!formula || !formula.is_initiative" class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="bg-parchment/40 rounded p-2">
+                            <div class="text-xs font-bold text-ink/60 mb-1">Unkept dice</div>
+                            <template x-for="(d, i) in unkeptDice" :key="i">
+                                <div class="font-mono">
+                                    <span x-text="d.parts.join(' + ')"></span>
+                                    <template x-if="d.parts.length > 1">
+                                        <span> = <span class="font-bold" x-text="d.value"></span></span>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="unkeptDice.length === 0">
+                                <div class="text-xs italic text-ink/40">none</div>
+                            </template>
+                        </div>
+                        <div class="bg-parchment/40 rounded p-2">
+                            <div class="text-xs font-bold text-ink/60 mb-1">Kept dice</div>
+                            <template x-for="(d, i) in keptDice" :key="i">
+                                <div class="font-mono">
+                                    <span x-text="d.parts.join(' + ')"></span>
+                                    <template x-if="d.parts.length > 1">
+                                        <span> = <span class="font-bold" x-text="d.value"></span></span>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    {# Total + structured breakdown (not shown for initiative) #}
+                    <div x-show="!formula || !formula.is_initiative" class="bg-ink/5 rounded p-3 text-sm">
+                        <div class="flex items-center justify-between mb-1 gap-3">
+                            <div class="font-bold text-lg">
+                                Total: <span class="text-accent" x-text="baseTotal"></span>
+                            </div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
+                        {# Only show the breakdown list when there are flat bonuses;
+                           with no bonuses, the Total line above already says
+                           everything (Total = sum of kept dice). #}
+                        <template x-if="formula && formula.bonuses && formula.bonuses.length > 0">
+                            <ul class="text-xs text-ink/70 list-disc list-inside space-y-0.5">
+                                <li><span x-text="keptSum"></span> from the kept dice</li>
+
+                                {# Single bonus: render directly without sub-bullets #}
+                                <template x-if="formula?.bonuses?.length === 1">
+                                    <li>
+                                        <span x-text="((formula?.bonuses?.[0]?.amount || 0) >= 0 ? '+' : '') + formula?.bonuses?.[0]?.amount"></span>
+                                        from <span x-text="formula?.bonuses?.[0]?.label"></span>
+                                    </li>
+                                </template>
+
+                                {# Multiple bonuses: total line + indented sub-bullets #}
+                                <template x-if="formula?.bonuses?.length > 1">
+                                    <li>
+                                        <span x-text="((formula?.flat || 0) >= 0 ? '+' : '') + (formula?.flat || 0)"></span> total flat bonus
+                                        <ul class="ml-5 mt-0.5 list-disc list-inside space-y-0.5">
+                                            <template x-for="b in (formula?.bonuses || [])" :key="b.label">
+                                                <li>
+                                                    <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span>
+                                                    from <span x-text="b.label"></span>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </li>
+                                </template>
+                            </ul>
+                        </template>
+
+                        {# 3rd Dan free raises spent on this roll #}
+                        <div x-show="raisesSpentThisRoll > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="raisesSpentThisRoll * 5"></span>
+                            from <span x-text="raisesSpentThisRoll"></span>
+                            3rd Dan free raise<span x-show="raisesSpentThisRoll > 1">s</span>
+                        </div>
+
+                        {# Void points spent on this roll #}
+                        <div x-show="formula?.void_spent > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            Rolled +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span>
+                            from <span x-text="formula?.void_spent"></span>
+                            spent void point<span x-show="formula?.void_spent > 1">s</span>
+                        </div>
+
+                        {# Otherworldliness spent on this roll #}
+                        <div x-show="formula?.ow_spent > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            Skill raised by <span x-text="formula?.ow_spent"></span>
+                            by Otherworldliness
+                        </div>
+
+                        {# Merchant 5th Dan reroll net effect #}
+                        <div x-show="formula?.merchant_5th_dan_used" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            <span x-text="((formula?.merchant_5th_dan_bonus || 0) >= 0 ? '+' : '') + (formula?.merchant_5th_dan_bonus || 0)"></span>
+                            from Merchant 5th Dan reroll
+                        </div>
+
+                        {# Mirumoto 5th Dan: +10 per VP on combat rolls #}
+                        <div x-show="formula?.void_spent > 0 && voidSpendConfig.combat_vp_flat_bonus > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="(formula?.void_spent || 0) * voidSpendConfig.combat_vp_flat_bonus"></span>
+                            from 5th Dan (+<span x-text="voidSpendConfig.combat_vp_flat_bonus"></span> per VP on combat rolls)
+                        </div>
+
+                        {# Overflow from rolling above 10k10 #}
+                        <div x-show="formula?.void_overflow_bonus > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="formula?.void_overflow_bonus"></span>
+                            from rolling above 10k10 (+2 per extra rolled or kept die above 10)
+                        </div>
+
+                        {# Shosuro 5th Dan: lowest 3 dice added #}
+                        <div x-show="shosuroLowest3Bonus > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="shosuroLowest3Bonus"></span>
+                            from 5th Dan (lowest 3 dice added to result)
+                        </div>
+
+                        {# Mirumoto 3rd Dan: points spent on this roll #}
+                        <div x-show="mirumotoPointsSpentThisRoll > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="mirumotoPointsSpentThisRoll * 2"></span>
+                            from <span x-text="mirumotoPointsSpentThisRoll"></span> 3rd Dan point<span x-show="mirumotoPointsSpentThisRoll > 1">s</span>
+                        </div>
+
+                        {# Shinjo Bushi: +2*(phases held) once the player picks the phase #}
+                        <div x-show="shinjoParryBonusApplied > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5"
+                             data-testid="shinjo-parry-phase-breakdown">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="shinjoParryBonusApplied"></span>
+                            from Shinjo Bushi (die <span x-text="shinjoParryDieValue"></span>
+                            held to phase <span x-text="shinjoParryPhase"></span>)
+                        </div>
+
+                        {# Conviction points spent on this roll #}
+                        <div x-show="convictionSpentThisRoll > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="convictionSpentThisRoll"></span>
+                            from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
+                        </div>
+
+                        <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
+                            <div class="mt-2 pt-2 border-t border-ink/10">
+                                <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
+                                <template x-for="alt in (formula?.alternatives || [])" :key="alt.label">
+                                    <div class="text-sm">
+                                        <span class="font-bold text-accent" x-text="baseTotal + alt.extra_flat"></span>
+                                        <span x-text="alt.label"></span>
+                                    </div>
+                                </template>
+                                <template x-if="(formula?.alternatives || []).length > 1">
+                                    <div class="text-sm">
+                                        <span class="font-bold text-accent" x-text="baseTotal + (formula?.alternatives || []).reduce((s, a) => s + a.extra_flat, 0)"></span>
+                                        if all of the above
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
+                    {# Courtier 5th Dan: optional TN/contested bonus #}
+                    <label x-show="formula?.courtier_5th_dan_optional > 0" x-cloak
+                           class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
+                        <input type="checkbox" x-model="courtier5thApplied"
+                               @change="if (courtier5thApplied) { baseTotal += formula.courtier_5th_dan_optional; } else { baseTotal -= formula.courtier_5th_dan_optional; }"
+                               class="rounded text-accent">
+                        <span>Courtier 5th Dan: +<span x-text="formula?.courtier_5th_dan_optional"></span> (this is a TN/contested roll)</span>
+                    </label>
+
+                    {# 3rd Dan free raises: Spend / Undo #}
+                    <div x-show="formula && formula.adventure_raises_max_per_roll > 0 && advRaisesConfig.available > 0"
+                         x-cloak class="bg-parchment rounded p-3 text-sm">
+                            <div class="flex items-center gap-2 mb-1">
+                                <button type="button" @click="spendRaise()" :disabled="!canSpendRaise()"
+                                        data-action="spend-raise"
+                                        class="btn-primary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                    Spend 3rd Dan Free Raise (+5)
+                                </button>
+                                <button type="button" @click="undoRaise()" :disabled="!canUndoRaise()"
+                                        data-action="undo-raise"
+                                        class="btn-secondary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                    Undo
+                                </button>
+                            </div>
+                            <div class="text-xs text-ink/60">
+                                This roll: <span class="font-mono font-bold" x-text="raisesSpentThisRoll"></span>
+                                / <span x-text="formula?.adventure_raises_max_per_roll"></span> max
+                                <span class="mx-1">&middot;</span>
+                                Remaining this adventure: <span class="font-mono font-bold" x-text="raisesRemainingAdventure()"></span>
+                                / <span x-text="advRaisesConfig.available"></span>
+                            </div>
+                        </div>
+
+                    {# Conviction: spend points for +1 each (non-initiative rolls only) #}
+                    <div x-show="convictionConfig.rank > 0 && !formula?.is_initiative && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
+                         x-cloak class="bg-parchment rounded p-3 text-sm" data-conviction-block>
+                        <div class="flex items-center gap-2 mb-1">
+                            <button type="button" @click="spendConviction()" :disabled="!canSpendConviction()"
+                                    data-action="spend-conviction"
+                                    class="btn-primary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                Spend Conviction (+1)
+                            </button>
+                            <button type="button" @click="undoConviction()" :disabled="!canUndoConviction()"
+                                    data-action="undo-conviction"
+                                    class="btn-secondary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                Undo
+                            </button>
+                        </div>
+                        <div class="text-xs text-ink/60">
+                            This roll: <span class="font-mono font-bold" x-text="convictionSpentThisRoll"></span>
+                            / <span x-text="convictionConfig.max_per_roll"></span> max
+                            <span class="mx-1">&middot;</span>
+                            Remaining today: <span class="font-mono font-bold" x-text="convictionPoolAvail()"></span>
+                            / <span x-text="convictionConfig.daily_max"></span>
+                        </div>
+                    </div>
+
+                    {# Priest 5th Dan ally: spend from a party Priest's Conviction pool #}
+                    <template x-for="priest in (formula?.is_initiative ? [] : priestAllies)" :key="priest.priest_id">
+                        <div class="bg-parchment rounded p-3 text-sm"
+                             x-show="priestAllyPoolAvail(priest) > 0 || priestAllySpent(priest.priest_id) > 0"
+                             x-cloak :data-priest-ally-block="priest.priest_id">
+                            <div class="flex items-center gap-2 mb-1">
+                                <button type="button"
+                                        @click="spendPriestAlly(priest)"
+                                        :disabled="!canSpendPriestAlly(priest)"
+                                        :data-action="'spend-priest-ally-' + priest.priest_id"
+                                        class="btn-primary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                    Spend <span x-text="priest.name"></span>'s Conviction (+1)
+                                </button>
+                                <button type="button"
+                                        @click="undoPriestAlly(priest)"
+                                        :disabled="!canUndoPriestAlly(priest)"
+                                        class="btn-secondary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+                                    Undo
+                                </button>
+                            </div>
+                            <div class="text-xs text-ink/60">
+                                This roll: <span class="font-mono font-bold" x-text="priestAllySpent(priest.priest_id)"></span>
+                                / <span x-text="priest.max_per_roll"></span> max
+                                <span class="mx-1">&middot;</span>
+                                Available: <span class="font-mono font-bold" x-text="priestAllyPoolAvail(priest)"></span>
+                                / <span x-text="priest.pool_max"></span>
+                            </div>
+                        </div>
+                    </template>
+
+                    {# Priest 3rd Dan precepts pool block (display only in Phase 4;
+                       click-to-swap wired in Phase 5). #}
+                    {{ precepts_pool_block('roll', 'roll-p') }}
+                    </div>
+
+                    {# Shinjo Bushi Special Ability: pick the phase the parry
+                       action takes place in so we can apply +2X where X is
+                       the number of phases the spent die was held. Asked
+                       post-roll (unlike the attack modal, which asks pre-roll
+                       because the bonus feeds into the hit-probability chart)
+                       - on a parry we just need to adjust the displayed
+                       total. #}
+                    <div x-show="phase === 'done'
+                                 && schoolAbilities.shinjo_phase_bonus
+                                 && formula?.shinjo_phase_bonus_attack
+                                 && shinjoParryDieValue !== null"
+                         x-cloak
+                         data-testid="shinjo-parry-phase-bonus"
+                         class="bg-parchment rounded p-2 text-sm flex flex-wrap items-center gap-2">
+                        <span>Shinjo Bushi: die <span class="font-mono" x-text="shinjoParryDieValue"></span> spent at phase</span>
+                        <select x-model.number="shinjoParryPhase"
+                                @change="_applyShinjoParryBonus()"
+                                data-action="shinjo-parry-phase"
+                                class="border rounded px-1 py-0.5 text-xs">
+                            <option :value="null">-</option>
+                            {# Sub-die-value phases are impossible (the die
+                               hasn't "come up" yet), so the picker only offers
+                               phases >= the spent die's value. #}
+                            <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter(p => p >= (shinjoParryDieValue || 1))" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                        </select>
+                        <span x-show="shinjoParryBonusApplied > 0" x-cloak class="text-ink/60"
+                              data-testid="shinjo-parry-phase-bonus-display">
+                            (+<span x-text="shinjoParryBonusApplied"></span> to the roll,
+                            held <span x-text="(shinjoParryPhase || 0) - (shinjoParryDieValue || 0)"></span> phase<span x-show="((shinjoParryPhase || 0) - (shinjoParryDieValue || 0)) !== 1">s</span>)
+                        </span>
+                    </div>
+
+                    {# Mirumoto 3rd Dan: spend points for +2 on parry/attack in regular roll #}
+                    <div x-show="phase === 'done' && schoolAbilities.mirumoto_round_points && ((window._trackingBridge?.mirumotoRoundPoints || 0) > 0 || mirumotoPointsSpentThisRoll > 0) && (currentRollKey === 'parry' || currentRollKey === 'attack')" x-cloak
+                         class="bg-parchment rounded p-2 text-sm">
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { if (t.canEdit) { t.mirumotoRoundPoints--; } mirumotoPointsSpentThisRoll++; baseTotal += 2; }"
+                                    :disabled="(window._trackingBridge?.mirumotoRoundPoints || 0) <= 0"
+                                    class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                Spend 3rd Dan Point (+2)
+                            </button>
+                            <button type="button"
+                                    @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { if (t.canEdit) { t.mirumotoRoundPoints++; } mirumotoPointsSpentThisRoll--; baseTotal -= 2; }"
+                                    :disabled="mirumotoPointsSpentThisRoll <= 0"
+                                    class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                Undo
+                            </button>
+                            <span class="text-xs text-ink/60" x-text="(window._trackingBridge?.mirumotoRoundPoints || 0) + ' points remaining'"></span>
+                        </div>
+                    </div>
+
+                    {# Togashi 3rd Dan: daily athletics raises #}
+                    <div x-show="phase === 'done'
+                                 && schoolAbilities.togashi_daily_athletics_raises
+                                 && currentRollKey?.startsWith('athletics:')
+                                 && (togashiRaisesPoolAvail() > 0 || togashiRaisesSpentThisRoll > 0)"
+                         x-cloak class="bg-parchment rounded p-2 text-sm">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button type="button"
+                                    @click="spendTogashiRaise()"
+                                    :disabled="!canSpendTogashiRaise()"
+                                    data-action="spend-togashi-raise"
+                                    class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                Spend Athletics Raise (+5)
+                            </button>
+                            <button type="button"
+                                    x-show="togashiRaisesSpentThisRoll > 0"
+                                    @click="undoTogashiRaise()"
+                                    data-action="undo-togashi-raise"
+                                    class="btn-secondary px-3 py-1 rounded text-sm">
+                                Undo
+                            </button>
+                            <span class="text-xs text-ink/60"
+                                  x-text="togashiRaisesSpentThisRoll + ' / ' + togashiRaisesPerRollCap() + ' this roll'"></span>
+                        </div>
+                        <div class="text-xs text-ink/50 mt-1"
+                             x-text="'Daily pool: ' + togashiRaisesPoolAvail() + ' / ' + (schoolAbilities.togashi_daily_raises_max || 0) + ' remaining'"></div>
+                    </div>
+
+                    {# No-reroll note (impaired, iaijutsu strike, or unskilled) - only when a 10 was actually rolled #}
+                    <div x-show="formula && !formula.reroll_tens && formula?.no_reroll_reason && finalDice.some(d => d.value === 10)"
+                         x-cloak class="text-xs italic text-red-700 font-medium">
+                        <span x-show="formula?.no_reroll_reason === 'iaijutsu_strike'">
+                            10s not rerolled for the strike in an iaijutsu duel
+                        </span>
+                        <span x-show="formula?.no_reroll_reason === 'impaired'">
+                            10s not rerolled due to being Impaired
+                        </span>
+                        <span x-show="formula?.no_reroll_reason === 'unskilled'">
+                            10s not rerolled due to <span x-text="formula?.unskilled_skill_name"></span> being 0
+                        </span>
+                    </div>
+
+                    {# Priest "sick or impaired" ritual: offer a reroll of the
+                       Impaired 10s, one button per priest in the party. The
+                       button only appears when the roll was Impaired AND a 10
+                       is still present in the pool. #}
+                    <div x-show="formula && formula.no_reroll_reason === 'impaired' && finalDice.some(d => d.value === 10) && (partyPriests || []).length > 0"
+                         x-cloak class="mt-2 flex flex-col gap-2" data-priest-bless-reroll-block>
+                        <template x-for="priest in (partyPriests || [])" :key="'bless-10-' + priest.priest_id">
+                            <div class="tooltip-trigger relative inline-block self-start"
+                                 :data-priest-bless-reroll="priest.priest_id">
+                                <button type="button"
+                                        @click="rerollImpairedTens(priest)"
+                                        :data-action="'priest-bless-reroll-10-' + priest.priest_id"
+                                        class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
+                                    <span x-text="priest.name"></span> priest blessed for 10 rerolls
+                                </button>
+                                <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">
+                                    Only click this button if <span x-text="priest.name"></span> specifically blessed you in advance with the following ritual:
+                                    <br><br>
+                                    <em>If the target was already suffering penalties from being sick or impaired at the time this ritual was performed, they ignore those penalties in the next conversation or fight.</em>
+                                    <br><em>Time: 5 minutes</em>
+                                </span>
+                            </div>
+                        </template>
+                    </div>
+
+                    {# Akodo Special: feint grants temp VP (4 on success, 1 on failure) #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.akodo_temp_vp_on_feint" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="font-medium mb-1">Akodo Feint - Temp VP</div>
+                        <div class="flex gap-2">
+                            <button type="button"
+                                    @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 4; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
+                                    class="bg-success hover:bg-success-dark text-white px-3 py-1 rounded text-xs">
+                                Succeeded (+4 temp VP)
+                            </button>
+                            <button type="button"
+                                    @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
+                                    class="bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded text-xs">
+                                Failed (+1 temp VP)
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Feint knack: 1 temp VP auto-granted (non-Akodo feint schools) #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.feint_temp_vp" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
+                        Gained 1 temp VP from feint.
+                    </div>
+
+                    {# Bayushi 4th Dan: feint auto-banks +5 on next attack #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.bayushi_post_feint_raise" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
+                        Bayushi 4th Dan: +5 banked for a future attack (free raise).
+                    </div>
+
+                    {# Ide Special: feint -> lower target TN by 10 #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.ide_feint_tn_reduce" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <button type="button"
+                                @click="ideBankedTnReduce += 10; $el.disabled = true; $el.textContent = 'Banked -10 TN for next attack'; window._trackingBridge?.saveBankedBonuses();"
+                                class="btn-primary px-3 py-1 rounded text-xs">
+                            Bank -10 TN on target (Ide Special)
+                        </button>
+                    </div>
+
+                    {# Oppose Knowledge: show penalty applied to target's Water rolls #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:oppose_knowledge'" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
+                        Target's Water skill rolls are reduced by
+                        <span class="font-bold text-accent" x-text="Math.floor(baseTotal / 5)"></span>
+                        for the rest of the conversation
+                        <span class="text-xs text-ink/40">(result <span x-text="baseTotal"></span> / 5)</span>
+                    </div>
+
+                    {# Oppose Social: show penalty applied to target's Air rolls #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:oppose_social'" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
+                        Target's Air skill rolls are reduced by
+                        <span class="font-bold text-accent" x-text="Math.floor(baseTotal / 5)"></span>
+                        for the rest of the conversation
+                        <span class="text-xs text-ink/40">(result <span x-text="baseTotal"></span> / 5)</span>
+                    </div>
+
+                    {# Courtier 4th Dan: temp VP after successful manipulation #}
+                    <div x-show="phase === 'done' && currentRollKey === 'skill:manipulation' && schoolAbilities.courtier_temp_vp_on_hit" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <button type="button"
+                                @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
+                                class="bg-success hover:bg-success-dark text-white px-3 py-1 rounded text-xs">
+                            Gain 1 temp VP (Courtier 4th Dan - once per target)
+                        </button>
+                    </div>
+
+                    {# Togashi 4th Dan: reroll contested roll (once per roll, commits).
+                       Hidden on rolls that are never contested: initiative,
+                       etiquette, heraldry, damage rolls (e.g. Dragon Tattoo),
+                       and parry rolls (parry raises the attacker's TN rather
+                       than being contested against an opponent's roll). #}
+                    <div x-show="phase === 'done' && schoolAbilities.togashi_reroll_contested && !luckyUsedThisRoll && !togashiRerollUsed && !formula?.is_initiative && !formula?.is_damage_roll && currentRollKey !== 'skill:etiquette' && currentRollKey !== 'skill:heraldry' && currentRollKey !== 'parry' && currentRollKey !== 'athletics:parry'" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <button type="button"
+                                @click="togashiOrigTotal = baseTotal; togashiRerollUsed = true; runRoll()"
+                                class="btn-primary px-3 py-1 rounded text-xs">
+                            Reroll (Togashi 4th Dan) <span class="text-xs text-parchment/80">(only if contested)</span>
+                        </button>
+                        <div class="text-xs text-ink/70 mt-1">
+                            You must take the new result - you may not keep the original.
+                        </div>
+                    </div>
+                    <div x-show="togashiRerollUsed" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Togashi 4th Dan rerolled. Original result (<span x-text="togashiOrigTotal"></span>) is discarded; the new result stands.
+                    </div>
+
+                    {# Hiruma 5th Dan: parry note about -10 LW on attacker #}
+                    <div x-show="phase === 'done' && currentRollKey === 'parry' && schoolAbilities.hiruma_parry_reduce_lw" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
+                        Hiruma 5th Dan: the attacker deals 10 fewer light wounds on their next 2 damage rolls.
+                    </div>
+
+                    {# Doji 5th Dan: always-TN skills - show input directly #}
+                    <div x-show="phase === 'done' && formula?.doji_5th_dan_always" x-cloak
+                         data-testid="doji-5th-always"
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs">TN or opponent's result (Doji 5th Dan):</label>
+                            <input type="number" x-model.number="dojiOpponentResult" min="0"
+                                   class="w-20 border rounded px-2 py-1 text-sm text-center">
+                            <span class="text-xs" x-show="dojiOpponentResult >= 10" x-cloak>
+                                +<span x-text="Math.floor((dojiOpponentResult - 10) / 5)"></span> bonus
+                            </span>
+                        </div>
+                        <div x-show="dojiOpponentResult >= 10" x-cloak class="text-xs text-ink/60 mt-1">
+                            Adjusted total: <span class="font-bold" x-text="baseTotal + Math.floor(((dojiOpponentResult || 0) - 10) / 5)"></span>
+                        </div>
+                    </div>
+
+                    {# Doji 5th Dan: sometimes-TN skills - checkbox then input #}
+                    <div x-show="phase === 'done' && formula?.doji_5th_dan_optional" x-cloak
+                         data-testid="doji-5th-optional"
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" x-model="dojiTnRollApplied"
+                                   class="rounded text-accent">
+                            <span class="text-xs">This is a TN/contested roll (Doji 5th Dan)</span>
+                        </label>
+                        <div x-show="dojiTnRollApplied" x-cloak class="mt-2">
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs">TN or opponent's result:</label>
+                                <input type="number" x-model.number="dojiOpponentResult" min="0"
+                                       class="w-20 border rounded px-2 py-1 text-sm text-center">
+                                <span class="text-xs" x-show="dojiOpponentResult >= 10" x-cloak>
+                                    +<span x-text="Math.floor((dojiOpponentResult - 10) / 5)"></span> bonus
+                                </span>
+                            </div>
+                            <div x-show="dojiOpponentResult >= 10" x-cloak class="text-xs text-ink/60 mt-1">
+                                Adjusted total: <span class="font-bold" x-text="baseTotal + Math.floor(((dojiOpponentResult || 0) - 10) / 5)"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Bayushi 3rd Dan: feint deals Xk1 damage #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.bayushi_feint_damage" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="text-xs text-ink/60 mb-1">Bayushi 3rd Dan: feint deals
+                            <span x-text="schoolAbilities.bayushi_feint_damage_rolled + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0)"></span>k<span x-text="1 + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0)"></span> damage<span x-show="(formula?.void_spent || 0) > 0" x-cloak> (includes +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span> from VP)</span>.
+                        </div>
+                        <button type="button"
+                                @click="const r = schoolAbilities.bayushi_feint_damage_rolled + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0); const k = 1 + (schoolAbilities.bayushi_vp_damage ? (formula?.void_spent || 0) : 0); rollSubDamage(r, k, 'Bayushi 3rd Dan feint damage (' + r + 'k' + k + ')');"
+                                class="btn-primary px-3 py-1 rounded text-xs">
+                            Roll Feint Damage
+                        </button>
+                    </div>
+
+                    {# Shiba 3rd Dan: parry deals (2X)k1 damage #}
+                    <div x-show="phase === 'done' && currentRollKey === 'parry' && schoolAbilities.shiba_parry_damage" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="text-xs text-ink/60 mb-1">Shiba 3rd Dan: parry deals <span x-text="schoolAbilities.shiba_parry_damage_rolled"></span>k1 damage (no ring/TN bonus).</div>
+                        <button type="button"
+                                @click="const r = schoolAbilities.shiba_parry_damage_rolled; rollSubDamage(r, 1, 'Shiba 3rd Dan parry damage (' + r + 'k1)');"
+                                class="btn-primary px-3 py-1 rounded text-xs">
+                            Roll Parry Damage
+                        </button>
+                    </div>
+
+                    {# Shiba 5th Dan: parry lowers opponent TN (display note) #}
+                    <div x-show="phase === 'done' && currentRollKey === 'parry' && schoolAbilities.shiba_parry_lower_tn" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
+                        5th Dan: if this parry succeeded, you've just lowered the attacker's TN to be hit by the amount your parry exceeded their attack roll (their TN may become negative).
+                    </div>
+
+                    {# Daidoji 3rd Dan: counterattack gives X free raises on wound check #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:counterattack' && schoolAbilities.daidoji_counterattack_raises" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
+                        Daidoji 3rd Dan: the person you counterattacked for gets +<span x-text="schoolAbilities.daidoji_counterattack_raises_amount * 5"></span> (<span x-text="schoolAbilities.daidoji_counterattack_raises_amount"></span> free raises) on their wound check from the original attack.
+                    </div>
+
+                    {# Kitsuki 5th Dan: reduce target rings (display note) #}
+                    <div x-show="phase === 'done' && schoolAbilities.kitsuki_reduce_rings" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
+                        Kitsuki 5th Dan: you may reduce chosen characters' Air, Fire, and Water by 1. You may target any one character, or multiple characters whose total XP does not exceed yours. Does not work during iaijutsu duels. Does not stack with other Kitsuki Magistrates.
+                    </div>
+
+                    {# Merchant Special: post-roll VP spending (1 VP at a time, re-rolls with extra dice) #}
+                    <div x-show="phase === 'done' && schoolAbilities.merchant_post_roll_vp && !formula?.is_initiative && merchantVpStillAvailable()" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="text-xs text-ink/60 mb-1">
+                            Merchant Special: spend VP after seeing the roll.
+                            <span x-show="(formula?.merchant_vp_spent || 0) > 0"
+                                  x-text="'(' + (formula?.merchant_vp_spent || 0) + ' spent this roll)'"></span>
+                        </div>
+                        <button type="button"
+                                @click="merchantSpendOneVp()"
+                                class="btn-primary px-2 py-1 rounded text-xs">
+                            Spend 1 VP (+1k1)
+                        </button>
+                    </div>
+
+                    {# Merchant 5th Dan: once-per-roll selective reroll #}
+                    <div x-show="phase === 'done' && schoolAbilities.merchant_5th_dan_reroll && !formula?.is_initiative && !formula?.merchant_5th_dan_used && merchant5thPhase === 'idle'" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="text-xs text-ink/60 mb-1">
+                            Merchant 5th Dan: reroll dice if the selected dice sum to at least 5 * (count - 1).
+                        </div>
+                        <button type="button"
+                                data-action="merchant-5th-start"
+                                @click="merchant5thStart()"
+                                class="btn-primary px-2 py-1 rounded text-xs">
+                            Merchant 5th Dan Reroll
+                        </button>
+                    </div>
+
+                    {# Merchant 5th Dan: dice selection UI #}
+                    <div x-show="merchant5thPhase === 'selecting'" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-3 text-sm">
+                        <div class="font-medium text-amber-800 mb-2">
+                            Merchant 5th Dan: select dice to reroll
+                            (sum must be &ge; <span x-text="merchant5thMinRequired()"></span>;
+                            selected sum: <span x-text="merchant5thSelectedSum()"></span>)
+                        </div>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                            <template x-for="(d, i) in finalDice" :key="'m5'+i">
+                                <button type="button"
+                                        data-action="merchant-5th-die"
+                                        @click="merchant5thToggle(i)"
+                                        class="w-10 h-10 rounded-full border-2 font-mono font-bold text-sm transition-colors"
+                                        :class="merchant5thSelections.includes(i) ? 'border-accent bg-accent/20 text-accent' : d.kept ? 'border-ink/30 bg-white text-ink' : 'border-ink/20 bg-ink/5 text-ink/50'"
+                                        x-text="d.value">
+                                </button>
+                            </template>
+                        </div>
+                        <div class="text-xs text-amber-700 mb-2">Kept dice are bold. Unkept dice are dimmed. Rerolling may change which dice are kept.</div>
+                        <div class="flex gap-2">
+                            <button type="button"
+                                    data-action="merchant-5th-confirm"
+                                    @click="merchant5thConfirm()"
+                                    :disabled="!merchant5thCanConfirm()"
+                                    class="btn-primary px-3 py-1 rounded text-xs disabled:opacity-30">
+                                Reroll <span x-text="merchant5thSelections.length"></span>
+                            </button>
+                            <button type="button" @click="merchant5thCancel()"
+                                    class="btn-secondary px-3 py-1 rounded text-xs">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Lucky reroll: original was higher (non-initiative) #}
+                    <div x-show="luckyOriginalWasHigher && !formula?.is_initiative" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevBaseTotal + _genericDiscretionaryTotal()"></span>) - you may keep the original result instead.
+                    </div>
+
+                    {# Lucky reroll: initiative - always show original action dice #}
+                    <div x-show="luckyUsedThisRoll && formula?.is_initiative && luckyPrevActionDice.length > 0" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        <div class="font-medium mb-1">Original action dice (choose which set to keep):</div>
+                        <div class="flex gap-2">
+                            <template x-for="(v, i) in luckyPrevActionDice" :key="'lpd'+i">
+                                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full border-2 font-mono font-bold"
+                                      :class="v === 0 ? 'border-gold bg-gold/10 text-gold' : v <= 3 ? 'border-accent bg-accent/10 text-accent' : 'border-ink/30 bg-parchment text-ink'"
+                                      x-text="v"></span>
+                            </template>
+                        </div>
+                    </div>
+
+                    {# Shinjo 5th Dan: bank parry excess for future wound check #}
+                    <div x-show="phase === 'done' && currentRollKey === 'parry' && schoolAbilities.shinjo_bank_parry_excess" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="font-medium mb-1">Shinjo 5th Dan - Bank Parry Excess</div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs">Opponent's attack roll:</label>
+                            <input type="number" x-model.number="shinjoParryOpponentRoll" min="0"
+                                   :disabled="shinjoParryBankedThisRoll !== null"
+                                   class="w-20 border rounded px-2 py-1 text-sm text-center disabled:opacity-50">
+                            <button type="button"
+                                    :disabled="shinjoParryBankedThisRoll !== null"
+                                    data-action="shinjo-bank-parry-excess"
+                                    @click="const excess = baseTotal - (shinjoParryOpponentRoll || 0); if (excess > 0) { bankedWcExcess.push({amount: excess, spent: false}); } shinjoParryBankedThisRoll = Math.max(0, excess); window._trackingBridge?.saveBankedBonuses();"
+                                    class="btn-primary px-3 py-1 rounded text-xs disabled:opacity-50">
+                                <span x-show="shinjoParryBankedThisRoll === null">Bank Excess</span>
+                                <span x-show="shinjoParryBankedThisRoll !== null && shinjoParryBankedThisRoll > 0"
+                                      x-cloak>Banked +<span x-text="shinjoParryBankedThisRoll"></span></span>
+                                <span x-show="shinjoParryBankedThisRoll === 0" x-cloak>No excess</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div x-show="phase === 'done'" x-cloak class="flex justify-end gap-2 pt-2">
+                        <button x-show="canUseLucky()" x-cloak type="button" @click="useLucky()"
+                                class="btn-gold px-4 py-2 rounded text-sm font-medium">
+                            Use Lucky to reroll
+                        </button>
+                        <button type="button" @click="close()"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium">Close</button>
+                    </div>
+
+                {# Sub-damage result (feint damage, parry damage) #}
+                <div x-show="phase === 'sub-damage-result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Damage dice:</span>
+                        <template x-for="(d, i) in subDamageDice" :key="'sd'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="font-bold text-2xl text-accent" x-text="subDamageTotal + ' damage'"></div>
+                        <div class="text-xs text-ink/60 mt-1" x-text="subDamageLabel"></div>
+                    </div>
+                    <button type="button" @click="phase = 'done'"
+                            class="btn-secondary px-4 py-2 rounded text-sm font-medium">
+                        Back
+                    </button>
+                    <button type="button" @click="close()"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                        Close
+                    </button>
+                </div>
+                </div>
+            </div>
+        </div>

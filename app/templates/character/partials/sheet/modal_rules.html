@@ -1,0 +1,17 @@
+        <div x-show="rulesModalOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4"
+             data-modal="rules-text"
+             @click.self="rulesModalOpen = false">
+            <div class="bg-white rounded-lg shadow-xl px-5 py-4 max-w-md w-full max-h-[80vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-2">
+                    <h3 class="text-lg font-bold text-accent">Rules text</h3>
+                    <button type="button" @click="rulesModalOpen = false"
+                            data-action="close-rules-modal"
+                            aria-label="Close"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+                <div class="text-sm text-ink whitespace-normal" data-rules-modal-body x-html="rulesModalContent"></div>
+            </div>
+        </div>
+
+        {# ── Wound Check Modal ── #}

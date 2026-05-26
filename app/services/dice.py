@@ -1569,13 +1569,20 @@ def build_all_roll_formulas(
         if formula is not None:
             out[f"ring:{ring_name}"] = formula.to_dict()
 
-    # Athletics on each ring - only emitted when the character actually
-    # has the athletics knack (rank >= 1). For characters without it the
-    # bare ``ring:<Ring>`` formula above is identical to what
-    # ``build_athletics_formula`` would have produced, and the ring
-    # tile's picker menu drops the redundant "athletics" row.
+    # Athletics on each ring - normally only emitted when the character
+    # actually has the athletics knack (rank >= 1). For characters without it
+    # the bare ``ring:<Ring>`` formula above is identical to what
+    # ``build_athletics_formula`` would have produced, and the ring tile's
+    # picker menu drops the redundant "athletics" row.
+    #
+    # The exception is a school whose rules modify *bare* athletics rolls:
+    # Kitsune Warden's 4th Dan floors every athletics roll at 10 dice (see
+    # build_athletics_formula), which a knack-less Kitsune still benefits from -
+    # there the athletics:<Ring> roll is no longer redundant with ring:<Ring>,
+    # so it must stay reachable. We emit it at every Dan for the Kitsune (so the
+    # option is consistently present and simply gains the floor at Dan 4).
     _ath_rank = merged_knacks(character_data).get("athletics", 0)
-    if _ath_rank >= 1:
+    if _ath_rank >= 1 or character_data.get("school") == "kitsune_warden":
         for ring_name in (r.value for r in Ring):
             formula = build_athletics_formula(ring_name, character_data)
             if formula is not None:

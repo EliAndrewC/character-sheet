@@ -10,3 +10,6 @@ client_secret*.json
 staged_art/
 logs/
 .claude/
+
+# Tailwind standalone CLI (downloaded by scripts/build-css.sh)
+/bin/

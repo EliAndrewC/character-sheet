@@ -53,7 +53,7 @@
         <div class="flex gap-3 items-center">
             <button type="submit"
                     :disabled="state === 'generating'"
-                    class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded font-medium disabled:opacity-40"
+                    class="btn-primary px-4 py-2 rounded font-medium disabled:opacity-40"
                     data-action="generate-art">
                 <span x-show="state !== 'failed'"
                       x-text="state === 'generating' ? 'Generating…' : 'Generate Art'"></span>
@@ -91,7 +91,7 @@
             <input type="hidden" name="w" :value="Math.round(box.w)">
             <input type="hidden" name="h" :value="Math.round(box.h)">
             <button type="submit"
-                    class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded font-medium"
+                    class="btn-primary px-4 py-2 rounded font-medium"
                     data-action="save-headshot">
                 Save Headshot
             </button>
@@ -104,7 +104,7 @@
             <a :href="imageUrl"
                :download="`character-${charId}-${Date.now()}.png`"
                data-action="download-screenshot"
-               class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded font-medium">
+               class="btn-secondary px-4 py-2 rounded font-medium">
                 Download Screenshot
             </a>
         </form>

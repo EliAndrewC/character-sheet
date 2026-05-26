@@ -731,6 +731,111 @@ def calculate_available_xp(
     return starting_xp + earned_xp
 
 
+def editor_xp_view(character_data: dict) -> dict:
+    """Everything the editor's live XP display needs, computed server-side.
+
+    This is the single source of truth that replaced the editor's old
+    client-side Alpine XP duplication. Returns:
+
+    - ``spent``: gross positive XP (matches the editor's "Spent"; disadvantage
+      gains are reflected in ``budget``, not subtracted here).
+    - ``budget``: available XP plus disadvantage gains (the "Total" budget).
+    - ``remaining``: ``budget - spent`` (drives the overspend-red styling).
+    - ``totals``: the per-category dict from :func:`calculate_total_xp`.
+    - ``costs``: per-control cost hints keyed by control id - ``"ring:<Name>"``,
+      ``"skill:<id>"``, ``"knack:<id>"``, ``"foreign_knack:<id>"``,
+      ``"combat:attack"``, ``"combat:parry"``, ``"honor"``, ``"rank"``,
+      ``"recognition"`` - computed with the same per-item cost functions so the
+      inline hints can never drift from the totals.
+    """
+    totals = calculate_total_xp(character_data)
+    available = calculate_available_xp(
+        character_data.get("earned_xp", 0),
+        character_data.get("starting_xp", 150),
+    )
+    spent = (
+        totals["rings"] + totals["skills"] + totals["knacks"]
+        + totals["foreign_knacks"] + totals["combat_skills"]
+        + totals["honor"] + totals["rank"] + totals["recognition"]
+        + totals["advantages"] + totals["campaign_advantages"]
+    )
+    # Disadvantage categories are <= 0 (XP gained back); they raise the budget.
+    dis_gain = -(totals["disadvantages"] + totals["campaign_disadvantages"])
+    budget = available + dis_gain
+    remaining = budget - spent
+
+    school_ring = character_data.get("school_ring_choice", "")
+    knacks = character_data.get("knacks", {}) or {}
+    dan = compute_dan(knacks) if knacks else 0
+
+    costs: Dict[str, int] = {}
+    for ring, val in (character_data.get("rings") or {}).items():
+        # Per-ring cost in isolation; the 4th-Dan discount only affects the
+        # school ring, which calculate_ring_xp handles via school_ring/dan.
+        costs[f"ring:{ring}"] = calculate_ring_xp({ring: val}, school_ring, dan=dan)
+    for sid, rank in (character_data.get("skills") or {}).items():
+        costs[f"skill:{sid}"] = calculate_skill_xp({sid: rank})
+    for kid, rank in knacks.items():
+        costs[f"knack:{kid}"] = calculate_knack_xp({kid: rank})
+    for fid, rank in (character_data.get("foreign_knacks") or {}).items():
+        costs[f"foreign_knack:{fid}"] = calculate_foreign_knack_xp({fid: rank})
+    costs["combat:attack"] = calculate_combat_skill_xp(
+        attack=character_data.get("attack", COMBAT_SKILL_START),
+        parry=COMBAT_SKILL_START,
+    )
+    costs["combat:parry"] = calculate_combat_skill_xp(
+        attack=COMBAT_SKILL_START,
+        parry=character_data.get("parry", COMBAT_SKILL_START),
+    )
+    costs["honor"] = totals["honor"]
+    costs["rank"] = totals["rank"]
+    costs["recognition"] = totals["recognition"]
+
+    # Marginal cost of one step up / down per control, pre-computed for every
+    # control so the editor's +/- hover tooltips ("Raise to N (X XP)" /
+    # "Lower to N (refund X XP)") are fully server-sourced - no client cost
+    # tables. `down` at a control's floor is harmless (its button is disabled).
+    def _delta(fn, cur, step=1):
+        return {"up": fn(cur + step) - fn(cur), "down": fn(cur) - fn(cur - step)}
+
+    marginal: Dict[str, dict] = {}
+    for ring, val in (character_data.get("rings") or {}).items():
+        marginal[f"ring:{ring}"] = _delta(
+            lambda v, _r=ring: calculate_ring_xp({_r: v}, school_ring, dan=dan), val
+        )
+    for sid, rank in (character_data.get("skills") or {}).items():
+        marginal[f"skill:{sid}"] = _delta(
+            lambda r, _s=sid: calculate_skill_xp({_s: r}), rank
+        )
+    for kid, rank in knacks.items():
+        marginal[f"knack:{kid}"] = _delta(
+            lambda r, _k=kid: calculate_knack_xp({_k: r}), rank
+        )
+    for fid, rank in (character_data.get("foreign_knacks") or {}).items():
+        marginal[f"foreign_knack:{fid}"] = _delta(
+            lambda r, _f=fid: calculate_foreign_knack_xp({_f: r}), rank
+        )
+    marginal["combat:attack"] = _delta(
+        lambda a: calculate_combat_skill_xp(attack=a, parry=COMBAT_SKILL_START),
+        character_data.get("attack", COMBAT_SKILL_START),
+    )
+    marginal["combat:parry"] = _delta(
+        lambda p: calculate_combat_skill_xp(attack=COMBAT_SKILL_START, parry=p),
+        character_data.get("parry", COMBAT_SKILL_START),
+    )
+
+    return {
+        "spent": spent,
+        "budget": budget,
+        "remaining": remaining,
+        "available": available,
+        "dis_gain": dis_gain,
+        "totals": totals,
+        "costs": costs,
+        "marginal": marginal,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------

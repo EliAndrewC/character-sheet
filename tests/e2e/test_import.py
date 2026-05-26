@@ -102,6 +102,9 @@ def test_dropdown_closes_on_click_outside(page, live_server_url):
     page.goto(live_server_url)
     page.locator('[data-testid="new-character-button"]').click()
     create_option = page.locator('[data-testid="new-character-option-create"]')
+    # The dropdown opens via Alpine x-show on the next tick - wait for the
+    # reveal rather than a one-shot is_visible() that races the click.
+    create_option.wait_for(state="visible", timeout=5000)
     assert create_option.is_visible()
     # Click somewhere far from the menu.
     page.locator("h1, body").first.click(position={"x": 5, "y": 400})

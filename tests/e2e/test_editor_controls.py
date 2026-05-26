@@ -1,6 +1,6 @@
 """E2E: Editor field controls — min/max, disabled states, recognition halving, rank lock."""
 
-from tests.e2e.helpers import select_school, click_plus, click_minus, start_new_character, apply_changes
+from tests.e2e.helpers import select_school, click_plus, click_minus, start_new_character, apply_changes, wait_xp, wait_xp_changed
 import pytest
 
 pytestmark = [pytest.mark.rings, pytest.mark.knacks, pytest.mark.combat_skills, pytest.mark.skills, pytest.mark.honor_rank_recognition, pytest.mark.advantages]
@@ -327,11 +327,9 @@ def test_recognition_halve_sets_3_5(page, live_server_url):
 def test_recognition_halve_grants_3_xp(page, live_server_url):
     """Halving recognition reduces spent XP by 3 (net effect of -3 recognition XP)."""
     _go_to_editor(page, live_server_url)
-    spent_before = int(page.text_content('[x-text="grossSpent()"]').strip())
+    spent_before = int(page.text_content('[x-text="xp.spent"]').strip())
     page.check('input[name="recognition_halved"]')
-    page.wait_for_timeout(300)
-    spent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
-    assert spent_after == spent_before - 3
+    wait_xp(page, "spent", spent_before - 3)
 
 
 def test_recognition_unhalve_restores(page, live_server_url):
@@ -393,8 +391,7 @@ def test_recognition_halved_can_raise(page, live_server_url):
     val = page.locator('input[name="recognition"]').input_value()
     assert float(val) == 4.5
     # Should cost XP: -3 (halve) + 1 (raised 1.0 above base) = -2
-    spent = page.text_content('[x-text="grossSpent()"]').strip()
-    assert int(spent) == -2
+    wait_xp(page, "spent", -2)
 
 
 # --- Earned XP / Notes ---
@@ -402,11 +399,9 @@ def test_recognition_halved_can_raise(page, live_server_url):
 def test_earned_xp_updates_budget(page, live_server_url):
     """Changing earned XP updates the total budget."""
     _go_to_editor(page, live_server_url)
-    budget_before = page.text_content('[x-text="budgetWithDis()"]').strip()
+    budget_before = int(page.text_content('[x-text="xp.budget"]').strip())
     page.fill('input[name="earned_xp"]', "20")
-    page.wait_for_timeout(300)
-    budget_after = page.text_content('[x-text="budgetWithDis()"]').strip()
-    assert int(budget_after) == int(budget_before) + 20
+    wait_xp(page, "budget", budget_before + 20)
 
 
 # --- Save status ---
@@ -423,21 +418,19 @@ def test_save_status_indicator(page, live_server_url):
 def test_campaign_advantage_toggles_xp(page, live_server_url):
     """Campaign advantage checkbox updates XP."""
     _go_to_editor(page, live_server_url)
-    spent_before = int(page.text_content('[x-text="grossSpent()"]').strip())
+    spent_before = int(page.text_content('[x-text="xp.spent"]').strip())
     page.check('input[name="camp_adv_streetwise"]')
-    page.wait_for_timeout(300)
-    spent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
-    assert spent_after > spent_before
+    wait_xp_changed(page, "spent", spent_before)
+    assert int(page.text_content('[x-text="xp.spent"]').strip()) > spent_before
 
 
 def test_campaign_disadvantage_toggles_xp(page, live_server_url):
     """Campaign disadvantage checkbox adds XP to budget."""
     _go_to_editor(page, live_server_url)
-    budget_before = int(page.text_content('[x-text="budgetWithDis()"]').strip())
+    budget_before = int(page.text_content('[x-text="xp.budget"]').strip())
     page.check('input[name="camp_dis_peasantborn"]')
-    page.wait_for_timeout(300)
-    budget_after = int(page.text_content('[x-text="budgetWithDis()"]').strip())
-    assert budget_after > budget_before
+    wait_xp_changed(page, "budget", budget_before)
+    assert int(page.text_content('[x-text="xp.budget"]').strip()) > budget_before
 
 
 def test_campaign_advantage_tooltip_has_full_rules_text(page, live_server_url):
@@ -481,21 +474,20 @@ def test_editor_skill_tooltip_has_canonical_rules_text(page, live_server_url):
 def test_basic_skill_xp_cost(page, live_server_url):
     """Adding a basic skill rank increases XP spent."""
     _go_to_editor(page, live_server_url)
-    page.wait_for_timeout(500)
-    spent_before = int(page.text_content('[x-text="grossSpent()"]').strip())
+    spent_before = int(page.text_content('[x-text="xp.spent"]').strip())
     click_plus(page, "skill_bragging", 1)
-    page.wait_for_timeout(300)
-    spent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
-    assert spent_after > spent_before
+    wait_xp_changed(page, "spent", spent_before)
+    assert int(page.text_content('[x-text="xp.spent"]').strip()) > spent_before
 
 
 def test_advanced_skill_costs_more(page, live_server_url):
     """Advanced skill at rank 1 costs more than basic skill at rank 1."""
     _go_to_editor(page, live_server_url)
-    spent_before = int(page.text_content('[x-text="grossSpent()"]').strip())
+    spent_before = int(page.text_content('[x-text="xp.spent"]').strip())
     click_plus(page, "skill_precepts", 1)
-    spent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
-    assert spent_after - spent_before > 1  # Advanced cost 2 at rank 1
+    wait_xp_changed(page, "spent", spent_before)
+    spent_after = int(page.text_content('[x-text="xp.spent"]').strip())
+    assert spent_after - spent_before > 1
 
 
 def test_per_row_xp_labels_say_spent_not_just_xp(page, live_server_url):
@@ -509,17 +501,15 @@ def test_per_row_xp_labels_say_spent_not_just_xp(page, live_server_url):
     click_plus(page, "ring_fire", 1)                 # ring 2 -> 3
     click_plus(page, "attack", 1)                    # combat skill
     click_plus(page, "knack_double_attack", 1)       # school knack 1 -> 2
-    page.wait_for_timeout(200)
-
-    body = page.text_content("body")
-    # All four updated rows should show "X XP spent" labels somewhere.
-    assert "XP spent" in body
-    # Spot-check specific rendered totals.
-    # Bragging at rank 2 (basic): 2 + 2 = 4 XP
-    assert "4 XP spent" in body
-    # Fire ring at rank 3 (school ring is Water for akodo, so Fire 2->3 costs
-    # 5 + 10 = 15 XP, but ringCost only counts above default 2: just 15).
-    assert "15 XP spent" in body
+    # Labels are server-computed and arrive after the debounced refresh.
+    # Bragging rank 2 (basic) = 4 XP; Fire ring 2->3 = 15 XP.
+    page.wait_for_function(
+        """() => {
+            const b = document.body.textContent;
+            return b.includes('15 XP spent') && b.includes('4 XP spent');
+        }""",
+        timeout=6000,
+    )
     # Attack at rank 2 (advanced): 4 XP
     # double_attack at rank 2 (advanced): 4 XP
     # Both produce "4 XP spent" – already asserted.
@@ -528,6 +518,7 @@ def test_per_row_xp_labels_say_spent_not_just_xp(page, live_server_url):
     # Find a "X XP" advantage label that is NOT followed by "spent". The
     # standard Crab Hands advantage costs 3 XP for example.
     import re
+    body = page.text_content("body")
     bare_xp_count = len(re.findall(r"\b\d+ XP(?!\s*spent)", body))
     assert bare_xp_count > 0, (
         "expected at least one advantage/disadvantage row to show plain "

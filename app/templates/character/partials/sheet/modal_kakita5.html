@@ -1,0 +1,215 @@
+        <div x-show="k5Open" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="kakita-5th-dan">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent">Kakita 5th Dan: Phase 0 Contest</h3>
+                    <button type="button" @click="closeKakita5thDanModal()"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+                <div class="text-xs text-gold bg-parchment rounded p-2 font-medium mb-3"
+                     data-testid="kakita-5th-banner">
+                    Phase 0 contested iaijutsu. Attacker phase = 0.
+                </div>
+
+                {# PRE-ROLL #}
+                <div x-show="k5Phase === 'pre'" class="space-y-3">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" x-model="k5OpponentHasIaijutsu"
+                               @change="k5OpponentSkillRank = k5OpponentHasIaijutsu ? 4 : 3"
+                               data-action="kakita-5th-opponent-has-iaijutsu"
+                               class="rounded border-ink/30">
+                        <span>Opponent has iaijutsu knack</span>
+                    </label>
+                    <div x-show="!k5OpponentHasIaijutsu" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Opponent rolls attack instead; you gain +1 free raise (+5 flat) on your iaijutsu roll.
+                    </div>
+
+                    {# Opponent skill rank: general contested-roll rule grants
+                       a free raise (+5 flat) for each rank the Kakita's
+                       iaijutsu exceeds the opponent's picked skill. Your own
+                       iaijutsu rank comes from the knack on your sheet. #}
+                    <div class="text-xs text-ink/60 bg-parchment rounded p-2 flex flex-wrap items-center gap-2">
+                        <span x-text="k5OpponentHasIaijutsu
+                                ? 'Opponent iaijutsu rank:'
+                                : 'Opponent attack skill:'"></span>
+                        <select x-model.number="k5OpponentSkillRank"
+                                data-action="kakita-5th-opponent-skill"
+                                class="border rounded px-1 py-0.5 text-xs">
+                            <template x-for="r in [1, 2, 3, 4, 5]" :key="r">
+                                <option :value="r" x-text="r"></option>
+                            </template>
+                        </select>
+                        <span class="text-ink/50">
+                            (your iaijutsu rank <span x-text="k5OwnIaijutsuRank"></span> -
+                            <span data-testid="kakita-5th-contest-skill-bonus"
+                                  x-text="_kakita5thContestSkillBonus() > 0
+                                        ? '+' + _kakita5thContestSkillBonus() + ' free raise bonus'
+                                        : 'no free raise (opponent ≥ you)'"></span>)
+                        </span>
+                    </div>
+
+                    {% if school_abilities.get('kakita_3rd_dan_defender_phase_bonus_x') %}
+                    <div class="text-xs text-ink/60 bg-parchment rounded p-2 flex flex-wrap items-center gap-2">
+                        <span>Kakita 3rd Dan: die 0, defender's first action in phase</span>
+                        <select x-model.number="k5DefenderPhase"
+                                data-action="kakita-5th-defender-phase"
+                                class="border rounded px-1 py-0.5 text-xs">
+                            <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                            <option value="11">no remaining actions</option>
+                        </select>
+                        <span class="text-ink/50">
+                            (+<span data-testid="kakita-5th-3rd-dan-bonus"
+                                    x-text="(schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0)
+                                            * Math.max(0, (parseInt(k5DefenderPhase, 10) || 0))"></span>
+                            from 3rd Dan,
+                            X = <span x-text="schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0"></span>)
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    <div class="text-xs text-ink/60 bg-parchment rounded p-2"
+                         data-testid="kakita-5th-prebonus">
+                        Total pre-roll bonus: +<span x-text="_kakita5thPreRollBonus()"></span>
+                    </div>
+
+                    <button type="button"
+                            @click="rollKakita5thDanContest()"
+                            data-action="kakita-5th-roll"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                        Roll Iaijutsu (contested)
+                    </button>
+                </div>
+
+                {# ROLLING: animation tray for the iaijutsu contest roll
+                   (shared between the contested-roll and the damage roll
+                   since they never animate at the same time). #}
+                <div x-show="k5Phase === 'rolling' || k5Phase === 'damage-rolling'" x-cloak
+                     class="mb-4">
+                    <div class="text-sm text-ink/60 mb-1"
+                         x-text="k5Phase === 'rolling' ? 'Rolling iaijutsu...' : 'Rolling damage...'"></div>
+                    <div id="dice-animation-k5" x-show="k5Phase === 'rolling'"
+                         class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+                    <div id="dice-animation-k5-damage" x-show="k5Phase === 'damage-rolling'" x-cloak
+                         class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+                </div>
+
+                {# CONTEST RESULT #}
+                <div x-show="k5Phase === 'result'" x-cloak class="space-y-3">
+                    <div class="text-base font-mono font-bold text-ink/80"
+                         data-testid="kakita-5th-formula"
+                         x-text="k5FormulaText"></div>
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in k5RollDice" :key="i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3 text-lg font-bold">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>Your roll: <span class="text-accent" data-testid="kakita-5th-total" x-text="k5RollTotal"></span></div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
+                    </div>
+
+                    {# Bonuses applied to the contested roll, so the player
+                       can see where each +N came from without parsing the
+                       formula flat. #}
+                    <div x-show="k5NoIaijutsuBonus + k5KakitaBonus + k5ContestSkillBonus > 0"
+                         x-cloak class="text-xs text-ink/70 space-y-0.5"
+                         data-testid="kakita-5th-bonuses-breakdown">
+                        <div x-show="k5NoIaijutsuBonus > 0" x-cloak>
+                            &bull; +<span x-text="k5NoIaijutsuBonus"></span>
+                            from 5th Dan (opponent has no iaijutsu)
+                        </div>
+                        <div x-show="k5KakitaBonus > 0" x-cloak>
+                            &bull; +<span x-text="k5KakitaBonus"></span>
+                            from Kakita 3rd Dan (defender phase
+                            <span x-text="k5DefenderPhase === 11 ? '11 - no remaining actions' : k5DefenderPhase"></span>)
+                        </div>
+                        <div x-show="k5ContestSkillBonus > 0" x-cloak
+                             data-testid="kakita-5th-contest-skill-breakdown">
+                            &bull; +<span x-text="k5ContestSkillBonus"></span>
+                            from contested-roll skill gap
+                            (your iaijutsu <span x-text="k5OwnIaijutsuRank"></span> -
+                            opponent <span x-text="k5OpponentSkillRank"></span>)
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm">Opponent's iaijutsu/attack roll:</label>
+                        <input type="number" x-model.number="k5OpponentRoll" min="0"
+                               data-action="kakita-5th-opponent-roll"
+                               class="w-20 border rounded px-2 py-1 text-sm text-center">
+                    </div>
+                    <div x-show="k5OpponentRoll > 0" x-cloak
+                         class="text-sm"
+                         data-testid="kakita-5th-outcome">
+                        <span x-show="k5RollTotal > k5OpponentRoll" class="text-success font-medium">
+                            Won by <span x-text="k5RollTotal - k5OpponentRoll"></span>.
+                        </span>
+                        <span x-show="k5RollTotal < k5OpponentRoll" class="text-red-700 font-medium">
+                            Lost by <span x-text="k5OpponentRoll - k5RollTotal"></span>.
+                        </span>
+                        <span x-show="k5RollTotal === k5OpponentRoll" class="text-ink/60 font-medium">
+                            Tied.
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm">Base weapon damage</label>
+                        <input type="number" x-model.number="k5WeaponRolled" min="0" max="10"
+                               data-action="kakita-5th-weapon-rolled"
+                               class="w-16 border rounded px-2 py-1 text-sm text-center">
+                        <span class="font-mono">k</span>
+                        <input type="number" x-model.number="k5WeaponKept" min="1" max="10"
+                               data-action="kakita-5th-weapon-kept"
+                               class="w-16 border rounded px-2 py-1 text-sm text-center">
+                    </div>
+                    <button type="button"
+                            @click="rollKakita5thDanDamage()"
+                            data-action="kakita-5th-roll-damage"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                        Roll Damage
+                    </button>
+                </div>
+
+                {# DAMAGE RESULT #}
+                <div x-show="k5Phase === 'damage-result'" x-cloak class="space-y-3">
+                    <div class="bg-ink/5 rounded p-3 text-base">
+                        <div>Your iaijutsu: <span class="font-bold" x-text="k5RollTotal"></span></div>
+                        <div>Opponent: <span class="font-bold" x-text="k5OpponentRoll"></span></div>
+                        <div x-show="k5DamageDiceAdjust !== 0" x-cloak
+                             data-testid="kakita-5th-damage-adjust">
+                            Damage dice adjustment:
+                            <span class="font-bold" :class="k5DamageDiceAdjust > 0 ? 'text-success' : 'text-red-700'"
+                                  x-text="(k5DamageDiceAdjust > 0 ? '+' : '') + k5DamageDiceAdjust"></span>
+                        </div>
+                    </div>
+                    <div class="text-sm">
+                        <span class="text-ink/60">Damage dice:</span>
+                        <template x-for="(d, i) in k5DamageDice" :key="i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                        <span x-show="k5DamageDice.length === 0" class="text-ink/40 italic">no dice rolled</span>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="font-bold text-2xl text-accent"
+                             data-testid="kakita-5th-damage-total"
+                             x-text="k5DamageTotal + ' damage'"></div>
+                    </div>
+                    <button type="button" @click="closeKakita5thDanModal()"
+                            class="btn-secondary px-4 py-2 rounded text-sm font-medium">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+

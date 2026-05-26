@@ -1,0 +1,46 @@
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Skills</h2>
+
+        {% set char_skills = character.skills or {} %}
+
+        {% for section_label, cat, advanced in [
+            ('Social Skills (Basic)', 'social', false),
+            ('Social Skills (Advanced)', 'social', true),
+            ('Knowledge Skills (Basic)', 'knowledge', false),
+            ('Knowledge Skills (Advanced)', 'knowledge', true),
+        ] %}
+        <div class="mb-4">
+            <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">{{ section_label }}</h3>
+            <div class="grid gap-1">
+                {% for sid, skill in skills.items() %}
+                {% if skill.category == cat and skill.is_advanced == advanced %}
+                {% set rank = char_skills.get(sid, 0) %}
+                {% set roll = skill_rolls.get(sid) %}
+                {% set has_modifiers = roll and roll.tooltip_lines|length > 1 %}
+                <div class="skill-row{% if has_modifiers %} skill-row--has-modifiers{% endif %} py-1 tooltip-trigger relative {{ 'opacity-60' if rank == 0 else '' }} cursor-pointer hover:bg-parchment/50 rounded px-1 -mx-1"
+                     data-roll-key="skill:{{ sid }}">
+                    <span class="skill-row__name text-sm font-medium truncate">{{ skill.name }}</span>
+                    <div class="skill-row__pips flex gap-0.5">
+                        {% for i in range(1, 6) %}
+                        <div class="w-4 h-4 rounded-full border {{ 'bg-accent border-accent' if i <= rank else 'border-ink/30' }}"></div>
+                        {% endfor %}
+                    </div>
+                    {% if roll %}
+                    <span class="skill-row__roll text-xs text-accent font-medium">
+                        {{ roll.display }}
+                        {% if has_modifiers %}
+                        ({{ roll.parenthetical }})
+                        {% endif %}
+                    </span>
+                    {% endif %}
+                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
+                        <p class="font-medium mb-1">{{ skill.name }} ({{ skill.ring.value }})</p>
+                        <div class="whitespace-pre-line">{{ skill.rules_text or skill.description }}</div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </section>

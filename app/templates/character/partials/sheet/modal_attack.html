@@ -1,0 +1,1122 @@
+{% from "character/partials/sheet/_macros.html" import precepts_pool_block %}
+        <div x-show="atkModalOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="attack">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent" x-text="(atkFormula?.label || 'Attack').replace(/\s*\(.*\)/, '')"></h3>
+                    <button type="button" @click="atkModalOpen = false"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+                {% include 'character/partials/read_only_roll_banner.html' %}
+
+                {# ── PRE-ROLL ── #}
+                <div x-show="atkPhase === 'pre'" class="space-y-4">
+                    {# Missing-action-dice warning. Rolls can still happen without
+                       any unspent action dice (e.g. an attack outside a combat
+                       round), but players who forgot to roll initiative get an
+                       orange nudge with a one-click shortcut to do so. #}
+                    <div x-show="initiativeWarningVariant() === 'no-init'" x-cloak
+                         data-testid="attack-init-warning-no-init"
+                         class="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded p-2">
+                        Note: you are using <span x-text="attackActionName()"></span> without having
+                        <button type="button"
+                                data-action="roll-initiative-from-warning"
+                                @click="triggerInitiativeFromWarning()"
+                                class="underline hover:text-orange-900 font-medium">rolled initiative</button>.
+                    </div>
+                    <div x-show="initiativeWarningVariant() === 'out-of-dice'" x-cloak
+                         data-testid="attack-init-warning-out-of-dice"
+                         class="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded p-2">
+                        Note: you are out of action dice for the round. Did you mean to
+                        <button type="button"
+                                data-action="roll-initiative-from-warning"
+                                @click="triggerInitiativeFromWarning()"
+                                class="underline hover:text-orange-900 font-medium">roll initiative</button>
+                        before using <span x-text="attackActionName()"></span>?
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">
+                                Opponent's Base TN
+                                <span x-show="atkIsDoubleAttack()" x-cloak class="text-xs text-ink/60 font-normal">(+20 for double attack)</span>
+                                <span x-show="atkIsAthleticsAttack()" x-cloak class="text-xs text-ink/60 font-normal">(athletics attack: TN = 5 + 10 &times; Parry)</span>
+                            </label>
+                            <div x-show="!atkShowCustomTN">
+                                <select x-show="!atkIsAthleticsAttack()" x-model.number="atkTN" @change="if($event.target.value === 'other') { atkShowCustomTN = true; }"
+                                        class="w-full border rounded px-2 py-1.5 text-sm">
+                                    <option value="5">5 (Parry 0)</option>
+                                    <option value="10">10 (Parry 1)</option>
+                                    <option value="15">15 (Parry 2)</option>
+                                    <option value="20">20 (Parry 3)</option>
+                                    <option value="25">25 (Parry 4)</option>
+                                    <option value="30">30 (Parry 5)</option>
+                                    <option value="other">Other...</option>
+                                </select>
+                                <select x-show="atkIsAthleticsAttack()" x-cloak x-model.number="atkTN" @change="if($event.target.value === 'other') { atkShowCustomTN = true; }"
+                                        class="w-full border rounded px-2 py-1.5 text-sm">
+                                    <option value="5">5 (Parry 0)</option>
+                                    <option value="15">15 (Parry 1)</option>
+                                    <option value="25">25 (Parry 2)</option>
+                                    <option value="35">35 (Parry 3)</option>
+                                    <option value="45">45 (Parry 4)</option>
+                                    <option value="55">55 (Parry 5)</option>
+                                    <option value="other">Other...</option>
+                                </select>
+                            </div>
+                            <div x-show="atkShowCustomTN" x-cloak class="flex gap-1">
+                                <input type="number" x-model.number="atkTN" min="1" max="100"
+                                       class="w-full border rounded px-2 py-1.5 text-sm">
+                                <button @click="atkShowCustomTN = false" class="text-xs text-ink/50 hover:text-ink">Back</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Base weapon damage</label>
+                            <div class="flex gap-1">
+                                <input type="number" x-model.number="atkWeaponRolled" min="0" max="10"
+                                       class="w-16 border rounded px-2 py-1.5 text-sm text-center" placeholder="R">
+                                <span class="self-center text-sm font-mono">k</span>
+                                <input type="number" x-model.number="atkWeaponKept" min="1" max="10"
+                                       class="w-16 border rounded px-2 py-1.5 text-sm text-center" placeholder="K">
+                            </div>
+                            {% if character.school == 'brotherhood_of_shinsei_monk' %}
+                            <div class="text-xs text-ink/50 mt-1">Default 1k3 (unarmed - Brotherhood special ability)</div>
+                            {% elif school and school.category not in ('bushi', 'counterattack', 'duelist', 'investigator') %}
+                            <div class="text-xs text-ink/50 mt-1">Default 3k2 (non-bushi)</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {# Formula bonuses (e.g. Kitsuki +2*Water, Courtier +Air).
+                       Mantis posture overlays (live): +5 offensive, plus 5th Dan
+                       offensive-posture-count accumulator. #}
+                    <div x-show="(atkFormula?.bonus_sources?.length > 0) || _mantisLiveAttackLabels().length > 0" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        <span class="font-medium">Bonuses:</span>
+                        <span x-text="[...(atkFormula?.bonus_sources || []), ..._mantisLiveAttackLabels()].join(', ')"></span>
+                    </div>
+
+                    {# Pre-roll "Extra bonus": GM-grant situational bonus
+                       that can't be auto-computed (positioning, Isawa
+                       Ishi 1st Dan grant, etc.). Updates the hit-chance
+                       table + expected damage row reactively while
+                       checked, and is folded into the formula on commit
+                       so the post-roll breakdown shows the labeled
+                       contribution. Defaults reset on every modal open
+                       (unchecked, +15, "surrounding"). #}
+                    <div class="border-t border-ink/10 pt-2">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox"
+                                   x-model="atkExtraBonusEnabled"
+                                   data-testid="atk-extra-bonus-toggle"
+                                   class="rounded text-accent">
+                            <span class="font-medium">Extra bonus</span>
+                        </label>
+                        <div x-show="atkExtraBonusEnabled" x-cloak
+                             class="flex gap-2 ml-6 mt-1 items-center">
+                            <input type="number"
+                                   x-model.number="atkExtraBonusAmount"
+                                   data-testid="atk-extra-bonus-amount"
+                                   class="w-20 border rounded px-2 py-1 text-sm text-center">
+                            <input type="text"
+                                   x-model="atkExtraBonusLabel"
+                                   maxlength="60"
+                                   data-testid="atk-extra-bonus-label"
+                                   placeholder="surrounding"
+                                   class="flex-1 border rounded px-2 py-1 text-sm">
+                        </div>
+                    </div>
+
+                    {# Damage-side bonuses (Courtier +Air, Mantis 2nd Dan +5, etc.).
+                       Mantis posture overlays (live): +5 offensive + 5th Dan accumulator. #}
+                    <div x-show="(atkFormula?.damage_bonus_sources?.length > 0) || _mantisLiveDamageLabels().length > 0" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        <span class="font-medium">Damage bonuses:</span>
+                        <span x-text="[...(atkFormula?.damage_bonus_sources || []), ..._mantisLiveDamageLabels()].join(', ')"></span>
+                    </div>
+
+                    {# Isawa Duelist 3rd Dan: note that TN trade is assumed in probabilities #}
+                    <div x-show="schoolAbilities.isawa_tn_trade" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Isawa 3rd Dan: probabilities assume +<span x-text="schoolAbilities.isawa_tn_trade_bonus || 0"></span> TN trade bonus (applied post-roll).
+                    </div>
+
+                    {# Ide Special: banked TN reduction #}
+                    <div x-show="ideBankedTnReduce > 0" x-cloak
+                         class="bg-success/5 border border-success/40 rounded p-2 text-sm text-success">
+                        Ide feint bonus: TN reduced by <span x-text="ideBankedTnReduce"></span> (effective TN: <span x-text="Math.max(0, atkEffectiveTN() - ideBankedTnReduce)"></span>)
+                    </div>
+
+                    {# Banked bonus indicators #}
+                    <div x-show="hirumaBankedAttackBonus > 0 || (akodoBankedBonuses || []).some(b => !b.spent) || bayushiBankedFeintRaise > 0" x-cloak
+                         class="bg-success/5 border border-success/40 rounded p-2 text-xs text-success space-y-0.5">
+                        <div x-show="hirumaBankedAttackBonus > 0" x-cloak>Hiruma post-parry bonus: +<span x-text="hirumaBankedAttackBonus"></span> (auto-applied to attack and damage)</div>
+                        <template x-for="(b, i) in (akodoBankedBonuses || []).filter(b => !b.spent)" :key="'ab'+i">
+                            <div>Akodo banked bonus: +<span x-text="b.amount"></span> (discretionary, applied after roll)</div>
+                        </template>
+                        <div x-show="bayushiBankedFeintRaise > 0" x-cloak>Bayushi feint raise<span x-show="bayushiBankedFeintRaise > 5">s</span>: +<span x-text="bayushiBankedFeintRaise"></span> available (discretionary, applied after roll)</div>
+                    </div>
+
+                    {# Doji Artisan 5th Dan: auto-bonus from TN #}
+                    <div x-show="atkFormula?.doji_5th_dan_always" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Doji 5th Dan: +<span x-text="Math.max(0, Math.floor((atkTN - 10) / 5))"></span>
+                        bonus (from TN <span x-text="atkTN"></span>)
+                    </div>
+
+                    {# Attack Specialization: one checkbox per spec targeting
+                       the Attack combat skill. Each checked box adds +10 to
+                       the roll (and to the hit-probability table). Shown on
+                       every attack-modal variant (plain attack, double_attack,
+                       lunge, counterattack, athletics:attack, Kakita iaijutsu)
+                       since "Specialization (Attack)" applies to any attack. #}
+                    <div x-show="atkFormula?.is_attack_type && attackSpecs.length > 0" x-cloak
+                         data-testid="attack-spec-section"
+                         class="text-xs text-ink/60 bg-parchment rounded p-2 space-y-1">
+                        <template x-for="(spec, i) in attackSpecs" :key="i">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" x-model="atkSpecApplies[i]"
+                                       :data-testid="'attack-spec-checkbox-' + i"
+                                       class="rounded border-ink/30">
+                                <span>Specialization (<span x-text="spec.text || 'unspecified'"></span>) applies: +10 to the roll</span>
+                            </label>
+                        </template>
+                    </div>
+
+                    {# Doji Artisan 4th Dan: "target has not attacked me this
+                       round" bonus = current phase. The phase matters but we
+                       can't derive it from action-die state alone (the attack
+                       may be made before any action die is spent), so the
+                       player picks it from a dropdown. #}
+                    <div x-show="atkFormula?.doji_4th_dan_untouched_target" x-cloak
+                         data-testid="doji-4th-dan-untouched"
+                         class="text-xs text-ink/60 bg-parchment rounded p-2 space-y-1">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" x-model="atkDojiUntouchedTarget"
+                                   data-action="doji-4th-dan-untouched-checkbox"
+                                   class="rounded border-ink/30">
+                            <span>Target has not attacked me this round (Doji 4th Dan: +phase)</span>
+                        </label>
+                        <div x-show="atkDojiUntouchedTarget" x-cloak class="flex items-center gap-2">
+                            <label>Current phase:</label>
+                            <select x-model.number="atkDojiPhase"
+                                    data-action="doji-4th-dan-phase"
+                                    class="border rounded px-1 py-0.5 text-xs">
+                                <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="p">
+                                    <option :value="p" x-text="p"></option>
+                                </template>
+                            </select>
+                            <span class="text-ink/50">(+<span x-text="atkDojiPhase"></span> to the roll)</span>
+                        </div>
+                    </div>
+
+                    {# Shinjo Bushi Special Ability: +2X where X is the number
+                       of phases the spent action die was held (current phase
+                       minus die value). Shown only when the attack will
+                       actually consume an action die - suppressed entirely
+                       when the initiative warning is active. #}
+                    <div x-show="atkFormula?.shinjo_phase_bonus_attack
+                                 && schoolAbilities.shinjo_phase_bonus
+                                 && initiativeWarningVariant() === null
+                                 && _shinjoDieToSpend()" x-cloak
+                         data-testid="shinjo-phase-bonus"
+                         class="text-xs text-ink/60 bg-parchment rounded p-2 flex flex-wrap items-center gap-2">
+                        <span>Shinjo Bushi: die <span class="font-mono" x-text="_shinjoDieToSpend()?.value ?? ''"></span> spent at phase</span>
+                        <select x-model.number="atkShinjoPhase"
+                                data-action="shinjo-phase"
+                                class="border rounded px-1 py-0.5 text-xs">
+                            {# An action die "comes up" in its own phase, so
+                               spending it earlier than that is impossible -
+                               the dropdown omits the sub-die-value phases
+                               rather than offering clamped-to-zero options. #}
+                            <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter(p => p >= (_shinjoDieToSpend()?.value || 1))" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                        </select>
+                        <span class="text-ink/50" data-testid="shinjo-phase-bonus-display">
+                            (+<span x-text="_shinjoPhaseBonus()"></span> to the roll,
+                            held <span x-text="_shinjoPhasesHeld()"></span> phase<span x-show="_shinjoPhasesHeld() !== 1">s</span>)
+                        </span>
+                    </div>
+
+                    {# Kakita Duelist Phase-0 iaijutsu attack note. Shown for
+                       any iaijutsu-variant attack (spent from a Phase-0 die
+                       in this phase; future phases add the interrupt /
+                       5th-Dan entry points that also route through here). #}
+                    <div x-show="atkFormula?.attack_variant === 'iaijutsu'
+                                 && schoolAbilities.kakita_phase_zero
+                                 && !atkKakitaInterrupt" x-cloak
+                         data-testid="kakita-phase-zero-attack-note"
+                         class="text-xs text-gold bg-parchment rounded p-2 font-medium">
+                        Kakita Phase 0 iaijutsu attack.
+                    </div>
+                    <div x-show="atkKakitaInterrupt" x-cloak
+                         data-testid="kakita-phase-zero-interrupt-note"
+                         class="text-xs text-gold bg-parchment rounded p-2 font-medium">
+                        Phase 0 Kakita interrupt attack (2 highest dice spent).
+                    </div>
+
+                    {# Kakita Duelist 3rd Dan defender-phase bonus. The player
+                       picks the defender's next action phase from a 1-10
+                       dropdown (plus an 11-labeled "no remaining actions"
+                       default per the rules). Suppressed when the initiative
+                       warning would fire or no action die will be spent,
+                       mirroring the Shinjo / Doji 4th Dan controls above. #}
+                    <div x-show="atkFormula?.kakita_3rd_dan_defender_phase_bonus
+                                 && (schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0) > 0
+                                 && initiativeWarningVariant() === null
+                                 && (_shinjoDieToSpend() || atkForceAttackerPhase !== null)" x-cloak
+                         data-testid="kakita-3rd-dan-bonus"
+                         class="text-xs text-ink/60 bg-parchment rounded p-2 flex flex-wrap items-center gap-2">
+                        <span>Kakita 3rd Dan: die <span class="font-mono" x-text="_kakita3rdDanAttackerPhase()"></span>, defender's next action in phase</span>
+                        <select x-model.number="atkKakitaDefenderPhase"
+                                data-action="kakita-3rd-dan-defender-phase"
+                                :class="atkKakitaDefenderPhase === 0 ? 'border-accent ring-1 ring-accent' : ''"
+                                class="border rounded px-1 py-0.5 text-xs">
+                            <option :value="0" x-text="'Select phase'"></option>
+                            <template x-for="p in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                            <option :value="11">no remaining actions</option>
+                        </select>
+                        <span x-show="atkKakitaDefenderPhase !== 0" x-cloak
+                              class="text-ink/50" data-testid="kakita-3rd-dan-bonus-display">
+                            (+<span x-text="_kakita3rdDanBonus()"></span> to the roll,
+                            X = <span x-text="schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0"></span>)
+                        </span>
+                        <span x-show="atkKakitaDefenderPhase === 0" x-cloak
+                              class="text-accent font-medium"
+                              data-testid="kakita-3rd-dan-needs-phase">
+                            Pick the defender's next action phase to enable the roll.
+                        </span>
+                    </div>
+
+                    {# Ikoma 4th Dan: 10-dice floor on unparried damage #}
+                    <div x-show="schoolAbilities.ikoma_10_dice_floor" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Ikoma 4th Dan: unparried attacks always roll at least 10 damage dice. Avg Damage below reflects this.
+                    </div>
+
+                    {# Shosuro Actor 5th Dan: note that lowest-3 bonus is baked into probabilities #}
+                    <div x-show="atkFormula?.shosuro_5th_dan" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Shosuro 5th Dan: sum of lowest 3 dice is added to each roll (some dice may be counted twice). The averages below include this bonus.
+                    </div>
+
+                    {# Kitsune Warden Special Ability: swap the attack ring
+                       for the school ring. Rendered only when the formula
+                       carries a kitsune_swap sub-dict (i.e., school ring
+                       value differs from Fire and the variant is not
+                       iaijutsu); template x-if removes the input from the
+                       DOM entirely for non-Kitsune characters so generic
+                       'input[type=checkbox]' selectors in other tests
+                       aren't ambiguous. #}
+                    <template x-if="atkFormula?.kitsune_swap">
+                        <label class="flex items-center gap-2 text-sm bg-parchment rounded p-2 cursor-pointer">
+                            <input type="checkbox" x-model="atkKitsuneSwap"
+                                   data-testid="kitsune-attack-ring-swap">
+                            <span>
+                                Use Kitsune Warden Special Ability
+                                (roll with <span class="font-bold" x-text="atkFormula?.kitsune_swap?.kitsune_swap_to_ring"></span>
+                                instead of <span x-text="atkFormula?.kitsune_swap?.kitsune_swap_from_ring"></span>)
+                            </span>
+                        </label>
+                    </template>
+
+                    {# Probability table #}
+                    <div class="overflow-x-auto">
+                        <table class="text-sm w-full">
+                            <thead>
+                                <tr class="border-b border-ink/20">
+                                    <th class="text-left py-1 pr-3">Void</th>
+                                    <th class="text-right py-1 px-2">Attack Roll</th>
+                                    <th class="text-right py-1 px-2">Hit %</th>
+                                    <th class="text-right py-1 px-2">Avg Extra Dice</th>
+                                    <th class="text-right py-1 px-2">Avg Damage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="v in Array.from({length: (voidSpendConfig.cap || 0) + 1}, (_, i) => i)" :key="v">
+                                    <tr class="border-b border-ink/5"
+                                        :class="v === atkVoidSelected ? 'bg-accent/10 font-medium' : ''">
+                                        <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
+                                        <td class="text-right py-1 px-2 font-mono text-xs text-ink/70"
+                                            x-text="((atkKitsuneSwap && atkProbs[atkKey]?.kitsune_swap?.void_keys?.[String(v)]) || atkProbs[atkKey]?.void_keys?.[String(v)] || '').replace(',', 'k')"></td>
+                                        <td class="text-right py-1 px-2 text-success"
+                                            x-text="Math.round(atkHitChance(v) * 100) + '%'"></td>
+                                        <td class="text-right py-1 px-2"
+                                            x-text="atkAvgExtraDice(v)"></td>
+                                        <td class="text-right py-1 px-2 font-bold"
+                                            x-text="atkAvgDamage(v)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {# Void selector + roll button #}
+                    <div class="flex items-center gap-3">
+                        <label class="text-sm font-medium">Void points:</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" @click="atkVoidSelected = Math.max(0, atkVoidSelected - 1)"
+                                    :disabled="atkVoidSelected <= 0"
+                                    class="btn-pip">-</button>
+                            <span class="w-8 text-center font-bold text-lg" x-text="atkVoidSelected"></span>
+                            <button type="button" @click="atkVoidSelected = Math.min(atkVoidSelected + 1, Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0))"
+                                    :disabled="atkVoidSelected >= Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0)"
+                                    class="btn-pip">+</button>
+                        </div>
+                        <button type="button" @click="rollAttack()"
+                                data-action="roll-attack"
+                                :disabled="_kakita3rdDanNeedsPhase()"
+                                :title="_kakita3rdDanNeedsPhase()
+                                        ? 'Select the defender\'s next action phase before rolling. The Kakita 3rd Dan bonus depends on how many phases ahead the defender is.'
+                                        : ''"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-accent">
+                            Roll <span x-text="(atkFormula?.label || 'Attack').replace(/\s*\(.*\)/, '')"></span>
+                        </button>
+                    </div>
+                </div>
+
+                {# ── ROLLING ── #}
+                <div x-show="atkPhase === 'rolling' || atkPhase === 'damage-rolling' || hidaRerollPhase === 'rerolling'" x-cloak>
+                    <div id="dice-animation-atk"
+                         class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+                </div>
+
+                {# ── ATTACK RESULT ── #}
+                <div x-show="atkPhase === 'result'" x-cloak class="space-y-3">
+                    {# Kitsune Warden Special Ability annotation #}
+                    <div x-show="formula?.kitsune_swap_to_ring" x-cloak
+                         data-testid="kitsune-attack-swap-annotation"
+                         class="text-xs italic text-accent">
+                        Kitsune Warden Special Ability: rolled with
+                        <span class="font-bold" x-text="formula?.kitsune_swap_to_ring"></span>
+                        instead of <span x-text="formula?.kitsune_swap_from_ring"></span>.
+                    </div>
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'atk'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3 text-sm">
+                        <div class="flex items-center justify-between gap-3 mb-1">
+                            <div class="font-bold text-lg">
+                                Total: <span class="text-accent" x-text="baseTotal"></span>
+                                <template x-if="atkIsDoubleAttack()">
+                                    <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="atkEffectiveTN()"></span> (<span x-text="atkTN"></span> + 20)</span>
+                                </template>
+                                <template x-if="!atkIsDoubleAttack()">
+                                    <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="atkTN"></span></span>
+                                </template>
+                            </div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
+                        <div class="text-xs text-ink/70 mt-0.5">
+                            &bull; <span x-text="keptSum"></span> from the kept dice
+                        </div>
+                        <div x-show="formula?.iaijutsu_first_dan_extra_die" x-cloak
+                             data-testid="kakita-1st-dan-iaijutsu-attack-breakdown"
+                             class="text-xs text-ink/70 mt-0.5">
+                            &bull; +1 rolled die from 1st Dan (iaijutsu)
+                        </div>
+                        <div x-show="formula?.void_spent > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span>
+                            from <span x-text="formula?.void_spent"></span> spent void point<span x-show="formula?.void_spent > 1">s</span>
+                        </div>
+                        <div x-show="formula?.void_spent > 0 && voidSpendConfig.combat_vp_flat_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="(formula?.void_spent || 0) * voidSpendConfig.combat_vp_flat_bonus"></span>
+                            from 5th Dan (+<span x-text="voidSpendConfig.combat_vp_flat_bonus"></span> per VP)
+                        </div>
+                        <div x-show="formula?.void_overflow_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="formula?.void_overflow_bonus"></span> from rolling above 10k10
+                        </div>
+                        <template x-for="b in (formula?.bonuses || [])" :key="b.label">
+                            <div class="text-xs text-ink/70 mt-0.5">
+                                &bull; <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span> from <span x-text="b.label"></span>
+                            </div>
+                        </template>
+                        <div x-show="formula?.isawa_tn_trade" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="schoolAbilities.isawa_tn_trade_bonus || 0"></span> from Isawa 3rd Dan TN trade
+                        </div>
+                        <div x-show="formula?.hiruma_parry_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="formula?.hiruma_parry_bonus"></span> from Hiruma post-parry bonus
+                        </div>
+                        <div x-show="akodoSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="akodoSpentThisRoll"></span> from Akodo 3rd Dan banked bonus
+                        </div>
+                        <div x-show="bayushiRaisesSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="bayushiRaisesSpentThisRoll"></span> from Bayushi 4th Dan feint raise<span x-show="bayushiRaisesSpentThisRoll > 5">s</span>
+                        </div>
+                        <div x-show="mirumotoPointsSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="mirumotoPointsSpentThisRoll * 2"></span>
+                            from <span x-text="mirumotoPointsSpentThisRoll"></span> 3rd Dan point<span x-show="mirumotoPointsSpentThisRoll > 1">s</span>
+                        </div>
+                        <div x-show="formula?.doji_5th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="formula?.doji_5th_dan_bonus"></span> from Doji 5th Dan (TN <span x-text="atkTN"></span>)
+                        </div>
+                        <div x-show="formula?.doji_4th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
+                             data-testid="doji-4th-dan-breakdown">
+                            &bull; +<span x-text="formula?.doji_4th_dan_bonus"></span> from Doji 4th Dan (phase <span x-text="formula?.doji_4th_dan_phase"></span>, target had not attacked)
+                        </div>
+                        <div x-show="formula?.attack_spec_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
+                             data-testid="attack-spec-breakdown">
+                            &bull; +<span x-text="formula?.attack_spec_bonus"></span> from Specialization (<span x-text="(formula?.attack_spec_applied_texts || []).join(', ')"></span>)
+                        </div>
+                        <div x-show="formula?.shinjo_phase_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
+                             data-testid="shinjo-phase-bonus-breakdown">
+                            &bull; +<span x-text="formula?.shinjo_phase_bonus"></span> from Shinjo Bushi (die
+                            <span x-text="formula?.shinjo_phase_bonus_die_value"></span>
+                            held to phase <span x-text="formula?.shinjo_phase_bonus_phase"></span>)
+                        </div>
+                        <div x-show="formula?.kakita_3rd_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
+                             data-testid="kakita-3rd-dan-breakdown">
+                            &bull; +<span x-text="formula?.kakita_3rd_dan_bonus"></span> from Kakita 3rd Dan (die
+                            <span x-text="formula?.kakita_3rd_dan_attacker_phase"></span>,
+                            defender phase <span x-text="formula?.kakita_3rd_dan_defender_phase"></span>,
+                            X = <span x-text="formula?.kakita_3rd_dan_x"></span>)
+                        </div>
+                        <div x-show="shosuroLowest3Bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="shosuroLowest3Bonus"></span> from Shosuro 5th Dan (lowest 3 dice added to result)
+                        </div>
+                        <div x-show="convictionSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="convictionSpentThisRoll"></span>
+                            from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
+                        </div>
+                        <div x-show="atkPostRollBonusEnabled && atkPostRollBonusApplied !== 0" x-cloak
+                             class="text-xs text-ink/70 mt-0.5"
+                             data-testid="atk-post-roll-bonus-breakdown">
+                            &bull; <span x-text="(atkPostRollBonusApplied >= 0 ? '+' : '') + atkPostRollBonusApplied"></span> extra bonus
+                        </div>
+                    </div>
+
+                    {# Post-roll "Extra bonus": GM-grant adjustment
+                       applied after the dice land. Sits above the
+                       HIT/MISS branch so it can flip a near-miss into
+                       a hit; the damage-extra-dice display refreshes
+                       reactively as the number changes (each +5 over
+                       TN granting another rolled damage die). No text
+                       field per the spec - just a number that affects
+                       attack total + damage. #}
+                    <div class="bg-ink/5 rounded p-3">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox"
+                                   x-model="atkPostRollBonusEnabled"
+                                   @change="atkPostRollBonusToggle($event.target.checked)"
+                                   data-testid="atk-post-roll-bonus-toggle"
+                                   class="rounded text-accent">
+                            <span class="font-medium">Extra bonus</span>
+                        </label>
+                        <div x-show="atkPostRollBonusEnabled" x-cloak
+                             class="ml-6 mt-1">
+                            <input type="number"
+                                   x-model.number="atkPostRollBonusAmount"
+                                   @input="atkPostRollBonusUpdate()"
+                                   x-ref="atkPostRollBonusInput"
+                                   data-testid="atk-post-roll-bonus-amount"
+                                   class="w-24 border rounded px-2 py-1 text-sm text-center">
+                        </div>
+                    </div>
+
+                    {# Hida 3rd Dan: reroll dice selection (any die, not just kept) #}
+                    <div x-show="schoolAbilities.hida_reroll && hidaRerollPhase === 'selecting'" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-3 text-sm">
+                        <div class="font-medium text-amber-800 mb-2">
+                            Hida 3rd Dan: select up to <span x-text="hidaRerollMax"></span> dice to reroll
+                            <span x-show="hidaRerollMax !== schoolAbilities.hida_reroll_x" class="text-xs">(impaired: halved but 10s rerolled)</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                            <template x-for="(d, i) in finalDice" :key="'hr'+i">
+                                <button type="button"
+                                        @click="if (hidaRerollSelections.includes(i)) { hidaRerollSelections = hidaRerollSelections.filter(x => x !== i); } else if (hidaRerollSelections.length < hidaRerollMax) { hidaRerollSelections.push(i); }"
+                                        class="w-10 h-10 rounded-full border-2 font-mono font-bold text-sm transition-colors"
+                                        :class="hidaRerollSelections.includes(i) ? 'border-accent bg-accent/20 text-accent' : d.kept ? 'border-ink/30 bg-white text-ink' : 'border-ink/20 bg-ink/5 text-ink/50'"
+                                        x-text="d.value">
+                                </button>
+                            </template>
+                        </div>
+                        <div class="text-xs text-amber-700 mb-2">Kept dice are bold. Unkept dice are dimmed. Rerolling an unkept die may change which dice are kept.</div>
+                        <div class="flex gap-2">
+                            <button type="button"
+                                    @click="(async () => { hidaRerollPhase = 'rerolling'; atkPhase = 'rerolling'; const allDice = [...finalDice]; const rerollTens = formula.reroll_tens || (schoolAbilities.hida_reroll && !formula.reroll_tens); const newDice = await _rerollDice(hidaRerollSelections.length, rerollTens, 'dice-animation-atk'); const sortedSel = [...hidaRerollSelections].sort((a,b)=>a-b); sortedSel.forEach((idx, j) => { allDice[idx] = { value: newDice[j].value, kept: false }; }); const sorted = allDice.map((d,i) => ({value: d.value, origIdx: i})).sort((a,b) => a.value - b.value); const keptCount = formula.kept; sorted.forEach((d,i) => { allDice[d.origIdx].kept = i >= sorted.length - keptCount; }); finalDice = allDice; keptDice = allDice.filter(d => d.kept); keptSum = keptDice.reduce((s,d) => s + d.value, 0); baseTotal = keptSum + formula.flat; atkRollTotal = baseTotal; atkRaisesSpent = 0; _atkUpdateHitState(); hidaRerollPhase = 'done'; atkPhase = 'result'; })()"
+                                    :disabled="hidaRerollSelections.length === 0"
+                                    class="btn-primary px-3 py-1 rounded text-xs disabled:opacity-30">
+                                Reroll <span x-text="hidaRerollSelections.length"></span> dice
+                            </button>
+                            <button type="button" @click="hidaRerollPhase = 'done'"
+                                    class="btn-secondary px-3 py-1 rounded text-xs">
+                                Skip
+                            </button>
+                        </div>
+                    </div>
+
+                    {# HIT #}
+                    <div x-show="atkHit" x-cloak class="bg-success/5 border border-success/40 rounded p-3">
+                        <div class="font-bold text-success mb-2">
+                            <template x-if="atkNearMiss">
+                                <span>HIT (4th Dan) - missed TN by <span x-text="Math.abs(atkExcess)"></span>, Matsu 4th Dan turns near-miss into a hit (no extra damage)</span>
+                            </template>
+                            <template x-if="!atkNearMiss && atkIsDoubleAttack()">
+                                <span>HIT - exceeded base TN by <span x-text="atkRollTotal - atkTN"></span>
+                                (<span x-text="atkExtraDice"></span> extra damage dice) + automatic serious wound</span>
+                            </template>
+                            <template x-if="!atkNearMiss && !atkIsDoubleAttack()">
+                                <span>HIT - exceeded TN by <span x-text="atkExcess"></span>
+                                (<span x-text="atkExtraDice"></span> extra damage dice)</span>
+                            </template>
+                        </div>
+
+                        {# Damage formula breakdown #}
+                        <div x-show="atkCurrentDamage()" class="text-sm mb-2">
+                            <span class="font-medium">Damage roll:</span>
+                            <span class="font-mono font-bold" x-text="atkCurrentDamage()?.rolled + 'k' + atkCurrentDamage()?.kept + (atkCurrentDamage()?.flat > 0 ? ' + ' + atkCurrentDamage()?.flat : '')"></span>
+                            <span class="text-ink/50 ml-1">avg <span x-text="atkCurrentDamage()?.avg"></span></span>
+                            <div class="text-xs text-ink/60 mt-1">
+                                <template x-for="(p, i) in (atkCurrentDamage()?.parts || [])" :key="i">
+                                    <span x-text="(i > 0 ? ', ' : '') + p"></span>
+                                </template>
+                            </div>
+                        </div>
+
+                        {# Failed parry checkbox #}
+                        <label class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
+                            <input type="checkbox" x-model="atkFailedParry" class="rounded text-accent">
+                            Opponent made a failed parry
+                        </label>
+                        <div x-show="atkFailedParry" x-cloak class="ml-6 mt-1 flex items-center gap-2 text-sm">
+                            <span class="text-ink/60">Parry skill:</span>
+                            <input type="number" x-model.number="atkParrySkill" min="1" max="5"
+                                   class="w-16 border rounded px-2 py-1 text-sm text-center">
+                        </div>
+
+                        {# Discretionary bonuses (3rd Dan) #}
+                        <div x-show="atkFormula?.adventure_raises_max_per_roll > 0" x-cloak class="mt-2 pt-2 border-t border-success/30">
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button" @click="atkSpendRaise()"
+                                        :disabled="atkRaisesSpent >= (atkFormula?.adventure_raises_max_per_roll || 0)"
+                                        class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Free Raise (+5)
+                                </button>
+                                <button type="button" @click="atkUndoRaise()"
+                                        :disabled="atkRaisesSpent <= 0"
+                                        class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+
+                        {# Togashi 3rd Dan daily athletics raises. An athletics-
+                           attack is simultaneously an athletics roll, so the
+                           daily pool may be spent here just like on any other
+                           athletics roll. Gated on the athletics-attack flag
+                           so regular attacks don't show it. #}
+                        <div x-show="atkFormula?.is_athletics_attack
+                                     && schoolAbilities.togashi_daily_athletics_raises
+                                     && (togashiRaisesPoolAvail() > 0 || togashiRaisesSpentThisRoll > 0)"
+                             x-cloak class="mt-2 pt-2 border-t border-success/30">
+                            <div class="flex items-center gap-2 flex-wrap text-sm">
+                                <button type="button" @click="atkSpendTogashiRaise()"
+                                        :disabled="!canSpendTogashiRaise()"
+                                        data-action="spend-togashi-raise-atk"
+                                        class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Athletics Raise (+5)
+                                </button>
+                                <button type="button" @click="atkUndoTogashiRaise()"
+                                        x-show="togashiRaisesSpentThisRoll > 0"
+                                        data-action="undo-togashi-raise-atk"
+                                        class="btn-secondary px-3 py-1 rounded text-sm">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60"
+                                      x-text="togashiRaisesSpentThisRoll + ' / ' + togashiRaisesPerRollCap() + ' this roll'"></span>
+                            </div>
+                            <div class="text-xs text-ink/50 mt-1"
+                                 x-text="'Daily pool: ' + togashiRaisesPoolAvail() + ' / ' + (schoolAbilities.togashi_daily_raises_max || 0) + ' remaining'"></div>
+                        </div>
+
+                        {# Conviction: +1 per point spent (attack) #}
+                        <div x-show="convictionConfig.rank > 0 && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
+                             x-cloak class="mt-2 pt-2 border-t border-success/30" data-conviction-block-atk>
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button" @click="spendConviction('attack')"
+                                        :disabled="!canSpendConviction()"
+                                        data-action="spend-conviction-atk"
+                                        class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Conviction (+1)
+                                </button>
+                                <button type="button" @click="undoConviction('attack')"
+                                        :disabled="!canUndoConviction()"
+                                        class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60">
+                                    <span x-text="convictionSpentThisRoll"></span>/<span x-text="convictionConfig.max_per_roll"></span> max
+                                    <span class="mx-1">&middot;</span>
+                                    <span x-text="convictionPoolAvail()"></span> remaining today
+                                </span>
+                            </div>
+                        </div>
+
+                        {# Priest 5th Dan ally (attack): spend from a party Priest's pool #}
+                        <template x-for="priest in priestAllies" :key="'atk-p-' + priest.priest_id">
+                            <div class="mt-2 pt-2 border-t border-success/30"
+                                 x-show="priestAllyPoolAvail(priest) > 0 || priestAllySpent(priest.priest_id) > 0"
+                                 x-cloak :data-priest-ally-block-atk="priest.priest_id">
+                                <div class="flex items-center gap-2 text-sm">
+                                    <button type="button"
+                                            @click="spendPriestAlly(priest, 'attack')"
+                                            :disabled="!canSpendPriestAlly(priest)"
+                                            :data-action="'spend-priest-ally-atk-' + priest.priest_id"
+                                            class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                        Spend <span x-text="priest.name"></span>'s Conviction (+1)
+                                    </button>
+                                    <button type="button"
+                                            @click="undoPriestAlly(priest, 'attack')"
+                                            :disabled="!canUndoPriestAlly(priest)"
+                                            class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                        Undo
+                                    </button>
+                                    <span class="text-xs text-ink/60">
+                                        <span x-text="priestAllySpent(priest.priest_id)"></span>/<span x-text="priest.max_per_roll"></span> max
+                                        <span class="mx-1">&middot;</span>
+                                        <span x-text="priestAllyPoolAvail(priest)"></span> available
+                                    </span>
+                                </div>
+                            </div>
+                        </template>
+
+                        {# Mirumoto 3rd Dan: spend points for +2 on attack #}
+                        <div x-show="schoolAbilities.mirumoto_round_points && ((window._trackingBridge?.mirumotoRoundPoints || 0) > 0 || mirumotoPointsSpentThisRoll > 0)" x-cloak class="mt-2 pt-2 border-t border-success/30">
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button"
+                                        @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { if (t.canEdit) { t.mirumotoRoundPoints--; } mirumotoPointsSpentThisRoll++; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState(); }"
+                                        :disabled="(window._trackingBridge?.mirumotoRoundPoints || 0) <= 0"
+                                        class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend 3rd Dan Point (+2)
+                                </button>
+                                <button type="button"
+                                        @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { if (t.canEdit) { t.mirumotoRoundPoints++; } mirumotoPointsSpentThisRoll--; atkRollTotal -= 2; baseTotal -= 2; _atkUpdateHitState(); }"
+                                        :disabled="mirumotoPointsSpentThisRoll <= 0"
+                                        class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60" x-text="(window._trackingBridge?.mirumotoRoundPoints || 0) + ' points remaining'"></span>
+                            </div>
+                        </div>
+
+                        {# Akodo 3rd Dan: spend banked bonuses on attack #}
+                        <div x-show="schoolAbilities.akodo_wc_attack_bonus && ((akodoBankedBonuses || []).some(b => !b.spent) || akodoSpentThisRoll > 0)" x-cloak
+                             class="mt-2 pt-2 border-t border-success/30">
+                            <div class="text-sm font-medium mb-1">Akodo 3rd Dan - Banked Bonuses</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <template x-for="(b, i) in akodoBankedBonuses" :key="'akb'+i">
+                                    <button x-show="!b.spent" type="button"
+                                            @click="akodoBankedBonuses[i].spent = true; akodoSpentThisRoll += b.amount; atkRollTotal += b.amount; baseTotal += b.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses();"
+                                            class="btn-primary px-2 py-1 rounded text-xs">
+                                        Apply +<span x-text="b.amount"></span>
+                                    </button>
+                                </template>
+                                <button type="button" x-show="akodoSpentThisRoll > 0"
+                                        @click="const last = [...akodoBankedBonuses].reverse().find(b => b.spent); if (last) { last.spent = false; akodoSpentThisRoll -= last.amount; atkRollTotal -= last.amount; baseTotal -= last.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses(); }"
+                                        class="btn-secondary px-2 py-1 rounded text-xs">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+
+                        {# Bayushi 4th Dan: spend banked feint raises on attack #}
+                        <div x-show="schoolAbilities.bayushi_post_feint_raise && (bayushiBankedFeintRaise > 0 || bayushiRaisesSpentThisRoll > 0)" x-cloak
+                             class="mt-2 pt-2 border-t border-success/30">
+                            <div class="text-sm font-medium mb-1">Bayushi 4th Dan - Banked Feint Raises</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button x-show="bayushiBankedFeintRaise > 0" type="button"
+                                        @click="bayushiBankedFeintRaise -= 5; bayushiRaisesSpentThisRoll += 5; atkRollTotal += 5; baseTotal += 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        class="btn-primary px-2 py-1 rounded text-xs">
+                                    Apply +5 (<span x-text="bayushiBankedFeintRaise / 5"></span> remaining)
+                                </button>
+                                <button type="button" x-show="bayushiRaisesSpentThisRoll > 0"
+                                        @click="bayushiBankedFeintRaise += 5; bayushiRaisesSpentThisRoll -= 5; atkRollTotal -= 5; baseTotal -= 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        class="btn-secondary px-2 py-1 rounded text-xs">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+
+                        {# Isawa Duelist 3rd Dan: post-roll TN trade toggle #}
+                        <div x-show="schoolAbilities.isawa_tn_trade" x-cloak
+                             class="mt-2 pt-2 border-t border-success/30">
+                            <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                <input type="checkbox" x-model="atkIsawaTnTrade"
+                                       @change="const amt = schoolAbilities.isawa_tn_trade_bonus || 0; if (atkIsawaTnTrade) { atkRollTotal += amt; baseTotal += amt; } else { atkRollTotal -= amt; baseTotal -= amt; } _atkUpdateHitState();"
+                                       class="rounded border-ink/30">
+                                <span>Isawa 3rd Dan: +<span x-text="schoolAbilities.isawa_tn_trade_bonus || 0"></span> on this attack (-5 TN to be hit)</span>
+                            </label>
+                        </div>
+
+                        {# Courtier 4th Dan: temp VP after successful attack #}
+                        <div x-show="schoolAbilities.courtier_temp_vp_on_hit" x-cloak
+                             class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                            <button type="button"
+                                    @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
+                                    class="bg-success hover:bg-success-dark text-white px-3 py-1 rounded text-xs">
+                                Gain 1 temp VP (Courtier 4th Dan - once per target)
+                            </button>
+                        </div>
+
+                        {# Daidoji 3rd Dan: counterattack gives free raises #}
+                        <div x-show="schoolAbilities.daidoji_counterattack_raises && atkFormula?.attack_variant === 'counterattack'" x-cloak
+                             class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
+                            Daidoji 3rd Dan: the person you counterattacked for gets +<span x-text="(schoolAbilities.daidoji_counterattack_raises_amount || 0) * 5"></span> (<span x-text="schoolAbilities.daidoji_counterattack_raises_amount || 0"></span> free raises) on their wound check from the original attack.
+                        </div>
+
+                        {# Hida 5th Dan: counterattack excess banked for wound check #}
+                        <div x-show="schoolAbilities.hida_counterattack_wc_bonus && atkFormula?.attack_variant === 'counterattack'" x-cloak
+                             class="mt-2 bg-success/5 border border-success/40 rounded p-2 text-xs text-ink/70"
+                             data-testid="hida-5th-dan-banked-note">
+                            Hida 5th Dan: banked +<span x-text="atkExcess"></span> for your next wound check (counterattack excess over TN).
+                        </div>
+
+                        {# Otaku 5th Dan: trade 10 damage dice for 1 auto serious wound (pre-roll) #}
+                        <label x-show="schoolAbilities.otaku_trade_dice_for_sw && atkCurrentDamage()?.rawRolled > 10" x-cloak
+                               class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
+                            <input type="checkbox" x-model="atkOtakuTradeDice" class="rounded text-accent">
+                            <span>Trade 10 damage dice for 1 automatic serious wound (5th Dan)
+                                <span class="text-xs text-ink/50">(rolled dice: <span x-text="atkCurrentDamage()?.rawRolled"></span> becomes <span x-text="Math.max(2, atkCurrentDamage()?.rawRolled - 10)"></span>)</span>
+                            </span>
+                        </label>
+
+                        <button type="button" @click="rollDamage()"
+                                class="mt-3 btn-primary px-4 py-2 rounded text-sm font-medium">
+                            Make Damage Roll
+                        </button>
+                    </div>
+
+                    {# Priest 3rd Dan precepts pool - rendered OUTSIDE the
+                       HIT/MISS split so swapping a lower rolled die for a
+                       higher pool die can turn a narrow miss into a hit. #}
+                    {{ precepts_pool_block('attack', 'atk-p') }}
+
+                    {# MISS — display the effective TN, which is the +20
+                       elevated TN on a double attack. Showing the base TN
+                       here would contradict the hit/miss calculation. #}
+                    <div x-show="!atkHit" x-cloak class="bg-red-50 border border-red-300 rounded p-3">
+                        <div class="font-bold text-red-800">MISSED - needed <span x-text="atkEffectiveTN()"></span>, rolled <span x-text="atkRollTotal"></span></div>
+                        {# Discretionary bonuses might turn a miss into a hit #}
+                        <div x-show="atkFormula?.adventure_raises_max_per_roll > 0" x-cloak class="mt-2">
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button" @click="atkSpendRaise()"
+                                        :disabled="atkRaisesSpent >= (atkFormula?.adventure_raises_max_per_roll || 0)"
+                                        class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Free Raise (+5)
+                                </button>
+                                <button type="button" @click="atkUndoRaise()"
+                                        :disabled="atkRaisesSpent <= 0"
+                                        class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+                        {# Togashi 3rd Dan athletics raises: spending one may
+                           turn a narrow miss into a hit on an athletics
+                           attack. Same gate as the HIT block above. #}
+                        <div x-show="atkFormula?.is_athletics_attack
+                                     && schoolAbilities.togashi_daily_athletics_raises
+                                     && (togashiRaisesPoolAvail() > 0 || togashiRaisesSpentThisRoll > 0)"
+                             x-cloak class="mt-2">
+                            <div class="flex items-center gap-2 flex-wrap text-sm">
+                                <button type="button" @click="atkSpendTogashiRaise()"
+                                        :disabled="!canSpendTogashiRaise()"
+                                        data-action="spend-togashi-raise-atk"
+                                        class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Athletics Raise (+5)
+                                </button>
+                                <button type="button" @click="atkUndoTogashiRaise()"
+                                        x-show="togashiRaisesSpentThisRoll > 0"
+                                        data-action="undo-togashi-raise-atk"
+                                        class="btn-secondary px-3 py-1 rounded text-sm">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60"
+                                      x-text="togashiRaisesSpentThisRoll + ' / ' + togashiRaisesPerRollCap() + ' this roll'"></span>
+                            </div>
+                        </div>
+                        {# Akodo 3rd Dan: spend banked bonuses to turn miss into hit #}
+                        <div x-show="schoolAbilities.akodo_wc_attack_bonus && ((akodoBankedBonuses || []).some(b => !b.spent) || akodoSpentThisRoll > 0)" x-cloak
+                             class="mt-2 pt-2 border-t border-red-200">
+                            <div class="text-sm font-medium mb-1">Akodo 3rd Dan - Banked Bonuses</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <template x-for="(b, i) in akodoBankedBonuses" :key="'akbm'+i">
+                                    <button x-show="!b.spent" type="button"
+                                            @click="akodoBankedBonuses[i].spent = true; akodoSpentThisRoll += b.amount; atkRollTotal += b.amount; baseTotal += b.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses();"
+                                            class="btn-primary px-2 py-1 rounded text-xs">
+                                        Apply +<span x-text="b.amount"></span>
+                                    </button>
+                                </template>
+                                <button type="button" x-show="akodoSpentThisRoll > 0"
+                                        @click="const last = [...akodoBankedBonuses].reverse().find(b => b.spent); if (last) { last.spent = false; akodoSpentThisRoll -= last.amount; atkRollTotal -= last.amount; baseTotal -= last.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses(); }"
+                                        class="btn-secondary px-2 py-1 rounded text-xs">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+                        {# Bayushi 4th Dan: spend banked feint raises on attack #}
+                        <div x-show="schoolAbilities.bayushi_post_feint_raise && (bayushiBankedFeintRaise > 0 || bayushiRaisesSpentThisRoll > 0)" x-cloak
+                             class="mt-2 pt-2 border-t border-red-200">
+                            <div class="text-sm font-medium mb-1">Bayushi 4th Dan - Banked Feint Raises</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button x-show="bayushiBankedFeintRaise > 0" type="button"
+                                        @click="bayushiBankedFeintRaise -= 5; bayushiRaisesSpentThisRoll += 5; atkRollTotal += 5; baseTotal += 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        class="btn-primary px-2 py-1 rounded text-xs">
+                                    Apply +5 (<span x-text="bayushiBankedFeintRaise / 5"></span> remaining)
+                                </button>
+                                <button type="button" x-show="bayushiRaisesSpentThisRoll > 0"
+                                        @click="bayushiBankedFeintRaise += 5; bayushiRaisesSpentThisRoll -= 5; atkRollTotal -= 5; baseTotal -= 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        class="btn-secondary px-2 py-1 rounded text-xs">
+                                    Undo
+                                </button>
+                            </div>
+                        </div>
+                        {# Hiruma 3rd Dan: spend banked post-parry bonuses on attack (MISS) #}
+                        {# Isawa Duelist 3rd Dan: post-roll TN trade toggle (MISS) #}
+                        <div x-show="schoolAbilities.isawa_tn_trade" x-cloak
+                             class="mt-2 pt-2 border-t border-red-200">
+                            <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                <input type="checkbox" x-model="atkIsawaTnTrade"
+                                       @change="const amt = schoolAbilities.isawa_tn_trade_bonus || 0; if (atkIsawaTnTrade) { atkRollTotal += amt; baseTotal += amt; } else { atkRollTotal -= amt; baseTotal -= amt; } _atkUpdateHitState();"
+                                       class="rounded border-ink/30">
+                                <span>Isawa 3rd Dan: +<span x-text="schoolAbilities.isawa_tn_trade_bonus || 0"></span> on this attack (-5 TN to be hit)</span>
+                            </label>
+                        </div>
+                        {# Mirumoto 3rd Dan: spend points on miss to turn into hit #}
+                        <div x-show="schoolAbilities.mirumoto_round_points && (window._trackingBridge?.mirumotoRoundPoints || 0) > 0" x-cloak
+                             class="mt-2 pt-2 border-t border-red-200">
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button"
+                                        @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { if (t.canEdit) { t.mirumotoRoundPoints--; } mirumotoPointsSpentThisRoll++; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState(); }"
+                                        :disabled="(window._trackingBridge?.mirumotoRoundPoints || 0) <= 0"
+                                        class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend 3rd Dan Point (+2)
+                                </button>
+                                <button type="button"
+                                        @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { if (t.canEdit) { t.mirumotoRoundPoints++; } mirumotoPointsSpentThisRoll--; atkRollTotal -= 2; baseTotal -= 2; _atkUpdateHitState(); }"
+                                        :disabled="mirumotoPointsSpentThisRoll <= 0"
+                                        class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60" x-text="(window._trackingBridge?.mirumotoRoundPoints || 0) + ' points remaining'"></span>
+                            </div>
+                        </div>
+                        {# Conviction on a missed attack: each point is +1 and
+                           may turn a narrow miss into a hit. spendConviction
+                           updates atkRollTotal/baseTotal and calls
+                           _atkUpdateHitState so the HIT block replaces the
+                           MISS block live when the bonus crosses the TN. #}
+                        <div x-show="convictionConfig.rank > 0 && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
+                             x-cloak class="mt-2 pt-2 border-t border-red-200" data-conviction-block-atk-miss>
+                            <div class="flex items-center gap-2 text-sm">
+                                <button type="button" @click="spendConviction('attack')"
+                                        :disabled="!canSpendConviction()"
+                                        data-action="spend-conviction-atk-miss"
+                                        class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend Conviction (+1)
+                                </button>
+                                <button type="button" @click="undoConviction('attack')"
+                                        :disabled="!canUndoConviction()"
+                                        class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60">
+                                    <span x-text="convictionSpentThisRoll"></span>/<span x-text="convictionConfig.max_per_roll"></span> max
+                                    <span class="mx-1">&middot;</span>
+                                    <span x-text="convictionPoolAvail()"></span> remaining today
+                                </span>
+                            </div>
+                        </div>
+                        {# Priest 5th Dan ally (attack, MISS): spend from a
+                           party Priest's pool to raise the failed roll. Uses
+                           spendPriestAlly which already updates atkRollTotal
+                           and runs _atkUpdateHitState. #}
+                        <template x-for="priest in priestAllies" :key="'atkm-p-' + priest.priest_id">
+                            <div class="mt-2 pt-2 border-t border-red-200"
+                                 x-show="priestAllyPoolAvail(priest) > 0 || priestAllySpent(priest.priest_id) > 0"
+                                 x-cloak :data-priest-ally-block-atk-miss="priest.priest_id">
+                                <div class="flex items-center gap-2 text-sm">
+                                    <button type="button"
+                                            @click="spendPriestAlly(priest, 'attack')"
+                                            :disabled="!canSpendPriestAlly(priest)"
+                                            :data-action="'spend-priest-ally-atk-miss-' + priest.priest_id"
+                                            class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                        Spend <span x-text="priest.name"></span>'s Conviction (+1)
+                                    </button>
+                                    <button type="button"
+                                            @click="undoPriestAlly(priest, 'attack')"
+                                            :disabled="!canUndoPriestAlly(priest)"
+                                            class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                        Undo
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        <button type="button" @click="atkModalOpen = false"
+                                class="mt-3 btn-secondary px-4 py-2 rounded text-sm font-medium">
+                            Close
+                        </button>
+                    </div>
+
+                    {# Mantis Wave-Treader 3rd Dan offensive: spend action die
+                       to add +X to attack and damage for the rest of the round.
+                       Visible on hit or miss (rule is phrased "after making an
+                       attack roll") when posture is offensive and at least one
+                       unspent action die remains. #}
+                    {% if school_abilities.get('mantis_3rd_dan_offensive') %}
+                    <div x-show="window._trackingBridge?.currentPosture?.() === 'offensive'
+                                 && (window._trackingBridge?.actionDice || []).some(d => !d.spent)"
+                         x-cloak class="mt-2 flex flex-wrap items-center gap-2">
+                        <button type="button"
+                                @click="window._trackingBridge?.incrementMantis3rdDanOffensive({{ school_abilities.get('mantis_3rd_dan_x', 0) }})"
+                                data-action="mantis-3rd-dan-offensive"
+                                title="After making an attack roll during a phase in which you have chosen an offensive posture, you may spend one action die from any phase to give yourself +X to all attack and damage rolls for the rest of the round, where X is your attack skill."
+                                class="btn-primary px-3 py-1 rounded text-sm">
+                            Spend another action to increase attack and damage by
+                            <span>{{ school_abilities.get('mantis_3rd_dan_x', 0) }}</span>
+                            for the round
+                        </button>
+                        <span x-show="(window._trackingBridge?.offensive3rdDanAccum || 0) > 0"
+                              x-cloak
+                              class="text-xs text-ink/60"
+                              data-testid="mantis-3rd-dan-offensive-accum"
+                              x-text="'Accumulated: +' + (window._trackingBridge?.offensive3rdDanAccum || 0)"></span>
+                    </div>
+                    {% endif %}
+
+                    {# Lucky reroll for attack #}
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyAttack()"
+                            class="btn-gold px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll attack
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevBaseTotal + _atkDiscretionaryTotal()"></span>) - you may keep the original result instead.
+                    </div>
+                </div>
+
+                {# ── DAMAGE RESULT ── #}
+                <div x-show="atkPhase === 'damage-result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Damage dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'dmg'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-bold text-2xl text-accent" x-text="atkDamageTotal + ' damage'"></div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
+                        <template x-if="atkDamageParts.length > 0 && (atkDamageFlat > 0 || atkDamageShosuroBonus > 0 || convictionSpentThisRoll > 0)">
+                            <div class="mt-1">
+                                <div class="text-xs text-ink/70">
+                                    &bull; <span x-text="keptSum"></span> from kept dice
+                                </div>
+                                <template x-for="(p, i) in atkDamageParts" :key="'dp'+i">
+                                    <div class="text-xs text-ink/70">
+                                        &bull; <span x-text="p"></span>
+                                    </div>
+                                </template>
+                                <div x-show="atkDamageShosuroBonus > 0" x-cloak class="text-xs text-ink/70">
+                                    &bull; +<span x-text="atkDamageShosuroBonus"></span> from Shosuro 5th Dan (lowest 3 dice added to damage)
+                                </div>
+                                <div x-show="convictionSpentThisRoll > 0" x-cloak class="text-xs text-ink/70">
+                                    &bull; +<span x-text="convictionSpentThisRoll"></span>
+                                    from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="schoolAbilities.matsu_lw_reset_15" x-cloak
+                             class="text-xs text-ink/70 mt-1">
+                            If this causes serious wounds, the defender's light wounds reset to 15 instead of 0.
+                        </div>
+                    </div>
+                    {# Otaku 5th Dan: note that trade was applied #}
+                    <div x-show="atkOtakuTradeDice" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm font-medium text-accent">
+                        + 1 automatic serious wound (5th Dan - traded 10 damage dice)
+                    </div>
+                    {# Conviction: +1 per point (damage) #}
+                    <div x-show="convictionConfig.rank > 0 && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
+                         x-cloak class="bg-parchment rounded p-2 text-sm" data-conviction-block-damage>
+                        <div class="flex items-center gap-2">
+                            <button type="button" @click="spendConviction('damage')"
+                                    :disabled="!canSpendConviction()"
+                                    data-action="spend-conviction-damage"
+                                    class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                Spend Conviction (+1)
+                            </button>
+                            <button type="button" @click="undoConviction('damage')"
+                                    :disabled="!canUndoConviction()"
+                                    class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                Undo
+                            </button>
+                            <span class="text-xs text-ink/60">
+                                <span x-text="convictionSpentThisRoll"></span>/<span x-text="convictionConfig.max_per_roll"></span> max
+                                <span class="mx-1">&middot;</span>
+                                <span x-text="convictionPoolAvail()"></span> remaining today
+                            </span>
+                        </div>
+                    </div>
+                    {# Priest 5th Dan ally (damage) #}
+                    <template x-for="priest in priestAllies" :key="'dmg-p-' + priest.priest_id">
+                        <div class="bg-parchment rounded p-2 text-sm"
+                             x-show="priestAllyPoolAvail(priest) > 0 || priestAllySpent(priest.priest_id) > 0"
+                             x-cloak :data-priest-ally-block-dmg="priest.priest_id">
+                            <div class="flex items-center gap-2">
+                                <button type="button"
+                                        @click="spendPriestAlly(priest, 'damage')"
+                                        :disabled="!canSpendPriestAlly(priest)"
+                                        :data-action="'spend-priest-ally-dmg-' + priest.priest_id"
+                                        class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Spend <span x-text="priest.name"></span>'s Conviction (+1)
+                                </button>
+                                <button type="button"
+                                        @click="undoPriestAlly(priest, 'damage')"
+                                        :disabled="!canUndoPriestAlly(priest)"
+                                        class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
+                                    Undo
+                                </button>
+                                <span class="text-xs text-ink/60">
+                                    <span x-text="priestAllySpent(priest.priest_id)"></span>/<span x-text="priest.max_per_roll"></span> max
+                                    <span class="mx-1">&middot;</span>
+                                    <span x-text="priestAllyPoolAvail(priest)"></span> available
+                                </span>
+                            </div>
+                        </div>
+                    </template>
+
+                    {# Priest 3rd Dan precepts pool block (display only in Phase 4;
+                       click-to-swap wired in Phase 5). #}
+                    {{ precepts_pool_block('damage', 'dmg-p') }}
+
+                    {# Lucky reroll for damage #}
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyDamage()"
+                            class="btn-gold px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll damage
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                    </div>
+                    <button type="button" @click="atkModalOpen = false"
+                            class="btn-secondary px-4 py-2 rounded text-sm font-medium">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {# ── Iaijutsu Duel Modal ── #}

@@ -112,11 +112,17 @@ def test_xp_summary_reflects_10_xp_premium(page, live_server_url):
     """Adding one foreign knack at rank 1 adds 10 XP to the editor's gross spend."""
     _go_to_editor(page, live_server_url)
     page.wait_for_timeout(300)
-    spent_before = int(page.text_content('[x-text="grossSpent()"]').strip())
+    spent_before = int(page.text_content('[x-text="xp.spent"]').strip())
     _add_foreign_knack(page, "athletics")
-    page.wait_for_timeout(200)
-    spent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
-    assert spent_after - spent_before == 10
+    # XP is server-computed and fetched after the change; wait for the +10.
+    page.wait_for_function(
+        """exp => {
+            const el = document.querySelector('[x-text="xp.spent"]');
+            return el && parseInt(el.textContent.trim()) === exp;
+        }""",
+        arg=spent_before + 10,
+        timeout=6000,
+    )
 
 
 def test_xp_summary_card_appears_only_when_present(page, live_server_url):

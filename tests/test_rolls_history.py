@@ -861,11 +861,13 @@ def test_roll_history_page_200_for_editor(client):
     # The roll-type column header reads "Type of Roll" (not just "Roll", which
     # is ambiguous with the roll's result).
     assert "Type of Roll" in resp.text
-    # base.html wires up the self-hosted display font + semantic colour palette
-    # (guards against the styling foundations silently regressing).
+    # base.html links the build-time-compiled Tailwind stylesheet and wires the
+    # self-hosted display font (guards the CSS-build pipeline + typography from
+    # regressing). The semantic colour palette now lives in tailwind.config.js,
+    # compiled into app.css, so it is no longer inline in the page.
+    assert "/static/css/app.css" in resp.text
     assert "spectral-600.woff2" in resp.text
     assert "--font-display" in resp.text
-    assert "success:" in resp.text and "info:" in resp.text
 
 
 def test_roll_history_page_embeds_rolls_json(client):

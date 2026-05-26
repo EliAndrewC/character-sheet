@@ -1,0 +1,310 @@
+        <div x-show="duelOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="iaijutsu-duel">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent">Iaijutsu Duel</h3>
+                    <button type="button" @click="duelOpen = false"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+                {% include 'character/partials/read_only_roll_banner.html' %}
+
+                {# ── SETUP ── #}
+                <div x-show="duelPhase === 'setup'" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-parchment rounded p-3 text-center">
+                            <div class="text-sm text-ink/60">Your Duel TN</div>
+                            <div class="text-2xl font-bold" x-text="duelPlayerTN"></div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Opponent's Total XP</label>
+                            <input type="number" x-model="duelOpponentXP" min="0" placeholder="e.g. 200"
+                                   class="w-full border rounded px-3 py-2 text-sm">
+                            <div class="text-xs text-ink/50 mt-1">
+                                Opponent's TN: <span x-text="Math.floor(parseInt(duelOpponentXP || '0') / 10)"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-sm text-ink/60">
+                        Weapon: Katana (4k2)
+                    </div>
+                    <button type="button" @click="duelStartContested()"
+                            :disabled="!duelOpponentXP"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                        Proceed to Contested Roll
+                    </button>
+                </div>
+
+                {# ── CONTESTED ROLL ── #}
+                <div x-show="duelPhase === 'contested'" class="space-y-4">
+                    <p class="text-sm text-ink/70">Roll iaijutsu to determine who gets the first option to focus or strike.</p>
+                    <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-success bg-success/5 rounded p-2">
+                        +<span x-text="duelRestartBonus"></span> bonus from winning previous round(s)
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <label class="text-sm font-medium">Void points:</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" @click="duelVoidSelected = Math.max(0, duelVoidSelected - 1)"
+                                    :disabled="duelVoidSelected <= 0"
+                                    class="btn-pip">-</button>
+                            <span class="w-8 text-center font-bold text-lg" x-text="duelVoidSelected"></span>
+                            <button type="button" @click="duelVoidSelected = Math.min(duelVoidSelected + 1, Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0))"
+                                    :disabled="duelVoidSelected >= Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0)"
+                                    class="btn-pip">+</button>
+                        </div>
+                    </div>
+                    <button type="button" @click="duelRollContested()"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                        Roll Contested Iaijutsu
+                    </button>
+                </div>
+
+                {# ── CONTESTED ROLLING ── #}
+                <div x-show="duelPhase === 'contested-rolling' || duelPhase === 'strike-rolling' || duelPhase === 'damage-rolling'" x-cloak>
+                    <div id="dice-animation-duel"
+                         class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+                </div>
+
+                {# ── CONTESTED RESULT ── #}
+                <div x-show="duelPhase === 'contested-result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'dc'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-bold text-lg">Contested roll: <span class="text-accent" x-text="duelContestedRoll"></span></div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
+                        <div x-show="formula?.void_spent > 0" x-cloak class="text-xs text-ink/70 mt-1">
+                            &bull; +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span>
+                            from <span x-text="formula?.void_spent"></span> spent void point<span x-show="formula?.void_spent > 1">s</span>
+                        </div>
+                        <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="duelRestartBonus"></span> from winning previous round(s)
+                        </div>
+                        <template x-for="b in (formula?.bonuses || [])" :key="b.label">
+                            <div class="text-xs text-ink/70 mt-0.5">
+                                &bull; <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span> from <span x-text="b.label"></span>
+                            </div>
+                        </template>
+                    </div>
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyDuelContested()"
+                            class="btn-gold px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                    </div>
+                    <button type="button" @click="duelProceedToFocusStrike()"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                        Proceed to Focus / Strike
+                    </button>
+                </div>
+
+                {# ── FOCUS / STRIKE ── #}
+                <div x-show="duelPhase === 'focus_strike'" x-cloak class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4 text-center">
+                        <div class="bg-parchment rounded p-3">
+                            <div class="text-sm text-ink/60">Your TN</div>
+                            <div class="text-2xl font-bold" x-text="duelPlayerTN"></div>
+                        </div>
+                        <div class="bg-parchment rounded p-3">
+                            <div class="text-sm text-ink/60">Opponent's TN</div>
+                            <div class="text-2xl font-bold" x-text="duelOpponentTN"></div>
+                        </div>
+                    </div>
+                    <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-success bg-success/5 rounded p-2">
+                        +<span x-text="duelRestartBonus"></span> bonus from winning previous round(s)
+                    </div>
+                    <div class="flex justify-between">
+                        <button type="button" @click="duelFocus()"
+                                :disabled="!duelPlayerCanFocus"
+                                class="btn-secondary px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                            Focus (+5 to your TN)
+                        </button>
+                        <button type="button" @click="duelOpponentFocus()"
+                                :disabled="!duelOpponentCanFocus"
+                                class="btn-secondary px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                            Opponent Focuses (+5 to their TN)
+                        </button>
+                    </div>
+                    <div class="text-center">
+                        <button type="button" @click="duelRollStrike()"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                            Strike!
+                        </button>
+                    </div>
+                </div>
+
+                {# ── STRIKE RESULT ── #}
+                <div x-show="duelPhase === 'strike-result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'ds'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3 text-sm">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-bold text-lg">
+                                Strike roll: <span class="text-accent" x-text="duelStrikeRoll"></span>
+                                <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="duelOpponentTN"></span></span>
+                            </div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
+                        <div x-show="duelRestartBonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                            &bull; +<span x-text="duelRestartBonus"></span> from winning previous round(s)
+                        </div>
+                        <template x-for="b in (formula?.bonuses || [])" :key="b.label">
+                            <div class="text-xs text-ink/70 mt-0.5">
+                                &bull; <span x-text="(b.amount >= 0 ? '+' : '') + b.amount"></span> from <span x-text="b.label"></span>
+                            </div>
+                        </template>
+                        <div x-show="finalDice.some(d => d.value === 10)" x-cloak class="text-xs italic text-red-700 mt-1">
+                            10s not rerolled for the strike in an iaijutsu duel
+                        </div>
+                    </div>
+
+                    {# HIT #}
+                    <div x-show="duelStrikeHit" x-cloak class="bg-success/5 border border-success/40 rounded p-3">
+                        <div class="font-bold text-success mb-2">
+                            HIT - exceeded TN by <span x-text="duelStrikeExcess"></span>
+                            (<span x-text="duelStrikeExcess"></span> extra damage dice!)
+                        </div>
+                        <div class="text-sm mb-2">
+                            <span class="font-medium">Damage roll:</span>
+                            <span class="font-mono font-bold"
+                                  x-text="duelComputeDamage().rolled + 'k' + duelComputeDamage().kept + (duelComputeDamage().flat > 0 ? ' + ' + duelComputeDamage().flat : '')"></span>
+                            <span class="text-ink/50 ml-1">avg <span x-text="duelComputeDamage().avg"></span></span>
+                        </div>
+                        <button type="button" @click="duelRollDamage()"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                            Roll Damage
+                        </button>
+                    </div>
+
+                    {# MISS #}
+                    <div x-show="!duelStrikeHit" x-cloak class="bg-red-50 border border-red-300 rounded p-3">
+                        <div class="font-bold text-red-800 mb-2">MISSED</div>
+                    </div>
+
+                    {# Lucky reroll for duel strike #}
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyDuelStrike()"
+                            class="btn-gold px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll strike
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                    </div>
+
+                    {# Opponent's roll input (always shown after strike) #}
+                    <div class="bg-parchment rounded p-3 space-y-2">
+                        <label class="block text-sm font-medium">Opponent's iaijutsu roll total:</label>
+                        <div class="flex gap-2">
+                            <input type="number" x-model="duelOpponentRoll" min="0" placeholder="Enter total"
+                                   class="w-32 border rounded px-2 py-1.5 text-sm">
+                            <button type="button" @click="duelApplyOpponentRoll()"
+                                    :disabled="!duelOpponentRoll"
+                                    class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                                Apply Roll
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {# ── DAMAGE RESULT ── #}
+                <div x-show="duelPhase === 'damage-result'" x-cloak class="space-y-3">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Damage dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'dd'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+                    <div class="bg-ink/5 rounded p-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-bold text-2xl text-accent" x-text="duelDamageTotal + ' damage'"></div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
+                    </div>
+
+                    {# Lucky reroll for duel damage #}
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyDuelDamage()"
+                            class="btn-gold px-4 py-2 rounded text-sm font-medium">
+                        Use Lucky to reroll damage
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
+                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                    </div>
+
+                    <div>
+                        <p class="text-sm text-ink/70">Enter opponent's roll to continue.</p>
+                        <div class="flex gap-2 mt-2">
+                            <input type="number" x-model="duelOpponentRoll" min="0" placeholder="Opponent's total"
+                                   class="w-32 border rounded px-2 py-1.5 text-sm">
+                            <button type="button" @click="duelApplyOpponentRoll()"
+                                    :disabled="!duelOpponentRoll"
+                                    class="bg-ink/20 hover:bg-ink/30 text-ink px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                                Apply Roll
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {# ── OPPONENT DAMAGE + WOUND CHECK ── #}
+                <div x-show="duelPhase === 'opponent-damage'" x-cloak class="space-y-3">
+                    <div class="bg-red-50 border border-red-300 rounded p-3">
+                        <div class="font-bold text-red-800 mb-2">Opponent hit you!</div>
+                        <div class="text-sm text-ink/60 mb-2">Your TN to be hit: <span class="font-bold" x-text="duelPlayerTN"></span></div>
+                        <label class="block text-sm font-medium mb-1">Opponent's damage roll total:</label>
+                        <div class="flex gap-2">
+                            <input type="number" x-model="duelOpponentDamage" min="0" placeholder="Damage"
+                                   class="w-32 border rounded px-2 py-1.5 text-sm">
+                            <button type="button" @click="duelApplyOpponentDamage()"
+                                    :disabled="!duelOpponentDamage"
+                                    class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">
+                                Make Wound Check
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {# ── RESTART (both missed) ── #}
+                <div x-show="duelPhase === 'restart'" x-cloak class="space-y-3">
+                    <div class="bg-parchment rounded p-3">
+                        <div class="font-bold text-ink mb-2">Both duelists missed - resheathe and restart</div>
+                        <p class="text-sm text-ink/70">
+                            <template x-if="duelStrikeRoll >= parseInt(duelOpponentRoll || '0')">
+                                <span class="text-success font-medium">You rolled higher - you receive a free raise (+5) on future iaijutsu rolls.</span>
+                            </template>
+                            <template x-if="duelStrikeRoll < parseInt(duelOpponentRoll || '0')">
+                                <span class="text-red-700 font-medium">Opponent rolled higher - they receive the bonus.</span>
+                            </template>
+                        </p>
+                    </div>
+                    <button type="button" @click="duelRestart()"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                        Start Next Round
+                    </button>
+                </div>
+
+                {# ── DONE ── #}
+                <div x-show="duelPhase === 'done'" x-cloak class="space-y-3">
+                    <p class="text-sm text-ink/70">The iaijutsu duel phase is complete. Normal kenjutsu combat may follow.</p>
+                    <button type="button" @click="duelOpen = false"
+                            class="btn-secondary px-4 py-2 rounded text-sm font-medium">Close</button>
+                </div>
+            </div>
+        </div>
+

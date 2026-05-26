@@ -1,0 +1,28 @@
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <div class="flex items-baseline gap-4 mb-4">
+            {% if school %}
+            {{ section_header(school.name) }}
+            <span class="text-sm bg-accent/10 text-accent rounded-full px-3 py-0.5 font-medium text-center">
+                {{ dan }}{{ 'st' if dan == 1 else ('nd' if dan == 2 else ('rd' if dan == 3 else 'th')) }} Dan
+            </span>
+            <span class="text-sm text-ink/60">School Ring: {{ character.school_ring_choice }}</span>
+            {% else %}
+            <h2 class="text-xl font-bold text-ink/40">No school selected yet</h2>
+            {% endif %}
+        </div>
+
+        {% if school %}
+        <div class="mb-4">
+            <p class="text-sm font-medium">Special Ability:</p>
+            <p class="text-sm bg-parchment rounded p-2 italic mt-1">{{ school_special_ability_html(school) }}</p>
+        </div>
+
+        <!-- Techniques - bold if attained, grayed if not -->
+        <div>
+            <p class="text-sm font-medium mb-1">Techniques:</p>
+            {% for d, desc in school.techniques.items() %}
+            <div class="text-sm mb-2 {{ 'font-semibold' if d <= dan else 'opacity-40' }}"><span class="font-medium {{ 'text-accent' if d <= dan else '' }}">{{ d }}{{ 'st' if d == 1 else ('nd' if d == 2 else ('rd' if d == 3 else 'th')) }} Dan:</span> <span class="whitespace-pre-line">{{ desc }}</span></div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </section>

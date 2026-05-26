@@ -138,3 +138,30 @@ def apply_changes(page, summary="Test version", make_visible=True):
     page.locator('div.fixed button:text("Apply Changes")').click()
     # Use a generous timeout — under heavy session load the server can be slow
     page.wait_for_url("**/characters/*", timeout=30000)
+
+
+def wait_xp(page, field, expected, timeout=6000):
+    """Wait until the editor's server-computed XP footer shows ``expected`` for
+    ``field`` ('spent', 'budget', or 'remaining'). XP is fetched from
+    POST /characters/{id}/xp debounced + async, so it lags edits by a beat."""
+    page.wait_for_function(
+        """([f, exp]) => {
+            const el = document.querySelector('[x-text="xp.' + f + '"]');
+            return el && el.textContent.trim() === String(exp);
+        }""",
+        arg=[field, str(expected)],
+        timeout=timeout,
+    )
+
+
+def wait_xp_changed(page, field, baseline, timeout=6000):
+    """Wait until the editor's xp.<field> differs from ``baseline`` - i.e. a
+    refresh has landed after an edit whose exact resulting value isn't asserted."""
+    page.wait_for_function(
+        """([f, b]) => {
+            const el = document.querySelector('[x-text="xp.' + f + '"]');
+            return el && parseInt(el.textContent.trim()) !== b;
+        }""",
+        arg=[field, baseline],
+        timeout=timeout,
+    )

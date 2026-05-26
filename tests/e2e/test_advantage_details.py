@@ -1,6 +1,6 @@
 """E2E: Advantage detail fields (text, skill selection) appear and auto-save."""
 
-from tests.e2e.helpers import select_school, apply_changes, start_new_character
+from tests.e2e.helpers import select_school, apply_changes, start_new_character, wait_xp
 import pytest
 
 pytestmark = pytest.mark.advantage_details
@@ -145,6 +145,9 @@ def test_specialization_sub_section_lets_you_add_multiple_rows(page, live_server
     # The Specialization checkbox in the regular advantages grid is gone.
     assert page.locator('input[name="adv_specialization"]').count() == 0
 
+    # Baseline gross spend before adding any specializations.
+    base = int(page.text_content('[x-text="xp.spent"]').strip())
+
     # Add two rows.
     add_btn = page.locator('[data-testid="add-specialization"]')
     add_btn.click()
@@ -160,16 +163,13 @@ def test_specialization_sub_section_lets_you_add_multiple_rows(page, live_server
     row1.locator('select').select_option(value="bragging")
     page.wait_for_timeout(150)
 
-    # Each spec costs 2 XP.
-    grossSpent = int(page.text_content('[x-text="grossSpent()"]').strip())
-    assert grossSpent >= 4
+    # Each filled spec costs 2 XP; two specs add 4 (server-computed, fetched).
+    wait_xp(page, "spent", base + 4)
 
     # Remove the first row; XP drops by 2.
     row0.locator('[data-testid="remove-specialization-0"]').click()
-    page.wait_for_timeout(150)
     assert section.locator('[data-testid^="specialization-row-"]').count() == 1
-    grossSpent_after = int(page.text_content('[x-text="grossSpent()"]').strip())
-    assert grossSpent_after == grossSpent - 2
+    wait_xp(page, "spent", base + 2)
 
 
 def test_attack_specialization_checkboxes_on_attack_modal(page, live_server_url):

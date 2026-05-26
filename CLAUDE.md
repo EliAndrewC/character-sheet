@@ -6,7 +6,7 @@ A character sheet and character builder web app for L7R, a Legend of the Five Ri
 
 - **Backend:** Python / FastAPI
 - **Database:** SQLite via SQLAlchemy (persistent volume on Fly.io)
-- **Frontend:** Jinja2 templates + HTMX (server interactions) + Alpine.js (client-side reactivity) + Tailwind CSS (all self-hosted in /static/)
+- **Frontend:** Jinja2 templates + HTMX (server interactions) + Alpine.js (client-side reactivity) + Tailwind CSS (build-time compiled to `app/static/css/app.css`, see "Styling / CSS build") - all self-hosted in /static/, no CDN
 - **Testing:** pytest (unit), Playwright + headless Chromium (e2e clicktests)
 - **Deployment:** Fly.io with Docker
 
@@ -53,6 +53,17 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 The app auto-creates the SQLite database (`l7r.db` by default) on first startup. Set the `DATABASE_URL` env var to change the path (file path only, the app prepends `sqlite:///`).
+
+## Styling / CSS build
+
+Tailwind is **compiled at build time** into `app/static/css/app.css` (a purged, minified stylesheet, ~50KB) - NOT the in-browser Play CDN runtime (that ~407KB `tailwind.js` was removed). `base.html` links `app.css` and keeps its hand-written rules in the inline `<style>` block.
+
+- **Theme** (custom colors `accent`/`gold`/`success`/`info`, the `display` font family, warm `boxShadow`) lives in `tailwind.config.js` - the single source of truth. Keep it in sync with the `@font-face` / custom CSS in `base.html`.
+- **Build:** `scripts/build-css.sh` (uses the standalone Tailwind CLI, no Node; downloads it to gitignored `bin/` on first run). Pass `--watch` during local dev.
+- **Committed artifact:** `app/static/css/app.css` is committed so a fresh checkout + `uvicorn` (and the e2e suite) work with zero setup. **After editing templates/classes, rerun `scripts/build-css.sh`** so the committed CSS matches - otherwise new classes won't be styled locally.
+- **Deploys** rebuild it automatically: the Dockerfile `cssbuild` stage runs the CLI against the templates and overwrites the committed copy, so `fly deploy` always ships a current, fully-purged stylesheet.
+- **Purge caveat:** only classes that appear *literally* in `content` files (`app/templates/**/*.html`, `app/static/js/**/*.js`) survive. A class assembled by string concatenation in JS will be dropped - add such classes to `safelist` in `tailwind.config.js`.
+- **Button system:** reusable button colour variants live in an `@layer components` block in `tailwind-input.css`: `.btn-primary` (accent), `.btn-secondary` (ink), `.btn-danger` / `.btn-danger-soft` (red), `.btn-info` (slate), `.btn-gold`, `.btn-ghost`, and `.btn-pip` (the square +/- stepper). Each centralizes only the colour/hover treatment; callers keep their own size/padding utilities (e.g. `class="btn-primary px-4 py-2 rounded text-sm font-medium"`). Use these for new buttons so a restyle stays one-touch. (Dropdown menu-items - `w-full text-left ... hover:bg-parchment` - are a separate pattern, not buttons.)
 
 ## Running Tests
 
@@ -138,7 +149,7 @@ The canonical rules live at: https://github.com/EliAndrewC/l7r/tree/master/rules
 
 ## Key Architectural Decisions
 
-- **XP calculation is implemented both client-side (Alpine.js) and server-side (services/xp.py).** The client-side version provides instant feedback during editing; the server-side version is authoritative for validation and display on the character sheet. These must stay in sync.
+- **XP calculation lives only in `services/xp.py` (single source of truth).** The editor no longer recomputes XP in Alpine; it POSTs its current state to `POST /characters/{id}/xp` (read-only, ~250ms debounced) and renders the returned `editor_xp_view()` payload - the footer figures (`spent`/`budget`/`remaining`), per-control "X XP spent" totals (`costs`), and the +/- tooltip marginal hints (`marginal`). The initial paint is seeded server-side via `xp_initial` in the edit route. The published sheet's XP breakdown is server-rendered separately via `calculate_xp_breakdown()`. Trade-off: live edit feedback lags an edit by the debounce + a tiny round-trip instead of being instant - the deliberate cost of removing the former client/server duplication.
 - **TemplateResponse uses keyword arguments** (`request=`, `name=`, `context=`) - required by the installed Starlette version.
 - **School selection uses `htmx.ajax()` called from Alpine.js** - not HTMX attributes on the select element. This is because the URL is dynamic (includes the school ID) and HTMX attribute-based triggers don't reliably fire from Alpine-managed elements.
 - **School ring choice is stored explicitly** because some schools let the player choose their school ring (e.g. "any non-Void"). The `school_ring_choice` field records which ring was actually selected.
@@ -289,6 +300,8 @@ fly deploy
 ```
 
 Requires a persistent volume named `l7r_data` mounted at `/data`. The `DATABASE_URL` env var is set to `/data/l7r.db` in fly.toml. The VM is configured for 512MB RAM (shared CPU) to accommodate boto3 imports for the backup system.
+
+`fly deploy` builds the multi-stage `Dockerfile`: the `cssbuild` stage compiles the purged Tailwind stylesheet (see "Styling / CSS build") and the runtime stage copies it in, so each deploy ships a stylesheet matching that deploy's templates - no manual CSS step. `.dockerignore` keeps `.env`, `.git`, `bin/`, and dev DBs out of the image.
 
 ## Database Backups
 
