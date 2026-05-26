@@ -1,0 +1,78 @@
+    <!-- HEADER -->
+    <div class="flex flex-wrap items-start justify-between gap-2">
+        <div class="min-w-0">
+            <h1 class="text-3xl font-bold break-words">
+                {{ character.name }}{% if character.is_hidden %}<span class="inline-flex items-center gap-1 align-middle ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-sm font-medium border border-amber-300"
+                      title="This character is hidden. Only editors can see it."
+                      data-testid="sheet-hidden-indicator">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M10.585 10.587a2 2 0 002.828 2.83M9.363 5.365A9.466 9.466 0 0112 5c4.478 0 8.268 2.943 9.542 7a9.97 9.97 0 01-1.563 2.81M6.21 6.215C4.293 7.41 2.83 9.092 2.458 12c1.274 4.057 5.064 7 9.542 7 1.62 0 3.146-.39 4.49-1.077"/>
+                    </svg>
+                    Hidden
+                </span>{% endif %}{% if character.name_explanation %}<span class="inline-block align-middle ml-1"
+                      data-testid="name-explanation-tooltip"
+                      x-data="{ open: false }">
+                    <button type="button"
+                            @click="open = !open"
+                            data-action="open-name-explanation"
+                            aria-label="Show name explanation"
+                            class="text-ink/40 hover:text-ink/70 align-middle">
+                        <svg class="w-5 h-5 inline-block" fill="none"
+                             stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M8 7h8M8 11h8M8 15h5M6 3h10a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z"/>
+                        </svg>
+                    </button>
+                    <div x-show="open" x-cloak
+                         class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4"
+                         data-modal="name-explanation-display"
+                         @click.self="open = false"
+                         @keydown.escape.window="open = false">
+                        <div class="bg-white rounded-lg shadow-xl px-5 py-4 max-w-md w-full max-h-[80vh] overflow-y-auto text-left">
+                            <div class="flex items-start justify-between mb-2">
+                                <h3 class="text-lg font-bold text-accent">{{ character.name }}</h3>
+                                <button type="button" @click="open = false"
+                                        data-action="close-name-explanation"
+                                        aria-label="Close"
+                                        class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                            </div>
+                            <div class="text-sm text-ink whitespace-pre-wrap font-normal leading-snug">{{ character.name_explanation }}</div>
+                        </div>
+                    </div>
+                </span>{% endif %}
+            </h1>
+            {% if owner_display_name or character.age is not none or character.lineage %}
+            <p class="text-ink/60">
+                {% if owner_display_name %}Player: {{ owner_display_name }}{% endif %}
+                {% if owner_display_name and character.age is not none %} &middot; {% endif %}
+                {% if character.age is not none %}Age: {{ character.age }}{% endif %}
+                {% if (owner_display_name or character.age is not none) and character.lineage %} &middot; {% endif %}
+                {% if character.lineage %}
+                {% set _lineage_desc = wasp_lineages.get(character.lineage) %}
+                {% if _lineage_desc %}
+                <span class="tooltip-trigger relative inline-block cursor-help" data-testid="lineage-tooltip">
+                    {{ character.lineage }} lineage
+                    <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-normal text-left font-normal">{{ _lineage_desc }}</span>
+                </span>
+                {% else %}
+                {{ character.lineage }} lineage
+                {% endif %}
+                {% endif %}
+            </p>
+            {% endif %}
+        </div>
+        {% if viewer_can_edit %}
+        <div class="flex gap-2 flex-wrap">
+            <a href="/characters/{{ character.id }}/roll-history"
+               data-action="roll-history"
+               class="btn-info px-4 py-2 rounded text-sm font-medium transition-colors">
+                Roll History
+            </a>
+            <a href="/characters/{{ character.id }}/edit"
+               class="bg-ink hover:bg-ink/80 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                Edit
+            </a>
+        </div>
+        {% endif %}
+    </div>
+

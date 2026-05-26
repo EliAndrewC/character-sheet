@@ -1,0 +1,106 @@
+{# Shared macros for the character sheet partials. Imported by sheet.html and
+   any sheet partial that calls them:
+       {% from "character/partials/sheet/_macros.html" import render_rows, precepts_pool_block %}
+#}
+
+{# Macro: render a flat list of XP line rows as a 3-column grid (XP | label | from→to).
+   ``align`` controls the horizontal alignment of the label column - most
+   sections look best centered, but advantages/disadvantages have wordy
+   labels that read better left-aligned. #}
+{% macro render_rows(rows, align='center') %}
+<div class="grid gap-x-3 gap-y-0.5 text-sm font-mono items-baseline"
+     style="grid-template-columns: auto auto 1fr;">
+{% for row in rows %}
+    {% if row.note %}
+        <div class="col-span-3 text-xs text-ink/60 italic font-sans">{{ row.label }}</div>
+    {% else %}
+        <div class="text-right whitespace-nowrap">{{ row.xp }} XP:</div>
+        <div class="text-{{ align }}">{{ row.label }}</div>
+        <div class="whitespace-nowrap">
+            {% if 'from_val' in row %}{{ row.from_val }} &rarr; {{ row.to_val }}{% endif %}
+        </div>
+    {% endif %}
+{% endfor %}
+</div>
+{% endmacro %}
+
+{# Macro: render the Priest 3rd Dan precepts pool block inside a roll
+   modal. ``modal`` is one of "attack" / "damage" / "wc" / "roll" and is
+   passed to the Alpine helpers so the pool's visibility matches the
+   active roll type. Clicking a pool die opens a dropdown of eligible
+   rolled-die values (strictly lower); picking one commits the swap,
+   which rewrites finalDice, re-keeps the top-N, updates the active
+   modal's total, and persists the new pool via /track or the swap
+   endpoint (self vs ally). #}
+{% macro precepts_pool_block(modal, key_prefix) %}
+<template x-for="priest in preceptsPoolAlliesForThisRoll('{{ modal }}')" :key="'{{ key_prefix }}-' + priest.priest_id">
+    <div class="bg-parchment rounded p-3 text-sm"
+         :data-testid="'precepts-pool-in-roll-' + priest.priest_id"
+         :data-precepts-pool-modal="'{{ modal }}'">
+        <div class="text-xs font-medium mb-1">
+            <template x-if="priest.isSelf">
+                <span>3rd Dan combat die pool</span>
+            </template>
+            <template x-if="!priest.isSelf">
+                <span><span x-text="priest.name"></span>'s Combat dice pool</span>
+            </template>
+        </div>
+        <div class="flex flex-wrap gap-1">
+            <template x-for="(die, j) in priest.pool" :key="j">
+                {# Outside-click dismiss is handled by a document-level
+                   listener registered in diceRoller().init(). Using a
+                   direct listener (rather than @click.outside here)
+                   sidesteps Alpine's visibility heuristic, which can be
+                   confused by the menu's position:fixed + translateY
+                   transform. #}
+                <div class="relative"
+                     data-precepts-pool-die
+                     :data-priest-id="priest.priest_id"
+                     :data-die-index="j"
+                     :data-die-value="die.value">
+                    <button type="button"
+                            @click="openPreceptsPoolMenu(priest, j, $el)"
+                            :data-action="'precepts-pool-die-' + priest.priest_id + '-' + j"
+                            class="block cursor-pointer hover:opacity-80 transition-opacity"
+                            title="Click to swap this die with one of your rolled dice">
+                        <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
+                             class="die action-die"
+                             :class="die.value >= 10 ? 'two-digit' : ''">
+                            <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+                            <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
+                                  x-text="die.value"></text>
+                        </svg>
+                    </button>
+                    <div x-show="preceptsPoolMenuOpen === (priest.priest_id + ':' + j)"
+                         x-cloak
+                         :data-precepts-swap-menu="priest.priest_id + ':' + j"
+                         :style="'top:' + preceptsPoolMenuPos.top + 'px; left:' + preceptsPoolMenuPos.left + 'px' + (preceptsPoolMenuPos.flipped ? '; transform: translateY(-100%)' : '')"
+                         class="fixed bg-white border border-ink/20 rounded shadow-lg z-[60] text-sm whitespace-nowrap min-w-[220px]">
+                        <template x-for="opt in preceptsSwapOptions(priest, die.value)" :key="opt.label">
+                            <button type="button"
+                                    :disabled="!!opt.disabled"
+                                    @click="if (!opt.disabled) swapPreceptsDie(priest, j, opt.value)"
+                                    :data-precepts-swap-option="opt.disabled ? 'none' : opt.value"
+                                    class="block w-full text-left px-3 py-2 hover:bg-parchment disabled:opacity-40 disabled:cursor-not-allowed"
+                                    x-text="opt.label"></button>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+        {# Swap history for this priest's pool during the current roll.
+           Rendered as an auxiliary bonus-source line so players can see
+           where their roll total is coming from. #}
+        <div x-show="preceptsPoolSwapBonuses.some(b => b.priestId === priest.priest_id)"
+             x-cloak class="mt-2 text-xs text-ink/70 space-y-0.5">
+            <template x-for="b in preceptsPoolSwapBonuses.filter(b => b.priestId === priest.priest_id)" :key="b.rolledValueBefore + '-' + b.poolValueAfter">
+                <div data-testid="precepts-pool-swap-entry">
+                    <span x-text="(b.poolValueAfter - b.rolledValueBefore >= 0 ? '+' : '') + (b.poolValueAfter - b.rolledValueBefore)"></span>
+                    (swapped rolled <span x-text="b.rolledValueBefore"></span>
+                    &rarr; <span x-text="b.poolValueAfter"></span>)
+                </div>
+            </template>
+        </div>
+    </div>
+</template>
+{% endmacro %}

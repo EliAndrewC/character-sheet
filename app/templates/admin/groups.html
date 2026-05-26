@@ -15,7 +15,7 @@
             <input type="text" name="name" required maxlength="64" placeholder="e.g. Friday Group"
                    class="flex-1 border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
             <button type="submit"
-                    class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded font-medium transition-colors">
+                    class="btn-primary px-4 py-2 rounded font-medium transition-colors">
                 Add Group
             </button>
         </form>
@@ -32,7 +32,7 @@
                         <input type="text" name="name" value="{{ g.name }}" required maxlength="64"
                                class="flex-1 border rounded px-3 py-2 focus:ring-2 focus:ring-accent/30 focus:border-accent">
                         <button type="submit"
-                                class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-2 rounded text-sm font-medium transition-colors">
+                                class="btn-secondary px-3 py-2 rounded text-sm font-medium transition-colors">
                             Rename
                         </button>
                     </form>
@@ -40,7 +40,7 @@
                     <form method="POST" action="/admin/groups/{{ g.id }}/delete"
                           onsubmit="return confirm('Delete &quot;{{ g.name }}&quot;? Its characters will become unassigned.');">
                         <button type="submit"
-                                class="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded text-sm font-medium transition-colors">
+                                class="btn-danger-soft px-3 py-2 rounded text-sm font-medium transition-colors">
                             Delete
                         </button>
                     </form>

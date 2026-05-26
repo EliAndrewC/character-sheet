@@ -1707,12 +1707,14 @@ def test_freeform_modal_has_copy_as_image_button(page, live_server_url):
     page.locator('[data-action="open-freeform-roll"]').click()
     page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
     page.locator('[data-action="freeform-roll"]').click()
+    # 10s (matching the other roll-wait helpers) - under full-suite browser
+    # load the freeform roll's phase transition can exceed a tight 5s budget.
     page.wait_for_function(
         """() => {
             const ff = document.querySelector('[x-data="freeformRoller()"]');
             return ff && Alpine.$data(ff).ffPhase === 'done';
         }""",
-        timeout=5000,
+        timeout=10000,
     )
     _wait_copy_ready(page, '[data-modal="freeform-roll"]')
 

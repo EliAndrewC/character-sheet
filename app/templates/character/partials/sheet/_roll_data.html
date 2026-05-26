@@ -1,0 +1,26 @@
+    <!-- DICE ROLLER (click-to-roll modal) -->
+    <script type="application/json" id="roll-formulas">{{ roll_formulas | tojson }}</script>
+    <script type="application/json" id="user-prefs">{{ user_prefs | tojson }}</script>
+    {% set adv_raises_max = namespace(val=0) %}
+    {% for a in per_adventure %}{% if a.id == 'adventure_raises' %}{% set adv_raises_max.val = a.max %}{% endif %}{% endfor %}
+    <script type="application/json" id="attack-probs">{{ attack_probs | tojson }}</script>
+    <script type="application/json" id="damage-avgs">{{ damage_avgs | tojson }}</script>
+    <script type="application/json" id="wound-check-probs">{{ wound_check_probs | tojson }}</script>
+    <script type="application/json" id="void-spend-config">{{ void_spend_config | tojson }}</script>
+    <script type="application/json" id="school-abilities">{{ school_abilities | tojson }}</script>
+    <script type="application/json" id="attack-specializations">{{ attack_specs | tojson }}</script>
+    <script type="application/json" id="daidoji-counterattack-party">{{ daidoji_counterattack_party | tojson }}</script>
+    <script type="application/json" id="adventure-raises-config">{{ {
+        "available": adv_raises_max.val,
+        "used": (adventure_state or {}).get('adventure_raises_used', 0),
+    } | tojson }}</script>
+    {% set _conv_rank = (char_knacks.get('conviction', {}) or {}).get('rank', 0) %}
+    <script type="application/json" id="conviction-config">{{ {
+        "rank": _conv_rank,
+        "max_per_roll": _conv_rank,
+        "daily_max": 2 * _conv_rank,
+    } | tojson }}</script>
+    <script type="application/json" id="priest-conviction-allies">{{ priest_conviction_allies | tojson }}</script>
+    <script type="application/json" id="priest-precepts-allies">{{ priest_precepts_allies | tojson }}</script>
+    <script type="application/json" id="party-priests">{{ party_priests | tojson }}</script>
+    <script src="/static/js/dice.js?v={{ static_v('js/dice.js') }}"></script>

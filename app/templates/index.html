@@ -83,7 +83,13 @@
             {{ group_name }}
             {% endif %}
         </h2>
-        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {# grid-cols-1 at the base is required, not cosmetic: without an
+           explicit single-column template the implicit grid uses auto columns,
+           which size to the items' max-content. A long (truncated) character
+           name then blows the card past the viewport on mobile. grid-cols-1
+           uses minmax(0,1fr), clamping the track to the available width so
+           truncate can do its job. #}
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {% for char in chars %}
                 {{ character_card(char) }}
             {% endfor %}

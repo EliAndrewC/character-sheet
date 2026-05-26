@@ -1,0 +1,26 @@
+/* Tailwind entry point compiled to app/static/css/app.css (see
+   scripts/build-css.sh and the Dockerfile cssbuild stage). The app's
+   hand-written CSS lives inline in base.html's <style> block, not here. */
+@tailwind base;
+@tailwind components;
+
+/* ── Button system ──────────────────────────────────────────────────────────
+   Each variant centralizes a button's COLOUR treatment only (fill + hover +
+   transition); callers keep their own size/padding/shape utilities. So future
+   restyles are one-touch, while existing sizes are preserved. Each @apply
+   mirrors exactly the utilities it replaced, so adopting a variant is a no-op
+   visually (it just adds a consistent transition). See base.html / templates.
+*/
+@layer components {
+  .btn-primary     { @apply bg-accent text-parchment transition-colors hover:bg-red-900; }
+  .btn-secondary   { @apply bg-ink/10 text-ink transition-colors hover:bg-ink/20; }
+  .btn-danger      { @apply bg-red-800 text-parchment transition-colors hover:bg-red-900; }
+  .btn-danger-soft { @apply bg-red-100 text-red-800 transition-colors hover:bg-red-200; }
+  .btn-info        { @apply bg-info text-parchment transition-colors hover:bg-info-dark; }
+  .btn-gold        { @apply bg-gold/20 text-ink transition-colors hover:bg-gold/30; }
+  .btn-ghost       { @apply text-ink/60 transition-colors hover:bg-ink/10; }
+  /* Square +/- stepper ("pip") - a full control, since every instance is identical. */
+  .btn-pip         { @apply w-7 h-7 rounded bg-ink/10 text-sm font-bold transition-colors hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed; }
+}
+
+@tailwind utilities;

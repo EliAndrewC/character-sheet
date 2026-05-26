@@ -9,12 +9,9 @@
    mobile), live roll display, mobile-only chevron toggle, desktop hover
    tooltip, and a mobile-only expand panel sibling that surfaces the
    canonical rules text without colliding with the form controls.
-   `costs` selects between BASIC_COSTS / ADVANCED_COSTS for the +/- titles;
-   `is_advanced_arg` is the literal "true"/"false" passed into
-   skillXpLabel(). #}
+   XP figures (per-control "spent" + the +/- marginal hints) come from the
+   server-computed `xp` object - see refreshXp() / app/services/xp.py. #}
 {% macro skill_row(sid, skill, is_advanced) -%}
-{% set costs = "ADVANCED_COSTS" if is_advanced else "BASIC_COSTS" %}
-{% set is_advanced_arg = "true" if is_advanced else "false" %}
 <div x-data="{ expanded: false }">
     <div class="editor-skill-row tooltip-trigger relative">
         <div class="editor-skill-row__name-ctrls">
@@ -23,18 +20,18 @@
                 <button type="button"
                         @click="skills.{{ sid }} = Math.max(0, skills.{{ sid }} - 1)"
                         :disabled="skills.{{ sid }} <= 0"
-                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + {{ costs }}[skills.{{ sid }}] + ' XP)'"
-                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                        :title="skills.{{ sid }} <= 0 ? '' : 'Lower to ' + (skills.{{ sid }}-1) + ' (refund ' + (xp.marginal['skill:{{ sid }}']?.down || 0) + ' XP)'"
+                        class="btn-pip">-</button>
                 <span class="w-8 text-center font-bold text-lg" x-text="skills.{{ sid }}"></span>
                 <input type="hidden" name="skill_{{ sid }}" :value="skills.{{ sid }}">
                 <button type="button"
                         @click="skills.{{ sid }} = Math.min(5, skills.{{ sid }} + 1)"
                         :disabled="skills.{{ sid }} >= 5"
-                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + {{ costs }}[skills.{{ sid }}+1] + ' XP)'"
-                        class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                        :title="skills.{{ sid }} >= 5 ? '' : 'Raise to ' + (skills.{{ sid }}+1) + ' (' + (xp.marginal['skill:{{ sid }}']?.up || 0) + ' XP)'"
+                        class="btn-pip">+</button>
             </div>
         </div>
-        <span class="editor-skill-row__xp text-xs text-ink/50" x-text="skillXpLabel('{{ sid }}', {{ is_advanced_arg }})"></span>
+        <span class="editor-skill-row__xp text-xs text-ink/50" x-text="skills.{{ sid }} > 0 ? ((xp.costs['skill:{{ sid }}'] || 0) + ' XP spent') : ''"></span>
         <span class="editor-skill-row__roll text-xs text-accent font-medium" x-text="skillRollDisplay('{{ sid }}')"></span>
         <button type="button"
                 class="editor-skill-row__chevron sm:hidden shrink-0 p-1 text-ink/60 hover:text-ink"
@@ -98,11 +95,11 @@
                     <div class="flex justify-end gap-3">
                         <button type="button" @click="showDiscardModal = false"
                                 data-action="cancel-discard"
-                                class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
+                                class="px-4 py-2 rounded text-sm btn-ghost">Cancel</button>
                         <button type="button" @click="doDiscard()"
                                 :disabled="discardLoading"
                                 data-action="confirm-discard"
-                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
                             Confirm
                         </button>
                     </div>
@@ -153,9 +150,9 @@
                     </div>
                     <div class="flex justify-end gap-3">
                         <button type="button" @click="showApplyModal = false" data-action="cancel-apply"
-                                class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
+                                class="px-4 py-2 rounded text-sm btn-ghost">Cancel</button>
                         <button type="button" @click="doApply()" :disabled="!applySummary.trim()"
-                                class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
                             Apply Changes
                         </button>
                     </div>
@@ -214,11 +211,11 @@
             </div>
             <div class="flex justify-end gap-3">
                 <button type="button" @click="showNameModal = false" data-action="cancel-name"
-                        class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
+                        class="px-4 py-2 rounded text-sm btn-ghost">Cancel</button>
                 <button type="button" @click="applyNameFromModal()"
                         :disabled="!nameModalName || nameModalLoading || !!nameModalError"
                         data-action="apply-name"
-                        class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
+                        class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-30">
                     Use this name
                 </button>
             </div>
@@ -246,10 +243,10 @@
             <div class="flex justify-end gap-3 mt-4">
                 <button type="button" @click="cancelExplanationModal()"
                         data-action="cancel-explanation"
-                        class="px-4 py-2 rounded text-sm text-ink/60 hover:bg-ink/10">Cancel</button>
+                        class="px-4 py-2 rounded text-sm btn-ghost">Cancel</button>
                 <button type="button" @click="saveExplanationModal()"
                         data-action="save-explanation"
-                        class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium">
+                        class="btn-primary px-4 py-2 rounded text-sm font-medium">
                     Save
                 </button>
             </div>
@@ -761,17 +758,17 @@
                             <button type="button"
                                     @click="knacks[kid] = Math.max(1, knacks[kid] - 1)"
                                     :disabled="knacks[kid] <= 1"
-                                    :title="knacks[kid] <= 1 ? '' : 'Lower to ' + (knacks[kid]-1) + ' (refund ' + ADVANCED_COSTS[knacks[kid]] + ' XP)'"
-                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                                    :title="knacks[kid] <= 1 ? '' : 'Lower to ' + (knacks[kid]-1) + ' (refund ' + (xp.marginal['knack:' + kid]?.down || 0) + ' XP)'"
+                                    class="btn-pip">-</button>
                             <span class="w-8 text-center font-bold text-lg" x-text="knacks[kid]"></span>
                             <input type="hidden" :name="'knack_' + kid" :value="knacks[kid]">
                             <button type="button"
                                     @click="knacks[kid] = Math.min(5, knacks[kid] + 1)"
                                     :disabled="knacks[kid] >= 5"
-                                    :title="knacks[kid] >= 5 ? '' : 'Raise to ' + (knacks[kid]+1) + ' (' + ADVANCED_COSTS[knacks[kid]+1] + ' XP)'"
-                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                                    :title="knacks[kid] >= 5 ? '' : 'Raise to ' + (knacks[kid]+1) + ' (' + (xp.marginal['knack:' + kid]?.up || 0) + ' XP)'"
+                                    class="btn-pip">+</button>
                         </div>
-                        <span class="text-xs text-ink/50" x-text="totalKnackCostSingle(knacks[kid]) + ' XP spent'"></span>
+                        <span class="text-xs text-ink/50" x-text="(xp.costs['knack:' + kid] || 0) + ' XP spent'"></span>
                     </div>
                 </template>
             </div>
@@ -788,17 +785,17 @@
                         <button type="button"
                                 @click="rings.{{ ring }} = Math.max(getSchoolRing() === '{{ ring }}' ? schoolRingMin() : 2, rings.{{ ring }} - 1)"
                                 :disabled="rings.{{ ring }} <= (getSchoolRing() === '{{ ring }}' ? schoolRingMin() : 2)"
-                                :title="rings.{{ ring }} <= (getSchoolRing() === '{{ ring }}' ? schoolRingMin() : 2) ? (getSchoolRing() === '{{ ring }}' ? 'School ring cannot go below ' + schoolRingMin() : '') : 'Lower to ' + (rings.{{ ring }}-1) + ' (refund ' + (5 * rings.{{ ring }}) + ' XP)'"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                                :title="rings.{{ ring }} <= (getSchoolRing() === '{{ ring }}' ? schoolRingMin() : 2) ? (getSchoolRing() === '{{ ring }}' ? 'School ring cannot go below ' + schoolRingMin() : '') : 'Lower to ' + (rings.{{ ring }}-1) + ' (refund ' + (xp.marginal['ring:{{ ring }}']?.down || 0) + ' XP)'"
+                                class="btn-pip">-</button>
                         <span class="w-8 text-center font-bold text-lg" x-text="rings.{{ ring }}"></span>
                         <input type="hidden" name="ring_{{ ring.lower() }}" :value="rings.{{ ring }}">
                         <button type="button"
                                 @click="rings.{{ ring }} = Math.min(ringMax('{{ ring }}'), rings.{{ ring }} + 1)"
                                 :disabled="rings.{{ ring }} >= ringMax('{{ ring }}')"
-                                :title="rings.{{ ring }} >= ringMax('{{ ring }}') ? '' : 'Raise to ' + (rings.{{ ring }}+1) + ' (' + (5 * (rings.{{ ring }}+1)) + ' XP)'"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                                :title="rings.{{ ring }} >= ringMax('{{ ring }}') ? '' : 'Raise to ' + (rings.{{ ring }}+1) + ' (' + (xp.marginal['ring:{{ ring }}']?.up || 0) + ' XP)'"
+                                class="btn-pip">+</button>
                     </div>
-                    <p class="text-xs text-ink/50 mt-1" x-text="ringCost('{{ ring }}') + ' XP spent'"></p>
+                    <p class="text-xs text-ink/50 mt-1" x-text="(xp.costs['ring:{{ ring }}'] || 0) + ' XP spent'"></p>
                 </div>
                 {% endfor %}
             </div>
@@ -817,17 +814,17 @@
                         <button type="button"
                                 @click="attack = Math.max(1, attack - 1)"
                                 :disabled="attack <= 1 || attack <= parry - 1"
-                                :title="attack <= 1 ? '' : (attack <= parry - 1 ? 'Parry cannot exceed Attack + 1' : 'Lower to ' + (attack-1) + ' (refund ' + ADVANCED_COSTS[attack] + ' XP)')"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                                :title="attack <= 1 ? '' : (attack <= parry - 1 ? 'Parry cannot exceed Attack + 1' : 'Lower to ' + (attack-1) + ' (refund ' + (xp.marginal['combat:attack']?.down || 0) + ' XP)')"
+                                class="btn-pip">-</button>
                         <span class="w-8 text-center font-bold text-lg" x-text="attack"></span>
                         <input type="hidden" name="attack" :value="attack">
                         <button type="button"
                                 @click="attack = Math.min(5, attack + 1)"
                                 :disabled="attack >= 5"
-                                :title="attack >= 5 ? '' : 'Raise to ' + (attack+1) + ' (' + ADVANCED_COSTS[attack+1] + ' XP)'"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                                :title="attack >= 5 ? '' : 'Raise to ' + (attack+1) + ' (' + (xp.marginal['combat:attack']?.up || 0) + ' XP)'"
+                                class="btn-pip">+</button>
                     </div>
-                    <span class="text-xs text-ink/50" x-text="combatSkillXp(attack) + ' XP spent'"></span>
+                    <span class="text-xs text-ink/50" x-text="(xp.costs['combat:attack'] || 0) + ' XP spent'"></span>
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                         <p class="font-medium mb-1">Attack (Fire)</p>
                         <p>Roll Attack + Fire to hit. TN to hit = 5 + 5 * defender's Parry. Extra damage die per 5 over TN.</p>
@@ -839,17 +836,17 @@
                         <button type="button"
                                 @click="parry = Math.max(1, parry - 1)"
                                 :disabled="parry <= 1"
-                                :title="parry <= 1 ? '' : 'Lower to ' + (parry-1) + ' (refund ' + ADVANCED_COSTS[parry] + ' XP)'"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                                :title="parry <= 1 ? '' : 'Lower to ' + (parry-1) + ' (refund ' + (xp.marginal['combat:parry']?.down || 0) + ' XP)'"
+                                class="btn-pip">-</button>
                         <span class="w-8 text-center font-bold text-lg" x-text="parry"></span>
                         <input type="hidden" name="parry" :value="parry">
                         <button type="button"
                                 @click="parry = Math.min(5, parry + 1)"
                                 :disabled="parry >= 5 || parry >= attack + 1"
-                                :title="parry >= attack + 1 ? 'Parry cannot exceed Attack + 1' : (parry >= 5 ? '' : 'Raise to ' + (parry+1) + ' (' + ADVANCED_COSTS[parry+1] + ' XP)')"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                                :title="parry >= attack + 1 ? 'Parry cannot exceed Attack + 1' : (parry >= 5 ? '' : 'Raise to ' + (parry+1) + ' (' + (xp.marginal['combat:parry']?.up || 0) + ' XP)')"
+                                class="btn-pip">+</button>
                     </div>
-                    <span class="text-xs text-ink/50" x-text="combatSkillXp(parry) + ' XP spent'"></span>
+                    <span class="text-xs text-ink/50" x-text="(xp.costs['combat:parry'] || 0) + ' XP spent'"></span>
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-sm">
                         <p class="font-medium mb-1">Parry (Air)</p>
                         <p>Roll Parry + Air to parry. TN to be hit = 5 + 5 * Parry. Declaring parry before attack roll grants a free raise.</p>
@@ -872,14 +869,14 @@
                                 @click="honor = Math.max(1.0, +(honor - 0.5).toFixed(1))"
                                 :disabled="honor <= 1.0"
                                 :title="honor <= 1.0 ? '' : 'Lower to ' + (honor - 0.5).toFixed(1) + ' (refund 1 XP)'"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                                class="btn-pip">-</button>
                         <span class="w-8 text-center font-bold text-lg" x-text="honor.toFixed(1)"></span>
                         <input type="hidden" name="honor" :value="honor">
                         <button type="button"
                                 @click="honor = Math.min(5.0, +(honor + 0.5).toFixed(1))"
                                 :disabled="honor >= 5.0"
                                 :title="honor >= 5.0 ? '' : 'Raise to ' + (honor + 0.5).toFixed(1) + ' (1 XP)'"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                                class="btn-pip">+</button>
                     </div>
                     <p class="text-xs text-ink/50 mt-1">Starts at 1.0. Cost: 1 XP per 0.5</p>
                 </div>
@@ -919,14 +916,14 @@
                                 @click="recognition = Math.max(recognitionMin(), +(recognition - 0.5).toFixed(1))"
                                 :disabled="awardsLocked() || recognition <= recognitionMin()"
                                 :title="awardsLocked() ? 'Locked: GM-awarded bonus exists. Use the Bonus button below.' : (recognition <= recognitionMin() ? '' : 'Lower to ' + (recognition - 0.5).toFixed(1))"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">-</button>
+                                class="btn-pip">-</button>
                         <span class="w-8 text-center font-bold text-lg" x-text="recognition.toFixed(1)"></span>
                         <input type="hidden" name="recognition" :value="recognition">
                         <button type="button"
                                 @click="recognition = Math.min(Math.floor(rank * 3) / 2, +(recognition + 0.5).toFixed(1))"
                                 :disabled="awardsLocked() || recognition >= Math.floor(rank * 3) / 2"
                                 :title="awardsLocked() ? 'Locked: GM-awarded bonus exists. Use the Bonus button below.' : (recognition >= Math.floor(rank * 3) / 2 ? '' : 'Raise to ' + (recognition + 0.5).toFixed(1))"
-                                class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                                class="btn-pip">+</button>
                     </div>
                     <p class="text-xs text-ink/50 mt-1">Starts at 7.5. Max 150% of Rank. 1 XP per 1.0</p>
                 </div>
@@ -947,7 +944,7 @@
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide">GM-Awarded Bonuses</h3>
                     <button type="button" @click="openAwardModal()" data-action="open-award-modal"
-                            class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm font-medium transition-colors">
+                            class="btn-primary px-3 py-1.5 rounded text-sm font-medium transition-colors">
                         + GM-awarded Rank / Recognition
                     </button>
                 </div>
@@ -1041,12 +1038,12 @@
                         <div class="flex items-center gap-1">
                             <button type="button" data-action="award-modal-rank-minus"
                                     @click="awardModalRank = +(awardModalRank - 0.5).toFixed(1)"
-                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">-</button>
+                                    class="btn-pip">-</button>
                             <span class="w-12 text-center font-mono font-bold"
                                   x-text="(awardModalRank >= 0 ? '+' : '') + awardModalRank.toFixed(1)"></span>
                             <button type="button" data-action="award-modal-rank-plus"
                                     @click="awardModalRank = +(awardModalRank + 0.5).toFixed(1)"
-                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                                    class="btn-pip">+</button>
                             <span class="text-xs text-ink/50 ml-2">Can be negative (loss of rank).</span>
                         </div>
                     </div>
@@ -1056,12 +1053,12 @@
                             <button type="button" data-action="award-modal-recog-minus"
                                     @click="awardModalRecognition = Math.max(0, +(awardModalRecognition - 0.5).toFixed(1))"
                                     :disabled="awardModalRecognition <= 0"
-                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-sm font-bold">-</button>
+                                    class="btn-pip">-</button>
                             <span class="w-12 text-center font-mono font-bold"
                                   x-text="'+' + awardModalRecognition.toFixed(1)"></span>
                             <button type="button" data-action="award-modal-recog-plus"
                                     @click="awardModalRecognition = +(awardModalRecognition + 0.5).toFixed(1)"
-                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">+</button>
+                                    class="btn-pip">+</button>
                             <span class="text-xs text-ink/50 ml-2">Recognition can only increase.</span>
                         </div>
                     </div>
@@ -1110,10 +1107,10 @@
 
                 <div class="flex justify-end gap-2 mt-5">
                     <button type="button" @click="closeAwardModal()" data-action="cancel-award"
-                            class="bg-ink/10 hover:bg-ink/20 text-ink px-4 py-2 rounded text-sm">Cancel</button>
+                            class="btn-secondary px-4 py-2 rounded text-sm">Cancel</button>
                     <button type="button" @click="applyAwardModal()" data-action="apply-award"
                             :disabled="!canApplyAward()"
-                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed">
                         Apply
                     </button>
                 </div>
@@ -1492,17 +1489,17 @@
                                     @click="decrementForeignKnack(kid)"
                                     :title="foreignKnackDecrementTitle(kid)"
                                     :data-testid="'foreign-knack-minus-' + kid"
-                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 text-sm font-bold">-</button>
+                                    class="btn-pip">-</button>
                             <span class="w-8 text-center font-bold text-lg" x-text="foreignKnacks[kid]"></span>
                             <input type="hidden" :name="'foreign_knack_' + kid" :value="foreignKnacks[kid]">
                             <button type="button"
                                     @click="foreignKnacks[kid] = Math.min(5, foreignKnacks[kid] + 1)"
                                     :disabled="foreignKnacks[kid] >= 5"
-                                    :title="foreignKnacks[kid] >= 5 ? '' : 'Raise to ' + (foreignKnacks[kid]+1) + ' (' + ADVANCED_COSTS[foreignKnacks[kid]+1] + ' XP)'"
+                                    :title="foreignKnacks[kid] >= 5 ? '' : 'Raise to ' + (foreignKnacks[kid]+1) + ' (' + (xp.marginal['foreign_knack:' + kid]?.up || 0) + ' XP)'"
                                     :data-testid="'foreign-knack-plus-' + kid"
-                                    class="w-7 h-7 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold">+</button>
+                                    class="btn-pip">+</button>
                         </div>
-                        <span class="text-xs text-ink/50" x-text="foreignKnackTotalCost(foreignKnacks[kid]) + ' XP spent'"></span>
+                        <span class="text-xs text-ink/50" x-text="(xp.costs['foreign_knack:' + kid] || 0) + ' XP spent'"></span>
                     </div>
                 </template>
             </div>
@@ -1537,7 +1534,7 @@
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-xl font-bold text-accent">Freeform Sections</h2>
                 <button type="button" id="add-section-btn"
-                        class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                        class="btn-primary px-4 py-2 rounded text-sm font-medium transition-colors">
                     Add Section
                 </button>
             </div>
@@ -1554,15 +1551,15 @@
                 <div class="flex-1 min-w-0">
                     <h3 class="text-xs sm:text-sm font-bold mb-0.5 sm:mb-1">XP Summary</h3>
                     <div class="text-xs sm:text-sm">
-                        <span>Spent: <strong class="font-mono" x-text="grossSpent()"></strong></span>
+                        <span>Spent: <strong class="font-mono" x-text="xp.spent"></strong></span>
                         <span class="mx-1 sm:mx-2">/</span>
-                        <span>Total: <strong class="font-mono" x-text="budgetWithDis()"></strong>
-                            <span class="text-xs text-ink/50" x-show="totalDisXp() > 0"
-                                  x-text="'(' + 150 + ' starting + ' + earnedXp + ' earned + ' + totalDisXp() + ' disadvantages)'"></span>
+                        <span>Total: <strong class="font-mono" x-text="xp.budget"></strong>
+                            <span class="text-xs text-ink/50" x-show="xp.dis_gain > 0"
+                                  x-text="'(' + 150 + ' starting + ' + earnedXp + ' earned + ' + xp.dis_gain + ' disadvantages)'"></span>
                         </span>
                         <span class="mx-1 sm:mx-2">-</span>
-                        <span :class="remainingXp() >= 0 ? 'text-success' : 'text-red-600 font-bold'">
-                            Unspent: <strong class="font-mono" x-text="remainingXp()"></strong>
+                        <span :class="xp.remaining >= 0 ? 'text-success' : 'text-red-600 font-bold'">
+                            Unspent: <strong class="font-mono" x-text="xp.remaining"></strong>
                         </span>
                     </div>
                 </div>
@@ -1611,7 +1608,7 @@
                     <div class="relative"
                          x-data="{ artMenu: false, confirmOverwrite: false, confirmingDelete: false }">
                         <button type="button" @click="artMenu = !artMenu"
-                                class="bg-info hover:bg-info-dark text-parchment px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm flex items-center gap-1"
+                                class="btn-info px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm flex items-center gap-1"
                                 data-action="character-art-menu">
                             Character Art
                             <svg class="w-3 h-3" :class="artMenu ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -1671,11 +1668,11 @@
                                 </p>
                                 <div class="flex gap-3 justify-end">
                                     <button type="button" @click="confirmOverwrite = false"
-                                            class="px-4 py-2 rounded bg-ink/10 hover:bg-ink/20 text-ink text-sm">
+                                            class="px-4 py-2 rounded btn-secondary text-sm">
                                         Cancel
                                     </button>
                                     <a href="/characters/{{ character.id }}/art"
-                                       class="px-4 py-2 rounded bg-accent hover:bg-red-900 text-parchment text-sm font-medium"
+                                       class="px-4 py-2 rounded btn-primary text-sm font-medium"
                                        data-action="confirm-overwrite">
                                         Continue
                                     </a>
@@ -1693,13 +1690,13 @@
                        reloads and both flip back to clean. #}
                     <button type="button" x-show="isPublished && hasUnpublishedChanges" x-cloak
                             @click="openDiscardModal()" data-action="discard-changes"
-                            class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base">
+                            class="btn-secondary px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base">
                         Discard Changes
                     </button>
                     <button type="button" x-show="!isPublished || hasUnpublishedChanges" x-cloak
                             @click="openApplyModal()" data-action="apply-changes"
                             :disabled="!school"
-                            class="bg-accent hover:bg-red-900 text-parchment px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base disabled:opacity-40 disabled:cursor-not-allowed">
+                            class="btn-primary px-3 py-2 sm:px-6 sm:py-3 rounded font-medium transition-colors text-sm sm:text-base disabled:opacity-40 disabled:cursor-not-allowed">
                         Apply Changes
                     </button>
                 </div>
@@ -1710,10 +1707,6 @@
 </div>
 
 <script>
-// XP cost tables (mirrored from Python for client-side calculation)
-const BASIC_COSTS = [0, 2, 2, 3, 3, 3];   // index = new rank
-const ADVANCED_COSTS = [0, 4, 4, 6, 8, 10];
-
 // School ring options for variable-ring schools
 const SCHOOL_RING_OPTIONS = {
     {% for sid, opts in school_ring_options.items() %}
@@ -1865,26 +1858,20 @@ const SKILL_SYNERGIES = {
     'acting': ['sincerity', 'intimidation', 'sneaking'],
 };
 
-function totalSkillCost(rank, isAdvanced) {
-    const table = isAdvanced ? ADVANCED_COSTS : BASIC_COSTS;
-    let cost = 0;
-    for (let r = 1; r <= rank; r++) cost += table[r];
-    return cost;
-}
-
-function totalKnackCost(rank) {
-    // Rank 1 is free (from school). Cost only for ranks above 1.
-    let cost = 0;
-    for (let r = 2; r <= rank; r++) cost += ADVANCED_COSTS[r];
-    return cost;
-}
-
 function characterForm() {
     return {
         school: '{{ character.school }}',
         schoolRingChoice: '{{ character.school_ring_choice }}',
         startingXp: 150,
         earnedXp: {{ character.earned_xp }},
+        // Server-computed XP - the single source of truth (app/services/xp.py
+        // ::editor_xp_view), replacing the former client-side Alpine calc.
+        // Seeded from the page render, then refreshed (debounced) from
+        // POST /characters/{id}/xp on every XP-relevant change. Shape:
+        // {spent, budget, remaining, available, dis_gain, totals, costs, marginal}.
+        xp: {{ xp_initial | tojson }},
+        _xpTimer: null,
+        _xpReqId: 0,
         age: {{ character.age if character.age is not none else 'null' }},
         // Lineage is split into two reactive fields for the editor UI;
         // the canonical value persisted to the server is computed by
@@ -2033,6 +2020,10 @@ function characterForm() {
             this.$watch('honor', () => this.markDirty());
             this.$watch('rank', () => this.markDirty());
             this.$watch('recognition', () => this.markDirty());
+            // earnedXp affects the XP budget but isn't auto-saved on its own
+            // (it changes via GM awards / the admin field), so refresh the XP
+            // display without marking the form dirty.
+            this.$watch('earnedXp', () => this.refreshXp());
             this.$watch('advantages', () => this.markDirty(), { deep: true });
             this.$watch('disadvantages', () => this.markDirty(), { deep: true });
             this.$watch('campaignAdvantages', () => this.markDirty(), { deep: true });
@@ -2063,6 +2054,58 @@ function characterForm() {
             this._dirty = true;
             this.sheetsStale = true;
             this.debounceSave();
+            this.refreshXp();
+        },
+
+        // Live XP display: ask the server (single source of truth) to compute
+        // the totals + per-control cost hints from the current (unsaved) state.
+        // Debounced short (~250ms) so it feels near-instant while coalescing
+        // rapid +/- clicks; a request-id guard drops out-of-order responses.
+        refreshXp() {
+            if (this._xpTimer) clearTimeout(this._xpTimer);
+            this._xpTimer = setTimeout(() => this._runXp(), 250);
+        },
+
+        _xpBody() {
+            return {
+                school: this.school,
+                school_ring_choice: this.schoolRingChoice,
+                rings: this.rings,
+                attack: this.attack,
+                parry: this.parry,
+                // Send ALL skills (incl. rank 0, unlike autosave) so the server
+                // can return the marginal cost of the first raise (0 -> 1) for
+                // the +/- hover hints on not-yet-taken skills.
+                skills: this.skills,
+                knacks: this.knacks,
+                foreign_knacks: this.foreignKnacks,
+                advantages: Object.keys(this.advantages).filter(k => this.advantages[k]),
+                disadvantages: Object.keys(this.disadvantages).filter(k => this.disadvantages[k]),
+                campaign_advantages: Object.keys(this.campaignAdvantages).filter(k => this.campaignAdvantages[k]),
+                campaign_disadvantages: Object.keys(this.campaignDisadvantages).filter(k => this.campaignDisadvantages[k]),
+                specializations: this.specializations,
+                honor: this.honor,
+                rank: this.rank,
+                rank_locked: this.rankLocked,
+                recognition: this.recognition,
+                recognition_halved: this.recognitionHalved,
+                earned_xp: this.earnedXp,
+            };
+        },
+
+        async _runXp() {
+            const reqId = ++this._xpReqId;
+            try {
+                const resp = await fetch('/characters/' + this._charId + '/xp', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(this._xpBody()),
+                });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (reqId !== this._xpReqId) return;  // a newer request superseded this one
+                this.xp = data;
+            } catch (e) { /* non-fatal: keep the last good XP display */ }
         },
 
         async setGroup(value) {
@@ -2462,24 +2505,6 @@ function characterForm() {
             return 5;
         },
 
-        ringCost(ringName) {
-            const schoolRing = this.getSchoolRing();
-            const isSchool = ringName === schoolRing;
-            const dan4 = isSchool && this.currentDan() >= 4;
-            // 4th Dan: school ring is auto-raised to 4 for free, so the
-            // cost loop starts from 4 instead of 3.
-            const start = isSchool ? (dan4 ? 4 : 3) : 2;
-            const val = this.rings[ringName] || 2;
-            let cost = 0;
-            for (let v = start + 1; v <= val; v++) {
-                let raiseCost = 5 * v;
-                // 4th Dan: -5 XP per school ring raise above 4.
-                if (dan4) raiseCost = Math.max(0, raiseCost - 5);
-                cost += raiseCost;
-            }
-            return cost;
-        },
-
         // --- GM-awarded Rank / Recognition bonuses ---
 
         awardsLocked() {
@@ -2694,12 +2719,6 @@ function characterForm() {
             return this.lineageDropdown || '';
         },
 
-        skillXpLabel(skillId, isAdvanced) {
-            const rank = this.skills[skillId] || 0;
-            if (rank === 0) return '';
-            return totalSkillCost(rank, isAdvanced) + ' XP spent';
-        },
-
         currentDan() {
             const vals = Object.values(this.knacks);
             if (vals.length === 0) return 0;
@@ -2797,24 +2816,11 @@ function characterForm() {
             this.markDirty();
         },
 
-        totalKnackCostSingle(rank) {
-            return totalKnackCost(rank);
-        },
-
-        // --- Foreign school knacks ---
-        // 0->1 costs a flat 10 XP premium, 2..5 use the standard ADVANCED_COSTS.
-        // Mirrors calculate_foreign_knack_xp in app/services/xp.py.
-        foreignKnackTotalCost(rank) {
-            if (rank <= 0) return 0;
-            let cost = 10;
-            for (let r = 2; r <= rank; r++) cost += ADVANCED_COSTS[r];
-            return cost;
-        },
-
         foreignKnackDecrementTitle(kid) {
             const r = this.foreignKnacks[kid];
-            if (r <= 1) return 'Remove ' + (KNACK_NAMES[kid] || kid) + ' (refund 10 XP)';
-            return 'Lower to ' + (r - 1) + ' (refund ' + ADVANCED_COSTS[r] + ' XP)';
+            const refund = (this.xp.marginal['foreign_knack:' + kid]?.down) || 0;
+            if (r <= 1) return 'Remove ' + (KNACK_NAMES[kid] || kid) + ' (refund ' + refund + ' XP)';
+            return 'Lower to ' + (r - 1) + ' (refund ' + refund + ' XP)';
         },
 
         decrementForeignKnack(kid) {
@@ -2969,137 +2975,13 @@ function characterForm() {
             return display;
         },
 
-        totalRingXp() {
-            let cost = 0;
-            for (const r of ['Air', 'Fire', 'Earth', 'Water', 'Void']) {
-                cost += this.ringCost(r);
-            }
-            return cost;
-        },
-
-        totalSkillXp() {
-            let cost = 0;
-            for (const [sid, rank] of Object.entries(this.skills)) {
-                if (rank > 0) {
-                    cost += totalSkillCost(rank, ADVANCED_SKILLS.includes(sid));
-                }
-            }
-            return cost;
-        },
-
-        totalKnackXp() {
-            let cost = 0;
-            for (const [kid, rank] of Object.entries(this.knacks)) {
-                cost += totalKnackCost(rank);
-            }
-            return cost;
-        },
-
-        totalForeignKnackXp() {
-            let cost = 0;
-            for (const [kid, rank] of Object.entries(this.foreignKnacks || {})) {
-                cost += this.foreignKnackTotalCost(rank);
-            }
-            return cost;
-        },
-
-        combatSkillXp(rank) {
-            // Advanced cost for ranks above 1
-            let cost = 0;
-            for (let r = 2; r <= rank; r++) cost += ADVANCED_COSTS[r];
-            return cost;
-        },
-
-        totalCombatSkillXp() {
-            return this.combatSkillXp(this.attack) + this.combatSkillXp(this.parry);
-        },
-
-        totalAdvXp() {
-            const ADV_COSTS = {
-                {% for aid, adv in advantages.items() %}
-                '{{ aid }}': {{ adv.xp_cost }},
-                {% endfor %}
-            };
-            let cost = 0;
-            for (const [aid, checked] of Object.entries(this.advantages)) {
-                if (checked) cost += ADV_COSTS[aid] || 0;
-            }
-            // Specializations: 2 XP per instance. Drop empty rows from the
-            // count so an in-progress "+ Add" doesn't briefly show a charge
-            // before the player picks a skill / types a name.
-            const specs = (this.specializations || []).filter(
-                s => s && (s.text || '').trim() && (s.skills || [])[0]
-            );
-            cost += specs.length * 2;
-            return cost;
-        },
-
-        totalDisXp() {
-            const DIS_VALUES = {
-                {% for did, dis in disadvantages.items() %}
-                '{{ did }}': {{ dis.xp_value }},
-                {% endfor %}
-            };
-            let gained = 0;
-            for (const [did, checked] of Object.entries(this.disadvantages)) {
-                if (checked) gained += DIS_VALUES[did] || 0;
-            }
-            return gained;
-        },
-
-        totalCampaignAdvXp() {
-            const COSTS = { {% for aid, adv in campaign_advantages.items() %}'{{ aid }}': {{ adv.xp_cost }}, {% endfor %} };
-            let cost = 0;
-            for (const [aid, checked] of Object.entries(this.campaignAdvantages)) { if (checked) cost += COSTS[aid] || 0; }
-            return cost;
-        },
-
-        totalCampaignDisXp() {
-            const VALUES = { {% for did, dis in campaign_disadvantages.items() %}'{{ did }}': {{ dis.xp_value }}, {% endfor %} };
-            let gained = 0;
-            for (const [did, checked] of Object.entries(this.campaignDisadvantages)) { if (checked) gained += VALUES[did] || 0; }
-            return gained;
-        },
-
-        honorXp() {
-            return Math.max(0, Math.round((this.honor - 1.0) / 0.5));
-        },
-
-        rankXp() {
-            if (this.rankLocked) return 0;
-            return Math.max(0, Math.round((this.rank - 7.5) / 0.5));
-        },
-
+        // XP is computed server-side (app/services/xp.py::editor_xp_view) and
+        // displayed via the reactive `xp` object - see refreshXp(). The former
+        // client-side XP calculation (grossSpent/total*Xp/etc.) was removed to
+        // eliminate the duplicate-logic drift risk. recognitionMin stays: it's
+        // a control bound (the stepper floor), not an XP cost.
         recognitionMin() {
             return this.recognitionHalved ? 3.5 : 7.5;
-        },
-
-        recognitionXp() {
-            const base = this.recognitionHalved ? 3.5 : 7.5;
-            let xp = this.recognitionHalved ? -3 : 0;
-            if (this.recognition > base) {
-                xp += Math.round((this.recognition - base) * 1);
-            }
-            return xp;
-        },
-
-        grossSpent() {
-            return this.totalRingXp() + this.totalSkillXp() + this.totalKnackXp()
-                 + this.totalForeignKnackXp()
-                 + this.totalCombatSkillXp() + this.honorXp() + this.rankXp()
-                 + this.recognitionXp() + this.totalAdvXp() + this.totalCampaignAdvXp();
-        },
-
-        budgetWithDis() {
-            return 150 + this.earnedXp + this.totalDisXp() + this.totalCampaignDisXp();
-        },
-
-        totalXp() {
-            return this.grossSpent() - this.totalDisXp();
-        },
-
-        remainingXp() {
-            return this.budgetWithDis() - this.grossSpent();
         },
     };
 }
@@ -3136,7 +3018,7 @@ class SectionsManager {
                        value="${SectionsManager.escapeAttr(label)}">
                 <button type="button" class="move-up bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 rounded text-sm" title="Move up">&uarr;</button>
                 <button type="button" class="move-down bg-ink/10 hover:bg-ink/20 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-2 rounded text-sm" title="Move down">&darr;</button>
-                <button type="button" class="delete bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded text-sm" title="Delete section">Delete</button>
+                <button type="button" class="delete btn-danger-soft px-3 py-2 rounded text-sm" title="Delete section">Delete</button>
             </div>
             <label class="flex items-center gap-2 text-xs text-ink/60 mb-2 cursor-pointer">
                 <input type="checkbox" class="section-restricted rounded text-accent" ${restricted ? 'checked' : ''}>

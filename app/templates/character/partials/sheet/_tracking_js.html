@@ -1,0 +1,811 @@
+    <script>
+        // Money row: holds the locked Spring equinox disbursal plus
+        // user-added entries, with add/delete handlers that POST to
+        // /money/add and /money/delete. The server returns the full
+        // recomputed state on each mutation so we just replace the
+        // local ``state`` field - no client-side bookkeeping of the
+        // running balance.
+        function moneyTracker() {
+            return {
+                expanded: false,
+                state: {{ money_state|tojson }},
+                canEdit: {{ 'true' if viewer_can_edit else 'false' }},
+                charId: {{ character.id }},
+                // Modal state.
+                modalOpen: false,
+                modalKind: 'income',
+                modalLabel: '',
+                modalAmount: null,
+                modalError: '',
+                modalSubmitting: false,
+
+                init() { /* nothing to wire up; state arrives via tojson */ },
+
+                openModal(kind) {
+                    this.modalKind = kind;
+                    this.modalLabel = '';
+                    this.modalAmount = null;
+                    this.modalError = '';
+                    this.modalSubmitting = false;
+                    this.modalOpen = true;
+                    // Focus the label input after Alpine renders the
+                    // modal. ``$nextTick`` ensures the ref exists.
+                    this.$nextTick(() => {
+                        if (this.$refs.modalLabelInput) {
+                            this.$refs.modalLabelInput.focus();
+                        }
+                    });
+                },
+
+                closeModal() {
+                    if (this.modalSubmitting) return;
+                    this.modalOpen = false;
+                },
+
+                async submitModal() {
+                    const label = (this.modalLabel || '').trim();
+                    // Round half-up to the nearest tenth-koku on the
+                    // client too so the validation error message
+                    // matches what the server would do. The server
+                    // is still authoritative - it rounds again on
+                    // ingest - but echoing the rule client-side
+                    // avoids a confusing "looks like 1.7, server
+                    // says 1.65 is fine" round-trip.
+                    const raw = parseFloat(this.modalAmount);
+                    if (!label) {
+                        this.modalError = 'Please enter a description.';
+                        return;
+                    }
+                    if (!Number.isFinite(raw) || raw <= 0) {
+                        this.modalError = 'Amount must be a positive number (tenths of a koku ok, e.g. 1.6).';
+                        return;
+                    }
+                    const amount = Math.floor(raw * 10 + 0.5) / 10;
+                    if (amount <= 0) {
+                        this.modalError = 'Amount rounds to zero - please enter at least 0.1.';
+                        return;
+                    }
+                    this.modalError = '';
+                    this.modalSubmitting = true;
+                    try {
+                        const resp = await fetch(
+                            '/characters/' + this.charId + '/money/add',
+                            {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({
+                                    kind: this.modalKind, label, amount,
+                                }),
+                            }
+                        );
+                        if (!resp.ok) {
+                            const data = await resp.json().catch(() => ({}));
+                            this.modalError = data.error || 'Could not save - please try again.';
+                            this.modalSubmitting = false;
+                            return;
+                        }
+                        const data = await resp.json();
+                        this.state = data.money;
+                        this.modalOpen = false;
+                    } catch (e) {
+                        this.modalError = 'Could not reach the server.';
+                    } finally {
+                        this.modalSubmitting = false;
+                    }
+                },
+
+                async removeEntry(entryId) {
+                    if (!this.canEdit) return;
+                    try {
+                        const resp = await fetch(
+                            '/characters/' + this.charId + '/money/delete',
+                            {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({entry_id: entryId}),
+                            }
+                        );
+                        if (!resp.ok) return;
+                        const data = await resp.json();
+                        this.state = data.money;
+                    } catch (e) { /* leave the row in place on network failure */ }
+                },
+            };
+        }
+
+        function trackingData() {
+            return {
+                lightWounds: {{ character.current_light_wounds or 0 }},
+                seriousWounds: {{ character.current_serious_wounds or 0 }},
+                voidPoints: {{ character.current_void_points or 0 }},
+                voidMax: {{ void_max }},
+                tempVoidPoints: {{ character.current_temp_void_points or 0 }},
+                adventureState: {{ (adventure_state or {})|tojson }},
+                perAdventure: {{ per_adventure|tojson }},
+                mirumotoRoundPoints: 0,
+                mirumotoRoundPointsMax: {{ school_abilities.get('mirumoto_round_points_max', 0) }},
+                akodoBankedBonuses: ({{ (adventure_state or {})|tojson }}).akodo_banked_bonuses
+                    ? ({{ (adventure_state or {})|tojson }}).akodo_banked_bonuses.map(a => ({amount: a, spent: false}))
+                    : [],
+                bayushiBankedFeintRaise: ({{ (adventure_state or {})|tojson }}).bayushi_banked_feint_raise || 0,
+                hirumaBankedAttackBonus: ({{ (adventure_state or {})|tojson }}).hiruma_banked_attack_bonus || 0,
+                hidaBankedWcBonus: ({{ (adventure_state or {})|tojson }}).hida_banked_wc_bonus || 0,
+                matsuBankedWcBonuses: (() => {
+                    const v = ({{ (adventure_state or {})|tojson }}).matsu_banked_wc_bonuses;
+                    if (Array.isArray(v)) return v.map(a => ({amount: a, spent: false}));
+                    // Migrate old single-number format
+                    const old = ({{ (adventure_state or {})|tojson }}).matsu_banked_wc_bonus;
+                    if (typeof old === 'number' && old > 0) return [{amount: old, spent: false}];
+                    return [];
+                })(),
+                bankedWcExcess: (() => {
+                    const v = ({{ (adventure_state or {})|tojson }}).banked_wc_excess;
+                    if (Array.isArray(v)) return v.map(a => ({amount: a, spent: false}));
+                    if (typeof v === 'number' && v > 0) return [{amount: v, spent: false}];
+                    return [];
+                })(),
+                actionDice: {{ (action_dice or [])|tojson }},
+                actionMenuOpen: null,
+                // Priest 3rd Dan precepts dice pool. Persists across combat
+                // rounds; cleared only by the per-adventure reset. Each entry
+                // is {value: int 1-10}.
+                preceptsPool: {{ (precepts_pool or [])|tojson }},
+                // Identifies the currently-hovered row in the per-die action
+                // menu when that row has a void-spend flyout ("<dieIndex>-<row>").
+                actionMenuHoverRow: null,
+                // Mantis Wave-Treader per-phase posture tracker state. Lives in
+                // adventure_state so it survives reloads but resets per round.
+                posturePhase: ({{ (adventure_state or {})|tojson }}).mantis_posture_phase || 1,
+                postureHistory: ({{ (adventure_state or {})|tojson }}).mantis_posture_history || [],
+                // Mantis 3rd Dan offensive: per-round accumulator set by the
+                // attack-result-modal button.
+                offensive3rdDanAccum: ({{ (adventure_state or {})|tojson }}).mantis_offensive_3rd_dan_accum || 0,
+                // Mantis 3rd Dan defensive: per-round accumulator set by the
+                // Tracking-section button; feeds WC + TN overlays.
+                defensive3rdDanAccum: ({{ (adventure_state or {})|tojson }}).mantis_defensive_3rd_dan_accum || 0,
+                // Kakita 5th Dan: once-per-combat-round contested iaijutsu.
+                // Persists across page reloads within a round; reset on the
+                // next initiative roll (via setActionDice).
+                kakita5thDanUsed: !!({{ (adventure_state or {})|tojson }}).kakita_5th_dan_used,
+                _charId: {{ character.id }},
+                _saving: false,
+                showResetModal: false,
+                // Night's Rest state. Populated by openNightsRestModal()
+                // from the server's /nights-rest/preview response so the
+                // SW cadence math, per-day pool detection, and Isawa Ishi
+                // VP refund all stay in one place (server-side).
+                showNightsRestModal: false,
+                showNightsRestNothingModal: false,
+                nightsRestEffects: [],
+                nightsRestAltEffects: [],
+                nightsRestSwRemaining: 0,
+                nightsRestAccelerate: false,
+                nightsRestConfirming: false,
+                // Read-only roll mode: when canEdit is false, every save()
+                // short-circuits so nothing persists. Banner copy and the
+                // login link come from the same flags.
+                canEdit: {{ 'true' if viewer_can_edit else 'false' }},
+                isLoggedIn: {{ 'true' if viewer_is_logged_in else 'false' }},
+                ownerName: {{ (owner_display_name or '')|tojson }},
+                loginUrl: {{ login_url_for_return_to_sheet|tojson }},
+
+                // Roll formulas parsed from the same JSON blob diceRoller()
+                // loads later. The per-action-die menu's x-if gates for
+                // Double Attack / Counterattack / Lunge / Feint read these
+                // via this reactive field instead of ``window._diceRoller``
+                // - the dice-roller component initializes AFTER tracking
+                // (it's lower in the DOM), and the global reference isn't
+                // reactive, so Alpine never re-evaluated the gates and the
+                // knack menu items were invisible until some other
+                // reactive change (e.g. rolling initiative) happened to
+                // remount the template.
+                rollFormulas: (() => {
+                    try {
+                        const el = document.getElementById('roll-formulas');
+                        return el ? JSON.parse(el.textContent || '{}') : {};
+                    } catch (e) { return {}; }
+                })(),
+
+                async save() {
+                    // Read-only viewers get an in-memory shim: no POST, but
+                    // the Impaired indicator still fires so local wound-state
+                    // changes refresh the rest of the UI.
+                    if (!this.canEdit) {
+                        window.dispatchEvent(new CustomEvent('wound-changed', {
+                            detail: { serious: this.seriousWounds }
+                        }));
+                        return;
+                    }
+                    if (this._saving) return;
+                    this._saving = true;
+                    // Notify the Impaired indicator so it updates reactively
+                    window.dispatchEvent(new CustomEvent('wound-changed', {
+                        detail: { serious: this.seriousWounds }
+                    }));
+                    await fetch('/characters/' + this._charId + '/track', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            current_light_wounds: this.lightWounds,
+                            current_serious_wounds: this.seriousWounds,
+                            current_void_points: this.voidPoints,
+                            current_temp_void_points: this.tempVoidPoints,
+                            adventure_state: this.adventureState,
+                            action_dice: this.actionDice,
+                            precepts_pool: this.preceptsPool,
+                        }),
+                    });
+                    this._saving = false;
+                },
+
+                setActionDice(dice) {
+                    // Initiative rolls are the end-of-round trigger: replace
+                    // action dice and reset Mantis round state in one shot.
+                    // Accepts either a list of numeric values (legacy) or
+                    // a list of dice objects ``{value, athletics_only?, mantis_4th_dan?}``
+                    // so callers can persist the Togashi athletics-only die
+                    // and the Mantis 4th Dan bonus die.
+                    //
+                    // Read-only Roll Mode: non-editors get nothing here.
+                    // Their initiative roll plays the dice-modal animation
+                    // (so they can see what they rolled) but the action
+                    // dice section on the sheet stays anchored at whatever
+                    // the editor's persisted state was - empty if the
+                    // editor hasn't rolled yet, or the editor's actual
+                    // dice if they have. A non-editor cannot make dice
+                    // appear or disappear from the sheet display.
+                    if (!this.canEdit) return;
+                    this.resetMantisRound();
+                    this.actionDice = (dice || []).map(d => {
+                        if (typeof d === 'number') return {value: d, spent: false};
+                        const entry = {value: d.value, spent: false};
+                        if (d.athletics_only) entry.athletics_only = true;
+                        if (d.mantis_4th_dan) entry.mantis_4th_dan = true;
+                        return entry;
+                    });
+                    this.actionMenuOpen = null;
+                    this.kakita5thDanUsed = false;
+                    delete this.adventureState.kakita_5th_dan_used;
+                    this.save();
+                },
+                clearActionDice() {
+                    if (!this.canEdit) return;
+                    this.actionDice = [];
+                    this.actionMenuOpen = null;
+                    this.resetMantisRound();
+                    this.save();
+                },
+                async rollPreceptsPool() {
+                    // Priest 3rd Dan: roll X dice (X = precepts skill rank),
+                    // all kept, 10s reroll on. The resulting values form the
+                    // pool that persists across combat rounds and is cleared
+                    // only by the per-adventure reset.
+                    const n = {{ school_abilities.get('priest_precepts_pool_size', 0) }};
+                    if (n <= 0) return;
+                    let animEnabled = true, soundEnabled = true;
+                    try {
+                        const p = JSON.parse(document.getElementById('user-prefs').textContent || '{}');
+                        animEnabled = p.dice_animation_enabled !== false;
+                        soundEnabled = p.dice_sound_enabled !== false;
+                    } catch (e) { /* keep defaults */ }
+                    const playSound = soundEnabled && window.L7RDice
+                        ? (k) => window.L7RDice.playDiceSound(k) : null;
+                    const dice = await window.L7RDice.rollAndAnimate(
+                        n, true, animEnabled, playSound, 'dice-animation-precepts'
+                    );
+                    this.preceptsPool = dice
+                        .map(d => ({ value: d.value }))
+                        .sort((a, b) => b.value - a.value);
+                    this.save();
+                },
+                clearPreceptsPool() {
+                    if (!this.canEdit) return;
+                    this.preceptsPool = [];
+                    // Clear any stale dice from the last roll's animation so
+                    // the tray is empty when the Roll Pool button reappears.
+                    const tray = document.getElementById('dice-animation-precepts');
+                    if (tray) tray.innerHTML = '';
+                    this.save();
+                },
+                // Mantis Wave-Treader posture tracker helpers.
+                currentPosture() {
+                    return this.postureHistory.length > 0
+                        ? this.postureHistory[this.postureHistory.length - 1]
+                        : null;
+                },
+                offensivePhaseCount() {
+                    return this.postureHistory.filter(p => p === 'offensive').length;
+                },
+                defensivePhaseCount() {
+                    return this.postureHistory.filter(p => p === 'defensive').length;
+                },
+                _dispatchMantisPostureChanged(posture) {
+                    // Single event surface for every Mantis round-state change.
+                    // Cross-scope listeners (currently the TN display) read the
+                    // enriched detail to derive their displayed values.
+                    window.dispatchEvent(new CustomEvent('mantis-posture-changed', {
+                        detail: {
+                            posture: posture,
+                            offensiveCount: this.offensivePhaseCount(),
+                            defensiveCount: this.defensivePhaseCount(),
+                            offensive3rdDan: this.offensive3rdDanAccum || 0,
+                            defensive3rdDan: this.defensive3rdDanAccum || 0,
+                        },
+                    }));
+                },
+                selectPosture(type) {
+                    if (!this.canEdit) return;
+                    if (this.posturePhase > 10) return;
+                    if (type !== 'offensive' && type !== 'defensive') return;
+                    this.postureHistory = [...this.postureHistory, type];
+                    this.posturePhase += 1;
+                    this.adventureState.mantis_posture_phase = this.posturePhase;
+                    this.adventureState.mantis_posture_history = this.postureHistory;
+                    this._dispatchMantisPostureChanged(type);
+                    this.save();
+                },
+                resetMantisRound() {
+                    // Zeros the Mantis per-round posture tracker and any
+                    // per-round accumulators set by Mantis abilities. The
+                    // caller is responsible for calling save().
+                    // Non-editors: posture display stays anchored to the
+                    // persisted server state, just like every other sheet
+                    // counter.
+                    if (!this.canEdit) return;
+                    this.posturePhase = 1;
+                    this.postureHistory = [];
+                    this.offensive3rdDanAccum = 0;
+                    this.defensive3rdDanAccum = 0;
+                    delete this.adventureState.mantis_posture_phase;
+                    delete this.adventureState.mantis_posture_history;
+                    delete this.adventureState.mantis_offensive_3rd_dan_accum;
+                    delete this.adventureState.mantis_defensive_3rd_dan_accum;
+                    this._dispatchMantisPostureChanged(null);
+                },
+                toggleActionMenu(i) {
+                    this.actionMenuOpen = this.actionMenuOpen === i ? null : i;
+                },
+                spendActionDie(i) {
+                    if (!this.canEdit) return;
+                    if (this.actionDice[i]) {
+                        this.actionDice[i].spent = true;
+                        // Manual spend has no known action context.
+                        delete this.actionDice[i].spent_by;
+                        this.actionMenuOpen = null;
+                        this.save();
+                    }
+                },
+                unspendActionDie(i) {
+                    if (!this.canEdit) return;
+                    if (this.actionDice[i]) {
+                        this.actionDice[i].spent = false;
+                        delete this.actionDice[i].spent_by;
+                        this.actionMenuOpen = null;
+                        this.save();
+                    }
+                },
+                // Returns the index of the die that was spent, or -1 if none
+                // were available. An optional spentBy label is attached.
+                // When ``isAthletics`` is falsy (default), any die flagged
+                // ``athletics_only`` is skipped - those dice may only be
+                // spent on athletics actions (Togashi special ability).
+                // Non-editors get -1 so the auto-spend caller gracefully
+                // skips the spent-die annotation downstream; the action
+                // menu / modal flow they triggered still proceeds normally.
+                spendLowestUnspentActionDie(spentBy, isAthletics = false) {
+                    if (!this.canEdit) return -1;
+                    for (let i = 0; i < this.actionDice.length; i++) {
+                        const d = this.actionDice[i];
+                        if (d.spent) continue;
+                        if (!isAthletics && d.athletics_only) continue;
+                        d.spent = true;
+                        if (spentBy) d.spent_by = spentBy;
+                        this.save();
+                        return i;
+                    }
+                    return -1;
+                },
+                // Mark a specific die (by index) spent with an initial label.
+                // Used by the per-die action menu so the user can pick which
+                // die pays for an action instead of auto-spending the lowest.
+                // Returns true on success. Non-editor path returns false so
+                // the per-die-spent index is left at -1 in the dice roller.
+                spendSpecificActionDie(i, spentBy) {
+                    if (!this.canEdit) return false;
+                    const d = this.actionDice[i];
+                    if (!d || d.spent) return false;
+                    d.spent = true;
+                    if (spentBy) d.spent_by = spentBy;
+                    this.actionMenuOpen = null;
+                    this.save();
+                    return true;
+                },
+                annotateActionDie(i, spentBy) {
+                    if (!this.canEdit) return;
+                    if (i < 0 || !this.actionDice[i]) return;
+                    if (spentBy) {
+                        this.actionDice[i].spent_by = spentBy;
+                    } else {
+                        delete this.actionDice[i].spent_by;
+                    }
+                    this.save();
+                },
+                // Picks the action die to spend for a Mantis 3rd Dan technique
+                // invocation from the attack-result or tracking-section button.
+                // Rule: prefer the Mantis 4th Dan athletics bonus die (it's
+                // restricted to movement / athletics / this technique, so
+                // spending it "for free" is the best use); otherwise spend
+                // the HIGHEST-value unspent regular action die (the "last"
+                // phase of the round, so the player doesn't waste an earlier
+                // phase that could still be used for a real action). Returns
+                // the chosen index or -1 if no eligible die exists.
+                _pickMantis3rdDanDie() {
+                    const dice = this.actionDice;
+                    const fourth = dice.findIndex(d => !d.spent && d.mantis_4th_dan);
+                    if (fourth >= 0) return fourth;
+                    let bestIdx = -1;
+                    let bestValue = -1;
+                    for (let i = 0; i < dice.length; i++) {
+                        const d = dice[i];
+                        if (d.spent || d.athletics_only) continue;
+                        if (d.value > bestValue) {
+                            bestValue = d.value;
+                            bestIdx = i;
+                        }
+                    }
+                    return bestIdx;
+                },
+                incrementMantis3rdDanOffensive(amount) {
+                    // Called from the attack-result-modal button. Spends the
+                    // Mantis 4th Dan bonus die if available, otherwise the
+                    // highest-value unspent regular action die, and
+                    // accumulates +X on subsequent attack / damage rolls.
+                    if (!this.canEdit) return false;
+                    if (!amount) return false;
+                    const idx = this._pickMantis3rdDanDie();
+                    if (idx < 0) return false;
+                    this.actionDice[idx].spent = true;
+                    this.actionDice[idx].spent_by = 'Mantis 3rd Dan (offensive)';
+                    this.offensive3rdDanAccum = (this.offensive3rdDanAccum || 0) + amount;
+                    this.adventureState.mantis_offensive_3rd_dan_accum = this.offensive3rdDanAccum;
+                    this._dispatchMantisPostureChanged(this.currentPosture());
+                    this.save();
+                    return true;
+                },
+                incrementMantis3rdDanDefensive(amount) {
+                    // Called from the Tracking-section button. Same die-
+                    // selection rule as the offensive counterpart; accumulates
+                    // +X on subsequent wound checks and on the displayed TN.
+                    if (!this.canEdit) return false;
+                    if (!amount) return false;
+                    const idx = this._pickMantis3rdDanDie();
+                    if (idx < 0) return false;
+                    this.actionDice[idx].spent = true;
+                    this.actionDice[idx].spent_by = 'Mantis 3rd Dan (defensive)';
+                    this.defensive3rdDanAccum = (this.defensive3rdDanAccum || 0) + amount;
+                    this.adventureState.mantis_defensive_3rd_dan_accum = this.defensive3rdDanAccum;
+                    this._dispatchMantisPostureChanged(this.currentPosture());
+                    this.save();
+                    return true;
+                },
+                // Kakita Phase 0 Interrupt: spend the two highest unspent
+                // non-athletics-only action dice and open the attack modal
+                // for an iaijutsu attack. The dice roller handles the modal
+                // side; the tracking bridge owns the dice so the spend
+                // persists even if the modal is closed without rolling.
+                _kakitaInterruptEligibleCount() {
+                    return (this.actionDice || [])
+                        .filter(d => !d.spent && !d.athletics_only).length;
+                },
+                _kakitaSpendTwoHighestForInterrupt() {
+                    const dice = this.actionDice || [];
+                    // Pair each unspent eligible die with its index, sort by
+                    // value DESCENDING, and spend the top two. "Highest" is
+                    // by raw value, so a Phase-0 die (value 0) is last pick -
+                    // which is the correct reading of the rules: the
+                    // interrupt costs your two HIGHEST (latest-phase) dice.
+                    const candidates = dice
+                        .map((d, idx) => ({d, idx}))
+                        .filter(x => !x.d.spent && !x.d.athletics_only)
+                        .sort((a, b) => (b.d.value || 0) - (a.d.value || 0));
+                    if (candidates.length < 2) return false;
+                    for (let k = 0; k < 2; k++) {
+                        const {d} = candidates[k];
+                        d.spent = true;
+                        d.spent_by = 'Kakita Phase 0 interrupt';
+                    }
+                    this.save();
+                    return true;
+                },
+                kakitaPhase0Interrupt() {
+                    if (!this._kakitaSpendTwoHighestForInterrupt()) return;
+                    if (window._diceRoller?.openKakitaPhase0InterruptModal) {
+                        window._diceRoller.openKakitaPhase0InterruptModal();
+                    }
+                },
+                spendActionDieForMantis3rdDan(i, posture, amount) {
+                    // Called from the per-die action menu. Spends the clicked
+                    // die and accumulates +X on the chosen posture's rolls
+                    // (attack/damage for offensive, parry/WC for defensive).
+                    if (!this.canEdit) return false;
+                    if (!amount) return false;
+                    const d = this.actionDice[i];
+                    if (!d || d.spent) return false;
+                    const label = posture === 'offensive'
+                        ? 'Mantis 3rd Dan (offensive)'
+                        : 'Mantis 3rd Dan (defensive)';
+                    d.spent = true;
+                    d.spent_by = label;
+                    if (posture === 'offensive') {
+                        this.offensive3rdDanAccum = (this.offensive3rdDanAccum || 0) + amount;
+                        this.adventureState.mantis_offensive_3rd_dan_accum = this.offensive3rdDanAccum;
+                    } else {
+                        this.defensive3rdDanAccum = (this.defensive3rdDanAccum || 0) + amount;
+                        this.adventureState.mantis_defensive_3rd_dan_accum = this.defensive3rdDanAccum;
+                    }
+                    this.actionMenuOpen = null;
+                    this.actionMenuHoverRow = null;
+                    this._dispatchMantisPostureChanged(this.currentPosture());
+                    this.save();
+                    return true;
+                },
+
+                saveBankedBonuses() {
+                    // Read-only Roll Mode: skip banked-bonus state writes
+                    // entirely for non-editors. They can walk through any
+                    // ability that BANKS a bonus during a roll, but the
+                    // banked array stays anchored to whatever the server
+                    // had so the tracking-section display doesn't grow.
+                    if (!this.canEdit) return;
+                    // Persist unspent Akodo banked bonuses and other banked state to adventureState
+                    const unspent = this.akodoBankedBonuses.filter(b => !b.spent).map(b => b.amount);
+                    this.adventureState.akodo_banked_bonuses = unspent.length > 0 ? unspent : undefined;
+                    const dr = window._diceRoller;
+                    if (dr) {
+                        this.adventureState.hiruma_banked_attack_bonus = dr.hirumaBankedAttackBonus || undefined;
+                        this.adventureState.bayushi_banked_feint_raise = dr.bayushiBankedFeintRaise || undefined;
+                        const wcExUnspent = (this.bankedWcExcess || []).filter(b => !b.spent).map(b => b.amount);
+                        this.adventureState.banked_wc_excess = wcExUnspent.length > 0 ? wcExUnspent : undefined;
+                        const matsuUnspent = (dr.matsuBankedWcBonuses || []).filter(b => !b.spent).map(b => b.amount);
+                        this.adventureState.matsu_banked_wc_bonuses = matsuUnspent.length > 0 ? matsuUnspent : undefined;
+                        this.adventureState.matsu_banked_wc_bonus = undefined;  // clear old format
+                        this.adventureState.ide_banked_tn_reduce = dr.ideBankedTnReduce || undefined;
+                        this.adventureState.hida_banked_wc_bonus = dr.hidaBankedWcBonus || undefined;
+                    }
+                    this.save();
+                },
+
+                getCount(id) { return this.adventureState[id + '_used'] || 0; },
+                setCount(id, val) {
+                    // Read-only Roll Mode: non-editors cannot mutate the
+                    // adventureState pool counts. Persistent state stays
+                    // anchored at the server value; the modal flow that
+                    // calls this still proceeds normally because it
+                    // doesn't depend on the post-call read.
+                    if (!this.canEdit) return;
+                    this.adventureState[id + '_used'] = val;
+                    this.save();
+                    // Notify the dice roller (separate Alpine scope) so its
+                    // remaining-raises counter stays in sync.
+                    window.dispatchEvent(new CustomEvent('adventure-state-changed'));
+                },
+                getToggle(id) { return !!this.adventureState[id]; },
+                setToggle(id, val) {
+                    if (!this.canEdit) return;
+                    this.adventureState[id] = val;
+                    this.save();
+                },
+
+                resetAbility(id) {
+                    if (!this.canEdit) return;
+                    const ability = (this.perAdventure || []).find(a => a.id === id);
+                    if (!ability) return;
+                    if (ability.type === 'counter') this.adventureState[id + '_used'] = 0;
+                    if (ability.type === 'toggle') this.adventureState[id] = false;
+                    this.save();
+                    window.dispatchEvent(new CustomEvent('adventure-state-changed'));
+                },
+
+                worldlinessAvailable() {
+                    const wa = (this.perAdventure || []).find(a => a.id === 'worldliness');
+                    if (!wa) return 0;
+                    return Math.max(0, (wa.max || 0) - this.getCount('worldliness'));
+                },
+                anyVPAvailable() {
+                    return (this.voidPoints || 0) + (this.tempVoidPoints || 0) + this.worldlinessAvailable();
+                },
+
+                hasAnythingSpent() {
+                    for (const a of this.perAdventure) {
+                        if (a.type === 'counter' && this.getCount(a.id) > 0) return true;
+                        if (a.type === 'toggle' && this.getToggle(a.id)) return true;
+                    }
+                    // Leftover action dice from a prior combat round also
+                    // count as clearable state.
+                    if ((this.actionDice || []).length > 0) return true;
+                    // A non-empty precepts pool (Priest 3rd Dan) carries across
+                    // combat rounds and is only cleared by the per-adventure
+                    // reset or its own Clear button.
+                    if ((this.preceptsPool || []).length > 0) return true;
+                    return false;
+                },
+
+                resetSummary() {
+                    const items = [];
+                    for (const a of this.perAdventure) {
+                        if (a.type === 'counter') {
+                            const used = this.getCount(a.id);
+                            if (used > 0) items.push('Regain ' + used + ' ' + a.name);
+                        } else if (a.type === 'toggle') {
+                            if (this.getToggle(a.id)) items.push('Regain ' + a.name);
+                        }
+                    }
+                    const nAD = (this.actionDice || []).length;
+                    if (nAD > 0) {
+                        items.push('Clear ' + nAD + ' action ' + (nAD > 1 ? 'dice' : 'die'));
+                    }
+                    const nPP = (this.preceptsPool || []).length;
+                    if (nPP > 0) {
+                        items.push('Clear combat dice pool (' + nPP + ' ' + (nPP > 1 ? 'dice' : 'die') + ')');
+                    }
+                    return items;
+                },
+
+                resetAdventure() {
+                    for (const a of this.perAdventure) {
+                        if (a.type === 'counter') this.adventureState[a.id + '_used'] = 0;
+                        if (a.type === 'toggle') this.adventureState[a.id] = false;
+                    }
+                    // Wipe any leftover action dice from a prior combat round.
+                    this.actionDice = [];
+                    this.actionMenuOpen = null;
+                    // Priest 3rd Dan precepts pool is per-adventure state.
+                    this.preceptsPool = [];
+                    const precTray = document.getElementById('dice-animation-precepts');
+                    if (precTray) precTray.innerHTML = '';
+                    // Clear all combat-session bonuses
+                    this.akodoBankedBonuses = [];
+                    this.bayushiBankedFeintRaise = 0;
+                    this.hirumaBankedAttackBonus = 0;
+                    this.hidaBankedWcBonus = 0;
+                    this.bankedWcExcess = [];
+                    this.matsuBankedWcBonuses = [];
+                    this.mirumotoRoundPoints = 0;
+                    // Also clear diceRoller combat state if available
+                    if (window._diceRoller) {
+                        window._diceRoller.akodoBankedBonuses = this.akodoBankedBonuses;
+                        window._diceRoller.akodoSpentThisRoll = 0;
+                        window._diceRoller.hirumaBankedAttackBonus = 0;
+                        window._diceRoller.bayushiBankedFeintRaise = 0;
+                        window._diceRoller.bankedWcExcess = this.bankedWcExcess;
+                        window._diceRoller.matsuBankedWcBonuses = [];
+                        window._diceRoller.ideBankedTnReduce = 0;
+                        window._diceRoller.hidaBankedWcBonus = 0;
+                    }
+                    // Clear persisted banked bonuses from adventureState
+                    delete this.adventureState.akodo_banked_bonuses;
+                    delete this.adventureState.hiruma_banked_attack_bonus;
+                    delete this.adventureState.bayushi_banked_feint_raise;
+                    delete this.adventureState.banked_wc_excess;
+                    delete this.adventureState.matsu_banked_wc_bonus;
+                    delete this.adventureState.matsu_banked_wc_bonuses;
+                    delete this.adventureState.ide_banked_tn_reduce;
+                    delete this.adventureState.hida_banked_wc_bonus;
+                    this.save();
+                    window.dispatchEvent(new CustomEvent('adventure-state-changed'));
+                },
+
+                async openNightsRestModal() {
+                    // Read-only Roll Mode: button is gated by viewer_can_edit
+                    // server-side, but belt-and-braces here too. The
+                    // /nights-rest/preview endpoint will also 403 a non-editor.
+                    if (!this.canEdit) return;
+                    this.nightsRestAccelerate = false;
+                    try {
+                        const resp = await fetch(
+                            '/characters/' + this._charId + '/nights-rest/preview'
+                        );
+                        if (!resp.ok) return;
+                        const data = await resp.json();
+                        if (!data.would_change) {
+                            this.showNightsRestNothingModal = true;
+                            return;
+                        }
+                        this.nightsRestEffects = data.effects || [];
+                        this.nightsRestAltEffects = data.alt_effects || [];
+                        this.nightsRestSwRemaining = data.sw_remaining_after || 0;
+                        this.showNightsRestModal = true;
+                    } catch (e) { /* network error: silently no-op */ }
+                },
+                displayedNightsRestEffects() {
+                    // Overlay alt_effects (currently only the SW heal line
+                    // ever differs) onto effects[] by key when the accelerate
+                    // checkbox is checked. This is what the modal x-for
+                    // iterates so the bullet list updates in-place.
+                    if (!this.nightsRestAccelerate) return this.nightsRestEffects;
+                    const byKey = {};
+                    for (const e of this.nightsRestAltEffects) byKey[e.key] = e;
+                    return this.nightsRestEffects.map(e => byKey[e.key] || e);
+                },
+                async confirmNightsRest() {
+                    if (this.nightsRestConfirming) return;
+                    this.nightsRestConfirming = true;
+                    try {
+                        const resp = await fetch(
+                            '/characters/' + this._charId + '/nights-rest',
+                            {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({
+                                    accelerate_cadence: this.nightsRestAccelerate,
+                                }),
+                            }
+                        );
+                        this.showNightsRestModal = false;
+                        if (resp.ok) window.location.reload();
+                    } finally {
+                        this.nightsRestConfirming = false;
+                    }
+                },
+
+                // Light wound modals
+                lwPlusModal: false,
+                lwMinusMenu: false,
+                lwSetModal: false,
+                lwSeriousCount: 1,
+                lwAddAmount: '',
+                lwNewTotal: '',
+                lwSetValue: '',
+
+                lwTakeSeriousAndReset() {
+                    if (this.canEdit) {
+                        this.seriousWounds += this.lwSeriousCount;
+                        this.lightWounds = 0;
+                    }
+                    this.lwPlusModal = false;
+                    this.lwSeriousCount = 1;
+                    this.save();
+                },
+                lwAddToTotal() {
+                    const add = parseInt(this.lwAddAmount) || 0;
+                    if (add > 0 && this.canEdit) { this.lightWounds += add; }
+                    this.lwPlusModal = false;
+                    this.lwAddAmount = '';
+                    this.save();
+                    // For editors the WC modal reads the post-mutation
+                    // lightWounds; for non-editors we pass the entered
+                    // amount via event detail so the WC roll runs against
+                    // it without ever touching the displayed counter.
+                    const wcLW = this.canEdit ? this.lightWounds : add;
+                    if (wcLW > 0) {
+                        window.dispatchEvent(new CustomEvent('open-wound-check', { detail: { amount: wcLW } }));
+                    }
+                },
+                lwSetToTotal() {
+                    const val = parseInt(this.lwNewTotal);
+                    const valid = !isNaN(val) && val >= 0;
+                    if (valid && this.canEdit) { this.lightWounds = val; }
+                    this.lwPlusModal = false;
+                    this.lwNewTotal = '';
+                    this.save();
+                    const wcLW = this.canEdit ? this.lightWounds : (valid ? val : 0);
+                    if (wcLW > 0) {
+                        window.dispatchEvent(new CustomEvent('open-wound-check', { detail: { amount: wcLW } }));
+                    }
+                },
+                lwResetToZero() {
+                    if (this.canEdit) { this.lightWounds = 0; }
+                    this.lwMinusMenu = false;
+                    this.save();
+                },
+                lwSetViaModal() {
+                    const val = parseInt(this.lwSetValue);
+                    if (!isNaN(val) && val >= 0 && this.canEdit) { this.lightWounds = val; }
+                    this.lwSetModal = false;
+                    this.lwMinusMenu = false;
+                    this.lwSetValue = '';
+                    this.save();
+                },
+            };
+        }
+    </script>

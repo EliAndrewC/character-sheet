@@ -1345,6 +1345,34 @@ class TestBuildAllRollFormulas:
         assert formulas["ring:Air"]["rolled"] == 6
         assert formulas["ring:Air"]["kept"] == 3
 
+    def test_kitsune_warden_emits_athletics_without_knack(self):
+        """Kitsune Warden's 4th Dan floors bare athletics rolls at 10 dice, so
+        the athletics:<Ring> option must stay reachable even with no athletics
+        knack - unlike every other school, where it's dropped as redundant with
+        ring:<Ring>. Dan 4 -> floored to 10; Dan 3 -> normal (2 * Ring)k(Ring)."""
+        # Dan 4: Air 2 -> base 4 rolled, floored to 10; kept stays 2 (Air).
+        char4 = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks={"absorb_void": 4, "commune": 4, "iaijutsu": 4},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+        )
+        formulas4 = build_all_roll_formulas(char4)
+        assert "athletics:Air" in formulas4
+        assert formulas4["athletics:Air"]["rolled"] == 10
+        assert formulas4["athletics:Air"]["kept"] == 2
+        # Dan 3: no floor yet -> normal 4k2 (still emitted for the Kitsune).
+        char3 = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Water",
+            knacks={"absorb_void": 3, "commune": 3, "iaijutsu": 3},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+        )
+        formulas3 = build_all_roll_formulas(char3)
+        assert "athletics:Air" in formulas3
+        assert formulas3["athletics:Air"]["rolled"] == 4
+        assert formulas3["athletics:Air"]["kept"] == 2
+
     def test_missing_school_knacks_default_to_rank_one(self):
         """School knacks start at rank 1 for free, so formulas must be
         generated for them even when the stored knacks dict is empty or

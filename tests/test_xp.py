@@ -15,6 +15,7 @@ from app.services.xp import (
     calculate_total_xp,
     calculate_xp_breakdown,
     calculate_available_xp,
+    editor_xp_view,
     foreign_knack_xp_items,
     validate_character,
 )
@@ -979,3 +980,46 @@ class TestXpBreakdown:
         breakdown = calculate_xp_breakdown(data)
         assert breakdown["skills"]["subsections"][0]["rows"] == []
         assert breakdown["skills"]["subsections"][1]["rows"] == []
+
+
+class TestEditorXpView:
+    """The editor's single-source-of-truth XP payload (replaces the old
+    client-side Alpine calc): footer figures + per-control costs + marginal
+    +/- hints, all derived from the per-item cost functions."""
+
+    def test_assembles_spent_budget_costs_and_marginal(self):
+        data = make_character_data(
+            rings={"Air": 2, "Fire": 3, "Earth": 2, "Water": 3, "Void": 2},
+            skills={"bragging": 2},
+            advantages=["lucky"],
+            disadvantages=["proud"],
+            foreign_knacks={"athletics": 1},
+        )
+        v = editor_xp_view(data)
+        # Fire 2->3 = 15, bragging basic 0->2 = 4, lucky = 5, foreign athletics = 10.
+        assert v["spent"] == 34
+        assert v["budget"] == 150 + v["dis_gain"]
+        assert v["dis_gain"] > 0  # proud returns XP into the budget
+        assert v["remaining"] == v["budget"] - v["spent"]
+        assert v["totals"]["total"] == v["spent"] - v["dis_gain"]
+        # Per-control costs (the "X XP spent" labels).
+        assert v["costs"]["ring:Fire"] == 15
+        assert v["costs"]["ring:Water"] == 0          # school ring free at 3
+        assert v["costs"]["skill:bragging"] == 4
+        assert v["costs"]["foreign_knack:athletics"] == 10
+        assert v["costs"]["knack:double_attack"] == 0  # rank 1 is free
+        assert v["costs"]["combat:attack"] == 0
+        # Marginal +/- hints.
+        assert v["marginal"]["ring:Fire"] == {"up": 20, "down": 15}
+        assert v["marginal"]["skill:bragging"]["up"] == 3       # basic 2->3
+        assert v["marginal"]["knack:double_attack"]["up"] == 4  # advanced 1->2
+        assert v["marginal"]["foreign_knack:athletics"]["down"] == 10  # remove refunds premium
+        assert v["marginal"]["combat:parry"]["up"] == 4
+
+    def test_recognition_halved_lowers_spent_by_3(self):
+        base = editor_xp_view(make_character_data())
+        halved = editor_xp_view(
+            make_character_data(recognition=3.5, recognition_halved=True)
+        )
+        assert halved["spent"] == base["spent"] - 3
+        assert halved["costs"]["recognition"] == -3

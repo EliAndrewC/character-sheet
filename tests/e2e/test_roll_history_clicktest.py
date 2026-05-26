@@ -230,7 +230,7 @@ def test_roll_history_button_visible_for_editor(page, live_server_url):
     btn = page.locator('[data-action="roll-history"]')
     assert btn.is_visible()
     cls = btn.get_attribute("class") or ""
-    assert "bg-info" in cls, f"button should use the info colour, got class={cls}"
+    assert "btn-info" in cls, f"button should use the info colour, got class={cls}"
 
 
 def test_roll_history_button_hidden_for_anonymous(page, page_anon, live_server_url):
@@ -273,7 +273,7 @@ def test_delete_button_in_version_history_row(page, live_server_url):
     assert btn.count() == 1
     assert btn.is_visible()
     cls = btn.get_attribute("class") or ""
-    assert "bg-red-800" in cls, f"delete should be red, got class={cls}"
+    assert "btn-danger" in cls, f"delete should use the danger colour, got class={cls}"
     # The button sits to the right of the "Version History" header text.
     header_box = page.locator(
         'h2:has-text("Version History")'

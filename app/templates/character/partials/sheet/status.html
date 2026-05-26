@@ -1,0 +1,172 @@
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10 md:w-1/2">
+        <h2 class="text-xl font-bold mb-4 text-accent">Status</h2>
+        <div class="space-y-3">
+            {# Honor / Rank / Recognition - shared with the Group Summary
+               page (one set of rows per PC) via the partial below. #}
+            {% include 'character/partials/status_rows.html' %}
+
+            {# --- Money --- #}
+            {# Money row: replaces the legacy Stipend row. The compact
+               top line shows two numbers (annual stipend + koku
+               on-hand); clicking expands to the existing stipend
+               calculation plus a per-character ledger of income /
+               expense entries the player adds via the modal. The
+               Spring equinox disbursal (25% of stipend, ceiling) is
+               a locked entry at the top of the ledger and cannot be
+               edited or deleted - it's derived from the current
+               stipend at render time, so a stipend change updates
+               the disbursal amount retroactively. #}
+            <div class="bg-parchment rounded-lg p-3"
+                 x-data="moneyTracker()"
+                 x-init="init()"
+                 data-status-row="money">
+                <div class="flex items-center justify-between gap-3 cursor-pointer"
+                     @click="expanded = !expanded">
+                    <div class="text-sm text-ink/60">Money</div>
+                    <div class="flex items-center gap-3 min-w-0 flex-wrap justify-end">
+                        <div class="text-sm text-ink/60 whitespace-nowrap">
+                            <span class="font-mono font-bold text-ink"
+                                  data-money-stipend
+                                  x-text="state.stipend"></span>
+                            <span class="text-ink/50">koku/year stipend</span>
+                        </div>
+                        {# Cash on-hand is private - only editors see it.
+                           The stipend on the left stays visible because it
+                           describes the character's social standing, not
+                           their finances. #}
+                        {% if viewer_can_edit %}
+                        <div class="text-xl font-bold whitespace-nowrap">
+                            <span data-money-on-hand
+                                  x-text="state.on_hand.toFixed(1)"></span>
+                            <span class="text-sm font-normal text-ink/50">koku on-hand</span>
+                        </div>
+                        {% endif %}
+                        <svg :class="expanded ? 'rotate-180' : ''" class="w-4 h-4 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div x-show="expanded" x-cloak class="mt-2 pt-2 border-t border-ink/10 text-sm text-ink/80 space-y-3">
+                    {# --- Stipend calculation: unchanged from the legacy row, just nested under Money. --- #}
+                    {% if effective.stipend_modifiers %}
+                    <div class="space-y-1">
+                        <p class="font-medium">Stipend calculation:</p>
+                        {% for m in effective.stipend_modifiers %}
+                        <p>{{ m.source }}: {{ m.detail }}</p>
+                        {% endfor %}
+                        <p class="font-medium">= {{ effective.stipend }} koku/year</p>
+                    </div>
+                    {% endif %}
+
+                    {# --- Money ledger ---
+                       Private: only editors see the ledger and the
+                       cash on-hand. A non-editor's expanded view
+                       collapses to the stipend calculation above
+                       (and nothing else). The server strips the
+                       ``entries`` / ``on_hand`` fields from the
+                       state JSON when ``viewer_can_edit`` is false,
+                       so even reading page source doesn't reveal
+                       them. #}
+                    {% if viewer_can_edit %}
+                    <div class="space-y-1">
+                        <p class="font-medium">Money calculations:</p>
+                        <ul class="list-disc list-inside space-y-0.5">
+                            <template x-for="entry in state.entries" :key="entry.id">
+                                <li class="font-mono text-sm flex items-baseline gap-2"
+                                    :data-money-entry="entry.id">
+                                    <span :class="entry.kind === 'income' ? 'text-success' : 'text-rose-700'"
+                                          class="font-bold inline-block w-14 text-right shrink-0"
+                                          x-text="(entry.kind === 'income' ? '+' : '-') + entry.amount.toFixed(1)"></span>
+                                    <span class="text-ink/80 grow" x-text="entry.label"></span>
+                                    <button type="button"
+                                            x-show="!entry.locked"
+                                            x-cloak
+                                            @click="removeEntry(entry.id)"
+                                            class="text-xs text-ink/40 hover:text-rose-700 transition-colors px-1"
+                                            data-action="money-delete-entry"
+                                            :aria-label="'Delete ' + entry.label">&times;</button>
+                                </li>
+                            </template>
+                        </ul>
+                        <p class="font-medium pt-1 border-t border-ink/10 mt-1">
+                            = <span x-text="state.on_hand.toFixed(1)"></span> koku on-hand
+                        </p>
+                    </div>
+                    {% endif %}
+
+                    {% if viewer_can_edit %}
+                    <div class="flex gap-2 pt-1">
+                        <button type="button"
+                                @click="openModal('income')"
+                                class="btn-secondary px-3 py-1.5 rounded text-sm font-medium transition-colors"
+                                data-action="money-add-income">Add income</button>
+                        <button type="button"
+                                @click="openModal('expense')"
+                                class="btn-secondary px-3 py-1.5 rounded text-sm font-medium transition-colors"
+                                data-action="money-add-expense">Add expense</button>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if viewer_can_edit %}
+                {# Add-entry modal: shared by the Add income / Add expense
+                   buttons. The kind is captured at open time and
+                   rendered in the title; amount + label are entered
+                   here, then POSTed to /money/add and the response's
+                   state dict replaces the local ``state`` so the
+                   numbers and ledger refresh without a page reload. #}
+                <div x-show="modalOpen" x-cloak
+                     @keydown.escape.window="closeModal()"
+                     @click.self="closeModal()"
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+                     data-modal="money-entry">
+                    <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4 space-y-3">
+                        <h3 class="text-lg font-bold text-accent"
+                            x-text="modalKind === 'income' ? 'Add income' : 'Add expense'"></h3>
+                        <div class="space-y-2">
+                            <label class="block">
+                                <span class="text-sm text-ink/70">Description</span>
+                                <input type="text"
+                                       x-model="modalLabel"
+                                       x-ref="modalLabelInput"
+                                       @keydown.enter="$refs.modalAmountInput.focus()"
+                                       maxlength="200"
+                                       class="w-full border rounded px-2 py-1 mt-0.5 focus:outline-none focus:ring-1 focus:ring-accent"
+                                       data-testid="money-modal-label"
+                                       :placeholder="modalKind === 'income' ? 'e.g. Sold a bounty' : 'e.g. Bought provisions'">
+                            </label>
+                            <label class="block">
+                                <span class="text-sm text-ink/70">Amount (koku, tenths ok)</span>
+                                <input type="number"
+                                       min="0.1"
+                                       step="0.1"
+                                       x-model.number="modalAmount"
+                                       x-ref="modalAmountInput"
+                                       @keydown.enter.prevent="submitModal()"
+                                       class="w-full border rounded px-2 py-1 mt-0.5 focus:outline-none focus:ring-1 focus:ring-accent"
+                                       data-testid="money-modal-amount">
+                            </label>
+                            <p x-show="modalError" x-cloak
+                               class="text-xs text-rose-700"
+                               data-testid="money-modal-error"
+                               x-text="modalError"></p>
+                        </div>
+                        <div class="flex justify-end gap-2 pt-1">
+                            <button type="button"
+                                    @click="closeModal()"
+                                    class="btn-secondary px-3 py-1.5 rounded text-sm">Cancel</button>
+                            <button type="button"
+                                    @click="submitModal()"
+                                    :disabled="modalSubmitting"
+                                    data-testid="money-modal-submit"
+                                    class="btn-primary px-3 py-1.5 rounded text-sm disabled:opacity-50">
+                                <span x-show="!modalSubmitting">Add</span>
+                                <span x-show="modalSubmitting" x-cloak>Adding...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>

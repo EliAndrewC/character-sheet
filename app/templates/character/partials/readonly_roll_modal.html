@@ -82,12 +82,12 @@
                 <button type="button" @click="copyRollImage()"
                         :disabled="rollImageStatus !== 'ready'"
                         data-action="copy-readonly-roll-image"
-                        class="bg-ink/10 hover:bg-ink/20 text-ink px-3 py-1.5 rounded text-sm disabled:opacity-30">
+                        class="btn-secondary px-3 py-1.5 rounded text-sm disabled:opacity-30">
                     <span x-show="rollImageStatus !== 'copied'">Copy as image</span>
                     <span x-show="rollImageStatus === 'copied'" x-cloak>Copied!</span>
                 </button>
                 <button type="button" @click="close()" data-action="close-readonly-roll-footer"
-                        class="bg-accent hover:bg-red-900 text-parchment px-3 py-1.5 rounded text-sm">
+                        class="btn-primary px-3 py-1.5 rounded text-sm">
                     Close
                 </button>
             </div>

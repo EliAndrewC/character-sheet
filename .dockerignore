@@ -1,0 +1,18 @@
+# Keep secrets, VCS, caches, the local Tailwind CLI, and dev DBs out of the image.
+.git/
+.gitignore
+bin/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+.venv/
+venv/
+node_modules/

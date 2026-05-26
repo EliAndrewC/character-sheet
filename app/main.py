@@ -57,6 +57,13 @@ def get_backup_error():
 templates.env.globals["get_backup_error"] = get_backup_error
 
 # Static files
+# Ensure correct font MIME types - Python's mimetypes doesn't know woff2 by
+# default, so StaticFiles would otherwise serve fonts as text/plain.
+import mimetypes  # noqa: E402
+
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("font/woff", ".woff")
+
 _static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")

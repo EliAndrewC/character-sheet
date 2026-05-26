@@ -285,9 +285,10 @@ def test_draft_diff_has_distinct_visual_styling(page, live_server_url):
     page.wait_for_load_state("networkidle")
 
     classes = page.locator('[data-draft-diff]').get_attribute("class") or ""
-    # The class string should carry the blue accent and a left border
-    # that visually flags this block as separate from the v# rows below.
-    assert "blue" in classes
+    # The class string should carry the semantic "info" accent (the blue/slate
+    # tone, post semantic-color refactor) and a left border that visually flags
+    # this block as separate from the v# rows below.
+    assert "info" in classes
     assert "border-l" in classes
 
 

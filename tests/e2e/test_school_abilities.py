@@ -1078,9 +1078,11 @@ def test_iaijutsu_knack_links_to_combat_rules(page, live_server_url):
 def test_shosuro_stipend_display(page, live_server_url):
     """Shosuro Actor: stipend display on character sheet."""
     _create_char(page, live_server_url, "ShosuroStipend", "shosuro_actor")
-    # All characters should have a stipend displayed
-    stipend_el = page.locator('text="koku/year"').first
-    assert stipend_el.is_visible()
+    # All characters show an annual stipend in the always-visible Money row
+    # header: "<N> koku/year stipend" (the value lives in [data-money-stipend],
+    # the unit label "koku/year stipend" sits beside it).
+    assert page.locator("[data-money-stipend]").is_visible()
+    assert page.locator("text=koku/year stipend").first.is_visible()
 
 
 def test_shosuro_special_ability_in_sheet_rolls(page, live_server_url):
@@ -4833,7 +4835,10 @@ def test_kakita_5th_dan_contest_skill_bonus_shown_in_prebonus_and_breakdown(page
     assert state["phase"] == "result"
     assert state["contest_skill"] == 5
     breakdown = page.locator('[data-testid="kakita-5th-contest-skill-breakdown"]')
-    assert breakdown.is_visible()
+    # The JS state (phase/contest_skill above) settles synchronously, but the
+    # x-show/x-cloak reveal of this panel is an Alpine reactive update that
+    # lands on a later tick - wait for it instead of a one-shot is_visible().
+    breakdown.wait_for(state="visible", timeout=5000)
     text = breakdown.text_content()
     assert "+5" in text
     # Verify the own-rank vs opponent-rank numbers are rendered.
@@ -4899,12 +4904,14 @@ def test_kakita_5th_dan_section_disappears_when_action_dice_cleared(page, live_s
     """Clicking the Actions-panel Clear button (`clearActionDice`) wipes all
     action dice and the 5th Dan section goes with them."""
     _make_kakita_dan_5(page, live_server_url, "Kakita5Clear")
-    # Section starts visible (helper seeded a die).
-    assert page.locator('[data-testid="kakita-5th-dan-section"]').is_visible()
+    section = page.locator('[data-testid="kakita-5th-dan-section"]')
+    # Section starts visible (helper seeded a die) - wait for the x-show reveal
+    # rather than a one-shot is_visible() that races the Alpine render.
+    section.wait_for(state="visible", timeout=5000)
     # Clear via the tracking bridge's public API (mirrors clicking Clear).
     page.evaluate("() => window._trackingBridge.clearActionDice()")
-    page.wait_for_timeout(100)
-    assert not page.locator('[data-testid="kakita-5th-dan-section"]').is_visible()
+    # ...and wait for it to react away (x-show -> display:none).
+    section.wait_for(state="hidden", timeout=5000)
 
 
 def test_kakita_5th_dan_used_flag_persists_through_reload(page, live_server_url):
@@ -5454,6 +5461,9 @@ def test_shinjo_phase_bonus_on_parry_result_modal(page, live_server_url):
     display = page.locator('[data-testid="shinjo-parry-phase-bonus-display"]')
     assert "+10" in display.text_content()
     breakdown = page.locator('[data-testid="shinjo-parry-phase-breakdown"]')
+    # The breakdown's x-show reveal lands a tick after the select change -
+    # wait for it instead of a one-shot is_visible() that races the render.
+    breakdown.wait_for(state="visible", timeout=5000)
     assert breakdown.is_visible()
     assert "+10" in breakdown.text_content()
     state = page.evaluate("""() => {
@@ -6982,9 +6992,11 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
         window._trackingBridge.bankedWcExcess.push(entry1, entry2);
         window._diceRoller.bankedWcExcess = window._trackingBridge.bankedWcExcess;
     """)
-    page.wait_for_timeout(200)
-    # Should show in tracking section with individual entries
-    assert page.locator('text="Banked 5th Dan Wound Check Bonuses"').is_visible()
+    # Wait for the x-show reveal of the banked-bonuses tracking block rather
+    # than a fixed sleep that races the Alpine render under full-suite load.
+    banked = page.locator('text="Banked 5th Dan Wound Check Bonuses"')
+    banked.wait_for(state="visible", timeout=5000)
+    assert banked.is_visible()
     body = page.text_content("body")
     assert "+8" in body
     assert "+12" in body
@@ -7069,6 +7081,9 @@ def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):
     # Two Apply Matsu Bonus buttons should be visible (one per banked bonus)
     wc_modal = page.locator('[data-modal="wound-check"]')
     apply_btns = wc_modal.locator('button:has-text("Apply Matsu Bonus"):visible')
+    # Wait for the result panel's buttons to render (they appear together via
+    # one template) before counting, rather than racing the x-show reveal.
+    apply_btns.first.wait_for(state="visible", timeout=5000)
     assert apply_btns.count() == 2, f"Should have 2 Apply Matsu Bonus buttons, got {apply_btns.count()}"
     # Click first and verify total increases by 3
     total_before = page.evaluate("""() => {
@@ -7335,6 +7350,9 @@ def test_shinjo_5th_dan_banked_excess_in_tracking_section(page, live_server_url)
     _restore_dice(page)
     wc_modal = page.locator('[data-modal="wound-check"]')
     apply_btn = wc_modal.locator('button:has-text("5th Dan bonus"):visible')
+    # wcPhase flips to 'result' synchronously, but the Apply button's x-show
+    # reveal is a later Alpine tick - wait for it before counting.
+    apply_btn.first.wait_for(state="visible", timeout=5000)
     assert apply_btn.count() >= 1, \
         "Wound-check modal should label the bankedWcExcess button as a 5th Dan bonus"
 

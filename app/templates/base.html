@@ -4,7 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}L7R Character Builder{% endblock %}</title>
-    <script src="/static/js/tailwind.js"></script>
+    {# Build-time-compiled, purged Tailwind stylesheet (was the ~407KB Play CDN
+       runtime). Rebuilt on every deploy by the Dockerfile cssbuild stage; run
+       scripts/build-css.sh locally after changing templates/classes. The theme
+       lives in tailwind.config.js. #}
+    <link rel="preload" href="/static/fonts/spectral-600.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/app.css">
     <script src="/static/js/htmx.min.js"></script>
     <script defer src="/static/js/alpine.min.js"></script>
     <style>
@@ -331,40 +336,8 @@
            explicit focus style (most inputs/buttons already set their own). */
         :focus-visible { outline: 2px solid rgba(139, 0, 0, 0.45); outline-offset: 2px; }
     </style>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        parchment: '#f5f0e8',
-                        ink: '#2c1810',
-                        accent: '#8b0000',
-                        gold: '#b8860b',
-                        // Semantic state colours, desaturated to sit on warm
-                        // parchment instead of bright default Tailwind hues.
-                        // Use opacity modifiers for light fills (e.g.
-                        // bg-success/10) and the -dark variant for button hovers.
-                        success: { DEFAULT: '#4d6b46', dark: '#3a5235' },
-                        info: { DEFAULT: '#3f5d70', dark: '#324a5a' },
-                    },
-                    fontFamily: {
-                        // Heading / titling face. The actual family is set via
-                        // the --font-display CSS variable (see <style>), so it
-                        // can be swapped without touching utility usages.
-                        display: ['var(--font-display)', 'Georgia', 'Cambria', 'serif'],
-                    },
-                    boxShadow: {
-                        // Warm, ink-tinted elevation replacing black-based
-                        // defaults; applies to every existing shadow* utility.
-                        sm: '0 1px 2px 0 rgba(44,24,16,0.07)',
-                        DEFAULT: '0 1px 3px 0 rgba(44,24,16,0.10), 0 1px 2px -1px rgba(44,24,16,0.08)',
-                        md: '0 4px 6px -1px rgba(44,24,16,0.10), 0 2px 4px -2px rgba(44,24,16,0.08)',
-                        lg: '0 10px 15px -3px rgba(44,24,16,0.13), 0 4px 6px -4px rgba(44,24,16,0.10)',
-                    },
-                }
-            }
-        }
-    </script>
+    {# Tailwind theme now lives in /tailwind.config.js (compiled into app.css),
+       not an inline runtime config. #}
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-parchment text-ink min-h-screen">
@@ -415,7 +388,7 @@
                     <button type="button"
                        @click="newCharOpen = !newCharOpen"
                        :aria-expanded="newCharOpen"
-                       class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors w-full sm:w-auto inline-flex items-center justify-center gap-1"
+                       class="btn-primary px-4 py-2 rounded text-sm font-medium transition-colors w-full sm:w-auto inline-flex items-center justify-center gap-1"
                        data-testid="new-character-button">
                         New Character
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -446,7 +419,7 @@
                 {% else %}
                 <form method="POST" action="/characters" class="w-full sm:w-auto">
                     <button type="submit"
-                            class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors w-full sm:w-auto"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium transition-colors w-full sm:w-auto"
                             data-testid="new-character-button">
                         New Character
                     </button>
@@ -469,7 +442,7 @@
                 </a>
                 {% else %}
                 <a href="/auth/login"
-                   class="bg-accent hover:bg-red-900 text-parchment px-4 py-2 rounded text-sm font-medium transition-colors">
+                   class="btn-primary px-4 py-2 rounded text-sm font-medium transition-colors">
                     Login with Discord
                 </a>
                 {% endif %}

@@ -26,7 +26,7 @@ from app.services.versions import (
     revert_character,
     stringify_version_diff_entries,
 )
-from app.services.xp import calculate_total_xp
+from app.services.xp import editor_xp_view
 
 router = APIRouter(prefix="/characters")
 
@@ -759,6 +759,66 @@ async def autosave_character(
         "status": "saved",
         "has_unpublished_changes": character.has_unpublished_changes,
     })
+
+
+def _editor_char_dict(body: dict, character: Character) -> dict:
+    """Shape an editor autosave-style JSON body into the dict ``xp.py`` expects,
+    falling back to the persisted character for anything the body omits."""
+    return {
+        "school": body.get("school", character.school),
+        "school_ring_choice": body.get("school_ring_choice", character.school_ring_choice),
+        "rings": body.get("rings", character.rings),
+        "attack": body.get("attack", character.attack),
+        "parry": body.get("parry", character.parry),
+        "skills": body.get("skills", {}),
+        "knacks": body.get("knacks", {}),
+        "foreign_knacks": body.get("foreign_knacks", {}),
+        "advantages": body.get("advantages", []),
+        "disadvantages": body.get("disadvantages", []),
+        "campaign_advantages": body.get("campaign_advantages", []),
+        "campaign_disadvantages": body.get("campaign_disadvantages", []),
+        "specializations": body.get("specializations", []),
+        "honor": body.get("honor", character.honor),
+        "rank": body.get("rank", character.rank),
+        "rank_locked": body.get("rank_locked", character.rank_locked),
+        "recognition": body.get("recognition", character.recognition),
+        "recognition_halved": body.get("recognition_halved", character.recognition_halved),
+        "earned_xp": body.get("earned_xp", character.earned_xp),
+        "starting_xp": body.get("starting_xp", character.starting_xp),
+    }
+
+
+@router.post("/{char_id}/xp")
+async def character_xp(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Server-computed XP for the editor's live display (read-only, no persist).
+
+    The single source of truth that replaced the editor's old client-side XP
+    duplication: the editor POSTs its current (unsaved) state and renders the
+    returned spent/budget/remaining figures + per-control cost hints. See
+    app/services/xp.py::editor_xp_view.
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"], character.owner_discord_id, all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    body = await request.json()
+    return JSONResponse(editor_xp_view(_editor_char_dict(body, character)))
 
 
 @router.post("/{char_id}/set-group")
@@ -1648,44 +1708,6 @@ def _sanitize_precepts_pool(raw: Any) -> list:
 # ---------------------------------------------------------------------------
 # HTMX partial endpoints
 # ---------------------------------------------------------------------------
-
-
-@router.post("/api/xp-calc", response_class=HTMLResponse)
-async def xp_calc_partial(request: Request):
-    """Recalculate XP from form data and return the XP summary partial."""
-    form = await request.form()
-    form_data = dict(form)
-    data = _parse_form_to_dict(form_data)
-
-    # Build the dict shape expected by calculate_total_xp
-    char_dict = {
-        "school": data["school"],
-        "school_ring_choice": data["school_ring_choice"],
-        "rings": data["rings"],
-        "attack": data["attack"],
-        "parry": data["parry"],
-        "skills": data["skills"],
-        "knacks": data["knacks"],
-        "foreign_knacks": data.get("foreign_knacks", {}),
-        "advantages": data["advantages"],
-        "disadvantages": data["disadvantages"],
-        "honor": data["honor"],
-        "rank": data["rank"],
-        "recognition": data["recognition"],
-        "recognition_halved": data["recognition_halved"],
-        "earned_xp": data["earned_xp"],
-        "starting_xp": data["starting_xp"],
-    }
-
-    xp = calculate_total_xp(char_dict)
-    available = data["starting_xp"] + data["earned_xp"]
-    remaining = available - xp["total"]
-
-    return _templates().TemplateResponse(
-        request=request,
-        name="character/partials/xp_summary.html",
-        context={"xp": xp, "available": available, "remaining": remaining},
-    )
 
 
 @router.get("/api/school-info/{school_id}", response_class=HTMLResponse)

@@ -1,0 +1,447 @@
+{% from "character/partials/sheet/_macros.html" import precepts_pool_block %}
+        <div x-show="wcModalOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="wound-check">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent">Wound Check</h3>
+                    <button type="button" @click="wcModalOpen = false"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+                {% include 'character/partials/read_only_roll_banner.html' %}
+
+                {# ── PRE-ROLL: probability table + void selection ── #}
+                <div x-show="wcPhase === 'pre'" class="space-y-4">
+                    <div class="text-sm">
+                        <span class="text-ink/60">Light wounds:</span>
+                        <span class="font-bold text-lg" x-text="wcLightWounds"></span>
+                        <span class="text-ink/60 ml-2">TN:</span>
+                        <span class="font-bold" x-text="wcLightWounds"></span>
+                        <span x-show="wcProbs.flat > 0" x-cloak class="text-success text-xs ml-1"
+                              x-text="'(+' + wcProbs.flat + ' flat bonus)'"></span>
+                    </div>
+
+                    {# Bonus sources. Mantis defensive posture (+5) plus 5th Dan
+                       defensive-posture-count accumulator (+N) overlay live. #}
+                    <div x-show="formulas.wound_check?.bonus_sources?.length > 0 || _mantisLiveWcLabels().length > 0" x-cloak class="text-xs text-ink/60">
+                        Bonuses: <span x-text="[...(formulas.wound_check?.bonus_sources || []), ..._mantisLiveWcLabels()].join(', ')"></span>
+                    </div>
+
+                    {# Doji Artisan 5th Dan: auto-bonus from light wounds #}
+                    <div x-show="formulas.wound_check?.doji_5th_dan_wc && wcLightWounds >= 10" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Doji 5th Dan: +<span x-text="Math.max(0, Math.floor((wcLightWounds - 10) / 5))"></span>
+                        bonus (from <span x-text="wcLightWounds"></span> light wounds)
+                    </div>
+
+                    {# Shosuro Actor 5th Dan: note that lowest-3 bonus is baked into probabilities #}
+                    <div x-show="formulas.wound_check?.shosuro_5th_dan" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Shosuro 5th Dan: sum of lowest 3 dice is added to each roll (some dice may be counted twice). The probabilities below include this bonus.
+                    </div>
+
+                    {# Kitsune Warden Special Ability: swap the wound-check
+                       ring (Water) for the school ring. Rendered only when
+                       the formula carries kitsune_swap. Iaijutsu strikes
+                       are excluded by the formula builder. template x-if
+                       keeps the input out of the DOM entirely for non-
+                       Kitsune characters so the existing Daidoji
+                       counterattack-checkbox test isn't ambiguous. #}
+                    <template x-if="formulas.wound_check?.kitsune_swap && !wcIsStrike">
+                        <label class="flex items-center gap-2 text-sm bg-parchment rounded p-2 cursor-pointer">
+                            <input type="checkbox" x-model="wcKitsuneSwap"
+                                   data-testid="kitsune-wc-ring-swap">
+                            <span>
+                                Use Kitsune Warden Special Ability
+                                (roll with <span class="font-bold" x-text="formulas.wound_check?.kitsune_swap?.kitsune_swap_to_ring"></span>
+                                instead of <span x-text="formulas.wound_check?.kitsune_swap?.kitsune_swap_from_ring"></span>)
+                            </span>
+                        </label>
+                    </template>
+
+                    {# Probability table #}
+                    <div class="overflow-x-auto">
+                        <table class="text-sm w-full">
+                            <thead>
+                                <tr class="border-b border-ink/20">
+                                    <th class="text-left py-1 pr-3">Void</th>
+                                    <th class="text-right py-1 px-2">Pass</th>
+                                    <th class="text-right py-1 px-2">1 SW</th>
+                                    <th class="text-right py-1 px-2">2 SW</th>
+                                    <th class="text-right py-1 px-2">3 SW</th>
+                                    <th class="text-right py-1 px-2 font-bold">Avg SW</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="v in Array.from({length: (wcProbs.void_cap || 0) + 1}, (_, i) => i)" :key="v">
+                                    <tr class="border-b border-ink/5"
+                                        :class="v === wcVoidSelected ? 'bg-accent/10 font-medium' : ''">
+                                        <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
+                                        <td class="text-right py-1 px-2 text-success"
+                                            x-text="wcProbRow(v) ? Math.round(wcProbRow(v).passChance * 100) + '%' : '-'"></td>
+                                        <template x-for="sw in [1,2,3]" :key="sw">
+                                            <td class="text-right py-1 px-2"
+                                                x-text="wcProbRow(v)?.rows?.find(r => r.sw === sw) ? Math.round(wcProbRow(v).rows.find(r => r.sw === sw).chance * 100) + '%' : '-'"></td>
+                                        </template>
+                                        <td class="text-right py-1 px-2 font-bold"
+                                            x-text="wcProbRow(v) ? wcProbRow(v).expectedSW.toFixed(1) : '-'"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {# Bayushi 5th Dan note #}
+                    <div x-show="formulas.wound_check?.bayushi_5th_dan_half_lw" x-cloak
+                         class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        Bayushi 5th Dan: serious wounds are calculated as if your light wounds were halved
+                        (<span x-text="Math.floor(wcLightWounds / 2)"></span> instead of <span x-text="wcLightWounds"></span>).
+                        Pass chance is unaffected. SW columns reflect the halved calculation.
+                    </div>
+
+                    {# 3rd Dan raises note #}
+                    <div x-show="wcMaxRaisesPerRoll > 0" x-cloak class="text-xs text-ink/60 bg-parchment rounded p-2">
+                        You have 3rd Dan free raises available (not reflected in table above).
+                        These can be spent after the roll to adjust the result.
+                    </div>
+
+                    {# Daidoji 3rd Dan counterattack checkbox #}
+                    <div x-show="daidojiCounterattackData" x-cloak
+                         class="bg-parchment rounded p-2">
+                        <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
+                            <input type="checkbox" x-model="wcDaidojiCounterattack"
+                                   class="rounded border-ink/30">
+                            <span x-text="daidojiCounterattackData?.label"></span>
+                        </label>
+                        <div x-show="wcDaidojiCounterattack" x-cloak class="text-xs text-ink/60 mt-1 ml-6">
+                            +<span x-text="daidojiCounterattackData?.bonus"></span>
+                            (<span x-text="daidojiCounterattackData?.raises"></span>
+                            free raise<span x-show="daidojiCounterattackData?.raises > 1">s</span>)
+                            applied to this wound check.
+                        </div>
+                    </div>
+
+                    {# Void selection #}
+                    <div class="flex items-center gap-3">
+                        <label class="text-sm font-medium">Void points to spend:</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" @click="wcVoidSelected = Math.max(0, wcVoidSelected - 1)"
+                                    :disabled="wcVoidSelected <= 0"
+                                    class="btn-pip">-</button>
+                            <span class="w-8 text-center font-bold text-lg" x-text="wcVoidSelected"></span>
+                            <button type="button" @click="wcVoidSelected = Math.min(wcVoidSelected + 1, Math.min(computeVoidOptions().length, wcProbs.void_cap || 0))"
+                                    :disabled="wcVoidSelected >= Math.min(computeVoidOptions().length, wcProbs.void_cap || 0)"
+                                    class="btn-pip">+</button>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button type="button" @click="rollWoundCheck()"
+                                data-action="roll-wound-check-go"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                            Roll Wound Check
+                        </button>
+                        <button type="button" @click="wcIsStrike = true; wcVoidSelected = 0; rollWoundCheck()"
+                                data-action="roll-wound-check-strike"
+                                title="No void points, no discretionary bonuses, and 10s are not rerolled"
+                                class="btn-secondary px-4 py-2 rounded text-sm font-medium">
+                            Iaijutsu Strike Wound Check
+                        </button>
+                    </div>
+                </div>
+
+                {# ── ROLLING: dice animation ── #}
+                <div x-show="wcPhase === 'rolling'" x-cloak>
+                    <div id="dice-animation-wc"
+                         class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
+                </div>
+
+                {# ── RESULT: pass/fail + discretionary bonuses ── #}
+                <div x-show="wcPhase === 'result'" x-cloak class="space-y-3">
+                    {# Kitsune Warden Special Ability annotation #}
+                    <div x-show="formula?.kitsune_swap_to_ring" x-cloak
+                         data-testid="kitsune-wc-swap-annotation"
+                         class="text-xs italic text-accent">
+                        Kitsune Warden Special Ability: rolled with
+                        <span class="font-bold" x-text="formula?.kitsune_swap_to_ring"></span>
+                        instead of <span x-text="formula?.kitsune_swap_from_ring"></span>.
+                    </div>
+                    {# Roll summary #}
+                    <div class="text-sm">
+                        <span class="text-ink/60">Dice:</span>
+                        <template x-for="(d, i) in finalDice" :key="'wc'+i">
+                            <span class="mx-1 font-mono"
+                                  :class="d.kept ? 'font-bold text-ink' : 'text-ink/40 line-through'"
+                                  x-text="d.value"></span>
+                        </template>
+                    </div>
+
+                    <div class="bg-ink/5 rounded p-3 text-sm">
+                        <div class="flex items-center justify-between gap-3 mb-1">
+                            <div class="font-bold text-lg">
+                                Total: <span class="text-accent" x-text="baseTotal"></span>
+                                <span class="text-ink/50 text-sm ml-2">vs TN <span x-text="wcLightWounds"></span></span>
+                            </div>
+                            {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
+                        {# Show breakdown only when there are bonuses beyond the kept dice #}
+                        <template x-if="(formula?.flat || 0) > 0 || (formula?.void_spent || 0) > 0 || wcRaisesSpent > 0 || mirumotoPointsSpentThisRoll > 0 || wcDaidojiCounterattack || wcExcessSpentThisRoll > 0 || shosuroLowest3Bonus > 0 || convictionSpentThisRoll > 0">
+                            <div>
+                                <div class="text-xs text-ink/70 mt-0.5">
+                                    &bull; <span x-text="keptSum"></span> from the kept dice
+                                </div>
+                                <template x-for="src in (formula?.bonus_sources || [])" :key="src">
+                                    <div class="text-xs text-ink/70 mt-0.5">
+                                        &bull; <span x-text="src"></span>
+                                    </div>
+                                </template>
+                                <div x-show="formula?.void_spent > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="formula?.void_spent"></span>k<span x-text="formula?.void_spent"></span>
+                                    from <span x-text="formula?.void_spent"></span> spent void point<span x-show="formula?.void_spent > 1">s</span>
+                                </div>
+                                <div x-show="formula?.void_spent > 0 && voidSpendConfig.combat_vp_flat_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="(formula?.void_spent || 0) * voidSpendConfig.combat_vp_flat_bonus"></span>
+                                    from 5th Dan (+<span x-text="voidSpendConfig.combat_vp_flat_bonus"></span> per VP)
+                                </div>
+                                <div x-show="wcRaisesSpent > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="wcRaisesSpent * 5"></span> from <span x-text="wcRaisesSpent"></span> 3rd Dan free raise<span x-show="wcRaisesSpent > 1">s</span>
+                                </div>
+                                <div x-show="mirumotoPointsSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="mirumotoPointsSpentThisRoll * 2"></span>
+                                    from <span x-text="mirumotoPointsSpentThisRoll"></span> 3rd Dan point<span x-show="mirumotoPointsSpentThisRoll > 1">s</span>
+                                </div>
+                                <div x-show="wcMatsuBonusApplied > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="wcMatsuBonusApplied"></span>
+                                    from Matsu 3rd Dan banked bonus
+                                </div>
+                                <div x-show="wcPostRollVpSpent > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="wcPostRollVpSpent * 5"></span>
+                                    from <span x-text="wcPostRollVpSpent"></span> VP spent post-roll (4th Dan, +5 each)
+                                </div>
+                                <div x-show="wcExcessSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="wcExcessSpentThisRoll"></span>
+                                    from banked wound check excess (5th Dan)
+                                </div>
+                                <div x-show="shosuroLowest3Bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="shosuroLowest3Bonus"></span>
+                                    from Shosuro 5th Dan (lowest 3 dice added to result)
+                                </div>
+                                <div x-show="convictionSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
+                                    &bull; +<span x-text="convictionSpentThisRoll"></span>
+                                    from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="formula && !formula.reroll_tens && finalDice.some(d => d.value === 10)"
+                             x-cloak class="text-xs italic text-red-700">
+                            10s not rerolled for the strike in an iaijutsu duel
+                        </div>
+                    </div>
+
+                    {# PASSED #}
+                    <div x-show="wcPassed" x-cloak class="bg-success/5 border border-success/40 rounded p-3">
+                        <div class="font-bold text-success mb-2">Wound check PASSED</div>
+                        <p class="text-sm text-success mb-3">
+                            You may keep your light wounds or choose to take 1 serious wound and reset light wounds to 0.
+                        </p>
+                        {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each (increases margin for 3rd Dan banking) #}
+                        <div x-show="voidSpendConfig.wc_vp_free_raise" x-cloak
+                             class="mb-3 pt-2 border-t border-success/30">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button"
+                                        x-show="(window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
+                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) src = 'temp'; else if ((t.voidPoints || 0) > 0) src = 'regular'; else src = 'worldliness'; if (t.canEdit) { if (src === 'temp') t.tempVoidPoints--; else if (src === 'regular') t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); t.save(); } wcPostRollVpSources.push(src); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; wcMargin = wcRollTotal - wcLightWounds;"
+                                        class="bg-success hover:bg-success-dark text-white px-3 py-1.5 rounded text-sm font-medium">
+                                    Spend VP (+5)
+                                </button>
+                                <button type="button"
+                                        x-show="wcPostRollVpSpent > 0"
+                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (t.canEdit) { if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); } wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; wcMargin = wcRollTotal - wcLightWounds; }"
+                                        class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
+                                    Undo VP
+                                </button>
+                                <span x-show="wcPostRollVpSpent > 0" x-cloak class="text-xs text-success">
+                                    +<span x-text="wcPostRollVpSpent * 5"></span> from <span x-text="wcPostRollVpSpent"></span> VP (4th Dan)
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" @click="wcKeepLightWounds()"
+                                    class="bg-success hover:bg-success-dark text-white px-4 py-2 rounded text-sm font-medium">
+                                Keep Light Wounds
+                            </button>
+                            <button type="button" @click="wcTakeSeriousAndReset()"
+                                    class="btn-secondary px-4 py-2 rounded text-sm font-medium">
+                                Take 1 Serious Wound
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Daidoji 5th Dan: lower attacker TN after wound check #}
+                    <div x-show="schoolAbilities.daidoji_wc_lower_tn && wcPassed" x-cloak
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70 mt-2">
+                        Daidoji 5th Dan: the attacker's TN to be hit is lowered by the wound check excess (<span x-text="wcMargin"></span>) the next time they are attacked. This can lower a TN to below 0.
+                    </div>
+
+                    {# FAILED #}
+                    <div x-show="!wcPassed" x-cloak class="bg-red-50 border border-red-300 rounded p-3">
+                        <div class="font-bold text-red-800 mb-1">Wound check FAILED</div>
+                        <p class="text-sm text-red-700">
+                            Failed by <span class="font-bold" x-text="wcMargin"></span> -
+                            taking <span class="font-bold" x-text="wcSeriousWounds"></span>
+                            serious wound<span x-show="wcSeriousWounds > 1">s</span>.
+                            Light wounds reset to 0.
+                        </p>
+                        <p x-show="wcBayushiHalfLw" x-cloak class="text-sm text-red-700 mt-1 italic">
+                            Bayushi 5th Dan calculates serious wounds as if light wounds were halved
+                            (<span x-text="Math.floor(wcLightWounds / 2)"></span> instead of <span x-text="wcLightWounds"></span>).
+                        </p>
+                        <p x-show="(window._trackingBridge?.seriousWounds || 0) - wcSeriousWounds < _earthRing && (window._trackingBridge?.seriousWounds || 0) >= _earthRing"
+                           x-cloak class="text-sm font-bold text-red-800 mt-1"
+                           x-text="_charName + ' is now Impaired'"></p>
+                        <p x-show="(window._trackingBridge?.seriousWounds || 0) - wcSeriousWounds < _dyingThreshold && (window._trackingBridge?.seriousWounds || 0) >= _dyingThreshold"
+                           x-cloak class="text-sm font-bold text-red-900 mt-1"
+                           x-text="_charName + ' is now mortally wounded'"></p>
+
+                        {# Discretionary bonuses (3rd Dan raises, Matsu bonus) - only if not iaijutsu and not auto-applied #}
+                        <div x-show="!wcIsStrike && wcHasDiscretionary && !wcResultApplied" x-cloak
+                             class="mt-3 pt-2 border-t border-red-200">
+                            <div class="flex flex-wrap items-center gap-2 mb-1">
+                                <button type="button" @click="wcSpendRaise()"
+                                        x-show="wcMaxRaisesPerRoll > 0"
+                                        :disabled="wcRaisesSpent >= wcMaxRaisesPerRoll"
+                                        class="btn-primary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                                    Spend Free Raise (+5)
+                                </button>
+                                <button type="button" @click="wcUndoRaise()"
+                                        x-show="wcMaxRaisesPerRoll > 0"
+                                        :disabled="wcRaisesSpent <= 0"
+                                        class="btn-secondary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                                    Undo
+                                </button>
+                                <template x-for="(b, i) in matsuBankedWcBonuses" :key="'matsu'+i">
+                                    <button x-show="!b.spent" type="button"
+                                            @click="wcSpendMatsuBonus(i)"
+                                            class="btn-primary px-3 py-1.5 rounded text-sm font-medium">
+                                        Apply Matsu Bonus (+<span x-text="b.amount"></span>)
+                                    </button>
+                                </template>
+                                <button type="button" @click="wcUndoMatsuBonus()"
+                                        x-show="wcMatsuBonusApplied > 0"
+                                        class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
+                                    Undo Matsu Bonus
+                                </button>
+                                <template x-for="(b, i) in bankedWcExcess" :key="'wce'+i">
+                                    <button x-show="!b.spent" type="button"
+                                            @click="bankedWcExcess[i].spent = true; wcExcessSpentThisRoll += b.amount; baseTotal += b.amount; wcRollTotal += b.amount; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } window._trackingBridge?.saveBankedBonuses();"
+                                            class="btn-primary px-3 py-1.5 rounded text-sm font-medium">
+                                        Apply +<span x-text="b.amount"></span> (5th Dan bonus)
+                                    </button>
+                                </template>
+                                <button type="button"
+                                        x-show="wcExcessSpentThisRoll > 0"
+                                        @click="const last = [...bankedWcExcess].reverse().find(b => b.spent); if (last) { last.spent = false; wcExcessSpentThisRoll -= last.amount; baseTotal -= last.amount; wcRollTotal -= last.amount; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } window._trackingBridge?.saveBankedBonuses(); }"
+                                        class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
+                                    Undo
+                                </button>
+                                {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each #}
+                                <button type="button"
+                                        x-show="voidSpendConfig.wc_vp_free_raise && (window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
+                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) src = 'temp'; else if ((t.voidPoints || 0) > 0) src = 'regular'; else src = 'worldliness'; if (t.canEdit) { if (src === 'temp') t.tempVoidPoints--; else if (src === 'regular') t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); t.save(); } wcPostRollVpSources.push(src); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; }"
+                                        class="btn-primary px-3 py-1.5 rounded text-sm font-medium">
+                                    Spend VP (+5)
+                                </button>
+                                <button type="button"
+                                        x-show="wcPostRollVpSpent > 0"
+                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (t.canEdit) { if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); } wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
+                                        class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
+                                    Undo VP
+                                </button>
+                                {# Conviction: +1 per point (wound check) #}
+                                <button type="button"
+                                        x-show="convictionConfig.rank > 0 && (convictionPoolAvail() > 0 || convictionSpentThisRoll > 0)"
+                                        @click="spendConviction('wc')" :disabled="!canSpendConviction()"
+                                        data-action="spend-conviction-wc"
+                                        class="btn-primary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                                    Spend Conviction (+1)
+                                </button>
+                                <button type="button"
+                                        x-show="convictionSpentThisRoll > 0 && convictionConfig.rank > 0"
+                                        @click="undoConviction('wc')"
+                                        class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
+                                    Undo Conviction
+                                </button>
+                                {# Priest 5th Dan ally (wound check) #}
+                                <template x-for="priest in priestAllies" :key="'wc-p-' + priest.priest_id">
+                                    <span class="inline-flex items-center gap-1">
+                                        <button type="button"
+                                                x-show="priestAllyPoolAvail(priest) > 0 || priestAllySpent(priest.priest_id) > 0"
+                                                @click="spendPriestAlly(priest, 'wc')"
+                                                :disabled="!canSpendPriestAlly(priest)"
+                                                :data-action="'spend-priest-ally-wc-' + priest.priest_id"
+                                                class="btn-primary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                                            Spend <span x-text="priest.name"></span>'s Conviction (+1)
+                                        </button>
+                                        <button type="button"
+                                                x-show="priestAllySpent(priest.priest_id) > 0"
+                                                @click="undoPriestAlly(priest, 'wc')"
+                                                class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
+                                            Undo
+                                        </button>
+                                    </span>
+                                </template>
+                            </div>
+                            {# Priest 3rd Dan precepts pool block (display only in Phase 4;
+                               click-to-swap wired in Phase 5). #}
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                {{ precepts_pool_block('wc', 'wc-p') }}
+                            </div>
+                            <button type="button" @click="wcAcceptResult()"
+                                    class="btn-primary px-4 py-2 rounded text-sm font-medium mt-2">
+                                Accept Result
+                            </button>
+                        </div>
+
+                        {# Auto-applied or no discretionary - just close #}
+                        <div x-show="wcIsStrike || !wcHasDiscretionary || wcResultApplied" x-cloak>
+                            <button type="button" @click="wcModalOpen = false"
+                                    class="mt-3 btn-secondary px-4 py-2 rounded text-sm font-medium">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Akodo 5th Dan: reflect damage after taking damage #}
+                    <div x-show="schoolAbilities.akodo_reflect_damage && wcLightWounds > 0" x-cloak
+                         class="mt-3 pt-2 border-t border-ink/10">
+                        <div class="text-sm font-medium mb-1">Akodo 5th Dan - Reflect Damage</div>
+                        <p class="text-xs text-ink/60 mb-2">Spend VP to deal 10 light wounds per VP to the attacker (max <span x-text="wcLightWounds"></span>).</p>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm">VP to spend:</label>
+                            <input type="number" x-model.number="akodoReflectVP" min="0"
+                                   :max="Math.floor(wcLightWounds / 10) || 1"
+                                   class="w-16 border rounded px-2 py-1 text-sm text-center">
+                            <button type="button"
+                                    @click="const t = window._trackingBridge; if (t && akodoReflectVP > 0 && (t.anyVPAvailable?.() || 0) >= akodoReflectVP && t.canEdit) { for (let i = 0; i < akodoReflectVP; i++) { if ((t.tempVoidPoints || 0) > 0) t.tempVoidPoints--; else if ((t.voidPoints || 0) > 0) t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); } t.save(); } akodoReflectVP = 0;"
+                                    :disabled="akodoReflectVP <= 0"
+                                    class="btn-primary px-3 py-1 rounded text-sm font-medium disabled:opacity-30">
+                                Reflect <span x-text="(akodoReflectVP || 0) * 10"></span> LW
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Lucky reroll for wound check #}
+                    <button x-show="canUseLucky()" x-cloak type="button" @click="useLuckyWoundCheck()"
+                            class="btn-gold px-4 py-2 rounded text-sm font-medium mt-2">
+                        Use Lucky to reroll wound check
+                    </button>
+                    <div x-show="luckyOriginalWasHigher" x-cloak
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800 mt-2">
+                        Original roll was higher (<span x-text="luckyPrevBaseTotal + _wcDiscretionaryTotal()"></span>) - you may keep the original result instead.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ── Attack Modal ── #}
+        {# ── Kakita 5th Dan Phase-0 contested-iaijutsu modal ── #}

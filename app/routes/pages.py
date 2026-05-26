@@ -39,7 +39,11 @@ from app.services.status import (
     public_money_state,
 )
 from app.services.versions import compute_version_diff
-from app.services.xp import calculate_total_xp, calculate_xp_breakdown, validate_character
+from app.services.xp import (
+    calculate_xp_breakdown,
+    editor_xp_view,
+    validate_character,
+)
 
 router = APIRouter()
 
@@ -1169,7 +1173,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
         return HTMLResponse("You don't have permission to edit this character.", status_code=403)
 
     char_dict = character.to_dict()
-    xp_breakdown = calculate_total_xp(char_dict)
+    xp_initial = editor_xp_view(char_dict)
     school = SCHOOLS.get(character.school)
 
     # Build knacks dict for the school_info partial
@@ -1196,7 +1200,7 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "character": character,
             "char_dict": char_dict,
             "school": school,
-            "xp": xp_breakdown,
+            "xp_initial": xp_initial,
             "schools": SCHOOLS,
             "schools_by_category": SCHOOLS_BUSHI_NONBUSHI,
             "rings": [r.value for r in Ring],

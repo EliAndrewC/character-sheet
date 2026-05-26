@@ -1,0 +1,76 @@
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10">
+        <h2 class="text-xl font-bold mb-4 text-accent">Advantages & Disadvantages</h2>
+        <div class="grid gap-6 md:grid-cols-2">
+            {% if all_advs or char_specs %}
+            <div>
+                <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Advantages</h3>
+                {% for aid in all_advs %}
+                {% set adv = advantages.get(aid) or campaign_advantages.get(aid) %}
+                {% if adv %}
+                {% set detail = advantage_details.get(aid, {}) %}
+                {% set is_campaign = aid in (character.campaign_advantages or []) %}
+                <div class="mb-2 tooltip-trigger relative">
+                    <span class="text-sm font-medium cursor-help">{{ adv.name }}</span>
+                    {% if is_campaign %}
+                    <span class="text-xs text-ink/40">(campaign)</span>
+                    {% endif %}
+                    {% if detail.get('text') %}
+                    <span class="text-sm text-ink/60">- {{ detail.text }}</span>
+                    {% endif %}
+                    {% if detail.get('player') and detail.player in player_names %}
+                    <span class="text-xs text-ink/50">(known by {{ player_names[detail.player] }})</span>
+                    {% endif %}
+                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line">
+                        {{ adv.description }}
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+                {# Specialization can be taken multiple times; render one row per
+                   instance with its per-row sub-domain text + the chosen skill. #}
+                {% for spec in char_specs %}
+                {% set spec_skill = (skills.get(spec.skills[0]) or combat_skills.get(spec.skills[0])) if spec.skills else none %}
+                <div class="mb-2 tooltip-trigger relative">
+                    <span class="text-sm font-medium cursor-help">Specialization</span>
+                    {% if spec.text %}
+                    <span class="text-sm text-ink/60">- {{ spec.text }}</span>
+                    {% endif %}
+                    {% if spec_skill %}
+                    <span class="text-xs text-ink/50">({{ spec_skill.name }})</span>
+                    {% endif %}
+                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line">
+                        {{ advantages['specialization'].description }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if all_disadvs %}
+            <div>
+                <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Disadvantages</h3>
+                {% for did in all_disadvs %}
+                {% set dis = disadvantages.get(did) or campaign_disadvantages.get(did) %}
+                {% if dis %}
+                {% set detail = advantage_details.get(did, {}) %}
+                {% set is_campaign = did in (character.campaign_disadvantages or []) %}
+                <div class="mb-2 tooltip-trigger relative">
+                    <span class="text-sm font-medium cursor-help">{{ dis.name }}</span>
+                    {% if is_campaign %}
+                    <span class="text-xs text-ink/40">(campaign)</span>
+                    {% endif %}
+                    {% if detail.get('text') %}
+                    <span class="text-sm text-ink/60">- {{ detail.text }}</span>
+                    {% endif %}
+                    {% if detail.get('player') and detail.player in player_names %}
+                    <span class="text-xs text-ink/50">(known by {{ player_names[detail.player] }})</span>
+                    {% endif %}
+                    <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line">
+                        {{ dis.description }}
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </section>

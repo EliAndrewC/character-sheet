@@ -448,9 +448,11 @@ def test_lucky_prevtotal_updates_with_post_reroll_bonus(page, live_server_url):
     modal.locator('select:visible').select_option("25")
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
-    # Use Lucky immediately (no bonuses spent yet)
+    # Use Lucky immediately (no bonuses spent yet). atkPhase flips to 'result'
+    # synchronously, but the button's x-show reveal is a later Alpine tick -
+    # wait for it rather than a one-shot count() that races the render.
     lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
-    assert lucky_btn.count() > 0
+    lucky_btn.first.wait_for(state="visible", timeout=5000)
     lucky_btn.first.click()
     _wait_attack_result(page)
     # Get the displayed prev total
@@ -691,8 +693,10 @@ def test_wc_post_roll_vp_with_worldliness(page, live_server_url):
     page.wait_for_timeout(200)
     _add_lw_and_open_wc(page, 30)
     _roll_wc(page)
-    # Spend VP (+5) button should be visible
+    # Spend VP (+5) button should be visible. Wait for the result-modal x-show
+    # reveal rather than a one-shot count() that races the Alpine render.
     spend_btn = page.locator('button:has-text("Spend VP (+5)"):visible')
+    spend_btn.first.wait_for(state="visible", timeout=5000)
     assert spend_btn.count() > 0
     total_before = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');

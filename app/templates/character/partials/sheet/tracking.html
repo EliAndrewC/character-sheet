@@ -1,0 +1,1077 @@
+    <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
+             x-data="trackingData()"
+             x-init="window._trackingBridge = $data">
+        <div class="flex flex-col md:flex-row gap-10">
+        <!-- Wounds & Void (left column) -->
+        <div class="flex-1 min-w-0 space-y-3">
+            <h2 class="text-xl font-bold mb-4 text-accent">Tracking</h2>
+            <div class="relative">
+                <div class="flex items-center justify-between gap-4">
+                    <div class="text-sm text-ink/60">Light Wounds</div>
+                    <div class="flex items-center gap-2">
+                        <button x-show="lightWounds > 0" x-cloak
+                                @click="$dispatch('open-wound-check')"
+                                data-action="roll-wound-check"
+                                class="text-xs bg-accent/10 hover:bg-accent/20 text-accent font-medium px-2 py-1 rounded transition-colors">
+                            WC
+                        </button>
+                        <button @click="lwMinusMenu = !lwMinusMenu"
+                                :disabled="!canEdit || lightWounds <= 0"
+                                data-action="lw-minus"
+                                class="btn-pip">-</button>
+                        <span class="text-lg font-bold w-8 text-center" x-text="lightWounds"></span>
+                        <button @click="lwPlusModal = true"
+                                data-action="lw-plus"
+                                class="btn-pip">+</button>
+                    </div>
+                </div>
+
+                <!-- Minus dropdown menu -->
+                <div x-show="lwMinusMenu" x-cloak @click.outside="lwMinusMenu = false"
+                     class="absolute left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm w-48">
+                    <button @click="lwResetToZero()"
+                            class="block w-full text-left px-3 py-2 hover:bg-parchment">Reset to 0</button>
+                    <button @click="lwSetModal = true; lwMinusMenu = false; lwSetValue = String(lightWounds)"
+                            class="block w-full text-left px-3 py-2 hover:bg-parchment">Enter new total...</button>
+                </div>
+
+                <!-- Set total mini-modal -->
+                <div x-show="lwSetModal" x-cloak
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+                    <div class="bg-white rounded-lg shadow-xl px-6 py-4 w-64" @click.outside="lwSetModal = false">
+                        <h3 class="text-sm font-bold mb-2">Set Light Wounds</h3>
+                        <input type="number" x-model="lwSetValue" min="0"
+                               class="w-full border border-ink/20 rounded px-2 py-1 text-sm mb-3"
+                               @keydown.enter="lwSetViaModal()">
+                        <div class="flex justify-end gap-2">
+                            <button @click="lwSetModal = false" class="text-xs text-ink/50 hover:text-ink px-2 py-1">Cancel</button>
+                            <button @click="lwSetViaModal()" class="text-xs bg-accent text-parchment px-3 py-1 rounded">Set</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plus modal -->
+                <div x-show="lwPlusModal" x-cloak
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+                    <div class="bg-white rounded-lg shadow-xl px-6 py-5 w-80" @click.outside="lwPlusModal = false">
+                        <h3 class="text-base font-bold mb-4">Light Wounds</h3>
+
+                        <!-- Option 1: Take serious wounds and reset -->
+                        <div class="mb-4 pb-4 border-b border-ink/10">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm">Take serious wounds & reset light to 0</span>
+                            </div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <button @click="lwSeriousCount = Math.max(1, lwSeriousCount - 1)"
+                                        :disabled="lwSeriousCount <= 1"
+                                        class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                                <span class="text-lg font-bold w-6 text-center" x-text="lwSeriousCount"></span>
+                                <button @click="lwSeriousCount++"
+                                        class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 text-xs font-bold">+</button>
+                                <span class="text-xs text-ink/50">serious wound(s)</span>
+                            </div>
+                            <button @click="lwTakeSeriousAndReset()"
+                                    class="w-full text-xs bg-red-700 text-parchment px-3 py-1.5 rounded hover:bg-red-800">
+                                Take <span x-text="lwSeriousCount"></span> serious wound(s) & reset light to 0
+                            </button>
+                        </div>
+
+                        <!-- Option 2: Add to existing total -->
+                        <div class="mb-4 pb-4 border-b border-ink/10">
+                            <label class="text-sm block mb-1">Add to current total</label>
+                            <div class="flex gap-2">
+                                <input type="number" x-model="lwAddAmount" min="1" placeholder="Amount"
+                                       class="flex-1 border border-ink/20 rounded px-2 py-1 text-sm"
+                                       @keydown.enter="lwAddToTotal()">
+                                <button @click="lwAddToTotal()"
+                                        :disabled="!lwAddAmount || parseInt(lwAddAmount) <= 0"
+                                        class="text-xs bg-accent text-parchment px-3 py-1 rounded disabled:opacity-30">Add</button>
+                            </div>
+                        </div>
+
+                        <!-- Option 3: Set new total directly -->
+                        <div class="mb-3">
+                            <label class="text-sm block mb-1">Set total to</label>
+                            <div class="flex gap-2">
+                                <input type="number" x-model="lwNewTotal" min="0" placeholder="New total"
+                                       class="flex-1 border border-ink/20 rounded px-2 py-1 text-sm"
+                                       @keydown.enter="lwSetToTotal()">
+                                <button @click="lwSetToTotal()"
+                                        :disabled="lwNewTotal === '' || parseInt(lwNewTotal) < 0"
+                                        class="text-xs bg-accent text-parchment px-3 py-1 rounded disabled:opacity-30">Set</button>
+                            </div>
+                        </div>
+
+                        <div class="text-right">
+                            <button @click="lwPlusModal = false; lwAddAmount = ''; lwNewTotal = ''; lwSeriousCount = 1"
+                                    class="text-xs text-ink/50 hover:text-ink px-2 py-1">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center justify-between gap-4">
+                <div class="text-sm text-ink/60">Serious Wounds</div>
+                <div class="flex items-center gap-2">
+                    {% if viewer_can_edit %}
+                    <button @click="seriousWounds = Math.max(0, seriousWounds - 1); save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } }))"
+                            :disabled="seriousWounds <= 0"
+                            class="btn-pip">-</button>
+                    {% endif %}
+                    <span class="text-lg font-bold w-8 text-center" x-text="seriousWounds"></span>
+                    {% if viewer_can_edit %}
+                    <button @click="seriousWounds++; save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } }))"
+                            class="btn-pip">+</button>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex items-center justify-between gap-4">
+                <div class="text-sm text-ink/60">
+                    Void Points
+                    <span class="text-xs text-ink/40" x-text="'(max ' + voidMax + ')'"></span>
+                    {% if school_abilities.get('ide_extra_vp_regen') %}
+                    <span class="tooltip-trigger relative text-xs text-accent/70">+2/night
+                        <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">Ide 4th Dan: regain an extra +1 VP per night above the normal 1 per night</span>
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if viewer_can_edit %}
+                    <button @click="voidPoints = Math.max(0, voidPoints - 1); save()"
+                            :disabled="voidPoints <= 0"
+                            class="btn-pip">-</button>
+                    {% endif %}
+                    <span class="text-lg font-bold w-8 text-center" x-text="voidPoints"></span>
+                    {% if viewer_can_edit %}
+                    <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); save()"
+                            :disabled="voidPoints >= voidMax"
+                            class="btn-pip">+</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% if has_temp_void %}
+            <div class="flex items-center justify-between gap-4" data-testid="temp-void-row">
+                <div class="text-sm text-ink/60">Temp Void</div>
+                <div class="flex items-center gap-2">
+                    {% if viewer_can_edit %}
+                    <button @click="tempVoidPoints = Math.max(0, tempVoidPoints - 1); save()"
+                            :disabled="tempVoidPoints <= 0"
+                            data-action="temp-vp-minus"
+                            class="btn-pip">-</button>
+                    {% endif %}
+                    <span class="text-lg font-bold w-8 text-center" x-text="tempVoidPoints"></span>
+                    {% if viewer_can_edit %}
+                    <button @click="tempVoidPoints++; save()"
+                            data-action="temp-vp-plus"
+                            class="btn-pip">+</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% if viewer_can_edit %}
+            {% if school_abilities.get('togashi_heal_sw') or school_abilities.get('hida_trade_sw') %}
+            <div class="flex flex-wrap gap-2 mt-2">
+                {% if school_abilities.get('togashi_heal_sw') %}
+                <button @click="if (anyVPAvailable() > 0 && seriousWounds >= 2) { if (tempVoidPoints > 0) { tempVoidPoints--; } else if (voidPoints > 0) { voidPoints--; } else { setCount('worldliness', getCount('worldliness') + 1); } seriousWounds = Math.max(0, seriousWounds - 2); save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } })); }"
+                        :disabled="anyVPAvailable() <= 0 || seriousWounds < 2"
+                        class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                    Spend 1 VP to heal 2 SW
+                </button>
+                {% endif %}
+                {% if school_abilities.get('hida_trade_sw') %}
+                <button @click="if (lightWounds > 0) { seriousWounds += 2; lightWounds = 0; save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } })); }"
+                        :disabled="lightWounds <= 0"
+                        class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                    Take 2 SW to reset LW to 0
+                </button>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endif %}
+            {% if school_abilities.get('mirumoto_round_points') %}
+            <div class="flex items-center justify-between gap-4 mt-2 pt-2 border-t border-ink/10">
+                <div class="text-sm text-ink/60">3rd Dan Points <span class="text-xs">(per round)</span></div>
+                <div class="flex items-center gap-2">
+                    {% if viewer_can_edit %}
+                    <button @click="mirumotoRoundPoints = Math.max(0, mirumotoRoundPoints - 1)"
+                            :disabled="mirumotoRoundPoints <= 0"
+                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                    {% endif %}
+                    <span class="text-lg font-bold w-6 text-center" x-text="mirumotoRoundPoints"></span>
+                    {% if viewer_can_edit %}
+                    <button @click="mirumotoRoundPoints = Math.min(mirumotoRoundPointsMax, mirumotoRoundPoints + 1)"
+                            :disabled="mirumotoRoundPoints >= mirumotoRoundPointsMax"
+                            class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
+                    <button @click="mirumotoRoundPoints = mirumotoRoundPointsMax"
+                            class="text-xs text-accent hover:underline ml-1">Reset</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('akodo_wc_attack_bonus') %}
+            <div class="mt-2 pt-2 border-t border-ink/10" x-show="akodoBankedBonuses.length > 0" x-cloak>
+                <div class="text-sm text-ink/60 mb-1">Banked 3rd Dan Bonuses</div>
+                <div class="space-y-1">
+                    <template x-for="(b, i) in akodoBankedBonuses" :key="i">
+                        <div class="flex items-center justify-between gap-2 text-sm">
+                            <span :class="b.spent ? 'line-through text-ink/40' : 'font-medium'">
+                                +<span x-text="b.amount"></span>
+                            </span>
+                            {% if viewer_can_edit %}
+                            <button x-show="!b.spent"
+                                    @click="akodoBankedBonuses[i].spent = true; saveBankedBonuses()"
+                                    class="text-xs text-ink/50 hover:text-accent">Mark spent</button>
+                            {% endif %}
+                            <span x-show="b.spent" class="text-xs text-ink/40">spent</span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('bayushi_post_feint_raise') %}
+            <div class="mt-2 pt-2 border-t border-ink/10"
+                 x-show="bayushiBankedFeintRaise > 0" x-cloak>
+                <div class="text-sm text-ink/60 mb-1">Banked Feint Raises</div>
+                <div class="flex items-center justify-between gap-2 text-sm">
+                    <span class="font-medium">
+                        +<span x-text="bayushiBankedFeintRaise"></span>
+                        (<span x-text="bayushiBankedFeintRaise / 5"></span> raise<span x-show="bayushiBankedFeintRaise > 5">s</span>)
+                    </span>
+                    {% if viewer_can_edit %}
+                    <button @click="bayushiBankedFeintRaise = Math.max(0, bayushiBankedFeintRaise - 5); if (window._diceRoller) window._diceRoller.bayushiBankedFeintRaise = bayushiBankedFeintRaise; saveBankedBonuses()"
+                            class="text-xs text-ink/50 hover:text-accent">Mark 1 spent</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('hiruma_post_parry_bonus') %}
+            <div class="mt-2 pt-2 border-t border-ink/10"
+                 x-show="hirumaBankedAttackBonus > 0" x-cloak>
+                <div class="text-sm text-ink/60 mb-1">Banked Post-Parry Bonuses</div>
+                <div class="flex items-center justify-between gap-2 text-sm">
+                    <span class="font-medium">
+                        +<span x-text="hirumaBankedAttackBonus"></span> (attack and damage)
+                    </span>
+                    {% if viewer_can_edit %}
+                    <button @click="const amt = {{ school_abilities.get('hiruma_post_parry_amount', 0) }}; hirumaBankedAttackBonus = Math.max(0, hirumaBankedAttackBonus - amt); if (window._diceRoller) window._diceRoller.hirumaBankedAttackBonus = hirumaBankedAttackBonus; saveBankedBonuses()"
+                            class="text-xs text-ink/50 hover:text-accent">Mark 1 spent</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('hida_counterattack_wc_bonus') %}
+            <div class="mt-2 pt-2 border-t border-ink/10"
+                 x-show="hidaBankedWcBonus > 0" x-cloak>
+                <div class="text-sm text-ink/60 mb-1">Banked Counterattack Bonus</div>
+                <div class="flex items-center justify-between gap-2 text-sm">
+                    <span class="font-medium">
+                        +<span x-text="hidaBankedWcBonus"></span> to next wound check
+                    </span>
+                    {% if viewer_can_edit %}
+                    <button @click="hidaBankedWcBonus = 0; if (window._diceRoller) window._diceRoller.hidaBankedWcBonus = 0; saveBankedBonuses()"
+                            class="text-xs text-ink/50 hover:text-accent">Clear</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {# Shared Isawa Duelist 5th Dan / Shinjo Bushi 5th Dan banked
+               wound-check excess. Both schools push onto the same
+               ``bankedWcExcess`` state array, so this block just needs to
+               render whenever either ability is granted. #}
+            {% if school_abilities.get('isawa_bank_wc_excess') or school_abilities.get('shinjo_bank_parry_excess') %}
+            <div class="mt-2 pt-2 border-t border-ink/10"
+                 data-testid="banked-wc-excess-tracking"
+                 x-show="bankedWcExcess.length > 0" x-cloak>
+                <div class="text-sm text-ink/60 mb-1">Banked 5th Dan Wound Check Bonuses</div>
+                <div class="space-y-1">
+                    <template x-for="(b, i) in bankedWcExcess" :key="'wce'+i">
+                        <div class="flex items-center justify-between gap-2 text-sm">
+                            <span :class="b.spent ? 'line-through text-ink/40' : 'font-medium'">
+                                +<span x-text="b.amount"></span>
+                            </span>
+                            {% if viewer_can_edit %}
+                            <button x-show="!b.spent"
+                                    @click="bankedWcExcess[i].spent = true; saveBankedBonuses()"
+                                    class="text-xs text-ink/50 hover:text-accent">Mark spent</button>
+                            {% endif %}
+                            <span x-show="b.spent" class="text-xs text-ink/40">spent</span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('matsu_vp_wc_bonus') %}
+            <div class="mt-2 pt-2 border-t border-ink/10"
+                 x-show="matsuBankedWcBonuses.some(b => !b.spent)" x-cloak>
+                <div class="text-sm text-ink/60 mb-1">Banked Wound Check Bonuses</div>
+                <template x-for="(b, i) in matsuBankedWcBonuses" :key="'matsu'+i">
+                    <div x-show="!b.spent" class="flex items-center justify-between gap-2 text-sm">
+                        <span class="font-medium">
+                            +<span x-text="b.amount"></span> to a future wound check (after seeing roll)
+                        </span>
+                    </div>
+                </template>
+                {% if viewer_can_edit %}
+                <button @click="matsuBankedWcBonuses = []; if (window._diceRoller) window._diceRoller.matsuBankedWcBonuses = []; saveBankedBonuses()"
+                        class="text-xs text-ink/50 hover:text-accent mt-1">Clear All</button>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if school_abilities.get('ide_subtract_roll') %}
+            <div class="mt-2 pt-2 border-t border-ink/10">
+                <div class="text-sm text-ink/60 mb-1">Ide 3rd Dan - Subtract from Roll</div>
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            @click="const t = window._trackingBridge; if (!t || (t.anyVPAvailable?.() || 0) <= 0) return; window._diceRoller?.rollSpendVPForXk1({ x: {{ school_abilities.get('ide_subtract_x', 0) }}, title: 'Ide 3rd Dan' })"
+                            :disabled="(window._trackingBridge?.anyVPAvailable?.() || 0) <= 0"
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                        Spend 1 VP to subtract <span>{{ school_abilities.get('ide_subtract_x', 0) }}</span>k1
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('ishi_add_roll') %}
+            <div class="mt-2 pt-2 border-t border-ink/10">
+                <div class="text-sm text-ink/60 mb-1">Isawa Ishi 3rd Dan - Add to Roll</div>
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            @click="const t = window._trackingBridge; if (!t || (t.anyVPAvailable?.() || 0) <= 0) return; window._diceRoller?.rollSpendVPForXk1({ x: {{ school_abilities.get('ishi_add_x', 0) }}, title: 'Isawa Ishi 3rd Dan' })"
+                            :disabled="(window._trackingBridge?.anyVPAvailable?.() || 0) <= 0"
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                        Spend 1 VP to add <span>{{ school_abilities.get('ishi_add_x', 0) }}</span>k1
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('priest_bless_rituals') %}
+            <div class="mt-2 pt-2 border-t border-ink/10">
+                <div class="text-sm text-ink/60 mb-1">Priest Rituals</div>
+                <div class="flex flex-col gap-2">
+                    <div class="tooltip-trigger relative inline-block self-start" data-bless-research>
+                        <button type="button"
+                                @click="window._diceRoller?.rollBless('Bless research')"
+                                data-action="bless-research"
+                                class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
+                            Bless research
+                        </button>
+                        <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">
+                            When a target makes a roll to perform research, roll 2k1 and add it to their roll. Time: 5 minutes.
+                        </span>
+                    </div>
+                    <div class="tooltip-trigger relative inline-block self-start" data-bless-conversation>
+                        <button type="button"
+                                @click="window._diceRoller?.rollBless('Bless conversation topic')"
+                                data-action="bless-conversation"
+                                class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
+                            Bless conversation topic
+                        </button>
+                        <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">
+                            Before a conversation, bless a target and pick a topic of conversation. When the target makes their first contested roll on that topic, roll 2k1 and add it to their roll. Each blessing replaces the previous one. Time: 5 minutes.
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% if school_abilities.get('kuni_reflect_damage') %}
+            <div class="mt-2 pt-2 border-t border-ink/10" x-data="{ kuniLW: 0, reflected: false }">
+                <div class="text-sm text-ink/60 mb-1">Kuni 5th Dan - Reflect Damage</div>
+                <p class="text-xs text-ink/50 mb-1">After taking LW and resolving wound check, reflect that amount to attacker and take half yourself.</p>
+                <div x-show="!reflected" class="flex items-center gap-2">
+                    <input type="number" x-model.number="kuniLW" min="0" placeholder="LW taken"
+                           class="w-20 border rounded px-2 py-1 text-sm text-center">
+                    <button type="button"
+                            @click="const t = window._trackingBridge; if (t && kuniLW > 0 && t.canEdit) { const extra = Math.floor(kuniLW / 2); t.lightWounds += extra; t.save(); } reflected = true;"
+                            :disabled="kuniLW <= 0"
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                        Reflect
+                    </button>
+                </div>
+                <div x-show="reflected" x-cloak class="text-sm">
+                    <span class="font-bold text-accent">Reflected <span x-text="kuniLW"></span> LW to attacker.</span>
+                    <span class="text-ink/60">You take <span x-text="Math.floor(kuniLW / 2)"></span> additional LW.</span>
+                </div>
+            </div>
+            {% endif %}
+            {# Mantis posture: only show the section to non-editors when
+               there's already history to display. Otherwise the header is
+               an empty wedge that doesn't tell them anything. Non-editors
+               can't mutate postureHistory (the buttons inside are
+               viewer_can_edit-gated), so the server-rendered adventure_state
+               is authoritative for the visibility decision. #}
+            {% set _mantis_posture_history = (adventure_state or {}).get('mantis_posture_history') %}
+            {% if school_abilities.get('mantis_posture_tracking') and (viewer_can_edit or _mantis_posture_history) %}
+            <div class="mt-2 pt-2 border-t border-ink/10" data-testid="mantis-posture-tracker">
+                <div class="text-sm text-ink/60 mb-1">Posture</div>
+                {% if viewer_can_edit %}
+                <div class="flex gap-2 flex-wrap">
+                    <button type="button"
+                            @click="selectPosture('offensive')"
+                            :disabled="posturePhase > 10"
+                            data-action="mantis-posture-offensive"
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                        Offensive Posture for Phase <span x-text="posturePhase > 10 ? '...' : posturePhase"></span>
+                    </button>
+                    <button type="button"
+                            @click="selectPosture('defensive')"
+                            :disabled="posturePhase > 10"
+                            data-action="mantis-posture-defensive"
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
+                        Defensive Posture for Phase <span x-text="posturePhase > 10 ? '...' : posturePhase"></span>
+                    </button>
+                </div>
+                {% endif %}
+                <div x-show="currentPosture()" x-cloak class="text-sm mt-1"
+                     data-testid="mantis-current-posture">
+                    Current: Phase <span x-text="postureHistory.length"></span> -
+                    <span class="capitalize" x-text="currentPosture()"></span>
+                </div>
+                <div x-show="currentPosture()" x-cloak
+                     class="text-xs text-ink/50 mt-0.5"
+                     data-testid="mantis-posture-bonuses"
+                     x-text="currentPosture() === 'offensive'
+                        ? 'Active bonuses: +5 attack rolls, +5 damage rolls'
+                        : 'Active bonuses: +5 wound checks, +5 TN to be hit'"></div>
+                {% if school_abilities.get('mantis_posture_accumulation') %}
+                {# 5th Dan: per-round accumulator (+1 per declared posture). #}
+                <div x-show="offensivePhaseCount() > 0 || defensivePhaseCount() > 0" x-cloak
+                     class="text-xs text-ink/50 mt-0.5"
+                     data-testid="mantis-5th-dan-accumulator">
+                    <span class="font-medium">Accumulated 5th Dan bonuses:</span>
+                    <span x-show="offensivePhaseCount() > 0"
+                          data-testid="mantis-5th-dan-offensive"
+                          x-text="`+${offensivePhaseCount()} to attack and damage rolls`"></span>
+                    <span x-show="offensivePhaseCount() > 0 && defensivePhaseCount() > 0"> | </span>
+                    <span x-show="defensivePhaseCount() > 0"
+                          data-testid="mantis-5th-dan-defensive"
+                          x-text="`+${defensivePhaseCount()} to wound checks and TN`"></span>
+                </div>
+                {% endif %}
+                {% if viewer_can_edit and school_abilities.get('mantis_3rd_dan_defensive') %}
+                {# 3rd Dan defensive: spend action die for +X to WC and TN.
+                   Visible only in defensive posture AND when at least one
+                   action die is unspent. Tooltip carries the rules text. #}
+                <div x-show="currentPosture() === 'defensive' && (actionDice || []).some(d => !d.spent)"
+                     x-cloak class="mt-1 flex flex-wrap items-center gap-2">
+                    <button type="button"
+                            @click="incrementMantis3rdDanDefensive({{ school_abilities.get('mantis_3rd_dan_x', 0) }})"
+                            data-action="mantis-3rd-dan-defensive"
+                            title="After seeing the result of an attack roll made against you while fighting with a defensive posture, you may spend one action die from any phase to increase your wound checks and TN to be hit by X for the remainder of the round, where X is your attack skill."
+                            class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
+                        Spend action to increase TN and wound checks by
+                        <span>{{ school_abilities.get('mantis_3rd_dan_x', 0) }}</span>
+                    </button>
+                    <span x-show="defensive3rdDanAccum > 0" x-cloak
+                          class="text-xs text-ink/60"
+                          data-testid="mantis-3rd-dan-defensive-accum"
+                          x-text="'Accumulated: +' + defensive3rdDanAccum"></span>
+                </div>
+                {% endif %}
+                {% if viewer_can_edit %}
+                {# End-of-round "Clear bonuses" button. Semantically equivalent
+                   to the action-dice "Clear" button - it wipes posture history,
+                   accumulators, and action dice via clearActionDice(). Shown
+                   whenever any per-round Mantis state is non-zero. #}
+                <div x-show="actionDice.length > 0
+                             || postureHistory.length > 0
+                             || offensive3rdDanAccum > 0
+                             || defensive3rdDanAccum > 0"
+                     x-cloak class="mt-1">
+                    <button type="button"
+                            @click="clearActionDice()"
+                            data-action="mantis-clear-bonuses"
+                            title="End the combat round: clears posture history, all Mantis accumulators, and all action dice."
+                            class="text-xs text-ink/50 hover:text-accent underline">
+                        Clear bonuses
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Actions + Per-Adventure Abilities (right column) -->
+        {# Right column always renders: non-editors need a DOM home for
+           action dice after rolling initiative, even when per_adventure
+           is empty on the stored character. Inner x-show guards keep
+           the column visually empty until content exists. #}
+        <div class="flex-1 min-w-0">
+            <!-- Action dice (shown after initiative is rolled, hidden after Clear) -->
+            <div x-show="actionDice.length > 0" x-cloak class="mb-6"
+                 data-testid="action-dice-section">
+                {% include 'character/partials/read_only_roll_banner.html' %}
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide">Actions</h3>
+                    {% if viewer_can_edit %}
+                    <button type="button" @click="clearActionDice()"
+                            data-action="clear-action-dice"
+                            class="text-xs text-ink/50 hover:text-accent">Clear</button>
+                    {% endif %}
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="(die, i) in actionDice" :key="i">
+                        <div class="relative">
+                            <button type="button"
+                                    @click="toggleActionMenu(i)"
+                                    data-action="action-die"
+                                    :data-die-index="i"
+                                    :data-die-spent="die.spent ? 'true' : 'false'"
+                                    :data-die-value="die.value"
+                                    :data-die-athletics-only="die.athletics_only ? 'true' : 'false'"
+                                    :data-die-mantis-4th-dan="die.mantis_4th_dan ? 'true' : 'false'"
+                                    class="block"
+                                    :title="die.spent_by
+                                        ? die.spent_by
+                                        : (die.mantis_4th_dan
+                                            ? 'Mantis 4th Dan athletics die. May only be spent on movement, athletics, or the Mantis 3rd Dan technique.'
+                                            : (die.athletics_only
+                                                ? 'Athletics-only action die (Togashi special ability)'
+                                                : ({{ 'true' if school_abilities.get('kakita_phase_zero') else 'false' }} && die.value === 0
+                                                    ? 'Phase 0 (Kakita interrupt): iaijutsu attacks only.'
+                                                    : (die.spent ? 'Spent - click to mark as unspent' : 'Click to mark as spent'))))"
+                                    :data-die-spent-by="die.spent_by || ''">
+                                {# Same SVG kite shape as the roll-animation
+                                   dice (see app/static/js/dice.js). Color
+                                   variants are categorical only: spent,
+                                   Kakita Phase 0 interrupt, Togashi athletics-
+                                   only (blue), or default. #}
+                                <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
+                                     class="die action-die"
+                                     :class="(die.spent ? 'spent ' : '') + (die.athletics_only ? 'athletics-only ' : '') + (die.value === 0 ? 'phase-zero ' : '') + (die.value === 10 ? 'two-digit' : '')">
+                                    <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+                                    <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
+                                          x-text="die.value"></text>
+                                </svg>
+                            </button>
+                            {# Per-die action menu. Unspent dice can pay
+                               for any action they're eligible to pay for;
+                               athletics-only dice (Togashi special) are
+                               restricted to athletics variants. Each
+                               parry/feint row carries a void-spend flyout
+                               because those rolls are executed directly
+                               rather than through the attack modal. Non-
+                               editors reach all the same actions; the
+                               Phase 1 save shim keeps them client-local. #}
+                            <div x-show="actionMenuOpen === i" x-cloak
+                                 @click.outside="if (actionMenuOpen === i) { actionMenuOpen = null; actionMenuHoverRow = null; }"
+                                 class="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm whitespace-nowrap min-w-[200px]">
+                                {% if viewer_can_edit %}
+                                <template x-if="die.spent">
+                                    <button type="button"
+                                            @click="unspendActionDie(i)"
+                                            data-action="action-die-unspent"
+                                            class="block w-full text-left px-3 py-2 hover:bg-parchment">Mark as unspent</button>
+                                </template>
+                                {% endif %}
+                                {% if school_abilities.get('kakita_phase_zero') %}
+                                {# Kakita Phase-0 dice may only be spent on an
+                                   iaijutsu attack. Everything else (Roll
+                                   Attack, Parry, athletics variants, Mantis
+                                   3rd Dan, etc.) is suppressed for these
+                                   dice by gating the "normal" menu below on
+                                   the same value-zero check. #}
+                                <template x-if="!die.spent && die.value === 0">
+                                    <div>
+                                        <button type="button"
+                                                data-action-die-menu-item="iaijutsu-attack"
+                                                @click="window._diceRoller?.rollForActionDie('knack:iaijutsu:attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                class="block w-full text-left px-3 py-2 hover:bg-parchment">Iaijutsu Attack</button>
+                                        {% if viewer_can_edit %}
+                                        <button type="button"
+                                                @click="spendActionDie(i)"
+                                                data-action="action-die-spent"
+                                                class="block w-full text-left px-3 py-2 hover:bg-parchment border-t border-ink/10 text-ink/60">Mark as spent</button>
+                                        {% endif %}
+                                    </div>
+                                </template>
+                                {% endif %}
+                                <template x-if="!die.spent && !(die.value === 0 && {{ 'true' if school_abilities.get('kakita_phase_zero') else 'false' }})">
+                                    <div>
+                                        {# ── ATTACK-MODAL ACTIONS (no void submenu) ── #}
+                                        <template x-if="!die.athletics_only">
+                                            <button type="button"
+                                                    data-action-die-menu-item="attack"
+                                                    @click="window._diceRoller?.rollForActionDie('attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Roll Attack</button>
+                                        </template>
+                                        {% if school_abilities.get('has_athletics_combat') %}
+                                        <template x-if="die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }}">
+                                            <button type="button"
+                                                    data-action-die-menu-item="athletics-attack"
+                                                    @click="window._diceRoller?.rollForActionDie('athletics:attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Athletics Attack</button>
+                                        </template>
+                                        {% endif %}
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:double_attack']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="double-attack"
+                                                    @click="window._diceRoller?.rollForActionDie('knack:double_attack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Double Attack</button>
+                                        </template>
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:counterattack']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="counterattack"
+                                                    @click="window._diceRoller?.rollForActionDie('knack:counterattack', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Counterattack</button>
+                                        </template>
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:lunge']">
+                                            <button type="button"
+                                                    data-action-die-menu-item="lunge"
+                                                    @click="window._diceRoller?.rollForActionDie('knack:lunge', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">Lunge</button>
+                                        </template>
+                                        {# ── FEINT (roll modal, with void flyout) ── #}
+                                        <template x-if="!die.athletics_only && rollFormulas['knack:feint']">
+                                            <div class="relative"
+                                                 @mouseenter="actionMenuHoverRow = i + '-feint'"
+                                                 @mouseleave="actionMenuHoverRow = null">
+                                                <button type="button"
+                                                        data-action-die-menu-item="feint"
+                                                        @click="window._diceRoller?.rollForActionDie('knack:feint', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                        class="w-full text-left px-3 py-2 hover:bg-parchment flex items-center justify-between gap-2">
+                                                    <span>Feint</span>
+                                                    <span x-show="(window._diceRoller?.computeVoidOptions?.() || []).length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                                </button>
+                                                <div x-show="actionMenuHoverRow === i + '-feint' && (window._diceRoller?.computeVoidOptions?.() || []).length > 0"
+                                                     x-cloak
+                                                     data-action-die-void-submenu="feint"
+                                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[220px] z-50">
+                                                    <template x-for="opt in (window._diceRoller?.computeVoidOptions?.() || [])" :key="'fv'+opt.count">
+                                                        <button type="button"
+                                                                @click="window._diceRoller?.rollForActionDie('knack:feint', i, opt.count, opt); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                                class="block w-full text-left px-3 py-2 text-accent hover:bg-parchment">
+                                                            <span x-text="opt.label"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        {# ── PARRY (roll modal, with void flyout) ── #}
+                                        <template x-if="!die.athletics_only">
+                                            <div class="relative"
+                                                 @mouseenter="actionMenuHoverRow = i + '-parry'"
+                                                 @mouseleave="actionMenuHoverRow = null">
+                                                <button type="button"
+                                                        data-action-die-menu-item="parry"
+                                                        @click="window._diceRoller?.rollForActionDie('parry', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                        class="w-full text-left px-3 py-2 hover:bg-parchment flex items-center justify-between gap-2">
+                                                    <span>Roll Parry</span>
+                                                    <span x-show="(window._diceRoller?.computeVoidOptions?.() || []).length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                                </button>
+                                                <div x-show="actionMenuHoverRow === i + '-parry' && (window._diceRoller?.computeVoidOptions?.() || []).length > 0"
+                                                     x-cloak
+                                                     data-action-die-void-submenu="parry"
+                                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[220px] z-50">
+                                                    <template x-for="opt in (window._diceRoller?.computeVoidOptions?.() || [])" :key="'pv'+opt.count">
+                                                        <button type="button"
+                                                                @click="window._diceRoller?.rollForActionDie('parry', i, opt.count, opt); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                                class="block w-full text-left px-3 py-2 text-accent hover:bg-parchment">
+                                                            <span x-text="opt.label"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        {# ── PREDECLARED PARRY (+5 flat, roll modal, with void flyout) ── #}
+                                        <template x-if="!die.athletics_only">
+                                            <div class="relative"
+                                                 @mouseenter="actionMenuHoverRow = i + '-predeclared'"
+                                                 @mouseleave="actionMenuHoverRow = null">
+                                                <button type="button"
+                                                        data-action-die-menu-item="predeclared-parry"
+                                                        @click="window._diceRoller?.rollForActionDie('parry', i, 0, null, 5, 'predeclared parry'); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                        class="w-full text-left px-3 py-2 hover:bg-parchment flex items-center justify-between gap-2">
+                                                    <span>Predeclared Parry <span class="text-xs text-ink/50">(+5)</span></span>
+                                                    <span x-show="(window._diceRoller?.computeVoidOptions?.() || []).length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                                </button>
+                                                <div x-show="actionMenuHoverRow === i + '-predeclared' && (window._diceRoller?.computeVoidOptions?.() || []).length > 0"
+                                                     x-cloak
+                                                     data-action-die-void-submenu="predeclared-parry"
+                                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                                    <template x-for="opt in (window._diceRoller?.computeVoidOptions?.() || [])" :key="'ppv'+opt.count">
+                                                        <button type="button"
+                                                                @click="window._diceRoller?.rollForActionDie('parry', i, opt.count, opt, 5, 'predeclared parry'); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                                class="block w-full text-left px-3 py-2 text-accent hover:bg-parchment">
+                                                            <span x-text="opt.label + ' + predeclared (+5)'"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        {# ── ATHLETICS PARRY (roll modal, with void flyout) ── #}
+                                        {% if school_abilities.get('has_athletics_combat') %}
+                                        <template x-if="die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }}">
+                                            <div class="relative"
+                                                 @mouseenter="actionMenuHoverRow = i + '-ath-parry'"
+                                                 @mouseleave="actionMenuHoverRow = null">
+                                                <button type="button"
+                                                        data-action-die-menu-item="athletics-parry"
+                                                        @click="window._diceRoller?.rollForActionDie('athletics:parry', i); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                        class="w-full text-left px-3 py-2 hover:bg-parchment flex items-center justify-between gap-2">
+                                                    <span>Athletics Parry</span>
+                                                    <span x-show="(window._diceRoller?.computeVoidOptions?.() || []).length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                                </button>
+                                                <div x-show="actionMenuHoverRow === i + '-ath-parry' && (window._diceRoller?.computeVoidOptions?.() || []).length > 0"
+                                                     x-cloak
+                                                     data-action-die-void-submenu="athletics-parry"
+                                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[220px] z-50">
+                                                    <template x-for="opt in (window._diceRoller?.computeVoidOptions?.() || [])" :key="'apv'+opt.count">
+                                                        <button type="button"
+                                                                @click="window._diceRoller?.rollForActionDie('athletics:parry', i, opt.count, opt); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                                class="block w-full text-left px-3 py-2 text-accent hover:bg-parchment">
+                                                            <span x-text="opt.label"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        {# ── ATHLETICS PREDECLARED PARRY (roll modal, with void flyout) ── #}
+                                        <template x-if="die.athletics_only || {{ 'true' if school_abilities.get('athletics_combat_everywhere') else 'false' }}">
+                                            <div class="relative"
+                                                 @mouseenter="actionMenuHoverRow = i + '-ath-predeclared'"
+                                                 @mouseleave="actionMenuHoverRow = null">
+                                                <button type="button"
+                                                        data-action-die-menu-item="athletics-predeclared-parry"
+                                                        @click="window._diceRoller?.rollForActionDie('athletics:parry', i, 0, null, 5, 'predeclared parry'); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                        class="w-full text-left px-3 py-2 hover:bg-parchment flex items-center justify-between gap-2">
+                                                    <span>Athletics Predeclared Parry <span class="text-xs text-ink/50">(+5)</span></span>
+                                                    <span x-show="(window._diceRoller?.computeVoidOptions?.() || []).length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                                                </button>
+                                                <div x-show="actionMenuHoverRow === i + '-ath-predeclared' && (window._diceRoller?.computeVoidOptions?.() || []).length > 0"
+                                                     x-cloak
+                                                     data-action-die-void-submenu="athletics-predeclared-parry"
+                                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                                    <template x-for="opt in (window._diceRoller?.computeVoidOptions?.() || [])" :key="'appv'+opt.count">
+                                                        <button type="button"
+                                                                @click="window._diceRoller?.rollForActionDie('athletics:parry', i, opt.count, opt, 5, 'predeclared parry'); actionMenuOpen = null; actionMenuHoverRow = null"
+                                                                class="block w-full text-left px-3 py-2 text-accent hover:bg-parchment">
+                                                            <span x-text="opt.label + ' + predeclared (+5)'"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        {% endif %}
+                                        {# ── MANTIS 3RD DAN ── #}
+                                        {% if school_abilities.get('mantis_3rd_dan_offensive') %}
+                                        <template x-if="window._trackingBridge?.currentPosture?.() === 'offensive'">
+                                            <button type="button"
+                                                    data-action-die-menu-item="mantis-3rd-dan-offensive"
+                                                    @click="window._trackingBridge?.spendActionDieForMantis3rdDan(i, 'offensive', {{ school_abilities.get('mantis_3rd_dan_x', 0) }})"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">
+                                                Mantis 3rd Dan (+<span>{{ school_abilities.get('mantis_3rd_dan_x', 0) }}</span> attack &amp; damage)
+                                            </button>
+                                        </template>
+                                        {% endif %}
+                                        {% if school_abilities.get('mantis_3rd_dan_defensive') %}
+                                        <template x-if="window._trackingBridge?.currentPosture?.() === 'defensive'">
+                                            <button type="button"
+                                                    data-action-die-menu-item="mantis-3rd-dan-defensive"
+                                                    @click="window._trackingBridge?.spendActionDieForMantis3rdDan(i, 'defensive', {{ school_abilities.get('mantis_3rd_dan_x', 0) }})"
+                                                    class="block w-full text-left px-3 py-2 hover:bg-parchment">
+                                                Mantis 3rd Dan (+<span>{{ school_abilities.get('mantis_3rd_dan_x', 0) }}</span> parry &amp; wound checks)
+                                            </button>
+                                        </template>
+                                        {% endif %}
+                                        {# ── MANUAL ── #}
+                                        {% if viewer_can_edit %}
+                                        <button type="button"
+                                                @click="spendActionDie(i)"
+                                                data-action="action-die-spent"
+                                                class="block w-full text-left px-3 py-2 hover:bg-parchment border-t border-ink/10 text-ink/60">Mark as spent</button>
+                                        {% endif %}
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                {% if school_abilities.get('kakita_phase_zero') and viewer_can_edit %}
+                {# Kakita Duelist Special Ability: interrupt in Phase 0 for
+                   the cost of your 2 highest remaining action dice. The
+                   resulting attack uses iaijutsu (opens the iaijutsu attack
+                   variant in the attack modal). Per the rules the cost is
+                   paid when the declaration is made, so the spent flags
+                   stay set even if the player closes the attack modal
+                   without rolling. #}
+                <div class="mt-3">
+                    <button type="button"
+                            @click="kakitaPhase0Interrupt()"
+                            :disabled="_kakitaInterruptEligibleCount() < 2"
+                            data-action="kakita-phase-zero-interrupt"
+                            title="Spend your 2 highest unspent action dice to make a Phase 0 iaijutsu interrupt attack. The cost is paid as soon as you click - declaring the interrupt cannot be undone by closing the modal."
+                            class="px-3 py-1.5 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30 font-medium">
+                        Phase 0 Interrupt (-2 highest dice)
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if school_abilities.get('kakita_5th_dan_phase_zero_contest') and viewer_can_edit %}
+            {# Kakita 5th Dan: once per combat round at phase 0, contested
+               iaijutsu against an opponent. Gated on having action dice
+               displayed so the section appears after the player rolls
+               initiative and disappears when the action-dice Clear button
+               wipes them. #}
+            <div x-show="actionDice.length > 0" x-cloak class="mb-6"
+                 data-testid="kakita-5th-dan-section">
+                <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-2">Kakita 5th Dan</h3>
+                <button type="button"
+                        @click="window._diceRoller?.openKakita5thDanModal()"
+                        :disabled="kakita5thDanUsed"
+                        data-action="kakita-5th-dan-contest"
+                        title="Once per combat round at Phase 0, make a contested iaijutsu roll against an opponent. Damage scales +/- 1 die per 5-point gap."
+                        class="px-3 py-1.5 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30 font-medium">
+                    Phase 0 Contested Iaijutsu
+                </button>
+                <div x-show="kakita5thDanUsed" x-cloak class="text-xs text-ink/60 italic mt-1"
+                     data-testid="kakita-5th-used-note">
+                    Used this round. Roll initiative to refresh.
+                </div>
+            </div>
+            {% endif %}
+
+            {# ── Priest 3rd Dan precepts dice pool ──
+               Rolled at the start of combat (pool size = precepts skill rank).
+               Unlike action dice, persists across combat rounds - the Clear
+               button here and the per-adventure reset are the only things
+               that wipe it. The swap UI that lets pool dice replace rolled
+               dice on party members' rolls is added in a later phase. #}
+            {% if school_abilities.get('priest_precepts_pool') %}
+            <div class="mb-6" data-testid="precepts-pool-section">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide">
+                        Combat dice pool
+                        <span class="ml-1 text-xs text-ink/50 font-normal">
+                            ({{ school_abilities.get('priest_precepts_pool_size', 0) }} dice)
+                        </span>
+                    </h3>
+                    {% if viewer_can_edit %}
+                    <button type="button"
+                            x-show="preceptsPool.length > 0"
+                            @click="clearPreceptsPool()"
+                            data-action="clear-precepts-pool"
+                            class="text-xs text-ink/50 hover:text-accent">Clear</button>
+                    {% endif %}
+                </div>
+                <button type="button"
+                        x-show="preceptsPool.length === 0"
+                        @click="rollPreceptsPool()"
+                        data-action="roll-precepts-pool"
+                        :disabled="{{ school_abilities.get('priest_precepts_pool_size', 0) }} === 0"
+                        :title="{{ school_abilities.get('priest_precepts_pool_size', 0) }} === 0
+                            ? 'Raise your Precepts skill to at least 1 to generate a dice pool.'
+                            : 'Generate your combat dice pool.'"
+                        class="btn-primary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                    Generate dice pool
+                </button>
+                <div id="dice-animation-precepts"
+                     x-show="preceptsPool.length === 0"
+                     class="min-h-0 flex flex-wrap gap-2 mt-1"></div>
+                <div x-show="preceptsPool.length > 0"
+                     class="flex flex-wrap gap-2">
+                    <template x-for="(die, i) in preceptsPool" :key="i">
+                        <div class="relative">
+                            <div data-testid="precepts-pool-die"
+                                 :data-die-index="i"
+                                 :data-die-value="die.value">
+                                <svg viewBox="0 0 100 116" xmlns="http://www.w3.org/2000/svg"
+                                     class="die action-die"
+                                     :class="die.value === 10 ? 'two-digit' : ''">
+                                    <path class="die-shape" d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+                                    <text class="die-text" x="50" y="65" text-anchor="middle" dominant-baseline="middle"
+                                          x-text="die.value"></text>
+                                </svg>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if per_adventure %}
+            <h3 class="text-sm font-bold text-ink/70 uppercase tracking-wide mb-3">Per-Adventure Abilities</h3>
+            <div class="space-y-3">
+                {% for ability in per_adventure %}
+                {% if ability.type == 'counter' %}
+                <div class="flex items-center justify-between gap-4">
+                    <span class="text-sm font-medium">{{ ability.name }}</span>
+                    <div class="flex items-center gap-2">
+                        {% if viewer_can_edit %}
+                        {% if ability.per_day %}
+                        <button @click="resetAbility('{{ ability.id }}')"
+                                :disabled="getCount('{{ ability.id }}') <= 0"
+                                data-action="reset-ability-{{ ability.id }}"
+                                title="This pool resets each day"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded disabled:opacity-30">Reset</button>
+                        {% endif %}
+                        {% if ability.id == 'absorb_void' %}
+                        {# Each use of Absorb Void regains 1 spent void point.
+                           Disabled when voidPoints is already at max (no spent
+                           VP to recover) so the button can't generate an
+                           inert use. setCount triggers the persist. #}
+                        <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); setCount('absorb_void', Math.min({{ ability.max }}, getCount('absorb_void') + 1))"
+                                :disabled="getCount('absorb_void') >= {{ ability.max }} || voidPoints >= voidMax"
+                                data-action="use-absorb-void"
+                                title="Use Absorb Void to regain 1 spent void point"
+                                class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                        {% else %}
+                        <button @click="setCount('{{ ability.id }}', Math.min({{ ability.max }}, getCount('{{ ability.id }}') + 1))"
+                                :disabled="getCount('{{ ability.id }}') >= {{ ability.max }}"
+                                class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
+                        {% endif %}
+                        {% endif %}
+                        <span class="text-sm font-bold w-16 text-center"
+                              x-text="({{ ability.max }} - getCount('{{ ability.id }}')) + ' / {{ ability.max }}'"></span>
+                        {% if viewer_can_edit %}
+                        {% if ability.id == 'absorb_void' %}
+                        {# Undo a prior use of Absorb Void: refund the use AND
+                           re-spend the void point that was regained. #}
+                        <button @click="voidPoints = Math.max(0, voidPoints - 1); setCount('absorb_void', Math.max(0, getCount('absorb_void') - 1))"
+                                :disabled="getCount('absorb_void') <= 0"
+                                data-action="undo-absorb-void"
+                                title="Undo: refund this use and re-spend the void point"
+                                class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
+                        {% else %}
+                        <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
+                                :disabled="getCount('{{ ability.id }}') <= 0"
+                                class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% elif ability.type == 'toggle' %}
+                <div class="flex items-center justify-between gap-4">
+                    <span class="text-sm font-medium">{{ ability.name }}</span>
+                    <div class="flex items-center gap-2 text-sm">
+                        <span x-text="getToggle('{{ ability.id }}') ? '{{ ability.name }}: used' : '{{ ability.name }}: unused'"
+                              :class="getToggle('{{ ability.id }}') ? 'text-red-700 font-medium' : 'text-success font-medium'"
+                              class="text-xs"></span>
+                        {% if viewer_can_edit %}
+                        <button x-show="!getToggle('{{ ability.id }}')"
+                                @click="setToggle('{{ ability.id }}', true)"
+                                data-action="toggle-{{ ability.id }}-on"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded">Mark as used</button>
+                        <button x-show="getToggle('{{ ability.id }}')" x-cloak
+                                @click="setToggle('{{ ability.id }}', false)"
+                                data-action="toggle-{{ ability.id }}-off"
+                                class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded">Undo</button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% if viewer_can_edit %}
+            <button @click="showResetModal = true" data-action="open-reset-modal"
+                    :disabled="!hasAnythingSpent()"
+                    class="mt-4 text-sm bg-ink/10 hover:bg-ink/20 px-3 py-1.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                Reset Per-Adventure Abilities
+            </button>
+
+            {# Reset confirmation modal #}
+            <div x-show="showResetModal" x-cloak
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+                 @click.self="showResetModal = false" @keydown.escape="showResetModal = false">
+                <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4">
+                    <h3 class="text-lg font-bold text-accent mb-3">Reset Per-Adventure Abilities</h3>
+                    <p class="text-sm text-ink/70 mb-3">The following will be restored:</p>
+                    <ul class="text-sm space-y-1 mb-4">
+                        <template x-for="item in resetSummary()" :key="item">
+                            <li class="flex items-center gap-2">
+                                <span class="text-accent font-bold">&bull;</span>
+                                <span x-text="item"></span>
+                            </li>
+                        </template>
+                    </ul>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" @click="showResetModal = false"
+                                class="btn-secondary px-4 py-2 rounded text-sm">Cancel</button>
+                        <button type="button" @click="resetAdventure(); showResetModal = false"
+                                data-action="confirm-reset"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                            Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% endif %} {# end: if per_adventure #}
+
+            {# Night's Rest: always available for editors, regardless of
+               per_adventure abilities (button + 2 modals). Whether or not
+               the per-adventure reset button is rendered depends on the
+               character's school, but Night's Rest always has something it
+               could do: clear LW/VP/temp-VP, refresh per-day pools, advance
+               the SW healing cadence, etc. #}
+            {% if viewer_can_edit %}
+            <button @click="openNightsRestModal()" data-action="open-nights-rest-modal"
+                    class="{% if per_adventure %}ml-2{% else %}mt-4{% endif %} text-sm bg-ink/10 hover:bg-ink/20 px-3 py-1.5 rounded transition-colors">
+                Night's Rest
+            </button>
+
+            {# Night's Rest "nothing would change" modal #}
+            <div x-show="showNightsRestNothingModal" x-cloak
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+                 @click.self="showNightsRestNothingModal = false"
+                 @keydown.escape="showNightsRestNothingModal = false">
+                <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4">
+                    <h3 class="text-lg font-bold text-accent mb-3">Night's Rest</h3>
+                    <p class="text-sm text-ink/70 mb-4">
+                        There is nothing to restore right now - light wounds are 0,
+                        void points are full, no per-day abilities have been used,
+                        and there are no serious wounds to heal.
+                    </p>
+                    <div class="flex justify-end">
+                        <button type="button" data-action="close-nights-rest-nothing"
+                                @click="showNightsRestNothingModal = false"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {# Night's Rest confirmation modal #}
+            <div x-show="showNightsRestModal" x-cloak
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+                 @click.self="showNightsRestModal = false"
+                 @keydown.escape="showNightsRestModal = false">
+                <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-md w-full mx-4">
+                    <h3 class="text-lg font-bold text-accent mb-3">Night's Rest</h3>
+                    <p class="text-sm text-ink/70 mb-3">The following will happen:</p>
+                    <ul class="text-sm space-y-1 mb-4" data-testid="nights-rest-effects">
+                        <template x-for="item in displayedNightsRestEffects()" :key="item.key">
+                            <li class="flex items-center gap-2">
+                                <span class="text-accent font-bold">&bull;</span>
+                                <span x-text="item.label"></span>
+                            </li>
+                        </template>
+                    </ul>
+                    <label x-show="nightsRestSwRemaining > 0" x-cloak
+                           class="flex items-start gap-2 text-sm text-ink/80 mb-4 cursor-pointer"
+                           title="Use this if you adjusted serious wounds manually between rests, so the tracked cadence is off by one day.">
+                        <input type="checkbox" x-model="nightsRestAccelerate"
+                               data-action="nights-rest-accelerate"
+                               class="mt-1">
+                        <span>
+                            Treat last night as the alternate type
+                            (accelerate or delay healing by 1 day)
+                        </span>
+                    </label>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" data-action="cancel-nights-rest"
+                                @click="showNightsRestModal = false"
+                                class="btn-secondary px-4 py-2 rounded text-sm">Cancel</button>
+                        <button type="button" data-action="confirm-nights-rest"
+                                @click="confirmNightsRest()"
+                                :disabled="nightsRestConfirming"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-50">
+                            Confirm
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        </div> {# close flex flex-col md:flex-row #}
+    </section>
