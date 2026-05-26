@@ -27,8 +27,6 @@ Phase 7 deliverables:
   - `build_wound_check_formula`
 - New `RollFormula` fields `kitsune_swap_from_ring` and `kitsune_swap_to_ring` record the swap for the UI breakdown. `build_wound_check_formula` returns the same metadata in its dict shape. Empty strings when no swap is in effect.
 
-**Unit tests:** `test_dice.py::TestKitsuneWarden::test_*ring_override*` plus `test_*ring_swap*`, `test_iaijutsu_attack_rejects_ring_override`, and three negative tests asserting the out-of-scope formula builders do NOT expose a `ring_override` param (signature-level guards).
-
 ### Phase 8: Skill-roll dropdown submenu
 
 For each in-scope formula (skills + rollable knacks excluding iaijutsu + attack + parry + wound check), the server attaches a compact `kitsune_swap` sub-dict containing the swap-ring rolled/kept/label values. The post-pass lives in `app/services/dice.py::_attach_kitsune_swaps` and runs at the tail of `build_all_roll_formulas`. The sub-dict is omitted when the swap would be a no-op (the override ring's value equals the natural ring's value), so the UI gate is automatic.
@@ -42,8 +40,6 @@ The skill click menu (`app/templates/character/sheet.html`) gets a new `kitsune-
 
 The roll-result panel renders a `kitsune-swap-result-annotation` div when `formula.kitsune_swap_to_ring` is non-empty: "Kitsune Warden Special Ability: rolled with X instead of Y."
 
-**Clicktests:** 8 cases — visibility on different ring values, hidden when natural ring already matches, hidden when values equal, hidden for iaijutsu, swap formula correctness, annotation visible after swap, annotation hidden without swap, void spend carries through swap.
-
 ### Phase 9: Attack & Wound Check modal checkboxes
 
 The Attack modal and Wound Check modal each get a Kitsune ring-swap checkbox above their probability table. Checkbox visibility gates on `formula.kitsune_swap` being attached, so equal-ring-value cases (e.g. Kitsune with school ring Fire AND attack default ring Fire) automatically hide the option.
@@ -54,15 +50,11 @@ When the user rolls with the checkbox checked, `rollAttack` and `rollWoundCheck`
 
 iaijutsu rolls intentionally bypass the Attack modal (Kitsune lacks the Kakita-specific `knack:iaijutsu:attack` formula), so the iaijutsu exclusion happens upstream in formula construction rather than via UI gating.
 
-**Clicktests:** 7 cases — attack-modal checkbox visible + swaps prob table, attack hidden when ring values equal, iaijutsu knack roll has no swap, WC modal checkbox visible + swaps prob table, WC hidden when school ring is Water (default), attack swap annotation, WC swap annotation.
-
 ### Phase 10: Parry top-level menu entries
 
 The parry roll menu (`rollMenuHasParry` template) gains a `kitsune-parry-swap-block` containing two extra top-level entries — "Roll Parry ({SchoolRing})" and "Predeclared {SchoolRing}-Parry (+5)" — each with its own VP submenu mirroring the existing Air parry entries. Visibility gate: `formulas.parry.kitsune_swap` is attached AND `kitsune_swap.kept > parry.kept` (i.e., the swap is an upgrade). The `kept > kept` check covers both the spec's "school ring isn't Air" requirement (server already excludes equal-value swaps) and the "school ring's value > Air's value" requirement (downgrade swaps don't appear).
 
 The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason, useKitsuneSwap)`. The swap is applied before the +5 stacks. The Roll-swap entry uses the existing `executeRoll(key, voidSpent, option, owSpent, useKitsuneSwap=true)` from Phase 8.
-
-**Clicktests:** 6 cases — block visible when school ring higher than Air, hidden when school ring IS Air, hidden when values equal, swap-Roll formula correctness, predeclared-swap with +5, void-submenu under swap entry.
 
 ### Phase 11: Polish + importer
 
@@ -71,19 +63,6 @@ The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(k
 **Equal-ring suppression sweep:** `_diff_or_none` server-side returns None when the swap's rolled/kept matches the original's, so equal-value swaps are never attached. Confirmed working for the edge case Air=Water=3 with school ring Water.
 
 **Importer integration:** the LLM extraction schema (`app/services/import_schema.py`) gained a `third_dan_skill_choices: List[str]` field with a Kitsune-specific description. `app/services/import_validate.py::_resolve_technique_choices` resolves the source-stated skill names against the SKILLS catalog, dropping iaijutsu (rules-excluded — surfaces a "iaijutsu is not eligible" reason) and unknown names ("unknown skill name" reason). Stub payloads in `app/services/import_llm.py` updated to keep schema consistent. Existing `Fox` / `Fox Warden` / `Kitsune` school-name aliases (Phase 1) continue to resolve to `kitsune_warden`.
-
-**Unit tests:**
-- `test_dice.py::TestKitsuneWarden::test_special_ability_never_offered_on_iaijutsu_paths`
-- `test_dice.py::TestKitsuneWarden::test_special_ability_no_op_when_school_ring_value_equals_default_ring_value`
-- `test_import_validate.py::test_kitsune_warden_third_dan_skill_choices_resolved`
-- `test_import_validate.py::test_kitsune_warden_third_dan_drops_iaijutsu_with_warning`
-- `test_import_validate.py::test_kitsune_warden_third_dan_unknown_skill_dropped`
-- `test_import_validate.py::test_kitsune_warden_third_dan_empty_omits_key`
-
-**Clicktests:**
-- `test_iaijutsu_duel.py::test_kitsune_warden_iaijutsu_duel_offers_no_special_ability_swap`
-- `test_iaijutsu_duel.py::test_kitsune_warden_iaijutsu_strike_has_no_swap_in_roll_menu`
-- `test_school_abilities.py::test_kitsune_skill_submenu_hidden_when_air_equals_water_in_value`
 
 ---
 
@@ -100,15 +79,6 @@ The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(k
 
 **Implementation:** `app/game_data.py` (`SCHOOL_TECHNIQUE_BONUSES["kitsune_warden"]["first_dan_extra_die"] = None`), `app/services/dice.py` (flexible-1st-Dan branches), `app/templates/character/edit.html` (picker UI + helpers).
 
-**Unit tests:** `test_dice.py::TestKitsuneWarden::test_first_dan_*` (14 cases covering single/triple picks, all 8 roll-type branches including iaijutsu knack, no-bonus-below-Dan-1, persistence through technique_choices, empty/missing pick lists).
-
-**Clicktests:**
-- `test_school_abilities.py::test_kitsune_1st_dan_three_picker_dropdowns_visible_at_dan_1`
-- `test_school_abilities.py::test_kitsune_1st_dan_picker_includes_iaijutsu_option`
-- `test_school_abilities.py::test_kitsune_1st_dan_picks_distinct_no_duplicates`
-- `test_school_abilities.py::test_kitsune_1st_dan_pick_extra_die_applied_to_roll`
-- `test_school_abilities.py::test_kitsune_1st_dan_picks_persist_across_reload`
-
 ---
 
 ## 2nd Dan
@@ -122,11 +92,6 @@ The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(k
 - Editor UI: `kitsune_warden` was added to the `FLEXIBLE_2ND_DAN_SCHOOLS` set in `app/templates/character/edit.html`. The existing picker (data-testid `flex-2nd-dan-picker`, select `flex-2nd-dan-select`) renders for Kitsune at Dan >= 2 with no template change. Eligible roll types: skills + rollable knacks + attack/parry/wound_check/damage (initiative is excluded - free raise is meaningless on an initiative roll).
 
 **Implementation:** `app/templates/character/edit.html` (FLEXIBLE_2ND_DAN_SCHOOLS membership), `app/services/dice.py` (existing flexible branches; comments updated to mention Kitsune), `app/game_data.py` (Phase 1 stub).
-
-**Unit tests:** `test_dice.py::TestKitsuneWarden::test_second_dan_*` (6 cases: chosen skill / no choice / wound check / damage / attack / no-bonus-below-Dan-2).
-
-**Clicktests:**
-- `test_school_abilities.py::test_kitsune_2nd_dan_picker_visible_and_saves`
 
 ---
 
@@ -144,16 +109,6 @@ The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(k
 
 **Implementation:** `app/game_data.py` (third_dan dict with applicable_to_choices_count), `app/services/dice.py::_annotate_third_dan` (union with player picks), `app/templates/character/edit.html` (picker UI + KITSUNE_3RD_DAN_SKILL_IDS constant + helpers).
 
-**Unit tests:** `test_dice.py::TestKitsuneWarden::test_third_dan_*` (9 cases: attack always, WC always, chosen skills, unpicked skill, iaijutsu exclusion, pool size, max_per_roll, no-bonus-below-Dan-3, no-picks-only-attack-and-wound-check).
-
-**Clicktests:**
-- `test_school_abilities.py::test_kitsune_3rd_dan_skill_picker_excludes_iaijutsu`
-- `test_school_abilities.py::test_kitsune_3rd_dan_chosen_skill_offers_raise_button`
-- `test_school_abilities.py::test_kitsune_3rd_dan_unpicked_skill_no_raise_button`
-- `test_school_abilities.py::test_kitsune_3rd_dan_attack_always_offers_raise`
-- `test_school_abilities.py::test_kitsune_3rd_dan_wound_check_always_offers_raise`
-- `test_school_abilities.py::test_kitsune_3rd_dan_per_adventure_counter_visible`
-
 ---
 
 ## 4th Dan
@@ -166,14 +121,6 @@ The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(k
 - **10-dice athletics floor:** new flag `kitsune_athletics_10_dice_floor` exposed from `app/routes/pages.py` when `school == "kitsune_warden" && dan >= 4`. Applied in `app/services/dice.py::build_athletics_formula` and `build_athletics_combat_formula` — when the formula's rolled count is below 10, set rolled = 10. **Rolled count only; kept stays at the ring value** (Ring 2 -> 4k2 becomes 10k2, not 10k10). Mirrors Ikoma Bard's `ikoma_10_dice_floor` pattern. The athletics-combat formulas (athletics-attack / athletics-parry) also get the floor as defense in depth, but the View Sheet does not surface those options to Kitsune Warden by default (no athletics in school knacks; existing baseline gates athletics-attack/parry on `athletics_combat_everywhere` which is Togashi-only).
 
 **Implementation:** `app/services/xp.py` (existing), `app/templates/character/edit.html` (existing 4th Dan ring logic), `app/routes/pages.py` (new `kitsune_athletics_10_dice_floor` flag), `app/services/dice.py` (10-dice floor in both athletics formulas).
-
-**Unit tests:** `test_dice.py::TestKitsuneWarden::test_4th_dan_*` (8 cases: ring xp discount, athletics floor raises rolled to 10, doesn't lower above 10, doesn't change kept, applies to athletics-attack, applies to athletics-parry, no floor below Dan 4, floor only for Kitsune).
-
-**Clicktests:**
-- `test_school_abilities.py::test_kitsune_4th_dan_athletics_roll_shows_10_dice_floor`
-- `test_school_abilities.py::test_kitsune_below_4th_dan_athletics_uses_normal_formula`
-- `test_school_abilities.py::test_kitsune_4th_dan_athletics_attack_hidden_without_athletics_knack`
-- `test_school_abilities.py::test_kitsune_4th_dan_school_ring_auto_raise_for_water_choice`
 
 ---
 

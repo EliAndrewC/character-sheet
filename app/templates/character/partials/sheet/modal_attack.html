@@ -785,7 +785,7 @@
                                class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
                             <input type="checkbox" x-model="atkOtakuTradeDice" class="rounded text-accent">
                             <span>Trade 10 damage dice for 1 automatic serious wound (5th Dan)
-                                <span class="text-xs text-ink/50">(rolled dice: <span x-text="atkCurrentDamage()?.rawRolled"></span> becomes <span x-text="Math.max(2, atkCurrentDamage()?.rawRolled - 10)"></span>)</span>
+                                <span class="text-xs text-ink/50">(rolled dice: <span x-text="atkCurrentDamage()?.rawRolled"></span> becomes <span x-text="window.L7RRollMath.tradeDiceFloor(atkCurrentDamage()?.rawRolled, 10)"></span>)</span>
                             </span>
                         </label>
 

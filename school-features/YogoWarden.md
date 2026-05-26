@@ -12,17 +12,13 @@
 > Gain a temporary void point every time you take a serious wound.
 
 **Status:** Fully implemented.
-- Temporary Void Points are tracked for Yogo Warden (school is in `SCHOOLS_WITH_TEMP_VOID` via two mechanisms: the "temporary void" text in the special ability at `app/game_data.py:2382`, and the feint knack check at `app/game_data.py:2385`).
+- Temporary Void Points are tracked for Yogo Warden (school is in `SCHOOLS_WITH_TEMP_VOID` via two mechanisms: the "temporary void" text in the special ability at `app/game_data.py`, and the feint knack check at `app/game_data.py`).
 - The Temp Void counter appears on the View Sheet page with +/- buttons.
 - Auto-grant of temp VP on serious wound is implemented.
   - Server: `app/routes/pages.py` passes `yogo_temp_vp_on_sw: true` in school_abilities.
   - Client: `app/templates/character/sheet.html` auto-increments temp VP in `applyWoundCheckFailure()` and `wcTakeSeriousAndReset()` when serious wounds are gained.
 
-**Implementation:** `app/game_data.py:1088`, `app/game_data.py:2382-2386` (SCHOOLS_WITH_TEMP_VOID membership), `app/routes/pages.py` (yogo_temp_vp_on_sw flag), `app/templates/character/sheet.html` (Temp Void counter, auto-grant in wound check functions).
-
-**Unit tests:** None specific to the auto-grant mechanic.
-**Clicktests:**
-- `test_school_abilities.py::test_yogo_temp_vp_on_sw`
+**Implementation:** `app/game_data.py`, `app/game_data.py` (SCHOOLS_WITH_TEMP_VOID membership), `app/routes/pages.py` (yogo_temp_vp_on_sw flag), `app/templates/character/sheet.html` (Temp Void counter, auto-grant in wound check functions).
 
 ---
 
@@ -44,11 +40,6 @@
 - Wound check extra die: applied in `build_wound_check_formula()`.
 - Damage extra die: implemented via school-specific code in `app/services/dice.py` damage section.
 
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_yogo_warden_1st_dan_damage_extra_die` - verifies +1k0 on damage rolls
-**Clicktests:**
-- `test_school_abilities.py::test_yogo_1st_dan_formula_extra_die`
-
 **Questions (ANSWERED):**
 - Yes, the "damage" extra die adds +1k0 (one extra rolled die) to all damage rolls. This needs school-specific handling in the damage formula builder since the generic `_apply_school_technique_bonus()` is not called for damage rolls. Same applies to Kuni Witch Hunter.
 
@@ -62,10 +53,6 @@
 - `second_dan_free_raise: "wound_check"`
 - Applied as +5 flat bonus on wound check rolls via `_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
-**Unit tests:** None directly testing the Yogo Warden 2nd Dan free raise on wound checks.
-**Clicktests:**
-- `test_school_abilities.py::test_yogo_2nd_dan_wound_check_bonus`
-
 ---
 
 ## 3rd Dan
@@ -75,9 +62,6 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `yogo_vp_heals_lw: true` and `yogo_vp_heal_amount: 2*attack_skill` in school_abilities.
 - Client: `app/templates/character/sheet.html` hooks into `deductVoidPoints()` to automatically reduce light wounds by 2*attack_skill per VP spent.
-
-**Clicktests:**
-- `test_school_abilities.py::test_yogo_3rd_dan_vp_heals_lw`
 
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
@@ -95,15 +79,6 @@
 - VP for extra free raise on wound checks:
   - Server: `app/routes/pages.py` passes `wc_vp_free_raise: true` in void_spend_config when yogo_warden and dan >= 4 (same pattern as Akodo 4th Dan).
   - Client: `app/templates/character/sheet.html` applies +5 per VP flat bonus on wound check VP spending path.
-
-**Unit tests:**
-- `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
-- `test_xp.py` - covers 4th Dan XP discount.
-
-**Clicktests:**
-- `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
-- `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
-- `test_school_abilities.py::test_yogo_4th_dan_wc_vp_raise`
 
 ---
 

@@ -60,7 +60,7 @@
                         this.modalError = 'Amount must be a positive number (tenths of a koku ok, e.g. 1.6).';
                         return;
                     }
-                    const amount = Math.floor(raw * 10 + 0.5) / 10;
+                    const amount = window.L7RRollMath.roundToTenths(raw);
                     if (amount <= 0) {
                         this.modalError = 'Amount rounds to zero - please enter at least 0.1.';
                         return;

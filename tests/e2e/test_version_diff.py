@@ -193,6 +193,7 @@ def test_show_changes_collapses_on_second_click(page, live_server_url):
     btn = page.locator('[data-action="show-changes"]')
     btn.click()
     page.wait_for_selector('[data-version-diff]', timeout=3000)
+    page.locator('[data-version-diff]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-version-diff]').is_visible()
 
     btn.click()

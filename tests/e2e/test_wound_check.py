@@ -74,6 +74,7 @@ def test_wound_check_modal_opens(page, live_server_url):
     page.wait_for_timeout(300)
     # Modal should be visible with the probability table
     modal = page.locator('[data-modal="wound-check"]')
+    modal.locator('h3:text("Wound Check")').wait_for(state="visible", timeout=5000)
     assert modal.locator('h3:text("Wound Check")').is_visible()
     # Table should have at least the "None" (0 void) row
     assert modal.locator('td:text("None")').is_visible()
@@ -213,6 +214,7 @@ def test_iaijutsu_strike_wound_check_available(page, live_server_url):
     _create_character_with_wounds(page, live_server_url, "WCStrike", light_wounds=10)
     page.locator('[data-action="roll-wound-check"]').click()
     page.wait_for_timeout(300)
+    page.locator('[data-action="roll-wound-check-strike"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action="roll-wound-check-strike"]').is_visible()
 
 

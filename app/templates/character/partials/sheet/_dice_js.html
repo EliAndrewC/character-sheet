@@ -26,7 +26,7 @@
                 const t = window._trackingBridge;
                 const sw = (t && typeof t.seriousWounds === 'number')
                     ? t.seriousWounds : {{ character.current_serious_wounds or 0 }};
-                return sw >= this._ffEarthRing;
+                return window.L7RRollMath.isImpaired(sw, this._ffEarthRing);
             },
 
             openModal() {
@@ -363,17 +363,10 @@
                 this.baseTotal = newDiceOnly + disc;
                 const lw = this.wcLightWounds;
                 this.wcRollTotal = this.baseTotal;
-                if (this.wcRollTotal >= lw) {
-                    this.wcPassed = true;
-                    this.wcSeriousWounds = 0;
-                    this.wcMargin = this.wcRollTotal - lw;
-                } else {
-                    this.wcPassed = false;
-                    const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
-                        ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = Math.max(0, effectiveLw - this.wcRollTotal);
-                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
-                }
+                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, lw, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
+                this.wcPassed = wc.passed;
+                this.wcMargin = wc.margin;
+                this.wcSeriousWounds = wc.seriousWounds;
                 this.wcResultApplied = false;
                 this.wcPhase = 'result';
                 this.luckyOriginalWasHigher = this.luckyPrevBaseTotal > newDiceOnly;
@@ -516,7 +509,7 @@
             // Iaijutsu duel
             duelOpen: false,
             duelPhase: 'setup',
-            duelPlayerTN: Math.floor(({{ character.starting_xp }} + {{ character.earned_xp }}) / 10),
+            duelPlayerTN: window.L7RRollMath.duelTn({{ character.starting_xp }} + {{ character.earned_xp }}),
             duelOpponentXP: '',
             duelOpponentTN: 0,
             duelContestedDone: false,
@@ -897,7 +890,7 @@
                 // Update reroll_tens on all formulas when impaired state changes
                 window.addEventListener('wound-changed', (e) => {
                     const sw = e.detail?.serious ?? 0;
-                    const nowImpaired = sw >= this._earthRing;
+                    const nowImpaired = window.L7RRollMath.isImpaired(sw, this._earthRing);
                     for (const key of Object.keys(this.formulas)) {
                         const f = this.formulas[key];
                         if (key === 'wound_check') {
@@ -1354,14 +1347,8 @@
                 // Update formula dimensions + apply 10k10 caps
                 this.formula.rolled += 1;
                 this.formula.kept += 1;
-                if (this.formula.rolled > 10) {
-                    this.formula.kept += this.formula.rolled - 10;
-                    this.formula.rolled = 10;
-                }
-                if (this.formula.kept > 10) {
-                    this.formula.flat += 2 * (this.formula.kept - 10);
-                    this.formula.kept = 10;
-                }
+                const _cap = window.L7RRollMath.applyDiceCap(this.formula.rolled, this.formula.kept, this.formula.flat);
+                this.formula.rolled = _cap.rolled; this.formula.kept = _cap.kept; this.formula.flat = _cap.flat;
                 this.formula.void_spent = (this.formula.void_spent || 0) + 1;
                 this.formula.merchant_vp_spent = (this.formula.merchant_vp_spent || 0) + 1;
                 this.deductVoidPoints(opt);
@@ -1583,7 +1570,7 @@
                 if (!Number.isFinite(phase) || phase <= 0) return 0;
                 const dieVal = this.shinjoParryDieValue;
                 if (dieVal == null) return 0;
-                return 2 * Math.max(0, phase - dieVal);
+                return window.L7RRollMath.shinjoPhaseBonus(phase, dieVal);
             },
 
             _applyShinjoParryBonus() {
@@ -1669,14 +1656,9 @@
                     f.rolled += voidSpent;
                     f.kept += voidSpent;
                     f.void_spent = voidSpent;
-                    let overflowBonus = 0;
-                    if (f.rolled > 10) { f.kept += f.rolled - 10; f.rolled = 10; }
-                    if (f.kept > 10) {
-                        const overflow = f.kept - 10;
-                        overflowBonus = 2 * overflow;
-                        f.flat += overflowBonus;
-                        f.kept = 10;
-                    }
+                    const _cap = window.L7RRollMath.applyDiceCap(f.rolled, f.kept, f.flat);
+                    f.rolled = _cap.rolled; f.kept = _cap.kept; f.flat = _cap.flat;
+                    let overflowBonus = _cap.overflowFlat;
                     f.void_overflow_bonus = overflowBonus;
                     // Mirumoto 5th Dan: +10 per VP on combat rolls
                     const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
@@ -1757,7 +1739,7 @@
                     // so 10s reroll - unless the character is also Impaired.
                     if (applied > 0 && f.no_reroll_reason === 'unskilled') {
                         const sw = (t && typeof t.seriousWounds === 'number') ? t.seriousWounds : 0;
-                        const impaired = sw >= (this._earthRing || 0);
+                        const impaired = window.L7RRollMath.isImpaired(sw, this._earthRing || 0);
                         if (impaired) {
                             f.no_reroll_reason = 'impaired';
                         } else {
@@ -1784,14 +1766,9 @@
 
                 // Apply 10k10 caps client-side (after both OW and VP additions)
                 if (voidSpent > 0 || owSpent > 0) {
-                    let overflowBonus = 0;
-                    if (f.rolled > 10) { f.kept += f.rolled - 10; f.rolled = 10; }
-                    if (f.kept > 10) {
-                        const overflow = f.kept - 10;
-                        overflowBonus = 2 * overflow;
-                        f.flat += overflowBonus;
-                        f.kept = 10;
-                    }
+                    const _cap = window.L7RRollMath.applyDiceCap(f.rolled, f.kept, f.flat);
+                    f.rolled = _cap.rolled; f.kept = _cap.kept; f.flat = _cap.flat;
+                    let overflowBonus = _cap.overflowFlat;
                     f.void_overflow_bonus = overflowBonus;
                 }
 
@@ -1827,7 +1804,7 @@
                 const yogoHeal = this.schoolAbilities.yogo_vp_heal_amount || 0;
                 if (yogoHeal > 0) {
                     const totalSpent = (option.fromTemp || 0) + nonTempSpent;
-                    t.lightWounds = Math.max(0, t.lightWounds - totalSpent * yogoHeal);
+                    t.lightWounds = window.L7RRollMath.yogoHealLightWounds(t.lightWounds, totalSpent, yogoHeal);
                     window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
                 }
                 // Matsu 3rd Dan: bank 3*attack per VP for future wound check bonus
@@ -2612,7 +2589,7 @@
                 const sw = (t && typeof t.seriousWounds === 'number')
                     ? t.seriousWounds
                     : {{ character.current_serious_wounds or 0 }};
-                return sw >= {{ ring_map['Earth'] }};
+                return window.L7RRollMath.isImpaired(sw, {{ ring_map['Earth'] }});
             },
 
             _currentTn() {
@@ -2988,18 +2965,10 @@
 
             _wcUpdateMargin() {
                 // Recompute wound check pass/fail + margin after flat adjustments.
-                const lw = this.wcLightWounds;
-                if (this.wcRollTotal >= lw) {
-                    this.wcPassed = true;
-                    this.wcSeriousWounds = 0;
-                    this.wcMargin = this.wcRollTotal - lw;
-                } else {
-                    this.wcPassed = false;
-                    const effLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
-                        ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = Math.max(0, effLw - this.wcRollTotal);
-                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
-                }
+                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, this.wcLightWounds, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
+                this.wcPassed = wc.passed;
+                this.wcMargin = wc.margin;
+                this.wcSeriousWounds = wc.seriousWounds;
             },
 
             // --- Priest 3rd Dan precepts pool display ---
@@ -3365,7 +3334,7 @@
 
             openDuelModal() {
                 this.duelPhase = 'setup';
-                this.duelPlayerTN = Math.floor(({{ character.starting_xp }} + {{ character.earned_xp }}) / 10);
+                this.duelPlayerTN = window.L7RRollMath.duelTn({{ character.starting_xp }} + {{ character.earned_xp }});
                 this.duelContestedDone = false;
                 this.duelPlayerCanFocus = true;
                 this.duelOpponentCanFocus = true;
@@ -3384,7 +3353,7 @@
             },
 
             duelStartContested() {
-                this.duelOpponentTN = Math.floor(parseInt(this.duelOpponentXP || '0') / 10);
+                this.duelOpponentTN = window.L7RRollMath.duelTn(parseInt(this.duelOpponentXP || '0'));
                 this.duelPhase = 'contested';
             },
 
@@ -3398,8 +3367,8 @@
                     f.rolled += voidCount;
                     f.kept += voidCount;
                     f.void_spent = voidCount;
-                    if (f.rolled > 10) { f.kept += f.rolled - 10; f.rolled = 10; }
-                    if (f.kept > 10) { f.flat += 2 * (f.kept - 10); f.kept = 10; }
+                    const _cap = window.L7RRollMath.applyDiceCap(f.rolled, f.kept, f.flat);
+                    f.rolled = _cap.rolled; f.kept = _cap.kept; f.flat = _cap.flat;
                     // Mirumoto 5th Dan: +10 per VP on combat rolls
                     const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
                     if (combatBonus > 0) {
@@ -3486,12 +3455,12 @@
                 const ringName = f.damage_ring_name || 'Fire';
                 const wR = this.duelWeaponRolled;
                 const wK = this.duelWeaponKept;
-                const extraDice = Math.max(0, this.duelStrikeExcess);
+                const extraDice = window.L7RRollMath.clampNonNegative(this.duelStrikeExcess);
                 let rolled = wR + ringVal + (f.damage_extra_rolled || 0) + extraDice;
                 let kept = wK + (f.damage_extra_kept || 0);
                 let flat = f.damage_flat_bonus || 0;
-                if (rolled > 10) { kept += rolled - 10; rolled = 10; }
-                if (kept > 10) { flat += 2 * (kept - 10); kept = 10; }
+                const _cap = window.L7RRollMath.applyDiceCap(rolled, kept, flat);
+                rolled = _cap.rolled; kept = _cap.kept; flat = _cap.flat;
                 const rk = `${rolled},${kept}`;
                 const avg = Math.round((this.atkDamageAvgs[rk] || 0) + flat);
                 return { rolled, kept, flat, avg, extraDice, ringVal, ringName };
@@ -3569,8 +3538,8 @@
                 this.duelOpponentCanFocus = true;
                 this.duelVoidSelected = 0;
                 // Reset TNs to base values (XP / 10) - focus bonuses don't carry over
-                this.duelPlayerTN = Math.floor(({{ character.starting_xp }} + {{ character.earned_xp }}) / 10);
-                this.duelOpponentTN = Math.floor(parseInt(this.duelOpponentXP || '0') / 10);
+                this.duelPlayerTN = window.L7RRollMath.duelTn({{ character.starting_xp }} + {{ character.earned_xp }});
+                this.duelOpponentTN = window.L7RRollMath.duelTn(parseInt(this.duelOpponentXP || '0'));
                 this.duelPhase = 'contested';
             },
 
@@ -3642,7 +3611,7 @@
                     this.atkTN = f.is_athletics_attack ? 25 : 20;
                 }
                 const tnStep = f.is_athletics_attack ? 10 : 5;
-                this.atkParrySkill = Math.max(1, Math.floor((this.atkTN - 5) / tnStep));
+                this.atkParrySkill = window.L7RRollMath.parrySkillFromTn(this.atkTN, tnStep);
                 this.atkShowCustomTN = false;
                 this.atkModalOpen = true;
             },
@@ -3706,7 +3675,7 @@
                 // contested skill. Clamps at 0 (no penalty if lower).
                 const ours = parseInt(this.k5OwnIaijutsuRank, 10) || 0;
                 const theirs = parseInt(this.k5OpponentSkillRank, 10) || 0;
-                return Math.max(0, ours - theirs) * 5;
+                return window.L7RRollMath.contestSkillRaiseBonus(ours, theirs);
             },
 
             _kakita5thPreRollBonus() {
@@ -3722,7 +3691,7 @@
                 if (x > 0) {
                     const def = parseInt(this.k5DefenderPhase, 10);
                     if (Number.isFinite(def)) {
-                        bonus += x * Math.max(0, def - 0);
+                        bonus += window.L7RRollMath.kakitaDefenderPhaseBonus(x, def, 0);
                     }
                 }
                 bonus += this._kakita5thContestSkillBonus();
@@ -3754,7 +3723,7 @@
                 const x = this.schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0;
                 const def = parseInt(this.k5DefenderPhase, 10);
                 this.k5KakitaBonus = x > 0 && Number.isFinite(def)
-                    ? x * Math.max(0, def - 0) : 0;
+                    ? window.L7RRollMath.kakitaDefenderPhaseBonus(x, def, 0) : 0;
                 flat += this.k5KakitaBonus;
                 // Contested-roll skill comparison: +5 per rank Kakita's own
                 // iaijutsu exceeds the opponent's picked skill.
@@ -3796,8 +3765,7 @@
                 this.k5DamageFlat = f.damage_flat_bonus || 0;
                 // Contest scaling: +/- floor(diff / 5) rolled dice.
                 const diff = this.k5RollTotal - (parseInt(this.k5OpponentRoll, 10) || 0);
-                this.k5DamageDiceAdjust = diff >= 0
-                    ? Math.floor(diff / 5) : -Math.floor((-diff) / 5);
+                this.k5DamageDiceAdjust = window.L7RRollMath.damageDiceContestAdjust(diff);
                 this.k5DamageRolled = Math.max(0,
                     weaponRolled + extraRolled + ringVal + this.k5DamageDiceAdjust);
                 this.k5DamageKept = Math.max(0, weaponKept + extraKept);
@@ -3891,7 +3859,7 @@
 
             atkEffectiveTN() {
                 // Double attack TN is raised by 20
-                return this.atkIsDoubleAttack() ? this.atkTN + 20 : this.atkTN;
+                return window.L7RRollMath.attackEffectiveTn(this.atkTN, this.atkIsDoubleAttack());
             },
 
             // Mantis Wave-Treader posture overlay helpers. Read live state
@@ -3965,7 +3933,7 @@
 
             _dojiAtkBonus() {
                 return this.atkFormula?.doji_5th_dan_always
-                    ? Math.max(0, Math.floor((this.atkTN - 10) / 5)) : 0;
+                    ? window.L7RRollMath.bonusPer5Over10(this.atkTN) : 0;
             },
 
             // Attack Specialization bonus: +10 per checked attack spec.
@@ -3977,7 +3945,7 @@
                 for (let i = 0; i < (this.atkSpecApplies || []).length; i++) {
                     if (this.atkSpecApplies[i]) count++;
                 }
-                return 10 * count;
+                return window.L7RRollMath.attackSpecBonus(count);
             },
 
             // Doji Artisan 4th Dan: +phase when attacking a target that has
@@ -4018,7 +3986,7 @@
                 if (!die) return 0;
                 const phase = parseInt(this.atkShinjoPhase, 10);
                 if (!Number.isFinite(phase) || phase <= 0) return 0;
-                return Math.max(0, phase - (die.value || 0));
+                return window.L7RRollMath.shinjoPhasesHeld(phase, die.value || 0);
             },
             _shinjoPhaseBonus() {
                 if (!this.atkFormula?.shinjo_phase_bonus_attack) return 0;
@@ -4058,8 +4026,7 @@
                 // 0 is the "not yet picked" sentinel; no bonus until the
                 // player chooses a real phase.
                 if (!Number.isFinite(defender) || defender === 0) return 0;
-                const phases = Math.max(0, defender - attacker);
-                return x * phases;
+                return window.L7RRollMath.kakitaDefenderPhaseBonus(x, defender, attacker);
             },
 
             _kakita3rdDanNeedsPhase() {
@@ -4188,8 +4155,7 @@
                 const avg = this.atkAvgAttackRoll(voidCount);
                 // For double attack, extra dice are based on excess over BASE TN (not +20)
                 const excess = avg - this.atkTN;
-                if (excess <= 0) return 0;
-                return Math.floor(excess / 5);
+                return window.L7RRollMath.excessToExtraDice(excess);
             },
 
             shosuroAvgFor(rolled, rerollTens) {
@@ -4312,7 +4278,7 @@
 
                 // Otaku 5th Dan: trade dice for auto serious wound
                 if (tradeDice > 0) {
-                    rolled = Math.max(2, rolled - tradeDice);
+                    rolled = window.L7RRollMath.tradeDiceFloor(rolled, tradeDice);
                 }
 
                 // Apply 10k10 caps. Excess rolled dice become extra kept
@@ -4320,12 +4286,11 @@
                 // that overflow as a dedicated parts entry so the damage
                 // breakdown shows where the +2N came from (without this,
                 // the total silently included +2N that no bullet explained).
-                let overflowFlat = 0;
-                if (rolled > 10) { kept += rolled - 10; rolled = 10; }
-                if (kept > 10) {
-                    const extras = kept - 10;
-                    overflowFlat = 2 * extras;
-                    kept = 10;
+                const _cap = window.L7RRollMath.applyDiceCap(rolled, kept, flat);
+                rolled = _cap.rolled; kept = _cap.kept;
+                const overflowFlat = _cap.overflowFlat;
+                if (overflowFlat > 0) {
+                    const extras = overflowFlat / 2;
                     const noun = extras === 1 ? 'die' : 'dice';
                     parts.push(
                         `+${overflowFlat} bonus for rolling ${extras} ${noun} past 10k10`
@@ -4455,7 +4420,7 @@
 
                 // Doji Artisan 5th Dan: auto-apply bonus from TN
                 if (formula.doji_5th_dan_always) {
-                    const dojiBonus = Math.max(0, Math.floor((this.atkTN - 10) / 5));
+                    const dojiBonus = window.L7RRollMath.bonusPer5Over10(this.atkTN);
                     if (dojiBonus > 0) {
                         formula.flat += dojiBonus;
                         formula.doji_5th_dan_bonus = dojiBonus;
@@ -4575,13 +4540,9 @@
                     formula.rolled += voidCount;
                     formula.kept += voidCount;
                     formula.void_spent = voidCount;
-                    if (formula.rolled > 10) { formula.kept += formula.rolled - 10; formula.rolled = 10; }
-                    if (formula.kept > 10) {
-                        const overflow = formula.kept - 10;
-                        formula.flat += 2 * overflow;
-                        formula.void_overflow_bonus = 2 * overflow;
-                        formula.kept = 10;
-                    }
+                    const _cap = window.L7RRollMath.applyDiceCap(formula.rolled, formula.kept, formula.flat);
+                    formula.rolled = _cap.rolled; formula.kept = _cap.kept; formula.flat = _cap.flat;
+                    if (_cap.overflowFlat > 0) formula.void_overflow_bonus = _cap.overflowFlat;
                     // Mirumoto 5th Dan: +10 per VP on combat rolls
                     const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
                     if (combatBonus > 0) {
@@ -4648,7 +4609,7 @@
                 // For double attack, extra damage dice based on excess over BASE TN
                 const excessForDamage = this.atkIsDoubleAttack()
                     ? this.atkRollTotal - this.atkTN : excess;
-                this.atkExtraDice = this.atkHit && !this.atkNearMiss ? Math.max(0, Math.floor(excessForDamage / 5)) : 0;
+                this.atkExtraDice = this.atkHit && !this.atkNearMiss ? window.L7RRollMath.excessToExtraDice(excessForDamage) : 0;
 
                 // Hida 5th Dan: bank counterattack excess for wound check bonus
                 if (this.schoolAbilities.hida_counterattack_wc_bonus
@@ -4663,15 +4624,13 @@
                 if (this.schoolAbilities.hida_reroll) {
                     const isCounter = formula.attack_variant === 'counterattack';
                     const isImpaired = !formula.reroll_tens;
-                    let max = isCounter ? 2 * this.schoolAbilities.hida_reroll_x : this.schoolAbilities.hida_reroll_x;
-                    if (isImpaired) max = Math.ceil(max / 2);
-                    this.hidaRerollMax = max;
+                    this.hidaRerollMax = window.L7RRollMath.hidaRerollMax(this.schoolAbilities.hida_reroll_x, isCounter, isImpaired);
                     // Pre-select lowest dice (any, not just kept) with value <= 7
                     const allDiceIdx = this.finalDice.map((d, i) => ({ ...d, idx: i }));
                     allDiceIdx.sort((a, b) => a.value - b.value);
                     this.hidaRerollSelections = allDiceIdx
                         .filter(d => d.value <= 7)
-                        .slice(0, max)
+                        .slice(0, this.hidaRerollMax)
                         .map(d => d.idx);
                     this.hidaRerollPhase = 'selecting';
                 }
@@ -4752,7 +4711,7 @@
                 this.atkExcess = excess;
                 const excessForDamage = this.atkIsDoubleAttack()
                     ? this.atkRollTotal - this.atkTN : excess;
-                this.atkExtraDice = this.atkHit && !this.atkNearMiss ? Math.max(0, Math.floor(excessForDamage / 5)) : 0;
+                this.atkExtraDice = this.atkHit && !this.atkNearMiss ? window.L7RRollMath.excessToExtraDice(excessForDamage) : 0;
             },
 
             atkCurrentDamage() {
@@ -4887,7 +4846,7 @@
                 const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
                 const wcVpRaise = this.voidSpendConfig.wc_vp_free_raise ? voidCount * 5 : 0;
                 const dojiBonus = this.formulas['wound_check']?.doji_5th_dan_wc
-                    ? Math.max(0, Math.floor((this.wcLightWounds - 10) / 5)) : 0;
+                    ? window.L7RRollMath.bonusPer5Over10(this.wcLightWounds) : 0;
                 const shosuroFlat = this.wcIsStrike
                     ? (p.shosuro_flats_no_reroll?.[key] || 0)
                     : (p.shosuro_flats?.[key] || 0);
@@ -4907,7 +4866,7 @@
                 const effectiveTarget = Math.max(0, effectiveLw - flat);
 
                 const rows = [];
-                let maxSW = Math.floor(effectiveLw / 10) + 1;
+                let maxSW = window.L7RRollMath.woundCheckMaxSeriousWounds(effectiveLw);
                 for (let sw = 1; sw <= maxSW; sw++) {
                     // For SW calculation: a roll that fails the real check but exceeds the
                     // effective target gives 1 SW. Rolls below effective target give more SW.
@@ -4993,13 +4952,9 @@
                     formula.rolled += voidCount;
                     formula.kept += voidCount;
                     formula.void_spent = voidCount;
-                    if (formula.rolled > 10) { formula.kept += formula.rolled - 10; formula.rolled = 10; }
-                    if (formula.kept > 10) {
-                        const overflow = formula.kept - 10;
-                        formula.flat += 2 * overflow;
-                        formula.void_overflow_bonus = 2 * overflow;
-                        formula.kept = 10;
-                    }
+                    const _cap = window.L7RRollMath.applyDiceCap(formula.rolled, formula.kept, formula.flat);
+                    formula.rolled = _cap.rolled; formula.kept = _cap.kept; formula.flat = _cap.flat;
+                    if (_cap.overflowFlat > 0) formula.void_overflow_bonus = _cap.overflowFlat;
                     // Mirumoto 5th Dan: +10 per VP on combat rolls (wound checks are combat rolls)
                     const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
                     if (combatBonus > 0) {
@@ -5026,7 +4981,7 @@
 
                 // Doji Artisan 5th Dan: auto-apply bonus from light wounds
                 if (formula.doji_5th_dan_wc) {
-                    const dojiBonus = Math.max(0, Math.floor((this.wcLightWounds - 10) / 5));
+                    const dojiBonus = window.L7RRollMath.bonusPer5Over10(this.wcLightWounds);
                     if (dojiBonus > 0) {
                         formula.flat += dojiBonus;
                         formula.doji_5th_dan_bonus = dojiBonus;
@@ -5093,17 +5048,11 @@
                 this.wcRollTotal = effectiveTotal;
                 this.wcRaisesSpent = 0;
 
-                if (effectiveTotal >= lw) {
-                    this.wcPassed = true;
-                    this.wcSeriousWounds = 0;
-                    this.wcMargin = effectiveTotal - lw;
-                } else {
-                    this.wcPassed = false;
-                    // Bayushi 5th Dan: calculate serious wounds as if half light wounds
-                    const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
-                        ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = Math.max(0, effectiveLw - effectiveTotal);
-                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
+                const wc = window.L7RRollMath.woundCheckResult(effectiveTotal, lw, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
+                this.wcPassed = wc.passed;
+                this.wcMargin = wc.margin;
+                this.wcSeriousWounds = wc.seriousWounds;
+                if (!wc.passed) {
                     this.wcBayushiHalfLw = !!this.formulas['wound_check']?.bayushi_5th_dan_half_lw;
                 }
 
@@ -5129,16 +5078,10 @@
                 this.wcRaisesSpent++;
                 this.baseTotal += 5;
                 this.wcRollTotal += 5;
-                const lw = this.wcLightWounds;
-                if (this.wcRollTotal >= lw) {
-                    this.wcPassed = true;
-                    this.wcSeriousWounds = 0;
-                    this.wcMargin = this.wcRollTotal - lw;
-                } else {
-                    const eLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = Math.max(0, eLw - this.wcRollTotal);
-                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
-                }
+                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, this.wcLightWounds, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
+                this.wcPassed = wc.passed;
+                this.wcMargin = wc.margin;
+                this.wcSeriousWounds = wc.seriousWounds;
                 // Deduct the raise from tracking
                 if (t?.setCount) t.setCount('adventure_raises', raisesUsed + 1);
             },
@@ -5150,17 +5093,10 @@
                 this.wcMatsuBonusApplied += b.amount;
                 this.baseTotal += b.amount;
                 this.wcRollTotal += b.amount;
-                const lw = this.wcLightWounds;
-                if (this.wcRollTotal >= lw) {
-                    this.wcPassed = true;
-                    this.wcSeriousWounds = 0;
-                    this.wcMargin = this.wcRollTotal - lw;
-                } else {
-                    const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
-                        ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = Math.max(0, effectiveLw - this.wcRollTotal);
-                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
-                }
+                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, this.wcLightWounds, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
+                this.wcPassed = wc.passed;
+                this.wcMargin = wc.margin;
+                this.wcSeriousWounds = wc.seriousWounds;
                 window._trackingBridge?.saveBankedBonuses();
             },
 
@@ -5172,18 +5108,10 @@
                 this.wcMatsuBonusApplied -= last.amount;
                 this.baseTotal -= last.amount;
                 this.wcRollTotal -= last.amount;
-                const lw = this.wcLightWounds;
-                if (this.wcRollTotal >= lw) {
-                    this.wcPassed = true;
-                    this.wcSeriousWounds = 0;
-                    this.wcMargin = this.wcRollTotal - lw;
-                } else {
-                    this.wcPassed = false;
-                    const effectiveLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw
-                        ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = Math.max(0, effectiveLw - this.wcRollTotal);
-                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
-                }
+                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, this.wcLightWounds, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
+                this.wcPassed = wc.passed;
+                this.wcMargin = wc.margin;
+                this.wcSeriousWounds = wc.seriousWounds;
                 window._trackingBridge?.saveBankedBonuses();
             },
 
@@ -5196,17 +5124,10 @@
                 this.wcRaisesSpent--;
                 this.baseTotal -= 5;
                 this.wcRollTotal -= 5;
-                const lw = this.wcLightWounds;
-                if (this.wcRollTotal >= lw) {
-                    this.wcPassed = true;
-                    this.wcSeriousWounds = 0;
-                    this.wcMargin = this.wcRollTotal - lw;
-                } else {
-                    this.wcPassed = false;
-                    const eLw = this.formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw / 2) : lw;
-                    this.wcMargin = Math.max(0, eLw - this.wcRollTotal);
-                    this.wcSeriousWounds = Math.floor(this.wcMargin / 10) + 1;
-                }
+                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, this.wcLightWounds, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
+                this.wcPassed = wc.passed;
+                this.wcMargin = wc.margin;
+                this.wcSeriousWounds = wc.seriousWounds;
                 if (t?.setCount) t.setCount('adventure_raises', Math.max(0, raisesUsed - 1));
             },
 
@@ -5244,7 +5165,7 @@
                         this.bankedWcExcess.push({ amount: this.wcMargin, spent: false });
                     }
                     if (this.schoolAbilities.akodo_wc_attack_bonus && this.wcPassed && this.wcMargin > 0) {
-                        const bonus = Math.floor(this.wcMargin / 5) * (this.schoolAbilities.akodo_attack_skill || 0);
+                        const bonus = window.L7RRollMath.akodoBankedBonus(this.wcMargin, this.schoolAbilities.akodo_attack_skill || 0);
                         if (bonus > 0) t.akodoBankedBonuses.push({ amount: bonus, spent: false });
                     }
                     if (t.saveBankedBonuses) t.saveBankedBonuses();

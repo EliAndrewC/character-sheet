@@ -11,6 +11,10 @@
     <link rel="preload" href="/static/fonts/spectral-600.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/static/css/app.css">
     <script src="/static/js/htmx.min.js"></script>
+    {# Pure roll-math helpers (window.L7RRollMath). Loaded before Alpine so the
+       sheet's components can call it. Logic lives here (unit-testable) rather
+       than inline in Alpine handlers. #}
+    <script src="/static/js/roll_math.js"></script>
     <script defer src="/static/js/alpine.min.js"></script>
     <style>
         [x-cloak] { display: none !important; }

@@ -82,4 +82,5 @@ def test_version_history_collapsed_by_default(page, live_server_url):
     # Click to expand
     page.locator('text="Version History"').click()
     page.wait_for_timeout(300)
+    page.locator('text="Initial character creation"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Initial character creation"').is_visible()

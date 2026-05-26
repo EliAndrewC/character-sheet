@@ -165,6 +165,7 @@ def test_click_ring_always_shows_menu_even_with_zero_vp(page, live_server_url):
     page.locator('[data-roll-key="ring:Air"]').click()
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
     page.wait_for_selector('.fixed.z-50.bg-white.rounded-lg.shadow-xl', state='visible', timeout=3000)
+    menu.wait_for(state="visible", timeout=5000)
     assert menu.is_visible(), "roll menu should appear for ring tile click"
     assert menu.text_content() and "Air" in menu.text_content()
 
@@ -242,6 +243,7 @@ def test_ring_tile_picker_with_athletics_shows_both_rows(page, live_server_url):
     page.wait_for_timeout(200)
     page.locator('[data-roll-key="ring:Fire"]').click()
     page.wait_for_selector('[data-ring-picker-menu]', state='visible', timeout=3000)
+    page.locator('[data-ring-bare="Fire"]').first.wait_for(state="attached", timeout=5000)
     assert page.locator('[data-ring-bare="Fire"]').count() == 1
     assert page.locator('[data-ring-athletics="Fire"]').count() == 1
     # Clicking the bare row produces a modal whose title is just the
@@ -282,6 +284,7 @@ def test_athletics_knack_icon_opens_ring_picker(page, live_server_url):
     page.wait_for_selector('[data-athletics-picker-menu]', state='visible', timeout=3000)
     for ring in ["Air", "Fire", "Water", "Earth"]:
         btn = page.locator(f'button[data-athletics-ring="{ring}"]')
+        btn.wait_for(state="visible", timeout=5000)
         assert btn.is_visible(), f"ring option {ring} should be visible"
 
 
@@ -324,7 +327,9 @@ def test_athletics_picker_shows_attack_and_parry_options(page, live_server_url):
     _create_athletics_knack_char(page, live_server_url, "AthCombatPick")
     page.locator('[data-roll-key="knack:athletics"]').click()
     page.wait_for_selector('[data-athletics-picker-menu]', state='visible', timeout=3000)
+    page.locator('[data-athletics-combat="attack"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-athletics-combat="attack"]').is_visible()
+    page.locator('[data-athletics-combat="parry"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-athletics-combat="parry"]').is_visible()
 
 
@@ -354,6 +359,7 @@ def test_athletics_picker_has_predeclared_parry_row(page, live_server_url):
     page.locator('[data-roll-key="knack:athletics"]').click()
     page.wait_for_selector('[data-athletics-picker-menu]', state='visible', timeout=3000)
     row = page.locator('[data-athletics-combat="predeclared-parry"]')
+    row.wait_for(state="visible", timeout=5000)
     assert row.is_visible()
     # Original athletics:parry flat (before the +5 predeclared bonus)
     base_flat = page.evaluate("""() => {
@@ -406,7 +412,9 @@ def test_attack_button_shows_athletics_choice_when_athletics_available(page, liv
     _create_athletics_knack_char(page, live_server_url, "AtkChoice")
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-attack-choice-menu]', state='visible', timeout=3000)
+    page.locator('[data-attack-choice="attack"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-attack-choice="attack"]').is_visible()
+    page.locator('[data-attack-choice="athletics_attack"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-attack-choice="athletics_attack"]').is_visible()
 
 
@@ -437,6 +445,7 @@ def test_parry_menu_shows_athletics_parry_option(page, live_server_url):
     _create_athletics_knack_char(page, live_server_url, "ParryAth")
     page.locator('[data-roll-key="parry"]').click()
     page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    page.locator('[data-parry-menu-athletics]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-parry-menu-athletics]').is_visible()
 
 
@@ -655,6 +664,7 @@ def test_initiative_roll_shows_action_dice(page, live_server_url):
     page.locator('[data-roll-key="initiative"]').click()
     _wait_for_roll_result(page)
     modal = page.locator('[data-modal="dice-roller"]')
+    modal.locator('text="Action Dice"').wait_for(state="visible", timeout=5000)
     assert modal.locator('text="Action Dice"').is_visible()
 
 
@@ -922,7 +932,9 @@ def test_spend_raise_button_visible_for_applicable_skill(page, live_server_url):
     _create_3rd_dan_courtier(page, live_server_url)
     page.locator('[data-roll-key="skill:manipulation"]').click()
     _wait_for_roll_result(page)
+    page.locator('[data-action="spend-raise"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action="spend-raise"]').is_visible()
+    page.locator('[data-action="undo-raise"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action="undo-raise"]').is_visible()
 
 
@@ -1004,7 +1016,9 @@ def test_freeform_button_opens_modal(page, live_server_url):
     page.locator('[data-action="open-freeform-roll"]').click()
     page.wait_for_selector('[data-modal="freeform-roll"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="freeform-roll"]')
+    modal.locator('[data-freeform="rolled"]').wait_for(state="visible", timeout=5000)
     assert modal.locator('[data-freeform="rolled"]').is_visible()
+    modal.locator('[data-freeform="kept"]').wait_for(state="visible", timeout=5000)
     assert modal.locator('[data-freeform="kept"]').is_visible()
     assert modal.locator('[data-freeform="reroll-tens"]').is_visible()
 
@@ -1112,7 +1126,9 @@ def test_freeform_roll_again_returns_to_pre_phase(page, live_server_url):
     page.locator('[data-action="freeform-roll-again"]').click()
     page.wait_for_timeout(150)
     # Pre-phase controls are visible again
+    page.locator('[data-freeform="rolled"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-freeform="rolled"]').is_visible()
+    page.locator('[data-action="freeform-roll"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action="freeform-roll"]').is_visible()
 
 
@@ -1419,6 +1435,7 @@ def test_action_die_menu_shows_action_options(page, live_server_url):
     page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
     menu = page.locator('[data-action-die-menu-item="attack"]')
     menu.wait_for(state='visible', timeout=2000)
+    page.locator('[data-action-die-menu-item="attack"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="attack"]').is_visible()
     assert page.locator('[data-action-die-menu-item="parry"]').is_visible()
     assert page.locator('[data-action-die-menu-item="predeclared-parry"]').is_visible()

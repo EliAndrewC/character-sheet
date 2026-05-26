@@ -21,14 +21,6 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 **Implementation:** `app/game_data.py` (school definition), `app/routes/pages.py` (`merchant_post_roll_vp`), `app/templates/character/sheet.html` (post-roll VP buttons).
 
-**Unit tests:**
-- `test_dice.py::TestSuzumeOverseer::test_post_roll_vp_membership`
-- `test_dice.py::TestDojiArtisanRegressionAfterSuzume::test_merchant_post_roll_vp_still_works`
-
-**Clicktests:**
-- `test_school_abilities.py::test_suzume_post_roll_vp_buttons_visible`
-- `test_school_abilities.py::test_suzume_pre_roll_menu_has_no_vp_options`
-
 ---
 
 ## 1st Dan
@@ -39,16 +31,6 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 - `first_dan_extra_die: ["precepts", "commerce", "wound_check"]`
 - Applied generically in `app/services/dice.py::_apply_school_technique_bonus()` and `build_wound_check_formula()`.
-
-**Unit tests:**
-- `test_dice.py::TestSuzumeOverseer::test_first_dan_extra_die_on_precepts`
-- `test_dice.py::TestSuzumeOverseer::test_first_dan_extra_die_on_commerce`
-- `test_dice.py::TestSuzumeOverseer::test_first_dan_extra_die_on_wound_check`
-- `test_dice.py::TestSuzumeOverseer::test_first_dan_no_bonus_on_other_skill`
-
-**Clicktests:**
-- `test_school_abilities.py::test_suzume_1st_dan_extra_die_on_precepts`
-- `test_school_abilities.py::test_suzume_1st_dan_extra_die_on_wound_check`
 
 ---
 
@@ -64,17 +46,6 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - Constant `FLEXIBLE_2ND_DAN_SCHOOLS` in `edit.html` lists the four schools that share this picker.
 
 **Implementation:** `app/templates/character/edit.html` (picker), `app/services/dice.py` (server-side bonus), `app/game_data.py` (table entry).
-
-**Unit tests:**
-- `test_dice.py::TestSuzumeOverseer::test_second_dan_chosen_skill_gets_free_raise`
-- `test_dice.py::TestSuzumeOverseer::test_second_dan_no_choice_no_bonus`
-- `test_dice.py::TestSuzumeOverseer::test_second_dan_chosen_wound_check_gets_free_raise`
-- `test_dice.py::TestSuzumeOverseer::test_second_dan_chosen_damage_gets_free_raise`
-- `test_dice.py::TestSuzumeOverseer::test_second_dan_attack_choice_gets_free_raise`
-- `test_dice.py::TestSuzumeOverseer::test_second_dan_no_bonus_below_dan_2`
-
-**Clicktests:**
-- `test_school_abilities.py::test_suzume_2nd_dan_picker_visible_and_saves`
 
 ---
 
@@ -92,14 +63,6 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 **Implementation:** `app/game_data.py` (table entry), `app/routes/pages.py` (per_adventure counter wiring), `app/services/dice.py::_annotate_third_dan()` (max_per_roll stamping), `app/templates/character/sheet.html` (spend UI).
 
-**Unit tests:**
-- `test_dice.py::TestSuzumeOverseer::test_third_dan_annotates_applicable_skills`
-- `test_dice.py::TestSuzumeOverseer::test_third_dan_does_not_annotate_excluded_skill`
-- `test_dice.py::TestSuzumeOverseer::test_third_dan_per_adventure_pool_size`
-
-**Clicktests:**
-- `test_school_abilities.py::test_suzume_3rd_dan_precepts_raises`
-
 ---
 
 ## 4th Dan
@@ -111,10 +74,6 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 The first half (raise any one ring by 1, with discount) is the same kind of mechanic as Merchant's 4th Dan ring raise, but the second half ("skill considered 2 higher for free raises on contested rolls you didn't initiate") depends on contested-roll-mechanics that aren't modeled in our system. To avoid implementing only one of the two halves and leaving Suzume mid-power, the entire 4th Dan is omitted.
 
 The school's `techniques` dict in `app/game_data.py` deliberately has no key 4. The structural test `tests/test_game_data.py::TestSchools::test_all_schools_have_five_techniques` whitelists Suzume Overseer as the documented exception.
-
-**Unit tests:**
-- `test_dice.py::TestSuzumeOverseer::test_no_fourth_dan_untouched_target_flag` - confirms Suzume does not pick up the Doji 4th Dan untouched-target flag (which would otherwise leak in via the shared 5th Dan refactor).
-- `test_dice.py::TestDojiArtisanRegressionAfterSuzume::test_doji_4th_dan_still_only_doji` - confirms Doji 4th Dan still fires for Doji and not for Suzume.
 
 ---
 
@@ -129,24 +88,6 @@ The school's `techniques` dict in `app/game_data.py` deliberately has no key 4. 
 - Read-only Roll Mode: 5th-Dan bonus is a pure roll-total visualization (no bridge mutation), so non-editors see it correctly without any state mutation.
 
 **Implementation:** `app/services/dice.py` lines 354, 577, 656, 775, 875 (membership-test refactors).
-
-**Unit tests:**
-- `test_dice.py::TestSuzumeOverseer::test_fifth_dan_skill_always_tn`
-- `test_dice.py::TestSuzumeOverseer::test_fifth_dan_skill_sometimes_tn`
-- `test_dice.py::TestSuzumeOverseer::test_fifth_dan_skill_never_tn`
-- `test_dice.py::TestSuzumeOverseer::test_fifth_dan_attack_flag`
-- `test_dice.py::TestSuzumeOverseer::test_fifth_dan_parry_flag`
-- `test_dice.py::TestSuzumeOverseer::test_fifth_dan_wound_check_flag`
-- `test_dice.py::TestSuzumeOverseer::test_fifth_dan_knack_flag`
-- `test_dice.py::TestSuzumeOverseer::test_below_fifth_dan_no_flags`
-- `test_dice.py::TestDojiArtisanRegressionAfterSuzume::test_doji_5th_dan_still_fires`
-
-**Clicktests:**
-- `test_school_abilities.py::test_suzume_5th_dan_always_tn_skill_input`
-- `test_school_abilities.py::test_suzume_5th_dan_sometimes_tn_skill_checkbox`
-- `test_school_abilities.py::test_suzume_5th_dan_never_tn_skill_no_input`
-- `test_school_abilities.py::test_suzume_5th_dan_attack_auto_bonus`
-- `test_school_abilities.py::test_suzume_5th_dan_wound_check_auto_bonus`
 
 ---
 

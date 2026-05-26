@@ -12,19 +12,10 @@
 > You roll and keep one extra die for damage rolls from unarmed attacks.
 
 **Status:** Fully implemented.
-- `dice.py:581-584` adds +1 rolled and +1 kept to damage when `school_id == "brotherhood_of_shinsei_monk"` and `dan >= 1`.
+- `dice.py` adds +1 rolled and +1 kept to damage when `school_id == "brotherhood_of_shinsei_monk"` and `dan >= 1`.
 - Damage bonus sources include "+1k1 from 1st Dan (unarmed)".
 
-**Implementation:** `app/services/dice.py:581-584` (damage_extra_rolled/kept), bonus labeled "+1k1 from 1st Dan (unarmed)".
-
-**Unit tests:**
-- `test_dice.py:481` - tests damage formula for Brotherhood
-- `test_dice.py:528` - tests wound check formula
-- `test_dice.py:541` - tests non-rollable knacks (conviction, otherworldliness, worldliness)
-
-**Clicktests:**
-- `test_sheet_js_errors.py:18` includes `brotherhood_of_shinsei_monk` in the sheet JS error check list.
-- `test_school_abilities.py::test_brotherhood_damage_unarmed_bonus`
+**Implementation:** `app/services/dice.py` (damage_extra_rolled/kept), bonus labeled "+1k1 from 1st Dan (unarmed)".
 
 ---
 
@@ -36,12 +27,6 @@
 - `first_dan_extra_die: ["attack", "damage", "wound_check"]`
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
-**Unit tests:**
-- `test_dice.py:528` - verifies wound check formula for Brotherhood
-
-**Clicktests:**
-- `test_school_abilities.py::test_brotherhood_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -51,10 +36,6 @@
 **Status:** Fully implemented.
 - `second_dan_free_raise: "attack"`
 - Applied as +5 flat bonus on attack rolls via `_apply_school_technique_bonus()`.
-
-**Unit tests:** None directly testing the 2nd Dan free raise on attack.
-**Clicktests:**
-- `test_school_abilities.py::test_brotherhood_2nd_dan_attack_bonus`
 
 ---
 
@@ -68,15 +49,7 @@
 - `formula: "2X"`, `max_per_roll: "X"`
 - The "lower action dice by 5" part is NOT encoded in the structured data and is not implemented.
 
-**Implementation:** `app/game_data.py:2038-2045` (third_dan dict).
-
-**Unit tests:**
-- `test_dice.py:466-493` - tests 3rd Dan courtier (same mechanism, different school); Brotherhood uses identical mechanism
-- `test_dice.py:481` - Brotherhood-specific test confirming 3rd Dan adventure raises
-
-**Clicktests:**
-- `test_school_abilities.py::test_brotherhood_3rd_dan_precepts_raises`
-- The 3rd Dan free raise UI is also tested via Courtier in `test_rolls.py`.
+**Implementation:** `app/game_data.py` (third_dan dict).
 
 **Notes:** Spending 1 free raise can lower a single action die by 5 phases (confirmed). This is an alternative use of the same free raises pool.
 
@@ -94,12 +67,6 @@
 - "Failed parries don't lower damage dice" is implemented.
   - Server: `app/routes/pages.py` passes `brotherhood_parry_no_reduce: true` in school_abilities.
   - Client: `app/templates/character/sheet.html` skips parry damage reduction in `atkComputeDamage()`.
-
-**Unit tests:**
-- `test_remaining_features.py:20` - tests SCHOOL_RING_OPTIONS for Brotherhood (any non-Void)
-
-**Clicktests:**
-- `test_school_rings.py:26,43,67` - tests school ring selection for Brotherhood
 
 ---
 

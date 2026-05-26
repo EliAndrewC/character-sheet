@@ -117,6 +117,7 @@ def test_lucky_toggle_works(page, live_server_url):
     section.locator('button:text("Mark as used")').click()
     page.wait_for_timeout(500)
     assert "used" in section.text_content()
+    section.locator('button:text("Undo")').wait_for(state="visible", timeout=5000)
     assert section.locator('button:text("Undo")').is_visible()
 
 
@@ -130,6 +131,7 @@ def test_lucky_toggle_persists(page, live_server_url):
     page.reload()
     page.wait_for_selector('text="Lucky (re-roll)"')
     section = page.locator('text="Lucky (re-roll)"').locator('..')
+    section.locator('button:text("Undo")').wait_for(state="visible", timeout=5000)
     assert section.locator('button:text("Undo")').is_visible()
 
 
@@ -508,6 +510,7 @@ def test_nights_rest_accelerate_visible_only_with_sw_remaining(
     page.wait_for_timeout(200)
     page.locator('[data-action="open-nights-rest-modal"]').click()
     page.wait_for_selector('[data-action="confirm-nights-rest"]', timeout=5000)
+    page.locator('[data-action="nights-rest-accelerate"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action="nights-rest-accelerate"]').is_visible()
     page.locator('[data-action="cancel-nights-rest"]').click()
     page.wait_for_timeout(200)

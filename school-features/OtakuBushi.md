@@ -13,10 +13,7 @@
 
 **Status:** Out of scope - requires combat-phase tracking (interrupt lunge costing 1 action die).
 
-**Implementation:** `app/game_data.py:1032` (definition only). No corresponding logic in `dice.py` or templates.
-
-**Unit tests:** None.
-**Clicktests:** None.
+**Implementation:** `app/game_data.py` (definition only). No corresponding logic in `dice.py` or templates.
 
 ---
 
@@ -29,10 +26,6 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 - Reflected in roll formulas on the View Sheet.
 
-**Unit tests:** None specific to Otaku 1st Dan extra die (tested generically via other schools in `test_dice.py`).
-**Clicktests:**
-- `test_school_abilities.py::test_otaku_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -42,10 +35,6 @@
 **Status:** Fully implemented.
 - `second_dan_free_raise: "wound_check"`
 - Applied as +5 flat bonus on wound check rolls via `_apply_school_technique_bonus()` and `build_wound_check_formula()`.
-
-**Unit tests:** None directly testing the Otaku 2nd Dan free raise on wound checks.
-**Clicktests:**
-- `test_school_abilities.py::test_otaku_2nd_dan_wound_check_bonus`
 
 ---
 
@@ -72,15 +61,6 @@
   - Server: `app/routes/pages.py` passes `otaku_lunge_extra_die: true` in school_abilities.
   - Client: `app/templates/character/sheet.html` in `atkComputeDamage()`, when lunge is unsuccessfully parried, adds the lunge extra die back after parry reduction.
 
-**Unit tests:**
-- `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
-- `test_xp.py` - covers 4th Dan XP discount.
-
-**Clicktests:**
-- `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
-- `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
-- `test_school_abilities.py::test_otaku_4th_dan_lunge_extra_die`
-
 ---
 
 ## 5th Dan
@@ -90,9 +70,6 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `otaku_trade_dice_for_sw: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows a "Trade 10 damage dice for 1 automatic serious wound" button in the damage result when rolled >= 12 (ensuring min 2 after trade).
-
-**Clicktests:**
-- `test_school_abilities.py::test_otaku_5th_dan_trade_dice_for_sw`
 
 ---
 

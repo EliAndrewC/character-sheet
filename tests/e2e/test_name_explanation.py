@@ -126,6 +126,7 @@ def test_sheet_shows_tooltip_icon_when_explanation_exists(page, live_server_url)
     # carries the explanation as its inner text.
     page.wait_for_selector('[data-testid="name-explanation-tooltip"]', timeout=5000)
     tooltip = page.locator('[data-testid="name-explanation-tooltip"]')
+    tooltip.wait_for(state="visible", timeout=5000)
     assert tooltip.is_visible()
     # tooltip-content is visibility:hidden until hover, so inner_text is
     # empty. Use text_content to read the hidden payload.

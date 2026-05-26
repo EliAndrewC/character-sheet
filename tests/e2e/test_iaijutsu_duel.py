@@ -52,6 +52,7 @@ def test_duel_option_in_iaijutsu_menu(page, live_server_url):
     page.locator('[data-roll-key="knack:iaijutsu"]').click()
     page.wait_for_timeout(300)
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    menu.locator('button:text("Iaijutsu Duel")').wait_for(state="visible", timeout=5000)
     assert menu.locator('button:text("Iaijutsu Duel")').is_visible()
 
 
@@ -88,6 +89,7 @@ def test_contested_roll_proceeds(page, live_server_url):
     modal.locator('input[placeholder="e.g. 200"]').fill("200")
     modal.locator('button:text("Proceed to Contested Roll")').click()
     page.wait_for_timeout(300)
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state="visible", timeout=5000)
     assert modal.locator('button:text("Roll Contested Iaijutsu")').is_visible()
 
 
@@ -137,7 +139,9 @@ def test_focus_strike_phase_shows_buttons(page, live_server_url):
     }""", timeout=15000)
     modal.locator('button:text("Proceed to Focus / Strike")').click()
     page.wait_for_timeout(300)
+    modal.locator('button:text("Strike!")').wait_for(state="visible", timeout=5000)
     assert modal.locator('button:text("Strike!")').is_visible()
+    modal.locator('button:text("Focus (+5 to your TN)")').wait_for(state="visible", timeout=5000)
     assert modal.locator('button:text("Focus (+5 to your TN)")').is_visible()
 
 
@@ -311,6 +315,7 @@ def test_duel_opponent_hit_shows_damage_input(page, live_server_url):
     _get_to_opponent_damage(page, live_server_url, "DuelOppHit")
     # The opponent-damage phase should show damage input and wound check button
     page.wait_for_selector('input[placeholder="Damage"]', state='visible', timeout=10000)
+    page.locator('button:text("Make Wound Check")').wait_for(state="visible", timeout=5000)
     assert page.locator('button:text("Make Wound Check")').is_visible()
 
 
@@ -318,6 +323,7 @@ def test_duel_opponent_hit_shows_player_tn(page, live_server_url):
     """When opponent hits, the player's TN is shown as reference."""
     _get_to_opponent_damage(page, live_server_url, "DuelOppTN")
     page.wait_for_selector('input[placeholder="Damage"]', state='visible', timeout=10000)
+    page.locator('text="Your TN to be hit:"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Your TN to be hit:"').is_visible()
 
 

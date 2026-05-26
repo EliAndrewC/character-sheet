@@ -13,10 +13,7 @@
 
 **Status:** Out of scope - requires positional tracking (who is adjacent to whom) not supported by the app.
 
-**Implementation:** `app/game_data.py:1279-1281` (definition only).
-
-**Unit tests:** None.
-**Clicktests:** None.
+**Implementation:** `app/game_data.py` (definition only).
 
 ---
 
@@ -28,10 +25,6 @@
 - `first_dan_extra_die: ["initiative", "parry", "wound_check"]`
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()`, `build_wound_check_formula()`, and `build_initiative_formula()`.
 
-**Unit tests:** None specific to Hiruma 1st Dan initiative logic.
-**Clicktests:**
-- `test_school_abilities.py::test_hiruma_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -42,10 +35,6 @@
 - `second_dan_free_raise: "parry"`
 - Applied as +5 flat bonus on parry rolls via `_apply_school_technique_bonus()`.
 
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_hiruma_2nd_dan_parry_bonus`
-
 ---
 
 ## 3rd Dan
@@ -55,9 +44,6 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `hiruma_post_parry_bonus: true` and `hiruma_post_parry_amount: 2*attack_skill` in school_abilities.
 - Client: auto-banks 2*attack_skill after any parry roll, applies as flat bonus to both attack roll AND damage roll on next attack via `rollAttack()` and `atkComputeDamage()`.
-
-**Clicktests:**
-- `test_school_abilities.py::test_hiruma_post_parry_bonus`
 
 **Questions (ANSWERED):**
 - X is the attack skill rank.
@@ -72,13 +58,9 @@
 
 **Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- Action dice -2 is implemented in `dice.py:503` (`hiruma_4th_dan = school_id == "hiruma_scout" and dan >= 4`) and rendered on `sheet.html`.
+- Action dice -2 is implemented in `dice.py` (`hiruma_4th_dan = school_id == "hiruma_scout" and dan >= 4`) and rendered on `sheet.html`.
 
-**Implementation:** `app/services/dice.py:503` (`hiruma_4th_dan`), `app/templates/character/sheet.html` (initiative display).
-
-**Unit tests:** None specific to Hiruma 4th Dan action dice.
-**Clicktests:**
-- `test_school_abilities.py::test_hiruma_initiative_action_dice_info`
+**Implementation:** `app/services/dice.py` (`hiruma_4th_dan`), `app/templates/character/sheet.html` (initiative display).
 
 ---
 
@@ -89,7 +71,4 @@
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `hiruma_parry_reduce_lw: true` in school_abilities.
 - Client: shows informational note after parry rolls: "the attacker deals 10 fewer light wounds on their next 2 damage rolls."
-
-**Clicktests:**
-- `test_school_abilities.py::test_hiruma_5th_dan_parry_note`
 

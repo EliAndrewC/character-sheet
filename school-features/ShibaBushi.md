@@ -13,10 +13,7 @@
 
 **Status:** Out of scope - requires combat-phase tracking (interrupt parry spending action die) and positional tracking (parry for others).
 
-**Implementation:** `app/game_data.py:1139-1142` (definition only).
-
-**Unit tests:** None.
-**Clicktests:** None.
+**Implementation:** `app/game_data.py` (definition only).
 
 ---
 
@@ -29,10 +26,6 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 - Reflected in roll formulas on the View Sheet.
 
-**Unit tests:** None specific to Shiba 1st Dan.
-**Clicktests:**
-- `test_school_abilities.py::test_shiba_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -43,10 +36,6 @@
 - `second_dan_free_raise: "parry"`
 - Applied as +5 flat bonus on parry rolls via `_apply_school_technique_bonus()`.
 
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_shiba_2nd_dan_parry_bonus`
-
 ---
 
 ## 3rd Dan
@@ -55,9 +44,6 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `shiba_parry_damage: true` and `shiba_parry_damage_rolled: 2*attack_skill`. Client: `sheet.html` shows "Roll Parry Damage" button after parry rolls. Damage = (2*attack_skill)k1, no ring/TN bonus.
-
-**Clicktests:**
-- `test_school_abilities.py::test_shiba_parry_damage_button`
 
 **Questions (ANSWERED):**
 - X is the attack skill rank.
@@ -74,12 +60,6 @@
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 - "+3k1 on wound checks" is fully implemented via `app/services/dice.py:build_wound_check_formula()` (school_id == "shiba_bushi" and dan >= 4).
 
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_shiba_bushi_4th_dan_wound_check_3k1` - verifies +3k1 on wound checks at 4th Dan
-- `test_dice.py::TestSchoolAbilities::test_shiba_bushi_below_4th_dan_no_3k1` - verifies no bonus below 4th Dan
-**Clicktests:**
-- `test_school_abilities.py::test_shiba_4th_dan_wound_check_3k1_bonus`
-
 ---
 
 ## 5th Dan
@@ -89,5 +69,3 @@
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `shiba_parry_lower_tn: true`. Client shows informational note after parry rolls about lowering the attacker's TN by the parry excess.
 
-**Clicktests:**
-- `test_school_abilities.py::test_shiba_5th_dan_parry_tn_note`

@@ -63,7 +63,9 @@ def test_generate_wizard_step1_opens_from_dropdown(page, live_server_url):
     page.wait_for_url("**/art/generate")
     page.wait_for_selector('[data-testid="art-gen-gender-page"]')
     # Both radios present
+    page.locator('[data-testid="gender-male"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="gender-male"]').is_visible()
+    page.locator('[data-testid="gender-female"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="gender-female"]').is_visible()
 
 

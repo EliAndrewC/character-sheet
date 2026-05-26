@@ -13,10 +13,7 @@
 
 **Status:** Out of scope - "counterattack for others" requires positional tracking not supported by the app. The interrupt counterattack also requires combat-phase tracking.
 
-**Implementation:** `app/game_data.py:1112` (definition only). No corresponding logic in `dice.py` or templates.
-
-**Unit tests:** None.
-**Clicktests:** None.
+**Implementation:** `app/game_data.py` (definition only). No corresponding logic in `dice.py` or templates.
 
 ---
 
@@ -29,10 +26,6 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 - Reflected in roll formulas on the View Sheet.
 
-**Unit tests:** None specific to Daidoji 1st Dan extra die (tested generically via other schools in `test_dice.py`).
-**Clicktests:**
-- `test_school_abilities.py::test_daidoji_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -43,10 +36,6 @@
 - `second_dan_free_raise: "counterattack"`
 - Applied as +5 flat bonus on counterattack rolls via `_apply_school_technique_bonus()`.
 
-**Unit tests:** None directly testing the Daidoji 2nd Dan free raise on counterattack.
-**Clicktests:**
-- `test_school_abilities.py::test_daidoji_2nd_dan_counterattack_bonus`
-
 ---
 
 ## 3rd Dan
@@ -55,10 +44,6 @@
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `daidoji_counterattack_raises: true` and amount. Client shows note after counterattack rolls: the original attack target gets X free raises on their wound check.
-
-**Clicktests:**
-- `test_school_abilities.py::test_daidoji_3rd_dan_counterattack_raises_note`
-- `test_school_abilities.py::test_daidoji_counterattack_school_flag`
 
 **Questions (ANSWERED):**
 - X is the Daidoji's attack skill rank.
@@ -73,14 +58,6 @@
 **Status:** Partially implemented. Ring raise is fully implemented; "take damage for adjacent character" is out of scope (positional tracking).
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 
-**Unit tests:**
-- `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
-- `test_xp.py` - covers 4th Dan XP discount.
-
-**Clicktests:**
-- `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
-- `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
-
 ---
 
 ## 5th Dan
@@ -89,9 +66,6 @@
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `daidoji_wc_lower_tn: true`. Client shows note after passed wound checks about lowering the attacker's TN by the wound check excess.
-
-**Clicktests:**
-- `test_school_abilities.py::test_daidoji_5th_dan_wc_attacker_tn_note`
 
 ---
 

@@ -113,6 +113,7 @@ def test_award_appears_in_history_list(page, live_server_url):
     page.locator('[data-action="apply-award"]').click()
     page.wait_for_timeout(300)
     award_row = page.locator('[data-award-row]').first
+    award_row.wait_for(state="visible", timeout=5000)
     assert award_row.is_visible()
     source_input = award_row.locator('input[type="text"]')
     assert source_input.input_value() == "Heroic stand"
@@ -254,6 +255,7 @@ def test_reputation_tab_applies_good_reputation(page, live_server_url):
     page.wait_for_timeout(300)
     # Should appear in history with badge
     award_row = page.locator('[data-award-row]').first
+    award_row.wait_for(state="visible", timeout=5000)
     assert award_row.is_visible()
     assert "Good Reputation" in award_row.text_content()
 

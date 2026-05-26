@@ -535,7 +535,7 @@
                     <div x-show="phase === 'done' && currentRollKey === 'knack:oppose_knowledge'" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
                         Target's Water skill rolls are reduced by
-                        <span class="font-bold text-accent" x-text="Math.floor(baseTotal / 5)"></span>
+                        <span class="font-bold text-accent" x-text="window.L7RRollMath.freeRaisesFromResult(baseTotal)"></span>
                         for the rest of the conversation
                         <span class="text-xs text-ink/40">(result <span x-text="baseTotal"></span> / 5)</span>
                     </div>
@@ -544,7 +544,7 @@
                     <div x-show="phase === 'done' && currentRollKey === 'knack:oppose_social'" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm text-ink/70">
                         Target's Air skill rolls are reduced by
-                        <span class="font-bold text-accent" x-text="Math.floor(baseTotal / 5)"></span>
+                        <span class="font-bold text-accent" x-text="window.L7RRollMath.freeRaisesFromResult(baseTotal)"></span>
                         for the rest of the conversation
                         <span class="text-xs text-ink/40">(result <span x-text="baseTotal"></span> / 5)</span>
                     </div>
@@ -595,11 +595,11 @@
                             <input type="number" x-model.number="dojiOpponentResult" min="0"
                                    class="w-20 border rounded px-2 py-1 text-sm text-center">
                             <span class="text-xs" x-show="dojiOpponentResult >= 10" x-cloak>
-                                +<span x-text="Math.floor((dojiOpponentResult - 10) / 5)"></span> bonus
+                                +<span x-text="window.L7RRollMath.bonusPer5Over10(dojiOpponentResult)"></span> bonus
                             </span>
                         </div>
                         <div x-show="dojiOpponentResult >= 10" x-cloak class="text-xs text-ink/60 mt-1">
-                            Adjusted total: <span class="font-bold" x-text="baseTotal + Math.floor(((dojiOpponentResult || 0) - 10) / 5)"></span>
+                            Adjusted total: <span class="font-bold" x-text="baseTotal + window.L7RRollMath.bonusPer5Over10(dojiOpponentResult || 0)"></span>
                         </div>
                     </div>
 
@@ -618,11 +618,11 @@
                                 <input type="number" x-model.number="dojiOpponentResult" min="0"
                                        class="w-20 border rounded px-2 py-1 text-sm text-center">
                                 <span class="text-xs" x-show="dojiOpponentResult >= 10" x-cloak>
-                                    +<span x-text="Math.floor((dojiOpponentResult - 10) / 5)"></span> bonus
+                                    +<span x-text="window.L7RRollMath.bonusPer5Over10(dojiOpponentResult)"></span> bonus
                                 </span>
                             </div>
                             <div x-show="dojiOpponentResult >= 10" x-cloak class="text-xs text-ink/60 mt-1">
-                                Adjusted total: <span class="font-bold" x-text="baseTotal + Math.floor(((dojiOpponentResult || 0) - 10) / 5)"></span>
+                                Adjusted total: <span class="font-bold" x-text="baseTotal + window.L7RRollMath.bonusPer5Over10(dojiOpponentResult || 0)"></span>
                             </div>
                         </div>
                     </div>
@@ -764,7 +764,7 @@
                             <button type="button"
                                     :disabled="shinjoParryBankedThisRoll !== null"
                                     data-action="shinjo-bank-parry-excess"
-                                    @click="const excess = baseTotal - (shinjoParryOpponentRoll || 0); if (excess > 0) { bankedWcExcess.push({amount: excess, spent: false}); } shinjoParryBankedThisRoll = Math.max(0, excess); window._trackingBridge?.saveBankedBonuses();"
+                                    @click="const banked = window.L7RRollMath.bankExcess(baseTotal, shinjoParryOpponentRoll || 0); if (banked > 0) { bankedWcExcess.push({amount: banked, spent: false}); } shinjoParryBankedThisRoll = banked; window._trackingBridge?.saveBankedBonuses();"
                                     class="btn-primary px-3 py-1 rounded text-xs disabled:opacity-50">
                                 <span x-show="shinjoParryBankedThisRoll === null">Bank Excess</span>
                                 <span x-show="shinjoParryBankedThisRoll !== null && shinjoParryBankedThisRoll > 0"

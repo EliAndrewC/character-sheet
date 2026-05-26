@@ -41,7 +41,9 @@ def test_plus_opens_modal(page, live_server_url):
     _create_char(page, live_server_url)
     page.locator('[data-action="lw-plus"]').click()
     page.wait_for_selector('text="Add to current total"', timeout=3000)
+    page.locator('text="Take serious wounds & reset light to 0"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Take serious wounds & reset light to 0"').is_visible()
+    page.locator('text="Set total to"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Set total to"').is_visible()
 
 

@@ -76,7 +76,9 @@ def test_attack_modal_shows_probability_table(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page.locator('[data-modal="attack"]')
+    modal.locator('th:text("Hit %")').wait_for(state="visible", timeout=5000)
     assert modal.locator('th:text("Hit %")').is_visible()
+    modal.locator('td:text("None")').wait_for(state="visible", timeout=5000)
     assert modal.locator('td:text("None")').is_visible()
 
 
@@ -87,6 +89,7 @@ def test_attack_modal_shows_attack_roll_rk_column(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page.locator('[data-modal="attack"]')
+    modal.locator('th:text("Attack Roll")').wait_for(state="visible", timeout=5000)
     assert modal.locator('th:text("Attack Roll")').is_visible()
     # The first row's Attack Roll cell should match attack_probs void_keys['0']
     import json
@@ -307,6 +310,7 @@ def test_attack_modal_warns_when_no_initiative(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     warning = page.locator('[data-testid="attack-init-warning-no-init"]')
+    warning.wait_for(state="visible", timeout=5000)
     assert warning.is_visible()
     text = warning.text_content()
     assert "Attack" in text
@@ -334,6 +338,7 @@ def test_attack_modal_warns_when_out_of_action_dice(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     warning = page.locator('[data-testid="attack-init-warning-out-of-dice"]')
+    warning.wait_for(state="visible", timeout=5000)
     assert warning.is_visible()
     text = warning.text_content()
     assert "out of action dice" in text
@@ -388,6 +393,7 @@ def test_attack_modal_warning_reflects_athletics_attack_name(page, live_server_u
     page.locator('[data-attack-choice="athletics_attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     warning = page.locator('[data-testid="attack-init-warning-no-init"]')
+    warning.wait_for(state="visible", timeout=5000)
     assert warning.is_visible()
     # Label strips the parenthetical ring, e.g. "Athletics Attack (Fire)" -> "Athletics Attack".
     assert "Athletics Attack" in warning.text_content()

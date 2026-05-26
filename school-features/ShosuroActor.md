@@ -15,16 +15,7 @@
 - Attack/parry: `app/services/dice.py:build_combat_formula()` adds acting skill rank as extra rolled dice.
 - Wound check: `app/services/dice.py:build_wound_check_formula()` adds acting skill rank as extra rolled dice.
 
-**Implementation:** `app/game_data.py:1474-1476` (definition), `app/services/dice.py` (build_combat_formula, build_wound_check_formula).
-
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_shosuro_actor_attack_acting_bonus`
-- `test_dice.py::TestSchoolAbilities::test_shosuro_actor_parry_acting_bonus`
-- `test_dice.py::TestSchoolAbilities::test_shosuro_actor_wound_check_acting_bonus`
-- `test_dice.py::TestSchoolAbilities::test_shosuro_actor_no_acting_skill_no_bonus`
-
-**Clicktests:**
-- `test_school_abilities.py::test_shosuro_acting_skill_bonus`
+**Implementation:** `app/game_data.py` (definition), `app/services/dice.py` (build_combat_formula, build_wound_check_formula).
 
 ---
 
@@ -33,19 +24,10 @@
 > Rank considered 5.0 higher for stipend (4th Dan technique mentions this).
 
 **Status:** BUG FIXED. Now gated behind 4th Dan (dan >= 4) in `status.py`.
-- `app/services/status.py:63-69` adds +5 to stipend rank when school is "merchant" or "shosuro_actor".
+- `app/services/status.py` adds +5 to stipend rank when school is "merchant" or "shosuro_actor".
 - The bonus is now correctly gated behind 4th Dan (dan >= 4).
 
-**Implementation:** `app/services/status.py:63-69`.
-
-**Unit tests:**
-- `test_effective_status.py:176` - `test_household_wealth_with_shosuro_actor` verifies interaction with Household Wealth
-- `test_effective_status.py:190` - `test_shosuro_actor_stipend` verifies stipend calculation
-- `test_effective_status.py::TestMerchantStipend::test_shosuro_actor_stipend_below_4th_dan` - verifies no stipend bonus below 4th Dan
-- `test_effective_status.py::TestMerchantStipend::test_shosuro_actor_stipend_at_4th_dan` - verifies stipend bonus at 4th Dan
-
-**Clicktests:**
-- `test_school_abilities.py::test_shosuro_stipend_display`
+**Implementation:** `app/services/status.py`.
 
 ---
 
@@ -57,10 +39,6 @@
 - `first_dan_extra_die: ["attack", "sincerity", "wound_check"]`
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
-**Unit tests:** None specific to Shosuro 1st Dan.
-**Clicktests:**
-- `test_school_abilities.py::test_shosuro_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -70,10 +48,6 @@
 **Status:** Fully implemented.
 - `second_dan_free_raise: "sincerity"`
 - Applied as +5 flat bonus on sincerity rolls via `_apply_school_technique_bonus()`.
-
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_shosuro_2nd_dan_sincerity_bonus`
 
 ---
 
@@ -86,11 +60,7 @@
 - `applicable_to: ["acting", "heraldry", "sincerity", "sneaking", "attack", "wound_check"]`
 - `formula: "2X"`, `max_per_roll: "X"`
 
-**Implementation:** `app/game_data.py:2134-2142` (third_dan dict).
-
-**Unit tests:** None specific to Shosuro 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
-**Clicktests:**
-- `test_school_abilities.py::test_shosuro_3rd_dan_sincerity_raises`
+**Implementation:** `app/game_data.py` (third_dan dict).
 
 ---
 
@@ -100,15 +70,8 @@
 
 **Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- Stipend +5 rank is implemented in `status.py:63-69` (see Stipend Bonus section above).
+- Stipend +5 rank is implemented in `status.py` (see Stipend Bonus section above).
 - The stipend bonus is now correctly gated behind 4th Dan (dan >= 4).
-
-**Unit tests:**
-- `test_effective_status.py:190` - tests stipend with Shosuro Actor
-- `test_effective_status.py::TestMerchantStipend::test_shosuro_actor_stipend_below_4th_dan` - verifies no stipend bonus below 4th Dan
-- `test_effective_status.py::TestMerchantStipend::test_shosuro_actor_stipend_at_4th_dan` - verifies stipend bonus at 4th Dan
-
-**Clicktests:** None specific.
 
 **Questions (ANSWERED):**
 - Should the stipend +5 be gated behind 4th Dan? **YES.** The stipend bonus is a 4th Dan technique and should only apply at 4th Dan+. This has been fixed.
@@ -136,19 +99,4 @@
 - Probability displays (`atkHitChance`, `atkAvgAttackRoll`, `wcProbRow`) read `shosuro_flats` per `(rolled,kept)` key so every void level uses a bonus appropriate to that dice pool.
 
 **Avg Bonus Table:** `app/data/shosuro_5th_dan.py` - Monte Carlo (200k trials per cell, seed=1337). Keyed by `reroll_tens` and `rolled` (3..10). `app/data/__init__.py` exposes `shosuro_lowest_3_for(rolled, reroll_tens)` with clamp.
-
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_on_attack`
-- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_on_parry`
-- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_on_wound_check`
-- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_on_attack_in_all_roll_formulas`
-- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_not_set_below_5th_dan`
-- `test_dice.py::TestSchoolAbilities::test_shosuro_5th_dan_flag_not_set_other_schools`
-- `test_shosuro_lookup.py` (full suite: table shape, monotonicity, helper clamping)
-- `test_routes.py::TestViewCharacter::test_view_shosuro_5th_dan_bakes_probabilities`
-
-**Clicktests:**
-- `test_school_abilities.py::test_shosuro_5th_dan_lowest_3_dice` (skill roll)
-- `test_school_abilities.py::test_shosuro_5th_dan_attack_lowest_3_dice`
-- `test_school_abilities.py::test_shosuro_5th_dan_wound_check_lowest_3_dice`
 

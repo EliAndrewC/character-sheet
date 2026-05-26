@@ -12,15 +12,11 @@
 > You always roll 10 dice when rolling initiative, keeping the usual number as action dice.
 
 **Status:** Fully implemented.
-- `app/services/dice.py:487-489` checks `school_id == "matsu_bushi"` and sets `rolled = 10` in `build_initiative_formula()`.
+- `app/services/dice.py` checks `school_id == "matsu_bushi"` and sets `rolled = 10` in `build_initiative_formula()`.
 - The kept dice remain `Void` (unchanged), only rolled is overridden.
 - Matsu Bushi is NOT in `SCHOOLS_WITH_TEMP_VOID` (no feint knack, no temporary void mentions).
 
-**Implementation:** `app/game_data.py:1006`, `app/services/dice.py:487-489`.
-
-**Unit tests:** None. No test in `test_dice.py` verifies the Matsu initiative override.
-**Clicktests:**
-- `test_school_abilities.py::test_matsu_initiative_10_dice`
+**Implementation:** `app/game_data.py`, `app/services/dice.py`.
 
 ---
 
@@ -33,10 +29,6 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 - Reflected in roll formulas on the View Sheet.
 
-**Unit tests:** None specific to Matsu 1st Dan extra die (tested generically via other schools in `test_dice.py`).
-**Clicktests:**
-- `test_school_abilities.py::test_matsu_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -47,10 +39,6 @@
 - `second_dan_free_raise: "iaijutsu"`
 - Applied as +5 flat bonus on iaijutsu rolls via `_apply_school_technique_bonus()`.
 
-**Unit tests:** None directly testing the Matsu 2nd Dan free raise on iaijutsu.
-**Clicktests:**
-- `test_school_abilities.py::test_matsu_2nd_dan_iaijutsu_bonus`
-
 ---
 
 ## 3rd Dan
@@ -60,9 +48,6 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `matsu_vp_wc_bonus: true` and `matsu_vp_wc_amount: 3*attack_skill` in school_abilities.
 - Client: `app/templates/character/sheet.html` banks 3*attack_skill per VP spent via `deductVoidPoints()`, and the wound check modal shows an "Apply Matsu Bonus" button to apply the full banked amount after seeing the roll.
-
-**Clicktests:**
-- `test_school_abilities.py::test_matsu_3rd_dan_vp_wc_bonus`
 
 **Questions (ANSWERED):**
 - X = the Matsu's attack skill rank. So spending 1 VP adds 3 * attack_skill to a wound check.
@@ -81,15 +66,6 @@
   - Server: `app/routes/pages.py` passes `matsu_near_miss: true` in school_abilities.
   - Client: `app/templates/character/sheet.html` treats double attack rolls that miss by less than 20 as hits with 0 extra damage dice, showing "NEAR-MISS HIT" in the result display.
 
-**Unit tests:**
-- `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
-- `test_xp.py` - covers 4th Dan XP discount.
-
-**Clicktests:**
-- `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
-- `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
-- `test_school_abilities.py::test_matsu_4th_dan_near_miss`
-
 ---
 
 ## 5th Dan
@@ -100,11 +76,8 @@
 - Server: `app/routes/pages.py` passes `matsu_lw_reset_15: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows an informational note in the damage result: "If this causes serious wounds, the defender's light wounds reset to 15 instead of 0." This is a display-only implementation since the defender's sheet is separate.
 
-**Clicktests:**
-- `test_school_abilities.py::test_matsu_5th_dan_lw_reset_15`
-
 ---
 
 ## Test References
 
-- No school-specific test references found. Matsu Bushi is only referenced in `app/services/dice.py:487` for the initiative override.
+- No school-specific test references found. Matsu Bushi is only referenced in `app/services/dice.py` for the initiative override.

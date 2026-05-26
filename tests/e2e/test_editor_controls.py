@@ -538,6 +538,7 @@ def test_mantis_defaults_ring_to_void(page, live_server_url):
     page.wait_for_timeout(300)
     # School-ring picker is visible (the "Any" list has length > 1) and set to Void.
     ring_dropdown = page.locator('select[x-model="schoolRingChoice"]')
+    ring_dropdown.wait_for(state="visible", timeout=5000)
     assert ring_dropdown.is_visible()
     assert ring_dropdown.input_value() == "Void"
     # Void ring is raised to 3 (school-ring floor).
@@ -554,6 +555,7 @@ def test_priest_still_defaults_ring_to_water(page, live_server_url):
     select_school(page, "priest")
     page.wait_for_timeout(300)
     ring_dropdown = page.locator('select[x-model="schoolRingChoice"]')
+    ring_dropdown.wait_for(state="visible", timeout=5000)
     assert ring_dropdown.is_visible()
     assert ring_dropdown.input_value() == "Water"
     assert page.locator('input[name="ring_water"]').input_value() == "3"
@@ -1072,6 +1074,7 @@ def test_school_ring_picker_locks_after_first_apply_changes(page, live_server_ur
     page.wait_for_timeout(200)
     # Pre-publish: picker is enabled.
     picker = page.locator('[data-testid="school-ring-choice"]')
+    picker.wait_for(state="visible", timeout=5000)
     assert picker.is_visible()
     assert not picker.is_disabled()
     page.wait_for_selector('text="Saved"', timeout=5000)

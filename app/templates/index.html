@@ -68,8 +68,6 @@
 
 {% block content %}
 <div class="space-y-8">
-    <h1 class="text-3xl font-bold">Characters</h1>
-
     {% if grouped %}
     {% for group, chars in grouped %}
     {% set group_name = group.name if group else 'Not assigned to a group' %}

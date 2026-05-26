@@ -34,4 +34,5 @@ def test_empty_state_create_link(page_anon, live_server_url):
     """Homepage loads for anon users whether or not characters exist."""
     page_anon.goto(live_server_url)
     body = page_anon.text_content("body")
-    assert "Characters" in body
+    # The page-title <h1> was removed; the nav brand confirms the page rendered.
+    assert "L7R Character Builder" in body

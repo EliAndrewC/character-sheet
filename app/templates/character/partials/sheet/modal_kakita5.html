@@ -63,8 +63,7 @@
                         </select>
                         <span class="text-ink/50">
                             (+<span data-testid="kakita-5th-3rd-dan-bonus"
-                                    x-text="(schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0)
-                                            * Math.max(0, (parseInt(k5DefenderPhase, 10) || 0))"></span>
+                                    x-text="window.L7RRollMath.kakitaDefenderPhaseBonus(schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0, parseInt(k5DefenderPhase, 10) || 0, 0)"></span>
                             from 3rd Dan,
                             X = <span x-text="schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0"></span>)
                         </span>
