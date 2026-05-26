@@ -14,12 +14,7 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `merchant_post_roll_vp: true`. Client: after any non-initiative roll, shows VP spending buttons. Each VP adds +1k1 and the roll is re-executed with the additional dice.
 
-**Implementation:** `app/game_data.py:1448` (definition), `app/routes/pages.py` (merchant_post_roll_vp flag), `app/templates/character/sheet.html` (post-roll VP buttons).
-
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_merchant_post_roll_vp_spending`
-- `test_school_abilities.py::test_merchant_post_roll_vp_buttons`
+**Implementation:** `app/game_data.py` (definition), `app/routes/pages.py` (merchant_post_roll_vp flag), `app/templates/character/sheet.html` (post-roll VP buttons).
 
 ---
 
@@ -28,20 +23,10 @@
 > Rank considered 5.0 higher for stipend (4th Dan technique mentions this).
 
 **Status:** BUG FIXED. Now gated behind 4th Dan (dan >= 4) in `status.py`.
-- `app/services/status.py:63-69` adds +5 to stipend rank when school is "merchant" or "shosuro_actor".
+- `app/services/status.py` adds +5 to stipend rank when school is "merchant" or "shosuro_actor".
 - The bonus is now correctly gated behind 4th Dan (dan >= 4).
 
-**Implementation:** `app/services/status.py:63-69`.
-
-**Unit tests:**
-- `test_effective_status.py:185` - `test_merchant_school_stipend` verifies stipend calculation
-- `test_effective_status.py:169` - `test_household_wealth_with_merchant` verifies interaction with Household Wealth
-- `test_effective_status.py:210` - additional stipend test with Merchant
-- `test_effective_status.py::TestMerchantStipend::test_merchant_school_stipend_below_4th_dan` - verifies no stipend bonus below 4th Dan
-- `test_effective_status.py::TestMerchantStipend::test_merchant_school_stipend_at_4th_dan` - verifies stipend bonus at 4th Dan
-
-**Clicktests:**
-- `test_sheet_advanced.py:34` - `test_stipend_with_merchant_school` e2e test
+**Implementation:** `app/services/status.py`.
 
 ---
 
@@ -53,10 +38,6 @@
 - `first_dan_extra_die: ["interrogation", "sincerity", "wound_check"]`
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
-**Unit tests:** None specific to Merchant 1st Dan.
-**Clicktests:**
-- `test_school_abilities.py::test_merchant_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -66,10 +47,6 @@
 **Status:** Fully implemented.
 - `second_dan_free_raise: "interrogation"`
 - Applied as +5 flat bonus on interrogation rolls via `_apply_school_technique_bonus()`.
-
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_merchant_2nd_dan_interrogation_bonus`
 
 ---
 
@@ -82,11 +59,7 @@
 - `applicable_to: ["commerce", "heraldry", "interrogation", "sincerity", "attack", "wound_check"]`
 - `formula: "2X"`, `max_per_roll: "X"`
 
-**Implementation:** `app/game_data.py:2121-2129` (third_dan dict).
-
-**Unit tests:** None specific to Merchant 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
-**Clicktests:**
-- `test_school_abilities.py::test_merchant_3rd_dan_sincerity_raises`
+**Implementation:** `app/game_data.py` (third_dan dict).
 
 ---
 
@@ -96,16 +69,8 @@
 
 **Status:** Fully implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- Stipend +5 rank is implemented in `status.py:63-69` (see Stipend Bonus section above).
+- Stipend +5 rank is implemented in `status.py` (see Stipend Bonus section above).
 - The stipend bonus is now correctly gated behind 4th Dan (dan >= 4).
-
-**Unit tests:**
-- `test_effective_status.py:185` - tests stipend with Merchant school
-- `test_effective_status.py::TestMerchantStipend::test_merchant_school_stipend_below_4th_dan` - verifies no stipend bonus below 4th Dan
-- `test_effective_status.py::TestMerchantStipend::test_merchant_school_stipend_at_4th_dan` - verifies stipend bonus at 4th Dan
-
-**Clicktests:**
-- `test_sheet_advanced.py:34` - tests stipend display with Merchant school
 
 **Questions (ANSWERED):**
 - Should the stipend +5 be gated behind 4th Dan? **YES.** The stipend bonus is a 4th Dan technique and should only apply at 4th Dan+. This has been fixed.
@@ -120,4 +85,3 @@
 - Server gating: `merchant_5th_dan_reroll` flag in `app/routes/pages.py` when `school == "merchant"` and `dan >= 5`.
 - Client: `merchant5thStart` / `merchant5thToggle` / `merchant5thConfirm` on the dice roller in `app/templates/character/sheet.html`. Users select dice via the post-roll selection UI; the confirm button is disabled until the selected-sum constraint is satisfied. Delta is displayed as a bullet ("+N from Merchant 5th Dan reroll").
 - Interacts with the Merchant Special (post-roll VP spending) in any order; both operate on the same pool and share the `merchant_5th_dan_used` flag for once-per-roll enforcement.
-- Clicktests: `test_merchant_5th_dan_reroll_*` in `tests/e2e/test_school_abilities.py`.

@@ -175,6 +175,7 @@ def test_lucky_on_regular_roll(page, live_server_url):
         menu.locator('button:has-text("Roll")').first.click()
     _wait_roll_done(page)
     lucky_btn = page.locator('[data-modal="dice-roller"] button:has-text("Use Lucky"):visible')
+    lucky_btn.first.wait_for(state="visible", timeout=5000)
     assert lucky_btn.count() > 0, "Lucky button should appear on regular roll"
 
 
@@ -205,6 +206,7 @@ def test_lucky_reroll_on_attack(page, live_server_url):
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
+    lucky_btn.first.wait_for(state="visible", timeout=5000)
     assert lucky_btn.count() > 0, "Lucky button should appear on attack result"
 
 
@@ -247,6 +249,7 @@ def test_lucky_reroll_on_damage(page, live_server_url):
             return false;
         }""", timeout=10000)
         lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
+        lucky_btn.first.wait_for(state="visible", timeout=5000)
         assert lucky_btn.count() > 0, "Lucky button should appear on damage result"
 
 
@@ -261,6 +264,7 @@ def test_lucky_reroll_on_wound_check(page, live_server_url):
     _roll_wc(page)
     wc_modal = page.locator('[data-modal="wound-check"]')
     lucky_btn = wc_modal.locator('button:has-text("Use Lucky"):visible')
+    lucky_btn.first.wait_for(state="visible", timeout=5000)
     assert lucky_btn.count() > 0, "Lucky button should appear on wound check result"
 
 
@@ -312,6 +316,7 @@ def test_lucky_carries_over_free_raise_attack(page, live_server_url):
         assert total_with_raise == total_before_raise + 5
         # Now use Lucky
         lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
+        lucky_btn.first.wait_for(state="visible", timeout=5000)
         assert lucky_btn.count() > 0
         lucky_btn.first.click()
         _wait_attack_result(page)
@@ -345,6 +350,7 @@ def test_lucky_carries_over_free_raise_wc(page, live_server_url):
         raise_btn.first.click()
         page.wait_for_timeout(200)
         lucky_btn = wc_modal.locator('button:has-text("Use Lucky"):visible')
+        lucky_btn.first.wait_for(state="visible", timeout=5000)
         assert lucky_btn.count() > 0
         lucky_btn.first.click()
         _wait_wc_result(page)
@@ -378,6 +384,7 @@ def test_lucky_carries_over_wc_post_roll_vp(page, live_server_url):
         vp_btn.first.click()
         page.wait_for_timeout(200)
         lucky_btn = wc_modal.locator('button:has-text("Use Lucky"):visible')
+        lucky_btn.first.wait_for(state="visible", timeout=5000)
         assert lucky_btn.count() > 0
         lucky_btn.first.click()
         _wait_wc_result(page)
@@ -419,6 +426,7 @@ def test_lucky_carries_over_akodo_bonus(page, live_server_url):
         apply_btn.first.click()
         page.wait_for_timeout(200)
         lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
+        lucky_btn.first.wait_for(state="visible", timeout=5000)
         assert lucky_btn.count() > 0
         lucky_btn.first.click()
         _wait_attack_result(page)
@@ -696,7 +704,7 @@ def test_wc_post_roll_vp_with_worldliness(page, live_server_url):
     # Spend VP (+5) button should be visible. Wait for the result-modal x-show
     # reveal rather than a one-shot count() that races the Alpine render.
     spend_btn = page.locator('button:has-text("Spend VP (+5)"):visible')
-    spend_btn.first.wait_for(state="visible", timeout=5000)
+    spend_btn.first.wait_for(state="attached", timeout=5000)
     assert spend_btn.count() > 0
     total_before = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -738,6 +746,7 @@ def test_akodo_banked_bonus_on_miss(page, live_server_url):
     page.evaluate("window._trackingBridge.akodoBankedBonuses.push({amount: 15, spent: false})")
     page.wait_for_timeout(200)
     # Verify it shows in tracking section
+    page.locator('text="Banked 3rd Dan Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
     # Mock dice low so we miss
     page.evaluate("window._origRandom = Math.random; Math.random = () => 0.0")
@@ -754,6 +763,7 @@ def test_akodo_banked_bonus_on_miss(page, live_server_url):
     assert "MISSED" in miss_text
     # Apply button should be visible on the MISS section
     apply_btn = modal.locator('button:has-text("Apply +15"):visible')
+    apply_btn.first.wait_for(state="visible", timeout=5000)
     assert apply_btn.count() > 0, "Apply bonus button should appear on MISS"
     total_before = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -798,6 +808,7 @@ def test_akodo_undo_visible_after_all_bonuses_spent(page, live_server_url):
     page.evaluate("if (window._origRandom) Math.random = window._origRandom")
     # Apply the only bonus - this spends all bonuses
     apply_btn = modal.locator('button:has-text("Apply +12"):visible')
+    apply_btn.first.wait_for(state="visible", timeout=5000)
     assert apply_btn.count() > 0, "Apply button should be visible before spending"
     total_before = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -811,6 +822,7 @@ def test_akodo_undo_visible_after_all_bonuses_spent(page, live_server_url):
     page.wait_for_timeout(300)
     # All bonuses are now spent - Undo button should still be visible
     undo_btn = modal.locator('button:has-text("Undo"):visible')
+    undo_btn.first.wait_for(state="visible", timeout=5000)
     assert undo_btn.count() > 0, "Undo button must remain visible after all bonuses are spent"
     # Verify total increased
     total_after = page.evaluate("""() => {
@@ -850,6 +862,7 @@ def test_akodo_banked_bonuses_display_in_tracking(page, live_server_url):
     page.evaluate("window._trackingBridge.akodoBankedBonuses.push({amount: 8, spent: false})")
     page.wait_for_timeout(300)
     # Should now be visible
+    page.locator('text="Banked 3rd Dan Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
     body = page.text_content("body")
     assert "8" in body  # the amount is displayed
@@ -857,6 +870,7 @@ def test_akodo_banked_bonuses_display_in_tracking(page, live_server_url):
     page.locator('button:has-text("Mark spent")').click()
     page.wait_for_timeout(300)
     # Should show as spent (line-through)
+    page.locator('text="spent"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="spent"').is_visible()
 
 
@@ -874,12 +888,14 @@ def test_akodo_banked_bonuses_persist_on_refresh(page, live_server_url):
         window._trackingBridge.saveBankedBonuses();
     """)
     page.wait_for_timeout(500)
+    page.locator('text="Banked 3rd Dan Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
     # Refresh the page
     page.reload()
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(500)
     # Bonus should still be there
+    page.locator('text="Banked 3rd Dan Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
     bonuses = page.evaluate("window._trackingBridge?.akodoBankedBonuses?.length || 0")
     assert bonuses == 1, f"Expected 1 bonus after refresh, got {bonuses}"
@@ -898,6 +914,7 @@ def test_reset_adventure_clears_combat_bonuses(page, live_server_url):
     # Add a banked bonus and mark Lucky as used (so reset button is enabled)
     page.evaluate("window._trackingBridge.akodoBankedBonuses.push({amount: 10, spent: false})")
     page.wait_for_timeout(200)
+    page.locator('text="Banked 3rd Dan Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked 3rd Dan Bonuses"').is_visible()
     # Open reset modal and confirm
     reset_btn = page.locator('[data-action="open-reset-modal"]')

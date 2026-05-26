@@ -15,11 +15,7 @@
 - Server: `app/routes/pages.py` passes `ide_feint_tn_reduce: true` in school_abilities.
 - Client: shows "Bank -10 TN on target" button after feint rolls. The banked TN reduction is shown in the attack modal and applied when rolling the attack.
 
-**Implementation:** `app/game_data.py:1421-1423` (definition), `app/routes/pages.py` (ide_feint_tn_reduce flag), `app/templates/character/sheet.html` (feint result button, attack modal TN reduction).
-
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_ide_feint_banks_tn_reduce`
+**Implementation:** `app/game_data.py` (definition), `app/routes/pages.py` (ide_feint_tn_reduce flag), `app/templates/character/sheet.html` (feint result button, attack modal TN reduction).
 
 ---
 
@@ -32,14 +28,7 @@
 - Server: `app/models.py` stores player choices in `technique_choices` JSON column. `app/services/dice.py:_apply_school_technique_bonus()` applies +1 rolled die for chosen skills.
 - Editor UI allows selecting skills.
 
-**Implementation:** `app/game_data.py:2114` (`first_dan_extra_die: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
-
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_extra_die`
-- `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_no_choice_no_bonus`
-
-**Clicktests:**
-- `test_school_abilities.py::test_ide_1st_dan_skill_selection`
+**Implementation:** `app/game_data.py` (`first_dan_extra_die: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
 
 ---
 
@@ -52,13 +41,7 @@
 - Server: `app/models.py` stores player choice in `technique_choices` JSON column. `app/services/dice.py:_apply_school_technique_bonus()` applies +5 flat bonus for the chosen skill.
 - Editor UI allows selecting skill.
 
-**Implementation:** `app/game_data.py:2115` (`second_dan_free_raise: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
-
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_flexible_second_dan_free_raise`
-
-**Clicktests:**
-- `test_school_abilities.py::test_ide_2nd_dan_skill_selection`
+**Implementation:** `app/game_data.py` (`second_dan_free_raise: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
 
 ---
 
@@ -71,12 +54,6 @@
 - Client: tracking section shows "Ide 3rd Dan - Subtract from Roll" button. Spending 1 VP calls `rollSpendVPForXk1` in `app/templates/character/sheet.html`, which rolls Xk1 (X = tact skill) and displays the result to subtract from an opponent's roll. (Shares `rollSpendVPForXk1` with the Isawa Ishi 3rd Dan add-to-roll.)
 - The roll **is recorded to Roll History** with `roll_key = "spend_vp_xk1:ide_diplomat"` and label "Ide 3rd Dan". The history tooltip resolves that key to this school's actual 3rd Dan technique rules text (via the `spend_vp_xk1:<school_id>` branch in `app/services/roll_descriptions.py`). Before the fix, this roll filled the modal but never POSTed, so it never appeared in the history.
 - "You know the result of all TN and contested rolls except sincerity and interrogation" is an information display mechanic (not encoded).
-
-**Clicktests:**
-- `test_school_abilities.py::test_ide_3rd_dan_subtract_button`
-- `test_school_abilities.py::test_ide_subtract_button_visible`
-- `test_school_abilities.py::test_ide_3rd_dan_subtract_behavioral`
-- `test_school_abilities.py::test_spend_vp_xk1_roll_recorded_in_history` (records to Roll History)
 
 **Questions (ANSWERED):**
 - X is the tact skill rank (as stated in the rules text).
@@ -96,10 +73,6 @@
   - Client: `app/templates/character/sheet.html` shows "+1 VP nightly (4th Dan)" text under the VP counter.
   - This is display-only since VP regeneration is tracked manually by players.
 
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_ide_vp_regen_display`
-
 ---
 
 ## 5th Dan
@@ -109,9 +82,6 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `ide_temp_vp_on_spend: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` hooks into `deductVoidPoints()` to auto-grant temp VP when non-temp VP is spent.
-
-**Clicktests:**
-- `test_school_abilities.py::test_ide_5th_dan_temp_vp_on_spend`
 
 **Questions (ANSWERED):**
 - "Not gained from this technique" means VP gained from the 5th Dan itself cannot trigger more temp VP. This prevents the infinite loop.

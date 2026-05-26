@@ -153,6 +153,7 @@ def test_specialization_sub_section_lets_you_add_multiple_rows(page, live_server
     add_btn.click()
     add_btn.click()
     page.wait_for_timeout(150)
+    section.locator('[data-testid^="specialization-row-"]').first.wait_for(state="attached", timeout=5000)
     assert section.locator('[data-testid^="specialization-row-"]').count() == 2
 
     row0 = section.locator('[data-testid="specialization-row-0"]')
@@ -203,6 +204,7 @@ def test_attack_specialization_checkboxes_on_attack_modal(page, live_server_url)
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
 
     section = page.locator('[data-testid="attack-spec-section"]')
+    section.wait_for(state="visible", timeout=5000)
     assert section.is_visible()
     cb0 = page.locator('[data-testid="attack-spec-checkbox-0"]')
     cb1 = page.locator('[data-testid="attack-spec-checkbox-1"]')
@@ -291,7 +293,9 @@ def test_attack_specialization_checkbox_visible_on_other_attack_variants(page, l
 
     page.locator('[data-roll-key="knack:double_attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    page.locator('[data-testid="attack-spec-section"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="attack-spec-section"]').is_visible()
+    page.locator('[data-testid="attack-spec-checkbox-0"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="attack-spec-checkbox-0"]').is_visible()
 
 
@@ -337,7 +341,9 @@ def test_dark_secret_shows_fields(page, live_server_url):
     _go_to_editor(page, live_server_url)
     page.check('input[name="dis_dark_secret"]')
     page.wait_for_selector('input[placeholder="What is your secret?"]', timeout=3000)
+    page.locator('input[placeholder="What is your secret?"]').wait_for(state="visible", timeout=5000)
     assert page.locator('input[placeholder="What is your secret?"]').is_visible()
+    page.locator('select', has=page.locator('option:text("Select player who knows...")')).wait_for(state="visible", timeout=5000)
     assert page.locator('select', has=page.locator('option:text("Select player who knows...")')).is_visible()
 
 
@@ -362,6 +368,7 @@ def test_bad_reputation_shows_text(page, live_server_url):
     # The second "What are you known for?" field (first is for good_reputation advantage)
     page.wait_for_timeout(300)
     fields = page.locator('input[placeholder="What are you known for?"]')
+    fields.last.wait_for(state="visible", timeout=5000)
     assert fields.last.is_visible()
 
 

@@ -26,6 +26,7 @@ def test_multi_ring_school_shows_dropdown(page, live_server_url):
     select_school(page, "brotherhood_of_shinsei_monk")  # any non-Void
     page.wait_for_timeout(500)
     dropdown = page.locator('text="Choose School Ring"')
+    dropdown.wait_for(state="visible", timeout=5000)
     assert dropdown.is_visible()
 
 
@@ -34,6 +35,7 @@ def test_air_or_water_ring_dropdown(page, live_server_url):
     _go_to_editor(page, live_server_url)
     select_school(page, "doji_artisan")  # Air or Water
     page.wait_for_timeout(500)
+    page.locator('text="Choose School Ring"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Choose School Ring"').is_visible()
 
 
@@ -66,6 +68,7 @@ def test_changing_multi_to_fixed_hides_dropdown(page, live_server_url):
     _go_to_editor(page, live_server_url)
     select_school(page, "brotherhood_of_shinsei_monk")  # multi-ring
     page.wait_for_timeout(500)
+    page.locator('text="Choose School Ring"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Choose School Ring"').is_visible()
     select_school(page, "akodo_bushi")  # fixed ring (Water)
     page.wait_for_timeout(500)

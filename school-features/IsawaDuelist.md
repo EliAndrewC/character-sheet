@@ -12,15 +12,10 @@
 > You add your Water instead of Fire to your rolled damage dice.
 
 **Status:** Fully implemented.
-- `dice.py:567` sets `damage_ring_name = "Water"` when `school_id == "isawa_duelist"`.
+- `dice.py` sets `damage_ring_name = "Water"` when `school_id == "isawa_duelist"`.
 - This causes all damage calculations for the Isawa Duelist to use Water instead of Fire.
 
-**Implementation:** `app/services/dice.py:567` (`damage_ring_name = "Water" if school_id == "isawa_duelist" else "Fire"`).
-
-**Unit tests:** None specific to this mechanic.
-**Clicktests:**
-- `test_sheet_js_errors.py` includes `isawa_duelist` indirectly (not in the explicit list but referenced generally).
-- `test_school_abilities.py::test_isawa_duelist_damage_shows_water`
+**Implementation:** `app/services/dice.py` (`damage_ring_name = "Water" if school_id == "isawa_duelist" else "Fire"`).
 
 ---
 
@@ -32,10 +27,6 @@
 - `first_dan_extra_die: ["double_attack", "lunge", "wound_check"]`
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
-**Unit tests:** None specific to Isawa Duelist 1st Dan.
-**Clicktests:**
-- `test_school_abilities.py::test_isawa_duelist_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -46,10 +37,6 @@
 - `second_dan_free_raise: "wound_check"`
 - Applied as +5 flat bonus on wound check rolls via `_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_isawa_duelist_2nd_dan_wound_check_bonus`
-
 ---
 
 ## 3rd Dan
@@ -59,9 +46,6 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `isawa_tn_trade: true` and `isawa_tn_trade_bonus: 3*attack_skill` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows a checkbox toggle in the attack modal pre-roll phase: "Trade -5 TN to be hit for +3X on this attack." When checked, adds the flat bonus to the attack roll. Note about TN penalty waiver if parried is informational only.
-
-**Clicktests:**
-- `test_school_abilities.py::test_isawa_duelist_3rd_dan_tn_trade_toggle`
 
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
@@ -77,9 +61,6 @@
 **Status:** Partially implemented. Ring raise is fully implemented; "lunge as interrupt action once per round" is out of scope (combat-phase tracking).
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 
-**Unit tests:** None specific to Isawa Duelist 4th Dan.
-**Clicktests:** None.
-
 ---
 
 ## 5th Dan
@@ -89,8 +70,4 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `isawa_bank_wc_excess: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` banks wound check excess (margin when passed) via `wcKeepLightWounds()`, and the wound check modal shows an "Apply Banked Excess" button for future wound checks.
-
-**Clicktests:**
-- `test_school_abilities.py::test_isawa_duelist_5th_dan_banks_wc_excess`
-
 

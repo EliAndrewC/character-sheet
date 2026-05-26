@@ -16,6 +16,7 @@ def test_money_expand_shows_stipend_calculation(page, live_server_url):
     assert detail.is_visible() is False
     money_row.locator('div').first.click()
     page.wait_for_timeout(150)
+    detail.wait_for(state="visible", timeout=5000)
     assert detail.is_visible()
 
 
@@ -186,6 +187,7 @@ def test_unlucky_toggle(page, live_server_url):
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Test")
     page.wait_for_selector('text="Unlucky (GM penalty)"')
+    page.locator('text="Unlucky (GM penalty)"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Unlucky (GM penalty)"').is_visible()
 
 
@@ -199,6 +201,7 @@ def test_money_locked_disbursal_has_no_visible_delete_button(page, live_server_u
     money_row.locator('div').first.click()
     page.wait_for_timeout(150)
     locked_entry = money_row.locator('[data-money-entry="spring-equinox-disbursal"]')
+    locked_entry.wait_for(state="visible", timeout=5000)
     assert locked_entry.is_visible()
     assert "Spring equinox stipend disbursal" in locked_entry.text_content()
     delete_btn = locked_entry.locator('[data-action="money-delete-entry"]')
@@ -299,6 +302,7 @@ def test_money_modal_rejects_blank_label(page, live_server_url):
     page.locator('[data-testid="money-modal-submit"]').click()
     page.wait_for_timeout(150)
     err = page.locator('[data-testid="money-modal-error"]')
+    err.wait_for(state="visible", timeout=5000)
     assert err.is_visible()
     assert "description" in err.text_content().lower()
     # Modal stays open so the user can fix it.
@@ -319,6 +323,7 @@ def test_money_modal_rejects_non_positive_amount(page, live_server_url):
     page.locator('[data-testid="money-modal-submit"]').click()
     page.wait_for_timeout(150)
     err = page.locator('[data-testid="money-modal-error"]')
+    err.wait_for(state="visible", timeout=5000)
     assert err.is_visible()
     assert "positive" in err.text_content().lower()
 

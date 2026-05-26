@@ -127,6 +127,7 @@ def test_lineage_metadata_full_lifecycle(page, live_server_url):
     page.locator('a:text-is("Edit")').click()
     page.wait_for_selector('input[name="name"]')
     dropdown = page.locator('[data-testid="lineage-dropdown"]')
+    dropdown.wait_for(state="visible", timeout=5000)
     assert dropdown.is_visible()
     dropdown.select_option("Kyoma")
     page.wait_for_timeout(150)
@@ -180,6 +181,7 @@ def test_lineage_tooltip_renders_on_view_sheet_for_canonical_pick(
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Pick Tsuruchi")
     tip = page.locator('[data-testid="lineage-tooltip"]')
+    tip.wait_for(state="visible", timeout=5000)
     assert tip.is_visible()
     # The tooltip-content lives inside the trigger span; pull its full
     # text content (which Playwright includes whether visible or not).
@@ -241,6 +243,7 @@ def test_apply_button_visible_on_revisit_of_never_applied_draft(page, live_serve
     )
     page.wait_for_timeout(150)
     apply_btn = page.locator('[data-action="apply-changes"]')
+    apply_btn.wait_for(state="visible", timeout=5000)
     assert apply_btn.is_visible(), (
         "Apply Changes must remain visible for unpublished drafts even when "
         "the server-side has_unpublished_changes flag is False"
@@ -294,8 +297,10 @@ def test_discard_full_flow_modal_diff_and_revert(page, live_server_url):
     page.fill('input[name="earned_xp"]', "12")
     page.wait_for_selector('text="Saved"', timeout=5000)
     page.wait_for_timeout(200)
+    page.locator('[data-action="apply-changes"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action="apply-changes"]').is_visible()
     discard_btn = page.locator('[data-action="discard-changes"]')
+    discard_btn.wait_for(state="visible", timeout=5000)
     assert discard_btn.is_visible()
 
     # Open modal -> diff line for the change shows up.

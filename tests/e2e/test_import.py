@@ -77,6 +77,7 @@ def test_new_character_dropdown_opens_on_click(page, live_server_url):
     page.locator('[data-testid="new-character-button"]').click()
     # Wait for Alpine to flip x-show and render the options.
     create_option.wait_for(state='visible', timeout=2000)
+    import_option.wait_for(state="visible", timeout=5000)
     assert import_option.is_visible()
 
 
@@ -141,6 +142,7 @@ def test_submit_with_no_source_shows_inline_error(page, live_server_url):
     page.goto(f"{live_server_url}/import")
     page.locator('[data-testid="import-submit"]').click()
     banner = page.locator('[data-testid="import-error-banner"]')
+    banner.wait_for(state="visible", timeout=5000)
     assert banner.is_visible()
     assert "upload a file or paste a URL" in banner.text_content()
 

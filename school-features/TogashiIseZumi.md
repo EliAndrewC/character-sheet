@@ -18,16 +18,6 @@
 - `app/services/dice.py::build_all_roll_formulas` emits the second variant as `initiative:athletics` (base + 3 dice, `togashi_athletics_only: True`).
 - `app/templates/character/sheet.html` renders the initiative box as "{base} plus 1 athletics action or {athletics} athletics actions" for Togashi characters, and opens a two-option dropdown (`data-togashi-init-menu`) on click.
 
-**Unit tests:**
-- `test_dice.py::test_togashi_initiative_default_variant`
-- `test_dice.py::test_togashi_athletics_initiative_variant`
-- `test_dice.py::test_non_togashi_has_no_athletics_initiative`
-
-**Clicktests:**
-- `test_school_abilities.py::test_togashi_initiative_dropdown_shows_both_variants`
-- `test_school_abilities.py::test_togashi_initiative_normal_variant_rolls_correct_dice`
-- `test_school_abilities.py::test_togashi_initiative_athletics_variant_rolls_correct_dice`
-
 ---
 
 ## 1st Dan
@@ -37,16 +27,6 @@
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["athletics", "wound_check", "initiative"]`
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` for athletics; `build_wound_check_formula` and `build_initiative_formula` also honor the flag.
-
-**Unit tests:**
-- `test_dice.py::test_togashi_1st_dan_athletics_extra_die`
-- `test_dice.py::test_togashi_1st_dan_wound_check_extra_die`
-- `test_dice.py::test_togashi_initiative_1st_dan_extra_die`
-- `test_dice.py::test_togashi_1st_dan_no_longer_boosts_attack`
-
-**Clicktests:**
-- `test_school_abilities.py::test_togashi_1st_dan_behavioral`
-- `test_school_abilities.py::test_togashi_initiative_dan_advancement_bonus`
 
 ---
 
@@ -58,10 +38,6 @@
 - `second_dan_free_raise: "athletics"`
 - Applied as +5 flat bonus on athletics rolls via `_apply_school_technique_bonus()`.
 
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_togashi_2nd_dan_athletics_bonus`
-
 ---
 
 ## 3rd Dan
@@ -70,9 +46,6 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `togashi_daily_athletics_raises: true`, `togashi_daily_raises_max: 4*precepts`, and `togashi_daily_raises_per_roll: precepts`. Client: shows "Spend Athletics Raise (+5)" button after athletics rolls with per-roll cap of X.
-
-**Clicktests:**
-- `test_school_abilities.py::test_togashi_3rd_dan_athletics_raises`
 
 **Questions (ANSWERED):**
 - "Each day" is the frequency, as stated in the rules text.
@@ -93,10 +66,6 @@
 **Questions (ANSWERED):**
 - Despite the rules text saying "any Ring", the Togashi should always use Void for their 4th Dan raise (same as their school ring). The standard 4th Dan behavior is correct for this school.
 
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_togashi_4th_dan_reroll_contested`
-
 ---
 
 ## 5th Dan
@@ -106,7 +75,4 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `togashi_heal_sw: true` in school_abilities config when togashi_ise_zumi and dan >= 5.
 - Client: `app/templates/character/sheet.html` shows a "Spend 1 VP to heal 2 SW" button in the tracking section.
-
-**Clicktests:**
-- `test_school_abilities.py::test_togashi_heal_sw_button_works`
 

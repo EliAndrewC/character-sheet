@@ -350,6 +350,7 @@ def test_non_editor_spends_vp_on_attack_does_not_change_vp(
     page_nonadmin.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page_nonadmin.locator('[data-modal="attack"]')
     banner = modal.locator('[data-testid="readonly-roll-banner"]')
+    banner.first.wait_for(state="visible", timeout=5000)
     assert banner.first.is_visible()
 
     # Select 2 VP via the pre-roll +/- control.
@@ -807,6 +808,7 @@ def test_non_editor_ally_conviction_no_persist(
     page_nonadmin.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     modal = page_nonadmin.locator('[data-modal="attack"]')
     # Banner visible inside attack modal.
+    modal.locator('[data-testid="readonly-roll-banner"]').first.wait_for(state="visible", timeout=5000)
     assert modal.locator('[data-testid="readonly-roll-banner"]').first.is_visible()
     page_nonadmin.evaluate(
         "() => {"
@@ -966,6 +968,7 @@ def test_non_editor_rolls_wc_does_not_change_displayed_counts(
     page_nonadmin.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=5000)
     modal = page_nonadmin.locator('[data-modal="wound-check"]')
     banner = modal.locator('[data-testid="readonly-roll-banner"]')
+    banner.first.wait_for(state="visible", timeout=5000)
     assert banner.first.is_visible()
 
     # Roll. With LW=1 pass probability is essentially 1.
@@ -1053,6 +1056,7 @@ def test_non_editor_lw_minus_button_disabled(
     page_nonadmin.wait_for_selector("h1")
     minus = page_nonadmin.locator('[data-action="lw-minus"]')
     assert minus.count() == 1
+    minus.wait_for(state="visible", timeout=5000)
     assert minus.is_visible()
     assert not minus.is_enabled()
 
@@ -1254,6 +1258,7 @@ def test_action_dice_clear_button_editor_only(
     page_anon.goto(sheet_url)
     page_anon.wait_for_selector("h1")
     section = page_anon.locator('[data-testid="action-dice-section"]')
+    section.wait_for(state="visible", timeout=5000)
     assert section.is_visible()
     assert page_anon.locator(
         '[data-action="clear-action-dice"]'

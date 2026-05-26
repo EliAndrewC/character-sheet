@@ -11,12 +11,9 @@
 
 > You may never become Tainted. Roll an extra (X+1)k(X+1) on wound checks, where X is the Shadowlands Taint of the attacker, rounded down to the nearest whole number.
 
-**Status:** Partially implemented. Taint immunity is narrative. The Taint-based wound check bonus is not currently implemented (target Taint level tracking deferred).
+**Status:** Partially implemented. Taint immunity is narrative. The untainted base case (attacker Taint X=0 -> +1k1 on wound checks) IS implemented in `app/services/dice.py:build_wound_check_formula()` (`"+1k1 from Kuni Special (untainted base)"`). The Taint-*scaling* portion (X>0, requiring attacker-Taint tracking) is deferred.
 
-**Implementation:** `app/game_data.py:1337-1338` (definition only).
-
-**Unit tests:** None.
-**Clicktests:** None.
+**Implementation:** `app/game_data.py` (definition), `app/services/dice.py:build_wound_check_formula()` (+1k1 base).
 
 ---
 
@@ -29,11 +26,6 @@
 - Interrogation and wound check extra die: applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 - Damage extra die: implemented via school-specific code in `app/services/dice.py` damage section.
 
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_kuni_witch_hunter_1st_dan_damage_extra_die` - verifies +1k0 on damage rolls
-**Clicktests:**
-- `test_school_abilities.py::test_kuni_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -43,10 +35,6 @@
 **Status:** Fully implemented.
 - `second_dan_free_raise: "interrogation"`
 - Applied as +5 flat bonus on interrogation rolls via `_apply_school_technique_bonus()`.
-
-**Unit tests:** None.
-**Clicktests:**
-- `test_school_abilities.py::test_kuni_2nd_dan_interrogation_bonus`
 
 ---
 
@@ -60,11 +48,7 @@
 - `formula: "2X"`, `max_per_roll: "X"`
 - Note: The "damage vs Tainted" restriction is not encoded in the structured data; damage is listed unconditionally in `applicable_to`.
 
-**Implementation:** `app/game_data.py:2075-2083` (third_dan dict).
-
-**Unit tests:** None specific to Kuni 3rd Dan. The mechanism is identical to other standard 3rd Dan schools.
-**Clicktests:**
-- `test_school_abilities.py::test_kuni_3rd_dan_interrogation_raises`
+**Implementation:** `app/game_data.py` (third_dan dict).
 
 ---
 
@@ -76,9 +60,6 @@
 - Ring raise (+1 Earth, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 - "Extra action die (attacks only vs Tainted)" is NOT implemented. This is a combat mechanic requiring Taint tracking.
 
-**Unit tests:** None.
-**Clicktests:** None.
-
 ---
 
 ## 5th Dan
@@ -89,8 +70,4 @@
 - Server: `app/routes/pages.py` passes `kuni_reflect_damage: true` in school_abilities.
 - Client: tracking section shows "Kuni 5th Dan - Reflect Damage" UI with LW input. Reflecting applies half the reflected LW as additional damage to self.
 - The "Tainted-only bonus: attack in current phase adds to reflected damage" is out of scope (combat-phase tracking).
-
-**Clicktests:**
-- `test_school_abilities.py::test_kuni_5th_dan_reflect_damage_ui`
-
 

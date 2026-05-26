@@ -34,30 +34,12 @@ Mechanical rituals:
    character themselves.
 
 **Implementation:**
-- `app/game_data.py:1564` — school definition.
+- `app/game_data.py` — school definition.
 - `app/routes/pages.py` — `priest_bless_rituals` flag; `party_priests` list.
 - `app/templates/character/sheet.html` — Bless buttons in the Tracking panel;
   `rollBless(title)` and `rerollImpairedTens(priest)` methods on the
   `diceRoller` Alpine component; reroll button wrapper gated on
   `formula.no_reroll_reason === 'impaired' && finalDice.some(d => d.value === 10) && partyPriests.length > 0`.
-
-**Unit tests:**
-- `test_routes.py::TestPriestBlessRituals` (flag + button rendering, priest vs non-priest)
-- `test_routes.py::TestPartyPriestsContext` (party_priests includes all party priests at any Dan, excludes self, empty if no group or no priests)
-
-**Clicktests:**
-- `test_school_abilities.py::test_priest_bless_conversation_topic_rolls_2k1`
-- `test_school_abilities.py::test_priest_bless_research_rolls_2k1`
-- `test_school_abilities.py::test_priest_bless_buttons_have_rules_tooltips`
-- `test_school_abilities.py::test_priest_bless_roll_allows_conviction_spending`
-- `test_school_abilities.py::test_priest_bless_roll_offers_no_void_spending`
-- `test_school_abilities.py::test_priest_bless_buttons_absent_on_non_priest`
-- `test_school_abilities.py::test_priest_bless_reroll_button_shows_on_impaired_10`
-- `test_school_abilities.py::test_priest_bless_reroll_button_tooltip_has_rules_text`
-- `test_school_abilities.py::test_priest_bless_reroll_replaces_10s_and_updates_total`
-- `test_school_abilities.py::test_priest_bless_reroll_button_hides_after_click`
-- `test_school_abilities.py::test_priest_bless_reroll_button_hidden_without_party_priest`
-- `test_school_abilities.py::test_priest_bless_reroll_button_hidden_when_not_impaired`
 
 ---
 
@@ -70,14 +52,7 @@ Mechanical rituals:
 - Server: `app/models.py` stores player choices in `technique_choices` JSON column. `app/services/dice.py:_apply_school_technique_bonus()` applies +1 rolled die for chosen skills.
 - Editor UI allows selecting skills.
 
-**Implementation:** `app/game_data.py:2167` (`first_dan_extra_die: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
-
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_extra_die`
-- `test_dice.py::TestSchoolAbilities::test_flexible_first_dan_no_choice_no_bonus`
-
-**Clicktests:**
-- `test_school_abilities.py::test_priest_1st_dan_skill_selection`
+**Implementation:** `app/game_data.py` (`first_dan_extra_die: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
 
 ---
 
@@ -89,15 +64,7 @@ Mechanical rituals:
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES`.
 - "Honor bonus rolls" are: bragging (gets +2*Honor), precepts (gets +2*Honor), and open sincerity (non-contested sincerity, gets +2*Honor). Contested sincerity (lying, rolled vs interrogation) does NOT qualify.
 
-**Implementation:** `app/game_data.py:2168` (`second_dan_free_raise: None`), `app/services/dice.py:build_skill_formula()`.
-
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_priest_2nd_dan_bragging_bonus`
-- `test_dice.py::TestSchoolAbilities::test_priest_2nd_dan_sincerity_conditional`
-- `test_dice.py::TestSchoolAbilities::test_priest_below_2nd_dan_no_bonus`
-
-**Clicktests:**
-- `test_school_abilities.py::test_priest_2nd_dan_honor_bonus_raise`
+**Implementation:** `app/game_data.py` (`second_dan_free_raise: None`), `app/services/dice.py:build_skill_formula()`.
 
 ---
 
@@ -164,43 +131,6 @@ Mechanics:
   `precepts-pool-section` UI in the Tracking panel;
   pool block wired into all four roll-result modals.
 
-**Unit tests:**
-- `test_routes.py::TestTrackState::test_track_precepts_pool_sanitization` (sanitizer)
-- `test_routes.py::TestTrackState::test_track_rejects_pool_for_non_priest`
-- `test_routes.py::TestTrackState::test_track_rejects_pool_for_priest_below_3rd_dan`
-- `test_routes.py::TestPriestPreceptsPoolContext` (school_abilities flags + Alpine serialization)
-- `test_routes.py::TestPriestPreceptsAlliesContext` (party-broadcast context)
-- `test_routes.py::TestPriestPreceptsPoolEndpoint` (swap endpoint)
-- `test_routes.py::TestPreceptsPoolAuth::test_requires_authentication`
-- `test_versions.py::TestPreceptsPoolDanDrop` (publish / revert wipe)
-
-**Clicktests:**
-- Roll + clear + persist: `test_priest_3rd_dan_pool_button_visible_only_for_priest_3rd_dan`,
-  `test_priest_3rd_dan_roll_creates_pool_of_size_equal_to_precepts`,
-  `test_priest_3rd_dan_clear_button_empties_pool`,
-  `test_priest_3rd_dan_pool_persists_across_reload`,
-  `test_priest_3rd_dan_pool_not_cleared_by_action_dice_clear`,
-  `test_priest_3rd_dan_pool_not_cleared_by_initiative_roll`.
-- Per-adventure reset: `test_priest_3rd_dan_adventure_reset_clears_pool`,
-  `test_priest_3rd_dan_reset_modal_lists_pool_clear`,
-  `test_priest_3rd_dan_reset_button_enabled_with_only_pool`.
-- Display in roll modals: `test_priest_3rd_dan_pool_appears_on_own_parry_roll`,
-  `test_priest_3rd_dan_pool_appears_on_own_wound_check`,
-  `test_priest_3rd_dan_pool_does_not_appear_on_skill_roll`,
-  `test_priest_3rd_dan_pool_predicate_excludes_iaijutsu_duel`,
-  `test_priest_3rd_dan_empty_pool_does_not_render_block`,
-  `test_ally_sees_priest_3rd_dan_pool_on_attack_roll`.
-- Swap: `test_priest_3rd_dan_swap_pool_die_with_lower_rolled_die`,
-  `test_priest_3rd_dan_swap_promotes_unkept_die_into_kept`,
-  `test_priest_3rd_dan_swap_menu_dedupes_rolled_values`,
-  `test_priest_3rd_dan_swap_menu_shows_disabled_when_no_lower`,
-  `test_priest_3rd_dan_equal_value_rolled_die_excluded_from_menu`,
-  `test_priest_3rd_dan_swap_dropdown_opens_and_closes`,
-  `test_ally_swaps_priest_pool_die_and_broadcasts`,
-  `test_ally_swap_strictly_rejects_equal_or_higher_rolled_die`.
-- Hygiene: `test_sheet_js_errors.py::test_sheet_no_js_errors_for_priest_3rd_dan_with_pool`,
-  `test_responsive.py::test_precepts_pool_no_overflow_at_phone_width`.
-
 ---
 
 ## 4th Dan
@@ -209,9 +139,6 @@ Mechanics:
 
 **Status:** Partially implemented. Ring raise is fully implemented; "free raise for self and allies on contested rolls" is out of scope (cross-sheet ally buff).
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
-
-**Unit tests:** None.
-**Clicktests:** None.
 
 ---
 
@@ -225,12 +152,3 @@ Mechanics:
 - **Per-conversation refresh:** not implemented (no "conversation start" trigger exists in the UI).
 - **Lower action dice to counterattack/parry:** not implemented.
 
-**Unit tests:**
-- `test_routes.py::TestInitiativePerRoundResetFlags::test_priest_5th_dan_has_round_conviction_refresh`
-- `test_routes.py::TestInitiativePerRoundResetFlags::test_priest_4th_dan_does_not_have_round_conviction_refresh`
-- `test_routes.py::TestPriestAllyConviction` (ally-spend endpoint suite)
-
-**Clicktests:**
-- `test_school_abilities.py::test_priest_5th_dan_initiative_refreshes_conviction`
-- `test_school_abilities.py::test_priest_5th_dan_initiative_no_message_when_conviction_unspent`
-- `test_school_abilities.py::test_priest_4th_dan_initiative_does_not_reset_conviction`

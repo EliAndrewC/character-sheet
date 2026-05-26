@@ -404,6 +404,7 @@ def test_show_hidden_toggle_default_off(page, live_server_url):
     page.locator('[data-action="toggle-show-hidden"]').check()
     page.wait_for_timeout(200)
     rows = page.locator('[data-roll-id]')
+    rows.first.wait_for(state="attached", timeout=5000)
     assert rows.count() == 1
     # The hidden row should have the visually-distinct styling
     cls = rows.first.get_attribute("class") or ""
@@ -423,6 +424,7 @@ def test_hide_unhide_flow(page, live_server_url):
     # Flip toggle, row reappears with Unhide
     page.locator('[data-action="toggle-show-hidden"]').check()
     page.wait_for_timeout(200)
+    page.locator('[data-roll-id]').first.wait_for(state="attached", timeout=5000)
     assert page.locator('[data-roll-id]').count() == 1
     page.locator('[data-action="unhide-roll"]').first.click()
     page.wait_for_timeout(400)
@@ -529,6 +531,7 @@ def test_readonly_modal_shows_tn_for_attack(page, live_server_url):
     page.locator('[data-action="view-roll"]').first.click()
     page.wait_for_selector('[data-testid="readonly-roll-modal"]', state="visible")
     tn_line = page.locator('[data-testid="readonly-tn"]')
+    tn_line.wait_for(state="visible", timeout=5000)
     assert tn_line.is_visible()
     text = tn_line.text_content().strip()
     assert "35" in text
@@ -574,6 +577,7 @@ def test_readonly_modal_initiative_renders_action_dice(page, live_server_url):
     page.locator('[data-action="view-roll"]').first.click()
     page.wait_for_selector('[data-testid="readonly-roll-modal"]', state="visible")
     dice = page.locator('[data-testid="readonly-action-dice"]')
+    dice.wait_for(state="visible", timeout=5000)
     assert dice.is_visible()
     text = dice.text_content()
     assert "3, 5, 7" in text
@@ -883,6 +887,7 @@ def test_readonly_modal_shows_breakdown_with_vp_spent(page, live_server_url):
     page.locator('[data-action="view-roll"]').first.click()
     page.wait_for_selector('[data-testid="readonly-roll-modal"]', state="visible")
     breakdown = page.locator('[data-testid="readonly-breakdown"]')
+    breakdown.wait_for(state="visible", timeout=5000)
     assert breakdown.is_visible()
     text = breakdown.text_content()
     # All four breakdown sources should be visible
@@ -905,6 +910,7 @@ def test_readonly_modal_explainer_panel(page, live_server_url):
     page.locator('[data-action="view-roll"]').first.click()
     page.wait_for_selector('[data-testid="readonly-roll-modal"]', state="visible")
     explainer = page.locator('[data-testid="readonly-explainer"]')
+    explainer.wait_for(state="visible", timeout=5000)
     assert explainer.is_visible()
     text = explainer.text_content()
     assert "skill" in text.lower()
@@ -1030,6 +1036,7 @@ def test_impaired_tag_tooltip(page, live_server_url):
     """)
     page.wait_for_timeout(300)
     _open_roll_history_page(page)
+    page.locator('[data-testid="impaired-tag"]').first.wait_for(state="attached", timeout=5000)
     assert page.locator('[data-testid="impaired-tag"]').count() == 1
     # The explainer node is always in the DOM (visibility-toggled), so its
     # text is readable without hovering.

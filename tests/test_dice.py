@@ -4616,3 +4616,93 @@ class TestKitsuneWarden:
         assert any("1st Dan" in s for s in (atk.get("bonus_sources") or [])), \
             f"Expected '+1 rolled die from 1st Dan' in attack bonus_sources, got {atk.get('bonus_sources')}"
 
+
+
+class TestSchoolCoverageBackfill:
+    """Backfill for server-side school behaviors a coverage audit found were
+    exercised ONLY by the e2e clicktests (the same risk that let the Kitsune
+    athletics-floor bug ship). The bulk of school dice.py logic already has
+    targeted unit tests; these close the two genuine gaps found:
+
+      1. Kuni Witch Hunter's +1k1 wound-check Special Ability (dice.py:
+         build_wound_check_formula) had no unit assertion.
+      2. The Kitsuki Magistrate abilities were unit-tested only at the leaf
+         builders (build_combat_formula / build_skill_formula); nothing
+         asserted they survive into build_all_roll_formulas - the integration
+         layer where the Kitsune bug actually lived.
+    """
+
+    def test_kuni_witch_hunter_wound_check_plus_1k1(self):
+        """+1k1 on wound checks (untainted base). Tested at Dan 0 to isolate
+        the always-on Special Ability from the 1st-Dan extra wound-check die."""
+        kuni = make_character_data(
+            school="kuni_witch_hunter",
+            rings={"Air": 2, "Fire": 2, "Earth": 3, "Water": 2, "Void": 2},
+            knacks={},  # Dan 0
+        )
+        ctl = make_character_data(
+            school="akodo_bushi",
+            rings={"Air": 2, "Fire": 2, "Earth": 3, "Water": 2, "Void": 2},
+            knacks={},
+        )
+        wc = build_wound_check_formula(kuni)
+        wc_ctl = build_wound_check_formula(ctl)
+        assert wc["rolled"] == wc_ctl["rolled"] + 1
+        assert wc["kept"] == wc_ctl["kept"] + 1
+        assert any("Kuni Special" in s for s in wc["bonus_sources"])
+
+    def test_kitsuki_abilities_wired_into_build_all_roll_formulas(self):
+        """Integration: the Water-for-interrogation swap and +2*Water attack
+        flat both reach the dict the UI consumes (not just the leaf builders).
+        Dan 0 isolates the Special Ability from the 1st-Dan extra die; Air != Water
+        so the swap is observable."""
+        kitsuki = make_character_data(
+            school="kitsuki_magistrate",
+            school_ring_choice="Water",
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
+            knacks={},  # Dan 0
+            attack=2,
+            skills={"interrogation": 3},
+        )
+        formulas = build_all_roll_formulas(kitsuki)
+        assert formulas["attack"]["flat"] == 8  # 2 * Water(4)
+        assert formulas["skill:interrogation"]["kept"] == 4  # Water, not Air(2)
+        assert "(Water)" in formulas["skill:interrogation"]["label"]
+
+    def test_brotherhood_1st_dan_unarmed_damage_plus_1k1(self):
+        """Brotherhood of Shinsei 1st Dan: +1k1 unarmed damage. This is the
+        ONLY branch that sets damage_extra_kept, and it had no unit assertion
+        (e2e-only). Asserted through build_all_roll_formulas."""
+        bro = make_character_data(
+            school="brotherhood_of_shinsei_monk",
+            knacks={"conviction": 1, "otherworldliness": 1, "worldliness": 1},
+            attack=2,
+        )
+        atk = build_all_roll_formulas(bro)["attack"]
+        assert atk["damage_extra_rolled"] == 1
+        assert atk["damage_extra_kept"] == 1
+        assert any("unarmed" in s for s in atk["damage_bonus_sources"])
+
+    def test_brotherhood_no_unarmed_damage_below_1st_dan(self):
+        """Dan-gated: a Brotherhood monk with rank-0 school knacks (Dan 0)
+        gets no unarmed damage bonus."""
+        bro0 = make_character_data(
+            school="brotherhood_of_shinsei_monk", knacks={}, attack=2,
+        )
+        atk = build_all_roll_formulas(bro0)["attack"]
+        assert atk["damage_extra_rolled"] == 0
+        assert atk["damage_extra_kept"] == 0
+
+    def test_courtier_damage_plus_air_flat(self):
+        """Courtier adds +Air as a flat DAMAGE bonus (distinct from the +Air
+        attack flat, which is separately tested). Neither unit nor e2e isolated
+        this damage contribution before."""
+        c = make_character_data(
+            school="courtier",
+            knacks={"discern_honor": 1, "oppose_social": 1, "worldliness": 1},
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+            attack=2,
+        )
+        atk = build_all_roll_formulas(c)["attack"]
+        assert atk["damage_flat_bonus"] == 3  # Air
+        assert any("Courtier (Air)" in s for s in atk["damage_bonus_sources"])

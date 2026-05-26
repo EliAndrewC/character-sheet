@@ -115,6 +115,7 @@ def test_owner_dropdown_visible_for_admin(page, live_server_url):
     create_and_apply(page, live_server_url, "Admin Dropdown")
     page.locator('a:text-is("Edit")').click()
     page.wait_for_selector('input[name="name"]')
+    page.locator('select[name="owner_discord_id"]').wait_for(state="visible", timeout=5000)
     assert page.locator('select[name="owner_discord_id"]').is_visible()
 
 

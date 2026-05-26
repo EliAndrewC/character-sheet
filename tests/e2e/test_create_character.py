@@ -63,6 +63,7 @@ def test_new_character_starts_hidden_with_banner_and_chip(page, live_server_url)
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     banner = page.locator('[data-testid="hidden-draft-banner"]')
+    banner.wait_for(state="visible", timeout=5000)
     assert banner.is_visible()
     text = banner.text_content()
     assert "hidden" in text.lower()
@@ -159,6 +160,7 @@ def test_apply_changes_keeps_hidden_when_checkbox_unchecked(page, live_server_ur
     page.wait_for_selector('input[name="name"]')
     chip = page.locator('[data-testid="visibility-toggle"]')
     assert chip.get_attribute("data-state") == "hidden"
+    page.locator('[data-testid="hidden-draft-banner"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="hidden-draft-banner"]').is_visible()
 
 

@@ -18,11 +18,7 @@
   - Server: `app/routes/pages.py` passes `akodo_temp_vp_on_feint: true` in school_abilities.
   - Client: `app/templates/character/sheet.html` shows "Succeeded (+4 temp VP)" and "Failed (+1 temp VP)" buttons after feint rolls.
 
-**Implementation:** `app/game_data.py:893`, `app/services/dice.py` (SCHOOLS_WITH_TEMP_VOID computed in `app/game_data.py`), `app/routes/pages.py` (akodo_temp_vp_on_feint flag), `app/templates/character/sheet.html` (Temp Void counter, feint result buttons).
-
-**Unit tests:** None specific to the auto-grant mechanic.
-**Clicktests:**
-- `test_school_abilities.py::test_akodo_feint_temp_vp`
+**Implementation:** `app/game_data.py`, `app/services/dice.py` (SCHOOLS_WITH_TEMP_VOID computed in `app/game_data.py`), `app/routes/pages.py` (akodo_temp_vp_on_feint flag), `app/templates/character/sheet.html` (Temp Void counter, feint result buttons).
 
 ---
 
@@ -35,12 +31,6 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 - Reflected in roll formulas on the View Sheet.
 
-**Unit tests:**
-- `test_dice.py::TestBuildAllRollFormulas::test_wound_check_formula_present` - verifies wound check rolled=5 for Akodo (Water 3 + 1 + 1 from 1st Dan)
-
-**Clicktests:**
-- `test_school_abilities.py::test_akodo_1st_dan_formula_display` - verifies extra die in roll formula display for attack/double_attack/wound_check
-
 ---
 
 ## 2nd Dan
@@ -51,10 +41,6 @@
 - `second_dan_free_raise: "wound_check"`
 - Applied as +5 flat bonus on wound check rolls via `_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 
-**Unit tests:** None directly testing the Akodo 2nd Dan free raise on wound checks.
-**Clicktests:**
-- `test_school_abilities.py::test_akodo_2nd_dan_wound_check_bonus`
-
 ---
 
 ## 3rd Dan
@@ -64,9 +50,6 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `akodo_wc_attack_bonus: true` and `akodo_attack_skill` in school_abilities.
 - Client: after passing a wound check (in `wcKeepLightWounds()`), computes `floor(margin / 5) * attack_skill` and adds it as an individual entry to `akodoBankedBonuses[]`. Multiple bonuses from different wound checks accumulate as separate entries. Each can be applied independently after seeing an attack roll, or marked as spent from the "Banked 3rd Dan Bonuses" section in the tracking area. Undo is supported.
-
-**Clicktests:**
-- `test_school_abilities.py::test_akodo_3rd_dan_wc_banks_bonus`
 
 **Questions (ANSWERED):**
 - Formula: `floor((wound_check_roll - light_wounds) / 5) * attack_skill` = a single flat bonus
@@ -87,15 +70,6 @@
   - Server: `app/routes/pages.py` passes `wc_vp_free_raise: true` in void_spend_config when akodo_bushi and dan >= 4.
   - Client: `app/templates/character/sheet.html` shows "Spend VP (+5)" and "Undo VP" buttons in the wound check discretionary section AFTER seeing the roll result. Each VP spent adds +5 flat to the wound check total. This is a post-roll decision per the rules ("after rolling a wound check").
 
-**Unit tests:**
-- `test_remaining_features.py::TestFourthDanAutoRaise` - 7 tests covering the ring raise mechanics
-- `test_xp.py` - covers 4th Dan XP discount
-
-**Clicktests:**
-- `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring`
-- `test_editor_controls.py::test_fourth_dan_school_ring_max_7`
-- Plus 6 additional 4th Dan ring state tests
-
 ---
 
 ## 5th Dan
@@ -105,8 +79,4 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `akodo_reflect_damage: true` in school_abilities.
 - Client: `app/templates/character/sheet.html` shows a "Reflect Damage" section in the wound check result with a VP input and button. Each VP spent deals 10 LW to the attacker (informational - applied on the attacker's sheet manually).
-
-**Clicktests:**
-- `test_school_abilities.py::test_akodo_5th_dan_reflect_damage_ui`
-
 

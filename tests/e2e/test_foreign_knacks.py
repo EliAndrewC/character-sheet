@@ -80,6 +80,7 @@ def test_never_mind_dismisses_without_change(page, live_server_url):
     page.select_option('[data-testid="foreign-knack-select"]', "__cancel__")
     page.wait_for_timeout(150)
     # Picker should be hidden again, button visible again.
+    page.locator('[data-testid="add-foreign-knack-btn"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="add-foreign-knack-btn"]').is_visible()
     # No foreign-knack rows appeared and no autosave inputs were emitted.
     assert page.locator('[data-testid^="foreign-knack-row-"]').count() == 0
@@ -141,6 +142,7 @@ def test_xp_summary_card_appears_only_when_present(page, live_server_url):
     # Now the card appears.
     page.wait_for_selector('[data-xp-card="foreign_knacks"]', timeout=5000)
     card = page.locator('[data-xp-card="foreign_knacks"]')
+    card.wait_for(state="visible", timeout=5000)
     assert card.is_visible()
     # Total = 10 (the rank-1 premium).
     assert "10" in (card.text_content() or "")
@@ -173,6 +175,7 @@ def test_foreign_knack_listed_distinctly_on_sheet(page, live_server_url):
     apply_changes(page, "sheet test")
     page.wait_for_selector('[data-testid="foreign-knacks-list"]', timeout=5000)
     section = page.locator('[data-testid="foreign-knacks-list"]')
+    section.wait_for(state="visible", timeout=5000)
     assert section.is_visible()
     text = section.text_content() or ""
     assert "Athletics" in text

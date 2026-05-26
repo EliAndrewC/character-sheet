@@ -77,6 +77,7 @@ def test_status_chevron_expands_detail(page, live_server_url):
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "GoodRep")
     rank_row = page.locator('[data-status-row="rank"]')
+    rank_row.wait_for(state="visible", timeout=5000)
     assert rank_row.is_visible()
     pills = rank_row.locator('[data-status-pills="rank"]')
     assert pills.is_visible()
@@ -89,6 +90,7 @@ def test_status_chevron_expands_detail(page, live_server_url):
     # Click the row to expand.
     rank_row.locator('div').first.click()
     page.wait_for_timeout(150)
+    rank_row.locator('div.status-tooltip-grid').first.wait_for(state="visible", timeout=5000)
     assert rank_row.locator('div.status-tooltip-grid').first.is_visible()
     # The expanded breakdown spells out the full source/context.
     assert "Good Reputation" in rank_row.text_content()
@@ -473,8 +475,10 @@ def test_xp_summary_expand_switch_collapse(page, live_server_url):
     # Click Rings -> panel opens with Rings detail
     page.locator('[data-xp-card="rings"]').click()
     page.wait_for_timeout(200)
+    panel.wait_for(state="visible", timeout=5000)
     assert panel.is_visible()
     rings_detail = page.locator('[data-xp-detail="rings"]')
+    rings_detail.wait_for(state="visible", timeout=5000)
     assert rings_detail.is_visible()
     rings_text = rings_detail.text_content()
     assert "Air" in rings_text and "→" in rings_text and "15" in rings_text
@@ -482,7 +486,9 @@ def test_xp_summary_expand_switch_collapse(page, live_server_url):
     # Click School Knacks -> only that detail is visible now
     page.locator('[data-xp-card="school_knacks"]').click()
     page.wait_for_timeout(200)
+    panel.wait_for(state="visible", timeout=5000)
     assert panel.is_visible()
+    page.locator('[data-xp-detail="school_knacks"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-xp-detail="school_knacks"]').is_visible()
     assert not page.locator('[data-xp-detail="rings"]').is_visible()
     assert "Iaijutsu" in page.locator('[data-xp-detail="school_knacks"]').text_content()
@@ -512,6 +518,7 @@ def test_xp_summary_hrr_always_shows_wasp_note(page, live_server_url):
     page.locator('[data-xp-card="honor_rank_recognition"]').click()
     page.wait_for_timeout(200)
     detail = page.locator('[data-xp-detail="honor_rank_recognition"]')
+    detail.wait_for(state="visible", timeout=5000)
     assert detail.is_visible()
     assert "Wasp Campaign" in detail.text_content()
 
@@ -534,6 +541,7 @@ def test_xp_summary_disadvantages_on_bottom_row(page, live_server_url):
     dis_card.click()
     page.wait_for_timeout(200)
     detail = page.locator('[data-xp-detail="disadvantages"]')
+    detail.wait_for(state="visible", timeout=5000)
     assert detail.is_visible()
     assert "Proud" in detail.text_content()
 
@@ -568,6 +576,7 @@ def test_school_knack_expanded_shows_full_rules(page, live_server_url):
     # Click to expand
     iaijutsu_row.click()
     page.wait_for_timeout(300)
+    rules_panel.wait_for(state="visible", timeout=5000)
     assert rules_panel.is_visible()
     panel_text = rules_panel.text_content()
     # Phrase that only appears in the full upstream rules text
@@ -589,6 +598,7 @@ def test_isawa_ishi_absorb_void_shows_per_day_override(page, live_server_url):
     rules_panel = row.locator('div.whitespace-pre-line')
     row.click()
     page.wait_for_timeout(300)
+    rules_panel.wait_for(state="visible", timeout=5000)
     assert rules_panel.is_visible()
     html = rules_panel.inner_html()
     assert "<s>per adventure</s>" in html
@@ -626,6 +636,7 @@ def test_kitsune_warden_absorb_void_canonical_text(page, live_server_url):
     rules_panel = row.locator('div.whitespace-pre-line')
     row.click()
     page.wait_for_timeout(300)
+    rules_panel.wait_for(state="visible", timeout=5000)
     assert rules_panel.is_visible()
     html = rules_panel.inner_html()
     assert "per adventure" in rules_panel.text_content()

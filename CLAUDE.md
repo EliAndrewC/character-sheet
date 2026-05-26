@@ -89,6 +89,25 @@ Clicktests start a live uvicorn server on a random port with a temp database, th
 
 Available marks, which features they cover, and which test files they map to are all documented in `tests/e2e/COVERAGE.md` (the "Pytest Marks" section). Marks are defined in `pytest.ini`.
 
+### JS unit tests (pure roll-math helpers)
+
+Pure roll/engine math extracted from the sheet's Alpine layer lives in
+`app/static/js/roll_math.js` (no DOM/Alpine deps; exposed as `window.L7RRollMath`
+for the browser and `module.exports` for Node). It is unit-tested with Node's
+built-in runner - no npm install, no framework, ~0.2s:
+
+```bash
+node --test tests/js/
+```
+
+**This MUST pass before any deploy** (see the Development Workflow / Deployment
+sections). When you add or change school roll math, put the pure computation
+(inputs -> number, side-effect free) in `roll_math.js` and assert it in
+`tests/js/`, rather than inlining it in an Alpine `@click` handler where only a
+slow browser clicktest can reach it. The Alpine layer keeps the *interaction*
+(when to apply, accumulate, undo, optimistic display); the *arithmetic* lives in
+`roll_math.js`. See `akodoBankedBonus` for the pattern.
+
 ### Coverage Policy
 
 **Coverage must report 100%.** Either write a real test, or add `# pragma: no cover` with a one-line comment explaining why the line is untestable. The pragma forces the "why not" to be deliberate and visible in the diff, instead of hidden in a policy doc that drifts out of date.
@@ -119,7 +138,7 @@ New features follow this cycle:
 
 The key distinction: unit tests use TDD (tests first), clicktests are written after the feature works. Clicktests are run selectively, not as part of every iteration loop. **Do not skip clicktests** - if a feature changes frontend behavior, it needs a clicktest. The coverage checklist in `tests/e2e/COVERAGE.md` is the source of truth for what's tested. **After writing clicktests, always update `tests/e2e/COVERAGE.md`** with entries for every new test function. This is required, not optional - every test must appear in COVERAGE.md.
 
-7. **Deploy after UI changes.** Any change that touches the frontend (templates, CSS, client-side JS) should be deployed to Fly.io after tests pass so the live site stays current.
+7. **Deploy after UI changes.** Any change that touches the frontend (templates, CSS, client-side JS) should be deployed to Fly.io after tests pass so the live site stays current. **Before every deploy, `node --test tests/js/` MUST pass** (the pure roll-math layer, ~0.2s) - alongside the unit suite and the relevant clicktests.
 
 **Do NOT auto-run the full e2e suite.** The full suite takes ~46 minutes on the dev container and is not part of the per-feature loop. Targeted clicktests by `pytest.mark` (step 6) are the only e2e gate before declaring a feature done. Only run the full suite when the user explicitly asks for it.
 
@@ -289,6 +308,8 @@ The `school-features/` directory contains one .md file per school documenting:
 This inventory is the basis for future school-by-school implementation work. When implementing a school feature, update the corresponding .md file to reflect the new status.
 
 ## Deployment
+
+**Pre-deploy gate:** `node --test tests/js/` (pure roll-math, ~0.2s) and the unit suite must pass, plus the relevant clicktests for anything you changed.
 
 The Fly CLI is not pre-installed in the sandbox container. Install it and authenticate before deploying:
 

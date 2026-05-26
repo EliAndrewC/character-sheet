@@ -18,11 +18,7 @@
   - Server: `app/routes/pages.py` passes `mirumoto_temp_vp_on_parry: true` in school_abilities.
   - Client: `app/templates/character/sheet.html` auto-increments temp VP after parry rolls in `runRoll()`.
 
-**Implementation:** `app/game_data.py:982`, `app/game_data.py:2382` (SCHOOLS_WITH_TEMP_VOID membership), `app/routes/pages.py` (mirumoto_temp_vp_on_parry flag), `app/templates/character/sheet.html` (Temp Void counter, auto-grant in runRoll).
-
-**Unit tests:** None specific to the auto-grant mechanic.
-**Clicktests:**
-- `test_school_abilities.py::test_mirumoto_parry_temp_vp`
+**Implementation:** `app/game_data.py`, `app/game_data.py` (SCHOOLS_WITH_TEMP_VOID membership), `app/routes/pages.py` (mirumoto_temp_vp_on_parry flag), `app/templates/character/sheet.html` (Temp Void counter, auto-grant in runRoll).
 
 ---
 
@@ -35,13 +31,6 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_wound_check_formula()`.
 - Reflected in roll formulas on the View Sheet.
 
-**Unit tests:**
-- `test_dice.py::TestSchoolTechniqueBonus::test_school_technique_first_dan_extra_die` - Uses Mirumoto Bushi to set up a dan-1 character (lines 362-369).
-- `test_dice.py::TestCombatFormula::test_mirumoto_bushi_1st_dan_parry_extra_die` - Directly tests that a Mirumoto at dan 2 gets +1 rolled die on parry (line 417). Verifies `rolled=5` (parry 2 + Air 2 + 1 from 1st Dan) and `flat=5` (from 2nd Dan free raise).
-
-**Clicktests:**
-- `test_school_abilities.py::test_mirumoto_1st_dan_formula_extra_die`
-
 ---
 
 ## 2nd Dan
@@ -52,12 +41,6 @@
 - `second_dan_free_raise: "parry"`
 - Applied as +5 flat bonus on parry rolls via `_apply_school_technique_bonus()`.
 
-**Unit tests:**
-- `test_dice.py::TestCombatFormula::test_mirumoto_bushi_1st_dan_parry_extra_die` - Also validates 2nd Dan: asserts `flat=5` on parry at dan 2 (line 428).
-
-**Clicktests:**
-- `test_school_abilities.py::test_mirumoto_2nd_dan_parry_bonus`
-
 ---
 
 ## 3rd Dan
@@ -67,13 +50,6 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `mirumoto_round_points: true` and `mirumoto_round_points_max: 2*attack_skill`. Client: tracking section shows a per-round points counter with +/- and Reset. "Spend 3rd Dan Point (+2)" button appears on attack and parry roll results. Points can be spent for +2 flat on the roll.
 - Pool is auto-refilled to max when the character rolls initiative (new combat round), with a "Mirumoto 3rd Dan points refreshed for the new combat round" message in the initiative result modal. See `_resetPerRoundAbilities` in `app/templates/character/sheet.html`. No message appears when the pool was already full.
-
-**Clicktests:**
-- `test_school_abilities.py::test_mirumoto_round_points_display_and_buttons`
-- `test_school_abilities.py::test_mirumoto_round_points_counter`
-- `test_school_abilities.py::test_mirumoto_3rd_dan_initiative_refills_round_points`
-- `test_school_abilities.py::test_mirumoto_3rd_dan_initiative_no_message_when_pool_full`
-- `test_school_abilities.py::test_non_initiative_roll_does_not_trigger_reset`
 
 **Questions (ANSWERED):**
 - X = attack skill rank. So 2 * attack_skill points per round.
@@ -93,15 +69,6 @@
   - Server: `app/routes/pages.py` passes `mirumoto_parry_modifier: true` in school_abilities.
   - Client: `app/templates/character/sheet.html` in `atkComputeDamage()` - vs double attacks: no parry reduction (auto SW preserved); vs regular attacks: parry reduction halved (rounded down).
 
-**Unit tests:**
-- `test_remaining_features.py::TestFourthDanAutoRaise` - covers the ring raise mechanics (generic).
-- `test_xp.py` - covers 4th Dan XP discount.
-
-**Clicktests:**
-- `test_editor_controls.py::test_fourth_dan_auto_raises_school_ring` (generic).
-- `test_editor_controls.py::test_fourth_dan_school_ring_max_7` (generic).
-- `test_school_abilities.py::test_mirumoto_4th_dan_reduced_damage_dice`
-
 ---
 
 ## 5th Dan
@@ -117,17 +84,9 @@
 - "Combat rolls" includes wound checks (still need to confirm with user which specific roll types qualify).
 - Does this apply to temporary void points as well?
 
-**Clicktests:**
-- `test_school_abilities.py::test_mirumoto_5th_dan_vp_plus_10`
-
 No unit test for the pages.py flag (it's a template context variable), but the behavior is tested through the UI.
 
 ---
 
 ## Test References
 
-- `tests/test_dice.py:364` - Uses `mirumoto_bushi` to test 1st Dan extra die on parry/double_attack.
-- `tests/test_dice.py:417` - Directly tests Mirumoto 1st Dan parry extra die and 2nd Dan free raise.
-- `tests/e2e/test_school_selection.py:48` - Uses `mirumoto_bushi` to test that school knack controls appear (counterattack, double_attack, iaijutsu).
-- `tests/e2e/test_sheet_js_errors.py:16` - Includes `mirumoto_bushi` in the JS error check suite (Void school ring, counterattack knack, temp void).
-- `tests/e2e/test_sheet_display.py:290` - Uses `mirumoto_bushi` for the school knack expansion rules text test.

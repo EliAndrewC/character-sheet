@@ -30,34 +30,6 @@
 
 **Design note:** `build_initiative_formula` already sets `reroll_tens=False` for every school, so a kept 10 truly reads as 10 on the client. No Kakita-specific reroll override was needed.
 
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_kakita_phase_zero_flag`
-- `test_dice.py::TestSchoolAbilities::test_non_kakita_initiative_no_phase_zero_flag`
-- `test_routes.py::TestKakitaPhaseZeroFlag::test_kakita_has_phase_zero_flag`
-- `test_routes.py::TestKakitaPhaseZeroFlag::test_non_kakita_does_not_have_phase_zero_flag`
-- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_formula_exposed`
-- `test_dice.py::TestSchoolAbilities::test_non_kakita_no_iaijutsu_attack_formula`
-- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_formula_mirrors_iaijutsu_knack_rolled_kept`
-- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_formula_respects_4th_dan_damage_bonus`
-- `test_dice.py::TestSchoolAbilities::test_kakita_below_4th_dan_iaijutsu_attack_no_damage_bonus`
-
-**Clicktests:**
-- `test_school_abilities.py::test_kakita_phase_0_behavioral`
-- `test_school_abilities.py::test_kakita_initiative_keeps_10_over_higher_lower_dice`
-- `test_school_abilities.py::test_kakita_initiative_two_10s_both_become_phase_0`
-- `test_school_abilities.py::test_non_kakita_10_on_initiative_is_unkept`
-- `test_school_abilities.py::test_kakita_phase_0_die_has_phase_zero_svg_class`
-- `test_school_abilities.py::test_kakita_phase_0_die_survives_reload`
-- `test_school_abilities.py::test_kakita_phase_0_die_tooltip_mentions_iaijutsu`
-- `test_school_abilities.py::test_kakita_phase_zero_die_menu_shows_only_iaijutsu_attack`
-- `test_school_abilities.py::test_kakita_non_zero_die_menu_unchanged`
-- `test_school_abilities.py::test_kakita_phase_zero_menu_opens_attack_modal_for_iaijutsu`
-- `test_school_abilities.py::test_kakita_phase_zero_attack_modal_notes_interrupt`
-- `test_school_abilities.py::test_kakita_phase_zero_attack_spends_the_clicked_die`
-- `test_school_abilities.py::test_non_kakita_with_iaijutsu_does_not_expose_iaijutsu_attack_key`
-- `test_sheet_js_errors.py` includes `kakita_duelist` in the school list.
-- `test_school_selection.py` references `kakita_duelist` for selection testing.
-
 ---
 
 ## 1st Dan
@@ -69,17 +41,6 @@
 - Applied in `app/services/dice.py:_apply_school_technique_bonus()` and `build_initiative_formula()`.
 - The Kakita-only `knack:iaijutsu:attack` variant also surfaces the bonus: its `bonus_sources` list includes "+1 rolled die from 1st Dan" so the attack modal's pre-roll probability panel reports it, and an `iaijutsu_first_dan_extra_die` flag drives a dedicated "+1 rolled die from 1st Dan (iaijutsu)" line in the post-roll breakdown.
 
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_bonus_sources_lists_1st_dan_extra_die`
-- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_formula_includes_1st_dan_rolled_die`
-
-**Clicktests:**
-- `test_school_abilities.py::test_kakita_1st_dan_formula_extra_die`
-- `test_school_abilities.py::test_kakita_iaijutsu_attack_modal_lists_1st_dan_and_2nd_dan_bonuses`
-- `test_school_abilities.py::test_kakita_iaijutsu_attack_modal_probability_uses_1st_dan_rolled_die`
-- `test_school_abilities.py::test_kakita_iaijutsu_attack_results_show_1st_dan_extra_die_line`
-- `test_school_abilities.py::test_non_kakita_iaijutsu_attack_has_no_1st_dan_flag`
-
 ---
 
 ## 2nd Dan
@@ -90,13 +51,6 @@
 - `second_dan_free_raise: "iaijutsu"`
 - Applied as +5 flat bonus on iaijutsu rolls via `_apply_school_technique_bonus()`.
 - Also surfaces on the `knack:iaijutsu:attack` variant: the 2nd Dan free raise rides on `atk.flat` / `atk.bonuses` (via `build_knack_formula`'s call into `_apply_school_technique_bonus`) and is echoed into `bonus_sources` for the attack modal's pre-roll summary.
-
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_bonus_sources_lists_2nd_dan_free_raise`
-- `test_dice.py::TestSchoolAbilities::test_kakita_iaijutsu_attack_formula_includes_2nd_dan_flat_in_probability`
-
-**Clicktests:**
-- `test_school_abilities.py::test_kakita_2nd_dan_iaijutsu_bonus`
 
 ---
 
@@ -116,30 +70,6 @@
 - "Defender is considered to act in phase 11" if they have no remaining actions.
 - "You know the next action of everyone within striking range" is an information display mechanic.
 
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_kakita_3rd_dan_attack_flag_set`
-- `test_dice.py::TestSchoolAbilities::test_kakita_3rd_dan_parry_no_flag`
-- `test_dice.py::TestSchoolAbilities::test_kakita_3rd_dan_attack_knack_flags`
-- `test_dice.py::TestSchoolAbilities::test_kakita_3rd_dan_athletics_attack_flag`
-- `test_dice.py::TestSchoolAbilities::test_kakita_3rd_dan_iaijutsu_attack_flag`
-- `test_dice.py::TestSchoolAbilities::test_kakita_below_3rd_dan_no_defender_phase_flag`
-- `test_dice.py::TestSchoolAbilities::test_kakita_3rd_dan_flag_only_for_kakita_school`
-
-**Clicktests:**
-- `test_school_abilities.py::test_kakita_3rd_dan_defender_phase_control_hidden_without_initiative`
-- `test_school_abilities.py::test_kakita_3rd_dan_defender_phase_control_hidden_out_of_dice`
-- `test_school_abilities.py::test_kakita_3rd_dan_defender_phase_control_visible_with_action_dice`
-- `test_school_abilities.py::test_kakita_3rd_dan_bonus_applied_to_attack_roll`
-- `test_school_abilities.py::test_kakita_3rd_dan_bonus_clamps_when_defender_acts_first`
-- `test_school_abilities.py::test_kakita_3rd_dan_bonus_shifts_probability_chart`
-- `test_school_abilities.py::test_kakita_3rd_dan_bonus_uses_clicked_die_value`
-- `test_school_abilities.py::test_kakita_3rd_dan_phase_11_yields_max_bonus_for_no_remaining_actions`
-- `test_school_abilities.py::test_kakita_below_3rd_dan_no_bonus_control`
-- `test_school_abilities.py::test_kakita_3rd_dan_bonus_on_phase_zero_die`
-- `test_school_abilities.py::test_kakita_3rd_dan_roll_button_disabled_until_phase_picked`
-- `test_school_abilities.py::test_kakita_3rd_dan_roll_button_enabled_with_no_remaining_actions`
-- `test_school_abilities.py::test_kakita_below_3rd_dan_roll_button_always_enabled`
-
 ---
 
 ## 4th Dan
@@ -149,12 +79,6 @@
 **Status:** Fully implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
 - "Free raise on iaijutsu DAMAGE rolls" is fully implemented via `app/services/dice.py:build_all_roll_formulas()` (iaijutsu damage metadata with +5 flat bonus when school_id == "kakita_duelist" and dan >= 4).
-
-**Unit tests:**
-- `test_dice.py::TestSchoolAbilities::test_kakita_duelist_4th_dan_iaijutsu_damage_bonus` - verifies +5 flat on iaijutsu damage at 4th Dan
-- `test_dice.py::TestSchoolAbilities::test_kakita_duelist_below_4th_dan_no_damage_bonus` - verifies no bonus below 4th Dan
-**Clicktests:**
-- `test_school_abilities.py::test_kakita_4th_dan_iaijutsu_damage_bonus`
 
 ---
 
@@ -174,34 +98,3 @@
 
 **General contested-roll skill-gap bonus:** for every rank by which the Kakita's iaijutsu exceeds the opponent's picked skill (iaijutsu when they have it, attack when they don't), the player gains +5 flat (one free raise). This is a general contested-roll rule that currently only surfaces on the 5th Dan modal; future contested-roll flows should use the same `_kakita5thContestSkillBonus` math pattern.
 
-**Unit tests:**
-- `test_routes.py::TestKakitaPhaseZeroFlag::test_kakita_5th_dan_has_phase_zero_contest_flag`
-- `test_routes.py::TestKakitaPhaseZeroFlag::test_kakita_below_5th_dan_no_phase_zero_contest_flag`
-- `test_routes.py::TestKakitaPhaseZeroFlag::test_non_kakita_no_phase_zero_contest_flag`
-
-**Clicktests:**
-- `test_school_abilities.py::test_kakita_5th_dan_button_visible_on_dan_5_sheet`
-- `test_school_abilities.py::test_kakita_below_5th_dan_hides_button`
-- `test_school_abilities.py::test_kakita_5th_dan_button_opens_contest_modal`
-- `test_school_abilities.py::test_kakita_5th_dan_modal_defaults_opponent_has_iaijutsu`
-- `test_school_abilities.py::test_kakita_5th_dan_opponent_without_iaijutsu_grants_plus_5`
-- `test_school_abilities.py::test_kakita_5th_dan_3rd_dan_bonus_applies_with_attacker_phase_0`
-- `test_school_abilities.py::test_kakita_5th_dan_roll_applies_bonuses`
-- `test_school_abilities.py::test_kakita_5th_dan_damage_scales_up_when_won_by_5`
-- `test_school_abilities.py::test_kakita_5th_dan_damage_scales_down_when_lost_by_5`
-- `test_school_abilities.py::test_kakita_5th_dan_damage_unchanged_when_diff_under_5`
-- `test_school_abilities.py::test_kakita_5th_dan_button_disabled_after_use_until_next_initiative`
-- `test_school_abilities.py::test_kakita_5th_dan_modal_cancel_before_roll_does_not_consume`
-- `test_school_abilities.py::test_kakita_5th_dan_modal_inherits_4th_dan_damage_bonus`
-- `test_school_abilities.py::test_kakita_5th_dan_opponent_skill_dropdown_defaults_to_4`
-- `test_school_abilities.py::test_kakita_5th_dan_opponent_skill_drops_to_3_when_unchecked`
-- `test_school_abilities.py::test_kakita_5th_dan_opponent_skill_back_to_4_when_rechecked`
-- `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_higher`
-- `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_equal`
-- `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_when_lower`
-- `test_school_abilities.py::test_kakita_5th_dan_contest_skill_bonus_shown_in_prebonus_and_breakdown`
-- `test_school_abilities.py::test_kakita_5th_dan_uses_rollandanimate_for_contest`
-- `test_school_abilities.py::test_kakita_5th_dan_section_hidden_before_initiative`
-- `test_school_abilities.py::test_kakita_5th_dan_section_appears_after_initiative`
-- `test_school_abilities.py::test_kakita_5th_dan_section_disappears_when_action_dice_cleared`
-- `test_school_abilities.py::test_kakita_5th_dan_used_flag_persists_through_reload`

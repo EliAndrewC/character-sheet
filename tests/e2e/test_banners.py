@@ -17,6 +17,7 @@ def test_draft_banner_for_new_character(page, live_server_url):
     # Navigate to the view sheet
     page.locator('button:text("View Sheet")').click()
     page.wait_for_selector("h1")
+    page.locator('text="Draft"').first.wait_for(state="visible", timeout=5000)
     assert page.locator('text="Draft"').first.is_visible()
     assert "no versions" in page.text_content("body").lower()
 

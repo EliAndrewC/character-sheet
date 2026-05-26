@@ -53,6 +53,7 @@ def test_roll_menu_shows_void_options(page, live_server_url):
     page.locator('[data-roll-key="skill:bragging"]').click()
     page.wait_for_timeout(500)
     menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    menu.wait_for(state="visible", timeout=5000)
     assert menu.is_visible(), "Roll menu should be visible"
     # Check menu has void option
     menu_text = menu.text_content()
@@ -165,6 +166,7 @@ def test_ow_submenu_appears_for_basic_skill_with_ow_available(page, live_server_
     page.locator('[data-roll-menu="root"] >> text="Roll "').first.hover()
     page.wait_for_timeout(200)
     submenu = page.locator('[data-ow-submenu="roll"]')
+    submenu.wait_for(state="visible", timeout=5000)
     assert submenu.is_visible(), "OW submenu should be visible on hover"
     text = submenu.text_content()
     assert "Spend 1 Otherworldliness" in text
@@ -336,6 +338,7 @@ def test_ow_submenu_appears_for_unskilled_basic_skill(page, live_server_url):
     page.locator('[data-roll-menu="root"] >> text="Roll "').first.hover()
     page.wait_for_timeout(200)
     submenu = page.locator('[data-ow-submenu="roll"]')
+    submenu.wait_for(state="visible", timeout=5000)
     assert submenu.is_visible(), "OW submenu should appear for unskilled basic skill"
     text = submenu.text_content()
     # Unskilled basic skill: capacity=5, pool=4, so 4 options (1..4)

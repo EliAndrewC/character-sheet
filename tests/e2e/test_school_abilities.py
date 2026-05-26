@@ -364,6 +364,7 @@ def test_bayushi_banked_raises_tracking_and_persist(page, live_server_url):
     """)
     page.wait_for_timeout(500)
     # Should show in tracking section
+    page.locator('text="Banked Feint Raises"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked Feint Raises"').is_visible()
     body = page.text_content("body")
     assert "+10" in body
@@ -379,6 +380,7 @@ def test_bayushi_banked_raises_tracking_and_persist(page, live_server_url):
     page.wait_for_timeout(500)
     val = page.evaluate("window._trackingBridge?.bayushiBankedFeintRaise || 0")
     assert val == 5, f"Expected 5 after refresh, got {val}"
+    page.locator('text="Banked Feint Raises"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked Feint Raises"').is_visible()
 
 
@@ -427,6 +429,7 @@ def test_courtier_4th_dan_temp_vp(page, live_server_url):
     # Wait a moment for Alpine to process x-show/x-cloak
     page.wait_for_timeout(500)
     btn = page.locator('button:has-text("Gain 1 temp VP")')
+    btn.first.wait_for(state="attached", timeout=5000)
     assert btn.count() >= 1
 def test_courtier_5th_dan_wc_bonus(page, live_server_url):
     """Courtier 5th Dan: wound check formula includes +Air."""
@@ -546,7 +549,9 @@ def test_hida_3rd_dan_reroll_appears(page, live_server_url):
     modal.locator('select:visible').select_option("5")
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
+    page.locator('text="Hida 3rd Dan: select up to"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Hida 3rd Dan: select up to"').is_visible()
+    page.locator('button:text("Skip")').wait_for(state="visible", timeout=5000)
     assert page.locator('button:text("Skip")').is_visible()
 
 
@@ -1012,6 +1017,7 @@ def test_mirumoto_round_points_display_and_buttons(page, live_server_url):
     _create_char(page, live_server_url, "MirumotoPoints", "mirumoto_bushi",
                  knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
     page.wait_for_selector('text="3rd Dan Points"', timeout=5000)
+    page.locator('text="3rd Dan Points"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="3rd Dan Points"').is_visible()
 
     # Find the points section
@@ -1153,6 +1159,7 @@ def test_togashi_3rd_dan_athletics_raises(page, live_server_url):
     page.wait_for_timeout(200)
     # Roll athletics and check for the button
     _roll_via_menu_or_direct(page, "athletics:Air")
+    page.locator('[data-action="spend-togashi-raise"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action="spend-togashi-raise"]').is_visible()
 
 
@@ -1228,6 +1235,7 @@ def test_togashi_athletics_raise_on_athletics_parry(page, live_server_url):
     page.wait_for_timeout(200)
     _roll_via_menu_or_direct(page, "athletics:parry")
     spend_btn = page.locator('[data-action="spend-togashi-raise"]')
+    spend_btn.wait_for(state="visible", timeout=5000)
     assert spend_btn.is_visible()
     spend_btn.click()
     page.wait_for_timeout(200)
@@ -1366,6 +1374,7 @@ def test_bayushi_feint_damage_button(page, live_server_url):
     page.locator('[data-modal="dice-roller"]').locator('button:text("Back")').click()
     page.wait_for_timeout(300)
     # Should be back on the done phase with Roll Feint Damage visible again
+    page.locator('button:text("Roll Feint Damage")').wait_for(state="visible", timeout=5000)
     assert page.locator('button:text("Roll Feint Damage")').is_visible()
 
 
@@ -1423,7 +1432,9 @@ def test_hida_reroll_selection_appears(page, live_server_url):
     modal.locator('select:visible').select_option("5")
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
+    page.locator('text="Hida 3rd Dan: select up to"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Hida 3rd Dan: select up to"').is_visible()
+    page.locator('button:text("Skip")').wait_for(state="visible", timeout=5000)
     assert page.locator('button:text("Skip")').is_visible()
     # All dice should be shown (rolled count), not just kept
     dice_count = page.evaluate("""() => {
@@ -1650,6 +1661,7 @@ def test_mirumoto_round_points_counter(page, live_server_url):
     _create_char(page, live_server_url, "MirumotoPoints2", "mirumoto_bushi",
                  knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
     page.wait_for_selector('text="3rd Dan Points"', timeout=5000)
+    page.locator('text="3rd Dan Points"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="3rd Dan Points"').is_visible()
 
 
@@ -2205,7 +2217,9 @@ def test_togashi_initiative_dropdown_shows_both_variants(page, live_server_url):
     # Click opens dropdown (does not roll directly)
     init_box.click()
     page.wait_for_selector('[data-togashi-init-menu]', state='visible', timeout=10000)
+    page.locator('[data-togashi-init-normal]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-togashi-init-normal]').is_visible()
+    page.locator('[data-togashi-init-athletics]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-togashi-init-athletics]').is_visible()
 
 
@@ -2583,6 +2597,7 @@ def test_priest_3rd_dan_clear_button_empties_pool(page, live_server_url):
         window._trackingBridge.save();
     """)
     page.wait_for_timeout(100)
+    page.locator('[data-testid="precepts-pool-die"]').first.wait_for(state="attached", timeout=5000)
     assert page.locator('[data-testid="precepts-pool-die"]').count() == 3
     page.locator('[data-action="clear-precepts-pool"]').click()
     page.wait_for_function(
@@ -2590,8 +2605,11 @@ def test_priest_3rd_dan_clear_button_empties_pool(page, live_server_url):
         timeout=3000,
     )
     assert page.locator('[data-testid="precepts-pool-die"]').count() == 0
-    # Roll button is back.
-    assert page.locator('[data-action="roll-precepts-pool"]').is_visible()
+    # Roll button is back (x-show re-reveal after the pool empties lands a tick
+    # later - wait for it rather than a one-shot is_visible()).
+    roll_btn = page.locator('[data-action="roll-precepts-pool"]')
+    roll_btn.wait_for(state="visible", timeout=5000)
+    assert roll_btn.is_visible()
 
 
 def test_priest_3rd_dan_pool_persists_across_reload(page, live_server_url):
@@ -3590,6 +3608,7 @@ def test_bayushi_below_5th_dan_prob_table_no_half_note(page, live_server_url):
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     halved_note = wc_modal.locator('text="Bayushi 5th Dan"')
+    halved_note.count() == 0 or not halved_note.first.wait_for(state="visible", timeout=5000)
     assert halved_note.count() == 0 or not halved_note.first.is_visible()
 
 
@@ -3917,6 +3936,7 @@ def test_kakita_phase_zero_die_menu_shows_only_iaijutsu_attack(page, live_server
     ).first.click()
     page.wait_for_selector(
         '[data-action-die-menu-item="iaijutsu-attack"]:visible', timeout=2000)
+    page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').count() == 1
     for kind in ("attack", "parry", "double-attack", "counterattack",
                  "lunge", "feint", "predeclared-parry", "athletics-attack",
@@ -3925,6 +3945,7 @@ def test_kakita_phase_zero_die_menu_shows_only_iaijutsu_attack(page, live_server
             f'[data-action-die-menu-item="{kind}"]:visible'
         ).count() == 0, f"{kind} leaked into the phase-0 menu"
     # Mark-as-spent still there as an escape hatch.
+    page.locator('[data-action="action-die-spent"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action="action-die-spent"]:visible').count() == 1
 
 
@@ -3941,8 +3962,11 @@ def test_kakita_non_zero_die_menu_unchanged(page, live_server_url):
     ).first.click()
     page.wait_for_selector(
         '[data-action-die-menu-item="attack"]:visible', timeout=2000)
+    page.locator('[data-action-die-menu-item="attack"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="attack"]:visible').count() == 1
+    page.locator('[data-action-die-menu-item="parry"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="parry"]:visible').count() == 1
+    page.locator('[data-action-die-menu-item="double-attack"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="double-attack"]:visible').count() == 1
     # The iaijutsu-attack menu item is Phase-0-only and does not leak onto
     # a regular die.
@@ -3975,6 +3999,7 @@ def test_kakita_phase_zero_attack_modal_notes_interrupt(page, live_server_url):
     page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     note = page.locator('[data-testid="kakita-phase-zero-attack-note"]')
+    note.wait_for(state="visible", timeout=5000)
     assert note.is_visible()
     assert "Phase 0" in note.text_content()
     assert "iaijutsu" in note.text_content().lower()
@@ -4110,6 +4135,7 @@ def test_kakita_3rd_dan_defender_phase_control_hidden_without_initiative(page, l
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     assert not page.locator('[data-testid="kakita-3rd-dan-bonus"]').is_visible()
+    page.locator('[data-testid="attack-init-warning-no-init"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="attack-init-warning-no-init"]').is_visible()
 
 
@@ -4135,6 +4161,7 @@ def test_kakita_3rd_dan_defender_phase_control_visible_with_action_dice(page, li
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     control = page.locator('[data-testid="kakita-3rd-dan-bonus"]')
+    control.wait_for(state="visible", timeout=5000)
     assert control.is_visible()
     default = page.evaluate(
         "() => document.querySelector('[data-action=\"kakita-3rd-dan-defender-phase\"]').value")
@@ -4584,6 +4611,7 @@ def test_kakita_5th_dan_button_opens_contest_modal(page, live_server_url):
     page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
     phase = page.evaluate("() => window._diceRoller?.k5Phase")
     assert phase == "pre"
+    page.locator('[data-testid="kakita-5th-banner"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="kakita-5th-banner"]').is_visible()
 
 
@@ -4896,7 +4924,9 @@ def test_kakita_5th_dan_section_appears_after_initiative(page, live_server_url):
         window._trackingBridge.actionDice = [{value: 4, spent: false}];
     }""")
     page.wait_for_timeout(100)
+    page.locator('[data-testid="kakita-5th-dan-section"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="kakita-5th-dan-section"]').is_visible()
+    page.locator('[data-action="kakita-5th-dan-contest"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action="kakita-5th-dan-contest"]').is_visible()
 
 
@@ -5089,6 +5119,7 @@ def test_daidoji_below_3rd_dan_no_counterattack_checkbox(page, live_server_url):
     page.wait_for_selector('[data-modal="wound-check"]', state='visible', timeout=10000)
     wc_modal = page.locator('[data-modal="wound-check"]')
     checkbox = wc_modal.locator('text="Hit was counterattacked"')
+    checkbox.count() == 0 or not checkbox.wait_for(state="visible", timeout=5000)
     assert checkbox.count() == 0 or not checkbox.is_visible(), "Below 3rd Dan should not show counterattack checkbox"
 
 
@@ -5234,6 +5265,7 @@ def test_shinjo_phase_bonus_hidden_without_initiative(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     assert not page.locator('[data-testid="shinjo-phase-bonus"]').is_visible()
+    page.locator('[data-testid="attack-init-warning-no-init"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="attack-init-warning-no-init"]').is_visible()
 
 
@@ -5264,6 +5296,7 @@ def test_shinjo_phase_bonus_visible_with_action_dice(page, live_server_url):
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     control = page.locator('[data-testid="shinjo-phase-bonus"]')
+    control.wait_for(state="visible", timeout=5000)
     assert control.is_visible()
     # Default phase matches the to-be-spent die (sub-die-value phases are
     # impossible and are omitted from the dropdown), so the initial display
@@ -5378,8 +5411,10 @@ def test_knack_menu_items_appear_on_fresh_page_load(page, live_server_url):
     # that might trigger a reactive re-evaluation of the inner templates.
     page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
     page.wait_for_timeout(200)
+    page.locator('[data-action-die-menu-item="double-attack"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="double-attack"]').is_visible(), \
         "Double Attack must appear in the per-die menu on a fresh page load"
+    page.locator('[data-action-die-menu-item="lunge"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="lunge"]').is_visible(), \
         "Lunge must appear in the per-die menu on a fresh page load"
     # And options not granted by Shinjo's school knacks must stay absent.
@@ -5641,6 +5676,7 @@ def test_ide_3rd_dan_subtract_behavioral(page, live_server_url):
     # Close the modal - button should still be visible for reuse
     modal.locator('button:has-text("\u00d7")').click()
     page.wait_for_timeout(200)
+    subtract_btn.wait_for(state="visible", timeout=5000)
     assert subtract_btn.is_visible()
 
 
@@ -5700,6 +5736,7 @@ def test_ide_5th_dan_subtract_grants_temp_vp(page, live_server_url):
     page.wait_for_timeout(200)
     # Click subtract button
     subtract_btn = page.locator('button:has-text("Spend 1 VP to subtract")')
+    subtract_btn.wait_for(state="visible", timeout=5000)
     assert subtract_btn.is_visible()
     subtract_btn.click()
     _wait_roll_done(page)
@@ -5912,6 +5949,7 @@ def test_doji_5th_dan_sometimes_tn_skill_checkbox(page, live_server_url):
     checkbox.click()
     page.wait_for_timeout(300)
     # Now the input should be visible
+    opponent_input.wait_for(state="visible", timeout=5000)
     assert opponent_input.is_visible()
     # Enter a TN
     base = page.evaluate("""() => {
@@ -6033,6 +6071,7 @@ def test_doji_4th_dan_untouched_checkbox_visible_on_attack(page, live_server_url
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     ut = page.locator('[data-testid="doji-4th-dan-untouched"]')
+    ut.wait_for(state="visible", timeout=5000)
     assert ut.is_visible()
     assert ut.locator('[data-action="doji-4th-dan-phase"]').count() == 1
     # Dropdown hidden until checkbox is ticked.
@@ -6133,6 +6172,7 @@ def test_doji_4th_dan_counterattack_shows_checkbox(page, live_server_url):
                  knack_overrides={"counterattack": 4, "oppose_social": 4, "worldliness": 4})
     page.locator('[data-roll-key="knack:counterattack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    page.locator('[data-testid="doji-4th-dan-untouched"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-testid="doji-4th-dan-untouched"]').is_visible()
 
 
@@ -6807,6 +6847,7 @@ def test_akodo_4th_dan_vp_on_passed_wound_check(page, live_server_url):
     assert "PASSED" in wc_modal.text_content()
     # Spend VP (+5) button should be visible in the passed section
     spend_btn = wc_modal.locator('button:has-text("Spend VP (+5)"):visible')
+    spend_btn.first.wait_for(state="visible", timeout=5000)
     assert spend_btn.count() > 0, "Spend VP button must appear on passed wound check for 4th Dan"
     # Get margin before spending
     margin_before = page.evaluate("""() => {
@@ -6831,6 +6872,7 @@ def test_akodo_4th_dan_vp_on_passed_wound_check(page, live_server_url):
     assert margin_after == margin_before + 5, f"Margin should increase by 5: {margin_before} -> {margin_after}"
     # Undo VP button should be visible
     undo_btn = wc_modal.locator('button:has-text("Undo VP"):visible')
+    undo_btn.first.wait_for(state="visible", timeout=5000)
     assert undo_btn.count() > 0, "Undo VP button must appear after spending"
     # VP should have decreased
     vp = page.evaluate("window._trackingBridge.voidPoints")
@@ -6866,6 +6908,7 @@ def test_akodo_4th_dan_vp_on_failed_wound_check(page, live_server_url):
     assert "FAILED" in wc_modal.text_content()
     # Spend VP (+5) button should be visible in the failed section
     spend_btn = wc_modal.locator('button:has-text("Spend VP (+5)"):visible')
+    spend_btn.first.wait_for(state="visible", timeout=5000)
     assert spend_btn.count() > 0, "Spend VP button must appear on failed wound check for 4th Dan"
     # Click Spend VP and verify total increases
     total_before = page.evaluate("""() => {
@@ -6949,6 +6992,7 @@ def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
     """)
     page.wait_for_timeout(200)
     # Bonus should show in tracking section
+    page.locator('text="Banked Post-Parry Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked Post-Parry Bonuses"').is_visible()
     # Roll attack - bonus should be auto-applied (not discretionary)
     _mock_dice_high(page)
@@ -7021,6 +7065,7 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
     # Individual "Apply +N" buttons should be visible
     wc_modal = page.locator('[data-modal="wound-check"]')
     apply_btns = wc_modal.locator('button:has-text("Apply +"):visible')
+    apply_btns.first.wait_for(state="visible", timeout=5000)
     assert apply_btns.count() >= 2, f"Should see 2 Apply buttons, got {apply_btns.count()}"
     # Click the first one (+8) and verify the total increases by 8
     total_before = page.evaluate("""() => {
@@ -7044,6 +7089,7 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
     assert total_after == total_before + 8, f"First excess should add +8: {total_before} -> {total_after}"
     # Second Apply button (+12) should still be available
     remaining = wc_modal.locator('button:has-text("Apply +"):visible')
+    remaining.first.wait_for(state="visible", timeout=5000)
     assert remaining.count() >= 1, "Second Apply button should still be available"
 
 
@@ -7059,6 +7105,7 @@ def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):
     """)
     page.wait_for_timeout(200)
     # Should show in tracking section
+    page.locator('text="Banked Wound Check Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked Wound Check Bonuses"').is_visible()
     # Add LW and roll wound check
     page.locator('[data-action="lw-plus"]').click()
@@ -7083,7 +7130,7 @@ def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):
     apply_btns = wc_modal.locator('button:has-text("Apply Matsu Bonus"):visible')
     # Wait for the result panel's buttons to render (they appear together via
     # one template) before counting, rather than racing the x-show reveal.
-    apply_btns.first.wait_for(state="visible", timeout=5000)
+    apply_btns.first.wait_for(state="attached", timeout=5000)
     assert apply_btns.count() == 2, f"Should have 2 Apply Matsu Bonus buttons, got {apply_btns.count()}"
     # Click first and verify total increases by 3
     total_before = page.evaluate("""() => {
@@ -7107,8 +7154,10 @@ def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):
     assert total_after == total_before + 3, f"Matsu bonus should add +3: {total_before} -> {total_after}"
     # One Apply button should remain, plus Undo should be visible
     remaining = wc_modal.locator('button:has-text("Apply Matsu Bonus"):visible')
+    remaining.first.wait_for(state="visible", timeout=5000)
     assert remaining.count() == 1, f"Should have 1 remaining Apply button, got {remaining.count()}"
     undo_btn = wc_modal.locator('button:has-text("Undo Matsu Bonus"):visible')
+    undo_btn.first.wait_for(state="visible", timeout=5000)
     assert undo_btn.count() > 0, "Undo Matsu Bonus button should be visible after applying"
     # Apply second bonus, total should be +6 from original
     remaining.first.click()
@@ -7319,6 +7368,7 @@ def test_shinjo_5th_dan_banked_excess_in_tracking_section(page, live_server_url)
     }""")
     page.wait_for_timeout(200)
     tracking_block = page.locator('[data-testid="banked-wc-excess-tracking"]')
+    tracking_block.wait_for(state="visible", timeout=5000)
     assert tracking_block.is_visible(), \
         "Shinjo 5th Dan banked excess should surface in tracking section"
     body = tracking_block.text_content()
@@ -7352,7 +7402,7 @@ def test_shinjo_5th_dan_banked_excess_in_tracking_section(page, live_server_url)
     apply_btn = wc_modal.locator('button:has-text("5th Dan bonus"):visible')
     # wcPhase flips to 'result' synchronously, but the Apply button's x-show
     # reveal is a later Alpine tick - wait for it before counting.
-    apply_btn.first.wait_for(state="visible", timeout=5000)
+    apply_btn.first.wait_for(state="attached", timeout=5000)
     assert apply_btn.count() >= 1, \
         "Wound-check modal should label the bankedWcExcess button as a 5th Dan bonus"
 
@@ -7607,6 +7657,7 @@ def test_mirumoto_3rd_dan_initiative_refills_round_points(page, live_server_url)
     page.locator('[data-roll-key="initiative"]').click()
     _wait_roll_done(page)
     msgs = _init_reset_messages(page)
+    msgs.wait_for(state="visible", timeout=5000)
     assert msgs.is_visible()
     assert "Mirumoto 3rd Dan points refreshed" in msgs.text_content()
     # Pool should now be at max.
@@ -7639,6 +7690,7 @@ def test_priest_5th_dan_initiative_refreshes_conviction(page, live_server_url):
     page.locator('[data-roll-key="initiative"]').click()
     _wait_roll_done(page)
     msgs = _init_reset_messages(page)
+    msgs.wait_for(state="visible", timeout=5000)
     assert msgs.is_visible()
     assert "Conviction pool refreshed" in msgs.text_content()
     used_after = page.evaluate("() => window._trackingBridge.getCount('conviction')")
@@ -7733,6 +7785,7 @@ def test_priest_bless_roll_allows_conviction_spending(page, live_server_url):
     page.locator('[data-action="bless-conversation"]').click()
     _wait_roll_done(page)
     conv_block = page.locator('[data-conviction-block]')
+    conv_block.wait_for(state="visible", timeout=5000)
     assert conv_block.is_visible()
     base_before = page.evaluate("() => window._diceRoller.baseTotal")
     conv_block.locator('[data-action="spend-conviction"]').click()
@@ -8028,6 +8081,7 @@ def test_mantis_2nd_dan_editor_picker_visible_and_saves(page, live_server_url):
     click_plus(page, "knack_worldliness", 1)
     page.wait_for_timeout(200)
     # The picker is now visible and options include the eligible set.
+    picker.wait_for(state="visible", timeout=5000)
     assert picker.is_visible()
     select = page.locator('[data-testid="mantis-2nd-dan-select"]')
     option_values = select.evaluate("el => Array.from(el.querySelectorAll('option')).map(o => o.value)")
@@ -8253,6 +8307,7 @@ def test_mantis_posture_tracker_advance(page, live_server_url):
     page.wait_for_function("() => window._trackingBridge.posturePhase === 2")
     assert _posture_history(page) == ["offensive"]
     current = page.locator('[data-testid="mantis-current-posture"]')
+    current.wait_for(state="visible", timeout=5000)
     assert current.is_visible()
     current_text = current.text_content()
     assert "Phase 1" in current_text
@@ -9752,7 +9807,9 @@ def test_mantis_4th_dan_die_flags_survive_reload(page, live_server_url):
     section.locator('[data-action="action-die"]').nth(idx).click()
     page.wait_for_selector('[data-action-die-menu-item="athletics-attack"]:visible',
                            timeout=2000)
+    page.locator('[data-action-die-menu-item="athletics-attack"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 1
+    page.locator('[data-action-die-menu-item="athletics-parry"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 1
     assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible'
                         ).count() == 1
@@ -9768,7 +9825,9 @@ def test_mantis_regular_die_menu_hides_athletics_options(page, live_server_url):
     page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
     page.wait_for_selector('[data-action-die-menu-item="attack"]:visible', timeout=2000)
     # Regular combat options are visible.
+    page.locator('[data-action-die-menu-item="attack"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="attack"]:visible').count() == 1
+    page.locator('[data-action-die-menu-item="parry"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="parry"]:visible').count() == 1
     # Athletics variants are hidden.
     assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 0
@@ -9795,9 +9854,13 @@ def test_mantis_4th_dan_die_menu_shows_only_athletics_and_3rd_dan(page, live_ser
     )
     page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').nth(idx).click()
     page.wait_for_selector('[data-action-die-menu-item="athletics-attack"]:visible', timeout=2000)
+    page.locator('[data-action-die-menu-item="athletics-attack"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 1
+    page.locator('[data-action-die-menu-item="athletics-parry"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 1
+    page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').count() == 1
+    page.locator('[data-action-die-menu-item="mantis-3rd-dan-offensive"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="mantis-3rd-dan-offensive"]:visible').count() == 1
     # Regular combat variants are not offered.
     assert page.locator('[data-action-die-menu-item="attack"]:visible').count() == 0
@@ -9839,6 +9902,7 @@ def test_togashi_attack_skill_menu_shows_athletics_choice(page, live_server_url)
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-attack-choice-menu]', state='visible', timeout=3000)
     # The attack choice menu includes both regular and athletics options.
+    page.locator('[data-attack-choice-menu]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-attack-choice-menu]').is_visible()
 
 
@@ -9848,6 +9912,7 @@ def test_togashi_parry_skill_menu_shows_athletics_row(page, live_server_url):
     _create_char(page, live_server_url, "TogashiParryAth", "togashi_ise_zumi")
     page.locator('[data-roll-key="parry"]').click()
     page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
+    page.locator('[data-parry-menu] [data-parry-menu-athletics]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-parry-menu] [data-parry-menu-athletics]').is_visible()
 
 
@@ -9859,8 +9924,11 @@ def test_togashi_regular_die_menu_shows_athletics_options(page, live_server_url)
     _seed_action_dice(page, [3, 5])
     page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
     page.wait_for_selector('[data-action-die-menu-item="athletics-attack"]:visible', timeout=2000)
+    page.locator('[data-action-die-menu-item="athletics-attack"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 1
+    page.locator('[data-action-die-menu-item="athletics-parry"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 1
+    page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').count() == 1
 
 
@@ -9980,6 +10048,7 @@ def test_kitsune_2nd_dan_picker_visible_and_saves(page, live_server_url):
     click_plus(page, "knack_commune", 1)
     click_plus(page, "knack_iaijutsu", 1)
     page.wait_for_timeout(200)
+    picker.wait_for(state="visible", timeout=5000)
     assert picker.is_visible()
     # Need a non-zero bragging skill so the 2nd Dan +5 actually shows up
     # on a roll formula we can inspect.
@@ -10019,6 +10088,7 @@ def test_suzume_2nd_dan_picker_visible_and_saves(page, live_server_url):
     click_plus(page, "knack_pontificate", 1)
     click_plus(page, "knack_worldliness", 1)
     page.wait_for_timeout(200)
+    picker.wait_for(state="visible", timeout=5000)
     assert picker.is_visible()
     select = page.locator('[data-testid="flex-2nd-dan-select"]')
     option_values = select.evaluate("el => Array.from(el.querySelectorAll('option')).map(o => o.value)")
@@ -10519,6 +10589,7 @@ def test_kitsune_skill_submenu_visible_when_school_ring_higher_than_skill_ring(p
     page.locator('[data-roll-key="skill:bragging"]').click()
     page.wait_for_timeout(300)
     block = page.locator('[data-testid="kitsune-skill-swap-block"]')
+    block.wait_for(state="visible", timeout=5000)
     assert block.is_visible()
     # The label calls out Water vs Air.
     text = block.text_content()
@@ -10728,6 +10799,7 @@ def test_kitsune_attack_modal_checkbox_visible_and_swaps_probability_table(page,
     _open_attack_modal_and_roll_pre_only()
     page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=10000)
     checkbox = page.locator('[data-testid="kitsune-attack-ring-swap"]')
+    checkbox.wait_for(state="visible", timeout=5000)
     assert checkbox.is_visible()
     # Read the prob-table's first row "Attack Roll" cell (void=0).
     modal = page.locator('[data-modal="attack"]')
@@ -11041,6 +11113,7 @@ def test_kitsune_parry_menu_shows_swap_block_when_school_ring_higher_than_air(pa
     page.locator('[data-roll-key="parry"]').click()
     page.wait_for_timeout(300)
     block = page.locator('[data-testid="kitsune-parry-swap-block"]')
+    block.wait_for(state="visible", timeout=5000)
     assert block.is_visible()
     # Both swap entries visible inside the block.
     assert block.locator('[data-testid="kitsune-parry-swap-roll"]').is_visible()

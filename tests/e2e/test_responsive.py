@@ -311,6 +311,7 @@ def test_hamburger_toggle_shows_nav(page, live_server_url):
     hamburger = page.locator('nav button[aria-label="Toggle navigation"]')
     hamburger.click()
     page.wait_for_timeout(200)
+    page.locator('nav button:text("New Character")').wait_for(state="visible", timeout=5000)
     assert page.locator('nav button:text("New Character")').is_visible()
     # Close
     hamburger.click()

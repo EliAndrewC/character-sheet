@@ -95,7 +95,7 @@
                     <div x-show="formulas.wound_check?.bayushi_5th_dan_half_lw" x-cloak
                          class="text-xs text-ink/60 bg-parchment rounded p-2">
                         Bayushi 5th Dan: serious wounds are calculated as if your light wounds were halved
-                        (<span x-text="Math.floor(wcLightWounds / 2)"></span> instead of <span x-text="wcLightWounds"></span>).
+                        (<span x-text="window.L7RRollMath.woundCheckEffectiveLw(wcLightWounds, true)"></span> instead of <span x-text="wcLightWounds"></span>).
                         Pass chance is unaffected. SW columns reflect the halved calculation.
                     </div>
 
@@ -294,7 +294,7 @@
                         </p>
                         <p x-show="wcBayushiHalfLw" x-cloak class="text-sm text-red-700 mt-1 italic">
                             Bayushi 5th Dan calculates serious wounds as if light wounds were halved
-                            (<span x-text="Math.floor(wcLightWounds / 2)"></span> instead of <span x-text="wcLightWounds"></span>).
+                            (<span x-text="window.L7RRollMath.woundCheckEffectiveLw(wcLightWounds, true)"></span> instead of <span x-text="wcLightWounds"></span>).
                         </p>
                         <p x-show="(window._trackingBridge?.seriousWounds || 0) - wcSeriousWounds < _earthRing && (window._trackingBridge?.seriousWounds || 0) >= _earthRing"
                            x-cloak class="text-sm font-bold text-red-800 mt-1"
@@ -333,27 +333,27 @@
                                 </button>
                                 <template x-for="(b, i) in bankedWcExcess" :key="'wce'+i">
                                     <button x-show="!b.spent" type="button"
-                                            @click="bankedWcExcess[i].spent = true; wcExcessSpentThisRoll += b.amount; baseTotal += b.amount; wcRollTotal += b.amount; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } window._trackingBridge?.saveBankedBonuses();"
+                                            @click="bankedWcExcess[i].spent = true; wcExcessSpentThisRoll += b.amount; baseTotal += b.amount; wcRollTotal += b.amount; const wc = window.L7RRollMath.woundCheckResult(wcRollTotal, wcLightWounds, formulas['wound_check']?.bayushi_5th_dan_half_lw); wcPassed = wc.passed; wcMargin = wc.margin; wcSeriousWounds = wc.seriousWounds; window._trackingBridge?.saveBankedBonuses();"
                                             class="btn-primary px-3 py-1.5 rounded text-sm font-medium">
                                         Apply +<span x-text="b.amount"></span> (5th Dan bonus)
                                     </button>
                                 </template>
                                 <button type="button"
                                         x-show="wcExcessSpentThisRoll > 0"
-                                        @click="const last = [...bankedWcExcess].reverse().find(b => b.spent); if (last) { last.spent = false; wcExcessSpentThisRoll -= last.amount; baseTotal -= last.amount; wcRollTotal -= last.amount; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } window._trackingBridge?.saveBankedBonuses(); }"
+                                        @click="const last = [...bankedWcExcess].reverse().find(b => b.spent); if (last) { last.spent = false; wcExcessSpentThisRoll -= last.amount; baseTotal -= last.amount; wcRollTotal -= last.amount; const wc = window.L7RRollMath.woundCheckResult(wcRollTotal, wcLightWounds, formulas['wound_check']?.bayushi_5th_dan_half_lw); wcPassed = wc.passed; wcMargin = wc.margin; wcSeriousWounds = wc.seriousWounds; window._trackingBridge?.saveBankedBonuses(); }"
                                         class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
                                     Undo
                                 </button>
                                 {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each #}
                                 <button type="button"
                                         x-show="voidSpendConfig.wc_vp_free_raise && (window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
-                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) src = 'temp'; else if ((t.voidPoints || 0) > 0) src = 'regular'; else src = 'worldliness'; if (t.canEdit) { if (src === 'temp') t.tempVoidPoints--; else if (src === 'regular') t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); t.save(); } wcPostRollVpSources.push(src); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; }"
+                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) src = 'temp'; else if ((t.voidPoints || 0) > 0) src = 'regular'; else src = 'worldliness'; if (t.canEdit) { if (src === 'temp') t.tempVoidPoints--; else if (src === 'regular') t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); t.save(); } wcPostRollVpSources.push(src); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; const wc = window.L7RRollMath.woundCheckResult(wcRollTotal, wcLightWounds, formulas['wound_check']?.bayushi_5th_dan_half_lw); wcPassed = wc.passed; wcMargin = wc.margin; wcSeriousWounds = wc.seriousWounds;"
                                         class="btn-primary px-3 py-1.5 rounded text-sm font-medium">
                                     Spend VP (+5)
                                 </button>
                                 <button type="button"
                                         x-show="wcPostRollVpSpent > 0"
-                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (t.canEdit) { if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); } wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; const lw = wcLightWounds; if (wcRollTotal >= lw) { wcPassed = true; wcSeriousWounds = 0; wcMargin = wcRollTotal - lw; } else { const eLw = formulas['wound_check']?.bayushi_5th_dan_half_lw ? Math.floor(lw/2) : lw; wcMargin = Math.max(0, eLw - wcRollTotal); wcSeriousWounds = Math.floor(wcMargin / 10) + 1; } }"
+                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (t.canEdit) { if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); } wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; const wc = window.L7RRollMath.woundCheckResult(wcRollTotal, wcLightWounds, formulas['wound_check']?.bayushi_5th_dan_half_lw); wcPassed = wc.passed; wcMargin = wc.margin; wcSeriousWounds = wc.seriousWounds; }"
                                         class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
                                     Undo VP
                                 </button>
