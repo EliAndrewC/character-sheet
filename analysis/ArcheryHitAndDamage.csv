@@ -1,0 +1,481 @@
+archer,aim,attack_pool,flat_to_hit,double_attack,target,parry,water,earth,out_at,evade,distance,dist_mod,tn,hit_pct,mean_excess,mean_lw_on_hit,mean_sw_on_hit,exp_sw_per_shot,approx_shots_to_incap
+Untrained,snap,4k2,0,False,Unarmored P1,1,2,2,4,False,0-50ft,5,15,0.6211,5.9753,42.3498,4.1679,2.5887,1.5452
+Untrained,snap,4k2,0,False,Unarmored P1,1,2,2,4,False,50-100ft,10,20,0.2924,6.0162,42.2981,4.1627,1.2174,3.2858
+Untrained,snap,4k2,0,False,Unarmored P1,1,2,2,4,False,100-200ft,15,25,0.1491,4.8708,41.7054,4.1043,0.6119,6.5370
+Untrained,snap,4k2,0,False,Unarmored P1,1,2,2,4,False,200-400ft,20,30,0.0587,5.1526,41.7946,4.1131,0.2413,16.5788
+Untrained,snap,4k2,0,False,Unarmored P1,1,2,2,4,True,0-50ft,5,20,0.2924,6.0162,42.2981,4.1627,1.2174,3.2858
+Untrained,snap,4k2,0,False,Unarmored P1,1,2,2,4,True,50-100ft,10,25,0.1491,4.8708,41.7054,4.1043,0.6119,6.5370
+Untrained,snap,4k2,0,False,Unarmored P1,1,2,2,4,True,100-200ft,15,30,0.0587,5.1526,41.7946,4.1131,0.2413,16.5788
+Untrained,snap,4k2,0,False,Unarmored P1,1,2,2,4,True,200-400ft,20,35,0.0253,4.4790,41.5116,4.0851,0.1033,38.7326
+Untrained,snap,4k2,0,False,Light P2,2,2,3,6,False,0-50ft,5,20,0.2924,6.0162,42.2981,4.1627,1.2174,4.9287
+Untrained,snap,4k2,0,False,Light P2,2,2,3,6,False,50-100ft,10,25,0.1491,4.8708,41.7054,4.1043,0.6119,9.8054
+Untrained,snap,4k2,0,False,Light P2,2,2,3,6,False,100-200ft,15,30,0.0587,5.1526,41.7946,4.1131,0.2413,24.8682
+Untrained,snap,4k2,0,False,Light P2,2,2,3,6,False,200-400ft,20,35,0.0253,4.4790,41.5116,4.0851,0.1033,58.0989
+Untrained,snap,4k2,0,False,Light P2,2,2,3,6,True,0-50ft,5,25,0.1491,4.8708,41.7054,4.1043,0.6119,9.8054
+Untrained,snap,4k2,0,False,Light P2,2,2,3,6,True,50-100ft,10,30,0.0587,5.1526,41.7946,4.1131,0.2413,24.8682
+Untrained,snap,4k2,0,False,Light P2,2,2,3,6,True,100-200ft,15,35,0.0253,4.4790,41.5116,4.0851,0.1033,58.0989
+Untrained,snap,4k2,0,False,Light P2,2,2,3,6,True,200-400ft,20,40,0.0091,5.0515,41.7587,4.1095,0.0375,160.0913
+Untrained,snap,4k2,0,False,Bushi P3,3,3,3,6,False,0-50ft,5,25,0.1491,4.8708,41.7054,3.4788,0.5186,11.5685
+Untrained,snap,4k2,0,False,Bushi P3,3,3,3,6,False,50-100ft,10,30,0.0587,5.1526,41.7946,3.4872,0.2046,29.3311
+Untrained,snap,4k2,0,False,Bushi P3,3,3,3,6,False,100-200ft,15,35,0.0253,4.4790,41.5116,3.4603,0.0875,68.5898
+Untrained,snap,4k2,0,False,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.0091,5.0515,41.7587,3.4838,0.0318,188.8460
+Untrained,snap,4k2,0,False,Bushi P3,3,3,3,6,True,0-50ft,5,30,0.0587,5.1526,41.7946,3.4872,0.2046,29.3311
+Untrained,snap,4k2,0,False,Bushi P3,3,3,3,6,True,50-100ft,10,35,0.0253,4.4790,41.5116,3.4603,0.0875,68.5898
+Untrained,snap,4k2,0,False,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.0091,5.0515,41.7587,3.4838,0.0318,188.8460
+Untrained,snap,4k2,0,False,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.0038,4.5405,41.5609,3.4649,0.0133,452.1277
+Untrained,snap,4k2,0,False,Heavy P4,4,3,4,8,False,0-50ft,5,30,0.0587,5.1526,41.7946,3.4872,0.2046,39.1082
+Untrained,snap,4k2,0,False,Heavy P4,4,3,4,8,False,50-100ft,10,35,0.0253,4.4790,41.5116,3.4603,0.0875,91.4530
+Untrained,snap,4k2,0,False,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.0091,5.0515,41.7587,3.4838,0.0318,251.7947
+Untrained,snap,4k2,0,False,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.0038,4.5405,41.5609,3.4649,0.0133,602.8370
+Untrained,snap,4k2,0,False,Heavy P4,4,3,4,8,True,0-50ft,5,35,0.0253,4.4790,41.5116,3.4603,0.0875,91.4530
+Untrained,snap,4k2,0,False,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.0091,5.0515,41.7587,3.4838,0.0318,251.7947
+Untrained,snap,4k2,0,False,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.0038,4.5405,41.5609,3.4649,0.0133,602.8370
+Untrained,snap,4k2,0,False,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.0014,4.8298,41.7406,3.4820,0.0049,1629.4680
+Untrained,snap,4k2,0,False,Duelist P5,5,4,4,8,False,0-50ft,5,35,0.0253,4.4790,41.5116,2.9066,0.0735,108.8750
+Untrained,snap,4k2,0,False,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.0091,5.0515,41.7587,2.9280,0.0267,299.5855
+Untrained,snap,4k2,0,False,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.0038,4.5405,41.5609,2.9107,0.0111,717.6262
+Untrained,snap,4k2,0,False,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.0014,4.8298,41.7406,2.9263,0.0041,1938.9064
+Untrained,snap,4k2,0,False,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.0091,5.0515,41.7587,2.9280,0.0267,299.5855
+Untrained,snap,4k2,0,False,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.0038,4.5405,41.5609,2.9107,0.0111,717.6262
+Untrained,snap,4k2,0,False,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.0014,4.8298,41.7406,2.9263,0.0041,1938.9064
+Untrained,snap,4k2,0,False,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.0006,3.6406,41.0913,2.8697,0.0018,4355.8857
+Untrained,aimed,4k2,10,False,Unarmored P1,1,2,2,4,False,0-50ft,5,15,0.9978,12.4493,46.1556,4.5436,4.5336,0.8823
+Untrained,aimed,4k2,10,False,Unarmored P1,1,2,2,4,False,50-100ft,10,20,0.9339,8.1038,43.5281,4.2842,4.0009,0.9998
+Untrained,aimed,4k2,10,False,Unarmored P1,1,2,2,4,False,100-200ft,15,25,0.6211,5.9753,42.3498,4.1679,2.5887,1.5452
+Untrained,aimed,4k2,10,False,Unarmored P1,1,2,2,4,False,200-400ft,20,30,0.2924,6.0162,42.2981,4.1627,1.2174,3.2858
+Untrained,aimed,4k2,10,False,Unarmored P1,1,2,2,4,True,0-50ft,5,20,0.9339,8.1038,43.5281,4.2842,4.0009,0.9998
+Untrained,aimed,4k2,10,False,Unarmored P1,1,2,2,4,True,50-100ft,10,25,0.6211,5.9753,42.3498,4.1679,2.5887,1.5452
+Untrained,aimed,4k2,10,False,Unarmored P1,1,2,2,4,True,100-200ft,15,30,0.2924,6.0162,42.2981,4.1627,1.2174,3.2858
+Untrained,aimed,4k2,10,False,Unarmored P1,1,2,2,4,True,200-400ft,20,35,0.1491,4.8708,41.7054,4.1043,0.6119,6.5370
+Untrained,aimed,4k2,10,False,Light P2,2,2,3,6,False,0-50ft,5,20,0.9339,8.1038,43.5281,4.2842,4.0009,1.4997
+Untrained,aimed,4k2,10,False,Light P2,2,2,3,6,False,50-100ft,10,25,0.6211,5.9753,42.3498,4.1679,2.5887,2.3178
+Untrained,aimed,4k2,10,False,Light P2,2,2,3,6,False,100-200ft,15,30,0.2924,6.0162,42.2981,4.1627,1.2174,4.9287
+Untrained,aimed,4k2,10,False,Light P2,2,2,3,6,False,200-400ft,20,35,0.1491,4.8708,41.7054,4.1043,0.6119,9.8054
+Untrained,aimed,4k2,10,False,Light P2,2,2,3,6,True,0-50ft,5,25,0.6211,5.9753,42.3498,4.1679,2.5887,2.3178
+Untrained,aimed,4k2,10,False,Light P2,2,2,3,6,True,50-100ft,10,30,0.2924,6.0162,42.2981,4.1627,1.2174,4.9287
+Untrained,aimed,4k2,10,False,Light P2,2,2,3,6,True,100-200ft,15,35,0.1491,4.8708,41.7054,4.1043,0.6119,9.8054
+Untrained,aimed,4k2,10,False,Light P2,2,2,3,6,True,200-400ft,20,40,0.0587,5.1526,41.7946,4.1131,0.2413,24.8682
+Untrained,aimed,4k2,10,False,Bushi P3,3,3,3,6,False,0-50ft,5,25,0.6211,5.9753,42.3498,3.5402,2.1988,2.7288
+Untrained,aimed,4k2,10,False,Bushi P3,3,3,3,6,False,50-100ft,10,30,0.2924,6.0162,42.2981,3.5352,1.0338,5.8037
+Untrained,aimed,4k2,10,False,Bushi P3,3,3,3,6,False,100-200ft,15,35,0.1491,4.8708,41.7054,3.4788,0.5186,11.5685
+Untrained,aimed,4k2,10,False,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.0587,5.1526,41.7946,3.4872,0.2046,29.3311
+Untrained,aimed,4k2,10,False,Bushi P3,3,3,3,6,True,0-50ft,5,30,0.2924,6.0162,42.2981,3.5352,1.0338,5.8037
+Untrained,aimed,4k2,10,False,Bushi P3,3,3,3,6,True,50-100ft,10,35,0.1491,4.8708,41.7054,3.4788,0.5186,11.5685
+Untrained,aimed,4k2,10,False,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.0587,5.1526,41.7946,3.4872,0.2046,29.3311
+Untrained,aimed,4k2,10,False,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.0253,4.4790,41.5116,3.4603,0.0875,68.5898
+Untrained,aimed,4k2,10,False,Heavy P4,4,3,4,8,False,0-50ft,5,30,0.2924,6.0162,42.2981,3.5352,1.0338,7.7383
+Untrained,aimed,4k2,10,False,Heavy P4,4,3,4,8,False,50-100ft,10,35,0.1491,4.8708,41.7054,3.4788,0.5186,15.4247
+Untrained,aimed,4k2,10,False,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.0587,5.1526,41.7946,3.4872,0.2046,39.1082
+Untrained,aimed,4k2,10,False,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.0253,4.4790,41.5116,3.4603,0.0875,91.4530
+Untrained,aimed,4k2,10,False,Heavy P4,4,3,4,8,True,0-50ft,5,35,0.1491,4.8708,41.7054,3.4788,0.5186,15.4247
+Untrained,aimed,4k2,10,False,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.0587,5.1526,41.7946,3.4872,0.2046,39.1082
+Untrained,aimed,4k2,10,False,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.0253,4.4790,41.5116,3.4603,0.0875,91.4530
+Untrained,aimed,4k2,10,False,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.0091,5.0515,41.7587,3.4838,0.0318,251.7947
+Untrained,aimed,4k2,10,False,Duelist P5,5,4,4,8,False,0-50ft,5,35,0.1491,4.8708,41.7054,2.9235,0.4359,18.3541
+Untrained,aimed,4k2,10,False,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.0587,5.1526,41.7946,2.9313,0.1719,46.5257
+Untrained,aimed,4k2,10,False,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.0253,4.4790,41.5116,2.9066,0.0735,108.8750
+Untrained,aimed,4k2,10,False,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.0091,5.0515,41.7587,2.9280,0.0267,299.5855
+Untrained,aimed,4k2,10,False,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.0587,5.1526,41.7946,2.9313,0.1719,46.5257
+Untrained,aimed,4k2,10,False,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.0253,4.4790,41.5116,2.9066,0.0735,108.8750
+Untrained,aimed,4k2,10,False,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.0091,5.0515,41.7587,2.9280,0.0267,299.5855
+Untrained,aimed,4k2,10,False,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.0038,4.5405,41.5609,2.9107,0.0111,717.6262
+Trained,snap,6k3,0,False,Unarmored P1,1,2,2,4,False,0-50ft,5,15,0.9696,12.0017,45.7458,4.5034,4.3665,0.9161
+Trained,snap,6k3,0,False,Unarmored P1,1,2,2,4,False,50-100ft,10,20,0.8188,8.7529,43.8630,4.3174,3.5351,1.1315
+Trained,snap,6k3,0,False,Unarmored P1,1,2,2,4,False,100-200ft,15,25,0.5160,7.6731,43.3072,4.2624,2.1995,1.8186
+Trained,snap,6k3,0,False,Unarmored P1,1,2,2,4,False,200-400ft,20,30,0.3113,6.6002,42.6273,4.1953,1.3059,3.0631
+Trained,snap,6k3,0,False,Unarmored P1,1,2,2,4,True,0-50ft,5,20,0.8188,8.7529,43.8630,4.3174,3.5351,1.1315
+Trained,snap,6k3,0,False,Unarmored P1,1,2,2,4,True,50-100ft,10,25,0.5160,7.6731,43.3072,4.2624,2.1995,1.8186
+Trained,snap,6k3,0,False,Unarmored P1,1,2,2,4,True,100-200ft,15,30,0.3113,6.6002,42.6273,4.1953,1.3059,3.0631
+Trained,snap,6k3,0,False,Unarmored P1,1,2,2,4,True,200-400ft,20,35,0.1571,6.2376,42.4754,4.1803,0.6567,6.0909
+Trained,snap,6k3,0,False,Light P2,2,2,3,6,False,0-50ft,5,20,0.8188,8.7529,43.8630,4.3174,3.5351,1.6973
+Trained,snap,6k3,0,False,Light P2,2,2,3,6,False,50-100ft,10,25,0.5160,7.6731,43.3072,4.2624,2.1995,2.7278
+Trained,snap,6k3,0,False,Light P2,2,2,3,6,False,100-200ft,15,30,0.3113,6.6002,42.6273,4.1953,1.3059,4.5946
+Trained,snap,6k3,0,False,Light P2,2,2,3,6,False,200-400ft,20,35,0.1571,6.2376,42.4754,4.1803,0.6567,9.1363
+Trained,snap,6k3,0,False,Light P2,2,2,3,6,True,0-50ft,5,25,0.5160,7.6731,43.3072,4.2624,2.1995,2.7278
+Trained,snap,6k3,0,False,Light P2,2,2,3,6,True,50-100ft,10,30,0.3113,6.6002,42.6273,4.1953,1.3059,4.5946
+Trained,snap,6k3,0,False,Light P2,2,2,3,6,True,100-200ft,15,35,0.1571,6.2376,42.4754,4.1803,0.6567,9.1363
+Trained,snap,6k3,0,False,Light P2,2,2,3,6,True,200-400ft,20,40,0.0803,5.6378,42.0712,4.1404,0.3323,18.0534
+Trained,snap,6k3,0,False,Bushi P3,3,3,3,6,False,0-50ft,5,25,0.5160,7.6731,43.3072,3.6315,1.8740,3.2017
+Trained,snap,6k3,0,False,Bushi P3,3,3,3,6,False,50-100ft,10,30,0.3113,6.6002,42.6273,3.5667,1.1102,5.4044
+Trained,snap,6k3,0,False,Bushi P3,3,3,3,6,False,100-200ft,15,35,0.1571,6.2376,42.4754,3.5521,0.5580,10.7519
+Trained,snap,6k3,0,False,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.0803,5.6378,42.0712,3.5136,0.2820,21.2736
+Trained,snap,6k3,0,False,Bushi P3,3,3,3,6,True,0-50ft,5,30,0.3113,6.6002,42.6273,3.5667,1.1102,5.4044
+Trained,snap,6k3,0,False,Bushi P3,3,3,3,6,True,50-100ft,10,35,0.1571,6.2376,42.4754,3.5521,0.5580,10.7519
+Trained,snap,6k3,0,False,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.0803,5.6378,42.0712,3.5136,0.2820,21.2736
+Trained,snap,6k3,0,False,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.0356,5.4738,42.0358,3.5102,0.1248,48.0680
+Trained,snap,6k3,0,False,Heavy P4,4,3,4,8,False,0-50ft,5,30,0.3113,6.6002,42.6273,3.5667,1.1102,7.2059
+Trained,snap,6k3,0,False,Heavy P4,4,3,4,8,False,50-100ft,10,35,0.1571,6.2376,42.4754,3.5521,0.5580,14.3359
+Trained,snap,6k3,0,False,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.0803,5.6378,42.0712,3.5136,0.2820,28.3649
+Trained,snap,6k3,0,False,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.0356,5.4738,42.0358,3.5102,0.1248,64.0906
+Trained,snap,6k3,0,False,Heavy P4,4,3,4,8,True,0-50ft,5,35,0.1571,6.2376,42.4754,3.5521,0.5580,14.3359
+Trained,snap,6k3,0,False,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.0803,5.6378,42.0712,3.5136,0.2820,28.3649
+Trained,snap,6k3,0,False,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.0356,5.4738,42.0358,3.5102,0.1248,64.0906
+Trained,snap,6k3,0,False,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.0162,5.0816,41.7786,3.4857,0.0564,141.8456
+Trained,snap,6k3,0,False,Duelist P5,5,4,4,8,False,0-50ft,5,35,0.1571,6.2376,42.4754,2.9910,0.4699,17.0255
+Trained,snap,6k3,0,False,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.0803,5.6378,42.0712,2.9556,0.2372,33.7203
+Trained,snap,6k3,0,False,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.0356,5.4738,42.0358,2.9524,0.1050,76.1998
+Trained,snap,6k3,0,False,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.0162,5.0816,41.7786,2.9300,0.0474,168.7523
+Trained,snap,6k3,0,False,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.0803,5.6378,42.0712,2.9556,0.2372,33.7203
+Trained,snap,6k3,0,False,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.0356,5.4738,42.0358,2.9524,0.1050,76.1998
+Trained,snap,6k3,0,False,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.0162,5.0816,41.7786,2.9300,0.0474,168.7523
+Trained,snap,6k3,0,False,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.0065,5.1300,41.8313,2.9346,0.0192,416.8391
+Trained,aimed,6k3,10,False,Unarmored P1,1,2,2,4,False,0-50ft,5,15,1.0000,21.5631,50.7844,5.0021,5.0021,0.7997
+Trained,aimed,6k3,10,False,Unarmored P1,1,2,2,4,False,50-100ft,10,20,0.9982,16.5964,48.3081,4.7567,4.7480,0.8425
+Trained,aimed,6k3,10,False,Unarmored P1,1,2,2,4,False,100-200ft,15,25,0.9696,12.0017,45.7458,4.5034,4.3665,0.9161
+Trained,aimed,6k3,10,False,Unarmored P1,1,2,2,4,False,200-400ft,20,30,0.8188,8.7529,43.8630,4.3174,3.5351,1.1315
+Trained,aimed,6k3,10,False,Unarmored P1,1,2,2,4,True,0-50ft,5,20,0.9982,16.5964,48.3081,4.7567,4.7480,0.8425
+Trained,aimed,6k3,10,False,Unarmored P1,1,2,2,4,True,50-100ft,10,25,0.9696,12.0017,45.7458,4.5034,4.3665,0.9161
+Trained,aimed,6k3,10,False,Unarmored P1,1,2,2,4,True,100-200ft,15,30,0.8188,8.7529,43.8630,4.3174,3.5351,1.1315
+Trained,aimed,6k3,10,False,Unarmored P1,1,2,2,4,True,200-400ft,20,35,0.5160,7.6731,43.3072,4.2624,2.1995,1.8186
+Trained,aimed,6k3,10,False,Light P2,2,2,3,6,False,0-50ft,5,20,0.9982,16.5964,48.3081,4.7567,4.7480,1.2637
+Trained,aimed,6k3,10,False,Light P2,2,2,3,6,False,50-100ft,10,25,0.9696,12.0017,45.7458,4.5034,4.3665,1.3741
+Trained,aimed,6k3,10,False,Light P2,2,2,3,6,False,100-200ft,15,30,0.8188,8.7529,43.8630,4.3174,3.5351,1.6973
+Trained,aimed,6k3,10,False,Light P2,2,2,3,6,False,200-400ft,20,35,0.5160,7.6731,43.3072,4.2624,2.1995,2.7278
+Trained,aimed,6k3,10,False,Light P2,2,2,3,6,True,0-50ft,5,25,0.9696,12.0017,45.7458,4.5034,4.3665,1.3741
+Trained,aimed,6k3,10,False,Light P2,2,2,3,6,True,50-100ft,10,30,0.8188,8.7529,43.8630,4.3174,3.5351,1.6973
+Trained,aimed,6k3,10,False,Light P2,2,2,3,6,True,100-200ft,15,35,0.5160,7.6731,43.3072,4.2624,2.1995,2.7278
+Trained,aimed,6k3,10,False,Light P2,2,2,3,6,True,200-400ft,20,40,0.3113,6.6002,42.6273,4.1953,1.3059,4.5946
+Trained,aimed,6k3,10,False,Bushi P3,3,3,3,6,False,0-50ft,5,25,0.9696,12.0017,45.7458,3.8646,3.7472,1.6012
+Trained,aimed,6k3,10,False,Bushi P3,3,3,3,6,False,50-100ft,10,30,0.8188,8.7529,43.8630,3.6847,3.0171,1.9887
+Trained,aimed,6k3,10,False,Bushi P3,3,3,3,6,False,100-200ft,15,35,0.5160,7.6731,43.3072,3.6315,1.8740,3.2017
+Trained,aimed,6k3,10,False,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.3113,6.6002,42.6273,3.5667,1.1102,5.4044
+Trained,aimed,6k3,10,False,Bushi P3,3,3,3,6,True,0-50ft,5,30,0.8188,8.7529,43.8630,3.6847,3.0171,1.9887
+Trained,aimed,6k3,10,False,Bushi P3,3,3,3,6,True,50-100ft,10,35,0.5160,7.6731,43.3072,3.6315,1.8740,3.2017
+Trained,aimed,6k3,10,False,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.3113,6.6002,42.6273,3.5667,1.1102,5.4044
+Trained,aimed,6k3,10,False,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.1571,6.2376,42.4754,3.5521,0.5580,10.7519
+Trained,aimed,6k3,10,False,Heavy P4,4,3,4,8,False,0-50ft,5,30,0.8188,8.7529,43.8630,3.6847,3.0171,2.6515
+Trained,aimed,6k3,10,False,Heavy P4,4,3,4,8,False,50-100ft,10,35,0.5160,7.6731,43.3072,3.6315,1.8740,4.2690
+Trained,aimed,6k3,10,False,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.3113,6.6002,42.6273,3.5667,1.1102,7.2059
+Trained,aimed,6k3,10,False,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.1571,6.2376,42.4754,3.5521,0.5580,14.3359
+Trained,aimed,6k3,10,False,Heavy P4,4,3,4,8,True,0-50ft,5,35,0.5160,7.6731,43.3072,3.6315,1.8740,4.2690
+Trained,aimed,6k3,10,False,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.3113,6.6002,42.6273,3.5667,1.1102,7.2059
+Trained,aimed,6k3,10,False,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.1571,6.2376,42.4754,3.5521,0.5580,14.3359
+Trained,aimed,6k3,10,False,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.0803,5.6378,42.0712,3.5136,0.2820,28.3649
+Trained,aimed,6k3,10,False,Duelist P5,5,4,4,8,False,0-50ft,5,35,0.5160,7.6731,43.3072,3.0642,1.5812,5.0594
+Trained,aimed,6k3,10,False,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.3113,6.6002,42.6273,3.0045,0.9352,8.5543
+Trained,aimed,6k3,10,False,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.1571,6.2376,42.4754,2.9910,0.4699,17.0255
+Trained,aimed,6k3,10,False,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.0803,5.6378,42.0712,2.9556,0.2372,33.7203
+Trained,aimed,6k3,10,False,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.3113,6.6002,42.6273,3.0045,0.9352,8.5543
+Trained,aimed,6k3,10,False,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.1571,6.2376,42.4754,2.9910,0.4699,17.0255
+Trained,aimed,6k3,10,False,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.0803,5.6378,42.0712,2.9556,0.2372,33.7203
+Trained,aimed,6k3,10,False,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.0356,5.4738,42.0358,2.9524,0.1050,76.1998
+Iaijutsu adept,snap,7k3,8,False,Unarmored P1,1,2,2,4,False,0-50ft,5,15,1.0000,21.2266,50.6020,4.9840,4.9840,0.8026
+Iaijutsu adept,snap,7k3,8,False,Unarmored P1,1,2,2,4,False,50-100ft,10,20,0.9977,16.2676,48.0888,4.7351,4.7243,0.8467
+Iaijutsu adept,snap,7k3,8,False,Unarmored P1,1,2,2,4,False,100-200ft,15,25,0.9664,11.7037,45.5347,4.4825,4.3320,0.9234
+Iaijutsu adept,snap,7k3,8,False,Unarmored P1,1,2,2,4,False,200-400ft,20,30,0.7924,8.7259,43.8236,4.3135,3.4179,1.1703
+Iaijutsu adept,snap,7k3,8,False,Unarmored P1,1,2,2,4,True,0-50ft,5,20,0.9977,16.2676,48.0888,4.7351,4.7243,0.8467
+Iaijutsu adept,snap,7k3,8,False,Unarmored P1,1,2,2,4,True,50-100ft,10,25,0.9664,11.7037,45.5347,4.4825,4.3320,0.9234
+Iaijutsu adept,snap,7k3,8,False,Unarmored P1,1,2,2,4,True,100-200ft,15,30,0.7924,8.7259,43.8236,4.3135,3.4179,1.1703
+Iaijutsu adept,snap,7k3,8,False,Unarmored P1,1,2,2,4,True,200-400ft,20,35,0.4873,7.9705,43.4254,4.2741,2.0828,1.9205
+Iaijutsu adept,snap,7k3,8,False,Light P2,2,2,3,6,False,0-50ft,5,20,0.9977,16.2676,48.0888,4.7351,4.7243,1.2700
+Iaijutsu adept,snap,7k3,8,False,Light P2,2,2,3,6,False,50-100ft,10,25,0.9664,11.7037,45.5347,4.4825,4.3320,1.3851
+Iaijutsu adept,snap,7k3,8,False,Light P2,2,2,3,6,False,100-200ft,15,30,0.7924,8.7259,43.8236,4.3135,3.4179,1.7555
+Iaijutsu adept,snap,7k3,8,False,Light P2,2,2,3,6,False,200-400ft,20,35,0.4873,7.9705,43.4254,4.2741,2.0828,2.8808
+Iaijutsu adept,snap,7k3,8,False,Light P2,2,2,3,6,True,0-50ft,5,25,0.9664,11.7037,45.5347,4.4825,4.3320,1.3851
+Iaijutsu adept,snap,7k3,8,False,Light P2,2,2,3,6,True,50-100ft,10,30,0.7924,8.7259,43.8236,4.3135,3.4179,1.7555
+Iaijutsu adept,snap,7k3,8,False,Light P2,2,2,3,6,True,100-200ft,15,35,0.4873,7.9705,43.4254,4.2741,2.0828,2.8808
+Iaijutsu adept,snap,7k3,8,False,Light P2,2,2,3,6,True,200-400ft,20,40,0.3028,6.6217,42.6419,4.1967,1.2709,4.7209
+Iaijutsu adept,snap,7k3,8,False,Bushi P3,3,3,3,6,False,0-50ft,5,25,0.9664,11.7037,45.5347,3.8445,3.7154,1.6149
+Iaijutsu adept,snap,7k3,8,False,Bushi P3,3,3,3,6,False,50-100ft,10,30,0.7924,8.7259,43.8236,3.6810,2.9168,2.0571
+Iaijutsu adept,snap,7k3,8,False,Bushi P3,3,3,3,6,False,100-200ft,15,35,0.4873,7.9705,43.4254,3.6428,1.7752,3.3800
+Iaijutsu adept,snap,7k3,8,False,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.3028,6.6217,42.6419,3.5681,1.0806,5.5527
+Iaijutsu adept,snap,7k3,8,False,Bushi P3,3,3,3,6,True,0-50ft,5,30,0.7924,8.7259,43.8236,3.6810,2.9168,2.0571
+Iaijutsu adept,snap,7k3,8,False,Bushi P3,3,3,3,6,True,50-100ft,10,35,0.4873,7.9705,43.4254,3.6428,1.7752,3.3800
+Iaijutsu adept,snap,7k3,8,False,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.3028,6.6217,42.6419,3.5681,1.0806,5.5527
+Iaijutsu adept,snap,7k3,8,False,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.1507,6.5154,42.6000,3.5640,0.5372,11.1690
+Iaijutsu adept,snap,7k3,8,False,Heavy P4,4,3,4,8,False,0-50ft,5,30,0.7924,8.7259,43.8236,3.6810,2.9168,2.7428
+Iaijutsu adept,snap,7k3,8,False,Heavy P4,4,3,4,8,False,50-100ft,10,35,0.4873,7.9705,43.4254,3.6428,1.7752,4.5067
+Iaijutsu adept,snap,7k3,8,False,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.3028,6.6217,42.6419,3.5681,1.0806,7.4036
+Iaijutsu adept,snap,7k3,8,False,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.1507,6.5154,42.6000,3.5640,0.5372,14.8920
+Iaijutsu adept,snap,7k3,8,False,Heavy P4,4,3,4,8,True,0-50ft,5,35,0.4873,7.9705,43.4254,3.6428,1.7752,4.5067
+Iaijutsu adept,snap,7k3,8,False,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.3028,6.6217,42.6419,3.5681,1.0806,7.4036
+Iaijutsu adept,snap,7k3,8,False,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.1507,6.5154,42.6000,3.5640,0.5372,14.8920
+Iaijutsu adept,snap,7k3,8,False,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.0800,5.6414,42.0865,3.5151,0.2813,28.4347
+Iaijutsu adept,snap,7k3,8,False,Duelist P5,5,4,4,8,False,0-50ft,5,35,0.4873,7.9705,43.4254,3.0746,1.4982,5.3396
+Iaijutsu adept,snap,7k3,8,False,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.3028,6.6217,42.6419,3.0058,0.9103,8.7886
+Iaijutsu adept,snap,7k3,8,False,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.1507,6.5154,42.6000,3.0018,0.4525,17.6809
+Iaijutsu adept,snap,7k3,8,False,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.0800,5.6414,42.0865,2.9569,0.2367,33.8024
+Iaijutsu adept,snap,7k3,8,False,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.3028,6.6217,42.6419,3.0058,0.9103,8.7886
+Iaijutsu adept,snap,7k3,8,False,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.1507,6.5154,42.6000,3.0018,0.4525,17.6809
+Iaijutsu adept,snap,7k3,8,False,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.0800,5.6414,42.0865,2.9569,0.2367,33.8024
+Iaijutsu adept,snap,7k3,8,False,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.0358,5.5175,42.0119,2.9502,0.1055,75.8076
+Iaijutsu adept,aimed,7k3,18,False,Unarmored P1,1,2,2,4,False,0-50ft,5,15,1.0000,31.2266,54.3656,5.3590,5.3590,0.7464
+Iaijutsu adept,aimed,7k3,18,False,Unarmored P1,1,2,2,4,False,50-100ft,10,20,1.0000,26.2266,52.6557,5.1883,5.1883,0.7710
+Iaijutsu adept,aimed,7k3,18,False,Unarmored P1,1,2,2,4,False,100-200ft,15,25,1.0000,21.2266,50.6020,4.9840,4.9840,0.8026
+Iaijutsu adept,aimed,7k3,18,False,Unarmored P1,1,2,2,4,False,200-400ft,20,30,0.9977,16.2676,48.0888,4.7351,4.7243,0.8467
+Iaijutsu adept,aimed,7k3,18,False,Unarmored P1,1,2,2,4,True,0-50ft,5,20,1.0000,26.2266,52.6557,5.1883,5.1883,0.7710
+Iaijutsu adept,aimed,7k3,18,False,Unarmored P1,1,2,2,4,True,50-100ft,10,25,1.0000,21.2266,50.6020,4.9840,4.9840,0.8026
+Iaijutsu adept,aimed,7k3,18,False,Unarmored P1,1,2,2,4,True,100-200ft,15,30,0.9977,16.2676,48.0888,4.7351,4.7243,0.8467
+Iaijutsu adept,aimed,7k3,18,False,Unarmored P1,1,2,2,4,True,200-400ft,20,35,0.9664,11.7037,45.5347,4.4825,4.3320,0.9234
+Iaijutsu adept,aimed,7k3,18,False,Light P2,2,2,3,6,False,0-50ft,5,20,1.0000,26.2266,52.6557,5.1883,5.1883,1.1565
+Iaijutsu adept,aimed,7k3,18,False,Light P2,2,2,3,6,False,50-100ft,10,25,1.0000,21.2266,50.6020,4.9840,4.9840,1.2039
+Iaijutsu adept,aimed,7k3,18,False,Light P2,2,2,3,6,False,100-200ft,15,30,0.9977,16.2676,48.0888,4.7351,4.7243,1.2700
+Iaijutsu adept,aimed,7k3,18,False,Light P2,2,2,3,6,False,200-400ft,20,35,0.9664,11.7037,45.5347,4.4825,4.3320,1.3851
+Iaijutsu adept,aimed,7k3,18,False,Light P2,2,2,3,6,True,0-50ft,5,25,1.0000,21.2266,50.6020,4.9840,4.9840,1.2039
+Iaijutsu adept,aimed,7k3,18,False,Light P2,2,2,3,6,True,50-100ft,10,30,0.9977,16.2676,48.0888,4.7351,4.7243,1.2700
+Iaijutsu adept,aimed,7k3,18,False,Light P2,2,2,3,6,True,100-200ft,15,35,0.9664,11.7037,45.5347,4.4825,4.3320,1.3851
+Iaijutsu adept,aimed,7k3,18,False,Light P2,2,2,3,6,True,200-400ft,20,40,0.7924,8.7259,43.8236,4.3135,3.4179,1.7555
+Iaijutsu adept,aimed,7k3,18,False,Bushi P3,3,3,3,6,False,0-50ft,5,25,1.0000,21.2266,50.6020,4.3315,4.3315,1.3852
+Iaijutsu adept,aimed,7k3,18,False,Bushi P3,3,3,3,6,False,50-100ft,10,30,0.9977,16.2676,48.0888,4.0893,4.0800,1.4706
+Iaijutsu adept,aimed,7k3,18,False,Bushi P3,3,3,3,6,False,100-200ft,15,35,0.9664,11.7037,45.5347,3.8445,3.7154,1.6149
+Iaijutsu adept,aimed,7k3,18,False,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.7924,8.7259,43.8236,3.6810,2.9168,2.0571
+Iaijutsu adept,aimed,7k3,18,False,Bushi P3,3,3,3,6,True,0-50ft,5,30,0.9977,16.2676,48.0888,4.0893,4.0800,1.4706
+Iaijutsu adept,aimed,7k3,18,False,Bushi P3,3,3,3,6,True,50-100ft,10,35,0.9664,11.7037,45.5347,3.8445,3.7154,1.6149
+Iaijutsu adept,aimed,7k3,18,False,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.7924,8.7259,43.8236,3.6810,2.9168,2.0571
+Iaijutsu adept,aimed,7k3,18,False,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.4873,7.9705,43.4254,3.6428,1.7752,3.3800
+Iaijutsu adept,aimed,7k3,18,False,Heavy P4,4,3,4,8,False,0-50ft,5,30,0.9977,16.2676,48.0888,4.0893,4.0800,1.9608
+Iaijutsu adept,aimed,7k3,18,False,Heavy P4,4,3,4,8,False,50-100ft,10,35,0.9664,11.7037,45.5347,3.8445,3.7154,2.1532
+Iaijutsu adept,aimed,7k3,18,False,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.7924,8.7259,43.8236,3.6810,2.9168,2.7428
+Iaijutsu adept,aimed,7k3,18,False,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.4873,7.9705,43.4254,3.6428,1.7752,4.5067
+Iaijutsu adept,aimed,7k3,18,False,Heavy P4,4,3,4,8,True,0-50ft,5,35,0.9664,11.7037,45.5347,3.8445,3.7154,2.1532
+Iaijutsu adept,aimed,7k3,18,False,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.7924,8.7259,43.8236,3.6810,2.9168,2.7428
+Iaijutsu adept,aimed,7k3,18,False,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.4873,7.9705,43.4254,3.6428,1.7752,4.5067
+Iaijutsu adept,aimed,7k3,18,False,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.3028,6.6217,42.6419,3.5681,1.0806,7.4036
+Iaijutsu adept,aimed,7k3,18,False,Duelist P5,5,4,4,8,False,0-50ft,5,35,0.9664,11.7037,45.5347,3.2609,3.1514,2.5386
+Iaijutsu adept,aimed,7k3,18,False,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.7924,8.7259,43.8236,3.1101,2.4644,3.2463
+Iaijutsu adept,aimed,7k3,18,False,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.4873,7.9705,43.4254,3.0746,1.4982,5.3396
+Iaijutsu adept,aimed,7k3,18,False,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.3028,6.6217,42.6419,3.0058,0.9103,8.7886
+Iaijutsu adept,aimed,7k3,18,False,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.7924,8.7259,43.8236,3.1101,2.4644,3.2463
+Iaijutsu adept,aimed,7k3,18,False,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.4873,7.9705,43.4254,3.0746,1.4982,5.3396
+Iaijutsu adept,aimed,7k3,18,False,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.3028,6.6217,42.6419,3.0058,0.9103,8.7886
+Iaijutsu adept,aimed,7k3,18,False,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.1507,6.5154,42.6000,3.0018,0.4525,17.6809
+Veteran,snap,8k3,9,True,Unarmored P1,1,2,2,4,False,0-50ft,5,15,1.0000,23.6322,56.6410,6.5867,6.5867,0.6073
+Veteran,snap,8k3,9,True,Unarmored P1,1,2,2,4,False,50-100ft,10,20,0.9997,18.6391,54.3047,6.3536,6.3514,0.6298
+Veteran,snap,8k3,9,True,Unarmored P1,1,2,2,4,False,100-200ft,15,25,0.9899,13.7928,51.7114,6.0949,6.0336,0.6630
+Veteran,snap,8k3,9,True,Unarmored P1,1,2,2,4,False,200-400ft,20,30,0.8972,9.9385,49.5016,5.8746,5.2706,0.7589
+Veteran,snap,8k3,9,True,Unarmored P1,1,2,2,4,True,0-50ft,5,20,0.9997,18.6391,54.3047,6.3536,6.3514,0.6298
+Veteran,snap,8k3,9,True,Unarmored P1,1,2,2,4,True,50-100ft,10,25,0.9899,13.7928,51.7114,6.0949,6.0336,0.6630
+Veteran,snap,8k3,9,True,Unarmored P1,1,2,2,4,True,100-200ft,15,30,0.8972,9.9385,49.5016,5.8746,5.2706,0.7589
+Veteran,snap,8k3,9,True,Unarmored P1,1,2,2,4,True,200-400ft,20,35,0.6100,8.5729,48.8020,5.8049,3.5408,1.1297
+Veteran,snap,8k3,9,True,Light P2,2,2,3,6,False,0-50ft,5,20,0.9997,18.6391,54.3047,6.3536,6.3514,0.9447
+Veteran,snap,8k3,9,True,Light P2,2,2,3,6,False,50-100ft,10,25,0.9899,13.7928,51.7114,6.0949,6.0336,0.9944
+Veteran,snap,8k3,9,True,Light P2,2,2,3,6,False,100-200ft,15,30,0.8972,9.9385,49.5016,5.8746,5.2706,1.1384
+Veteran,snap,8k3,9,True,Light P2,2,2,3,6,False,200-400ft,20,35,0.6100,8.5729,48.8020,5.8049,3.5408,1.6945
+Veteran,snap,8k3,9,True,Light P2,2,2,3,6,True,0-50ft,5,25,0.9899,13.7928,51.7114,6.0949,6.0336,0.9944
+Veteran,snap,8k3,9,True,Light P2,2,2,3,6,True,50-100ft,10,30,0.8972,9.9385,49.5016,5.8746,5.2706,1.1384
+Veteran,snap,8k3,9,True,Light P2,2,2,3,6,True,100-200ft,15,35,0.6100,8.5729,48.8020,5.8049,3.5408,1.6945
+Veteran,snap,8k3,9,True,Light P2,2,2,3,6,True,200-400ft,20,40,0.3985,7.1794,47.9428,5.7192,2.2789,2.6328
+Veteran,snap,8k3,9,True,Bushi P3,3,3,3,6,False,0-50ft,5,25,0.9899,13.7928,51.7114,5.4433,5.3885,1.1135
+Veteran,snap,8k3,9,True,Bushi P3,3,3,3,6,False,50-100ft,10,30,0.8972,9.9385,49.5016,5.2268,4.6894,1.2795
+Veteran,snap,8k3,9,True,Bushi P3,3,3,3,6,False,100-200ft,15,35,0.6100,8.5729,48.8020,5.1582,3.1464,1.9069
+Veteran,snap,8k3,9,True,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.3985,7.1794,47.9428,5.0742,2.0219,2.9675
+Veteran,snap,8k3,9,True,Bushi P3,3,3,3,6,True,0-50ft,5,30,0.8972,9.9385,49.5016,5.2268,4.6894,1.2795
+Veteran,snap,8k3,9,True,Bushi P3,3,3,3,6,True,50-100ft,10,35,0.6100,8.5729,48.8020,5.1582,3.1464,1.9069
+Veteran,snap,8k3,9,True,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.3985,7.1794,47.9428,5.0742,2.0219,2.9675
+Veteran,snap,8k3,9,True,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.2126,6.7930,47.7694,5.0572,1.0751,5.5809
+Veteran,snap,8k3,9,True,Heavy P4,4,3,4,8,False,0-50ft,5,30,0.8972,9.9385,49.5016,5.2268,4.6894,1.7060
+Veteran,snap,8k3,9,True,Heavy P4,4,3,4,8,False,50-100ft,10,35,0.6100,8.5729,48.8020,5.1582,3.1464,2.5426
+Veteran,snap,8k3,9,True,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.3985,7.1794,47.9428,5.0742,2.0219,3.9567
+Veteran,snap,8k3,9,True,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.2126,6.7930,47.7694,5.0572,1.0751,7.4411
+Veteran,snap,8k3,9,True,Heavy P4,4,3,4,8,True,0-50ft,5,35,0.6100,8.5729,48.8020,5.1582,3.1464,2.5426
+Veteran,snap,8k3,9,True,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.3985,7.1794,47.9428,5.0742,2.0219,3.9567
+Veteran,snap,8k3,9,True,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.2126,6.7930,47.7694,5.0572,1.0751,7.4411
+Veteran,snap,8k3,9,True,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.1155,6.0451,47.2991,5.0112,0.5786,13.8255
+Veteran,snap,8k3,9,True,Duelist P5,5,4,4,8,False,0-50ft,5,35,0.6100,8.5729,48.8020,4.5552,2.7786,2.8791
+Veteran,snap,8k3,9,True,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.3985,7.1794,47.9428,4.4750,1.7832,4.4864
+Veteran,snap,8k3,9,True,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.2126,6.7930,47.7694,4.4587,0.9479,8.4399
+Veteran,snap,8k3,9,True,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.1155,6.0451,47.2991,4.4149,0.5098,15.6929
+Veteran,snap,8k3,9,True,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.3985,7.1794,47.9428,4.4750,1.7832,4.4864
+Veteran,snap,8k3,9,True,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.2126,6.7930,47.7694,4.4587,0.9479,8.4399
+Veteran,snap,8k3,9,True,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.1155,6.0451,47.2991,4.4149,0.5098,15.6929
+Veteran,snap,8k3,9,True,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.0536,5.9489,47.2852,4.4134,0.2365,33.8243
+Veteran,aimed,8k3,19,True,Unarmored P1,1,2,2,4,False,0-50ft,5,15,1.0000,33.6322,60.1570,6.9378,6.9378,0.5765
+Veteran,aimed,8k3,19,True,Unarmored P1,1,2,2,4,False,50-100ft,10,20,1.0000,28.6322,58.5117,6.7735,6.7735,0.5905
+Veteran,aimed,8k3,19,True,Unarmored P1,1,2,2,4,False,100-200ft,15,25,1.0000,23.6322,56.6410,6.5867,6.5867,0.6073
+Veteran,aimed,8k3,19,True,Unarmored P1,1,2,2,4,False,200-400ft,20,30,0.9997,18.6391,54.3047,6.3536,6.3514,0.6298
+Veteran,aimed,8k3,19,True,Unarmored P1,1,2,2,4,True,0-50ft,5,20,1.0000,28.6322,58.5117,6.7735,6.7735,0.5905
+Veteran,aimed,8k3,19,True,Unarmored P1,1,2,2,4,True,50-100ft,10,25,1.0000,23.6322,56.6410,6.5867,6.5867,0.6073
+Veteran,aimed,8k3,19,True,Unarmored P1,1,2,2,4,True,100-200ft,15,30,0.9997,18.6391,54.3047,6.3536,6.3514,0.6298
+Veteran,aimed,8k3,19,True,Unarmored P1,1,2,2,4,True,200-400ft,20,35,0.9899,13.7928,51.7114,6.0949,6.0336,0.6630
+Veteran,aimed,8k3,19,True,Light P2,2,2,3,6,False,0-50ft,5,20,1.0000,28.6322,58.5117,6.7735,6.7735,0.8858
+Veteran,aimed,8k3,19,True,Light P2,2,2,3,6,False,50-100ft,10,25,1.0000,23.6322,56.6410,6.5867,6.5867,0.9109
+Veteran,aimed,8k3,19,True,Light P2,2,2,3,6,False,100-200ft,15,30,0.9997,18.6391,54.3047,6.3536,6.3514,0.9447
+Veteran,aimed,8k3,19,True,Light P2,2,2,3,6,False,200-400ft,20,35,0.9899,13.7928,51.7114,6.0949,6.0336,0.9944
+Veteran,aimed,8k3,19,True,Light P2,2,2,3,6,True,0-50ft,5,25,1.0000,23.6322,56.6410,6.5867,6.5867,0.9109
+Veteran,aimed,8k3,19,True,Light P2,2,2,3,6,True,50-100ft,10,30,0.9997,18.6391,54.3047,6.3536,6.3514,0.9447
+Veteran,aimed,8k3,19,True,Light P2,2,2,3,6,True,100-200ft,15,35,0.9899,13.7928,51.7114,6.0949,6.0336,0.9944
+Veteran,aimed,8k3,19,True,Light P2,2,2,3,6,True,200-400ft,20,40,0.8972,9.9385,49.5016,5.8746,5.2706,1.1384
+Veteran,aimed,8k3,19,True,Bushi P3,3,3,3,6,False,0-50ft,5,25,1.0000,23.6322,56.6410,5.9280,5.9280,1.0121
+Veteran,aimed,8k3,19,True,Bushi P3,3,3,3,6,False,50-100ft,10,30,0.9997,18.6391,54.3047,5.6978,5.6959,1.0534
+Veteran,aimed,8k3,19,True,Bushi P3,3,3,3,6,False,100-200ft,15,35,0.9899,13.7928,51.7114,5.4433,5.3885,1.1135
+Veteran,aimed,8k3,19,True,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.8972,9.9385,49.5016,5.2268,4.6894,1.2795
+Veteran,aimed,8k3,19,True,Bushi P3,3,3,3,6,True,0-50ft,5,30,0.9997,18.6391,54.3047,5.6978,5.6959,1.0534
+Veteran,aimed,8k3,19,True,Bushi P3,3,3,3,6,True,50-100ft,10,35,0.9899,13.7928,51.7114,5.4433,5.3885,1.1135
+Veteran,aimed,8k3,19,True,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.8972,9.9385,49.5016,5.2268,4.6894,1.2795
+Veteran,aimed,8k3,19,True,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.6100,8.5729,48.8020,5.1582,3.1464,1.9069
+Veteran,aimed,8k3,19,True,Heavy P4,4,3,4,8,False,0-50ft,5,30,0.9997,18.6391,54.3047,5.6978,5.6959,1.4045
+Veteran,aimed,8k3,19,True,Heavy P4,4,3,4,8,False,50-100ft,10,35,0.9899,13.7928,51.7114,5.4433,5.3885,1.4846
+Veteran,aimed,8k3,19,True,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.8972,9.9385,49.5016,5.2268,4.6894,1.7060
+Veteran,aimed,8k3,19,True,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.6100,8.5729,48.8020,5.1582,3.1464,2.5426
+Veteran,aimed,8k3,19,True,Heavy P4,4,3,4,8,True,0-50ft,5,35,0.9899,13.7928,51.7114,5.4433,5.3885,1.4846
+Veteran,aimed,8k3,19,True,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.8972,9.9385,49.5016,5.2268,4.6894,1.7060
+Veteran,aimed,8k3,19,True,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.6100,8.5729,48.8020,5.1582,3.1464,2.5426
+Veteran,aimed,8k3,19,True,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.3985,7.1794,47.9428,5.0742,2.0219,3.9567
+Veteran,aimed,8k3,19,True,Duelist P5,5,4,4,8,False,0-50ft,5,35,0.9899,13.7928,51.7114,4.8278,4.7793,1.6739
+Veteran,aimed,8k3,19,True,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.8972,9.9385,49.5016,4.6209,4.1458,1.9297
+Veteran,aimed,8k3,19,True,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.6100,8.5729,48.8020,4.5552,2.7786,2.8791
+Veteran,aimed,8k3,19,True,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.3985,7.1794,47.9428,4.4750,1.7832,4.4864
+Veteran,aimed,8k3,19,True,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.8972,9.9385,49.5016,4.6209,4.1458,1.9297
+Veteran,aimed,8k3,19,True,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.6100,8.5729,48.8020,4.5552,2.7786,2.8791
+Veteran,aimed,8k3,19,True,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.3985,7.1794,47.9428,4.4750,1.7832,4.4864
+Veteran,aimed,8k3,19,True,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.2126,6.7930,47.7694,4.4587,0.9479,8.4399
+Elite,snap,10k4,15,True,Unarmored P1,1,2,2,4,False,0-50ft,5,15,1.0000,38.8396,62.0624,7.1283,7.1283,0.5611
+Elite,snap,10k4,15,True,Unarmored P1,1,2,2,4,False,50-100ft,10,20,1.0000,33.8396,60.2871,6.9509,6.9509,0.5755
+Elite,snap,10k4,15,True,Unarmored P1,1,2,2,4,False,100-200ft,15,25,1.0000,28.8396,58.5490,6.7772,6.7772,0.5902
+Elite,snap,10k4,15,True,Unarmored P1,1,2,2,4,False,200-400ft,20,30,0.9999,23.8434,56.5902,6.5817,6.5807,0.6078
+Elite,snap,10k4,15,True,Unarmored P1,1,2,2,4,True,0-50ft,5,20,1.0000,33.8396,60.2871,6.9509,6.9509,0.5755
+Elite,snap,10k4,15,True,Unarmored P1,1,2,2,4,True,50-100ft,10,25,1.0000,28.8396,58.5490,6.7772,6.7772,0.5902
+Elite,snap,10k4,15,True,Unarmored P1,1,2,2,4,True,100-200ft,15,30,0.9999,23.8434,56.5902,6.5817,6.5807,0.6078
+Elite,snap,10k4,15,True,Unarmored P1,1,2,2,4,True,200-400ft,20,35,0.9970,18.9022,54.2893,6.3521,6.3333,0.6316
+Elite,snap,10k4,15,True,Light P2,2,2,3,6,False,0-50ft,5,20,1.0000,33.8396,60.2871,6.9509,6.9509,0.8632
+Elite,snap,10k4,15,True,Light P2,2,2,3,6,False,50-100ft,10,25,1.0000,28.8396,58.5490,6.7772,6.7772,0.8853
+Elite,snap,10k4,15,True,Light P2,2,2,3,6,False,100-200ft,15,30,0.9999,23.8434,56.5902,6.5817,6.5807,0.9118
+Elite,snap,10k4,15,True,Light P2,2,2,3,6,False,200-400ft,20,35,0.9970,18.9022,54.2893,6.3521,6.3333,0.9474
+Elite,snap,10k4,15,True,Light P2,2,2,3,6,True,0-50ft,5,25,1.0000,28.8396,58.5490,6.7772,6.7772,0.8853
+Elite,snap,10k4,15,True,Light P2,2,2,3,6,True,50-100ft,10,30,0.9999,23.8434,56.5902,6.5817,6.5807,0.9118
+Elite,snap,10k4,15,True,Light P2,2,2,3,6,True,100-200ft,15,35,0.9970,18.9022,54.2893,6.3521,6.3333,0.9474
+Elite,snap,10k4,15,True,Light P2,2,2,3,6,True,200-400ft,20,40,0.9695,14.3607,51.9249,6.1163,5.9298,1.0118
+Elite,snap,10k4,15,True,Bushi P3,3,3,3,6,False,0-50ft,5,25,1.0000,28.8396,58.5490,6.1176,6.1176,0.9808
+Elite,snap,10k4,15,True,Bushi P3,3,3,3,6,False,50-100ft,10,30,0.9999,23.8434,56.5902,5.9234,5.9226,1.0131
+Elite,snap,10k4,15,True,Bushi P3,3,3,3,6,False,100-200ft,15,35,0.9970,18.9022,54.2893,5.6967,5.6799,1.0564
+Elite,snap,10k4,15,True,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.9695,14.3607,51.9249,5.4645,5.2979,1.1325
+Elite,snap,10k4,15,True,Bushi P3,3,3,3,6,True,0-50ft,5,30,0.9999,23.8434,56.5902,5.9234,5.9226,1.0131
+Elite,snap,10k4,15,True,Bushi P3,3,3,3,6,True,50-100ft,10,35,0.9970,18.9022,54.2893,5.6967,5.6799,1.0564
+Elite,snap,10k4,15,True,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.9695,14.3607,51.9249,5.4645,5.2979,1.1325
+Elite,snap,10k4,15,True,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.8442,11.1259,50.1580,5.2912,4.4667,1.3433
+Elite,snap,10k4,15,True,Heavy P4,4,3,4,8,False,0-50ft,5,30,0.9999,23.8434,56.5902,5.9234,5.9226,1.3508
+Elite,snap,10k4,15,True,Heavy P4,4,3,4,8,False,50-100ft,10,35,0.9970,18.9022,54.2893,5.6967,5.6799,1.4085
+Elite,snap,10k4,15,True,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.9695,14.3607,51.9249,5.4645,5.2979,1.5100
+Elite,snap,10k4,15,True,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.8442,11.1259,50.1580,5.2912,4.4667,1.7911
+Elite,snap,10k4,15,True,Heavy P4,4,3,4,8,True,0-50ft,5,35,0.9970,18.9022,54.2893,5.6967,5.6799,1.4085
+Elite,snap,10k4,15,True,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.9695,14.3607,51.9249,5.4645,5.2979,1.5100
+Elite,snap,10k4,15,True,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.8442,11.1259,50.1580,5.2912,4.4667,1.7911
+Elite,snap,10k4,15,True,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.6106,9.6082,49.3425,5.2113,3.1817,2.5144
+Elite,snap,10k4,15,True,Duelist P5,5,4,4,8,False,0-50ft,5,35,0.9970,18.9022,54.2893,5.0720,5.0570,1.5820
+Elite,snap,10k4,15,True,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.9695,14.3607,51.9249,4.8487,4.7009,1.7018
+Elite,snap,10k4,15,True,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.8442,11.1259,50.1580,4.6827,3.9530,2.0238
+Elite,snap,10k4,15,True,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.6106,9.6082,49.3425,4.6061,2.8122,2.8447
+Elite,snap,10k4,15,True,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.9695,14.3607,51.9249,4.8487,4.7009,1.7018
+Elite,snap,10k4,15,True,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.8442,11.1259,50.1580,4.6827,3.9530,2.0238
+Elite,snap,10k4,15,True,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.6106,9.6082,49.3425,4.6061,2.8122,2.8447
+Elite,snap,10k4,15,True,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.4165,8.1686,48.5240,4.5295,1.8865,4.2407
+Elite,aimed,10k4,25,True,Unarmored P1,1,2,2,4,False,0-50ft,5,15,1.0000,48.8396,66.5652,7.5784,7.5784,0.5278
+Elite,aimed,10k4,25,True,Unarmored P1,1,2,2,4,False,50-100ft,10,20,1.0000,43.8396,64.0191,7.3239,7.3239,0.5462
+Elite,aimed,10k4,25,True,Unarmored P1,1,2,2,4,False,100-200ft,15,25,1.0000,38.8396,62.0624,7.1283,7.1283,0.5611
+Elite,aimed,10k4,25,True,Unarmored P1,1,2,2,4,False,200-400ft,20,30,1.0000,33.8396,60.2871,6.9509,6.9509,0.5755
+Elite,aimed,10k4,25,True,Unarmored P1,1,2,2,4,True,0-50ft,5,20,1.0000,43.8396,64.0191,7.3239,7.3239,0.5462
+Elite,aimed,10k4,25,True,Unarmored P1,1,2,2,4,True,50-100ft,10,25,1.0000,38.8396,62.0624,7.1283,7.1283,0.5611
+Elite,aimed,10k4,25,True,Unarmored P1,1,2,2,4,True,100-200ft,15,30,1.0000,33.8396,60.2871,6.9509,6.9509,0.5755
+Elite,aimed,10k4,25,True,Unarmored P1,1,2,2,4,True,200-400ft,20,35,1.0000,28.8396,58.5490,6.7772,6.7772,0.5902
+Elite,aimed,10k4,25,True,Light P2,2,2,3,6,False,0-50ft,5,20,1.0000,43.8396,64.0191,7.3239,7.3239,0.8192
+Elite,aimed,10k4,25,True,Light P2,2,2,3,6,False,50-100ft,10,25,1.0000,38.8396,62.0624,7.1283,7.1283,0.8417
+Elite,aimed,10k4,25,True,Light P2,2,2,3,6,False,100-200ft,15,30,1.0000,33.8396,60.2871,6.9509,6.9509,0.8632
+Elite,aimed,10k4,25,True,Light P2,2,2,3,6,False,200-400ft,20,35,1.0000,28.8396,58.5490,6.7772,6.7772,0.8853
+Elite,aimed,10k4,25,True,Light P2,2,2,3,6,True,0-50ft,5,25,1.0000,38.8396,62.0624,7.1283,7.1283,0.8417
+Elite,aimed,10k4,25,True,Light P2,2,2,3,6,True,50-100ft,10,30,1.0000,33.8396,60.2871,6.9509,6.9509,0.8632
+Elite,aimed,10k4,25,True,Light P2,2,2,3,6,True,100-200ft,15,35,1.0000,28.8396,58.5490,6.7772,6.7772,0.8853
+Elite,aimed,10k4,25,True,Light P2,2,2,3,6,True,200-400ft,20,40,0.9999,23.8434,56.5902,6.5817,6.5807,0.9118
+Elite,aimed,10k4,25,True,Bushi P3,3,3,3,6,False,0-50ft,5,25,1.0000,38.8396,62.0624,6.4677,6.4677,0.9277
+Elite,aimed,10k4,25,True,Bushi P3,3,3,3,6,False,50-100ft,10,30,1.0000,33.8396,60.2871,6.2906,6.2906,0.9538
+Elite,aimed,10k4,25,True,Bushi P3,3,3,3,6,False,100-200ft,15,35,1.0000,28.8396,58.5490,6.1176,6.1176,0.9808
+Elite,aimed,10k4,25,True,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.9999,23.8434,56.5902,5.9234,5.9226,1.0131
+Elite,aimed,10k4,25,True,Bushi P3,3,3,3,6,True,0-50ft,5,30,1.0000,33.8396,60.2871,6.2906,6.2906,0.9538
+Elite,aimed,10k4,25,True,Bushi P3,3,3,3,6,True,50-100ft,10,35,1.0000,28.8396,58.5490,6.1176,6.1176,0.9808
+Elite,aimed,10k4,25,True,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.9999,23.8434,56.5902,5.9234,5.9226,1.0131
+Elite,aimed,10k4,25,True,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.9970,18.9022,54.2893,5.6967,5.6799,1.0564
+Elite,aimed,10k4,25,True,Heavy P4,4,3,4,8,False,0-50ft,5,30,1.0000,33.8396,60.2871,6.2906,6.2906,1.2717
+Elite,aimed,10k4,25,True,Heavy P4,4,3,4,8,False,50-100ft,10,35,1.0000,28.8396,58.5490,6.1176,6.1176,1.3077
+Elite,aimed,10k4,25,True,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.9999,23.8434,56.5902,5.9234,5.9226,1.3508
+Elite,aimed,10k4,25,True,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.9970,18.9022,54.2893,5.6967,5.6799,1.4085
+Elite,aimed,10k4,25,True,Heavy P4,4,3,4,8,True,0-50ft,5,35,1.0000,28.8396,58.5490,6.1176,6.1176,1.3077
+Elite,aimed,10k4,25,True,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.9999,23.8434,56.5902,5.9234,5.9226,1.3508
+Elite,aimed,10k4,25,True,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.9970,18.9022,54.2893,5.6967,5.6799,1.4085
+Elite,aimed,10k4,25,True,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.9695,14.3607,51.9249,5.4645,5.2979,1.5100
+Elite,aimed,10k4,25,True,Duelist P5,5,4,4,8,False,0-50ft,5,35,1.0000,28.8396,58.5490,5.4813,5.4813,1.4595
+Elite,aimed,10k4,25,True,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.9999,23.8434,56.5902,5.2913,5.2905,1.5121
+Elite,aimed,10k4,25,True,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.9970,18.9022,54.2893,5.0720,5.0570,1.5820
+Elite,aimed,10k4,25,True,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.9695,14.3607,51.9249,4.8487,4.7009,1.7018
+Elite,aimed,10k4,25,True,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.9999,23.8434,56.5902,5.2913,5.2905,1.5121
+Elite,aimed,10k4,25,True,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.9970,18.9022,54.2893,5.0720,5.0570,1.5820
+Elite,aimed,10k4,25,True,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.9695,14.3607,51.9249,4.8487,4.7009,1.7018
+Elite,aimed,10k4,25,True,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.8442,11.1259,50.1580,4.6827,3.9530,2.0238
+Master,snap,10k5,20,True,Unarmored P1,1,2,2,4,False,0-50ft,5,15,1.0000,49.9247,72.5145,8.1733,8.1733,0.4894
+Master,snap,10k5,20,True,Unarmored P1,1,2,2,4,False,50-100ft,10,20,1.0000,44.9247,69.7664,7.8985,7.8985,0.5064
+Master,snap,10k5,20,True,Unarmored P1,1,2,2,4,False,100-200ft,15,25,1.0000,39.9247,67.6117,7.6830,7.6830,0.5206
+Master,snap,10k5,20,True,Unarmored P1,1,2,2,4,False,200-400ft,20,30,1.0000,34.9247,65.7320,7.4951,7.4951,0.5337
+Master,snap,10k5,20,True,Unarmored P1,1,2,2,4,True,0-50ft,5,20,1.0000,44.9247,69.7664,7.8985,7.8985,0.5064
+Master,snap,10k5,20,True,Unarmored P1,1,2,2,4,True,50-100ft,10,25,1.0000,39.9247,67.6117,7.6830,7.6830,0.5206
+Master,snap,10k5,20,True,Unarmored P1,1,2,2,4,True,100-200ft,15,30,1.0000,34.9247,65.7320,7.4951,7.4951,0.5337
+Master,snap,10k5,20,True,Unarmored P1,1,2,2,4,True,200-400ft,20,35,1.0000,29.9254,63.9176,7.3136,7.3135,0.5469
+Master,snap,10k5,20,True,Light P2,2,2,3,6,False,0-50ft,5,20,1.0000,44.9247,69.7664,7.8985,7.8985,0.7596
+Master,snap,10k5,20,True,Light P2,2,2,3,6,False,50-100ft,10,25,1.0000,39.9247,67.6117,7.6830,7.6830,0.7809
+Master,snap,10k5,20,True,Light P2,2,2,3,6,False,100-200ft,15,30,1.0000,34.9247,65.7320,7.4951,7.4951,0.8005
+Master,snap,10k5,20,True,Light P2,2,2,3,6,False,200-400ft,20,35,1.0000,29.9254,63.9176,7.3136,7.3135,0.8204
+Master,snap,10k5,20,True,Light P2,2,2,3,6,True,0-50ft,5,25,1.0000,39.9247,67.6117,7.6830,7.6830,0.7809
+Master,snap,10k5,20,True,Light P2,2,2,3,6,True,50-100ft,10,30,1.0000,34.9247,65.7320,7.4951,7.4951,0.8005
+Master,snap,10k5,20,True,Light P2,2,2,3,6,True,100-200ft,15,35,1.0000,29.9254,63.9176,7.3136,7.3135,0.8204
+Master,snap,10k5,20,True,Light P2,2,2,3,6,True,200-400ft,20,40,0.9995,24.9384,61.9575,7.1178,7.1142,0.8434
+Master,snap,10k5,20,True,Bushi P3,3,3,3,6,False,0-50ft,5,25,1.0000,39.9247,67.6117,7.0220,7.0220,0.8545
+Master,snap,10k5,20,True,Bushi P3,3,3,3,6,False,50-100ft,10,30,1.0000,34.9247,65.7320,6.8342,6.8342,0.8779
+Master,snap,10k5,20,True,Bushi P3,3,3,3,6,False,100-200ft,15,35,1.0000,29.9254,63.9176,6.6531,6.6530,0.9019
+Master,snap,10k5,20,True,Bushi P3,3,3,3,6,False,200-400ft,20,40,0.9995,24.9384,61.9575,6.4578,6.4546,0.9296
+Master,snap,10k5,20,True,Bushi P3,3,3,3,6,True,0-50ft,5,30,1.0000,34.9247,65.7320,6.8342,6.8342,0.8779
+Master,snap,10k5,20,True,Bushi P3,3,3,3,6,True,50-100ft,10,35,1.0000,29.9254,63.9176,6.6531,6.6530,0.9019
+Master,snap,10k5,20,True,Bushi P3,3,3,3,6,True,100-200ft,15,40,0.9995,24.9384,61.9575,6.4578,6.4546,0.9296
+Master,snap,10k5,20,True,Bushi P3,3,3,3,6,True,200-400ft,20,45,0.9935,20.0729,59.7666,6.2400,6.1992,0.9679
+Master,snap,10k5,20,True,Heavy P4,4,3,4,8,False,0-50ft,5,30,1.0000,34.9247,65.7320,6.8342,6.8342,1.1706
+Master,snap,10k5,20,True,Heavy P4,4,3,4,8,False,50-100ft,10,35,1.0000,29.9254,63.9176,6.6531,6.6530,1.2025
+Master,snap,10k5,20,True,Heavy P4,4,3,4,8,False,100-200ft,15,40,0.9995,24.9384,61.9575,6.4578,6.4546,1.2394
+Master,snap,10k5,20,True,Heavy P4,4,3,4,8,False,200-400ft,20,45,0.9935,20.0729,59.7666,6.2400,6.1992,1.2905
+Master,snap,10k5,20,True,Heavy P4,4,3,4,8,True,0-50ft,5,35,1.0000,29.9254,63.9176,6.6531,6.6530,1.2025
+Master,snap,10k5,20,True,Heavy P4,4,3,4,8,True,50-100ft,10,40,0.9995,24.9384,61.9575,6.4578,6.4546,1.2394
+Master,snap,10k5,20,True,Heavy P4,4,3,4,8,True,100-200ft,15,45,0.9935,20.0729,59.7666,6.2400,6.1992,1.2905
+Master,snap,10k5,20,True,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.9587,15.7072,57.5830,6.0232,5.7743,1.3855
+Master,snap,10k5,20,True,Duelist P5,5,4,4,8,False,0-50ft,5,35,1.0000,29.9254,63.9176,6.0126,6.0124,1.3306
+Master,snap,10k5,20,True,Duelist P5,5,4,4,8,False,50-100ft,10,40,0.9995,24.9384,61.9575,5.8194,5.8165,1.3754
+Master,snap,10k5,20,True,Duelist P5,5,4,4,8,False,100-200ft,15,45,0.9935,20.0729,59.7666,5.6051,5.5685,1.4367
+Master,snap,10k5,20,True,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.9587,15.7072,57.5830,5.3926,5.1698,1.5475
+Master,snap,10k5,20,True,Duelist P5,5,4,4,8,True,0-50ft,5,40,0.9995,24.9384,61.9575,5.8194,5.8165,1.3754
+Master,snap,10k5,20,True,Duelist P5,5,4,4,8,True,50-100ft,10,45,0.9935,20.0729,59.7666,5.6051,5.5685,1.4367
+Master,snap,10k5,20,True,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.9587,15.7072,57.5830,5.3926,5.1698,1.5475
+Master,snap,10k5,20,True,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.8480,12.4509,55.8562,5.2251,4.4309,1.8055
+Master,aimed,10k5,30,True,Unarmored P1,1,2,2,4,False,0-50ft,5,15,1.0000,59.9247,80.3999,8.9615,8.9615,0.4464
+Master,aimed,10k5,30,True,Unarmored P1,1,2,2,4,False,50-100ft,10,20,1.0000,54.9247,76.0473,8.5264,8.5264,0.4691
+Master,aimed,10k5,30,True,Unarmored P1,1,2,2,4,False,100-200ft,15,25,1.0000,49.9247,72.5145,8.1733,8.1733,0.4894
+Master,aimed,10k5,30,True,Unarmored P1,1,2,2,4,False,200-400ft,20,30,1.0000,44.9247,69.7664,7.8985,7.8985,0.5064
+Master,aimed,10k5,30,True,Unarmored P1,1,2,2,4,True,0-50ft,5,20,1.0000,54.9247,76.0473,8.5264,8.5264,0.4691
+Master,aimed,10k5,30,True,Unarmored P1,1,2,2,4,True,50-100ft,10,25,1.0000,49.9247,72.5145,8.1733,8.1733,0.4894
+Master,aimed,10k5,30,True,Unarmored P1,1,2,2,4,True,100-200ft,15,30,1.0000,44.9247,69.7664,7.8985,7.8985,0.5064
+Master,aimed,10k5,30,True,Unarmored P1,1,2,2,4,True,200-400ft,20,35,1.0000,39.9247,67.6117,7.6830,7.6830,0.5206
+Master,aimed,10k5,30,True,Light P2,2,2,3,6,False,0-50ft,5,20,1.0000,54.9247,76.0473,8.5264,8.5264,0.7037
+Master,aimed,10k5,30,True,Light P2,2,2,3,6,False,50-100ft,10,25,1.0000,49.9247,72.5145,8.1733,8.1733,0.7341
+Master,aimed,10k5,30,True,Light P2,2,2,3,6,False,100-200ft,15,30,1.0000,44.9247,69.7664,7.8985,7.8985,0.7596
+Master,aimed,10k5,30,True,Light P2,2,2,3,6,False,200-400ft,20,35,1.0000,39.9247,67.6117,7.6830,7.6830,0.7809
+Master,aimed,10k5,30,True,Light P2,2,2,3,6,True,0-50ft,5,25,1.0000,49.9247,72.5145,8.1733,8.1733,0.7341
+Master,aimed,10k5,30,True,Light P2,2,2,3,6,True,50-100ft,10,30,1.0000,44.9247,69.7664,7.8985,7.8985,0.7596
+Master,aimed,10k5,30,True,Light P2,2,2,3,6,True,100-200ft,15,35,1.0000,39.9247,67.6117,7.6830,7.6830,0.7809
+Master,aimed,10k5,30,True,Light P2,2,2,3,6,True,200-400ft,20,40,1.0000,34.9247,65.7320,7.4951,7.4951,0.8005
+Master,aimed,10k5,30,True,Bushi P3,3,3,3,6,False,0-50ft,5,25,1.0000,49.9247,72.5145,7.5120,7.5120,0.7987
+Master,aimed,10k5,30,True,Bushi P3,3,3,3,6,False,50-100ft,10,30,1.0000,44.9247,69.7664,7.2373,7.2373,0.8290
+Master,aimed,10k5,30,True,Bushi P3,3,3,3,6,False,100-200ft,15,35,1.0000,39.9247,67.6117,7.0220,7.0220,0.8545
+Master,aimed,10k5,30,True,Bushi P3,3,3,3,6,False,200-400ft,20,40,1.0000,34.9247,65.7320,6.8342,6.8342,0.8779
+Master,aimed,10k5,30,True,Bushi P3,3,3,3,6,True,0-50ft,5,30,1.0000,44.9247,69.7664,7.2373,7.2373,0.8290
+Master,aimed,10k5,30,True,Bushi P3,3,3,3,6,True,50-100ft,10,35,1.0000,39.9247,67.6117,7.0220,7.0220,0.8545
+Master,aimed,10k5,30,True,Bushi P3,3,3,3,6,True,100-200ft,15,40,1.0000,34.9247,65.7320,6.8342,6.8342,0.8779
+Master,aimed,10k5,30,True,Bushi P3,3,3,3,6,True,200-400ft,20,45,1.0000,29.9254,63.9176,6.6531,6.6530,0.9019
+Master,aimed,10k5,30,True,Heavy P4,4,3,4,8,False,0-50ft,5,30,1.0000,44.9247,69.7664,7.2373,7.2373,1.1054
+Master,aimed,10k5,30,True,Heavy P4,4,3,4,8,False,50-100ft,10,35,1.0000,39.9247,67.6117,7.0220,7.0220,1.1393
+Master,aimed,10k5,30,True,Heavy P4,4,3,4,8,False,100-200ft,15,40,1.0000,34.9247,65.7320,6.8342,6.8342,1.1706
+Master,aimed,10k5,30,True,Heavy P4,4,3,4,8,False,200-400ft,20,45,1.0000,29.9254,63.9176,6.6531,6.6530,1.2025
+Master,aimed,10k5,30,True,Heavy P4,4,3,4,8,True,0-50ft,5,35,1.0000,39.9247,67.6117,7.0220,7.0220,1.1393
+Master,aimed,10k5,30,True,Heavy P4,4,3,4,8,True,50-100ft,10,40,1.0000,34.9247,65.7320,6.8342,6.8342,1.1706
+Master,aimed,10k5,30,True,Heavy P4,4,3,4,8,True,100-200ft,15,45,1.0000,29.9254,63.9176,6.6531,6.6530,1.2025
+Master,aimed,10k5,30,True,Heavy P4,4,3,4,8,True,200-400ft,20,50,0.9995,24.9384,61.9575,6.4578,6.4546,1.2394
+Master,aimed,10k5,30,True,Duelist P5,5,4,4,8,False,0-50ft,5,35,1.0000,39.9247,67.6117,6.3796,6.3796,1.2540
+Master,aimed,10k5,30,True,Duelist P5,5,4,4,8,False,50-100ft,10,40,1.0000,34.9247,65.7320,6.1925,6.1925,1.2919
+Master,aimed,10k5,30,True,Duelist P5,5,4,4,8,False,100-200ft,15,45,1.0000,29.9254,63.9176,6.0126,6.0124,1.3306
+Master,aimed,10k5,30,True,Duelist P5,5,4,4,8,False,200-400ft,20,50,0.9995,24.9384,61.9575,5.8194,5.8165,1.3754
+Master,aimed,10k5,30,True,Duelist P5,5,4,4,8,True,0-50ft,5,40,1.0000,34.9247,65.7320,6.1925,6.1925,1.2919
+Master,aimed,10k5,30,True,Duelist P5,5,4,4,8,True,50-100ft,10,45,1.0000,29.9254,63.9176,6.0126,6.0124,1.3306
+Master,aimed,10k5,30,True,Duelist P5,5,4,4,8,True,100-200ft,15,50,0.9995,24.9384,61.9575,5.8194,5.8165,1.3754
+Master,aimed,10k5,30,True,Duelist P5,5,4,4,8,True,200-400ft,20,55,0.9935,20.0729,59.7666,5.6051,5.5685,1.4367
