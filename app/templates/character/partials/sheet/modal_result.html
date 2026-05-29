@@ -733,14 +733,13 @@
                         </div>
                     </div>
 
-                    {# Lucky reroll: reroll lower (non-initiative) — the
-                       auto-use-higher rule restored the original above, so
-                       this banner is purely informational. #}
-                    <div x-show="luckyOriginalWasHigher && !formula?.is_initiative" x-cloak
-                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800"
-                         data-testid="lucky-kept-original-banner">
-                        Lucky reroll (<span x-text="luckyRollPair?.reroll?.total"></span>) came in lower; kept the higher original roll (<span x-text="luckyRollPair?.original?.total"></span>).
-                    </div>
+                    {# Lucky reroll: always show both totals (original +
+                       reroll) when Lucky has fired on this roll, with a
+                       "kept" chip on whichever survived per the auto-use-
+                       higher rule. Initiative uses its own panel (next
+                       block). #}
+                    {% set context_hint = None %}
+                    {% include "character/partials/sheet/_lucky_pair_banner.html" %}
 
                     {# Lucky reroll: initiative - always show original action dice #}
                     <div x-show="luckyUsedThisRoll && formula?.is_initiative && luckyPrevActionDice.length > 0" x-cloak

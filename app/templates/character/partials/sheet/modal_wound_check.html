@@ -435,11 +435,8 @@
                             class="btn-gold px-4 py-2 rounded text-sm font-medium mt-2">
                         Use Lucky to reroll wound check
                     </button>
-                    <div x-show="luckyOriginalWasHigher" x-cloak
-                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800 mt-2"
-                         data-testid="lucky-kept-original-banner">
-                        Lucky reroll (<span x-text="luckyRollPair?.reroll?.total"></span>) came in lower; kept the higher original roll (<span x-text="luckyRollPair?.original?.total"></span>) - the serious-wound calculation above uses that higher value.
-                    </div>
+                    {% set context_hint = "The serious-wound calculation above uses the kept total." %}
+                    {% include "character/partials/sheet/_lucky_pair_banner.html" %}
                 </div>
             </div>
         </div>

@@ -423,7 +423,7 @@
                     this._prerenderRollImage(isInit
                         ? this._buildInitiativeImagePayload()
                         : this._buildRollImagePayload());
-                    this._maybeUpdateRollHistory();
+                    this._patchRollHistoryNow();
                 });
             },
 
@@ -473,7 +473,7 @@
                 this.wcResultApplied = false;
                 this.wcPhase = 'result';
                 this._prerenderRollImage(this._buildWoundCheckImagePayload());
-                this._maybeUpdateRollHistory();
+                this._patchRollHistoryNow();
             },
 
             async useLuckyAttack() {
@@ -510,7 +510,7 @@
                 // Refresh annotation + image off the effective state.
                 this._annotateSpentActionDie(this._describeAttackForDie(false));
                 this._prerenderRollImage(this._buildAttackImagePayload());
-                this._maybeUpdateRollHistory();
+                this._patchRollHistoryNow();
             },
 
             async useLuckyDamage() {
@@ -550,7 +550,7 @@
                 this.atkPhase = 'damage-result';
                 this._annotateSpentActionDie(this._describeAttackForDie(true));
                 this._prerenderRollImage(this._buildAttackDamageImagePayload());
-                this._maybeUpdateRollHistory();
+                this._patchRollHistoryNow();
             },
 
             async useLuckyDuelContested() {
@@ -576,7 +576,7 @@
                 this.duelContestedRoll = r.total;
                 this.duelPhase = 'contested-result';
                 this._prerenderRollImage(this._buildDuelContestedImagePayload());
-                this._maybeUpdateRollHistory();
+                this._patchRollHistoryNow();
             },
 
             async useLuckyDuelStrike() {
@@ -607,7 +607,7 @@
                 this.duelStrikeExcess = excess;
                 this.duelPhase = 'strike-result';
                 this._prerenderRollImage(this._buildDuelStrikeImagePayload());
-                this._maybeUpdateRollHistory();
+                this._patchRollHistoryNow();
             },
 
             async useLuckyDuelDamage() {
@@ -632,7 +632,7 @@
                 this.duelDamageTotal = r.total;
                 this.duelPhase = 'damage-result';
                 this._prerenderRollImage(this._buildDuelDamageImagePayload());
-                this._maybeUpdateRollHistory();
+                this._patchRollHistoryNow();
             },
 
             // Threshold data for wound check notifications
@@ -2917,13 +2917,19 @@
                 this._patchRollHistory(this._currentRollHistoryPayload());
             },
 
-            _patchRollHistory(body) {
+            _patchRollHistory(body, opts) {
                 if (!body) return;
                 const sig = JSON.stringify(body.payload);
                 if (sig === this._lastRollHistorySig) return;
                 const t = window._trackingBridge;
                 if (!t || !t._charId || !this._rollHistoryId) return;
                 this._lastRollHistorySig = sig;
+                // ``keepalive`` lets the browser deliver the PATCH even when
+                // the page is unloading (user clicked a nav link right after
+                // the action that triggered this patch). Without it, the
+                // fetch is aborted at navigation and the update is lost -
+                // which is how Lucky's payload.lucky pair was getting
+                // dropped when a user clicked away within ~200 ms.
                 fetch('/characters/' + t._charId + '/rolls/' + this._rollHistoryId, {
                     method: 'PATCH',
                     headers: {'Content-Type': 'application/json'},
@@ -2931,7 +2937,27 @@
                         payload: body.payload,
                         action_die_spent: body.action_die_spent,
                     }),
+                    keepalive: !!(opts && opts.keepalive),
                 }).catch(() => { /* non-fatal */ });
+            },
+
+            // Used by Lucky reroll handlers: bypass the 200 ms debounce so
+            // the payload.lucky pair lands even if the user immediately
+            // closes the modal or navigates away. Also marks the fetch as
+            // ``keepalive`` so a navigation in mid-flight doesn't abort it.
+            // If the initial-roll POST hasn't yet returned (rare race
+            // when Lucky fires before its response lands), stash the
+            // payload so ``_saveRollHistoryCreate``'s .then() PATCHes it
+            // as soon as the id arrives.
+            _patchRollHistoryNow() {
+                const body = this._currentRollHistoryPayload();
+                if (!body) return;
+                if (!this._rollHistoryId) {
+                    this._rollHistoryPendingPayload = body;
+                    return;
+                }
+                clearTimeout(this._rollHistoryUpdateTimer);
+                this._patchRollHistory(body, {keepalive: true});
             },
 
             // Debounced entry point for post-roll mutations. Each watcher

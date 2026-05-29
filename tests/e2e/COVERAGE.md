@@ -115,9 +115,10 @@ The three failures were:
 - [x] Lucky reroll carries over post-roll VP (wound check) -> `test_ui_interactions.py::test_lucky_carries_over_wc_post_roll_vp`
 - [x] Lucky reroll carries over Akodo banked bonus -> `test_ui_interactions.py::test_lucky_carries_over_akodo_bonus`
 - [x] Lucky pair totals are frozen snapshots; effective total tracks post-reroll bonuses -> `test_ui_interactions.py::test_lucky_pair_totals_frozen_effective_total_updates`
-- [x] Lucky auto-uses higher: lower reroll on attack restores the original total AND the extra-damage-dice followup is computed off the higher original -> `test_ui_interactions.py::test_lucky_auto_uses_higher_on_attack`
+- [x] Lucky auto-uses higher: lower reroll on attack restores the original total AND the extra-damage-dice followup is computed off the higher original; pair banner shows both totals with "kept" chip on Original half -> `test_ui_interactions.py::test_lucky_auto_uses_higher_on_attack`
 - [x] Lucky auto-uses higher: lower reroll on wound check restores the original total AND the serious-wound count above is the higher's count, not the lower's -> `test_ui_interactions.py::test_lucky_auto_uses_higher_on_wound_check`
-- [x] Lucky keeps reroll when higher: pair records `kept: 'reroll'`, no kept-original banner -> `test_ui_interactions.py::test_lucky_keeps_reroll_when_higher_attack`
+- [x] Lucky keeps reroll when higher: pair records `kept: 'reroll'`; pair banner shows both totals with "kept" chip on Reroll half -> `test_ui_interactions.py::test_lucky_keeps_reroll_when_higher_attack`
+- [x] Lucky pair PATCH lands even when user navigates away immediately (no debounce, keepalive fetch) -> `test_ui_interactions.py::test_lucky_pair_persisted_on_immediate_navigation`
 - [x] Failed parry checkbox changes damage formula -> `test_ui_interactions.py::test_failed_parry_checkbox`
 - [x] Predeclared parry rolls with +5 bonus -> `test_ui_interactions.py::test_predeclared_parry_with_bonus`
 - [x] Pre-roll "Extra bonus" toggle starts unchecked with defaults (+15 / "surrounding"); inputs hidden until checked -> `test_attack_modal.py::test_extra_bonus_starts_unchecked_with_defaults`
