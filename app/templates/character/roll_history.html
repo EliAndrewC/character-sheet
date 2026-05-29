@@ -180,6 +180,21 @@
                                          data-testid="impaired-explainer">{{ character.name }} was Impaired when making this roll and could not reroll 10s.</div>
                                 </span>
                             </template>
+                            {# Lucky badge: shown when Lucky was used on this
+                               roll. The pair (original + reroll totals) is
+                               rendered in the Result column; this tag flags
+                               that the row is a Lucky pair so it's
+                               recognizable at a glance from the list. #}
+                            <template x-if="r.payload && r.payload.lucky">
+                                <span class="tooltip-trigger relative align-middle cursor-help
+                                             text-[10px] uppercase tracking-wide
+                                             text-gold border border-gold/40 bg-gold/5 rounded px-1"
+                                      data-tooltip-clamp data-testid="lucky-tag">
+                                    lucky
+                                    <div class="tooltip-content absolute left-0 top-full z-20 mt-1 p-3 bg-ink text-parchment text-xs font-normal normal-case tracking-normal leading-snug rounded shadow-lg w-64"
+                                         data-testid="lucky-explainer">Lucky was used on this roll. Both the original and the rerolled totals are shown - the higher of the two was used to compute everything downstream (damage, serious wounds, etc.).</div>
+                                </span>
+                            </template>
                             <template x-if="r.is_hidden">
                                 <span class="align-middle text-[10px] uppercase tracking-wide
                                              text-ink/40 border border-ink/20 rounded px-1">hidden</span>
@@ -196,8 +211,29 @@
                              data-testid="roll-tn"></div>
 
                         <div class="rh-row__result">
-                            <span :class="resultClass(r)" x-text="resultText(r)"
-                                  data-testid="roll-result"></span>
+                            {# Lucky pair: render BOTH totals side by side
+                               (original | reroll). The half that was kept
+                               (per the auto-use-higher rule) gets the
+                               normal result styling; the discarded half is
+                               muted so the kept one stands out. The
+                               per-half data-testid attributes let a
+                               clicktest assert both halves and which
+                               survived. #}
+                            <template x-if="r.payload && r.payload.lucky">
+                                <span class="inline-flex items-center gap-1 text-sm">
+                                    <span :class="luckyHalfClass(r, 'original')"
+                                          x-text="r.payload.lucky.original.total"
+                                          data-testid="lucky-original-total"></span>
+                                    <span class="text-ink/30 text-xs">·</span>
+                                    <span :class="luckyHalfClass(r, 'reroll')"
+                                          x-text="r.payload.lucky.reroll.total"
+                                          data-testid="lucky-reroll-total"></span>
+                                </span>
+                            </template>
+                            <template x-if="!(r.payload && r.payload.lucky)">
+                                <span :class="resultClass(r)" x-text="resultText(r)"
+                                      data-testid="roll-result"></span>
+                            </template>
                         </div>
 
                         <div class="rh-row__note">
@@ -326,6 +362,17 @@
                 return box + (this.isSuccess(r)
                     ? 'bg-[#fff7e0] text-accent ring-1 ring-gold/40'
                     : 'bg-ink/5 text-ink/45');
+            },
+
+            luckyHalfClass(r, which) {
+                // Styling for one half of a Lucky pair in the Result column.
+                // The half marked ``kept`` in payload.lucky gets the normal
+                // result styling (success/miss colour vs TN); the discarded
+                // half is rendered as a muted, struck-through total so the
+                // kept one is unambiguously the live result.
+                const kept = (r.payload && r.payload.lucky && r.payload.lucky.kept) || 'reroll';
+                if (which === kept) return this.resultClass(r);
+                return 'inline-block font-mono font-bold tabular-nums px-2 py-0.5 rounded-md text-ink/40 line-through';
             },
 
             visibleGroups() {

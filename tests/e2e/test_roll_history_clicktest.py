@@ -1067,3 +1067,124 @@ def test_discretionary_bonus_updates_row(page, live_server_url):
     rolls_after = _list_rolls(page, cid)
     assert len(rolls_after) == 1, "should still be one row, not a new one"
     assert rolls_after[0]["payload"]["total"] == initial_total + 5
+
+
+# ---------------------------------------------------------------------------
+# Lucky badge + dual-total rendering on the Roll History page
+#
+# These tests insert a row directly via the rolls POST API so the rendering
+# pipeline (badge tag, dual-total cell styling, readonly-modal Lucky section)
+# can be asserted without the per-roll randomness of an actual reroll. The
+# end-to-end "click Use Lucky and watch it record" flow is covered by the
+# auto-use-higher tests in tests/e2e/test_ui_interactions.py.
+# ---------------------------------------------------------------------------
+
+
+def _insert_lucky_roll(page, char_id, *, original_total, reroll_total, kept):
+    """POST a roll row whose payload carries the full Lucky pair structure.
+    Mirrors what ``_currentRollHistoryPayload`` attaches when Lucky fires."""
+    page.evaluate(f"""
+        () => fetch('/characters/{char_id}/rolls', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{
+                roll_key: 'skill:bragging',
+                roll_label: 'Bragging',
+                payload: {{
+                    title: 'Bragging', formula: '4k2',
+                    kept: [{{parts: [8]}}, {{parts: [7]}}],
+                    dropped: [{{parts: [3]}}, {{parts: [2]}}],
+                    bonuses: [],
+                    extras: ['Lucky reroll used'],
+                    kept_sum: 15,
+                    total: {original_total if kept == "original" else reroll_total},
+                    lucky: {{
+                        kept: '{kept}',
+                        original: {{
+                            kept: [{{parts: [8]}}, {{parts: [7]}}],
+                            dropped: [{{parts: [3]}}, {{parts: [2]}}],
+                            total: {original_total},
+                            show_total: true,
+                        }},
+                        reroll: {{
+                            kept: [{{parts: [4]}}, {{parts: [3]}}],
+                            dropped: [{{parts: [2]}}, {{parts: [1]}}],
+                            total: {reroll_total},
+                            show_total: true,
+                        }},
+                    }},
+                }},
+                impaired_at_roll: false,
+                tn: null,
+            }})
+        }})
+    """)
+    page.wait_for_timeout(300)
+
+
+def test_roll_history_shows_lucky_badge(page, live_server_url):
+    """Roll History page renders a 'lucky' tag next to the roll type when
+    the row's payload carries a Lucky pair."""
+    _create_owner_character(page, live_server_url, name="LuckyBadge")
+    cid = _char_id(page)
+    _insert_lucky_roll(page, cid, original_total=22, reroll_total=15, kept="original")
+    _open_roll_history_page(page)
+    tag = page.locator('[data-testid="lucky-tag"]')
+    tag.wait_for(state="visible", timeout=5000)
+    assert "lucky" in tag.first.inner_text().lower()
+
+
+def test_roll_history_shows_both_totals_kept_original(page, live_server_url):
+    """When the auto-use-higher rule kept the original (lower reroll), the
+    Result cell shows BOTH totals; the original is styled as the live
+    result and the reroll is shown muted/strikethrough."""
+    _create_owner_character(page, live_server_url, name="LuckyDualOrig")
+    cid = _char_id(page)
+    _insert_lucky_roll(page, cid, original_total=22, reroll_total=15, kept="original")
+    _open_roll_history_page(page)
+    orig = page.locator('[data-testid="lucky-original-total"]').first
+    rer = page.locator('[data-testid="lucky-reroll-total"]').first
+    orig.wait_for(state="visible", timeout=5000)
+    assert orig.inner_text().strip() == "22"
+    assert rer.inner_text().strip() == "15"
+    # The reroll (discarded) half is the muted/strikethrough one.
+    rer_class = rer.get_attribute("class") or ""
+    orig_class = orig.get_attribute("class") or ""
+    assert "line-through" in rer_class
+    assert "line-through" not in orig_class
+
+
+def test_roll_history_shows_both_totals_kept_reroll(page, live_server_url):
+    """When the reroll won (>= original), the reroll is the live result
+    and the original is the muted half. Inverse of the test above."""
+    _create_owner_character(page, live_server_url, name="LuckyDualRer")
+    cid = _char_id(page)
+    _insert_lucky_roll(page, cid, original_total=15, reroll_total=24, kept="reroll")
+    _open_roll_history_page(page)
+    orig = page.locator('[data-testid="lucky-original-total"]').first
+    rer = page.locator('[data-testid="lucky-reroll-total"]').first
+    rer.wait_for(state="visible", timeout=5000)
+    assert orig.inner_text().strip() == "15"
+    assert rer.inner_text().strip() == "24"
+    orig_class = orig.get_attribute("class") or ""
+    rer_class = rer.get_attribute("class") or ""
+    assert "line-through" in orig_class
+    assert "line-through" not in rer_class
+
+
+def test_readonly_modal_shows_lucky_pair(page, live_server_url):
+    """Clicking a Lucky row opens the readonly detail modal which renders
+    both halves of the pair with a 'kept' tag on the surviving half."""
+    _create_owner_character(page, live_server_url, name="LuckyReadonly")
+    cid = _char_id(page)
+    _insert_lucky_roll(page, cid, original_total=22, reroll_total=15, kept="original")
+    _open_roll_history_page(page)
+    page.locator('[data-action="view-roll"]').first.click()
+    section = page.locator('[data-testid="readonly-lucky"]')
+    section.wait_for(state="visible", timeout=5000)
+    assert page.locator('[data-testid="readonly-lucky-original"]').inner_text().strip() == "22"
+    assert page.locator('[data-testid="readonly-lucky-reroll"]').inner_text().strip() == "15"
+    # The kept-original half carries the gold "kept" chip; the reroll half
+    # does not.
+    text = section.inner_text()
+    assert "KEPT" in text.upper()

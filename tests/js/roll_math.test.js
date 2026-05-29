@@ -202,3 +202,34 @@ test("akodoBankedBonus = floor(margin/5) * attackSkill, 0 if non-positive", () =
   assert.equal(M.akodoBankedBonus(19, 0), 0);
   assert.equal(M.akodoBankedBonus(0, 4), 0);
 });
+
+// --- Lucky reroll resolution ---
+
+test("luckyResolveReroll: reroll higher -> keep reroll, original not higher", () => {
+  assert.deepEqual(M.luckyResolveReroll(15, 22, false),
+                   { keepReroll: true, originalHigher: false });
+});
+
+test("luckyResolveReroll: reroll lower -> keep original (auto)", () => {
+  // The whole point of the auto-use-higher rule: a strictly-lower reroll
+  // returns keepReroll=false so the modal restores the original dice/total
+  // and the followup step (damage, serious wounds) reads the higher value.
+  assert.deepEqual(M.luckyResolveReroll(22, 15, false),
+                   { keepReroll: false, originalHigher: true });
+});
+
+test("luckyResolveReroll: tie keeps the reroll (either is equivalent)", () => {
+  assert.deepEqual(M.luckyResolveReroll(18, 18, false),
+                   { keepReroll: true, originalHigher: false });
+});
+
+test("luckyResolveReroll: initiative keeps both - never auto-pick", () => {
+  // Initiative produces two action-die layouts that aren't strictly
+  // comparable. Whatever the totals look like, we report keepReroll=true
+  // (so the live result shows the fresh roll) and never mark the original
+  // as the winner - the modal lets the player choose which set to keep.
+  assert.deepEqual(M.luckyResolveReroll(22, 15, true),
+                   { keepReroll: true, originalHigher: false });
+  assert.deepEqual(M.luckyResolveReroll(15, 22, true),
+                   { keepReroll: true, originalHigher: false });
+});

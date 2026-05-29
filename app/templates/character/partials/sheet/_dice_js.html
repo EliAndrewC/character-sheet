@@ -235,6 +235,14 @@
             luckyPrevBaseTotal: 0,
             luckyPrevActionDice: [],
             luckyOriginalWasHigher: false,
+            // When a Lucky reroll happens we capture BOTH halves (original
+            // and rerolled dice + totals) into this structure so the Roll
+            // History page can show the pair with a Lucky badge. ``kept``
+            // is 'reroll' when the reroll wins (or for initiative, which
+            // always shows the fresh roll as the live result) and
+            // 'original' when the auto-use-higher rule restores the
+            // original. Null when no Lucky has fired on the current roll.
+            luckyRollPair: null,
             perRoundResetMessages: [],
             // Shinjo Bushi phase bonus on the parry result modal. The spent
             // die's value is snapshot at roll time (before the attack-die
@@ -298,36 +306,124 @@
                     + (this.wcExcessSpentThisRoll || 0);
             },
 
-            _saveLuckyPrev() {
-                const disc = this._genericDiscretionaryTotal();
-                this.luckyPrevBaseTotal = this.baseTotal - disc;
-                this.luckyPrevTotal = this.baseTotal;
-                this.luckyPrevActionDice = [...this.actionDice];
-                this.luckyOriginalWasHigher = false;
+            // Snapshot the dice-display state immediately before a Lucky
+            // reroll fires. Two purposes:
+            //   1. If the reroll comes out lower (non-initiative), we
+            //      restore this state so the live modal and every followup
+            //      step (attack -> damage, wound check -> serious wounds)
+            //      reads the higher original value - the "auto-use-higher"
+            //      rule. There is never a reason to keep a strictly-lower
+            //      roll, so the player isn't asked.
+            //   2. Either way, the cell-shaped copies (``keptCells`` /
+            //      ``droppedCells``) get recorded into ``luckyRollPair``
+            //      so the Roll History page can display both halves of the
+            //      pair side by side.
+            // ``actionDice`` is only meaningful for initiative; for other
+            // flows it's just whatever leftover values are sitting in the
+            // shared state and the renderer ignores it because the pair's
+            // initiative flag is false.
+            _luckyDiceSnapshot() {
+                return {
+                    finalDice: (this.finalDice || []).map(d => ({...d})),
+                    keptDice: (this.keptDice || []).map(d => ({...d})),
+                    unkeptDice: (this.unkeptDice || []).map(d => ({...d})),
+                    keptSum: this.keptSum,
+                    keptCells: this._cellsFromDice(this.keptDice),
+                    droppedCells: this._cellsFromDice(this.unkeptDice),
+                    actionDice: (this.actionDice || []).map(d => ({value: d.value})),
+                };
             },
 
-            _checkLuckyResult(isInit) {
+            _restoreLuckyDice(snap) {
+                this.finalDice = snap.finalDice;
+                this.keptDice = snap.keptDice;
+                this.unkeptDice = snap.unkeptDice;
+                this.keptSum = snap.keptSum;
+            },
+
+            // Decide the Lucky reroll outcome, restore the original dice
+            // display when it wins (non-initiative only), and record the
+            // pair for the Roll History display. Call this AFTER the
+            // reroll has populated ``this.keptDice`` / ``this.unkeptDice``
+            // / ``this.keptSum`` with the rerolled values - we build the
+            // ``reroll`` half of the pair from current state before any
+            // restore happens. Returns ``{total, keepReroll}``; callers
+            // assign ``total`` back into their flow-specific total var
+            // (``atkRollTotal`` / ``wcRollTotal`` / ``atkDamageTotal`` /
+            // ``duelXRoll``) and use ``keepReroll`` to undo any
+            // companion state that lives outside the dice snapshot
+            // (e.g. damage's ``atkDamageShosuroBonus``).
+            _resolveLucky(origSnap, origTotal, newTotal, isInit) {
+                const res = window.L7RRollMath.luckyResolveReroll(
+                    origTotal, newTotal, isInit,
+                );
+                const rerollHalf = {
+                    kept: this._cellsFromDice(this.keptDice),
+                    dropped: this._cellsFromDice(this.unkeptDice),
+                    total: newTotal,
+                    show_total: !isInit,
+                };
                 if (isInit) {
-                    this.luckyOriginalWasHigher = true;
-                } else {
-                    const disc = this._genericDiscretionaryTotal();
-                    const newDiceOnly = this.baseTotal - disc;
-                    this.luckyOriginalWasHigher = this.luckyPrevBaseTotal > newDiceOnly;
+                    rerollHalf.action_dice = (this.actionDice || [])
+                        .map(d => ({value: d.value}));
                 }
+                if (!res.keepReroll) {
+                    this._restoreLuckyDice(origSnap);
+                }
+                this.luckyOriginalWasHigher = res.originalHigher;
+                const origHalf = {
+                    kept: origSnap.keptCells,
+                    dropped: origSnap.droppedCells,
+                    total: origTotal,
+                    show_total: !isInit,
+                };
+                if (isInit) {
+                    origHalf.action_dice = origSnap.actionDice;
+                }
+                this.luckyRollPair = {
+                    kept: res.keepReroll ? 'reroll' : 'original',
+                    original: origHalf,
+                    reroll: rerollHalf,
+                };
+                return {
+                    total: res.keepReroll ? newTotal : origTotal,
+                    keepReroll: res.keepReroll,
+                };
             },
 
+            // Generic Lucky reroll (skill / knack / ring / initiative /
+            // bless). Snapshot the dice BEFORE runRoll wipes them so the
+            // auto-use-higher rule can restore the original if the reroll
+            // comes out lower. ``runRoll`` is told to skip its own image
+            // render + history create - we patch the existing history row
+            // and re-prerender after the resolve so the effective (possibly
+            // restored) state is what gets stored / pasted-as-image.
             useLucky() {
                 if (!this.canUseLucky()) return;
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
-                this._saveLuckyPrev();
                 const isInit = this.formula?.is_initiative;
                 const disc = this._genericDiscretionaryTotal();
-                this.runRoll().then(() => {
-                    // runRoll sets baseTotal to dice-only; re-add carried-over bonuses
+                const origTotal = this.baseTotal;
+                const origSnap = this._luckyDiceSnapshot();
+                // Preserved so the existing initiative "choose which set"
+                // panel in modal_result.html keeps working.
+                this.luckyPrevBaseTotal = origTotal - disc;
+                this.luckyPrevTotal = origTotal;
+                this.luckyPrevActionDice = [...this.actionDice];
+                this.runRoll({skipHistoryCreate: true, skipImageRender: true}).then(() => {
+                    // runRoll resets baseTotal to dice-only; re-add the
+                    // carried-over discretionary bonuses (they survive
+                    // every reroll wave).
                     this.baseTotal += disc;
-                    this._checkLuckyResult(isInit);
+                    const newTotal = this.baseTotal;
+                    const r = this._resolveLucky(origSnap, origTotal, newTotal, isInit);
+                    this.baseTotal = r.total;
+                    this._prerenderRollImage(isInit
+                        ? this._buildInitiativeImagePayload()
+                        : this._buildRollImagePayload());
+                    this._maybeUpdateRollHistory();
                 });
             },
 
@@ -345,10 +441,11 @@
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
                 const disc = this._wcDiscretionaryTotal();
-                this.luckyPrevBaseTotal = this.wcRollTotal - disc;
-                this.luckyPrevTotal = this.wcRollTotal;
-                this.luckyOriginalWasHigher = false;
-                // Do NOT reset discretionary state - bonuses carry over
+                const origTotal = this.wcRollTotal;
+                const origSnap = this._luckyDiceSnapshot();
+                this.luckyPrevBaseTotal = origTotal - disc;
+                this.luckyPrevTotal = origTotal;
+                // Do NOT reset discretionary state - bonuses carry over.
                 this.wcPhase = 'rolling';
                 const f = this.formula;
                 const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-wc');
@@ -359,17 +456,24 @@
                 this.keptDice = keptDice;
                 this.unkeptDice = sorted.slice(0, sorted.length - keptCount);
                 this.keptSum = keptDice.reduce((s, d) => s + d.value, 0);
-                const newDiceOnly = this.keptSum + f.flat;
-                this.baseTotal = newDiceOnly + disc;
-                const lw = this.wcLightWounds;
-                this.wcRollTotal = this.baseTotal;
-                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, lw, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
+                const newTotal = this.keptSum + f.flat + disc;
+                // Resolve auto-use-higher: if the original beats the reroll
+                // the snapshot is restored and the wound-check math below
+                // computes off the higher (original) total.
+                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
+                this.baseTotal = r.total;
+                this.wcRollTotal = r.total;
+                const wc = window.L7RRollMath.woundCheckResult(
+                    this.wcRollTotal, this.wcLightWounds,
+                    this.formulas['wound_check']?.bayushi_5th_dan_half_lw,
+                );
                 this.wcPassed = wc.passed;
                 this.wcMargin = wc.margin;
                 this.wcSeriousWounds = wc.seriousWounds;
                 this.wcResultApplied = false;
                 this.wcPhase = 'result';
-                this.luckyOriginalWasHigher = this.luckyPrevBaseTotal > newDiceOnly;
+                this._prerenderRollImage(this._buildWoundCheckImagePayload());
+                this._maybeUpdateRollHistory();
             },
 
             async useLuckyAttack() {
@@ -378,10 +482,11 @@
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
                 const disc = this._atkDiscretionaryTotal();
-                this.luckyPrevBaseTotal = this.atkRollTotal - disc;
-                this.luckyPrevTotal = this.atkRollTotal;
-                this.luckyOriginalWasHigher = false;
-                // Do NOT reset discretionary state - bonuses carry over
+                const origTotal = this.atkRollTotal;
+                const origSnap = this._luckyDiceSnapshot();
+                this.luckyPrevBaseTotal = origTotal - disc;
+                this.luckyPrevTotal = origTotal;
+                // Do NOT reset discretionary state - bonuses carry over.
                 this.atkPhase = 'rolling';
                 const f = this.formula;
                 const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-atk');
@@ -391,16 +496,21 @@
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                const newDiceOnly = this.keptSum + f.flat;
-                this.baseTotal = newDiceOnly + disc;
-                this.atkRollTotal = this.baseTotal;
+                const newTotal = this.keptSum + f.flat + disc;
+                // Auto-use-higher: if reroll loses, restore original and
+                // ``_atkUpdateHitState`` below will compute hit/extra-dice
+                // off the higher original total. This is the fix for the
+                // followup-on-lower-reroll bug.
+                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
+                this.baseTotal = r.total;
+                this.atkRollTotal = r.total;
                 this.atkFailedParry = false;
                 this._atkUpdateHitState();
                 this.atkPhase = 'result';
-                this.luckyOriginalWasHigher = this.luckyPrevBaseTotal > newDiceOnly;
-                // Lucky reroll changes the attack total/hit state - refresh annotation.
+                // Refresh annotation + image off the effective state.
                 this._annotateSpentActionDie(this._describeAttackForDie(false));
                 this._prerenderRollImage(this._buildAttackImagePayload());
+                this._maybeUpdateRollHistory();
             },
 
             async useLuckyDamage() {
@@ -408,9 +518,10 @@
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
-                const prevTotal = this.atkDamageTotal;
-                this.luckyPrevTotal = prevTotal;
-                this.luckyOriginalWasHigher = false;
+                const origTotal = this.atkDamageTotal;
+                const origShosuro = this.atkDamageShosuroBonus;
+                const origSnap = this._luckyDiceSnapshot();
+                this.luckyPrevTotal = origTotal;
                 this.mirumotoPointsSpentThisRoll = 0;
                 this.atkPhase = 'damage-rolling';
                 const f = this.formula;
@@ -420,18 +531,26 @@
                 this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                // Shosuro 5th Dan: recompute lowest-3 bonus on rerolled damage
+                // Shosuro 5th Dan: recompute lowest-3 bonus on rerolled damage.
                 this.atkDamageShosuroBonus = 0;
                 if (this.atkFormula?.shosuro_5th_dan) {
                     const allValues = sorted.map(d => d.value);
                     const lowest3 = allValues.slice(0, Math.min(3, allValues.length));
                     this.atkDamageShosuroBonus = lowest3.reduce((s, v) => s + v, 0);
                 }
-                this.atkDamageTotal = this.keptSum + (f.flat || 0) + this.atkDamageShosuroBonus + this.convictionSpentThisRoll + this.totalPriestAllySpentThisRoll();
+                const newTotal = this.keptSum + (f.flat || 0) + this.atkDamageShosuroBonus + this.convictionSpentThisRoll + this.totalPriestAllySpentThisRoll();
+                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
+                // Companion state not covered by the dice snapshot: when
+                // the original wins, also restore the Shosuro bonus so the
+                // breakdown bullets match the kept dice.
+                if (!r.keepReroll) {
+                    this.atkDamageShosuroBonus = origShosuro;
+                }
+                this.atkDamageTotal = r.total;
                 this.atkPhase = 'damage-result';
-                this.luckyOriginalWasHigher = prevTotal > this.atkDamageTotal;
                 this._annotateSpentActionDie(this._describeAttackForDie(true));
                 this._prerenderRollImage(this._buildAttackDamageImagePayload());
+                this._maybeUpdateRollHistory();
             },
 
             async useLuckyDuelContested() {
@@ -439,9 +558,9 @@
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
-                const prevTotal = this.duelContestedRoll;
-                this.luckyPrevTotal = prevTotal;
-                this.luckyOriginalWasHigher = false;
+                const origTotal = this.duelContestedRoll;
+                const origSnap = this._luckyDiceSnapshot();
+                this.luckyPrevTotal = origTotal;
                 this.duelPhase = 'contested-rolling';
                 const f = this.formula;
                 const dice = await this._rerollDice(f.rolled, f.reroll_tens, 'dice-animation-duel');
@@ -449,11 +568,15 @@
                 const keptCount = Math.min(f.kept, sorted.length);
                 this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.baseTotal = this.keptSum + f.flat;
-                this.duelContestedRoll = this.baseTotal;
+                const newTotal = this.keptSum + f.flat;
+                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
+                this.baseTotal = r.total;
+                this.duelContestedRoll = r.total;
                 this.duelPhase = 'contested-result';
-                this.luckyOriginalWasHigher = prevTotal > this.duelContestedRoll;
+                this._prerenderRollImage(this._buildDuelContestedImagePayload());
+                this._maybeUpdateRollHistory();
             },
 
             async useLuckyDuelStrike() {
@@ -461,9 +584,9 @@
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
-                const prevTotal = this.duelStrikeRoll;
-                this.luckyPrevTotal = prevTotal;
-                this.luckyOriginalWasHigher = false;
+                const origTotal = this.duelStrikeRoll;
+                const origSnap = this._luckyDiceSnapshot();
+                this.luckyPrevTotal = origTotal;
                 this.duelPhase = 'strike-rolling';
                 const f = this.formula;
                 const dice = await this._rerollDice(f.rolled, false, 'dice-animation-duel');
@@ -471,14 +594,20 @@
                 const keptCount = Math.min(f.kept, sorted.length);
                 this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.baseTotal = this.keptSum + f.flat;
-                this.duelStrikeRoll = this.baseTotal;
+                const newTotal = this.keptSum + f.flat;
+                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
+                this.baseTotal = r.total;
+                this.duelStrikeRoll = r.total;
+                // Hit / excess feed the damage step, so they MUST be
+                // computed off the effective (higher) strike total.
                 const excess = this.duelStrikeRoll - this.duelOpponentTN;
                 this.duelStrikeHit = excess >= 0;
                 this.duelStrikeExcess = excess;
                 this.duelPhase = 'strike-result';
-                this.luckyOriginalWasHigher = prevTotal > this.duelStrikeRoll;
+                this._prerenderRollImage(this._buildDuelStrikeImagePayload());
+                this._maybeUpdateRollHistory();
             },
 
             async useLuckyDuelDamage() {
@@ -486,9 +615,9 @@
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
-                const prevTotal = this.duelDamageTotal;
-                this.luckyPrevTotal = prevTotal;
-                this.luckyOriginalWasHigher = false;
+                const origTotal = this.duelDamageTotal;
+                const origSnap = this._luckyDiceSnapshot();
+                this.luckyPrevTotal = origTotal;
                 this.duelPhase = 'damage-rolling';
                 const dmg = this.duelComputeDamage();
                 const dice = await this._rerollDice(dmg.rolled, true, 'dice-animation-duel');
@@ -496,10 +625,14 @@
                 const keptCount = Math.min(dmg.kept, sorted.length);
                 this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
+                this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.duelDamageTotal = this.keptSum + dmg.flat;
+                const newTotal = this.keptSum + dmg.flat;
+                const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
+                this.duelDamageTotal = r.total;
                 this.duelPhase = 'damage-result';
-                this.luckyOriginalWasHigher = prevTotal > this.duelDamageTotal;
+                this._prerenderRollImage(this._buildDuelDamageImagePayload());
+                this._maybeUpdateRollHistory();
             },
 
             // Threshold data for wound check notifications
@@ -1636,6 +1769,7 @@
                 this.dojiTnRollApplied = false;
                 this._postRollHooksFired = false;
                 this.luckyOriginalWasHigher = false;
+                this.luckyRollPair = null;
                 this.mirumotoPointsSpentThisRoll = 0;
                 this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
@@ -1709,6 +1843,7 @@
                 this.dojiTnRollApplied = false;
                 this._postRollHooksFired = false;
                 this.luckyOriginalWasHigher = false;
+                this.luckyRollPair = null;
                 this.mirumotoPointsSpentThisRoll = 0;
                 this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
@@ -1819,7 +1954,13 @@
                 t.save();
             },
 
-            async runRoll() {
+            // ``opts.skipImageRender`` and ``opts.skipHistoryCreate``: used
+            // by ``useLucky`` so a generic-roll reroll patches the existing
+            // history row + re-prerenders the image AFTER the auto-use-
+            // higher resolve has restored the original dice (if it won),
+            // instead of saving a second row and pasting an outdated image.
+            async runRoll(opts) {
+                opts = opts || {};
                 this.phase = 'rolling';
                 this.finalDice = [];
                 this.unkeptDice = [];
@@ -2020,15 +2161,19 @@
                 // synchronously inside the user-gesture handler.
                 // Initiative renders an action-dice panel rather than
                 // a keep/drop result, so it uses a separate builder.
-                this._prerenderRollImage(
-                    this.formula && this.formula.is_initiative
-                        ? this._buildInitiativeImagePayload()
-                        : this._buildRollImagePayload()
-                );
+                if (!opts.skipImageRender) {
+                    this._prerenderRollImage(
+                        this.formula && this.formula.is_initiative
+                            ? this._buildInitiativeImagePayload()
+                            : this._buildRollImagePayload()
+                    );
+                }
                 // Persist the roll to the character's Roll History (the
                 // server gates on the owner/non-admin-editor rule; non-
                 // recording cases get 204 and _rollHistoryId stays null).
-                this._saveRollHistoryCreate();
+                if (!opts.skipHistoryCreate) {
+                    this._saveRollHistoryCreate();
+                }
             },
 
             // Copy-as-image: build the payload, post it to the server's
@@ -2630,6 +2775,14 @@
                 // leave those fields untouched, which would otherwise
                 // re-record the previous skill roll's key for an attack.
                 const payload = this._currentResultPayload() || {};
+                // When Lucky has fired on this roll, attach both halves
+                // (original + reroll dice and totals) so the Roll History
+                // page can render the pair with a Lucky badge. The server
+                // stores the JSON verbatim and the dice-card renderer
+                // ignores unknown fields, so this needs no Python change.
+                if (this.luckyUsedThisRoll && this.luckyRollPair) {
+                    payload.lucky = this.luckyRollPair;
+                }
                 const {key, label} = this._currentRollHistoryKeyAndLabel(payload);
                 return {
                     roll_key: key,
@@ -3344,6 +3497,7 @@
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
+                this.luckyRollPair = null;
                 // Clear copy-as-image state so the modal opens fresh.
                 this.rollImageStatus = 'idle';
                 this.rollImageBlob = null;
@@ -3382,6 +3536,7 @@
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
+                this.luckyRollPair = null;
                 this.duelPhase = 'contested-rolling';
                 this.formula = f;
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
@@ -3427,6 +3582,7 @@
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
+                this.luckyRollPair = null;
                 this.duelPhase = 'strike-rolling';
                 this.formula = f;
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
@@ -3472,6 +3628,7 @@
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
+                this.luckyRollPair = null;
                 this.duelPhase = 'damage-rolling';
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
@@ -5289,6 +5446,7 @@
                 // post-roll school hooks (feint temp VP, Mirumoto parry VP, etc).
                 this._postRollHooksFired = true;
                 this.luckyOriginalWasHigher = false;
+                this.luckyRollPair = null;
                 this.mirumotoPointsSpentThisRoll = 0;
                 this.currentRollKey = 'bless';
                 this.shosuroLowest3Bonus = 0;

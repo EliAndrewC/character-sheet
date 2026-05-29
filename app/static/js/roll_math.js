@@ -224,6 +224,27 @@
       if (!(margin > 0) || !(attackSkill > 0)) return 0;
       return Math.floor(margin / 5) * attackSkill;
     },
+
+    /**
+     * Lucky reroll resolution. Lucky lets you reroll and keep the better
+     * result; for every roll except initiative the higher total always wins -
+     * there is never a reason to keep a strictly-lower roll, so the choice is
+     * automatic (no "you may keep the original" prompt). A tie keeps the
+     * reroll (either is equivalent).
+     *
+     * Initiative is exempt: a fresh initiative roll produces a different
+     * action-die layout that isn't strictly comparable, so the player keeps
+     * BOTH sets and chooses per the rules. We report keepReroll=true (so the
+     * fresh roll is shown as the live result) and never flag the original as
+     * the auto-winner; the modal lets the player switch.
+     *
+     * @returns {{keepReroll: boolean, originalHigher: boolean}}
+     */
+    luckyResolveReroll: function (originalTotal, rerollTotal, isInitiative) {
+      if (isInitiative) return { keepReroll: true, originalHigher: false };
+      var originalHigher = originalTotal > rerollTotal;
+      return { keepReroll: !originalHigher, originalHigher: originalHigher };
+    },
   };
 
   // Browser: globalThis === window, so callers use window.L7RRollMath.

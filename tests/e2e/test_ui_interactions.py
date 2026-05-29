@@ -446,9 +446,16 @@ def test_lucky_carries_over_akodo_bonus(page, live_server_url):
         assert state["bonusStillSpent"] is True, "Akodo bonus should remain marked spent"
 
 
-def test_lucky_prevtotal_updates_with_post_reroll_bonus(page, live_server_url):
-    """After Lucky reroll, spending more raises updates the displayed original total too."""
-    _create_char(page, live_server_url, "LuckyPrevUpd", "akodo_bushi",
+def test_lucky_pair_totals_frozen_effective_total_updates(page, live_server_url):
+    """After Lucky reroll, the ``luckyRollPair`` halves carry the original
+    and rerolled totals AS THEY WERE AT REROLL TIME - those are snapshots,
+    not live formulas. Spending a post-reroll free raise updates only the
+    EFFECTIVE total (the live ``atkRollTotal`` displayed as Total, which
+    drives the followup damage step); the pair's frozen totals stay put so
+    the Roll History accurately records the at-reroll moment. Replaces an
+    earlier test that asserted the old (now-removed) reactive banner
+    formula updated with spends."""
+    _create_char(page, live_server_url, "LuckyFrozen", "akodo_bushi",
                  knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
@@ -456,42 +463,44 @@ def test_lucky_prevtotal_updates_with_post_reroll_bonus(page, live_server_url):
     modal.locator('select:visible').select_option("25")
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
-    # Use Lucky immediately (no bonuses spent yet). atkPhase flips to 'result'
-    # synchronously, but the button's x-show reveal is a later Alpine tick -
-    # wait for it rather than a one-shot count() that races the render.
     lucky_btn = modal.locator('button:has-text("Use Lucky"):visible')
     lucky_btn.first.wait_for(state="visible", timeout=5000)
     lucky_btn.first.click()
     _wait_attack_result(page)
-    # Get the displayed prev total
-    prev_total_1 = page.evaluate("""() => {
+    before = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
             const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.atkPhase === 'result' && d.luckyPrevBaseTotal !== undefined) {
-                return d.luckyPrevBaseTotal + d._atkDiscretionaryTotal();
-            }
+            if (d && d.atkPhase === 'result' && d.luckyRollPair) return {
+                pairOrig: d.luckyRollPair.original.total,
+                pairReroll: d.luckyRollPair.reroll.total,
+                effective: d.atkRollTotal,
+            };
         }
-        return 0;
+        return null;
     }""")
-    # Now spend a free raise AFTER the Lucky reroll
     raise_btn = modal.locator('button:has-text("Spend Free Raise"):visible')
     if raise_btn.count() > 0:
         raise_btn.first.click()
         page.wait_for_timeout(200)
-        # The displayed prev total should have increased by 5 (bonus applies to both)
-        prev_total_2 = page.evaluate("""() => {
+        after = page.evaluate("""() => {
             const els = document.querySelectorAll('[x-data]');
             for (const el of els) {
                 const d = window.Alpine && window.Alpine.$data(el);
-                if (d && d.atkPhase === 'result' && d.luckyPrevBaseTotal !== undefined) {
-                    return d.luckyPrevBaseTotal + d._atkDiscretionaryTotal();
-                }
+                if (d && d.atkPhase === 'result' && d.luckyRollPair) return {
+                    pairOrig: d.luckyRollPair.original.total,
+                    pairReroll: d.luckyRollPair.reroll.total,
+                    effective: d.atkRollTotal,
+                };
             }
-            return 0;
+            return null;
         }""")
-        assert prev_total_2 == prev_total_1 + 5, \
-            f"Original total should increase by 5 when raise spent post-reroll: {prev_total_1} -> {prev_total_2}"
+        assert after["pairOrig"] == before["pairOrig"], \
+            "Pair original total is a frozen snapshot, not a live formula"
+        assert after["pairReroll"] == before["pairReroll"], \
+            "Pair reroll total is a frozen snapshot, not a live formula"
+        assert after["effective"] == before["effective"] + 5, \
+            "Effective total tracks the post-reroll raise"
 
 
 # ---------------------------------------------------------------------------
@@ -926,3 +935,203 @@ def test_reset_adventure_clears_combat_bonuses(page, live_server_url):
         # Banked bonuses should be cleared
         bonuses = page.evaluate("window._trackingBridge?.akodoBankedBonuses?.length || 0")
         assert bonuses == 0, f"Bonuses should be cleared after reset, got {bonuses}"
+
+
+# ---------------------------------------------------------------------------
+# Lucky auto-use-higher: when the reroll comes in lower than the original
+# (non-initiative), the original is automatically kept and the followup step
+# (attack -> damage, wound check -> serious wounds) computes off the higher
+# value. The pair is recorded on the modal state for the Roll History.
+# ---------------------------------------------------------------------------
+
+
+def _stub_low_reroll(page):
+    """Patch the dice-roller's ``_rerollDice`` to always return all-1s.
+    Guarantees the Lucky reroll is strictly lower than the original roll
+    so the auto-use-higher path fires deterministically, with no animation
+    delay. Applies to every flow (attack/wc/damage/duel/generic) since they
+    share one dice-roller Alpine instance."""
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d._rerollDice === 'function') {
+                d._rerollDice = async (rolled) => {
+                    return Array.from({length: rolled}, () => ({value: 1}));
+                };
+            }
+        }
+    }""")
+
+
+def test_lucky_auto_uses_higher_on_attack(page, live_server_url):
+    """Lower Lucky reroll on attack: original total is restored and the
+    extra-damage-dice followup count is computed off the higher original."""
+    _create_char(page, live_server_url, "LuckyHighAtk", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select:visible').select_option("15")
+    modal.locator('[data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+    before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return {
+                total: d.atkRollTotal,
+                extraDice: d.atkExtraDice,
+            };
+        }
+        return null;
+    }""")
+    # Force a guaranteed-lower reroll, then click Use Lucky.
+    _stub_low_reroll(page)
+    modal.locator('button:has-text("Use Lucky"):visible').first.click()
+    _wait_attack_result(page)
+    after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return {
+                total: d.atkRollTotal,
+                extraDice: d.atkExtraDice,
+                originalHigher: d.luckyOriginalWasHigher,
+                pair: d.luckyRollPair,
+            };
+        }
+        return null;
+    }""")
+    assert after["originalHigher"] is True
+    # The whole point: the live attack total is the ORIGINAL (higher), not
+    # the lower rerolled value. Same for the followup extra-damage dice.
+    assert after["total"] == before["total"], \
+        f"Expected original total restored ({before['total']}), got {after['total']}"
+    assert after["extraDice"] == before["extraDice"], \
+        f"Damage dice should be computed off higher original: " \
+        f"{before['extraDice']} vs {after['extraDice']}"
+    # The pair was recorded for the Roll History.
+    assert after["pair"]["kept"] == "original"
+    assert after["pair"]["original"]["total"] == before["total"]
+    # All-1s stub means kept-sum is min: should be strictly less than original.
+    assert after["pair"]["reroll"]["total"] < before["total"]
+    # The new banner replaces the old "you may keep" wording. Filter on
+    # ``:visible`` because the attack modal carries banners for both the
+    # attack-result and the damage-result phase (same testid); only the
+    # current phase's banner is visible.
+    banner = modal.locator('[data-testid="lucky-kept-original-banner"]:visible').first
+    banner.wait_for(state="visible", timeout=3000)
+    assert "kept the higher original" in banner.inner_text()
+
+
+def test_lucky_auto_uses_higher_on_wound_check(page, live_server_url):
+    """Lower Lucky reroll on wound check: the higher original is restored
+    and the serious-wound count above is the higher's count, not the
+    lower's. This is the followup-on-reroll bug fix - previously the
+    serious-wound count came off the lower rerolled value despite the
+    banner telling the player to 'keep the original'."""
+    _create_char(page, live_server_url, "LuckyHighWC", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    _add_lw_and_open_wc(page, 30)
+    _roll_wc(page)
+    before = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return {
+                total: d.wcRollTotal,
+                sw: d.wcSeriousWounds,
+                passed: d.wcPassed,
+            };
+        }
+        return null;
+    }""")
+    _stub_low_reroll(page)
+    wc_modal = page.locator('[data-modal="wound-check"]')
+    wc_modal.locator('button:has-text("Use Lucky"):visible').first.click()
+    _wait_wc_result(page)
+    after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return {
+                total: d.wcRollTotal,
+                sw: d.wcSeriousWounds,
+                passed: d.wcPassed,
+                originalHigher: d.luckyOriginalWasHigher,
+                pair: d.luckyRollPair,
+            };
+        }
+        return null;
+    }""")
+    assert after["originalHigher"] is True
+    assert after["total"] == before["total"], \
+        f"WC total should be the higher original after lower reroll"
+    # CRITICAL: the serious-wound count is the higher-value count, not the
+    # lower-value count that an all-1s reroll would produce.
+    assert after["sw"] == before["sw"], \
+        f"Serious wounds should reflect the higher original: " \
+        f"{before['sw']} vs {after['sw']}"
+    assert after["passed"] == before["passed"]
+    assert after["pair"]["kept"] == "original"
+
+
+def test_lucky_keeps_reroll_when_higher_attack(page, live_server_url):
+    """Higher Lucky reroll on attack: the reroll wins, no kept-original
+    banner, and the pair records ``kept: 'reroll'``."""
+    _create_char(page, live_server_url, "LuckyHighReroll", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select:visible').select_option("15")
+    modal.locator('[data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+    before_total = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return d.atkRollTotal;
+        }
+        return 0;
+    }""")
+    # Stub the reroll to come back as oversized values so it always beats
+    # the original regardless of any reroll-tens chain the original got.
+    # Tens-on-tens chains can easily push a real roll past 50+; bumping
+    # each rerolled die well past any plausible original keeps the test
+    # deterministic without per-run inspection of the original total.
+    page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d._rerollDice === 'function') {
+                d._rerollDice = async (rolled) => {
+                    return Array.from({length: rolled}, () => ({value: 99}));
+                };
+            }
+        }
+    }""")
+    modal.locator('button:has-text("Use Lucky"):visible').first.click()
+    _wait_attack_result(page)
+    after = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.atkPhase === 'result') return {
+                total: d.atkRollTotal,
+                originalHigher: d.luckyOriginalWasHigher,
+                pair: d.luckyRollPair,
+            };
+        }
+        return null;
+    }""")
+    assert after["originalHigher"] is False
+    assert after["total"] >= before_total, "Reroll should win when higher"
+    assert after["pair"]["kept"] == "reroll"
+    # No kept-original banner. Two same-testid banners live in the attack
+    # modal (one per phase); both should be hidden when the reroll wins.
+    banner_visible = modal.locator(
+        '[data-testid="lucky-kept-original-banner"]:visible'
+    ).count()
+    assert banner_visible == 0, "Banner only fires when original wins"
