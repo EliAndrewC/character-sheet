@@ -114,7 +114,10 @@ The three failures were:
 - [x] Lucky reroll carries over free raise (wound check) -> `test_ui_interactions.py::test_lucky_carries_over_free_raise_wc`
 - [x] Lucky reroll carries over post-roll VP (wound check) -> `test_ui_interactions.py::test_lucky_carries_over_wc_post_roll_vp`
 - [x] Lucky reroll carries over Akodo banked bonus -> `test_ui_interactions.py::test_lucky_carries_over_akodo_bonus`
-- [x] Lucky prev total updates reactively with post-reroll bonuses -> `test_ui_interactions.py::test_lucky_prevtotal_updates_with_post_reroll_bonus`
+- [x] Lucky pair totals are frozen snapshots; effective total tracks post-reroll bonuses -> `test_ui_interactions.py::test_lucky_pair_totals_frozen_effective_total_updates`
+- [x] Lucky auto-uses higher: lower reroll on attack restores the original total AND the extra-damage-dice followup is computed off the higher original -> `test_ui_interactions.py::test_lucky_auto_uses_higher_on_attack`
+- [x] Lucky auto-uses higher: lower reroll on wound check restores the original total AND the serious-wound count above is the higher's count, not the lower's -> `test_ui_interactions.py::test_lucky_auto_uses_higher_on_wound_check`
+- [x] Lucky keeps reroll when higher: pair records `kept: 'reroll'`, no kept-original banner -> `test_ui_interactions.py::test_lucky_keeps_reroll_when_higher_attack`
 - [x] Failed parry checkbox changes damage formula -> `test_ui_interactions.py::test_failed_parry_checkbox`
 - [x] Predeclared parry rolls with +5 bonus -> `test_ui_interactions.py::test_predeclared_parry_with_bonus`
 - [x] Pre-roll "Extra bonus" toggle starts unchecked with defaults (+15 / "surrounding"); inputs hidden until checked -> `test_attack_modal.py::test_extra_bonus_starts_unchecked_with_defaults`
@@ -1374,6 +1377,10 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Clicking a roll row opens the read-only results modal (no separate View button) → `test_roll_history_clicktest.py::test_row_click_opens_modal`
 - [x] Clicking the note input focuses it and does NOT open the modal → `test_roll_history_clicktest.py::test_clicking_note_input_does_not_open_modal`
 - [x] Impaired tag has its own tooltip naming the character and the 10s-reroll restriction → `test_roll_history_clicktest.py::test_impaired_tag_tooltip`
+- [x] Lucky badge renders next to the roll type when payload.lucky is present → `test_roll_history_clicktest.py::test_roll_history_shows_lucky_badge`
+- [x] Result column shows both totals (original + reroll) when kept='original'; reroll is styled muted/strikethrough → `test_roll_history_clicktest.py::test_roll_history_shows_both_totals_kept_original`
+- [x] Result column shows both totals when kept='reroll'; original is styled muted/strikethrough → `test_roll_history_clicktest.py::test_roll_history_shows_both_totals_kept_reroll`
+- [x] Readonly modal renders the Lucky pair section with a "kept" chip on the surviving half → `test_roll_history_clicktest.py::test_readonly_modal_shows_lucky_pair`
 
 ## Character Sheet — View as Non-Editor
 

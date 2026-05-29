@@ -76,6 +76,38 @@
                         </template>
                     </div>
                 </template>
+
+                {# Lucky pair: when a Lucky reroll fired on this roll,
+                   show BOTH the original and the rerolled total, with a
+                   tag on the one the auto-use-higher rule kept (the
+                   higher of the two). The kept total also drives the
+                   ``Total`` line above and every downstream computation. #}
+                <template x-if="payload && payload.lucky">
+                    <div class="mt-2 pt-2 border-t border-ink/10"
+                         data-testid="readonly-lucky">
+                        <div class="text-xs font-bold text-ink/70 mb-1">Lucky reroll:</div>
+                        <div class="text-sm flex items-center gap-2">
+                            <span class="text-ink/60">Original:</span>
+                            <span class="font-mono font-bold"
+                                  :class="payload.lucky.kept === 'original' ? 'text-accent' : 'text-ink/40 line-through'"
+                                  x-text="payload.lucky.original.total"
+                                  data-testid="readonly-lucky-original"></span>
+                            <template x-if="payload.lucky.kept === 'original'">
+                                <span class="text-[10px] uppercase tracking-wide text-gold border border-gold/40 bg-gold/5 rounded px-1">kept</span>
+                            </template>
+                        </div>
+                        <div class="text-sm flex items-center gap-2">
+                            <span class="text-ink/60">Reroll:</span>
+                            <span class="font-mono font-bold"
+                                  :class="payload.lucky.kept === 'reroll' ? 'text-accent' : 'text-ink/40 line-through'"
+                                  x-text="payload.lucky.reroll.total"
+                                  data-testid="readonly-lucky-reroll"></span>
+                            <template x-if="payload.lucky.kept === 'reroll'">
+                                <span class="text-[10px] uppercase tracking-wide text-gold border border-gold/40 bg-gold/5 rounded px-1">kept</span>
+                            </template>
+                        </div>
+                    </div>
+                </template>
             </div>
 
             <div class="flex justify-end gap-2">

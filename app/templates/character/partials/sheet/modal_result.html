@@ -733,10 +733,13 @@
                         </div>
                     </div>
 
-                    {# Lucky reroll: original was higher (non-initiative) #}
+                    {# Lucky reroll: reroll lower (non-initiative) — the
+                       auto-use-higher rule restored the original above, so
+                       this banner is purely informational. #}
                     <div x-show="luckyOriginalWasHigher && !formula?.is_initiative" x-cloak
-                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
-                        Original roll was higher (<span x-text="luckyPrevBaseTotal + _genericDiscretionaryTotal()"></span>) - you may keep the original result instead.
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800"
+                         data-testid="lucky-kept-original-banner">
+                        Lucky reroll (<span x-text="luckyRollPair?.reroll?.total"></span>) came in lower; kept the higher original roll (<span x-text="luckyRollPair?.original?.total"></span>).
                     </div>
 
                     {# Lucky reroll: initiative - always show original action dice #}

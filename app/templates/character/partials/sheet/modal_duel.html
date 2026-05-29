@@ -98,8 +98,9 @@
                         Use Lucky to reroll
                     </button>
                     <div x-show="luckyOriginalWasHigher" x-cloak
-                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
-                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800"
+                         data-testid="lucky-kept-original-banner">
+                        Lucky reroll (<span x-text="luckyRollPair?.reroll?.total"></span>) came in lower; kept the higher original contested roll (<span x-text="luckyRollPair?.original?.total"></span>).
                     </div>
                     <button type="button" @click="duelProceedToFocusStrike()"
                             class="btn-primary px-4 py-2 rounded text-sm font-medium">
@@ -202,8 +203,9 @@
                         Use Lucky to reroll strike
                     </button>
                     <div x-show="luckyOriginalWasHigher" x-cloak
-                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
-                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800"
+                         data-testid="lucky-kept-original-banner">
+                        Lucky reroll (<span x-text="luckyRollPair?.reroll?.total"></span>) came in lower; kept the higher original strike roll (<span x-text="luckyRollPair?.original?.total"></span>) - the damage roll uses that higher value.
                     </div>
 
                     {# Opponent's roll input (always shown after strike) #}
@@ -244,8 +246,9 @@
                         Use Lucky to reroll damage
                     </button>
                     <div x-show="luckyOriginalWasHigher" x-cloak
-                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800">
-                        Original roll was higher (<span x-text="luckyPrevTotal"></span>) - you may keep the original result instead.
+                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800"
+                         data-testid="lucky-kept-original-banner">
+                        Lucky reroll (<span x-text="luckyRollPair?.reroll?.total"></span>) came in lower; kept the higher original damage roll (<span x-text="luckyRollPair?.original?.total"></span>).
                     </div>
 
                     <div>
