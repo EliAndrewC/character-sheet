@@ -1016,13 +1016,27 @@ def test_lucky_auto_uses_higher_on_attack(page, live_server_url):
     assert after["pair"]["original"]["total"] == before["total"]
     # All-1s stub means kept-sum is min: should be strictly less than original.
     assert after["pair"]["reroll"]["total"] < before["total"]
-    # The new banner replaces the old "you may keep" wording. Filter on
+    # The always-visible Lucky pair banner shows both totals with a
+    # "kept" chip on the surviving half. When the original is the higher
+    # of the two, that chip lives next to the Original total. Filter on
     # ``:visible`` because the attack modal carries banners for both the
     # attack-result and the damage-result phase (same testid); only the
     # current phase's banner is visible.
-    banner = modal.locator('[data-testid="lucky-kept-original-banner"]:visible').first
+    banner = modal.locator('[data-testid="lucky-pair-banner"]:visible').first
     banner.wait_for(state="visible", timeout=3000)
-    assert "kept the higher original" in banner.inner_text()
+    text = banner.inner_text()
+    # Both totals are rendered in the banner.
+    assert str(before["total"]) in text, \
+        f"Original total {before['total']} should appear in banner: {text!r}"
+    assert str(after["pair"]["reroll"]["total"]) in text, \
+        f"Reroll total should appear in banner: {text!r}"
+    # The surviving half (here: original) carries the kept chip.
+    assert modal.locator(
+        '[data-testid="lucky-pair-original-kept"]:visible'
+    ).count() == 1, "Original-half kept chip should be visible"
+    assert modal.locator(
+        '[data-testid="lucky-pair-reroll-kept"]:visible'
+    ).count() == 0, "Reroll-half kept chip should NOT be visible"
 
 
 def test_lucky_auto_uses_higher_on_wound_check(page, live_server_url):
@@ -1129,9 +1143,66 @@ def test_lucky_keeps_reroll_when_higher_attack(page, live_server_url):
     assert after["originalHigher"] is False
     assert after["total"] >= before_total, "Reroll should win when higher"
     assert after["pair"]["kept"] == "reroll"
-    # No kept-original banner. Two same-testid banners live in the attack
-    # modal (one per phase); both should be hidden when the reroll wins.
-    banner_visible = modal.locator(
-        '[data-testid="lucky-kept-original-banner"]:visible'
-    ).count()
-    assert banner_visible == 0, "Banner only fires when original wins"
+    # Pair banner is always visible when Lucky has fired; when the reroll
+    # wins the "kept" chip lives next to the Reroll total, NOT the Original.
+    banner = modal.locator('[data-testid="lucky-pair-banner"]:visible').first
+    banner.wait_for(state="visible", timeout=3000)
+    assert modal.locator(
+        '[data-testid="lucky-pair-reroll-kept"]:visible'
+    ).count() == 1, "Reroll-half kept chip should be visible"
+    assert modal.locator(
+        '[data-testid="lucky-pair-original-kept"]:visible'
+    ).count() == 0, "Original-half kept chip should NOT be visible"
+
+
+def test_lucky_pair_persisted_on_immediate_navigation(page, live_server_url):
+    """Regression for a live-site bug: Lucky's PATCH for the roll-history
+    row was getting lost when the user clicked away within ~200 ms (the
+    debounce window of the watcher-based update path). Lucky now PATCHes
+    immediately with ``keepalive: true``, so the row's payload.lucky pair
+    lands even when navigation cancels in-flight requests right after.
+    The user-visible symptom was "only 1 of the rolls shows up on the
+    Roll History page" - meaning the row was there but its payload.lucky
+    field was missing, so the dual-total display had nothing to render
+    and fell back to the single-total result text."""
+    _create_char(page, live_server_url, "LuckyNav", "akodo_bushi")
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
+    if menu.is_visible():
+        menu.locator('button:has-text("Roll")').first.click()
+    _wait_roll_done(page)
+    # Click Use Lucky in the modal. After the reroll resolves we navigate
+    # AWAY immediately - simulating the user clicking a nav link the
+    # instant they've seen the new total. The debounced 200 ms PATCH path
+    # was getting cancelled here pre-fix; the immediate keepalive PATCH
+    # is what makes this land.
+    page.locator(
+        '[data-modal="dice-roller"] button:has-text("Use Lucky"):visible'
+    ).first.click()
+    page.wait_for_function(
+        "() => window._diceRoller.luckyUsedThisRoll "
+        "&& !!window._diceRoller.luckyRollPair",
+        timeout=10000,
+    )
+    # Get the character id from the URL before we navigate away.
+    import re
+    cid = int(re.search(r"/characters/(\d+)", page.url).group(1))
+    # Navigate to the Roll History page immediately - no sleep. This is
+    # the regression scenario; with the old debounced path the PATCH
+    # never reached the server because the fetch was aborted at
+    # navigation.
+    page.goto(f"{live_server_url}/characters/{cid}/roll-history")
+    page.wait_for_load_state("networkidle")
+    rolls = page.evaluate(f"""async () => {{
+        const r = await fetch('/characters/{cid}/rolls');
+        return (await r.json()).rolls;
+    }}""")
+    assert len(rolls) == 1, f"Expected 1 row, got {len(rolls)}"
+    payload = rolls[0]["payload"]
+    assert "lucky" in payload, (
+        "payload.lucky should be persisted even when the user navigates "
+        "away immediately after Use Lucky"
+    )
+    assert payload["lucky"]["original"]["total"]
+    assert payload["lucky"]["reroll"]["total"]

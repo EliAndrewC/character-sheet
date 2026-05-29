@@ -97,11 +97,8 @@
                             class="btn-gold px-4 py-2 rounded text-sm font-medium">
                         Use Lucky to reroll
                     </button>
-                    <div x-show="luckyOriginalWasHigher" x-cloak
-                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800"
-                         data-testid="lucky-kept-original-banner">
-                        Lucky reroll (<span x-text="luckyRollPair?.reroll?.total"></span>) came in lower; kept the higher original contested roll (<span x-text="luckyRollPair?.original?.total"></span>).
-                    </div>
+                    {% set context_hint = None %}
+                    {% include "character/partials/sheet/_lucky_pair_banner.html" %}
                     <button type="button" @click="duelProceedToFocusStrike()"
                             class="btn-primary px-4 py-2 rounded text-sm font-medium">
                         Proceed to Focus / Strike
@@ -202,11 +199,8 @@
                             class="btn-gold px-4 py-2 rounded text-sm font-medium">
                         Use Lucky to reroll strike
                     </button>
-                    <div x-show="luckyOriginalWasHigher" x-cloak
-                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800"
-                         data-testid="lucky-kept-original-banner">
-                        Lucky reroll (<span x-text="luckyRollPair?.reroll?.total"></span>) came in lower; kept the higher original strike roll (<span x-text="luckyRollPair?.original?.total"></span>) - the damage roll uses that higher value.
-                    </div>
+                    {% set context_hint = "The damage roll uses the kept strike total." %}
+                    {% include "character/partials/sheet/_lucky_pair_banner.html" %}
 
                     {# Opponent's roll input (always shown after strike) #}
                     <div class="bg-parchment rounded p-3 space-y-2">
@@ -245,11 +239,8 @@
                             class="btn-gold px-4 py-2 rounded text-sm font-medium">
                         Use Lucky to reroll damage
                     </button>
-                    <div x-show="luckyOriginalWasHigher" x-cloak
-                         class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800"
-                         data-testid="lucky-kept-original-banner">
-                        Lucky reroll (<span x-text="luckyRollPair?.reroll?.total"></span>) came in lower; kept the higher original damage roll (<span x-text="luckyRollPair?.original?.total"></span>).
-                    </div>
+                    {% set context_hint = None %}
+                    {% include "character/partials/sheet/_lucky_pair_banner.html" %}
 
                     <div>
                         <p class="text-sm text-ink/70">Enter opponent's roll to continue.</p>

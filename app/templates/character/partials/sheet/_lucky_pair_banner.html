@@ -1,0 +1,43 @@
+{# Lucky reroll pair banner. Renders BOTH the original and reroll totals
+   side by side with a "kept" chip on the surviving half (per the auto-
+   use-higher rule). The discarded half is muted and struck through so the
+   kept one is unambiguously the live result. Shown for every flow that
+   supports Lucky - generic / wound check / attack / damage / duel each
+   include this partial under its own modal block, so the look is uniform.
+
+   Optional ``{{ context_hint }}`` (set via Jinja set before the include)
+   shows a tiny secondary line explaining how the kept value flows into
+   the next step - "the damage roll below uses that higher value" on the
+   attack-result banner, etc. Omit it for the WC modal etc. where there
+   is no downstream step. The structure mirrors the readonly-modal Lucky
+   section in ``readonly_roll_modal.html`` for visual consistency. #}
+<div x-show="luckyUsedThisRoll && luckyRollPair && !formula?.is_initiative" x-cloak
+     class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800"
+     data-testid="lucky-pair-banner">
+    <div class="font-medium mb-1">Lucky reroll:</div>
+    <div class="flex items-center gap-2">
+        <span class="text-amber-900/70 w-16">Original:</span>
+        <span class="font-mono font-bold tabular-nums"
+              :class="luckyRollPair?.kept === 'original' ? 'text-amber-900' : 'text-amber-900/40 line-through'"
+              x-text="luckyRollPair?.original?.total"
+              data-testid="lucky-pair-original"></span>
+        <template x-if="luckyRollPair?.kept === 'original'">
+            <span class="text-[10px] uppercase tracking-wide text-gold border border-gold/50 bg-gold/5 rounded px-1"
+                  data-testid="lucky-pair-original-kept">kept</span>
+        </template>
+    </div>
+    <div class="flex items-center gap-2">
+        <span class="text-amber-900/70 w-16">Reroll:</span>
+        <span class="font-mono font-bold tabular-nums"
+              :class="luckyRollPair?.kept === 'reroll' ? 'text-amber-900' : 'text-amber-900/40 line-through'"
+              x-text="luckyRollPair?.reroll?.total"
+              data-testid="lucky-pair-reroll"></span>
+        <template x-if="luckyRollPair?.kept === 'reroll'">
+            <span class="text-[10px] uppercase tracking-wide text-gold border border-gold/50 bg-gold/5 rounded px-1"
+                  data-testid="lucky-pair-reroll-kept">kept</span>
+        </template>
+    </div>
+    {% if context_hint %}
+    <div class="text-xs text-amber-900/70 mt-1">{{ context_hint }}</div>
+    {% endif %}
+</div>
