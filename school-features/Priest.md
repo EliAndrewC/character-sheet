@@ -58,7 +58,7 @@ Mechanical rituals:
 
 ## 2nd Dan
 
-> You and your allies get a free raise on all rolls for which you receive an Honor bonus (bragging, precepts, and open sincerity).
+> You and your allies get a free raise on rolls for which you receive an Honor bonus (bragging, precepts, and open sincerity).
 
 **Status:** Partially implemented. The Priest's own free raise on Honor bonus rolls (bragging, precepts, open sincerity) is implemented in `dice.py:build_skill_formula()`. The "allies" part is out of scope (cross-sheet buff).
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES`.
@@ -70,7 +70,7 @@ Mechanical rituals:
 
 ## 3rd Dan
 
-> Roll X dice at the beginning of combat, where X is equal to your precepts skill. You may swap any of these dice for any rolled die on any attack, parry, wound check, or damage roll. You may swap any of these dice for any lower die on any of those types of rolls made by any ally.
+> Roll X dice at the beginning of combat, where X is your precepts skill.  You may swap any of these dice for any rolled die on any attack, parry, wound check, or damage roll.  You may swap any of these dice for any lower die on any of those types of rolls made by any ally.
 
 **Status:** Fully implemented.
 
@@ -135,7 +135,7 @@ Mechanics:
 
 ## 4th Dan
 
-> Raise your current and maximum of your School's chosen Ring by 1. Raising that Ring now costs 5 fewer XP. You and your allies get a free raise on all contested rolls for which your opponent has an equal or higher skill rank.
+> Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  You and your allies get a free raise on contested rolls for which your opponent has an equal or higher skill rank.
 
 **Status:** Partially implemented. Ring raise is fully implemented; "free raise for self and allies on contested rolls" is out of scope (cross-sheet ally buff).
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
@@ -144,7 +144,7 @@ Mechanics:
 
 ## 5th Dan
 
-> You may spend the points from your Conviction knack on your allies' rolls, and your Conviction points refresh after each conversation and combat round. You may also spend these points to lower action dice in order for you or an ally to counterattack or parry.
+> You may spend the points from your conviction knack on your allies' rolls, and your conviction points refresh after each conversation and combat round.
 
 **Status:** Partially implemented.
 - **Cross-sheet spending on allies' rolls:** implemented. A 5th Dan priest in the same gaming group appears in `priest_conviction_allies` on party members' sheets, and allies can spend from the priest's pool via `POST /characters/{priest_id}/ally-conviction`. See `app/routes/pages.py` (priest discovery) and `app/routes/characters.py::ally_conviction`.

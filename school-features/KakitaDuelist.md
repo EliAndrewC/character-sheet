@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Your 10s on initiative rolls are considered to be in a special Phase 0. You may use interrupt actions to attack using iaijutsu, and any Phase 0 attacks use iaijutsu.
+> Your 10s on initiative rolls are considered to be in a special Phase 0.  You may use interrupt actions to attack using iaijutsu, and any Phase 0 attacks use iaijutsu.
 
 **Status:** Fully implemented (Phases 1-5). Kakita correctly keeps 10s as Phase 0 on initiative, renders them distinctly, restricts their per-die menu to a single Iaijutsu Attack option that opens the attack modal, applies the 3rd Dan defender-phase bonus on every attack with live probability-chart updates, exposes a Phase-0 Interrupt button that spends the 2 highest dice as a cost to launch an iaijutsu attack at attacker phase 0, and provides a dedicated once-per-round 5th Dan contested-iaijutsu modal with ±1-die damage scaling per 5-point gap.
 
@@ -45,7 +45,7 @@
 
 ## 2nd Dan
 
-> You get a free raise on all iaijutsu rolls.
+> You get a free raise on iaijutsu rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "iaijutsu"`
@@ -56,7 +56,7 @@
 
 ## 3rd Dan
 
-> Your attacks get a bonus of X for each phase before the defender's next action they occur, where X is equal to your attack skill. If a defender does not have an action remaining in this round, they are considered to act in phase 11. This applies to all types of attacks, and you know the next action of everyone within striking range.
+> Your attacks of all types get a bonus of X for each phase before the target's next action they occur, where X is your attack skill.  If a target does not have an action remaining in this round, they are considered to act in phase 11.  You know the next action of all potential targets within striking range.
 
 **Status:** Fully implemented on the attack modal. The "you know the next action of everyone within striking range" information-display piece is player-knowledge and not modeled in the app.
 
@@ -74,7 +74,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. You get a free raise to all damage rolls from attacks using iaijutsu.
+> Raise your current and maximum Fire by 1.  Raising your Fire now costs 5 fewer XP.  You get a free raise on damage rolls from any strike which used iaijutsu.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -84,7 +84,7 @@
 
 ## 5th Dan
 
-> At the beginning of phase 0 in each combat round, make a contested iaijutsu roll against an opponent. If the opponent doesn't have iaijutsu, they may roll attack instead, and you get an extra free raise. Make a damage roll against this opponent; if you won the contested roll then roll 1 extra damage die for every 5 by which your roll exceeded your opponent's, and if you lost then roll 1 fewer damage die for every 5 by which their roll exceeded yours.
+> At the beginning of phase 0 in each combat round, make a contested iaijutsu roll against an opponent.  If the opponent doesn't have iaijutsu, they may roll attack instead, and you get an extra free raise.  Make a damage roll against this opponent; if you won the contested roll then roll 1 extra damage die for every 5 by which your roll exceeded your opponent's, and if you lost then roll 1 fewer damage die for every 5 by which their roll exceeded yours.
 
 **Status:** Fully implemented via a dedicated modal.
 

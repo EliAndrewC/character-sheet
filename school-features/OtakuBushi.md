@@ -19,7 +19,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on iaijutsu, lunge, and wound check rolls.
+> Roll one extra die on iaijutsu, lunge, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["iaijutsu", "lunge", "wound_check"]`
@@ -40,7 +40,7 @@
 
 ## 3rd Dan
 
-> After you roll damage against an opponent, increase that character's next X action dice this turn by (6 - that character's Fire) min 1, where X is your attack skill, to a maximum of phase 10.
+> After resolving any kind of successful or unsuccessful attack against a target, increase that character's next X action dice this turn by (6 - that character's Fire) min 1, where X is your attack skill, to a maximum of phase 10.
 
 **Status:** Out of scope - requires tracking opponent's action dice and modifying them (cross-character combat-phase tracking).
 
@@ -53,7 +53,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. When you lunge, you always roll the extra damage die from using lunge even if your attack is unsuccessfully parried.
+> Raise your current and maximum Fire by 1.  Raising your Fire now costs 5 fewer XP.  When you lunge, you always roll the extra damage die provided by the lunge knack even if your attack is unsuccessfully parried, and the next attack against you no longer provides the attacker with a free raise.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -65,7 +65,7 @@
 
 ## 5th Dan
 
-> After a successful attack or lunge roll, you may decrease the number of rolled damage dice by 10, to a minimum of 2, to automatically deal 1 serious wound to your opponent. You may only do this once per damage roll.
+> After a successful attack or lunge roll, you may decrease the number of rolled damage dice by 10, to a minimum of 2, to automatically deal a serious wound to your target.  You may only do this once per damage roll.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `otaku_trade_dice_for_sw: true` in school_abilities.

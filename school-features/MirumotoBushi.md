@@ -24,7 +24,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on parry, double attack, and wound check rolls.
+> Roll one extra die on parry, double attack, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["parry", "double_attack", "wound_check"]`
@@ -35,7 +35,7 @@
 
 ## 2nd Dan
 
-> Free raise on parry rolls.
+> You get a free raise on parry rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "parry"`
@@ -45,7 +45,7 @@
 
 ## 3rd Dan
 
-> At the beginning of each round, you get 2X points, where X is equal to your attack skill. Each point may be spent to decrease the phase of one of your actions by 1 in order to parry, or to provide a bonus of +2 on any type of attack or parry after you have seen your roll.
+> At the beginning of each round, you get 2X points, where X is your attack skill.  Each point may be spent to decrease the phase of one of your actions by 1 in order to parry, or to provide a bonus of +2 on a parry or any type of attack after seeing your roll.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `mirumoto_round_points: true` and `mirumoto_round_points_max: 2*attack_skill`. Client: tracking section shows a per-round points counter with +/- and Reset. "Spend 3rd Dan Point (+2)" button appears on attack and parry roll results. Points can be spent for +2 flat on the roll.
@@ -61,7 +61,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Void by 1. Raising your Void now costs 5 fewer XP. Failed parries against your double attacks do not prevent the automatic serious wound, and against your regular attacks the number of extra rolled damage dice the failed parry reduces is cut in half (rounded down).
+> Raise your current and maximum Void by 1.  Raising your Void now costs 5 fewer XP.  Failed parries against your double attacks do not prevent the automatic serious wound, and against your regular attacks the number of extra rolled damage dice the failed parry reduced is cut in half (rounded down).
 
 **Status:** Fully implemented.
 - Ring raise (+1 Void, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.

@@ -23,7 +23,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on initiative, parry, and wound check rolls.
+> Roll one extra die on initiative, parry, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["initiative", "parry", "wound_check"]`
@@ -45,7 +45,7 @@
 
 ## 3rd Dan
 
-> After a successful or unsuccessful parry, all your action dice are decreased by X, where X is equal to your attack skill. Action dice are considered to have been held since their newly lowered value. This can lower dice to negative numbers.
+> After a successful or unsuccessful parry, your action dice are decreased by X, where X is your attack skill.  Action dice are considered to have been held since their newly lowered value, which may be a negative number.
 
 **Status:** Fully implemented.
 
@@ -64,7 +64,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. Your highest action die is set to 1 at the beginning of each combat round.
+> Raise your current and maximum Air by 1.  Raising your Air now costs 5 fewer XP.  Your highest action die is set to 1 at the beginning of each combat round.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.

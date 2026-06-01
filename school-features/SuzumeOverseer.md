@@ -25,7 +25,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 ## 1st Dan
 
-> Roll one extra die on precepts, commerce, and wound check rolls.
+> Roll one extra die on precepts, commerce, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 
@@ -36,7 +36,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 ## 2nd Dan
 
-> You get a free raise on a type of roll of your choice.
+> You get a free raise on any type of roll.
 
 **Status:** Fully implemented as a flexible-2nd-Dan picker shared with Ide Diplomat, Isawa Ishi, and Shugenja.
 
@@ -51,7 +51,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 ## 3rd Dan
 
-> Each adventure you get 2X free raises, where X is equal to your precepts skill, which may be applied to the following rolls: commerce, heraldry, sincerity, tact, attack, and wound checks. You may not spend more than X of these free raises on a single roll.
+> Each adventure you get 2X free raises, where X is your precepts skill, which may be spent on commerce, heraldry, sincerity, tact, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 
@@ -67,7 +67,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 ## 4th Dan
 
-> Raise the current and maximum rank of any Ring by 1. Raising that Ring now costs 5 fewer XP. Your skill is considered 2 higher for the purpose of computing free raises for any contested roll you did not initiate.
+> Raise your current and maximum Water by 1.  Raising your School Ring now costs 5 fewer XP.  Your skill is considered 2 higher for the purpose of computing free raises for any contested roll you did not initiate.
 
 **Status:** OUT OF SCOPE - intentionally not implemented.
 

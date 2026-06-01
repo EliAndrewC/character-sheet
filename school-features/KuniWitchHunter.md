@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> You may never become Tainted. Roll an extra (X+1)k(X+1) on wound checks, where X is the Shadowlands Taint of the attacker, rounded down to the nearest whole number.
+> You may never become Tainted.  Roll an extra (X+1)k(X+1) on wound checks, where X is the Shadowlands Taint of the attacker (rounded down to the nearest whole number).
 
 **Status:** Partially implemented. Taint immunity is narrative. The untainted base case (attacker Taint X=0 -> +1k1 on wound checks) IS implemented in `app/services/dice.py:build_wound_check_formula()` (`"+1k1 from Kuni Special (untainted base)"`). The Taint-*scaling* portion (X>0, requiring attacker-Taint tracking) is deferred.
 
@@ -19,7 +19,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on damage, interrogation, and wound check rolls.
+> Roll one extra die on damage, interrogation, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["damage", "interrogation", "wound_check"]`
@@ -30,7 +30,7 @@
 
 ## 2nd Dan
 
-> You get a free raise a free on interrogation rolls.
+> You get a free raise on interrogation rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "interrogation"`
@@ -40,7 +40,7 @@
 
 ## 3rd Dan
 
-> Each adventure you get 2X free raises, where X is equal to your investigation skill, which may be applied to the following rolls: interrogation, intimidation, law, underworld, attack, and wound checks. You may also spend these free raises on damage rolls against targets with the Shadowlands Taint. You may not spend more than X of these free raises on a single roll.
+> Each adventure you get 2X free raises, where X is your investigation skill, which may be spent on interrogation, intimidation, law, underworld, attack, and wound checks after seeing your roll.  You may also spend these free raises on damage rolls against targets with the Shadowlands Taint after seeing your roll.  You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "investigation"`
@@ -54,7 +54,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Earth by 1. Raising your Earth now costs 5 fewer XP. Roll an an extra action die in combat, which may not be used to attack targets without the Shadowlands Taint.
+> Raise your current and maximum Earth by 1.  Raising your Earth now costs 5 fewer XP.  Roll an extra action die in combat, which may not be used to attack targets without the Shadowlands Taint.
 
 **Status:** Partially implemented.
 - Ring raise (+1 Earth, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -64,7 +64,7 @@
 
 ## 5th Dan
 
-> After you take light wounds and resolve your wound check, you may choose to inflict that number of light wounds on the opponent who dealt them and take half that amount yourself. If the opponent has the Shadowlands Taint, then you may also use an attack in the current phase to add to that damage.
+> After you take light wounds and resolve your wound check, you may choose to inflict that number of light wounds on the attacker who dealt them and take half that amount yourself.  If the attacker has the Shadowlands Taint, then you may also use an attack in the current phase to add to that damage.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `kuni_reflect_damage: true` in school_abilities.

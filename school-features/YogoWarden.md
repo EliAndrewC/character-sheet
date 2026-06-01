@@ -32,7 +32,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on attack, damage, and wound check rolls.
+> Roll one extra die on attack, damage, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "damage", "wound_check"]`
@@ -47,7 +47,7 @@
 
 ## 2nd Dan
 
-> You get a free raise on all wound check rolls.
+> You get a free raise on wound checks.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "wound_check"`
@@ -72,7 +72,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Earth by 1. Raising your Earth now costs 5 fewer XP. You get an extra free raise for each void point you spend on wound check rolls.
+> Raise your current and maximum Earth by 1.  Raising your Earth now costs 5 fewer XP.  You get an extra free raise for each void point you spend on wound checks.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Earth, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.

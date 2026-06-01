@@ -32,7 +32,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on iaijutsu, double attack, and wound check rolls.
+> Roll one extra die on iaijutsu, double attack, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["iaijutsu", "double_attack", "wound_check"]`
@@ -53,7 +53,7 @@
 
 ## 3rd Dan
 
-> Your feints do Xk1 damage, where X is your attack skill. You don't roll extra damage dice from your Fire or from exceeding the TN, but your Special Ability may increase the damage.
+> Your feints do Xk1 damage, where X is your attack skill.  You don't roll extra damage dice from your Fire or from exceeding the TN, but your Special Ability may increase the damage.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `bayushi_feint_damage: true` and `bayushi_feint_damage_rolled: attack_skill`. Client: `sheet.html` shows "Roll Feint Damage" button after feint rolls. Damage = attack_skill rolled, 1 kept, no ring/TN bonus. Bayushi Special VP bonus (+1k1 per VP) applies to the feint damage.
@@ -67,7 +67,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. After a successful or unsuccessful feint, you may apply a free raise to any future attack this combat.
+> Raise your current and maximum Fire by 1.  Raising your Fire now costs 5 fewer XP.  After a successful or unsuccessful feint, you may apply a free raise to a future attack roll of any type this combat after seeing your roll.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -79,7 +79,7 @@
 
 ## 5th Dan
 
-> When you fail a wound check, calculate your serious wounds as if you had half your number of light wounds.
+> When you fail a wound check, calculate your serious wounds as if you had half your number of light wounds (rounded down).
 
 **Status:** Fully implemented.
 - Server: `app/services/dice.py:build_wound_check_formula()` sets `bayushi_5th_dan_half_lw: True` flag.

@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> You may counterattack as an interrupt action by spending only 1 action die, but if you do so then your opponent gets a free raise on their wound check if you hit. You may counterattack for other characters at no penalty.
+> You may counterattack as an interrupt action by spending only one action die, but if you do so then your target gets a free raise on their wound check if you hit.  You may counterattack for other characters at no penalty.
 
 **Status:** Out of scope - "counterattack for others" requires positional tracking not supported by the app. The interrupt counterattack also requires combat-phase tracking.
 
@@ -19,7 +19,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on attack, counterattack, and wound check rolls.
+> Roll one extra die on attack, counterattack, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "counterattack", "wound_check"]`
@@ -30,7 +30,7 @@
 
 ## 2nd Dan
 
-> You get a free raise on all counterattack rolls.
+> You get a free raise on counterattack rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "counterattack"`
@@ -53,7 +53,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. You may choose to take the damage from a hit dealt to an adjacent character before damage has been rolled.
+> Raise your current and maximum Water by 1.  Raising your Water now costs 5 fewer XP.  You may choose to take the damage from a hit dealt to an adjacent character before damage has been rolled.
 
 **Status:** Partially implemented. Ring raise is fully implemented; "take damage for adjacent character" is out of scope (positional tracking).
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -62,7 +62,7 @@
 
 ## 5th Dan
 
-> After you or a character for whom you've counterattacked makes a wound check, lower the TN to hit the attacker the next time they are attacked by the amount by which the wound check exceeded the damage roll. This can lower a TN to below 0.
+> After you or a character for whom you've counterattacked makes a wound check, lower the TN to hit the attacker the next time they are attacked by the amount by which the wound check exceeded the damage roll.  This can lower the TN to a negative number.
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `daidoji_wc_lower_tn: true`. Client shows note after passed wound checks about lowering the attacker's TN by the wound check excess.

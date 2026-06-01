@@ -21,7 +21,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on double attack, lunge, and wound check rolls.
+> Roll one extra die on double attack, lunge, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["double_attack", "lunge", "wound_check"]`
@@ -41,7 +41,7 @@
 
 ## 3rd Dan
 
-> After you make any type of attack roll, you may lower your TN to be hit by 5 for the next time that you are attacked this round to get a bonus of 3X on your attack roll, where X is your attack skill. If a successful or unsuccessful parry is made against your attack, you do not suffer the TN penalty.
+> After you make any type of attack roll, you may lower your TN to be hit by 5 for the next time that you are attacked this round to get a bonus of 3X on your attack roll, where X is your attack skill.  If a successful or unsuccessful parry is made against your attack, you do not suffer the TN penalty.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `isawa_tn_trade: true` and `isawa_tn_trade_bonus: 3*attack_skill` in school_abilities.
@@ -56,7 +56,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. Once per round, you may lunge as an interrupt action at the cost of 1 action die.
+> Raise your current and maximum Water by 1.  Raising your Water now costs 5 fewer XP.  Once per round, you may lunge as an interrupt action at the cost of one action die.
 
 **Status:** Partially implemented. Ring raise is fully implemented; "lunge as interrupt action once per round" is out of scope (combat-phase tracking).
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.

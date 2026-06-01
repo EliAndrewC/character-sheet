@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> You use Water for interrogation rolls, and you add twice your Water to all attack rolls.
+> You use Water for interrogation rolls, and you add twice your Water to attack rolls.
 
 **Status:** Fully implemented.
 - Water for interrogation: `app/services/dice.py:build_skill_formula()` overrides ring to Water for kitsuki_magistrate + interrogation.
@@ -21,7 +21,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on investigation, interrogation, and wound check rolls.
+> Roll one extra die on investigation, interrogation, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["investigation", "interrogation", "wound_check"]`
@@ -41,7 +41,7 @@
 
 ## 3rd Dan
 
-> Each adventure you get 2X free raises, where X is equal to your investigation skill, which may be applied to the following rolls: interrogation, intimidation, law, underworld, attack, and wound checks. You may not spend more than X of these free raises on any single roll.
+> Each adventure you get 2X free raises, where X is your investigation skill, which may be spent on interrogation, intimidation, law, underworld, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "investigation"`
@@ -54,7 +54,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. You automatically know the Void, parry, and phase of the next action of each character during combat, and you know the result of contested rolls made against you out of combat.
+> Raise your current and maximum Water by 1.  Raising your Water now costs 5 fewer XP.  You automatically know the Void, parry, and phase of the next action of each character during combat, and you know the result of contested rolls made against you out of combat.
 
 **Status:** Partially implemented. Ring raise is fully implemented; "automatically know target's Void, parry, and next action phase" is out of scope (requires opponent data not available in the app).
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -63,7 +63,7 @@
 
 ## 5th Dan
 
-> Your presence is so overwhelming that the Air, Fire and Water rings of chosen characters are reduced by one. You may do this to any one character, or you may do it to multiple characters so long as the sum of their experience does not exceed your experience. This does not work during the iaijutsu phase of a duel, and it does not stack with other Kitsuki Magistrates targeting the same character.
+> Your presence is so overwhelming that the Air, Fire, and Water Rings of chosen characters are reduced by 1.  You may do this to any one character, or you may do it to multiple characters so long as the sum of their experience does not exceed your experience.  This does not work during the iaijutsu phase of a duel, and it does not stack with other Kitsuki Magistrates targeting the same character.
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `kitsuki_reduce_rings: true`. Client shows informational note after rolls describing the ring reduction ability and its XP-based targeting limit.

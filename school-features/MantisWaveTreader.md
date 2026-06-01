@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Each phase you select an "offensive" or "defensive" posture. While fighting with an offensive posture, you get a free raise to all attack and damage rolls, and while fighting in a defensive posture you get a free raise to wound checks and your TN to be hit is increased by 5.
+> Each phase you select an "offensive" or "defensive" posture.  While fighting with an offensive posture, you get a free raise on attack and damage rolls, and while fighting in a defensive posture you get a free raise on wound checks and your TN to be hit is increased by 5.
 
 **Status:** Implemented (Phases 4 + 5). The per-phase posture tracker renders in the Tracking section with two buttons - "Offensive Posture for Phase X" and "Defensive Posture for Phase X" - that advance X from 1 through 10 and then disable. Rolling initiative or clicking the action-dice "Clear" button resets X back to 1 and empties the posture history. Selections persist across page reloads via `adventure_state`. The current posture drives live mechanical overlays:
 - **Offensive:** +5 flat to attack rolls (labeled in pre-roll Bonuses row, post-roll breakdown, and `formula.bonuses`) and +5 flat to damage rolls (labeled in pre-roll Damage bonuses row and post-roll damage-result breakdown via `atkComputeDamage` / `atkDamageParts`).
@@ -39,7 +39,7 @@
 
 ## 2nd Dan
 
-> You get a free raise on a type of roll of your choice.
+> You get a free raise on any type of roll.
 
 **Status:** Implemented (Phase 3). Player picks one roll type; +5 flat bonus applies to matching rolls at Dan >= 2.
 
@@ -59,9 +59,7 @@
 
 ## 3rd Dan
 
-> After making an attack roll during a phase in which you have chosen an offensive posture, you may spend one action die from any phase to give yourself +X to all attack and damage rolls for the rest of the round, where X is your attack skill.
->
-> After seeing the result of an attack roll made against you while fighting with a defensive posture, you may spend one action die from any phase to increase your wound checks and TN to be hit by X for the remainder of the round, where X is your attack skill.
+> After making an attack roll during a phase in which you have chosen an offensive posture, you may spend one action die from any phase to give yourself +X to attack and damage rolls for the rest of the round, where X is your attack skill.  After seeing the result of an attack roll made against you while fighting with a defensive posture, you may spend one action die from any phase to increase your wound checks and TN to be hit by X for the remainder of the round, where X is your attack skill.
 
 **Status:** Both branches implemented (Phases 7 + 8).
 
@@ -87,7 +85,7 @@
 
 ## 4th Dan
 
-> Raise the current and maximum rank of your School Ring by 1. Raising that Ring now costs 5 fewer XP. Begin each combat round with an athletics action die set to 1, which may only be spent on movement, athletics actions, or your 3rd Dan technique.
+> Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  Begin each combat round with an athletics action die set to 1, which may only be spent on movement, athletics actions, or your 3rd Dan technique.
 
 **Status:** Implemented (Phase 10).
 
@@ -98,7 +96,7 @@
 
 ## 5th Dan
 
-> For each phase in which you declare an offensive posture, you gain +1 to all attack and damage rolls for the remainder of the round. For each phase in which you choose a defensive posture, you gain +1 to your wound checks and your TN to be hit for the remainder of the round.
+> For each phase in which you declare an offensive posture, you gain +1 to attack and damage rolls for the remainder of the round.  For each phase in which you choose a defensive posture, you gain +1 to your wound checks and your TN to be hit for the remainder of the round.
 
 **Status:** Implemented (Phase 6). Built on top of the posture tracker:
 - `offensivePhaseCount()` and `defensivePhaseCount()` are derived from `postureHistory` (no separate state), so they auto-reset whenever `resetMantisRound()` fires (initiative roll or action-dice Clear) along with the rest of Phase 4's round-tracker state.

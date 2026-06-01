@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> You may spend void points after you see the results of your initial roll.
+> You may spend void points after seeing your initial roll.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `merchant_post_roll_vp: true`. Client: after any non-initiative roll, shows VP spending buttons. Each VP adds +1k1 and the roll is re-executed with the additional dice.
@@ -32,7 +32,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on interrogation, sincerity, and wound check rolls.
+> Roll one extra die on interrogation, sincerity, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["interrogation", "sincerity", "wound_check"]`
@@ -52,7 +52,7 @@
 
 ## 3rd Dan
 
-> Each adventure you get 2X free raises, where X is equal to your sincerity skill, which may be applied to the following rolls: commerce, heraldry, interrogation, sincerity, attack, and wound checks. You may not spend more than X of these free raises on a single roll.
+> Each adventure you get 2X free raises, where X is your sincerity skill, which may be spent on commerce, heraldry, interrogation, sincerity, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "sincerity"`
@@ -65,7 +65,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. Your Rank is considered 5.0 higher for the purpose of calculating your stipend.
+> Raise your current and maximum Water by 1.  Raising your Water now costs 5 fewer XP.  Your Rank is considered 5.0 higher for the purpose of calculating your stipend.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -79,7 +79,7 @@
 
 ## 5th Dan
 
-> After making any non-initiative roll, you may reroll some of the dice so long as the dice being rerolled add up to at least 5*(X-1) where X is the number of dice being rerolled. You may only do this once per roll. As per your Special Ability, you may spend Void Points before and/or after you make this reroll.
+> After making any non-initiative roll, you may reroll some of the dice so long as the dice being rerolled add up to at least 5\*(X-1) where X is the number of dice being rerolled.  You may only do this once per roll.  As per your Special Ability, you may spend void points before and/or after this reroll.
 
 **Status:** Implemented.
 - Server gating: `merchant_5th_dan_reroll` flag in `app/routes/pages.py` when `school == "merchant"` and `dan >= 5`.
