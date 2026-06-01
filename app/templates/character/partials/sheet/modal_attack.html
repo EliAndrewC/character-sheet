@@ -184,11 +184,13 @@
                         </template>
                     </div>
 
-                    {# Doji Artisan 4th Dan: "target has not attacked me this
-                       round" bonus = current phase. The phase matters but we
-                       can't derive it from action-die state alone (the attack
-                       may be made before any action die is spent), so the
-                       player picks it from a dropdown. #}
+                    {# Doji Artisan 4th Dan: bonus = current phase when the
+                       target hasn't attacked you yet this round (regular
+                       attack), OR when this counterattack interrupts the
+                       target's first attack of the round against you. The
+                       phase matters but we can't derive it from action-die
+                       state alone (the attack may be made before any action
+                       die is spent), so the player picks it from a dropdown. #}
                     <div x-show="atkFormula?.doji_4th_dan_untouched_target" x-cloak
                          data-testid="doji-4th-dan-untouched"
                          class="text-xs text-ink/60 bg-parchment rounded p-2 space-y-1">
@@ -196,7 +198,7 @@
                             <input type="checkbox" x-model="atkDojiUntouchedTarget"
                                    data-action="doji-4th-dan-untouched-checkbox"
                                    class="rounded border-ink/30">
-                            <span>Target has not attacked me this round (Doji 4th Dan: +phase)</span>
+                            <span>Target's current attack is their first against me this round (Doji 4th Dan: +phase)</span>
                         </label>
                         <div x-show="atkDojiUntouchedTarget" x-cloak class="flex items-center gap-2">
                             <label>Current phase:</label>
@@ -461,7 +463,7 @@
                         </div>
                         <div x-show="formula?.doji_4th_dan_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
                              data-testid="doji-4th-dan-breakdown">
-                            &bull; +<span x-text="formula?.doji_4th_dan_bonus"></span> from Doji 4th Dan (phase <span x-text="formula?.doji_4th_dan_phase"></span>, target had not attacked)
+                            &bull; +<span x-text="formula?.doji_4th_dan_bonus"></span> from Doji 4th Dan (phase <span x-text="formula?.doji_4th_dan_phase"></span>, target's first attack against you this round)
                         </div>
                         <div x-show="formula?.attack_spec_bonus > 0" x-cloak class="text-xs text-ink/70 mt-0.5"
                              data-testid="attack-spec-breakdown">
@@ -552,6 +554,18 @@
                                 Skip
                             </button>
                         </div>
+                    </div>
+
+                    {# Otaku 4th Dan: after a lunge, the standard penalty
+                       (everyone fighting you gets a free raise on their next
+                       attack against you this round) is suppressed. Shown
+                       regardless of hit/miss, since the attacker's free raise
+                       is granted by the lunge action itself, not by the
+                       attack hitting. #}
+                    <div x-show="atkFormula?.attack_variant === 'lunge' && schoolAbilities.otaku_no_lunge_attacker_raise" x-cloak
+                         data-testid="otaku-4th-dan-no-lunge-attacker-raise"
+                         class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
+                        Otaku 4th Dan: the next attack against you this round does NOT get the usual lunge free raise.
                     </div>
 
                     {# HIT #}

@@ -15,14 +15,14 @@ A character sheet and character builder web app for L7R, a Legend of the Five Ri
 The dev environment is the `docker.io/docker/sandbox-templates:claude-code` container. To install dependencies:
 
 ```bash
-sudo apt-get install -y libmagic1 antiword            # system deps for the importer
+sudo apt-get install -y libmagic1 antiword libcairo2  # system deps for the importer + dice-card PNG renderer
 pip install --break-system-packages -r requirements.txt
 pip install --break-system-packages reportlab         # test-only: used to build PDF fixtures in tests/test_import_llm.py
 playwright install chromium
 playwright install-deps chromium
 ```
 
-`libmagic1` is required by `python-magic` (importer format detection) and `antiword` is required by the `.doc` ingest path in `app/services/import_ingest.py`. Both are missing from `requirements.txt` because they are system packages; without them `app.main` fails to import and every unit test errors out at collection time. `reportlab` is a dev-only dependency (PDF fixtures); it is not imported by `app/` at runtime, so it lives outside `requirements.txt`.
+`libmagic1` is required by `python-magic` (importer format detection) and `antiword` is required by the `.doc` ingest path in `app/services/import_ingest.py`. `libcairo2` is required by `cairocffi`/`CairoSVG`, used by the dice-card PNG renderer; without it `tests/test_dice_card.py` errors out at collection time. All three are missing from `requirements.txt` because they are system packages; without them `app.main` fails to import and large portions of the unit suite never run. `reportlab` is a dev-only dependency (PDF fixtures); it is not imported by `app/` at runtime, so it lives outside `requirements.txt`.
 
 ## Environment Variables
 

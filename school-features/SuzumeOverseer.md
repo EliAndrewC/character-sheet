@@ -69,11 +69,10 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 > Raise your current and maximum Water by 1.  Raising your School Ring now costs 5 fewer XP.  Your skill is considered 2 higher for the purpose of computing free raises for any contested roll you did not initiate.
 
-**Status:** OUT OF SCOPE - intentionally not implemented.
+**Status:** Partially implemented (ring-raise half).
 
-The first half (raise any one ring by 1, with discount) is the same kind of mechanic as Merchant's 4th Dan ring raise, but the second half ("skill considered 2 higher for free raises on contested rolls you didn't initiate") depends on contested-roll-mechanics that aren't modeled in our system. To avoid implementing only one of the two halves and leaving Suzume mid-power, the entire 4th Dan is omitted.
-
-The school's `techniques` dict in `app/game_data.py` deliberately has no key 4. The structural test `tests/test_game_data.py::TestSchools::test_all_schools_have_five_techniques` whitelists Suzume Overseer as the documented exception.
+- Ring raise (+1 Water, cost discount, max increase to 6) is fully implemented via `calculate_ring_xp()` server-side and the editor's standard 4th Dan ring helper. The school's `school_ring` is locked to Water and `SCHOOL_RING_OPTIONS["suzume_overseer"] == ["Water"]`, so the bonus always lands on Water - matching the canonical "locked to school ring" wording.
+- The contested-roll skill bonus ("skill considered 2 higher for free raises on contested rolls you didn't initiate") is **not mechanized**: free-raise computation on contested rolls isn't modeled in our system. The text is still surfaced on the sheet so the player/GM can apply it manually, same pattern as other partial 4th/5th Dan implementations.
 
 ---
 

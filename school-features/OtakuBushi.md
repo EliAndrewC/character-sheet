@@ -60,6 +60,7 @@
 - "Lunge always rolls an extra damage die even if unsuccessfully parried" is implemented:
   - Server: `app/routes/pages.py` passes `otaku_lunge_extra_die: true` in school_abilities.
   - Client: `app/templates/character/sheet.html` in `atkComputeDamage()`, when lunge is unsuccessfully parried, adds the lunge extra die back after parry reduction.
+- "Next attack against you no longer provides the attacker with a free raise" is surfaced as a display note on the lunge attack via the `otaku_no_lunge_attacker_raise` school_abilities flag. Not mechanized — the standard lunge attacker-raise rule (Lunge knack rules text: "Everyone fighting you gets a free raise on their next attack against you this round") isn't itself enforced by the app, so this display note reminds the player/GM that the Otaku 4th Dan negates it.
 
 ---
 

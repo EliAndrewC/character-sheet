@@ -46,8 +46,8 @@
 > You get a free raise on acting, sincerity, and sneaking rolls.
 
 **Status:** Fully implemented.
-- `second_dan_free_raise: "sincerity"`
-- Applied as +5 flat bonus on sincerity rolls via `_apply_school_technique_bonus()`.
+- `second_dan_free_raise: ["acting", "sincerity", "sneaking"]` (list-valued — the consumer in `dice.py` normalizes str-or-list, so single-skill schools keep their existing scalar form).
+- Applied as +5 flat bonus on acting, sincerity, or sneaking rolls via `_apply_school_technique_bonus()`.
 
 ---
 

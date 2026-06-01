@@ -800,14 +800,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Used by Isawa shugenja. Not rolled."
         ),
         rules_text=(
-            "A number of times per adventure equal to your rank in this knack, "
-            "you may draw void from your surroundings and regain a spent void "
-            "point. If you target a character when doing this, that character "
-            "loses a void point; if that character has no void points then the "
-            "next time they would regain one they do not. You may do this "
-            "either while conversing with that character or when attacking or "
-            "being attacked by that character in combat, but you may not "
-            "target the same character more than once per day."
+            "A number of times per adventure equal to your rank in this knack, you may draw void from your surroundings and regain a spent void point.  If you target a character when doing this, that character loses a void point; if that character has no void points then the next time they would regain one they do not.  You may do this either while conversing with that character or when attacking or being attacked by that character in combat, but you may not target the same character more than once per day."
         ),
     ),
     SchoolKnack(
@@ -818,15 +811,9 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Physical feats of agility, climbing, running, swimming, and acrobatics."
         ),
         rules_text=(
-            "When performing physical actions which are not covered by skills "
-            "(e.g. running, climbing, swimming, etc) everyone rolls (2 * Ring)k(Ring). "
-            "Characters with the athletics knack roll extra dice on such rolls "
-            "equal to their rank in this knack. Additionally, you may substitute "
-            "this knack for your attack or parry when making those rolls, i.e. "
-            "(athletics + Fire)k(Fire) or (athletics + Air)k(Air). This comes "
-            "at a penalty: if you use it to attack, your TN to hit is increased "
-            "by 5 times the defender's parry skill, and if you use it to parry, "
-            "then your TN is raised by 5 times the attack skill of the attacker."
+            "When performing physical actions which are not covered by skills (e.g. running, climbing, swimming, etc) everyone rolls (2 * Ring)k(Ring).  Characters with the athletics knack roll extra dice on such rolls equal to their rank in this knack."
+            "\n\n"
+            "Additionally, you may substitute this knack for your attack or parry when making those rolls, i.e. (athletics + Fire)k(Fire) or (athletics + Air)k(Air).  This comes at a penalty: if you use it to attack, your TN to hit is increased by 5 times the defender's parry skill, and if you use it to parry, then your TN is raised by 5 times the attack skill of the attacker."
         ),
     ),
     SchoolKnack(
@@ -838,18 +825,9 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Rolled with the ring of the element communed with."
         ),
         rules_text=(
-            "You may ask the elemental spirits about events which they have "
-            "recently witnessed. Spend a void point and roll this knack with the "
-            "Ring of the element of the spirits you are questioning. This is an "
-            "open roll, and the GM weighs it against the time passed since the "
-            "events in question and how much has happened here since then."
+            "You may ask the elemental spirits about events which they have recently witnessed.  Spend a void point and roll this knack with the Ring of the element of the spirits you are questioning.  This is an open roll, and the GM weighs it against the time passed since the events in question and how much has happened here since then."
             "\n\n"
-            "Different elemental spirits perceive humans differently and give "
-            "different types of information about them. Fire spirits read surface "
-            "thoughts, Air spirits sense emotional states, Earth spirits perceive "
-            "the motives behind actions, and Water spirits see the directions of "
-            "comings and goings. The higher your roll, the more details about "
-            "these things you receive."
+            "Different elemental spirits perceive humans differently and give different types of information about them.  Fire spirits read surface thoughts, Air spirits sense emotional states, Earth spirits perceive the motives behind actions, and Water spirits see the directions of comings and goings.  The higher your roll, the more details about these things you receive."
         ),
     ),
     SchoolKnack(
@@ -861,9 +839,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "special abilities and resist spiritual corruption."
         ),
         rules_text=(
-            "You receive 2X points per day, where X is equal to the rank of this "
-            "knack. After you make any roll, you may spend up to X of these "
-            "points to raise the roll by the number of points spent."
+            "You receive 2X points per day, where X is equal to the rank of this knack.  After you make any roll, you may spend up to X of these points to raise the roll by the number of points spent."
         ),
     ),
     SchoolKnack(
@@ -876,10 +852,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "some schools reduce this to 1."
         ),
         rules_text=(
-            "When an opponent attacks you, roll this knack to make an attack "
-            "against them before they roll theirs. If you counterattack an attack "
-            "directed at someone else, the TN is raised by 5 times the attacker's "
-            "parry skill. You may counterattack as an interrupt action."
+            "When an opponent attacks you, roll this knack to make an attack against them before they roll theirs.  If you counterattack an attack directed at someone else, the TN is raised by 5 times the attacker's parry skill.  You may counterattack as an interrupt action."
         ),
     ),
     SchoolKnack(
@@ -891,40 +864,17 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Rolled with Earth."
         ),
         rules_text=(
-            "This knack is used to detect the Shadowlands Taint in humans. To "
-            "use it, you must spend a full minute concentrating on someone, who "
-            "cannot leave your sight during this time. Success is automatic "
-            "against anyone without the ability to conceal their Shadowlands "
-            "Taint, although you must still roll the knack every time."
+            "This knack is used to detect the Shadowlands Taint in humans.  To use it, you must spend a full minute concentrating on someone, who cannot leave your sight during this time.  Success is automatic against anyone without the ability to conceal their Shadowlands Taint, although you must still roll the knack every time."
             "\n\n"
-            "Against bloodspeakers, this is a contested roll against their Fear "
-            "knack. If successful, the GM secretly rolls 1k1, and the Witch "
-            "Hunter successfully detects the Shadowlands Taint if the roll is "
-            "greater than twice the bloodspeaker's School Rank."
+            "Against bloodspeakers, this is a contested roll against their Fear knack.  If successful, the GM secretly rolls 1k1, and the Witch Hunter successfully detects the Shadowlands Taint if the roll is greater than twice the bloodspeaker's School Rank."
             "\n\n"
-            "The following bonuses and penalties apply to the contested roll:"
-            "\n"
-            "\u2022 The bloodspeaker gets a bonus of 10 * (7 \u2013 X) to their "
-            "roll, where X is the bloodspeaker's Shadowlands Taint."
-            "\n"
-            "\u2022 If forced to swallow a piece of jade, this bonus is "
-            "eliminated entirely."
-            "\n"
-            "\u2022 If stabbed by a jade object enough to draw blood during the "
-            "roll, bloodspeakers can't reroll 10s."
-            "\n"
-            "\u2022 Because servants of the Dark Lord cannot stand to be bound, "
-            "if you tie the hands of a bloodspeaker, they are unable to receive "
-            "any other bonuses to their roll, such as their Desire knack, or "
-            "their Rank 3 Technique."
-            "\n"
-            "\u2022 By tying a bloodspeaker's arms tightly to their body as well "
-            "as tightly tying their legs together, Witch Hunters receive two "
-            "free raises per hour in which the bloodspeaker was tied in this "
-            "manner before the detect Taint roll is made."
-            "\n"
-            "\u2022 By spending extra time concentrating on a single target, the "
-            "Witch Hunter receives two free raises per hour."
+            "The following bonuses and penalties apply to the contested roll:\n"
+            "- The bloodspeaker gets a bonus of 10 * (7 - X) to their roll, where X is the bloodspeaker's Shadowlands Taint.\n"
+            "- If forced to swallow a piece of jade, this bonus is eliminated entirely.\n"
+            "- If stabbed by a jade object enough to draw blood during the roll, bloodspeakers can't reroll 10s.\n"
+            "- Because servants of the Dark Lord cannot stand to be bound, if you tie the hands of a bloodspeaker, they are unable to receive any other bonuses to their roll, such as their Desire knack, or their Rank 3 Technique.\n"
+            "- By tying a bloodspeaker's arms tightly to their body as well as tightly tying their legs together, Witch Hunters receive two free raises per hour in which the bloodspeaker was tied in this manner before the detect Taint roll is made.\n"
+            "- By spending extra time concentrating on a single target, the Witch Hunter receives two free raises per hour."
         ),
     ),
     SchoolKnack(
@@ -936,12 +886,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "No roll required; passive ability."
         ),
         rules_text=(
-            "By engaging another character in conversation you may gain insight "
-            "into that character's Honor. When you use this knack the GM tells "
-            "you that that character's honor + 0.5 * (1k1 \u2013 0.5). After "
-            "each conversation past the first, you get a more accurate idea of "
-            "their honor, and the GM tells you a number which is 0.X closer to "
-            "the truth, where X is your rank in this knack."
+            "By engaging another character in conversation you may gain insight into that character's Honor.  When you use this knack the GM tells you that character's honor + 0.5 * (1k1 - 0.5).  After each conversation past the first, you get a more accurate idea of their honor, and the GM tells you a number which is 0.X closer to the truth, where X is your rank in this knack."
         ),
     ),
     SchoolKnack(
@@ -953,12 +898,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Each attack is rolled separately."
         ),
         rules_text=(
-            "The TN to hit your target is raised by 20. If successful, roll "
-            "extra damage dice as if the TN hadn't been raised, and inflict a "
-            "serious wound in addition to the normal damage roll. On an "
-            "unsuccessful parry, this extra serious wound becomes 2 extra rolled "
-            "damage dice, or 4 extra rolled damage dice if someone else "
-            "unsucessfully parried for the target."
+            "The TN to hit your target is raised by 20.  If successful, roll extra damage dice as if the TN hadn't been raised, and inflict a serious wound in addition to the normal damage roll.  On an unsuccessful parry, this extra serious wound becomes 2 extra rolled damage dice, or 4 extra rolled damage dice if someone else unsuccessfully parried for the target."
         ),
     ),
     SchoolKnack(
@@ -970,11 +910,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Each tattoo has a unique effect."
         ),
         rules_text=(
-            "At the beginning of each combat round, you may breath spiritual "
-            "fire which extends around you 10 feet in every direction. These "
-            "flames do not harm physical objects, except that they deal (2X)k1 "
-            "damage to any characters you choose to be harmed, where X is your "
-            "rank in this knack."
+            "At the beginning of each combat round, you may breathe spiritual fire which extends around you 10 feet in every direction.  These flames do not harm physical objects, except that they deal (2X)k1 damage to any characters you choose to be harmed, where X is your rank in this knack."
         ),
     ),
     SchoolKnack(
@@ -986,11 +922,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "May grant temporary void points or TN reductions depending on school."
         ),
         rules_text=(
-            "This attack does no damage, but if successful it yields a temporary "
-            "void point which may be used this round. Your highest action is "
-            "then moved to the current phase. The target is not told whether the "
-            "attack against them is a feint until after they see whether it "
-            "hits, and after any parries are resolved."
+            "This attack does no damage, but if successful it yields a temporary void point which may be used this round.  Your highest action is then moved to the current phase.  The target is not told whether the attack against them is a feint until after they see whether it hits, and after any parries are resolved."
         ),
     ),
     SchoolKnack(
@@ -1015,15 +947,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Used by Isawa Ishi shugenja."
         ),
         rules_text=(
-            "Spend a void and roll this knack to swap the highest and second "
-            "highest Ring ranks of the target character for the remainder of one "
-            "conversation or fight. In the case of a tie for the second-lowest "
-            "Ring, the target chooses which Ring is switched with the highest "
-            "one. You roll this knack against a secret TN equal to 5 times the "
-            "sum of the ranks of the target character's two highest Rings. You "
-            "may do this either while conversing with that character or when "
-            "attacking or being attacked by that character in combat, but you "
-            "may not target the same character more than once per day."
+            "Spend a void and roll this knack to swap the highest and second highest Ring ranks of the target character for the remainder of one conversation or fight.  In the case of a tie for the second-highest Ring, the target chooses which Ring is switched with the highest one.  You roll this knack against a secret TN equal to 5 times the sum of the ranks of the target character's two highest Rings.  You may do this either while conversing with that character or when attacking or being attacked by that character in combat, but you may not target the same character more than once per day."
         ),
     ),
     SchoolKnack(
@@ -1035,9 +959,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Rolled with Fire."
         ),
         rules_text=(
-            "Roll this knack instead of attack when attacking someone to roll an "
-            "extra die of damage if you hit. Everyone fighting you gets a free "
-            "raise on their next attack against you this round."
+            "Roll this knack instead of attack when attacking someone to roll an extra die of damage if you hit.  Everyone fighting you gets a free raise on their next attack against you this round."
         ),
     ),
     SchoolKnack(
@@ -1049,11 +971,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Rolled with Air."
         ),
         rules_text=(
-            "You have such command over factual arguments that you can trip "
-            "others up. Once per conversation you may target a character, roll "
-            "this knack, and divide the result by 5, rounding down. Subtract "
-            "that amount from all skill rolls made by that character for the "
-            "rest of the conversation which roll with Water."
+            "You have such command over factual arguments that you can trip others up.  Once per conversation you may target a character, roll this knack, and divide the result by 5, rounding down.  Subtract that amount from all skill rolls made by that character for the rest of the conversation which roll with Water."
         ),
     ),
     SchoolKnack(
@@ -1065,11 +983,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Rolled with Water."
         ),
         rules_text=(
-            "You have such command over social situations that you can trip "
-            "others up. Once per conversation you may target a character, roll "
-            "this knack, and divide the result by 5, rounding down. Subtract "
-            "that amount from all skill rolls made by that character for the "
-            "rest of the conversation which roll with Air."
+            "You have such command over social situations that you can trip others up.  Once per conversation you may target a character, roll this knack, and divide the result by 5, rounding down.  Subtract that amount from all skill rolls made by that character for the rest of the conversation which roll with Air."
         ),
     ),
     SchoolKnack(
@@ -1081,10 +995,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Passive social effect; no roll required."
         ),
         rules_text=(
-            "When rolling a basic skill, you may increase the skill's rank by "
-            "one, to a maximum of five. This may be done multiple times on the "
-            "same roll, but only a number of times per adventure equal to twice "
-            "your rank in this knack."
+            "When rolling a basic skill, you may increase the skill's rank by one, to a maximum of five.  This may be done multiple times on the same roll, but only a number of times per adventure equal to twice your rank in this knack."
         ),
     ),
     SchoolKnack(
@@ -1096,11 +1007,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Rolled with Water or Air, whichever is higher."
         ),
         rules_text=(
-            "Once per conversation, you may use your practiced aura of "
-            "knowledgeable confidence to roll this knack instead of any basic "
-            "skill when making an uncontested roll. This knack may be rolled "
-            "with either Water or Air, whichever is higher at the time it is "
-            "rolled."
+            "Once per conversation, you may use your practiced aura of knowledgeable confidence to roll this knack instead of any basic skill when making an uncontested roll.  This knack may be rolled with either Water or Air, whichever is higher at the time it is rolled."
         ),
     ),
     SchoolKnack(
@@ -1126,16 +1033,9 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "Requires the Shugenja school."
         ),
         rules_text=(
-            "To cast a spell, you spend actions equal to its mastery level minus "
-            "2. You then roll this knack with the Ring of that spell's element "
-            "against a TN of its mastery level times 5. You may not cast the "
-            "same spell more than once per combat round."
+            "To cast a spell, you spend actions equal to its mastery level minus 2.  You then roll this knack with the Ring of that spell's element against a TN of its mastery level times 5.  You may not cast the same spell more than once per combat round."
             "\n\n"
-            "After you roll, you lose void points equal to its mastery level. "
-            "For every 5 by which you exceed the TN, this cost is lowered by 1, "
-            "to a minimum of 1. If you end up not having enough void points, "
-            "then all of your void points are lost and you fail to cast the "
-            "spell."
+            "After you roll, you lose void points equal to its mastery level.  For every 5 by which you exceed the TN, this cost is lowered by 1, to a minimum of 1.  If you end up not having enough void points, then all of your void points are lost and you fail to cast the spell."
         ),
     ),
     SchoolKnack(
@@ -1433,7 +1333,7 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on any three rolls.",
             2: "You get a free raise on any type of roll.",
             3: (
-                "Each adventure you get 2X free raises, where X is your precepts skill, which may be spent on attack, wound checks, and any three skills after seeing your roll.  You may not spend more than X of these free raises on a single roll.  You may also perform priest rituals at the cost of one free raise per ritual."
+                "Each adventure you get 2X free raises, where X is your precepts skill, which may be spent after seeing your roll on attack, wound checks, and any three skills.  You may not spend more than X of these free raises on a single roll.  You may also perform priest rituals at the cost of one free raise per ritual."
             ),
             4: (
                 "Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  When you would roll fewer than 10 dice on athletics actions (i.e. when you roll (2 * Ring)k(Ring) for physical actions), roll 10 dice instead."
@@ -1562,7 +1462,7 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on attack, damage, and wound checks.",
             2: "You get a free raise on attack rolls.",
             3: (
-                "Each adventure you get 2X free raises, where X is your precepts skill, which may be spent on history, law, precepts, wound checks, and attack after seeing your roll.  You may not spend more than X of these free raises on a single roll.  These free raises may also be spent on action dice at any time, lowering a single die by 5 phases."
+                "Each adventure you get 2X free raises, where X is your precepts skill, which may be spent after seeing your roll on history, law, precepts, wound checks, and attack.  You may not spend more than X of these free raises on a single roll.  These free raises may also be spent on action dice at any time, lowering a single die by 5 phases."
             ),
             4: (
                 "Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  Failed parry attempts do not lower your rolled damage dice."
@@ -1586,7 +1486,7 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on athletics, initiative, and wound checks.",
             2: "You get a free raise on athletics rolls.",
             3: (
-                "Each day you get 4X free raises to spend on athletics after seeing your roll, where X is your precepts skill.  You may not spend more than X of these free raises on a single roll."
+                "Each day you get 4X free raises to spend after seeing your roll on athletics, where X is your precepts skill.  You may not spend more than X of these free raises on a single roll."
             ),
             4: (
                 "Raise your current and maximum Void by 1.  Raising your School Ring now costs 5 fewer XP.  You may reroll any contested roll once after seeing your roll, but you must keep the new roll even if it's lower than the original roll."
@@ -1606,7 +1506,7 @@ _SCHOOLS_LIST: List[School] = [
             "The two allies fighting on your left and right have their TN to "
             "be hit raised by 5."
         ),
-        school_knacks=["double_attack", "feint", "iaijutsu"],
+        school_knacks=["counterattack", "double_attack", "iaijutsu"],
         techniques={
             1: "Roll one extra die on initiative, parry, and wound checks.",
             2: "You get a free raise on parry rolls.",
@@ -1637,7 +1537,7 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on investigation, interrogation, and wound checks.",
             2: "You get a free raise on interrogation rolls.",
             3: (
-                "Each adventure you get 2X free raises, where X is your investigation skill, which may be spent on interrogation, intimidation, law, underworld, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll."
+                "Each adventure you get 2X free raises, where X is your investigation skill, which may be spent after seeing your roll on interrogation, intimidation, law, underworld, attack, and wound checks.  You may not spend more than X of these free raises on a single roll."
             ),
             4: (
                 "Raise your current and maximum Water by 1.  Raising your Water now costs 5 fewer XP.  You automatically know the Void, parry, and phase of the next action of each character during combat, and you know the result of contested rolls made against you out of combat."
@@ -1661,7 +1561,7 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on damage, interrogation, and wound checks.",
             2: "You get a free raise on interrogation rolls.",
             3: (
-                "Each adventure you get 2X free raises, where X is your investigation skill, which may be spent on interrogation, intimidation, law, underworld, attack, and wound checks after seeing your roll.  You may also spend these free raises on damage rolls against targets with the Shadowlands Taint after seeing your roll.  You may not spend more than X of these free raises on a single roll."
+                "Each adventure you get 2X free raises, where X is your investigation skill, which may be spent after seeing your roll on interrogation, intimidation, law, underworld, attack, and wound checks.  You may also spend these free raises after seeing your roll on damage rolls against targets with the Shadowlands Taint.  You may not spend more than X of these free raises on a single roll."
             ),
             4: (
                 "Raise your current and maximum Earth by 1.  Raising your Earth now costs 5 fewer XP.  Roll an extra action die in combat, which may not be used to attack targets without the Shadowlands Taint."
@@ -1685,7 +1585,7 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on tact, manipulation, and wound checks.",
             2: "You get a free raise on manipulation rolls.",
             3: (
-                "Each adventure you get 2X free raises, where X is your tact skill, which may be spent on heraldry, manipulation, sincerity, tact, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll."
+                "Each adventure you get 2X free raises, where X is your tact skill, which may be spent after seeing your roll on heraldry, manipulation, sincerity, tact, attack, and wound checks.  You may not spend more than X of these free raises on a single roll."
             ),
             4: (
                 "Raise your current and maximum Air by 1.  Raising your Air now costs 5 fewer XP.  Once per target per conversation or fight, you get a temporary void point after a successful attack or manipulation roll."
@@ -1709,7 +1609,7 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on counterattack, manipulation, and wound checks.",
             2: "You get a free raise on manipulation rolls.",
             3: (
-                "Each adventure you get 2X free raises, where X is your culture skill, which may be spent on bragging, culture, heraldry, manipulation, counterattack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll."
+                "Each adventure you get 2X free raises, where X is your culture skill, which may be spent after seeing your roll on bragging, culture, heraldry, manipulation, counterattack, and wound checks.  You may not spend more than X of these free raises on a single roll."
             ),
             4: (
                 "Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  When attacking a target who has not attacked you this round, or counterattacking a target who is attacking you for the first time this round, you receive a bonus equal to the current phase."
@@ -1759,7 +1659,7 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on interrogation, sincerity, and wound checks.",
             2: "You get a free raise on interrogation rolls.",
             3: (
-                "Each adventure you get 2X free raises, where X is your sincerity skill, which may be spent on commerce, heraldry, interrogation, sincerity, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll."
+                "Each adventure you get 2X free raises, where X is your sincerity skill, which may be spent after seeing your roll on commerce, heraldry, interrogation, sincerity, attack, and wound checks.  You may not spend more than X of these free raises on a single roll."
             ),
             4: (
                 "Raise your current and maximum Water by 1.  Raising your Water now costs 5 fewer XP.  Your Rank is considered 5.0 higher for the purpose of calculating your stipend."
@@ -1787,15 +1687,13 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on precepts, commerce, and wound checks.",
             2: "You get a free raise on any type of roll.",
             3: (
-                "Each adventure you get 2X free raises, where X is your precepts skill, which may be spent on commerce, heraldry, sincerity, tact, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll."
+                "Each adventure you get 2X free raises, where X is your precepts skill, which may be spent after seeing your roll on commerce, heraldry, sincerity, tact, attack, and wound checks.  You may not spend more than X of these free raises on a single roll."
             ),
-            # 4th Dan intentionally omitted: contested-roll bonuses for higher
-            # skill aren't in our system, and the ring-raise half is shared
-            # with Merchant 4th Dan which we also don't expose here.
+            4: (
+                "Raise your current and maximum Water by 1.  Raising your School Ring now costs 5 fewer XP.  Your skill is considered 2 higher for the purpose of computing free raises for any contested roll you did not initiate."
+            ),
             5: (
-                "When making any TN or contested roll, you receive a bonus "
-                "equal to (X-10) / 5 where X is the TN or result of your "
-                "opponent's contested roll."
+                "When making any TN or contested roll, you receive a bonus equal to (X-10) / 5 where X is the TN or result of your opponent's contested roll."
             ),
         },
     ),
@@ -1813,7 +1711,7 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on attack, sincerity, and wound checks.",
             2: "You get a free raise on acting, sincerity, and sneaking rolls.",
             3: (
-                "Each adventure you get 2X free raises, where X is your sincerity skill, which may be spent on acting, heraldry, sincerity, sneaking, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll."
+                "Each adventure you get 2X free raises, where X is your sincerity skill, which may be spent after seeing your roll on acting, heraldry, sincerity, sneaking, attack, and wound checks.  You may not spend more than X of these free raises on a single roll."
             ),
             4: (
                 "Raise your current and maximum Air by 1.  Raising your Air now costs 5 fewer XP.  Your Rank is considered 5.0 higher for the purpose of calculating your stipend."
@@ -1839,13 +1737,13 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on attack, bragging, and wound checks.",
             2: "You get a free raise on attack rolls.",
             3: (
-                "Each adventure you get 2X free raises, where X is your bragging skill, which may be spent on bragging, culture, heraldry, intimidation, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll."
+                "Each adventure you get 2X free raises, where X is your bragging skill, which may be spent after seeing your roll on bragging, culture, heraldry, intimidation, attack, and wound checks.  You may not spend more than X of these free raises on a single roll."
             ),
             4: (
                 "Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  When making a damage roll for an unparried attack for which you are not keeping extra damage dice, you always roll 10 dice."
             ),
             5: (
-                "Once per conversation or combat round, you can apply an oppose knack or your Special ability an additional time.  You may use your Special Ability after seeing the result of any type of attack roll made against you before damage is rolled, which cancels the attack and uses the attack roll as the parry roll for your own attack."
+                "Once per conversation or combat round, you can apply an oppose knack or your Special ability an additional time.  You may use your Special Ability after seeing the result of any type of attack roll made against you before damage is rolled, which cancels the attack and uses the attack roll as the parry roll used to defend against your attack."
             ),
         },
     ),
@@ -1922,7 +1820,7 @@ _SCHOOLS_LIST: List[School] = [
                 "You get a free raise on precepts and when rolling commune or spellcasting with your School Ring."
             ),
             3: (
-                "Each adventure you get 2X free raises, where X is your precepts skill, which may be spent on bragging, intimidation, precepts, tact, wound checks, and when rolling commune or spellcasting with your School Ring after seeing your roll.  You may not spend more than X of these free raises on a single roll."
+                "Each adventure you get 2X free raises, where X is your precepts skill, which may be spent after seeing your roll on bragging, intimidation, precepts, tact, wound checks, and when rolling commune or spellcasting with your School Ring.  You may not spend more than X of these free raises on a single roll."
             ),
             4: (
                 "Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  You may cast one spell per round as an interrupt action."
@@ -2464,7 +2362,10 @@ SCHOOL_TECHNIQUE_BONUSES: Dict[str, dict] = {
     },
     "shosuro_actor": {
         "first_dan_extra_die": ["attack", "sincerity", "wound_check"],
-        "second_dan_free_raise": "sincerity",
+        # Per the 2nd Dan rules text the free raise applies to acting, sincerity,
+        # and sneaking. The field accepts a list when the bonus covers more than
+        # one roll-type ID; consumers in dice.py normalize str-or-list.
+        "second_dan_free_raise": ["acting", "sincerity", "sneaking"],
         "third_dan": {
             "source_skill": "sincerity",
             "applicable_to": [

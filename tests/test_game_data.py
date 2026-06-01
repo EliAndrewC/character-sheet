@@ -163,16 +163,10 @@ class TestSchools:
             )
 
     def test_all_schools_have_five_techniques(self):
-        # Suzume Overseer is documented to omit its 4th Dan: contested-roll
-        # bonuses for higher skill aren't in our system. Every other school
-        # has all five Dan techniques.
         for sid, school in SCHOOLS.items():
-            if sid == "suzume_overseer":
-                assert set(school.techniques.keys()) == {1, 2, 3, 5}
-            else:
-                assert set(school.techniques.keys()) == {1, 2, 3, 4, 5}, (
-                    f"{school.name} techniques: {list(school.techniques.keys())}"
-                )
+            assert set(school.techniques.keys()) == {1, 2, 3, 4, 5}, (
+                f"{school.name} techniques: {list(school.techniques.keys())}"
+            )
 
     def test_all_school_knacks_exist(self):
         for sid, school in SCHOOLS.items():

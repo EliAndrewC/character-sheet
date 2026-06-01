@@ -2796,7 +2796,7 @@ class TestSecondDanFreeRaise:
         assert f.flat == 5
 
     def test_hiruma_2nd_dan_parry(self):
-        char = self._make("hiruma_scout", ["double_attack", "feint", "iaijutsu"])
+        char = self._make("hiruma_scout", ["counterattack", "double_attack", "iaijutsu"])
         f = build_combat_formula("parry", char)
         assert f.flat == 5
 
@@ -2854,6 +2854,24 @@ class TestSecondDanFreeRaise:
         char = self._make("shosuro_actor", ["athletics", "discern_honor", "pontificate"])
         f = build_skill_formula("sincerity", char)
         assert any("2nd Dan" in b["label"] for b in f.bonuses)
+
+    def test_shosuro_2nd_dan_acting(self):
+        # Shosuro 2nd Dan applies to acting (added to the list, was sincerity-only).
+        char = self._make("shosuro_actor", ["athletics", "discern_honor", "pontificate"])
+        f = build_skill_formula("acting", char)
+        assert any("2nd Dan" in b["label"] for b in f.bonuses)
+
+    def test_shosuro_2nd_dan_sneaking(self):
+        # Shosuro 2nd Dan applies to sneaking (added to the list, was sincerity-only).
+        char = self._make("shosuro_actor", ["athletics", "discern_honor", "pontificate"])
+        f = build_skill_formula("sneaking", char)
+        assert any("2nd Dan" in b["label"] for b in f.bonuses)
+
+    def test_shosuro_2nd_dan_no_bonus_on_other_skills(self):
+        # Shosuro 2nd Dan does NOT apply to skills outside acting/sincerity/sneaking.
+        char = self._make("shosuro_actor", ["athletics", "discern_honor", "pontificate"])
+        f = build_skill_formula("tact", char)
+        assert not any("2nd Dan" in b["label"] for b in f.bonuses)
 
     def test_togashi_2nd_dan_athletics(self):
         char = self._make("togashi_ise_zumi", ["athletics", "conviction", "dragon_tattoo"])
@@ -2937,7 +2955,7 @@ class TestInitiativeAndFlags:
     def test_hiruma_1st_dan_initiative_extra_die(self):
         char = make_character_data(
             school="hiruma_scout",
-            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            knacks={"counterattack": 1, "double_attack": 1, "iaijutsu": 1},
         )
         init = build_initiative_formula(char)
         assert init["rolled"] == 4  # Void(2)+1+1(1st Dan)
@@ -2945,7 +2963,7 @@ class TestInitiativeAndFlags:
     def test_hiruma_4th_dan_flag(self):
         char = make_character_data(
             school="hiruma_scout",
-            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+            knacks={"counterattack": 4, "double_attack": 4, "iaijutsu": 4},
         )
         init = build_initiative_formula(char)
         assert init["hiruma_4th_dan"] is True
@@ -3761,9 +3779,7 @@ class TestSuzumeOverseer:
         assert sch.school_ring == "Water"
         assert sch.category == "court"
         assert sch.school_knacks == ["oppose_social", "pontificate", "worldliness"]
-        # 4th Dan is intentionally omitted.
-        assert 4 not in sch.techniques
-        assert {1, 2, 3, 5} <= set(sch.techniques.keys())
+        assert set(sch.techniques.keys()) == {1, 2, 3, 4, 5}
 
     def test_school_ring_options_water_only(self):
         from app.game_data import SCHOOL_RING_OPTIONS
