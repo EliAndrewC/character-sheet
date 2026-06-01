@@ -19,7 +19,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on initiative, parry, and wound check rolls.
+> Roll one extra die on initiative, parry, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["initiative", "parry", "wound_check"]`
@@ -29,7 +29,7 @@
 
 ## 2nd Dan
 
-> You get a free raise to all parry rolls.
+> You get a free raise on parry rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "parry"`
@@ -39,7 +39,7 @@
 
 ## 3rd Dan
 
-> After making a successful or unsuccessful parry, add 2X to your next attack and damage roll against the attacker or someone adjacent to them, where X is your attack skill.
+> After making a successful or unsuccessful parry, add 2X to your next attack roll for any type of attack and to the damage roll for that attack if it hits, where X is your attack skill.  After your successful or unsuccessful parry resolves, you may immediately counterattack as an interrupt action at the cost of one action die, and this counterattack may be directed at anyone you can hit rather than being limited to the attacker whose strike you parried.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `hiruma_post_parry_bonus: true` and `hiruma_post_parry_amount: 2*attack_skill` in school_abilities.
@@ -54,7 +54,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. After rolling initiative, lower all of your action dice by 2, to a minimum of 1.
+> Raise your current and maximum Air by 1.  Raising your Air now costs 5 fewer XP.  After rolling initiative, lower your action dice by 2, to a minimum of 1.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.

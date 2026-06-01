@@ -24,7 +24,7 @@
 
 ## 1st Dan
 
-> Rolls one extra die on attack, double attack, and wound checks.
+> Roll one extra die on attack, double attack, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "double_attack", "wound_check"]`
@@ -45,7 +45,7 @@
 
 ## 3rd Dan
 
-> After you exceed the TN of a wound check, divide the difference between your wound check and the damage roll by 5, rounding down. You may add that number multiplied by X to any future attack this combat, where X is your attack skill.
+> After you exceed the TN of a wound check, divide the difference between your wound check and the damage roll by 5, rounding down.  You may add that number multiplied by X to any future type of attack roll this combat, where X is your attack skill.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `akodo_wc_attack_bonus: true` and `akodo_attack_skill` in school_abilities.
@@ -62,7 +62,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. You may spend void points after rolling a wound check to receive a free raise for each void point spent.
+> Raise your current and maximum Water by 1.  Raising your Water now costs 5 fewer XP.  You may spend void points after rolling a wound check to receive a free raise for each void point spent.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -74,7 +74,7 @@
 
 ## 5th Dan
 
-> After you take damage, you may spend void points to deal 10 light wounds to the attacker for every void point spent, up to the amount of damage you took.
+> After you take damage, you may spend void points to deal 10 light wounds to the attacker for each void point spent, up to the amount of damage you took.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `akodo_reflect_damage: true` in school_abilities.

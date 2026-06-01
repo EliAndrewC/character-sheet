@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Add your Air to all attack and damage rolls.
+> Add your Air to attack and damage rolls.
 
 **Status:** Fully implemented.
 - `dice.py` adds Air ring value as flat bonus to damage rolls when `school_id == "courtier"`.
@@ -22,7 +22,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on tact, manipulation, and wound check rolls.
+> Roll one extra die on tact, manipulation, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["tact", "manipulation", "wound_check"]`
@@ -42,7 +42,7 @@
 
 ## 3rd Dan
 
-> Each adventure you get 2X free raises, where X is equal to your tact skill, which may be applied to the following rolls: heraldry, manipulation, sincerity, tact, attack, and wound checks. You may not spend more than X of these free raises on a single roll.
+> Each adventure you get 2X free raises, where X is your tact skill, which may be spent on heraldry, manipulation, sincerity, tact, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "tact"`
@@ -57,7 +57,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. Once per target per conversation or fight, you get a temporary void point after a successful attack or manipulation roll.
+> Raise your current and maximum Air by 1.  Raising your Air now costs 5 fewer XP.  Once per target per conversation or fight, you get a temporary void point after a successful attack or manipulation roll.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -72,7 +72,7 @@
 
 ## 5th Dan
 
-> Add your Air to all TN and contested rolls. This stacks with your Special Ability for attack rolls.
+> Add your Air to TN and contested rolls.  This stacks with your Special Ability for attack rolls.
 
 **Status:** Fully implemented.
 - Skills: `app/services/dice.py:build_skill_formula()` adds +Air flat when courtier and dan >= 5.

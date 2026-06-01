@@ -21,7 +21,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on precepts and any two rolls of your choice.
+> Roll one extra die on precepts and any two rolls.
 
 **Status:** Fully implemented via technique_choices.
 - `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES` (choices are player-selected, not hardcoded).
@@ -34,7 +34,7 @@
 
 ## 2nd Dan
 
-> You get a free raise on any type of roll of your choice.
+> You get a free raise on any type of roll.
 
 **Status:** Fully implemented via technique_choices.
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES` (choice is player-selected, not hardcoded).
@@ -47,7 +47,7 @@
 
 ## 3rd Dan
 
-> After seeing the result of any TN or contested skill roll, you may spend a void point to subtract Xk1 from the roll, where X is equal to your tact skill. You know the result of all TN and contested rolls except sincerity and interrogation.
+> After seeing the result of any TN or contested skill roll, you may spend a void point to subtract Xk1 from the roll, where X is your tact skill.  You know the result of TN and contested rolls except sincerity and interrogation.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `ide_subtract_roll: true` and `ide_subtract_x: tact_skill` in school_abilities.
@@ -64,7 +64,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum in any non-Void Ring by 1. Raising that Ring now costs 5 fewer XP. You regain an extra void point every night.
+> Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  You regain an extra void point every night.
 
 **Status:** Fully implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.

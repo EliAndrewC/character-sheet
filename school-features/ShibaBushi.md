@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> You may parry as an interrupt action by spending your lowest 1 action die, and you may parry attacks directed at other characters with no penalty.
+> You may parry as an interrupt action by spending your lowest action die, and you may parry attacks directed at other characters with no penalty.
 
 **Status:** Out of scope - requires combat-phase tracking (interrupt parry spending action die) and positional tracking (parry for others).
 
@@ -19,7 +19,7 @@
 
 ## 1st Dan
 
-> Roll an extra die on double attack, parry, and wound check rolls.
+> Roll one extra die on double attack, parry, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["double_attack", "parry", "wound_check"]`
@@ -40,7 +40,7 @@
 
 ## 3rd Dan
 
-> Your successful or unsuccessful parry rolls deal (2X)k1 damage, where X is equal to your attack skill. You don't roll extra damage dice from your Fire or from exceeding the TN.
+> Your successful or unsuccessful parry rolls deal (2X)k1 damage, where X is your attack skill.  You don't roll extra damage dice from your Fire or from exceeding the TN.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `shiba_parry_damage: true` and `shiba_parry_damage_rolled: 2*attack_skill`. Client: `sheet.html` shows "Roll Parry Damage" button after parry rolls. Damage = (2*attack_skill)k1, no ring/TN bonus.
@@ -54,7 +54,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Air by 1. Raising your Air now costs 5 fewer XP. You roll an extra 3k1 on wound checks.
+> Raise your current and maximum Air by 1.  Raising your Air now costs 5 fewer XP.  You roll an extra 3k1 on wound checks.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Air, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -64,7 +64,7 @@
 
 ## 5th Dan
 
-> After you successfully parry, the TN to hit the parried opponent on the next attack directed at them this combat is lowered by the amount by which your parry roll exceeded its TN. This can lower the TN to a negative number.
+> After you successfully parry, the TN to hit the parried attacker on the next attack directed at them this combat is lowered by the amount by which your parry roll exceeded its TN.  This can lower the TN to a negative number.
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `shiba_parry_lower_tn: true`. Client shows informational note after parry rolls about lowering the attacker's TN by the parry excess.

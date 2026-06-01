@@ -22,7 +22,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on double attack, iaijutsu, and wound check rolls.
+> Roll one extra die on double attack, iaijutsu, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["double_attack", "iaijutsu", "wound_check"]`
@@ -43,7 +43,7 @@
 
 ## 3rd Dan
 
-> When you spend a void point, you may add 3X to any future wound check this combat after seeing the roll, where X is your attack skill.
+> When you spend a void point, you may add 3X to any future wound check this combat after seeing your roll, where X is your attack skill.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `matsu_vp_wc_bonus: true` and `matsu_vp_wc_amount: 3*attack_skill` in school_abilities.
@@ -58,7 +58,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Fire by 1. Raising your Fire now costs 5 fewer XP. When you miss the TN on a double attack roll by less than 20, you are still considered to have hit, but you deal no extra damage.
+> Raise your current and maximum Fire by 1.  Raising your Fire now costs 5 fewer XP.  When you miss the TN on a double attack roll by less than 20, you are still considered to have hit, but you deal no extra damage.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -70,7 +70,7 @@
 
 ## 5th Dan
 
-> After you deal light wounds which result in the defender taking one or more serious wounds, their light wound total is reset to 15 instead of 0.
+> After you deal light wounds which result in the target taking one or more serious wounds, their light wound total is reset to 15 instead of 0.
 
 **Status:** Fully implemented (display note).
 - Server: `app/routes/pages.py` passes `matsu_lw_reset_15: true` in school_abilities.

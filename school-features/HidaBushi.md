@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> You may counterattack as an interrupt action by spending only 1 action die, but if you do so then the attacker gets a free raise on their attack roll.
+> You may counterattack as an interrupt action by spending only one action die, but if you do so then the attacker gets a free raise on their attack roll.
 
 **Status:** Out of scope - requires combat-phase tracking (interrupt counterattack costing 1 action die).
 
@@ -19,7 +19,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on attack, counterattack, and wound check rolls.
+> Roll one extra die on attack, counterattack, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "counterattack", "wound_check"]`
@@ -30,7 +30,7 @@
 
 ## 2nd Dan
 
-> You get a free raise on all counterattack rolls.
+> You get a free raise on counterattack rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "counterattack"`
@@ -40,7 +40,7 @@
 
 ## 3rd Dan
 
-> You may re-roll 2X dice on each counterattack roll or X dice on any other attack roll, where X is your attack skill. When impaired, your number of extra dice on these rolls is divided in half (round up), but you reroll 10s on these rolls despite being impaired.
+> You may re-roll 2X dice on each counterattack roll or X dice on any other type of attack roll, where X is your attack skill.  When impaired, your number of extra dice on these rolls is divided in half (rounded up), but you reroll 10s on these rolls despite being impaired.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `hida_reroll: true` and `hida_reroll_x: attack_skill`. Client: after attack rolls, shows dice selection UI pre-selecting lowest dice <=7. User can toggle selections before confirming reroll. For counterattack: 2X dice. For other attacks: X dice. When impaired: count halved (round up) but 10s rerolled on these dice.
@@ -54,7 +54,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Water by 1. Raising your Water now costs 5 fewer XP. Instead of making a wound check, you may choose to take 2 serious wounds to reduce your light wounds to 0. You may not do this during the iaijutsu phase of a duel.
+> Raise your current and maximum Water by 1.  Raising your Water now costs 5 fewer XP.  Instead of making a wound check, you may choose to take 2 serious wounds to reduce your light wounds to 0.  You may not do this during the iaijutsu phase of a duel.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Water, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -66,7 +66,7 @@
 
 ## 5th Dan
 
-> When you counterattack successfully, note the quantity X by which the counterattack roll exceeded its TN. Add X to your wound check on the damage from the attack you counterattacked. You may choose to counterattack after seeing an opponent's damage roll, but that roll goes through even if your counterattack impairs or kills the opponent.
+> When you counterattack successfully, note the quantity X by which the counterattack roll exceeded its TN.  Add X to your wound check on the damage from the attack you counterattacked.  You may choose to counterattack after seeing the attacker's damage roll, but that roll goes through even if your counterattack impairs or kills the attacker.
 
 **Status:** Partially implemented. The first sentence (banking counterattack excess for wound check bonus) is fully implemented. The second sentence (reactive counterattack after seeing damage) is out of scope - requires combat-phase tracking.
 

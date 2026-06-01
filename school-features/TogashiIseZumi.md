@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Roll either 1 or 3 extra action dice at the beginning of each combat round. If you roll 1 die, it may only be spent on athletics actions; if you roll 3 dice, all of your action dice may only be spent on athletics actions.
+> Roll either 1 or 3 extra action dice at the beginning of each combat round.  If you roll 1 die, it may only be spent on athletics actions; if you roll 3 dice, all of your action dice may only be spent on athletics actions.
 
 **Status:** Implemented at the initiative roll level. The player chooses which variant each round; action-die athletics-only restrictions are tracked at the table (not by the app).
 
@@ -22,7 +22,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on athletics, wound check, and initiative rolls.
+> Roll one extra die on athletics, initiative, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["athletics", "wound_check", "initiative"]`
@@ -42,7 +42,7 @@
 
 ## 3rd Dan
 
-> Each day you get 4X free raises which may be applied to athletics rolls, where X is your precepts skill. You may not spend more than X of these free raises on a single roll.
+> Each day you get 4X free raises to spend on athletics after seeing your roll, where X is your precepts skill.  You may not spend more than X of these free raises on a single roll.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `togashi_daily_athletics_raises: true`, `togashi_daily_raises_max: 4*precepts`, and `togashi_daily_raises_per_roll: precepts`. Client: shows "Spend Athletics Raise (+5)" button after athletics rolls with per-roll cap of X.
@@ -55,7 +55,7 @@
 
 ## 4th Dan
 
-> Raise the current and maximum rank of any Ring by 1. Raising that Ring now costs 5 fewer XP. You may reroll any contested roll once after seeing the result.
+> Raise your current and maximum Void by 1.  Raising your School Ring now costs 5 fewer XP.  You may reroll any contested roll once after seeing your roll, but you must keep the new roll even if it's lower than the original roll.
 
 **Status:** Fully implemented.
 - Ring raise (+1 Void, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -70,7 +70,7 @@
 
 ## 5th Dan
 
-> At any time, you may spend 1 void point to heal 2 serious wounds.
+> At any time, you may spend one void point to heal 2 serious wounds.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `togashi_heal_sw: true` in school_abilities config when togashi_ise_zumi and dan >= 5.

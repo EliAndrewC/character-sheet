@@ -21,7 +21,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on attack, damage, and wound check rolls.
+> Roll one extra die on attack, damage, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "damage", "wound_check"]`
@@ -31,7 +31,7 @@
 
 ## 2nd Dan
 
-> You get a free raise on all attack rolls.
+> You get a free raise on attack rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "attack"`
@@ -41,7 +41,7 @@
 
 ## 3rd Dan
 
-> Each adventure you get 2X free raises, where X is equal to your precepts skill, which may be applied to the following rolls: history, law, precepts, wound checks, and attack. You may not spend more than X of these free raises on a single roll. These free raises may also be applied to action dice at any time, lowering a single die by 5 phases.
+> Each adventure you get 2X free raises, where X is your precepts skill, which may be spent on history, law, precepts, wound checks, and attack after seeing your roll.  You may not spend more than X of these free raises on a single roll.  These free raises may also be spent on action dice at any time, lowering a single die by 5 phases.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "precepts"`
@@ -60,7 +60,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum rank in a non-Void ring of your choice by 1. Raising this Ring now costs 5 fewer XP. Failed parry attempts do not lower your rolled damage dice.
+> Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  Failed parry attempts do not lower your rolled damage dice.
 
 **Status:** Fully implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
@@ -72,6 +72,6 @@
 
 ## 5th Dan
 
-> Once per round after you have been attacked but before damage is rolled, you may spend an action die from any phase to attack your attacker. If your attack roll is at least as high as your attacker's then the attack against you is canceled; your attack continues and you hit/miss and roll damage as normal.
+> Once per round after you have been attacked but before damage is rolled, you may spend an action die from any phase to attack your attacker.  If your attack roll is at least as high as your attacker's then the attack against you is canceled; your attack continues and you hit/miss and roll damage as normal.
 
 **Status:** Out of scope - requires reactive counter-attack mechanics (combat-phase tracking).

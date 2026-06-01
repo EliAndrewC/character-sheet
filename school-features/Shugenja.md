@@ -11,7 +11,7 @@
 
 ## Special Ability
 
-> Your maximum number of void points is equal to your highest ring plus your school rank. You regain a number of void points equal to your lowest Ring after a full night's rest, and one void point per 2 hours for a partial night. However, you may not spend more void points on any one roll than your lowest Ring minus 1.
+> Your maximum number of void points is equal to your highest Ring plus your school rank.  You regain a number of void points equal to your lowest Ring after a full night's rest, and one void point per 2 hours for a partial night.  However, you may not spend more void points on any one roll than your lowest Ring minus 1.
 
 **Status:** Fully implemented (same as Isawa Ishi). Spellcasting UI and enabling the school in the dropdown are deferred until the school is enabled.
 - VP max (highest ring + school rank) is implemented in `game_data.py` via `void_points_max_shugenja()`. `app/routes/pages.py` uses `void_points_max_shugenja()` for Shugenja VP max display.
@@ -28,7 +28,7 @@
 
 ## 1st Dan
 
-> Roll one extra die when rolling precepts or with commune and spellcasting for your chosen element.
+> Roll one extra die on precepts and when rolling commune or spellcasting with your School Ring.
 
 **Status:** Fully implemented via technique_choices.
 - `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES` (choices are player-selected, not hardcoded).
@@ -43,7 +43,7 @@
 
 ## 2nd Dan
 
-> You get a free raise when rolling precepts or with commune and spellcasting for your chosen element.
+> You get a free raise on precepts and when rolling commune or spellcasting with your School Ring.
 
 **Status:** Fully implemented via technique_choices.
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES` (choice is player-selected, not hardcoded).
@@ -58,7 +58,7 @@
 
 ## 3rd Dan
 
-> Each adventure you get 2X free raises, where X is equal to your precepts skill, which may be applied to the following rolls: bragging, intimidation, precepts, tact, wound checks, and spellcasting for your chosen element. You may not spend more than X of these free raises on any single roll.
+> Each adventure you get 2X free raises, where X is your precepts skill, which may be spent on bragging, intimidation, precepts, tact, wound checks, and when rolling commune or spellcasting with your School Ring after seeing your roll.  You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`. Element restriction on spellcasting free raises is deferred until the school is enabled.
 - `source_skill: "precepts"`
@@ -74,7 +74,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Ring of your chosen element by 1. Raising that Ring now costs 5 fewer XP. You may cast one spell per round as an interrupt action.
+> Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  You may cast one spell per round as an interrupt action.
 
 **Status:** Partially implemented. Ring raise is fully implemented; "cast one spell per round as an interrupt action" is out of scope (combat-phase tracking).
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring (which represents the chosen element).
@@ -83,7 +83,7 @@
 
 ## 5th Dan
 
-> Your non-Void rings are all considered 1 higher when rolling commune and spellcasting.
+> Your non-Void Rings are considered 1 higher when rolling commune and spellcasting.
 
 **Status:** Fully implemented.
 - Server: `app/services/dice.py:build_knack_formula()` adds +1 to non-Void ring values when computing commune and spellcasting formulas for shugenja at 5th Dan.

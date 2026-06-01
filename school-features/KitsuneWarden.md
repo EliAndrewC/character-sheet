@@ -68,7 +68,7 @@ The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(k
 
 ## 1st Dan
 
-> Roll one extra die on three rolls of your choice.
+> Roll one extra die on any three rolls.
 
 **Status:** Fully implemented.
 
@@ -83,7 +83,7 @@ The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(k
 
 ## 2nd Dan
 
-> You get a free raise on a type of roll of your choice.
+> You get a free raise on any type of roll.
 
 **Status:** Fully implemented (reuses the existing flexible-2nd-Dan wiring).
 
@@ -97,7 +97,7 @@ The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(k
 
 ## 3rd Dan
 
-> Each adventure you get 2X free raises, where X is equal to your precepts skill, which may be applied to the following rolls: attack, wound checks, and three skills of your choice. You may not spend more than X of these free raises on a single roll. You may also perform priest rituals at the cost of one free raise per ritual.
+> Each adventure you get 2X free raises, where X is your precepts skill, which may be spent on attack, wound checks, and any three skills after seeing your roll.  You may not spend more than X of these free raises on a single roll.  You may also perform priest rituals at the cost of one free raise per ritual.
 
 **Status:** Fully implemented.
 
@@ -113,7 +113,7 @@ The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(k
 
 ## 4th Dan
 
-> Raise your current and maximum School Ring by 1. Raising your School Ring now costs 5 fewer XP. When you would roll fewer than 10 dice on athletics actions (i.e. when you roll (2 * Ring)k(Ring) for physical actions), roll 10 dice instead.
+> Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  When you would roll fewer than 10 dice on athletics actions (i.e. when you roll (2 * Ring)k(Ring) for physical actions), roll 10 dice instead.
 
 **Status:** Fully implemented.
 
@@ -126,7 +126,7 @@ The predeclared swap entry calls a new 6-arg form of `executeRollWithExtraFlat(k
 
 ## 5th Dan
 
-> Select a spell from the shugenja spell list from your School Ring's element. Gain a modified version of that spell.
+> Select a spell from the shugenja spell list from your School Ring's element.  Gain a modified version of that spell.
 
 **Status:** OUT OF SCOPE - spell list not modeled in the character sheet. Rules text only; no UI affordance.
 

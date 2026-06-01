@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Your maximum number of void points is equal to your highest ring plus your school rank. After a full night's rest, your Absorb Void school knack resets to full usage and you regain spent void points equal to your lowest Ring. A partial night's rest restores 1 spent void point and 1 use of Absorb Void per 90 minutes of sleep, up to the per-night total you can regain. However, you may not spend more void points on any one roll than your lowest Ring minus 1.
+> Your maximum number of void points is equal to your highest Ring plus your school rank.  After a full night's rest, your Absorb Void school knack resets to full usage and you regain spent void points equal to your lowest Ring.  A partial night's rest restores 1 spent void point and 1 use of Absorb Void per 90 minutes of sleep, up to your normal per-night totals.  However, you may not spend more void points on a single roll than your lowest Ring minus 1.
 
 **Status:** Fully implemented.
 - VP max (highest ring + school rank) is implemented in `game_data.py` via `void_points_max_shugenja()`. `app/routes/pages.py` uses `void_points_max_shugenja()` for Isawa Ishi VP max display.
@@ -27,7 +27,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on precepts and any two types of rolls of your choice.
+> Roll one extra die on precepts and any two types of rolls.
 
 **Status:** Fully implemented.
 - `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES`. The two player-chosen rolls are stored in `technique_choices.first_dan_choices` (List[str], length up to 2). Eligible roll types match the Kitsune Warden 1st Dan picker: every skill (except precepts, which is auto-applied), every rollable school/foreign knack, plus attack/damage/initiative/parry/wound_check.
@@ -40,7 +40,7 @@
 
 ## 2nd Dan
 
-> You get a free raise on all rolls for any skill of your choice.
+> You get a free raise on rolls for any skill.
 
 **Status:** Fully implemented via technique_choices.
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES` (choice is player-selected, not hardcoded).
@@ -53,7 +53,7 @@
 
 ## 3rd Dan
 
-> After another character makes a roll for which void points may be spent, you may spend one void point to roll Xk1 and add the result to their total, where X is your precepts skill. You may only do this once per roll.
+> After another character makes a roll for which void points may be spent, you may spend one void point to roll Xk1 and add the result to their total, where X is your precepts skill.  You may only do this once per roll.
 
 **Status:** Implemented on the Isawa's side; the cross-sheet auto-add stays manual.
 - `school_abilities` exposes `ishi_add_roll` (true when `school == "isawa_ishi"` and Dan >= 3) and `ishi_add_x` (= precepts skill rank) in `app/routes/pages.py`.
@@ -70,7 +70,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Void by 1. Raising your Void now costs 5 fewer XP. Characters opposing you in contested rolls may not spend void points. If someone is opposing both you and someone else, they may spend void points, but the bonus will only count against whoever else they're opposing.
+> Raise your current and maximum Void by 1.  Raising your Void now costs 5 fewer XP.  Characters opposing you in contested rolls may not spend void points.  If someone is opposing both you and someone else, they may spend void points, but the bonus will only count against other characters opposing them.
 
 **Status:** Partially implemented. Ring raise is fully implemented; "opponents can't spend VP in contested rolls" is out of scope (requires tracking opponent VP spending).
 - Ring raise (+1 Void, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
@@ -79,6 +79,6 @@
 
 ## 5th Dan
 
-> You may completely negate another character's school or profession for the remainder of one conversation or fight. Against characters with a school, you must spend void points equal to twice their school rank. Against characters with no school, you must spend void points equal to their experience divided by 50, rounded down. This is instantaneous and does not require spending an action.
+> You may completely negate another character's school or profession for the remainder of a conversation or fight.  Against characters with a school, you must spend void points equal to twice their school rank.  Against characters with no school, you must spend void points equal to their experience divided by 50 (rounded down).  This is instantaneous and does not require spending an action.
 
 **Status:** Out of scope - requires targeting another character to negate their school (cross-character debuff mechanic).

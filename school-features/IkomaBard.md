@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> Once per round before making an attack roll against an opponent, you may force the opponent to spend their next available action die to attempt to parry your attack. The opponent does not get a free raise for pre-declaring the parry.
+> Once per round before making an attack roll against a target, you may force the target to spend their next available action die to attempt to parry your attack.  The target does not get a free raise for pre-declaring the parry.
 
 **Status:** Out of scope - requires forcing opponent to spend action die (combat-phase tracking affecting opponent).
 
@@ -19,7 +19,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on attack, bragging, and wound check rolls.
+> Roll one extra die on attack, bragging, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["attack", "bragging", "wound_check"]`
@@ -39,7 +39,7 @@
 
 ## 3rd Dan
 
-> Each adventure you get 2X free raises, where X is equal to your bragging skill, which may be applied to the following rolls: bragging, culture, heraldry, intimidation, attack, and wound checks. You may not spend more than X of these free raises on a single roll.
+> Each adventure you get 2X free raises, where X is your bragging skill, which may be spent on bragging, culture, heraldry, intimidation, attack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "bragging"`
@@ -60,7 +60,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum in any non-Void Ring by 1. Raising that Ring now costs 5 fewer XP. When making a damage roll for an unparried attack for which you are not keeping extra damage dice, you always roll 10 dice.
+> Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  When making a damage roll for an unparried attack for which you are not keeping extra damage dice, you always roll 10 dice.
 
 **Status:** Fully implemented.
 - Ring raise (+1 to the chosen non-Void ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "any non-Void", the 4th Dan ring raise applies to the chosen school ring.
@@ -73,6 +73,6 @@
 
 ## 5th Dan
 
-> Once per conversation or combat round, you can apply an oppose knack or your Special ability an additional time. You may choose to use your Special Ability after an opponent has made an attack roll against you, in which case their attack is canceled and their attack roll will be used as their parry roll.
+> Once per conversation or combat round, you can apply an oppose knack or your Special ability an additional time.  You may use your Special Ability after seeing the result of any type of attack roll made against you before damage is rolled, which cancels the attack and uses the attack roll as the parry roll for your own attack.
 
 **Status:** Out of scope - requires reactive cancellation of opponent's attack roll (combat-phase tracking).

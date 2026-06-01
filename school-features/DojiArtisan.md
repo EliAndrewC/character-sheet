@@ -9,7 +9,7 @@
 
 ## Special Ability
 
-> You may spend a void point to counterattack as an interrupt action at the cost of one actions die; this void point still gives your counterattack +1k1. While counterattacking, you receive a bonus equal to the attacker's roll divided by 5, rounded down.
+> You may spend a void point to counterattack as an interrupt action at the cost of one action die; this void point still gives your counterattack +1k1.  Your counterattack rolls receive a bonus equal to the attacker's roll divided by 5 (rounded down).
 
 **Status:** Out of scope - requires combat-phase tracking (interrupt counterattack with VP cost and attacker-roll-based bonus).
 
@@ -19,7 +19,7 @@
 
 ## 1st Dan
 
-> Roll one extra die on counterattack, manipulation, and wound check rolls.
+> Roll one extra die on counterattack, manipulation, and wound checks.
 
 **Status:** Fully implemented via `SCHOOL_TECHNIQUE_BONUSES`.
 - `first_dan_extra_die: ["counterattack", "manipulation", "wound_check"]`
@@ -29,7 +29,7 @@
 
 ## 2nd Dan
 
-> You get a free raise on manipulation.
+> You get a free raise on manipulation rolls.
 
 **Status:** Fully implemented.
 - `second_dan_free_raise: "manipulation"`
@@ -39,7 +39,7 @@
 
 ## 3rd Dan
 
-> Each adventure you get 2X free raises, where X is equal to your culture skill, which may be applied to the following rolls: bragging, culture, heraldry, manipulation, counterattack, and wound checks. You may not spend more than X of these free raises on a single roll.
+> Each adventure you get 2X free raises, where X is your culture skill, which may be spent on bragging, culture, heraldry, manipulation, counterattack, and wound checks after seeing your roll.  You may not spend more than X of these free raises on a single roll.
 
 **Status:** STANDARD 3rd Dan - Fully implemented via `third_dan` dict in `SCHOOL_TECHNIQUE_BONUSES`.
 - `source_skill: "culture"`
@@ -52,7 +52,7 @@
 
 ## 4th Dan
 
-> Raise your current and maximum Air or Water by 1. Raising that ring now costs 5 fewer XP. When attacking a target who has not attacked you this round, you receive a bonus equal to the current phase.
+> Raise your current and maximum School Ring by 1.  Raising your School Ring now costs 5 fewer XP.  When attacking a target who has not attacked you this round, or counterattacking a target who is attacking you for the first time this round, you receive a bonus equal to the current phase.
 
 **Status:** Fully implemented.
 - Ring raise (+1 to the chosen school ring, cost discount, max increase to 7) is fully implemented. Since the school ring is "Air or Water", the 4th Dan ring raise applies to whichever ring was chosen.
@@ -62,7 +62,7 @@
 
 ## 5th Dan
 
-> When making any TN or contested roll, you receive a bonus equal to (X-10) / 5 where X is the TN or result of your opponent's contested roll.
+> Add (X-10) / 5 to TN and contested rolls, where X is the TN or your opponent's roll.
 
 **Status:** Fully implemented with three-tier skill grouping and auto-apply on combat/wound checks.
 
