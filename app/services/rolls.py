@@ -205,7 +205,9 @@ def compute_skill_roll(
 
     # 2nd Dan: free raise = +5
     if dan >= 2 and bonuses.get("second_dan_free_raise"):
-        if skill_id == bonuses["second_dan_free_raise"]:
+        sd = bonuses["second_dan_free_raise"]
+        sd_list = sd if isinstance(sd, list) else [sd]
+        if skill_id in sd_list:
             result.flat_bonus += FREE_RAISE_VALUE
             bonus_parts.append((FREE_RAISE_VALUE, "+5 from 2nd Dan"))
 

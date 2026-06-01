@@ -275,7 +275,9 @@ def _apply_school_technique_bonus(
         formula.rolled += 1
 
     if dan >= 2 and bonuses_def.get("second_dan_free_raise"):
-        if skill_or_knack_id == bonuses_def["second_dan_free_raise"]:
+        sd_targets = bonuses_def["second_dan_free_raise"]
+        sd_list = sd_targets if isinstance(sd_targets, list) else [sd_targets]
+        if skill_or_knack_id in sd_list:
             _add_flat_bonus(formula, "2nd Dan technique", FREE_RAISE_VALUE)
 
     # Flexible 2nd Dan: player-chosen skill (Ide, Isawa Ishi, Shugenja)
@@ -1032,7 +1034,9 @@ def build_wound_check_formula(
 
     # 2nd Dan: free raise (+5) on wound_check
     if dan >= 2 and bonuses.get("second_dan_free_raise"):
-        if bonuses["second_dan_free_raise"] == "wound_check":
+        sd = bonuses["second_dan_free_raise"]
+        sd_list = sd if isinstance(sd, list) else [sd]
+        if "wound_check" in sd_list:
             flat += FREE_RAISE_VALUE
             bonus_sources.append("+5 from 2nd Dan")
 

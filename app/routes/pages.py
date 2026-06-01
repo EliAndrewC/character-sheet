@@ -594,6 +594,12 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "isawa_tn_trade_bonus": 3 * attack_skill if character.school == "isawa_duelist" and dan >= 3 else 0,
         # Otaku 4th Dan: lunge always rolls extra damage die even if parried
         "otaku_lunge_extra_die": character.school == "otaku_bushi" and dan >= 4,
+        # Otaku 4th Dan: after lunging, the usual lunge penalty (attackers
+        # gain a free raise on their next attack against the lunger this
+        # round) is suppressed. Display note only — the lunge attacker-raise
+        # rule isn't itself mechanized, so we just remind the player /
+        # opposing GM.
+        "otaku_no_lunge_attacker_raise": character.school == "otaku_bushi" and dan >= 4,
         # Brotherhood 3rd Dan: adventure raises can lower action die by 5
         "brotherhood_lower_action_die": character.school == "brotherhood_of_shinsei_monk" and dan >= 3,
         # Shosuro 5th Dan: add lowest 3 dice to result on any non-initiative roll
@@ -656,11 +662,19 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "shinjo_bank_parry_excess": character.school == "shinjo_bushi" and dan >= 5,
         # Bayushi Special: +1k1 per VP spent on attack damage
         "bayushi_vp_damage": character.school == "bayushi_bushi",
-        # Feint knack: 1 temp VP on successful feint (non-Akodo feint schools)
-        "feint_temp_vp": character.school in ("bayushi_bushi", "yogo_warden", "hiruma_scout", "ide_diplomat"),
+        # Feint knack: 1 temp VP on successful feint (non-Akodo feint schools).
+        # Schools listed here have feint in their school_knacks; if you add or
+        # remove feint from a school's knack list in game_data.py, update this
+        # set too.
+        "feint_temp_vp": character.school in ("bayushi_bushi", "yogo_warden", "ide_diplomat"),
         # Hiruma 3rd Dan: bank +2*attack for next attack and damage after parry
         "hiruma_post_parry_bonus": character.school == "hiruma_scout" and dan >= 3,
         "hiruma_post_parry_amount": 2 * attack_skill if character.school == "hiruma_scout" and dan >= 3 else 0,
+        # Hiruma 3rd Dan: post-parry free interrupt counterattack (display note).
+        # The counterattack may target anyone the Hiruma can hit, not just the
+        # parried attacker. Not mechanized — it requires combat-phase tracking,
+        # so the player executes it manually.
+        "hiruma_post_parry_interrupt_counterattack": character.school == "hiruma_scout" and dan >= 3,
         # Akodo 3rd Dan: bank wound check excess * attack for attack bonus
         "akodo_wc_attack_bonus": character.school == "akodo_bushi" and dan >= 3,
         "akodo_attack_skill": attack_skill if character.school == "akodo_bushi" and dan >= 3 else 0,

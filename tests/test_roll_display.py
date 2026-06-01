@@ -535,6 +535,21 @@ class TestSecondDanBonus:
         assert result.flat_bonus >= 5
         assert "2nd Dan" in result.tooltip
 
+    @pytest.mark.parametrize("skill_id", ["acting", "sincerity", "sneaking"])
+    def test_shosuro_actor_free_raise_on_each_listed_skill(self, skill_id):
+        """Shosuro Actor 2nd Dan grants +5 on every skill in the list (acting,
+        sincerity, sneaking)."""
+        data = make_character_data(
+            school="shosuro_actor",
+            school_ring_choice="Air",
+            rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+            skills={"acting": 2, "sincerity": 2, "sneaking": 2},
+            knacks={"athletics": 2, "discern_honor": 2, "pontificate": 2},
+        )
+        result = compute_skill_roll(skill_id, data)
+        assert result.flat_bonus >= 5
+        assert "2nd Dan" in result.tooltip
+
     def test_second_dan_not_reached(self):
         """If Dan < 2, no 2nd Dan bonus."""
         data = make_character_data(

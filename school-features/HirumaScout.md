@@ -3,7 +3,7 @@
 **School ID:** `hiruma_scout`
 **Category:** Investigator
 **School Ring:** Air - Confirmed correct.
-**School Knacks:** double_attack, feint, iaijutsu - All present and rollable. Feint knack means school is in `SCHOOLS_WITH_TEMP_VOID`.
+**School Knacks:** counterattack, double_attack, iaijutsu - All present and rollable. (Was previously listed as double_attack, feint, iaijutsu in `game_data.py`; corrected to match canonical `rules/04-schools.md` in the same round as the canonical-text sync. Hiruma no longer counts as a "feint school" so `feint_temp_vp` is no longer set for them, and they're no longer added to `SCHOOLS_WITH_TEMP_VOID` via the feint path — and the Hiruma Special Ability text doesn't mention temp VP either, so they're correctly out of that set now.)
 
 ---
 
@@ -44,11 +44,13 @@
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `hiruma_post_parry_bonus: true` and `hiruma_post_parry_amount: 2*attack_skill` in school_abilities.
 - Client: auto-banks 2*attack_skill after any parry roll, applies as flat bonus to both attack roll AND damage roll on next attack via `rollAttack()` and `atkComputeDamage()`.
+- The damage bonus is naturally gated on the attack hitting because damage is only rolled on hits ("to the damage roll for that attack if it hits").
+- The free interrupt counterattack option ("After your successful or unsuccessful parry resolves, you may immediately counterattack...") is surfaced as a display note in `modal_result.html` via the `hiruma_post_parry_interrupt_counterattack` school_abilities flag. Not mechanized — it requires combat-phase tracking, so the player executes the counterattack manually.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank.
 - The bonus is a flat +2X added to the next attack AND damage roll.
-- "Against the attacker or someone adjacent to them" means the bonus applies to the next attack against the original attacker or their neighbors.
+- The bonus applies only to the attack against the parried attacker (the "or someone adjacent" language was removed from the canonical rules).
 
 ---
 

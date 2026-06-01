@@ -1285,8 +1285,8 @@ class TestViewCharacter:
         resp = client.get(f"/characters/{cid}")
         assert resp.status_code == 200
         assert "shosuro_flats" in resp.text
-        # The 5th Dan rule text should now be the new wording
-        assert "After making any non-initiative roll" in resp.text
+        # The 5th Dan rule text matches the canonical wording in 04-schools.md
+        assert "Add your lowest three dice to non-initiative rolls" in resp.text
 
 
 class TestPerAdventureTracking:
@@ -5097,7 +5097,7 @@ class TestInitiativeBoxDisplay:
         cid = _seed_character(
             client, name="HirumaInit", school="hiruma_scout",
             school_ring_choice="Air",
-            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            knacks={"counterattack": 1, "double_attack": 1, "iaijutsu": 1},
         )
         resp = client.get(f"/characters/{cid}")
         assert "4 dice, keep 2" in resp.text
@@ -6801,3 +6801,65 @@ class TestMoneyDeleteEndpoint:
             f"/characters/{cid}/money/delete", json=["x"]
         )
         assert resp.status_code == 400
+
+
+class TestNewMechanicalSchoolAbilityFlags:
+    """Regression tests for school-abilities flags added in the round of
+    mechanical-rules updates from canonical rules sync."""
+
+    def _school_abilities(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(
+            r'id="school-abilities">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        return json.loads(m.group(1))
+
+    def test_hiruma_3rd_dan_sets_interrupt_counterattack_flag(self, client):
+        # Hiruma 3rd Dan: the canonical rules text gained a free interrupt
+        # counterattack option after parry, surfaced as a display note.
+        cid = _seed_character(
+            client, name="Hiruma3D", school="hiruma_scout",
+            school_ring_choice="Air", ring_air=3,
+            knacks={"counterattack": 3, "double_attack": 3, "iaijutsu": 3},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("hiruma_post_parry_interrupt_counterattack") is True
+
+    def test_hiruma_2nd_dan_no_interrupt_counterattack_flag(self, client):
+        cid = _seed_character(
+            client, name="Hiruma2D", school="hiruma_scout",
+            school_ring_choice="Air", ring_air=3,
+            knacks={"counterattack": 2, "double_attack": 2, "iaijutsu": 2},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("hiruma_post_parry_interrupt_counterattack") is False
+
+    def test_otaku_4th_dan_sets_no_lunge_attacker_raise_flag(self, client):
+        # Otaku 4th Dan suppresses the standard lunge attacker free-raise
+        # penalty against the lunger.
+        cid = _seed_character(
+            client, name="Otaku4D", school="otaku_bushi",
+            knacks={"double_attack": 4, "iaijutsu": 4, "lunge": 4},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("otaku_no_lunge_attacker_raise") is True
+
+    def test_otaku_3rd_dan_no_lunge_attacker_raise_flag(self, client):
+        cid = _seed_character(
+            client, name="Otaku3D", school="otaku_bushi",
+            knacks={"double_attack": 3, "iaijutsu": 3, "lunge": 3},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("otaku_no_lunge_attacker_raise") is False
+
+    def test_non_otaku_no_lunge_attacker_raise_flag(self, client):
+        cid = _seed_character(
+            client, name="Akodo4D", school="akodo_bushi",
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+        )
+        flags = self._school_abilities(client, cid)
+        assert flags.get("otaku_no_lunge_attacker_raise") is False
