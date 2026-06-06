@@ -645,6 +645,19 @@ class TestRenderPng:
         assert png.startswith(b"\x89PNG\r\n\x1a\n")
 
 
+class TestWarm:
+    def test_warm_returns_true_and_leaves_cache_untouched(self):
+        clear_cache()
+        assert dice_card.warm() is True
+        # The throwaway warm render must NOT populate the LRU - a real
+        # request should never be served the dummy card.
+        assert len(dice_card._cache) == 0
+
+    def test_warm_is_idempotent(self):
+        assert dice_card.warm() is True
+        assert dice_card.warm() is True
+
+
 class TestDataclasses:
     """Quick sanity check that the public dataclasses are immutable -
     needed because ``RollCard`` is stored in tuples used as dict keys

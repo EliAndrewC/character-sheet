@@ -1954,45 +1954,27 @@
                 t.save();
             },
 
-            // ``opts.skipImageRender`` and ``opts.skipHistoryCreate``: used
-            // by ``useLucky`` so a generic-roll reroll patches the existing
-            // history row + re-prerenders the image AFTER the auto-use-
-            // higher resolve has restored the original dice (if it won),
-            // instead of saving a second row and pasting an outdated image.
-            async runRoll(opts) {
-                opts = opts || {};
-                this.phase = 'rolling';
-                this.finalDice = [];
-                this.unkeptDice = [];
-                this.keptDice = [];
-                this.baseTotal = 0;
-                this.keptSum = 0;
-
-                const { rolled, kept, flat, reroll_tens } = this.formula;
-                // Sound is played once per round from inside rollAndAnimate so
-                // each reroll wave gets its own sound.
-                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
-                    ? (n) => window.L7RDice.playDiceSound(n)
-                    : null;
-                const dice = await window.L7RDice.rollAndAnimate(
-                    rolled, reroll_tens, this.prefs.dice_animation_enabled, playSound
-                );
-
+            // Pure result-state computation shared by the early
+            // (overlap-with-animation) and late paths in runRoll. From a
+            // settled dice array it sets finalDice / keptDice / unkeptDice
+            // / keptSum / baseTotal (plus the Shosuro 5th Dan and carried-
+            // Conviction adjustments). No external side effects, so it's
+            // safe to run mid-animation; the post-roll hooks that DO have
+            // side effects (VP grants, banking) stay in runRoll and fire
+            // only after the animation completes. Recomputing from the
+            // same dice is idempotent.
+            _computeResultState(dice, kept, flat) {
                 const indexed = dice.map((d, i) => ({ ...d, idx: i }));
                 // Kakita Duelist Special Ability: a 10 on initiative is
                 // actually Phase 0, so it MUST sort ahead of every non-10
                 // die for keep-lowest purposes - otherwise the keep-lowest
                 // slice discards it and the player loses their Phase-0 die.
-                // We only remap the sort key, not ``value`` itself; the
-                // initiative branch below converts the kept 10 to a 0 for
-                // the final action-die list.
                 const kakitaInit = !!(this.formula.is_initiative && this.formula.kakita_phase_zero);
                 const sortValue = (v) => (kakitaInit && v === 10) ? 0 : v;
                 const sortedAsc = [...indexed].sort(
                     (a, b) => sortValue(a.value) - sortValue(b.value) || a.idx - b.idx
                 );
                 const keptCount = Math.min(kept, sortedAsc.length);
-
                 const isInit = this.formula.is_initiative;
                 // Initiative: keep LOWEST dice. Normal: keep HIGHEST.
                 const keptIdx = new Set(
@@ -2000,7 +1982,6 @@
                         ? sortedAsc.slice(0, keptCount).map(d => d.idx)
                         : sortedAsc.slice(sortedAsc.length - keptCount).map(d => d.idx)
                 );
-
                 this.finalDice = sortedAsc.map(d => ({ value: d.value, kept: keptIdx.has(d.idx) }));
                 this.keptDice = sortedAsc.filter(d => keptIdx.has(d.idx));
                 this.unkeptDice = sortedAsc.filter(d => !keptIdx.has(d.idx));
@@ -2024,6 +2005,56 @@
                 // Priest 5th Dan ally conviction: also persists across rerolls.
                 if (!isInit) {
                     this.baseTotal += this.totalPriestAllySpentThisRoll();
+                }
+            },
+
+            // ``opts.skipImageRender`` and ``opts.skipHistoryCreate``: used
+            // by ``useLucky`` so a generic-roll reroll patches the existing
+            // history row + re-prerenders the image AFTER the auto-use-
+            // higher resolve has restored the original dice (if it won),
+            // instead of saving a second row and pasting an outdated image.
+            async runRoll(opts) {
+                opts = opts || {};
+                this.phase = 'rolling';
+                this.finalDice = [];
+                this.unkeptDice = [];
+                this.keptDice = [];
+                this.baseTotal = 0;
+                this.keptSum = 0;
+
+                const { rolled, kept, flat, reroll_tens } = this.formula;
+                // Sound is played once per round from inside rollAndAnimate so
+                // each reroll wave gets its own sound.
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n)
+                    : null;
+                const isInit = this.formula.is_initiative;
+                // Overlap the Copy-as-image render with the dice animation.
+                // The dice are final the instant they're generated (the
+                // animation is cosmetic), so ``onDiceReady`` - fired by
+                // rollAndAnimate before its ~3.2s of sleeps - lets us
+                // compute the result and kick off the PNG pre-render in
+                // parallel with the animation, so the image is ready by the
+                // time the result panel appears. Initiative builds a
+                // different (action-dice) panel with extra interleaved
+                // animation, so it stays on the post-animation path below;
+                // ``skipImageRender`` (Lucky reroll) opts out entirely.
+                this._earlyRendered = false;
+                const onDiceReady = (diceEarly) => {
+                    if (isInit || opts.skipImageRender) return;
+                    this._computeResultState(diceEarly, kept, flat);
+                    this._prerenderRollImage(this._buildRollImagePayload());
+                    this._earlyRendered = true;
+                };
+                const dice = await window.L7RDice.rollAndAnimate(
+                    rolled, reroll_tens, this.prefs.dice_animation_enabled,
+                    playSound, undefined, onDiceReady
+                );
+                // Compute the result state if onDiceReady didn't (initiative,
+                // skipImageRender, or the no-animation path where there's
+                // nothing to overlap). Idempotent on the same dice.
+                if (!this._earlyRendered) {
+                    this._computeResultState(dice, kept, flat);
                 }
 
                 // Initiative: compute action dice with school effects
@@ -2161,7 +2192,10 @@
                 // synchronously inside the user-gesture handler.
                 // Initiative renders an action-dice panel rather than
                 // a keep/drop result, so it uses a separate builder.
-                if (!opts.skipImageRender) {
+                // Skipped when the non-initiative early path already
+                // kicked off the render during the animation
+                // (``_earlyRendered``).
+                if (!opts.skipImageRender && !this._earlyRendered) {
                     this._prerenderRollImage(
                         this.formula && this.formula.is_initiative
                             ? this._buildInitiativeImagePayload()

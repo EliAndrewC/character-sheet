@@ -32,6 +32,11 @@ async def lifespan(app: FastAPI):
     init_db()
     _seed_campaign_players()
     threading.Thread(target=_check_and_backup, daemon=True).start()
+    # Prime the dice-card rasterizer off the request path so the first
+    # Copy-as-image after a machine wake doesn't eat cairosvg's one-time
+    # init cost. Best-effort, daemon thread - see dice_card.warm().
+    from app.services.dice_card import warm as _warm_dice_card
+    threading.Thread(target=_warm_dice_card, daemon=True).start()
     yield
 
 

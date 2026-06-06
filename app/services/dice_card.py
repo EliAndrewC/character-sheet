@@ -17,12 +17,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 from xml.sax.saxutils import escape as xml_escape
 
 import cairosvg
+
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -782,11 +786,58 @@ def render_png(payload: dict) -> bytes:
     cached = _cache_get(key)
     if cached is not None:
         return cached
+    # Time the build+rasterize on a cache miss. The rasterize
+    # (cairosvg) dominates - building the SVG string is ~free - so this
+    # is effectively the per-image cost. Logged at DEBUG so it's silent
+    # by default but available for ad-hoc measurement on the live box
+    # (e.g. ``LOG_LEVEL=DEBUG`` / a logging tweak) without code changes.
+    t0 = time.perf_counter()
     card = parse_payload(payload)
     svg = build_svg(card)
     png = cairosvg.svg2png(bytestring=svg.encode("utf-8"))
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    log.debug(
+        "dice_card render: %.1f ms (svg=%d B, png=%d B)",
+        elapsed_ms, len(svg), len(png),
+    )
     _cache_put(key, png)
     return png
+
+
+# Minimal payload used to prime the rasterizer at startup (see ``warm``).
+_WARM_PAYLOAD = {
+    "title": "warm", "formula": "1k1",
+    "kept": [{"parts": [1]}], "total": 1,
+}
+
+
+def warm() -> bool:
+    """Prime the rasterizer in this process.
+
+    The first ``cairosvg.svg2png`` call in a process pays a one-time
+    setup cost (library import + font/rasterizer init) of ~100-150 ms.
+    On Fly the machine auto-stops when idle, so without this the *first*
+    player to roll after a wake eats that latency on their Copy-as-image
+    button. Calling this once at startup (in a background thread) moves
+    the cost off the request path. Renders a tiny throwaway card whose
+    result is intentionally discarded; the LRU is left untouched so the
+    dummy never serves a real request. Returns True on success.
+
+    Failures are swallowed and logged - warming is best-effort and must
+    never take down startup (e.g. if a font/lib is momentarily
+    unavailable)."""
+    try:
+        t0 = time.perf_counter()
+        card = parse_payload(_WARM_PAYLOAD)
+        cairosvg.svg2png(bytestring=build_svg(card).encode("utf-8"))
+        log.info(
+            "dice_card rasterizer warmed in %.0f ms",
+            (time.perf_counter() - t0) * 1000,
+        )
+        return True
+    except Exception:  # pragma: no cover - best-effort; defensive only
+        log.warning("dice_card warm-up failed", exc_info=True)
+        return False
 
 
 def clear_cache() -> None:
