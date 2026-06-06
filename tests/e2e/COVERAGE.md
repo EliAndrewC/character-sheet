@@ -257,6 +257,7 @@ The three failures were:
 - [x] 1st Dan behavioral roll formulas and bonuses -> `test_school_abilities.py::test_hiruma_1st_dan_behavioral`
 - [x] 2nd Dan behavioral parry bonus -> `test_school_abilities.py::test_hiruma_2nd_dan_behavioral`
 - [x] 3rd Dan post-parry bonus triggers attack behavioral -> `test_school_abilities.py::test_hiruma_3rd_dan_parry_then_attack_behavioral`
+- [x] 3rd Dan post-parry interrupt-lunge note displayed after parry (says "lunge ... without ... penalty", not "counterattack") -> `test_school_abilities.py::test_hiruma_3rd_dan_interrupt_lunge_note`
 - [x] 4th Dan initiative shows action dice note -> `test_school_abilities.py::test_hiruma_4th_dan_initiative_note_behavioral`
 - [x] 5th Dan parry note displayed -> `test_school_abilities.py::test_hiruma_5th_dan_parry_note`
 
@@ -796,6 +797,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Copy-as-image on the freeform-roll modal (its own Alpine scope with a local copy of the prerender state) → `test_rolls.py::test_freeform_modal_has_copy_as_image_button`
 - [x] Copy-as-image on the dice-roller initiative result (action-dice panel) → `test_rolls.py::test_initiative_result_has_copy_as_image_button`
 - [x] Initiative card carries dropped dice alongside the action dice AND passes ``show_total: false`` so the renderer skips the misleading "TOTAL <n>" trophy → `test_rolls.py::test_initiative_image_payload_includes_dropped_dice_and_no_total`
+- [x] Copy-as-image payload's ``extras`` carries the "spent void point(s)" note when void was spent on the roll, so the rendered card's DETAILS section explains the inflated kept dice → `test_rolls.py::test_skill_roll_image_payload_includes_void_spent_detail`
 - [x] Copy-as-image on the wound-check result panel → `test_wound_check.py::test_wound_check_result_has_copy_as_image_button`
 - [x] Copy-as-image on the attack-roll result panel → `test_attack_modal.py::test_attack_result_has_copy_as_image_button`
 - [x] Copy-as-image on the attack damage-result panel (fresh card built from damage dice + damage total, not the attack snapshot) → `test_attack_modal.py::test_attack_damage_result_has_copy_as_image_button`

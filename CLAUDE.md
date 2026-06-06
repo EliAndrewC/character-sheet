@@ -24,6 +24,21 @@ playwright install-deps chromium
 
 `libmagic1` is required by `python-magic` (importer format detection) and `antiword` is required by the `.doc` ingest path in `app/services/import_ingest.py`. `libcairo2` is required by `cairocffi`/`CairoSVG`, used by the dice-card PNG renderer; without it `tests/test_dice_card.py` errors out at collection time. All three are missing from `requirements.txt` because they are system packages; without them `app.main` fails to import and large portions of the unit suite never run. `reportlab` is a dev-only dependency (PDF fixtures); it is not imported by `app/` at runtime, so it lives outside `requirements.txt`.
 
+If `apt-get install` can't find the packages, run `sudo apt-get update` first (a fresh container may have a stale package index).
+
+### Newer-than-supported OS quirks (e.g. Ubuntu 26.04 "resolute")
+
+The sandbox container can be a newer Ubuntu release than Playwright supports, which breaks two of the setup steps. Both have simple workarounds:
+
+- **`playwright install chromium` fails** with `Playwright does not support chromium on ubuntu26.04-x64`. This is a host-OS version gate, not a missing binary. Temporarily spoof `/etc/os-release` to the most recent supported LTS, install, then restore it:
+  ```bash
+  sudo cp /etc/os-release /tmp/os-release.bak
+  sudo sed -i 's/26.04/24.04/g; s/VERSION_CODENAME=resolute/VERSION_CODENAME=noble/; s/UBUNTU_CODENAME=resolute/UBUNTU_CODENAME=noble/' /etc/os-release
+  playwright install chromium && playwright install-deps chromium
+  sudo cp /tmp/os-release.bak /etc/os-release    # restore - the downloaded browser runs fine on the real OS
+  ```
+- **`node --test tests/js/` errors** with `Cannot find module '/workspace/tests/js'` on newer Node (e.g. v22.22). The directory-argument form is unreliable on that version; pass an explicit glob instead: `node --test tests/js/*.test.js`.
+
 ## Environment Variables
 
 A `.env` file (gitignored) holds credentials for deployment and external services:

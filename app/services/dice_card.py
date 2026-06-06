@@ -73,12 +73,24 @@ ALT_ROW_HEIGHT = 20
 ALT_AMOUNT_LABEL_GAP = 8
 ALT_IF_ALL_LABEL = "if all of the above"
 
+# "Details" bullets - free-text notes the client mirrors from the
+# on-screen result panel's small print (void points spent, the 5th Dan
+# +per-VP combat bonus, the above-10k10 overflow, Otherworldliness,
+# Conviction, a Lucky/Togashi reroll, etc.). Unlike the bonus block
+# these have no amount column - each entry is a full sentence already
+# formatted by the sheet - so they render as a left-aligned bulleted
+# list within a centered block.
+EXTRA_FONT_SIZE = 14
+EXTRA_ROW_HEIGHT = 20
+EXTRA_BULLET = "• "
+
 # Limits applied to incoming payloads - prevent abuse (huge SVGs) and
 # clip patently invalid input rather than failing later.
 MAX_DICE_PER_ROW = 30
 MAX_CHAIN_PER_CELL = 12
 MAX_BONUSES = 30
 MAX_ALTERNATIVES = 20
+MAX_EXTRAS = 20
 MAX_TEXT_LEN = 200
 
 # In-memory LRU. Each PNG is small (~30-50 KB); the cap keeps total
@@ -138,6 +150,10 @@ class RollCard:
     total: int = 0
     footer: Optional[str] = None
     alternatives: Tuple[Alternative, ...] = field(default_factory=tuple)
+    # Free-text "details" bullets mirroring the on-screen result
+    # panel's small print (void spent, overflow, Lucky, etc.). Render
+    # below the numeric bonus block; each is a full sentence.
+    extras: Tuple[str, ...] = field(default_factory=tuple)
     # Whether to render the "TOTAL <n>" trophy block at the bottom of
     # the card. Initiative rolls suppress this because there's no
     # meaningful sum across action dice - each die is its own
@@ -254,6 +270,23 @@ def _coerce_alternatives(raw_list) -> Tuple[Alternative, ...]:
     return tuple(out)
 
 
+def _coerce_extras(raw_list) -> Tuple[str, ...]:
+    """Normalise the free-text "details" bullets the client mirrors
+    from the on-screen result panel (void spent, overflow, Lucky, ...).
+
+    Each entry is a full sentence; non-strings and blanks are dropped
+    (``_coerce_text`` returns "" for them), and the list is clipped to
+    ``MAX_EXTRAS`` so a hostile payload can't balloon the card."""
+    if not isinstance(raw_list, list):
+        return ()
+    out: List[str] = []
+    for raw in raw_list[:MAX_EXTRAS]:
+        text = _coerce_text(raw)
+        if text:
+            out.append(text)
+    return tuple(out)
+
+
 def parse_payload(payload: dict) -> RollCard:
     """Build a ``RollCard`` from an untrusted client payload.
 
@@ -272,6 +305,7 @@ def parse_payload(payload: dict) -> RollCard:
         total=_coerce_int(payload.get("total"), 0),
         footer=_coerce_text(payload.get("footer")) or None,
         alternatives=_coerce_alternatives(payload.get("alternatives")),
+        extras=_coerce_extras(payload.get("extras")),
         # Default True so all existing roll types keep their TOTAL
         # trophy. Initiative payloads pass ``show_total: false`` to
         # suppress it.
@@ -482,13 +516,31 @@ def _plan_alternative_layout(card: RollCard) -> dict:
     }
 
 
-def _content_width(card: RollCard, bonus_plan: dict, alt_plan: dict) -> float:
+def _plan_extras_layout(card: RollCard) -> dict:
+    """Compute the details-bullets block geometry. Each row is a full
+    "• <sentence>" line; the block is as wide as its longest line so
+    the card-width pass can fit it. Returns ``{"rows": N,
+    "block_w": W}``."""
+    extras = card.extras
+    if not extras:
+        return {"rows": 0, "block_w": 0.0}
+    width = max(
+        _measure_text(EXTRA_BULLET + e, EXTRA_FONT_SIZE,
+                      weight=400, family="serif")
+        for e in extras
+    )
+    return {"rows": len(extras), "block_w": width}
+
+
+def _content_width(card: RollCard, bonus_plan: dict, alt_plan: dict,
+                   extras_plan: dict) -> float:
     return max(
         _measure_text(card.title, 34, weight=700, family="serif"),
         _measure_text(card.formula, 18, weight=400, family="serif"),
         _row_width(card.kept),
         _row_width(card.dropped),
         bonus_plan["block_w"],
+        extras_plan["block_w"],
         _measure_text(str(card.total), 56, weight=700, family="serif"),
         _measure_text(card.footer or "", 14, weight=400, family="serif"),
         alt_plan["block_w"],
@@ -529,7 +581,9 @@ def build_svg(card: RollCard) -> str:
     """Compose the SVG document for one card."""
     bonus_plan = _plan_bonus_layout(card)
     alt_plan = _plan_alternative_layout(card)
-    card_w = int(_content_width(card, bonus_plan, alt_plan) + 2 * PAD)
+    extras_plan = _plan_extras_layout(card)
+    card_w = int(_content_width(card, bonus_plan, alt_plan, extras_plan)
+                 + 2 * PAD)
     cx = card_w / 2
     parts: List[str] = []
 
@@ -594,6 +648,28 @@ def build_svg(card: RollCard) -> str:
                           + (bonus_plan["rows"] - 1) * BONUS_ROW_HEIGHT + 16)
     else:
         post_bonuses_y = post_dice_y + 4
+
+    # Details bullets (void spent, the 5th Dan +per-VP combat bonus,
+    # above-10k10 overflow, Otherworldliness, Lucky/Togashi reroll,
+    # ...). These mirror the small print under the on-screen result
+    # panel so a pasted card explains *why* the total landed where it
+    # did - e.g. that some kept dice came from spent void points.
+    # Rendered as a left-aligned bulleted list within a centered
+    # block, between the numeric bonus column and the TOTAL trophy.
+    if extras_plan["rows"] > 0:
+        parts.append(_hr(post_bonuses_y, card_w))
+        details_label_y = post_bonuses_y + 22
+        parts.append(_text(cx, details_label_y, "DETAILS", size=11,
+                           weight=600, opacity=0.55, letter_spacing=2.5,
+                           family="sans"))
+        block_left = cx - extras_plan["block_w"] / 2
+        row_y = details_label_y + 22
+        for e in card.extras:
+            parts.append(_text(block_left, row_y, EXTRA_BULLET + e,
+                               size=EXTRA_FONT_SIZE, weight=400,
+                               anchor="start", opacity=0.7))
+            row_y += EXTRA_ROW_HEIGHT
+        post_bonuses_y = row_y - EXTRA_ROW_HEIGHT + 16
 
     # Total trophy - suppressed for initiative rolls where no
     # meaningful sum exists across action dice. The footer still

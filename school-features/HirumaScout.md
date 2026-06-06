@@ -3,7 +3,7 @@
 **School ID:** `hiruma_scout`
 **Category:** Investigator
 **School Ring:** Air - Confirmed correct.
-**School Knacks:** counterattack, double_attack, iaijutsu - All present and rollable. (Was previously listed as double_attack, feint, iaijutsu in `game_data.py`; corrected to match canonical `rules/04-schools.md` in the same round as the canonical-text sync. Hiruma no longer counts as a "feint school" so `feint_temp_vp` is no longer set for them, and they're no longer added to `SCHOOLS_WITH_TEMP_VOID` via the feint path — and the Hiruma Special Ability text doesn't mention temp VP either, so they're correctly out of that set now.)
+**School Knacks:** double_attack, iaijutsu, lunge - All present and rollable. (Knack history: originally double_attack/feint/iaijutsu, then briefly counterattack/double_attack/iaijutsu, now double_attack/iaijutsu/lunge to match the 3rd Dan's post-parry interrupt lunge. Hiruma does not count as a "feint school" so `feint_temp_vp` is not set and they are not in `SCHOOLS_WITH_TEMP_VOID` - and the Special Ability text doesn't mention temp VP either, so they're correctly out of that set.)
 
 ---
 
@@ -39,13 +39,13 @@
 
 ## 3rd Dan
 
-> After making a successful or unsuccessful parry, add 2X to your next attack roll for any type of attack and to the damage roll for that attack if it hits, where X is your attack skill.  After your successful or unsuccessful parry resolves, you may immediately counterattack as an interrupt action at the cost of one action die, and this counterattack may be directed at anyone you can hit rather than being limited to the attacker whose strike you parried.
+> After making a successful or unsuccessful parry, add 2X to your next attack roll for any type of attack and to the damage roll for that attack if it hits, where X is your attack skill.  After your successful or unsuccessful parry resolves, you may immediately lunge as an interrupt action at the cost of one action die without suffering the normal lunge penalty.
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `hiruma_post_parry_bonus: true` and `hiruma_post_parry_amount: 2*attack_skill` in school_abilities.
 - Client: auto-banks 2*attack_skill after any parry roll, applies as flat bonus to both attack roll AND damage roll on next attack via `rollAttack()` and `atkComputeDamage()`.
 - The damage bonus is naturally gated on the attack hitting because damage is only rolled on hits ("to the damage roll for that attack if it hits").
-- The free interrupt counterattack option ("After your successful or unsuccessful parry resolves, you may immediately counterattack...") is surfaced as a display note in `modal_result.html` via the `hiruma_post_parry_interrupt_counterattack` school_abilities flag. Not mechanized — it requires combat-phase tracking, so the player executes the counterattack manually.
+- The free interrupt lunge option ("After your successful or unsuccessful parry resolves, you may immediately lunge...without suffering the normal lunge penalty") is surfaced as a display note in `modal_result.html` via the `hiruma_post_parry_interrupt_lunge` school_abilities flag. Not mechanized — it requires combat-phase tracking, so the player executes the lunge manually. The "without the normal lunge penalty" clause is display-only too (the lunge attacker free-raise penalty isn't mechanized on the sheet, same as the Otaku 4th Dan `otaku_no_lunge_attacker_raise` note). Since `lunge` is now a Hiruma school knack, the regular `knack:lunge` roll (with its standard +1k0 / damage mechanics) is also available.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank.

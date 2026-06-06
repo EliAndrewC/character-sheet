@@ -5097,7 +5097,7 @@ class TestInitiativeBoxDisplay:
         cid = _seed_character(
             client, name="HirumaInit", school="hiruma_scout",
             school_ring_choice="Air",
-            knacks={"counterattack": 1, "double_attack": 1, "iaijutsu": 1},
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
         )
         resp = client.get(f"/characters/{cid}")
         assert "4 dice, keep 2" in resp.text
@@ -6818,25 +6818,26 @@ class TestNewMechanicalSchoolAbilityFlags:
         assert m is not None
         return json.loads(m.group(1))
 
-    def test_hiruma_3rd_dan_sets_interrupt_counterattack_flag(self, client):
-        # Hiruma 3rd Dan: the canonical rules text gained a free interrupt
-        # counterattack option after parry, surfaced as a display note.
+    def test_hiruma_3rd_dan_sets_interrupt_lunge_flag(self, client):
+        # Hiruma 3rd Dan: the canonical rules text grants a free interrupt
+        # lunge (without the normal lunge penalty) after parry, surfaced as
+        # a display note.
         cid = _seed_character(
             client, name="Hiruma3D", school="hiruma_scout",
             school_ring_choice="Air", ring_air=3,
-            knacks={"counterattack": 3, "double_attack": 3, "iaijutsu": 3},
+            knacks={"lunge": 3, "double_attack": 3, "iaijutsu": 3},
         )
         flags = self._school_abilities(client, cid)
-        assert flags.get("hiruma_post_parry_interrupt_counterattack") is True
+        assert flags.get("hiruma_post_parry_interrupt_lunge") is True
 
-    def test_hiruma_2nd_dan_no_interrupt_counterattack_flag(self, client):
+    def test_hiruma_2nd_dan_no_interrupt_lunge_flag(self, client):
         cid = _seed_character(
             client, name="Hiruma2D", school="hiruma_scout",
             school_ring_choice="Air", ring_air=3,
-            knacks={"counterattack": 2, "double_attack": 2, "iaijutsu": 2},
+            knacks={"lunge": 2, "double_attack": 2, "iaijutsu": 2},
         )
         flags = self._school_abilities(client, cid)
-        assert flags.get("hiruma_post_parry_interrupt_counterattack") is False
+        assert flags.get("hiruma_post_parry_interrupt_lunge") is False
 
     def test_otaku_4th_dan_sets_no_lunge_attacker_raise_flag(self, client):
         # Otaku 4th Dan suppresses the standard lunge attacker free-raise

@@ -1506,12 +1506,12 @@ _SCHOOLS_LIST: List[School] = [
             "The two allies fighting on your left and right have their TN to "
             "be hit raised by 5."
         ),
-        school_knacks=["counterattack", "double_attack", "iaijutsu"],
+        school_knacks=["double_attack", "iaijutsu", "lunge"],
         techniques={
             1: "Roll one extra die on initiative, parry, and wound checks.",
             2: "You get a free raise on parry rolls.",
             3: (
-                "After making a successful or unsuccessful parry, add 2X to your next attack roll for any type of attack and to the damage roll for that attack if it hits, where X is your attack skill.  After your successful or unsuccessful parry resolves, you may immediately counterattack as an interrupt action at the cost of one action die, and this counterattack may be directed at anyone you can hit rather than being limited to the attacker whose strike you parried."
+                "After making a successful or unsuccessful parry, add 2X to your next attack roll for any type of attack and to the damage roll for that attack if it hits, where X is your attack skill.  After your successful or unsuccessful parry resolves, you may immediately lunge as an interrupt action at the cost of one action die without suffering the normal lunge penalty."
             ),
             4: (
                 "Raise your current and maximum Air by 1.  Raising your Air now costs 5 fewer XP.  After rolling initiative, lower your action dice by 2, to a minimum of 1."
@@ -2796,7 +2796,13 @@ GROUP_EFFECTS: Dict[str, Dict[str, Any]] = {
             "Party Rank is considered 1.0 lower when dealing with Imperial "
             "post holders."
         ),
-        "rank_modifier": (-1.0, "with Imperial post holders ({name}'s Imperial Disdain)"),
+        # Context is a bare phrase, like the other group effects - the
+        # effect name + source character are already rendered by the
+        # status row as "<Name>'s Imperial Disdain (<context>)". Baking
+        # "({name}'s Imperial Disdain)" in here too produced a doubled
+        # "...Imperial Disdain (with Imperial post holders (...Imperial
+        # Disdain))" readout.
+        "rank_modifier": (-1.0, "with Imperial post holders"),
         "short_label": "for Imperials",
     },
 }

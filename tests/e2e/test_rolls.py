@@ -1867,6 +1867,45 @@ def test_knack_roll_image_payload_omits_skill_rank_parenthetical(page, live_serv
     )
 
 
+def test_skill_roll_image_payload_includes_void_spent_detail(page, live_server_url):
+    """When void points are spent on a roll, the image payload's
+    ``extras`` carries the "spent void point(s)" note so the rendered
+    dice card explains the inflated kept dice (the server's dice-card
+    renderer surfaces ``extras`` under a DETAILS section). Asserted by
+    intercepting the POST body sent to ``/roll-image``."""
+    _create_roller(page, live_server_url, "VoidExtras")
+    # _create_roller zeroes VP; give the character void to spend.
+    page.evaluate("window._trackingBridge.voidPoints = 2; "
+                  "window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.evaluate("window.__capturedRollImagePayload = null")
+    page.evaluate("""() => {
+        const origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            if (typeof url === 'string'
+                    && url.indexOf('/roll-image') !== -1
+                    && opts && opts.body) {
+                try {
+                    window.__capturedRollImagePayload = JSON.parse(opts.body);
+                } catch (e) { /* ignore */ }
+            }
+            return origFetch.apply(this, arguments);
+        };
+    }""")
+    # Click the skill, then pick "Spend 1 void point" from the menu.
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(500)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    menu.locator('text=Spend 1 void point').first.click()
+    _wait_for_roll_result(page)
+    payload = page.evaluate("() => window.__capturedRollImagePayload")
+    assert payload is not None, "Expected a /roll-image POST to be captured"
+    extras = payload.get("extras") or []
+    assert any("spent void point" in e for e in extras), (
+        f"Expected a 'spent void point' detail in extras, got: {extras!r}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Post-roll mutations re-render the Copy-as-image card
 # ---------------------------------------------------------------------------

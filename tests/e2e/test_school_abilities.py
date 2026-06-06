@@ -565,7 +565,7 @@ def test_hida_4th_dan_trade_sw_button(page, live_server_url):
 def test_hiruma_5th_dan_parry_note(page, live_server_url):
     """Hiruma 5th Dan: parry note flag is set and note text exists in DOM after parry roll."""
     _create_char(page, live_server_url, "Hiruma5Parry", "hiruma_scout",
-                 knack_overrides={"counterattack": 5, "double_attack": 5, "iaijutsu": 5})
+                 knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
     sa = _get_school_abilities(page)
     assert sa.get("hiruma_parry_reduce_lw") is True
     _roll_via_menu_or_direct(page, "parry")
@@ -573,6 +573,24 @@ def test_hiruma_5th_dan_parry_note(page, live_server_url):
     page.wait_for_timeout(500)
     note = page.locator(':text("Hiruma 5th Dan")')
     assert note.count() > 0
+
+
+def test_hiruma_3rd_dan_interrupt_lunge_note(page, live_server_url):
+    """Hiruma 3rd Dan: after a parry roll, the post-parry interrupt-lunge
+    note appears (display-only) and says 'lunge ... without suffering the
+    normal lunge penalty' - not 'counterattack' (the ability was changed)."""
+    _create_char(page, live_server_url, "Hiruma3Lunge", "hiruma_scout",
+                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
+    sa = _get_school_abilities(page)
+    assert sa.get("hiruma_post_parry_interrupt_lunge") is True
+    _roll_via_menu_or_direct(page, "parry")
+    page.wait_for_timeout(500)
+    note = page.locator(':text("you may immediately lunge as an interrupt action")')
+    assert note.count() > 0
+    # The old counterattack wording must be gone.
+    assert page.locator(
+        ':text("you may immediately counterattack as an interrupt action")'
+    ).count() == 0
 
 
 # ===========================================================================
@@ -3440,7 +3458,7 @@ def test_ally_swap_strictly_rejects_equal_or_higher_rolled_die(page, live_server
 def test_hiruma_2nd_dan_behavioral(page, live_server_url):
     """Hiruma 2nd Dan: parry roll shows +5 from 2nd Dan."""
     _create_char(page, live_server_url, "Hiruma2B", "hiruma_scout",
-                 knack_overrides={"counterattack": 2, "double_attack": 2, "iaijutsu": 2})
+                 knack_overrides={"double_attack": 2, "iaijutsu": 2, "lunge": 2})
     _roll_via_menu_or_direct(page, "parry")
     assert "2nd Dan" in _get_roll_result_text(page)
 
@@ -5154,7 +5172,7 @@ def test_non_daidoji_with_party_counterattack_checkbox(page, live_server_url):
 def test_hiruma_4th_dan_initiative_note_behavioral(page, live_server_url):
     """Hiruma 4th Dan: initiative result shows action dice -2 note."""
     _create_char(page, live_server_url, "Hiruma4B", "hiruma_scout",
-                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
+                 knack_overrides={"double_attack": 4, "iaijutsu": 4, "lunge": 4})
     page.locator('[data-roll-key="initiative"]').click()
     _wait_roll_done(page)
     result = _get_roll_result_text(page)
@@ -6984,7 +7002,7 @@ def test_bayushi_vp_damage_behavioral(page, live_server_url):
 def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
     """Hiruma 3rd Dan: parry banks bonus, attack auto-applies it to both attack and damage."""
     _create_char(page, live_server_url, "Hiruma3FB", "hiruma_scout",
-                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
+                 knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
     # Inject a banked bonus directly (avoids parry roll timing issues)
     page.evaluate("""
         window._diceRoller.hirumaBankedAttackBonus = 4;
