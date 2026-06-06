@@ -670,11 +670,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Hiruma 3rd Dan: bank +2*attack for next attack and damage after parry
         "hiruma_post_parry_bonus": character.school == "hiruma_scout" and dan >= 3,
         "hiruma_post_parry_amount": 2 * attack_skill if character.school == "hiruma_scout" and dan >= 3 else 0,
-        # Hiruma 3rd Dan: post-parry free interrupt counterattack (display note).
-        # The counterattack may target anyone the Hiruma can hit, not just the
-        # parried attacker. Not mechanized — it requires combat-phase tracking,
-        # so the player executes it manually.
-        "hiruma_post_parry_interrupt_counterattack": character.school == "hiruma_scout" and dan >= 3,
+        # Hiruma 3rd Dan: post-parry free interrupt lunge (display note).
+        # The lunge is made without the normal lunge penalty. Not mechanized -
+        # it requires combat-phase tracking, so the player executes it manually.
+        "hiruma_post_parry_interrupt_lunge": character.school == "hiruma_scout" and dan >= 3,
         # Akodo 3rd Dan: bank wound check excess * attack for attack bonus
         "akodo_wc_attack_bonus": character.school == "akodo_bushi" and dan >= 3,
         "akodo_attack_skill": attack_skill if character.school == "akodo_bushi" and dan >= 3 else 0,

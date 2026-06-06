@@ -240,6 +240,40 @@ class TestParsePayload:
         assert len(card.alternatives) == 1
         assert card.alternatives[0].extra_flat == 0
 
+    def test_extras_parsed_in_order(self):
+        card = parse_payload(_basic_payload(extras=[
+            "Rolled +2k2 from 2 spent void points",
+            "Lucky reroll used",
+        ]))
+        assert card.extras == (
+            "Rolled +2k2 from 2 spent void points",
+            "Lucky reroll used",
+        )
+
+    def test_extras_default_to_empty_when_omitted(self):
+        card = parse_payload(_basic_payload())
+        assert card.extras == ()
+
+    def test_extras_non_list_collapses_to_empty(self):
+        card = parse_payload(_basic_payload(extras="not a list"))
+        assert card.extras == ()
+
+    def test_extras_blank_and_non_string_entries_dropped(self):
+        card = parse_payload(_basic_payload(extras=[
+            "kept", "", "   ", 42, None, {"x": 1},
+        ]))
+        assert card.extras == ("kept",)
+
+    def test_extras_clipped_to_max(self):
+        too_many = [f"detail {i}" for i in range(dice_card.MAX_EXTRAS + 10)]
+        card = parse_payload(_basic_payload(extras=too_many))
+        assert len(card.extras) == dice_card.MAX_EXTRAS
+
+    def test_extras_text_clipped_to_max_len(self):
+        card = parse_payload(_basic_payload(extras=["x" * 500]))
+        assert card.extras[0].endswith("...")
+        assert len(card.extras[0]) <= dice_card.MAX_TEXT_LEN + 3
+
 
 class TestBuildSvg:
     def test_emits_dice_kite_path(self):
@@ -414,6 +448,68 @@ class TestBuildSvg:
         }))
         assert "<script>" not in svg
         assert "&lt;script&gt;" in svg or "&lt;/text&gt;" in svg
+
+    def test_no_details_section_when_extras_empty(self):
+        svg = build_svg(parse_payload(_basic_payload()))
+        assert ">DETAILS<" not in svg
+
+    def test_details_section_renders_void_spent_line(self):
+        """The headline case: a roll where void points were spent must
+        surface the "spent void points" note under a DETAILS header so
+        the pasted card explains the inflated kept dice."""
+        svg = build_svg(parse_payload(_basic_payload(extras=[
+            "Rolled +2k2 from 2 spent void points",
+        ])))
+        assert ">DETAILS<" in svg
+        # Rendered verbatim (XML-escaped) as a bulleted line.
+        assert "Rolled +2k2 from 2 spent void points" in svg
+        assert dice_card.EXTRA_BULLET.strip() in svg
+
+    def test_details_section_renders_each_extra(self):
+        svg = build_svg(parse_payload(_basic_payload(extras=[
+            "Rolled +1k1 from 1 spent void point",
+            "+10 from 5th Dan (+10 per VP on combat rolls)",
+            "Lucky reroll used",
+        ])))
+        assert "Rolled +1k1 from 1 spent void point" in svg
+        assert "+10 from 5th Dan (+10 per VP on combat rolls)" in svg
+        assert "Lucky reroll used" in svg
+
+    def test_details_grow_card_height(self):
+        """Adding details bullets pushes the card taller - they consume
+        vertical space between the bonus block and the trophy."""
+        import re
+        base = _basic_payload()
+        with_extras = _basic_payload(extras=[
+            "Rolled +2k2 from 2 spent void points",
+            "Lucky reroll used",
+        ])
+        bh = int(re.search(r'height="(\d+)"',
+                           build_svg(parse_payload(base))).group(1))
+        eh = int(re.search(r'height="(\d+)"',
+                           build_svg(parse_payload(with_extras))).group(1))
+        assert eh > bh
+
+    def test_details_xml_escape_text(self):
+        """Player-influenced detail strings are XML-escaped, same policy
+        as bonus / alternative labels."""
+        svg = build_svg(parse_payload(_basic_payload(extras=[
+            "</text><script>alert(1)</script>",
+        ])))
+        assert "<script>" not in svg
+        assert "&lt;script&gt;" in svg or "&lt;/text&gt;" in svg
+
+    def test_details_render_without_bonuses(self):
+        """Details still render when there's no bonus block above them
+        (the section hangs straight off the dice block)."""
+        svg = build_svg(parse_payload({
+            "title": "T", "kept": [{"parts": [9]}], "total": 9,
+            "bonuses": [],
+            "extras": ["Rolled +1k1 from 1 spent void point"],
+        }))
+        assert ">BONUSES<" not in svg
+        assert ">DETAILS<" in svg
+        assert "Rolled +1k1 from 1 spent void point" in svg
 
     def test_show_total_false_suppresses_total_block(self):
         """Initiative payloads pass ``show_total: false`` because there

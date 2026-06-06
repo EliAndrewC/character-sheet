@@ -2796,7 +2796,7 @@ class TestSecondDanFreeRaise:
         assert f.flat == 5
 
     def test_hiruma_2nd_dan_parry(self):
-        char = self._make("hiruma_scout", ["counterattack", "double_attack", "iaijutsu"])
+        char = self._make("hiruma_scout", ["double_attack", "iaijutsu", "lunge"])
         f = build_combat_formula("parry", char)
         assert f.flat == 5
 
@@ -2955,7 +2955,7 @@ class TestInitiativeAndFlags:
     def test_hiruma_1st_dan_initiative_extra_die(self):
         char = make_character_data(
             school="hiruma_scout",
-            knacks={"counterattack": 1, "double_attack": 1, "iaijutsu": 1},
+            knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
         )
         init = build_initiative_formula(char)
         assert init["rolled"] == 4  # Void(2)+1+1(1st Dan)
@@ -2963,7 +2963,7 @@ class TestInitiativeAndFlags:
     def test_hiruma_4th_dan_flag(self):
         char = make_character_data(
             school="hiruma_scout",
-            knacks={"counterattack": 4, "double_attack": 4, "iaijutsu": 4},
+            knacks={"double_attack": 4, "iaijutsu": 4, "lunge": 4},
         )
         init = build_initiative_formula(char)
         assert init["hiruma_4th_dan"] is True

@@ -56,6 +56,14 @@ class TestPartyImperialDisdain:
         assert modifiers[0]["value"] == -1.0
         assert "Tanaka" in modifiers[0]["source"]
         assert "Imperial post holders" in modifiers[0]["context"]
+        # Regression: the context is a bare phrase and must NOT re-embed
+        # the effect name / source character (the status row already
+        # renders "<source> (<context>)"). Previously the context held
+        # "with Imperial post holders (Tanaka's Imperial Disdain)",
+        # producing a doubled "...Imperial Disdain (with Imperial post
+        # holders (Tanaka's Imperial Disdain))" readout.
+        assert modifiers[0]["context"] == "with Imperial post holders"
+        assert "Imperial Disdain" not in modifiers[0]["context"]
 
     def test_two_party_members_with_same_effect_produce_two_modifiers(self):
         party = [
