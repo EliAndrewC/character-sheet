@@ -1867,6 +1867,39 @@ def test_knack_roll_image_payload_omits_skill_rank_parenthetical(page, live_serv
     )
 
 
+def test_roll_image_prerender_overlaps_animation(page, live_server_url):
+    """The Copy-as-image render is kicked off the moment the dice are
+    known (from ``onDiceReady``, inside ``rollAndAnimate``) - in parallel
+    with the animation - rather than after the roll settles. We detect
+    this deterministically: the prerender ``onDiceReady`` runs while the
+    roller is still in phase 'rolling' (before ``runRoll`` flips it to
+    'done'), so the captured phase at the moment the /roll-image POST
+    fires is 'rolling'. The pre-optimization code fired it only after
+    phase had already become 'done'. (Holds regardless of the animation
+    pref, since onDiceReady runs before rollAndAnimate returns.)"""
+    _create_roller(page, live_server_url, "OverlapRoll")
+    page.evaluate("""() => {
+        window.__phaseAtRollImage = null;
+        const origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            if (typeof url === 'string'
+                    && url.indexOf('/roll-image') !== -1
+                    && window.__phaseAtRollImage === null) {
+                window.__phaseAtRollImage =
+                    window._diceRoller ? window._diceRoller.phase : '??';
+            }
+            return origFetch.apply(this, arguments);
+        };
+    }""")
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_for_roll_result(page)
+    phase = page.evaluate("() => window.__phaseAtRollImage")
+    assert phase == 'rolling', (
+        f"Expected prerender to fire during the roll (phase 'rolling'), "
+        f"got {phase!r} - the overlap optimization may have regressed."
+    )
+
+
 def test_skill_roll_image_payload_includes_void_spent_detail(page, live_server_url):
     """When void points are spent on a roll, the image payload's
     ``extras`` carries the "spent void point(s)" note so the rendered

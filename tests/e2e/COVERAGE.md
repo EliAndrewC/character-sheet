@@ -798,6 +798,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Copy-as-image on the dice-roller initiative result (action-dice panel) → `test_rolls.py::test_initiative_result_has_copy_as_image_button`
 - [x] Initiative card carries dropped dice alongside the action dice AND passes ``show_total: false`` so the renderer skips the misleading "TOTAL <n>" trophy → `test_rolls.py::test_initiative_image_payload_includes_dropped_dice_and_no_total`
 - [x] Copy-as-image payload's ``extras`` carries the "spent void point(s)" note when void was spent on the roll, so the rendered card's DETAILS section explains the inflated kept dice → `test_rolls.py::test_skill_roll_image_payload_includes_void_spent_detail`
+- [x] Copy-as-image prerender overlaps the roll: the /roll-image POST fires while phase is still 'rolling' (kicked off from onDiceReady during the animation, not after the result settles) → `test_rolls.py::test_roll_image_prerender_overlaps_animation`
 - [x] Copy-as-image on the wound-check result panel → `test_wound_check.py::test_wound_check_result_has_copy_as_image_button`
 - [x] Copy-as-image on the attack-roll result panel → `test_attack_modal.py::test_attack_result_has_copy_as_image_button`
 - [x] Copy-as-image on the attack damage-result panel (fresh card built from damage dice + damage total, not the attack snapshot) → `test_attack_modal.py::test_attack_damage_result_has_copy_as_image_button`

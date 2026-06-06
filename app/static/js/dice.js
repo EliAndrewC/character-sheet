@@ -119,8 +119,17 @@
     const ROLLING_MS = 1200;
     const SETTLE_MS = 2000;
 
-    async function rollAndAnimate(rolled, rerollTens, animate, playSound, trayId) {
+    async function rollAndAnimate(rolled, rerollTens, animate, playSound, trayId, onDiceReady) {
         const dice = rollAllDice(rolled, rerollTens);
+        // The dice are final the instant they're generated - the
+        // animation is purely cosmetic. Hand them to the caller now (via
+        // onDiceReady) so it can start expensive follow-up work, like
+        // pre-rendering the Copy-as-image PNG, in parallel with the
+        // ~3.2s animation instead of waiting for it to finish. Fired in
+        // a try/catch so a caller bug can't abort the animation.
+        if (onDiceReady) {
+            try { onDiceReady(dice); } catch (e) { /* non-fatal */ }
+        }
         if (!animate) {
             // No animation, but still play one sound burst if enabled.
             if (playSound) playSound(rolled);
