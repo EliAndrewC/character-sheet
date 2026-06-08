@@ -36,6 +36,23 @@ def test_click_skill_opens_modal_with_skill_name(page, live_server_url):
     assert "Bragging" in title
 
 
+def test_knack_roll_trigger_shows_d10_kite_icon(page, live_server_url):
+    """The knack roll trigger renders the d10 "kite" SVG (the same shape
+    as the tumbling animation dice and the copy-as-image card), visibly
+    sized - not the d6 die-face emoji it used to be."""
+    _create_roller(page, live_server_url, "DiceIcon")
+    # The shared sprite symbol is defined once on the page.
+    assert page.locator('#d10-die').count() >= 1
+    icon = page.locator('button[data-roll-key^="knack:"] svg.roll-die-icon').first
+    icon.wait_for(state="visible", timeout=5000)
+    box = icon.bounding_box()
+    assert box is not None and box["width"] > 4 and box["height"] > 4
+    # Clicking the icon button still triggers its roll (menu or modal).
+    icon.click()
+    page.wait_for_timeout(300)
+    assert page.evaluate("() => !!(window._diceRoller || document.querySelector('[data-modal=\"attack\"]'))")
+
+
 def test_click_attack_opens_attack_modal(page, live_server_url):
     """Clicking attack opens the attack modal (not the regular dice roller)."""
     _create_roller(page, live_server_url, "ClickAttack")
