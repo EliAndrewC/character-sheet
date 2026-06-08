@@ -2296,6 +2296,27 @@ class TestAbsorbVoidNonRollableAndExcludedFromPickers:
         # such button is emitted for it.
         assert 'data-roll-key="knack:absorb_void"' not in body
 
+    def test_roll_dice_icon_uses_d10_kite_not_emoji(self, client):
+        """The knack roll-trigger icon is the d10 "kite" SVG (matching the
+        roll animation + copy-as-image card), not the Unicode die-face
+        emoji (which every font draws as a pipped d6). The reusable
+        ``#d10-die`` symbol is defined once in base.html."""
+        cid = _seed_character(
+            client, name="DiceIconKite", school="shosuro_actor",
+            knacks={"athletics": 2, "discern_honor": 2, "pontificate": 2},
+        )
+        body = client.get(f"/characters/{cid}").text
+        # The shared sprite symbol is present, and the rollable knack's
+        # trigger references it via <use>.
+        assert 'id="d10-die"' in body
+        assert 'class="roll-die-icon"' in body
+        assert 'href="#d10-die"' in body
+        # The kite carries the d10's "0" (ten) face.
+        assert ">0</text>" in body
+        # The d6 die-face emoji must no longer appear anywhere on the sheet.
+        assert "\U0001F3B2" not in body
+        assert "&#x1F3B2;" not in body
+
     def test_editor_mantis_non_rollable_set_includes_absorb_void(self, client):
         """The JS-side MANTIS_NON_ROLLABLE_KNACKS Set drives every
         flexible-pick dropdown in the editor (Mantis 2nd Dan, Kitsune

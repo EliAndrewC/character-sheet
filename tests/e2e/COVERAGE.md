@@ -795,6 +795,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Click a Ring always opens the roll menu (even with 0 VP) → `test_rolls.py::test_click_ring_always_shows_menu_even_with_zero_vp`
 - [x] Click a Ring with VP shows "Spend N void points" dropdown options → `test_rolls.py::test_click_ring_shows_void_options_when_vp_available`
 - [x] Roll menu flipped above the clicked element sits close to it (no large gap) → `test_rolls.py::test_roll_menu_flipped_above_is_close_to_clicked_element`
+- [x] Knack roll trigger renders the d10 "kite" SVG icon (shared `#d10-die` sprite), visibly sized, and still triggers the roll on click - not the d6 die-face emoji → `test_rolls.py::test_knack_roll_trigger_shows_d10_kite_icon`
 - [x] Roll-result modal carries a "Copy as image" button that pre-renders a PNG dice card while the animation is on screen and writes it to the clipboard on click (verifies the PNG actually lands on the clipboard) → `test_rolls.py::test_roll_result_copy_as_image_button`
 - [x] Copy-as-image button is hidden during the dice animation and surfaces only once the pre-rendered PNG is ready → `test_rolls.py::test_roll_result_copy_button_hidden_during_animation`
 - [x] Copy-as-image on the freeform-roll modal (its own Alpine scope with a local copy of the prerender state) → `test_rolls.py::test_freeform_modal_has_copy_as_image_button`

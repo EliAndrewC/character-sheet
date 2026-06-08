@@ -111,6 +111,22 @@
         }
         .die-cell { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
 
+        /* Roll-trigger icon: the same d10 "kite" the roll animation and the
+           copy-as-image card use, rendered small as a click-to-roll glyph.
+           Replaces the Unicode die-face emoji, which every font draws as a
+           pipped d6. Sized in rem so it tracks the surrounding text. */
+        .roll-die-icon {
+            width: 0.95rem;
+            height: 1.1rem;           /* 116/100 kite aspect */
+            display: inline-block;
+            vertical-align: -0.2rem;
+            fill: #fff7e0;            /* gold-tinted face, matches "is-ten" dice */
+            stroke: #8b0000;          /* accent outline */
+            stroke-width: 6;
+            stroke-linejoin: round;
+            overflow: visible;
+        }
+
         /* Action-dice variant: same kite shape as the roll-animation die,
            but with color variants keyed to the die's *category* (spent,
            Kakita Phase 0 interrupt, Togashi athletics-only) rather than
@@ -345,6 +361,23 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-parchment text-ink min-h-screen">
+    {# Reusable d10 "kite" die sprite, referenced by roll-trigger icons via
+       <use href="#d10-die">. Same path as the roll animation
+       (app/static/js/dice.js DIE_PATH_D) and the copy-as-image card
+       (app/services/dice_card.py DIE_PATH); keep the three in sync. #}
+    <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+        <symbol id="d10-die" viewBox="0 0 100 116">
+            <path d="M 54.59 6.55 L 95.41 64.85 Q 100 71.4 94.03 76.73 L 55.97 110.67 Q 50 116 44.03 110.67 L 5.97 76.73 Q 0 71.4 4.59 64.85 L 45.41 6.55 Q 50 0 54.59 6.55 Z"/>
+            {# "0" = the d10's ten face (matches the roll animation's
+               dieFaceText convention). fill/stroke set explicitly so the
+               numeral isn't painted with the face's gold fill or the
+               kite's accent outline inherited from .roll-die-icon. #}
+            <text x="50" y="64" text-anchor="middle" dominant-baseline="middle"
+                  fill="#8b0000" stroke="none"
+                  font-family="ui-monospace, monospace" font-weight="bold"
+                  font-size="58">0</text>
+        </symbol>
+    </svg>
     <nav class="bg-ink text-parchment px-6 py-3 shadow-lg" x-data="{ navOpen: false }">
         <div class="max-w-6xl mx-auto flex items-center justify-between relative">
             <a href="/" class="text-xl font-bold tracking-wide hover:text-gold transition-colors">
