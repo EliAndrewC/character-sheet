@@ -870,6 +870,12 @@
             rollMenuOwCapacity: 0,
             owHoverRow: null,
             parryHoverRow: null,
+            // Pontificate menu: each main option (Roll / Spend N void) has
+            // a hover submenu of basic skills it can be rolled "as". This
+            // flag selects the Pontificate menu layout; pontHoverRow tracks
+            // which option's skill submenu is open.
+            rollMenuHasPontificate: false,
+            pontHoverRow: null,
             // Merchant 5th Dan selective reroll state
             merchant5thPhase: 'idle',  // 'idle' | 'selecting'
             merchant5thSelections: [],
@@ -1116,6 +1122,7 @@
                 const rulesHtml = isTouch ? this._readRulesText(el) : '';
                 this.rollMenuRulesHtml = rulesHtml;
                 this.rollMenuHasMobileAttack = false;
+                this.rollMenuHasPontificate = false;
 
                 // Athletics knack: show a ring picker instead of rolling the
                 // default-ring formula, since Athletics varies by ring.
@@ -1170,6 +1177,35 @@
                     this.owHoverRow = null;
                     this.athHoverRow = null;
                     this.parryHoverRow = null;
+                    this.rollMenuOpen = true;
+                    return;
+                }
+
+                // Pontificate: keep the with/without-void options, but give
+                // each a hover submenu of eligible basic skills. Rolling a
+                // submenu skill rolls "Pontificate (as <skill>)" which
+                // inherits that skill's bonuses; rolling the main option
+                // rolls plain Pontificate with no skill bonuses. Always show
+                // the menu (even at 0 VP) so the skill submenus are reachable.
+                if (key === 'knack:pontificate') {
+                    const pos = this._computeRollMenuPos(el);
+                    this.rollMenuKey = key;
+                    this.rollMenuTitle = f.label;
+                    this.rollMenuPos = pos;
+                    this.rollMenuOptions = this.schoolAbilities.merchant_post_roll_vp
+                        ? [] : this.computeVoidOptions();
+                    this.rollMenuHasStrike = false;
+                    this.rollMenuHasParry = false;
+                    this.rollMenuHasTogashiInit = false;
+                    this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuHasRingPicker = false;
+                    this.rollMenuHasAttackChoice = false;
+                    this.rollMenuHasPontificate = true;
+                    this.rollMenuOwCapacity = 0;
+                    this.owHoverRow = null;
+                    this.athHoverRow = null;
+                    this.parryHoverRow = null;
+                    this.pontHoverRow = null;
                     this.rollMenuOpen = true;
                     return;
                 }

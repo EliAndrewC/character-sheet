@@ -15,6 +15,7 @@ sheet and stays untouched. This module shares its bonus tables and constants.
 
 from __future__ import annotations
 
+import copy
 from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -72,6 +73,65 @@ NON_ROLLABLE_KNACKS = frozenset({
     # 1st/2nd/3rd Dan technique picker.
     "absorb_void",
 })
+
+
+# Basic skills that are NEVER rolled openly in conversation, so Pontificate
+# ("roll this knack instead of any basic skill when making an uncontested
+# roll") never offers them as a "Pontificate (as <skill>)" option.
+PONTIFICATE_EXCLUDED_SKILLS = frozenset({
+    "sneaking",
+    "heraldry",
+    "investigation",
+})
+
+
+def _skill_formula_has_bonus(d: dict) -> bool:
+    """True if a skill-formula dict carries at least one bonus a
+    Pontificate-as-this-skill roll could inherit: a positive flat bonus,
+    a conditional alternative, a 5th Dan optional TN bonus, or 3rd Dan
+    free raises. The unskilled-advanced -10 penalty (the only negative
+    entry that ever appears in ``bonuses``) does not count - and basic
+    skills, the only ones Pontificate substitutes for, never carry it."""
+    if d.get("alternatives"):
+        return True
+    if d.get("courtier_5th_dan_optional"):
+        return True
+    if d.get("doji_5th_dan_always") or d.get("doji_5th_dan_optional"):
+        return True
+    if d.get("adventure_raises_max_per_roll"):
+        return True
+    return any((b.get("amount", 0) or 0) > 0 for b in (d.get("bonuses") or []))
+
+
+def _build_pontificate_variant(
+    pont: dict, skill_dict: dict, skill_id: str, skill_name: str
+) -> dict:
+    """Build a "Pontificate (as <skill>)" formula dict.
+
+    The roll keeps Pontificate's own dice (Water/Air, knack rank) but
+    inherits the basic skill's full bonus set - flat honor/recognition
+    bonuses, conditional alternatives, 5th Dan optional TN bonuses, and
+    3rd Dan free raises - by starting from the already-computed skill
+    formula and substituting Pontificate's dice/ring/reroll fields. Using
+    the skill's bonus set as the source of truth means school-wide
+    bonuses that apply to both skills and knacks (Courtier/Doji 5th Dan)
+    are counted exactly once."""
+    v = copy.deepcopy(skill_dict)
+    for field_name in ("rolled", "kept", "reroll_tens", "no_reroll_reason"):
+        v[field_name] = pont.get(field_name)
+    v["label"] = f"Pontificate (as {skill_name})"
+    v["pontificate_as_skill"] = skill_id
+    v["pontificate_as_skill_name"] = skill_name
+    # Drop skill-identity / dice-shape fields that would mislabel the roll
+    # (it isn't that skill's dice and carries no skill rank), plus any
+    # Kitsune ring-swap metadata (Pontificate's ring isn't swappable here).
+    for field_name in (
+        "skill_name", "skill_rank", "unskilled_skill_name", "is_unskilled",
+        "otherworldliness_capacity", "kitsune_swap",
+        "kitsune_swap_from_ring", "kitsune_swap_to_ring",
+    ):
+        v.pop(field_name, None)
+    return v
 
 
 # Combat rolls eligible for the Mantis Wave-Treader 2nd Dan free raise.
@@ -1472,6 +1532,36 @@ def build_all_roll_formulas(
         if formula is not None:
             d = _annotate_third_dan(f"knack:{knack_id}", formula.to_dict())
             out[f"knack:{knack_id}"] = _annotate_attack_type(f"knack:{knack_id}", d)
+
+    # Pontificate "as <skill>" variants. The rules let a character "roll
+    # this knack instead of any basic skill when making an uncontested
+    # roll", so Pontificate-in-place-of-a-skill should inherit that
+    # skill's bonuses (honor/recognition flat, conditional alternatives,
+    # 3rd Dan free raises) while keeping Pontificate's own Water/Air dice.
+    # We pre-build one variant formula per eligible basic skill, keyed
+    # ``knack:pontificate:as:<skill_id>``, plus a ``pontificate_skills``
+    # menu list on the base formula. Eligible = a basic skill that's
+    # rolled openly in conversation (not sneaking/heraldry/investigation)
+    # AND one the character actually receives a bonus on; the bonus set is
+    # read from the already-built ``skill:<id>`` formulas above.
+    if "knack:pontificate" in out:
+        pont = out["knack:pontificate"]
+        pont_skills: List[dict] = []
+        for skill_id, skill_def in SKILLS.items():
+            if skill_def.is_advanced or skill_id in PONTIFICATE_EXCLUDED_SKILLS:
+                continue
+            sd = out.get(f"skill:{skill_id}")
+            if sd is None or not _skill_formula_has_bonus(sd):
+                continue
+            vkey = f"knack:pontificate:as:{skill_id}"
+            out[vkey] = _build_pontificate_variant(
+                pont, sd, skill_id, skill_def.name
+            )
+            pont_skills.append(
+                {"id": skill_id, "name": skill_def.name, "key": vkey}
+            )
+        pont_skills.sort(key=lambda s: s["name"])
+        pont["pontificate_skills"] = pont_skills
 
     # Iaijutsu knack: stamp damage metadata so the duel modal can use it.
     # Iaijutsu is NOT in ATTACK_TYPE_KEYS (it uses the roll menu, not

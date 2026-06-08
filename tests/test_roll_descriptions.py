@@ -139,6 +139,18 @@ def test_knack_variant_in_title():
     assert "strike" in out["title"]
 
 
+def test_pontificate_as_skill_variant_title():
+    out = describe_roll("knack:pontificate:as:bragging")
+    assert out["title"] == "Pontificate (as Bragging)"
+    # Body still resolves to the Pontificate knack's rules text.
+    assert "instead of any basic skill" in out["body"]
+
+
+def test_pontificate_as_unknown_skill_falls_back_to_raw_segment():
+    out = describe_roll("knack:pontificate:as:not_a_skill")
+    assert out["title"] == "Pontificate (as not_a_skill)"
+
+
 def test_knack_unknown_id():
     out = describe_roll("knack:not_a_knack")
     assert out["title"] == "not_a_knack"

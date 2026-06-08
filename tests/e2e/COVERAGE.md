@@ -576,6 +576,9 @@ The three failures were:
 
 - [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_priest_1st_dan_skill_selection`
 - [x] Pontificate is rolled with whichever of Water/Air is higher (badge advertises both, modal label uses the higher ring) -> `test_school_abilities.py::test_pontificate_picks_higher_of_water_and_air_in_roll_modal`
+- [x] Pontificate menu: each main option (Roll / Spend N void) expands on hover into a submenu of eligible basic skills; excludes sneaking/heraldry/investigation -> `test_pontificate.py::test_pontificate_menu_has_skill_submenu`, `::test_pontificate_void_option_has_skill_submenu`
+- [x] Pontificate "(as <skill>)" roll inherits that skill's bonuses, titles "Pontificate (as Bragging)", and records the skill in the roll key/history -> `test_pontificate.py::test_pontificate_as_skill_rolls_with_bonuses`
+- [x] Plain Pontificate from a main menu option carries no skill bonuses -> `test_pontificate.py::test_plain_pontificate_has_no_skill_bonuses`
 - [ ] Special ability "all 10 rituals" link on character sheet -> `test_school_abilities.py::test_priest_sheet_links_to_rituals`
 - [ ] Special ability "all 10 rituals" link in school selection editor -> `test_school_selection.py::test_priest_special_ability_links_to_rituals`
 - [ ] Non-Priest school's special ability has no rituals link in editor -> `test_school_selection.py::test_non_priest_special_ability_has_no_external_link`
