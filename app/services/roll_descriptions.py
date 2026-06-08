@@ -186,7 +186,13 @@ def describe_roll(roll_key: Optional[str]) -> Dict[str, str]:
         knack = SCHOOL_KNACKS.get(kid)
         if knack is not None:
             title = f"{knack.name} (knack)"
-            if variant:
+            # Pontificate "(as <skill>)" variants (key
+            # ``knack:pontificate:as:<skill>``): render the substituted
+            # basic skill in the title rather than the raw key segments.
+            if variant == "as" and len(parts) > 2:
+                sk = SKILLS.get(parts[2])
+                title = f"{knack.name} (as {sk.name if sk else parts[2]})"
+            elif variant:
                 title += f" - {variant}"
             return {
                 "title": title,

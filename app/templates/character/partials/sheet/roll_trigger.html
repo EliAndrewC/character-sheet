@@ -198,7 +198,7 @@
                 </div>
             </template>
             <div class="relative"
-                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasRingPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack"
+                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasRingPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack && !rollMenuHasPontificate"
                  @mouseenter="owHoverRow = 'roll'"
                  @mouseleave="owHoverRow = null">
                 <button type="button"
@@ -220,7 +220,7 @@
                     </template>
                 </div>
             </div>
-            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasRingPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack ? [] : rollMenuOptions)" :key="'r'+opt.count">
+            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasRingPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack || rollMenuHasPontificate ? [] : rollMenuOptions)" :key="'r'+opt.count">
                 <div class="relative"
                      @mouseenter="owHoverRow = 'r' + opt.count"
                      @mouseleave="owHoverRow = null">
@@ -416,6 +416,69 @@
                                             @click="executeRoll('athletics:parry', opt.count, opt)"
                                             class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
                                         <span x-text="opt.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            {# Pontificate menu: the with/without-void main options, each
+               with a hover submenu of basic skills it can be rolled "as".
+               Clicking a main option rolls plain Pontificate (no skill
+               bonuses); clicking a skill rolls the precomputed
+               ``knack:pontificate:as:<skill>`` variant, which carries that
+               skill's bonuses. The skill list comes from the server on the
+               base formula's ``pontificate_skills``. #}
+            <template x-if="rollMenuHasPontificate">
+                <div data-pontificate-menu>
+                    {# Main "Roll Pontificate" (no skill) + skill submenu #}
+                    <div class="relative"
+                         @mouseenter="pontHoverRow = 'roll'"
+                         @mouseleave="pontHoverRow = null">
+                        <button type="button"
+                                data-pontificate-roll
+                                @click="executeRoll(rollMenuKey, 0, null)"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                            <span>Roll <span x-text="rollMenuTitle"></span></span>
+                            <span x-show="(formulas[rollMenuKey]?.pontificate_skills || []).length > 0" class="text-xs text-accent" title="Roll in place of a basic skill">&#9656;</span>
+                        </button>
+                        <div x-show="pontHoverRow === 'roll' && (formulas[rollMenuKey]?.pontificate_skills || []).length > 0"
+                             x-cloak
+                             data-pontificate-submenu="roll"
+                             class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                            <template x-for="sk in (formulas[rollMenuKey]?.pontificate_skills || [])" :key="'po'+sk.id">
+                                <button type="button"
+                                        :data-pontificate-skill="sk.id"
+                                        @click="executeRoll(sk.key, 0, null)"
+                                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                    <span x-text="'as ' + sk.name"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    {# Each void option, with the same skill submenu #}
+                    <template x-for="opt in rollMenuOptions" :key="'pv'+opt.count">
+                        <div class="relative"
+                             @mouseenter="pontHoverRow = 'v' + opt.count"
+                             @mouseleave="pontHoverRow = null">
+                            <button type="button"
+                                    :data-pontificate-vp="opt.count"
+                                    @click="executeRoll(rollMenuKey, opt.count, opt)"
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent flex items-center justify-between gap-2">
+                                <span x-text="opt.label"></span>
+                                <span x-show="(formulas[rollMenuKey]?.pontificate_skills || []).length > 0" class="text-xs" title="Roll in place of a basic skill">&#9656;</span>
+                            </button>
+                            <div x-show="pontHoverRow === ('v' + opt.count) && (formulas[rollMenuKey]?.pontificate_skills || []).length > 0"
+                                 x-cloak
+                                 :data-pontificate-submenu="'v' + opt.count"
+                                 class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                <template x-for="sk in (formulas[rollMenuKey]?.pontificate_skills || [])" :key="'pov'+opt.count+'-'+sk.id">
+                                    <button type="button"
+                                            :data-pontificate-skill-vp="sk.id + ':' + opt.count"
+                                            @click="executeRoll(sk.key, opt.count, opt)"
+                                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                        <span x-text="opt.label + ' - as ' + sk.name"></span>
                                     </button>
                                 </template>
                             </div>
