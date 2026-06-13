@@ -151,6 +151,17 @@ The three failures were:
 - [x] Opponent wound check opens from duel -> `test_iaijutsu_duel.py::test_duel_opponent_wound_check_opens`
 - [x] Duel setup shows Katana (4k2) default -> `test_iaijutsu_duel.py::test_duel_katana_weapon_default`
 - [x] Duel restart when both miss resets TNs -> `test_ui_interactions.py::test_duel_restart_resets_tns`
+- [x] Focus/strike phase shows strike odds chart (your rows, 3 sample opponent pools, no VP levels) -> `test_iaijutsu_duel.py::test_focus_strike_shows_odds_chart`
+- [x] Odds chart TNs and percentages react live to Focus / Opponent Focuses clicks -> `test_iaijutsu_duel.py::test_focus_strike_chart_reacts_to_focus_clicks`
+- [x] Odds chart ~SW caveat names current light wounds when wounded, omits clause at 0 LW -> `test_iaijutsu_duel.py::test_focus_strike_chart_sw_caveat_shows_light_wounds_when_wounded`
+- [x] Conviction spend on contested roll (+1, undo, daily-pool carry into strike, no priest ally) -> `test_iaijutsu_duel.py::test_duel_contested_conviction_spend_and_pool_carry`
+- [x] Conviction spend on strike result raises total, flips miss-by-1 to hit, undo reverses -> `test_iaijutsu_duel.py::test_duel_strike_conviction_spend_flips_miss_to_hit`
+- [x] No conviction block on strike result without the knack -> `test_iaijutsu_duel.py::test_duel_strike_no_conviction_no_spend_block`
+- [x] Conviction spend on duel damage result (+1, undo) -> `test_iaijutsu_duel.py::test_duel_damage_conviction_spend_increments_total`
+- [x] Strike wound check offers ONLY own conviction (no raises/priest ally), no auto-apply until accepted -> `test_iaijutsu_duel.py::test_duel_strike_wound_check_conviction_only_discretionary`
+- [x] Strike wound check without conviction auto-applies failure as before -> `test_iaijutsu_duel.py::test_duel_strike_wound_check_auto_applies_without_conviction`
+- [x] Manual Iaijutsu Strike Wound Check button also offers own conviction only -> `test_iaijutsu_duel.py::test_manual_strike_wound_check_offers_conviction`
+- [x] Party priest 5th Dan conviction hidden on strike wound checks -> `test_groups.py::test_party_priest_ally_conviction_hidden_on_strike_wound_check`
 
 ## UI Interactions (cross-cutting)
 
@@ -1847,6 +1858,7 @@ Phase 8 runs the full regression suite as the exit gate.
 - [x] Foreign-knack rules-text disclosure shows the 'foreign / learned outside your school' preface → `test_foreign_knacks.py::test_foreign_knack_tooltip_includes_foreign_note`
 - [x] Foreign athletics rank 1 enables athletics roll buttons on the sheet → `test_foreign_knacks.py::test_foreign_athletics_enables_athletics_roll_on_sheet`
 - [x] Foreign worldliness grants the per-adventure Worldliness pool → `test_foreign_knacks.py::test_foreign_worldliness_grants_pool`
+- [x] Foreign conviction shows Spend Conviction (+1) on roll results and the spend registers → `test_foreign_knacks.py::test_foreign_conviction_shows_spend_button_on_roll`
 
 ---
 

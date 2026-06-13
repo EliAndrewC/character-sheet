@@ -968,6 +968,30 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         for k in range(1, min(r + 1, 11)):
             damage_avgs[f"{r},{k}"] = round(_prob_table[True].get((r, k), 0), 2)
 
+    # Iaijutsu duel focus/strike odds chart: no-reroll probability slices
+    # (strike rolls never reroll 10s) for the player's own strike pool plus
+    # three sample opponent pools. Only built when the character can duel.
+    duel_probs = None
+    _strike_formula = roll_formulas.get("knack:iaijutsu:strike")
+    if _strike_formula:
+        _sr, _sk = _strike_formula["rolled"], _strike_formula["kept"]
+        if _sr > 10:  # pragma: no cover - formulas arrive pre-capped; belt and braces
+            _sk += _sr - 10
+            _sr = 10
+        if _sk > 10:  # pragma: no cover - same
+            _sk = 10
+        duel_probs = {
+            "strike": [
+                round(_prob_table[False][_sr, _sk, x], 4) for x in range(max_target)
+            ],
+            "samples": {
+                f"{r},{k}": [
+                    round(_prob_table[False][r, k, x], 4) for x in range(max_target)
+                ]
+                for r, k in ((8, 4), (10, 5), (10, 7))
+            },
+        }
+
     # Get version history
     versions = (
         db.query(CharacterVersion)
@@ -1057,6 +1081,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "wound_check_probs": wc_probs,
             "attack_probs": attack_probs,
             "damage_avgs": damage_avgs,
+            "duel_probs": duel_probs,
             "has_temp_void": character.school in SCHOOLS_WITH_TEMP_VOID,
             "school_abilities": school_abilities,
             "daidoji_counterattack_party": daidoji_counterattack_party,

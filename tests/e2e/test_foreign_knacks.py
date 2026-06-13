@@ -219,6 +219,40 @@ def test_foreign_athletics_enables_athletics_roll_on_sheet(page, live_server_url
     assert page.locator('[data-ring-athletics="Air"]').count() == 1
 
 
+def test_foreign_conviction_shows_spend_button_on_roll(page, live_server_url):
+    """A character with conviction as a foreign knack sees the Spend
+    Conviction (+1) button on a roll result, and clicking it registers
+    the spend. Regression: the conviction-config fed to the roll modals
+    was built from school knacks only, so foreign conviction never
+    surfaced any spend option after a roll."""
+    # Akodo doesn't have conviction as a native knack; take it as foreign.
+    _go_to_editor(page, live_server_url)
+    page.fill('input[name="name"]', "FKConviction")
+    _add_foreign_knack(page, "conviction")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "conviction test")
+    # Roll a bare ring (non-initiative, uses the generic result modal).
+    page.locator('[data-roll-key="ring:Earth"]').click()
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    menu.wait_for(state="visible", timeout=5000)
+    menu.locator('[data-ring-bare="Earth"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+    spend = page.locator('[data-action="spend-conviction"]')
+    assert spend.is_visible(), \
+        "Spend Conviction must appear on roll results for foreign-knack conviction"
+    spend.click()
+    page.wait_for_timeout(150)
+    spent = page.evaluate("() => window._diceRoller?.convictionSpentThisRoll")
+    assert spent == 1, f"conviction spend should register; got {spent}"
+
+
 def test_foreign_worldliness_grants_pool(page, live_server_url):
     """A non-Asahina character with foreign worldliness rank 2 sees the
     Worldliness counter in their per-adventure tracking with max=2."""

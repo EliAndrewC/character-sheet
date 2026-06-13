@@ -56,7 +56,7 @@
 
 ## 3rd Dan
 
-> Your attacks of all types get a bonus of X for each phase before the target's next action they occur, where X is your attack skill.  If a target does not have an action remaining in this round, they are considered to act in phase 11.  You know the next action of all potential targets within striking range.
+> Your attacks of all types get a bonus of X for each phase before the target's next action occurs, where X is your attack skill.  If a target does not have an action remaining in this round, they are considered to act in phase 11.  You know the next action of all potential targets within striking range.
 
 **Status:** Fully implemented on the attack modal. The "you know the next action of everyone within striking range" information-display piece is player-knowledge and not modeled in the app.
 

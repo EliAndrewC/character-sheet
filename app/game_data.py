@@ -1436,7 +1436,7 @@ _SCHOOLS_LIST: List[School] = [
             1: "Roll one extra die on double attack, iaijutsu, and initiative rolls.",
             2: "You get a free raise on iaijutsu rolls.",
             3: (
-                "Your attacks of all types get a bonus of X for each phase before the target's next action they occur, where X is your attack skill.  If a target does not have an action remaining in this round, they are considered to act in phase 11.  You know the next action of all potential targets within striking range."
+                "Your attacks of all types get a bonus of X for each phase before the target's next action occurs, where X is your attack skill.  If a target does not have an action remaining in this round, they are considered to act in phase 11.  You know the next action of all potential targets within striking range."
             ),
             4: (
                 "Raise your current and maximum Fire by 1.  Raising your Fire now costs 5 fewer XP.  You get a free raise on damage rolls from any strike which used iaijutsu."

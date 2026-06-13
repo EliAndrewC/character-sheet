@@ -244,8 +244,9 @@
                         <p class="text-sm text-success mb-3">
                             You may keep your light wounds or choose to take 1 serious wound and reset light wounds to 0.
                         </p>
-                        {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each (increases margin for 3rd Dan banking) #}
-                        <div x-show="voidSpendConfig.wc_vp_free_raise" x-cloak
+                        {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each (increases margin for 3rd Dan banking).
+                           Not on iaijutsu strike wound checks - VP can't be spent there. #}
+                        <div x-show="voidSpendConfig.wc_vp_free_raise && !wcIsStrike" x-cloak
                              class="mb-3 pt-2 border-t border-success/30">
                             <div class="flex flex-wrap items-center gap-2">
                                 <button type="button"
@@ -402,8 +403,40 @@
                             </button>
                         </div>
 
+                        {# Iaijutsu strike: own Conviction is the ONLY
+                           discretionary spend allowed (rules quirk) - no
+                           raises, banked bonuses, post-roll VP, or
+                           priest-ally conviction. wcHasDiscretionary is
+                           recomputed to conviction-only for strikes in
+                           rollWoundCheck(). #}
+                        <div x-show="wcIsStrike && wcHasDiscretionary && !wcResultApplied" x-cloak
+                             class="mt-3 pt-2 border-t border-red-200" data-conviction-block-wc-strike>
+                            <div class="flex flex-wrap items-center gap-2 mb-1">
+                                <button type="button"
+                                        @click="spendConviction('wc')" :disabled="!canSpendConviction()"
+                                        data-action="spend-conviction-wc-strike"
+                                        class="btn-primary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-30">
+                                    Spend Conviction (+1)
+                                </button>
+                                <button type="button"
+                                        x-show="convictionSpentThisRoll > 0"
+                                        @click="undoConviction('wc')"
+                                        class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
+                                    Undo Conviction
+                                </button>
+                            </div>
+                            <div class="text-xs text-ink/50 italic mb-1">
+                                Conviction is the only discretionary bonus that can be spent on an iaijutsu strike wound check.
+                            </div>
+                            <button type="button" @click="wcAcceptResult()"
+                                    data-action="wc-strike-accept-result"
+                                    class="btn-primary px-4 py-2 rounded text-sm font-medium mt-1">
+                                Accept Result
+                            </button>
+                        </div>
+
                         {# Auto-applied or no discretionary - just close #}
-                        <div x-show="wcIsStrike || !wcHasDiscretionary || wcResultApplied" x-cloak>
+                        <div x-show="!wcHasDiscretionary || wcResultApplied" x-cloak>
                             <button type="button" @click="wcModalOpen = false"
                                     class="mt-3 btn-secondary px-4 py-2 rounded text-sm font-medium">
                                 Close
