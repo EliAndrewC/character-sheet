@@ -1,6 +1,6 @@
 # Combat vs non-combat XP - where the party spends its points
 
-A long-standing question about this campaign: of all the XP a character has
+A question we've had for a while but never calculated: of the XP a character has
 spent, how much went toward being good at *fighting* versus everything else -
 courtly maneuvering, investigation, trade, lore, social standing? This is a
 snapshot of where our ten player characters actually sit, taken from the live

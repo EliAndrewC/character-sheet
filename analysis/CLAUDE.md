@@ -23,6 +23,41 @@ file, so a run is self-documenting. Existing entries to copy the style from:
 `shosuro_fifth_dan_bonuses.py` -> `ShosuroFifthDan.{csv,md}` and the
 `...ByPercentile` companion.
 
+## Variant: analyses that read live campaign data (snapshot pattern)
+
+The default shape assumes the inputs are canonical and in-repo (`app/data`,
+`app/game_data.py`), so a rerun is byte-stable. Some analyses instead measure
+the **live campaign** - the player characters in the production database - which
+is not in the repo and not reproducible on its own. Those use a two-step
+**snapshot pattern**:
+
+- **capture** reads a *local copy* of the live DB (path passed in via
+  `DATABASE_URL` or `--db`) and writes a dated, committed JSON snapshot under a
+  `<name>_snapshots/` directory.
+- **report** builds the tables/stats from a committed snapshot, so it needs no
+  database and anyone with a checkout can reproduce the output.
+
+Rules for this variant:
+
+- **No secrets in the script, ever.** It never talks to the host or holds a
+  token/key. Pulling the live DB into a local file is a separate manual step the
+  operator runs with their own auth (e.g. `fly ssh sftp get ...`); document that
+  command in the script docstring, but keep credentials out of the committed
+  file. Loading `FLY_API_TOKEN` from `.env` happens in the operator's shell, not
+  the script.
+- **Snapshots store raw inputs, not computed results**, so if the analysis's
+  categorization is later refined, every historical snapshot recomputes
+  consistently. Keeping each dated snapshot is the point: it lets the analysis
+  show change over time (re-run `report` on any past date; a `trend` mode can
+  summarize one row per snapshot).
+- These entries legitimately **skip the CSV** and may have the script emit only
+  the table + stats rather than the whole `.md` - the prose is hand-authored
+  because the analysis involves non-scriptable judgment. The script is still the
+  single source of truth for the numbers; paste its stdout into the `.md`.
+
+Example: `combat_vs_noncombat_xp.py` (capture/report/trend) ->
+`CombatVsNonCombatXP.md` + `combat_xp_snapshots/<date>.json`.
+
 ## Conventions
 
 - **Run from the repo root** so the `app` package imports resolve:
