@@ -327,6 +327,70 @@ def test_party_priest_5th_dan_ally_conviction_button(page, live_server_url):
     assert after == before + 1
 
 
+def test_party_priest_ally_conviction_hidden_on_strike_wound_check(page, live_server_url):
+    """Rules quirk: during the strike portion of an iaijutsu duel, only your
+    OWN conviction may be spent - a party Priest's 5th Dan conviction pool
+    must not be offered on a strike wound check, even though it appears on
+    normal wound checks."""
+    # Character A: Priest at 5th Dan
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "StrikePriest")
+    select_school(page, "priest")
+    for knack in ("conviction", "otherworldliness", "pontificate"):
+        click_plus(page, f"knack_{knack}", 4)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Priest 5th Dan")
+    a_url = page.url
+    _set_group(page, a_url, "Tuesday Group")
+
+    # Character B: same group, no conviction of their own
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "StrikeAlly")
+    select_school(page, "akodo_bushi")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Strike ally")
+    b_url = page.url
+    _set_group(page, b_url, "Tuesday Group")
+
+    # On B's sheet: take light wounds, then run the iaijutsu strike WC.
+    page.goto(b_url)
+    page.locator('[data-action="lw-plus"]').click()
+    page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
+    page.fill('input[placeholder="Amount"]', "40")
+    page.locator('input[placeholder="Amount"]').locator('..').locator('button', has_text="Add").click()
+    page.wait_for_selector('[data-action="roll-wound-check-strike"]', state='visible', timeout=10000)
+
+    # (The normal-WC priest-ally button is covered by
+    # test_party_priest_5th_dan_ally_conviction_button; here we assert the
+    # strike path keeps it hidden.)
+    page.locator('[data-action="roll-wound-check-strike"]').click()
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcPhase === 'result') return true;
+        }
+        return false;
+    }""", timeout=15000)
+    wc = page.locator('[data-modal="wound-check"]')
+    # No priest-ally conviction button is visible on the strike WC...
+    assert wc.locator('[data-action^="spend-priest-ally-wc"]:visible').count() == 0
+    # ...and with no own conviction either, the failure auto-applied.
+    applied = page.evaluate("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.wcResultApplied !== undefined) return d.wcResultApplied;
+        }
+        return null;
+    }""")
+    assert applied is True
+
+
 def test_party_priest_2nd_dan_grants_bragging_free_raise(page, live_server_url):
     """A party member Priest at dan>=2 grants every ally a free raise on
     bragging/precepts/open-sincerity. The bonus shows in the skill tooltip

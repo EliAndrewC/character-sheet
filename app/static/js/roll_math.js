@@ -201,6 +201,123 @@
       return Math.floor(totalXp / 10);
     },
 
+    // ----------------------------------------------------------------- //
+    // Group F - iaijutsu duel focus/strike odds chart                    //
+    //                                                                    //
+    // The focus/strike phase shows hit / damage / serious-wound          //
+    // estimates with NO void or discretionary adjustments: none can be   //
+    // spent during the strike (own Conviction is ignored here as an      //
+    // edge case). Strike rolls and their wound checks do not reroll 10s; //
+    // the resulting damage rolls do. All functions work from "survival   //
+    // arrays" where survival[x] = P(kept-dice total >= x), the same      //
+    // no-reroll slices the server ships for the wound check modal.       //
+    // ----------------------------------------------------------------- //
+
+    /** P(kept total >= x) with out-of-range indices clamped to 1 / 0. */
+    survivalAt: function (survival, x) {
+      if (x <= 0) return 1;
+      if (!survival || x >= survival.length) return 0;
+      return survival[x];
+    },
+
+    /**
+     * Average iaijutsu-duel damage roll for a given strike excess. In a
+     * duel every point of excess adds a rolled die (not one per 5). The
+     * pool is (weaponRolled + ringVal + extraRolled + excess) k
+     * (weaponKept + extraKept) + dmgFlat, 10k10-capped; dmgAvgs maps
+     * "rolled,kept" to the average kept sum WITH 10s rerolled (damage
+     * rolls keep their rerolls even in duels).
+     */
+    duelDamageAvg: function (dmg, excess, dmgAvgs) {
+      var capped = this.applyDiceCap(
+        (dmg.weaponRolled || 0) + (dmg.ringVal || 0) + (dmg.extraRolled || 0)
+          + Math.max(0, excess),
+        (dmg.weaponKept || 0) + (dmg.extraKept || 0),
+        dmg.dmgFlat || 0
+      );
+      return (dmgAvgs[capped.rolled + "," + capped.kept] || 0) + capped.flat;
+    },
+
+    /**
+     * Expected serious wounds from one no-VP wound check against lw light
+     * wounds, given the check's survival array and flat bonus. Counts
+     * failures only (a pass inflicts 0 SW). Uses the same 10-point band
+     * arithmetic as the wound check modal's probability table so the two
+     * displays always agree. opts: {halfLw} Bayushi 5th Dan, {dojiWc}
+     * Doji Artisan 5th Dan +1-per-5-LW-over-10.
+     */
+    expectedSeriousWounds: function (survival, flat, lw, opts) {
+      opts = opts || {};
+      if (!(lw > 0)) return 0;
+      if (opts.dojiWc) flat += this.bonusPer5Over10(lw);
+      var target = Math.max(0, lw - flat);
+      var effLw = this.woundCheckEffectiveLw(lw, opts.halfLw);
+      var effTarget = Math.max(0, effLw - flat);
+      var maxSW = this.woundCheckMaxSeriousWounds(effLw);
+      var expected = 0;
+      for (var sw = 1; sw <= maxSW; sw++) {
+        var failLo = Math.max(0, effTarget - sw * 10);
+        var failHi = Math.max(0, effTarget - (sw - 1) * 10);
+        var chance = this.survivalAt(survival, failLo) - this.survivalAt(survival, failHi);
+        if (sw === 1 && opts.halfLw && effTarget < target) {
+          chance += this.survivalAt(survival, effTarget) - this.survivalAt(survival, target);
+        }
+        if (chance > 0) expected += sw * chance;
+      }
+      return expected;
+    },
+
+    /**
+     * Your strike vs an opponent TN: hit chance and average damage given
+     * a hit. survival is your strike pool's no-reroll slice; flat shifts
+     * every outcome (e.g. duel restart bonus).
+     * @returns {{hit: number, avgDamage: number}}
+     */
+    duelStrikeOutcome: function (survival, flat, tn, dmg, dmgAvgs) {
+      var hit = this.survivalAt(survival, tn - flat);
+      if (!(hit > 0)) return { hit: 0, avgDamage: 0 };
+      var sum = 0;
+      for (var s = Math.max(0, tn - flat); s <= survival.length; s++) {
+        var w = this.survivalAt(survival, s) - this.survivalAt(survival, s + 1);
+        if (!(w > 0)) continue;
+        sum += w * this.duelDamageAvg(dmg, s + flat - tn, dmgAvgs);
+      }
+      return { hit: hit, avgDamage: sum / hit };
+    },
+
+    /**
+     * A sample opponent pool's strike vs your TN: hit chance, average
+     * damage given a hit, and the average serious wounds your own
+     * no-reroll wound check takes from that hit on top of your current
+     * light wounds. The opponent is assumed to swing a katana (4k2) with
+     * Fire equal to the sample pool's kept count and no flat bonuses.
+     * The SW figure folds each excess level's AVERAGE damage into the
+     * wound check (an estimate - the full damage distribution would
+     * spread the bands slightly wider).
+     * wc: {survival, flat, halfLw, dojiWc} - your own wound check.
+     * @returns {{hit: number, avgDamage: number, avgSw: number}}
+     */
+    duelOpponentThreat: function (oppSurvival, tn, oppFire, dmgAvgs, wc, currentLw) {
+      var hit = this.survivalAt(oppSurvival, tn);
+      if (!(hit > 0)) return { hit: 0, avgDamage: 0, avgSw: 0 };
+      var dmgSum = 0;
+      var swSum = 0;
+      for (var s = Math.max(0, tn); s <= oppSurvival.length; s++) {
+        var w = this.survivalAt(oppSurvival, s) - this.survivalAt(oppSurvival, s + 1);
+        if (!(w > 0)) continue;
+        var d = this.duelDamageAvg(
+          { weaponRolled: 4, weaponKept: 2, ringVal: oppFire, dmgFlat: 0 },
+          s - tn, dmgAvgs
+        );
+        dmgSum += w * d;
+        swSum += w * this.expectedSeriousWounds(
+          wc.survival, wc.flat, currentLw + Math.round(d),
+          { halfLw: wc.halfLw, dojiWc: wc.dojiWc }
+        );
+      }
+      return { hit: hit, avgDamage: dmgSum / hit, avgSw: swSum / hit };
+    },
+
     /**
      * Hida Bushi 3rd Dan reroll allowance: X dice (2X on counterattacks),
      * halved and rounded UP when impaired.

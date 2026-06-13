@@ -570,7 +570,8 @@
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                const newTotal = this.keptSum + f.flat;
+                // Conviction spent before the reroll carries through.
+                const newTotal = this.keptSum + f.flat + (this.convictionSpentThisRoll || 0);
                 const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
                 this.baseTotal = r.total;
                 this.duelContestedRoll = r.total;
@@ -596,7 +597,9 @@
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                const newTotal = this.keptSum + f.flat;
+                // Conviction spent before the reroll carries through (same
+                // rule as every other reroll path).
+                const newTotal = this.keptSum + f.flat + (this.convictionSpentThisRoll || 0);
                 const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
                 this.baseTotal = r.total;
                 this.duelStrikeRoll = r.total;
@@ -627,7 +630,8 @@
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                const newTotal = this.keptSum + dmg.flat;
+                // Conviction spent on the damage carries through the reroll.
+                const newTotal = this.keptSum + dmg.flat + (this.convictionSpentThisRoll || 0);
                 const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
                 this.duelDamageTotal = r.total;
                 this.duelPhase = 'damage-result';
@@ -640,6 +644,9 @@
             _dyingThreshold: {{ dying_adj }},
             _charName: {{ character.name|tojson }},
             // Iaijutsu duel
+            duelProbs: null,
+            _duelChartSig: '',
+            _duelChartCache: null,
             duelOpen: false,
             duelPhase: 'setup',
             duelPlayerTN: window.L7RRollMath.duelTn({{ character.starting_xp }} + {{ character.earned_xp }}),
@@ -948,6 +955,11 @@
                         document.getElementById('conviction-config').textContent || '{}'
                     );
                 } catch (e) { /* keep defaults */ }
+                try {
+                    this.duelProbs = JSON.parse(
+                        document.getElementById('duel-probs').textContent || 'null'
+                    );
+                } catch (e) { this.duelProbs = null; }
                 try {
                     this.priestAllies = JSON.parse(
                         document.getElementById('priest-conviction-allies').textContent || '[]'
@@ -3147,6 +3159,9 @@
                 if (target === 'attack') this.atkRollTotal += 1;
                 if (target === 'wc') this.wcRollTotal += 1;
                 if (target === 'damage') this.atkDamageTotal += 1;
+                if (target === 'duel-contested') this.duelContestedRoll += 1;
+                if (target === 'duel-strike') this.duelStrikeRoll += 1;
+                if (target === 'duel-damage') this.duelDamageTotal += 1;
                 const t = window._trackingBridge;
                 if (t) {
                     const used = (t.getCount('conviction') || 0);
@@ -3156,6 +3171,7 @@
                     this._atkUpdateHitState();
                 }
                 if (target === 'wc') this._wcUpdateMargin();
+                if (target === 'duel-strike') this._duelUpdateStrikeState();
                 if (target === 'attack' || target === 'damage') this._refreshAttackDieTooltip();
             },
             undoConviction(target) {
@@ -3165,6 +3181,9 @@
                 if (target === 'attack') this.atkRollTotal -= 1;
                 if (target === 'wc') this.wcRollTotal -= 1;
                 if (target === 'damage') this.atkDamageTotal -= 1;
+                if (target === 'duel-contested') this.duelContestedRoll -= 1;
+                if (target === 'duel-strike') this.duelStrikeRoll -= 1;
+                if (target === 'duel-damage') this.duelDamageTotal -= 1;
                 const t = window._trackingBridge;
                 if (t) {
                     const used = (t.getCount('conviction') || 0);
@@ -3174,7 +3193,15 @@
                     this._atkUpdateHitState();
                 }
                 if (target === 'wc') this._wcUpdateMargin();
+                if (target === 'duel-strike') this._duelUpdateStrikeState();
                 if (target === 'attack' || target === 'damage') this._refreshAttackDieTooltip();
+            },
+            _duelUpdateStrikeState() {
+                // Hit / excess feed the damage step (extra dice), so they
+                // must track the conviction-adjusted strike total.
+                const excess = this.duelStrikeRoll - this.duelOpponentTN;
+                this.duelStrikeHit = excess >= 0;
+                this.duelStrikeExcess = excess;
             },
             // --- Togashi 3rd Dan daily athletics raises ---
             togashiRaisesPoolAvail() {
@@ -3633,6 +3660,7 @@
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.luckyRollPair = null;
+                this.convictionSpentThisRoll = 0;
                 this.duelPhase = 'contested-rolling';
                 this.formula = f;
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
@@ -3657,6 +3685,88 @@
                 this.duelPhase = 'focus_strike';
             },
 
+            // --- Focus/strike odds chart -------------------------------
+            // Deliberately ignores VP and discretionary bonuses: none can
+            // be spent on strike rolls or their wound checks (own
+            // Conviction is possible but an edge case the chart skips).
+            // Strike rolls and wound checks use no-reroll slices; damage
+            // averages keep the 10-reroll. All math lives in
+            // L7RRollMath (Group F); this just wires the sheet's data in.
+
+            _duelWcChartParams() {
+                // Mirror wcProbRow's iaijutsu-strike branch: base pool,
+                // zero VP, no-reroll slice, Shosuro no-reroll flat, live
+                // Mantis posture flats, Doji/Bayushi flags.
+                let p = this.wcProbs;
+                if (!p || !p.probs) {
+                    try {
+                        p = JSON.parse(document.getElementById('wound-check-probs')?.textContent || '{}');
+                    } catch (e) { p = {}; }
+                    this.wcProbs = p;
+                }
+                const key = p.void_keys?.['0'];
+                return {
+                    survival: (key && p.probs_no_reroll?.[key]) || [],
+                    flat: (p.flat || 0)
+                        + ((key && p.shosuro_flats_no_reroll?.[key]) || 0)
+                        + this._mantisLiveWcFlat(),
+                    halfLw: !!this.formulas['wound_check']?.bayushi_5th_dan_half_lw,
+                    dojiWc: !!this.formulas['wound_check']?.doji_5th_dan_wc,
+                };
+            },
+
+            duelChart() {
+                if (!this.duelProbs || !this.duelProbs.strike) return null;
+                const sf = this.formulas['knack:iaijutsu:strike'];
+                if (!sf) return null;
+                const lw = window._trackingBridge?.lightWounds || 0;
+                const sig = [this.duelPlayerTN, this.duelOpponentTN,
+                             this.duelRestartBonus, lw].join('|');
+                if (sig === this._duelChartSig && this._duelChartCache) {
+                    return this._duelChartCache;
+                }
+                const M = window.L7RRollMath;
+                const flat = (sf.flat || 0) + this.duelRestartBonus;
+                const df = this.formulas['knack:iaijutsu'] || {};
+                const dmg = {
+                    weaponRolled: this.duelWeaponRolled,
+                    weaponKept: this.duelWeaponKept,
+                    ringVal: df.damage_ring_val || 2,
+                    extraRolled: df.damage_extra_rolled || 0,
+                    extraKept: df.damage_extra_kept || 0,
+                    dmgFlat: df.damage_flat_bonus || 0,
+                };
+                const yours = [this.duelOpponentTN, this.duelOpponentTN + 5].map(tn =>
+                    M.duelStrikeOutcome(this.duelProbs.strike, flat, tn, dmg, this.atkDamageAvgs));
+                const wc = this._duelWcChartParams();
+                const opp = ['8,4', '10,5', '10,7'].map(rk => {
+                    const fire = parseInt(rk.split(',')[1], 10);
+                    const surv = this.duelProbs.samples?.[rk] || [];
+                    const cells = [this.duelPlayerTN, this.duelPlayerTN + 5].map(tn =>
+                        M.duelOpponentThreat(surv, tn, fire, this.atkDamageAvgs, wc, lw));
+                    return { pool: rk.replace(',', 'k'), cells };
+                });
+                const chart = {
+                    yours,
+                    opp,
+                    pool: sf.rolled + 'k' + sf.kept + (flat > 0 ? ' + ' + flat : ''),
+                    lw,
+                };
+                this._duelChartSig = sig;
+                this._duelChartCache = chart;
+                return chart;
+            },
+
+            duelFmtPct(cell) {
+                return Math.round(((cell && cell.hit) || 0) * 100) + '%';
+            },
+            duelFmtDmg(cell) {
+                return cell && cell.hit > 0 ? String(Math.round(cell.avgDamage)) : '-';
+            },
+            duelFmtSw(cell) {
+                return cell && cell.hit > 0 ? cell.avgSw.toFixed(1) : '-';
+            },
+
             duelFocus() {
                 if (!this.duelPlayerCanFocus) return;
                 this.duelPlayerTN += 5;
@@ -3679,6 +3789,7 @@
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.luckyRollPair = null;
+                this.convictionSpentThisRoll = 0;
                 this.duelPhase = 'strike-rolling';
                 this.formula = f;
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
@@ -3725,6 +3836,7 @@
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.luckyRollPair = null;
+                this.convictionSpentThisRoll = 0;
                 this.duelPhase = 'damage-rolling';
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
@@ -5194,10 +5306,17 @@
                     }
                 }
 
-                // Iaijutsu strike: no reroll
+                // Iaijutsu strike: no reroll. Discretionary bonuses are
+                // banned on strike wound checks EXCEPT the character's own
+                // Conviction (rules quirk) - so recompute the discretionary
+                // flag from conviction alone, dropping raises, banked
+                // bonuses, post-roll VP, and priest-ally conviction.
                 if (this.wcIsStrike) {
                     formula.reroll_tens = false;
                     formula.no_reroll_reason = 'iaijutsu_strike';
+                    this.wcHasDiscretionary =
+                        (this.convictionConfig.rank || 0) > 0
+                        && this.convictionPoolAvail() > 0;
                 }
 
                 // Add void spending
@@ -5315,8 +5434,12 @@
                 this._prerenderRollImage(this._buildWoundCheckImagePayload());
                 this._saveRollHistoryCreate();
 
-                // Auto-apply if no discretionary bonuses and failed (or iaijutsu)
-                if (!this.wcPassed && (this.wcIsStrike || !this.wcHasDiscretionary)) {
+                // Auto-apply if failed with no discretionary bonuses. (For
+                // strike wound checks wcHasDiscretionary was recomputed
+                // above to mean "own conviction available" - when it's set,
+                // the player gets the spend-conviction window before the
+                // failure is applied.)
+                if (!this.wcPassed && !this.wcHasDiscretionary) {
                     this.applyWoundCheckFailure();
                 }
             },

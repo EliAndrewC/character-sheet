@@ -6373,6 +6373,90 @@ class TestSheetForeignKnackHandling:
         # worldliness rank 3 -> worldliness_max 3 (foreign-knack branch).
         assert cfg.get("worldliness_max") == 3
 
+    def test_sheet_uses_foreign_conviction_for_roll_config(self, client):
+        """A character with conviction as a foreign knack (not school)
+        gets a non-zero conviction-config, so the roll modals offer the
+        Spend Conviction button. Regression: the config was built from
+        school knacks only, leaving foreign conviction at rank 0."""
+        import json, re
+        cid = _seed_character(
+            client, name="ForeignConv", school="akodo_bushi",
+            school_ring_choice="Water", ring_water=3,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            foreign_knacks={"conviction": 2},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(
+            r'id="conviction-config">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        cfg = json.loads(m.group(1))
+        assert cfg == {"rank": 2, "max_per_roll": 2, "daily_max": 4}
+
+    def test_sheet_native_conviction_still_populates_roll_config(self, client):
+        """School-native conviction keeps working through the same config
+        (the char_knacks branch of the lookup)."""
+        import json, re
+        cid = _seed_character(
+            client, name="NativeConv", school="togashi_ise_zumi",
+            school_ring_choice="Water", ring_water=3,
+            knacks={"athletics": 1, "conviction": 3, "dragon_tattoo": 1},
+        )
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(
+            r'id="conviction-config">(.*?)</script>',
+            resp.text, re.DOTALL,
+        )
+        assert m is not None
+        cfg = json.loads(m.group(1))
+        assert cfg == {"rank": 3, "max_per_roll": 3, "daily_max": 6}
+
+
+class TestDuelProbs:
+    """The sheet ships no-reroll probability slices for the iaijutsu duel
+    focus/strike odds chart (duel-probs JSON script)."""
+
+    def _read(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(r'id="duel-probs">(.*?)</script>', resp.text, re.DOTALL)
+        assert m is not None
+        return json.loads(m.group(1))
+
+    def test_duelist_gets_strike_and_sample_slices(self, client):
+        cid = _seed_character(
+            client, name="DuelProbs", school="akodo_bushi",
+            school_ring_choice="Water", ring_water=3,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        )
+        dp = self._read(client, cid)
+        assert dp is not None
+        # 151-entry survival arrays: P(kept total >= x) for x = 0..150.
+        assert len(dp["strike"]) == 151
+        assert dp["strike"][0] == 1.0
+        assert all(0.0 <= p <= 1.0 for p in dp["strike"])
+        # Monotonically non-increasing (it's a survival function).
+        assert all(a >= b for a, b in zip(dp["strike"], dp["strike"][1:]))
+        assert set(dp["samples"].keys()) == {"8,4", "10,5", "10,7"}
+        for arr in dp["samples"].values():
+            assert len(arr) == 151
+            assert arr[0] == 1.0
+            assert all(a >= b for a, b in zip(arr, arr[1:]))
+
+    def test_non_duelist_gets_null(self, client):
+        """No iaijutsu strike formula -> duel_probs is null and the chart
+        never renders."""
+        cid = _seed_character(
+            client, name="NoDuelProbs", school="courtier",
+            school_ring_choice="Air", ring_air=3,
+            knacks={"discern_honor": 1, "oppose_social": 1, "worldliness": 1},
+        )
+        assert self._read(client, cid) is None
+
 
 class TestKitsuneWardenSwapProbs:
     """Phase 9 attack_probs / wc_probs swap variants are computed by
