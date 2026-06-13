@@ -1,0 +1,727 @@
+{
+  "captured": "2026-06-13",
+  "source": "live database (published, non-hidden characters)",
+  "characters": [
+    {
+      "id": 1,
+      "name": "Tsuruchi Sadakichi",
+      "school": "mantis_wave_treader",
+      "school_ring_choice": "Air",
+      "rings": {
+        "Air": 3,
+        "Fire": 3,
+        "Earth": 3,
+        "Water": 3,
+        "Void": 3
+      },
+      "attack": 4,
+      "parry": 2,
+      "skills": {
+        "bragging": 1,
+        "etiquette": 3,
+        "intimidation": 2,
+        "sincerity": 4,
+        "sneaking": 4,
+        "tact": 2,
+        "acting": 2,
+        "interrogation": 1,
+        "manipulation": 2,
+        "culture": 1,
+        "investigation": 2,
+        "law": 2,
+        "underworld": 2
+      },
+      "knacks": {
+        "athletics": 3,
+        "iaijutsu": 3,
+        "worldliness": 3
+      },
+      "foreign_knacks": {},
+      "advantages": [
+        "discerning",
+        "kind_eye",
+        "lucky"
+      ],
+      "disadvantages": [
+        "driven",
+        "humble",
+        "long_temper",
+        "unlucky"
+      ],
+      "campaign_advantages": [
+        "highest_regard",
+        "minor_clan_major_ally_mantis",
+        "streetwise"
+      ],
+      "campaign_disadvantages": [],
+      "specializations": [],
+      "honor": 3.5,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 7.5,
+      "recognition_halved": false,
+      "starting_xp": 150,
+      "earned_xp": 50
+    },
+    {
+      "id": 2,
+      "name": "Tsuruchi Hidemasa",
+      "school": "yogo_warden",
+      "school_ring_choice": "Earth",
+      "rings": {
+        "Air": 3,
+        "Fire": 3,
+        "Earth": 4,
+        "Water": 4,
+        "Void": 3
+      },
+      "attack": 4,
+      "parry": 3,
+      "skills": {
+        "bragging": 1,
+        "etiquette": 2,
+        "intimidation": 2,
+        "sincerity": 2,
+        "sneaking": 3,
+        "tact": 1,
+        "acting": 1,
+        "culture": 3,
+        "investigation": 3,
+        "law": 1,
+        "precepts": 1,
+        "strategy": 2,
+        "history": 1
+      },
+      "knacks": {
+        "double_attack": 3,
+        "feint": 3,
+        "iaijutsu": 3
+      },
+      "foreign_knacks": {},
+      "advantages": [
+        "quick_healer"
+      ],
+      "disadvantages": [
+        "driven",
+        "permanent_wound"
+      ],
+      "campaign_advantages": [
+        "minor_clan_major_ally_sparrow"
+      ],
+      "campaign_disadvantages": [
+        "scorpion_advocate"
+      ],
+      "specializations": [
+        {
+          "text": "Wilderness",
+          "skills": [
+            "culture"
+          ]
+        }
+      ],
+      "honor": 2.0,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 3.5,
+      "recognition_halved": true,
+      "starting_xp": 150,
+      "earned_xp": 50
+    },
+    {
+      "id": 3,
+      "name": "Tsuruchi Jimen",
+      "school": "shosuro_actor",
+      "school_ring_choice": "Air",
+      "rings": {
+        "Air": 4,
+        "Fire": 3,
+        "Earth": 3,
+        "Water": 4,
+        "Void": 4
+      },
+      "attack": 3,
+      "parry": 3,
+      "skills": {
+        "sincerity": 5,
+        "sneaking": 2,
+        "acting": 5,
+        "commerce": 1,
+        "underworld": 1
+      },
+      "knacks": {
+        "athletics": 4,
+        "discern_honor": 4,
+        "pontificate": 4
+      },
+      "foreign_knacks": {},
+      "advantages": [
+        "lucky",
+        "strength_of_the_earth",
+        "worldly"
+      ],
+      "disadvantages": [
+        "bad_reputation",
+        "contrary",
+        "dark_secret",
+        "jealousy",
+        "long_temper",
+        "meddler",
+        "short_temper",
+        "unconventional",
+        "unlucky"
+      ],
+      "campaign_advantages": [],
+      "campaign_disadvantages": [
+        "family_reckoning_venomous_sting",
+        "lion_enmity",
+        "peasantborn"
+      ],
+      "specializations": [
+        {
+          "text": "Poisons & Drugs",
+          "skills": [
+            "underworld"
+          ]
+        }
+      ],
+      "honor": 5.0,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 3.5,
+      "recognition_halved": true,
+      "starting_xp": 150,
+      "earned_xp": 50
+    },
+    {
+      "id": 5,
+      "name": "Monk",
+      "school": "brotherhood_of_shinsei_monk",
+      "school_ring_choice": "Fire",
+      "rings": {
+        "Air": 3,
+        "Fire": 4,
+        "Earth": 3,
+        "Water": 4,
+        "Void": 4
+      },
+      "attack": 3,
+      "parry": 4,
+      "skills": {
+        "investigation": 4,
+        "law": 1,
+        "precepts": 5,
+        "history": 1
+      },
+      "knacks": {
+        "conviction": 4,
+        "otherworldliness": 4,
+        "worldliness": 4
+      },
+      "foreign_knacks": {},
+      "advantages": [
+        "discerning",
+        "lucky",
+        "strength_of_the_earth"
+      ],
+      "disadvantages": [
+        "contrary",
+        "dark_secret",
+        "jealousy",
+        "meddler",
+        "proud",
+        "short_temper",
+        "unlucky"
+      ],
+      "campaign_advantages": [],
+      "campaign_disadvantages": [
+        "scorpion_advocate"
+      ],
+      "specializations": [],
+      "honor": 5.0,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 3.5,
+      "recognition_halved": true,
+      "starting_xp": 150,
+      "earned_xp": 50
+    },
+    {
+      "id": 8,
+      "name": "Tsuruchi Toshihiro",
+      "school": "akodo_bushi",
+      "school_ring_choice": "Water",
+      "rings": {
+        "Air": 3,
+        "Fire": 3,
+        "Earth": 3,
+        "Water": 4,
+        "Void": 3
+      },
+      "attack": 4,
+      "parry": 4,
+      "skills": {
+        "bragging": 2,
+        "etiquette": 2,
+        "intimidation": 2,
+        "sincerity": 2,
+        "tact": 2,
+        "culture": 2,
+        "heraldry": 1,
+        "investigation": 1,
+        "precepts": 2,
+        "strategy": 2,
+        "history": 1
+      },
+      "knacks": {
+        "double_attack": 4,
+        "feint": 4,
+        "iaijutsu": 4
+      },
+      "foreign_knacks": {},
+      "advantages": [
+        "fierce",
+        "strength_of_the_earth",
+        "tactician"
+      ],
+      "disadvantages": [
+        "bad_reputation",
+        "dark_secret",
+        "driven",
+        "unkempt"
+      ],
+      "campaign_advantages": [
+        "highest_regard"
+      ],
+      "campaign_disadvantages": [],
+      "specializations": [],
+      "honor": 4.0,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 7.5,
+      "recognition_halved": false,
+      "starting_xp": 150,
+      "earned_xp": 50
+    },
+    {
+      "id": 10,
+      "name": "Tsuruchi Shizukanaken ",
+      "school": "hiruma_scout",
+      "school_ring_choice": "Air",
+      "rings": {
+        "Air": 4,
+        "Fire": 3,
+        "Earth": 3,
+        "Water": 2,
+        "Void": 3
+      },
+      "attack": 4,
+      "parry": 4,
+      "skills": {
+        "bragging": 2,
+        "etiquette": 1,
+        "intimidation": 4,
+        "sincerity": 1,
+        "sneaking": 2,
+        "tact": 1,
+        "acting": 1,
+        "interrogation": 3,
+        "manipulation": 3,
+        "investigation": 2,
+        "law": 2,
+        "precepts": 1,
+        "strategy": 2,
+        "underworld": 2
+      },
+      "knacks": {
+        "double_attack": 4,
+        "lunge": 4,
+        "iaijutsu": 4
+      },
+      "foreign_knacks": {},
+      "advantages": [
+        "discerning",
+        "fierce",
+        "higher_purpose",
+        "quick_healer",
+        "tactician"
+      ],
+      "disadvantages": [
+        "dark_secret",
+        "driven",
+        "emotional",
+        "long_temper",
+        "unconventional",
+        "unkempt",
+        "withdrawn"
+      ],
+      "campaign_advantages": [
+        "streetwise"
+      ],
+      "campaign_disadvantages": [
+        "peasantborn",
+        "scorpion_advocate"
+      ],
+      "specializations": [
+        {
+          "text": "Bare/Brass Knuckle Fighting",
+          "skills": [
+            "attack"
+          ]
+        }
+      ],
+      "honor": 3.0,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 3.5,
+      "recognition_halved": true,
+      "starting_xp": 150,
+      "earned_xp": 50
+    },
+    {
+      "id": 14,
+      "name": "Asako Tadashi",
+      "school": "isawa_ishi",
+      "school_ring_choice": "Void",
+      "rings": {
+        "Air": 3,
+        "Fire": 2,
+        "Earth": 2,
+        "Water": 4,
+        "Void": 5
+      },
+      "attack": 3,
+      "parry": 4,
+      "skills": {
+        "etiquette": 1,
+        "tact": 2,
+        "culture": 2,
+        "heraldry": 3,
+        "precepts": 2,
+        "commerce": 1,
+        "underworld": 3
+      },
+      "knacks": {
+        "absorb_void": 5,
+        "kharmic_spin": 5,
+        "otherworldliness": 5
+      },
+      "foreign_knacks": {},
+      "advantages": [
+        "charming",
+        "genealogist",
+        "kind_eye",
+        "worldly"
+      ],
+      "disadvantages": [
+        "bad_reputation",
+        "contrary",
+        "dark_secret",
+        "driven",
+        "long_temper",
+        "meddler",
+        "slow_healer",
+        "vain"
+      ],
+      "campaign_advantages": [
+        "minor_clan_major_ally_mantis"
+      ],
+      "campaign_disadvantages": [
+        "crane_indebted",
+        "peasantborn"
+      ],
+      "specializations": [
+        {
+          "text": "Underworld Craftspeople (Forgers, Street Pharmacists, etc)",
+          "skills": [
+            "underworld"
+          ]
+        }
+      ],
+      "honor": 1.0,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 3.5,
+      "recognition_halved": true,
+      "starting_xp": 150,
+      "earned_xp": 50
+    },
+    {
+      "id": 16,
+      "name": "Tsuruchi Makoto 鶴知誠",
+      "school": "shosuro_actor",
+      "school_ring_choice": "Air",
+      "rings": {
+        "Air": 4,
+        "Fire": 2,
+        "Earth": 3,
+        "Water": 3,
+        "Void": 2
+      },
+      "attack": 4,
+      "parry": 5,
+      "skills": {
+        "intimidation": 3,
+        "sincerity": 5,
+        "sneaking": 3,
+        "acting": 3,
+        "interrogation": 3,
+        "investigation": 3,
+        "law": 3,
+        "underworld": 1
+      },
+      "knacks": {
+        "athletics": 4,
+        "discern_honor": 4,
+        "pontificate": 4
+      },
+      "foreign_knacks": {},
+      "advantages": [
+        "discerning",
+        "fierce",
+        "quick_healer",
+        "worldly"
+      ],
+      "disadvantages": [
+        "contrary",
+        "driven",
+        "jealousy",
+        "long_temper",
+        "proud",
+        "unconventional",
+        "unkempt",
+        "withdrawn"
+      ],
+      "campaign_advantages": [
+        "minor_clan_major_ally_sparrow",
+        "minor_clan_major_ally_mantis",
+        "streetwise"
+      ],
+      "campaign_disadvantages": [
+        "crane_indebted",
+        "lion_enmity"
+      ],
+      "specializations": [
+        {
+          "text": "sneaking (avoid being followed)",
+          "skills": [
+            "sneaking"
+          ]
+        },
+        {
+          "text": "intimidation (incrimination)",
+          "skills": [
+            "intimidation"
+          ]
+        }
+      ],
+      "honor": 1.0,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 3.5,
+      "recognition_halved": true,
+      "starting_xp": 150,
+      "earned_xp": 50
+    },
+    {
+      "id": 17,
+      "name": "Kitsune Moriko",
+      "school": "kitsune_warden",
+      "school_ring_choice": "Air",
+      "rings": {
+        "Air": 4,
+        "Fire": 3,
+        "Earth": 3,
+        "Water": 3,
+        "Void": 3
+      },
+      "attack": 3,
+      "parry": 4,
+      "skills": {
+        "bragging": 1,
+        "etiquette": 1,
+        "intimidation": 3,
+        "sincerity": 3,
+        "sneaking": 3,
+        "tact": 1,
+        "acting": 2,
+        "culture": 1,
+        "law": 1,
+        "precepts": 5
+      },
+      "knacks": {
+        "absorb_void": 5,
+        "commune": 4,
+        "iaijutsu": 4
+      },
+      "foreign_knacks": {},
+      "advantages": [
+        "fierce",
+        "higher_purpose",
+        "quick_healer",
+        "strength_of_the_earth"
+      ],
+      "disadvantages": [
+        "bad_reputation",
+        "dark_secret",
+        "driven",
+        "long_temper",
+        "meddler",
+        "unkempt"
+      ],
+      "campaign_advantages": [],
+      "campaign_disadvantages": [
+        "peasantborn"
+      ],
+      "specializations": [],
+      "honor": 5.0,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 7.5,
+      "recognition_halved": false,
+      "starting_xp": 150,
+      "earned_xp": 50
+    },
+    {
+      "id": 18,
+      "name": "Tsuruchi Tetsuro",
+      "school": "ikoma_bard",
+      "school_ring_choice": "Air",
+      "rings": {
+        "Air": 4,
+        "Fire": 3,
+        "Earth": 4,
+        "Water": 3,
+        "Void": 3
+      },
+      "attack": 3,
+      "parry": 4,
+      "skills": {
+        "bragging": 5,
+        "intimidation": 1,
+        "sincerity": 1,
+        "acting": 1,
+        "interrogation": 1,
+        "manipulation": 3,
+        "culture": 1,
+        "heraldry": 1,
+        "law": 1,
+        "underworld": 1
+      },
+      "knacks": {
+        "discern_honor": 4,
+        "oppose_knowledge": 4,
+        "oppose_social": 4
+      },
+      "foreign_knacks": {},
+      "advantages": [
+        "fierce",
+        "lucky"
+      ],
+      "disadvantages": [
+        "bad_reputation",
+        "contrary",
+        "meddler",
+        "permanent_wound",
+        "proud",
+        "unkempt",
+        "unlucky"
+      ],
+      "campaign_advantages": [
+        "family_reckoning_righteous_sting",
+        "household_wealth",
+        "minor_clan_major_ally_sparrow",
+        "minor_clan_major_ally_fox",
+        "minor_clan_major_ally_mantis"
+      ],
+      "campaign_disadvantages": [
+        "imperial_disdain",
+        "lion_enmity"
+      ],
+      "specializations": [],
+      "honor": 2.0,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 7.5,
+      "recognition_halved": false,
+      "starting_xp": 150,
+      "earned_xp": 50
+    },
+    {
+      "id": 20,
+      "name": "Tsuruchi Yudai 勇大",
+      "school": "kakita_duelist",
+      "school_ring_choice": "Fire",
+      "rings": {
+        "Air": 3,
+        "Fire": 4,
+        "Earth": 3,
+        "Water": 3,
+        "Void": 3
+      },
+      "attack": 4,
+      "parry": 5,
+      "skills": {
+        "bragging": 1,
+        "etiquette": 1,
+        "sincerity": 1,
+        "tact": 3,
+        "manipulation": 2,
+        "law": 1,
+        "precepts": 1
+      },
+      "knacks": {
+        "double_attack": 5,
+        "iaijutsu": 5,
+        "lunge": 5
+      },
+      "foreign_knacks": {
+        "conviction": 2
+      },
+      "advantages": [
+        "good_reputation",
+        "imperial_favor",
+        "quick_healer",
+        "strength_of_the_earth"
+      ],
+      "disadvantages": [
+        "contrary",
+        "discordant",
+        "driven",
+        "emotional",
+        "humble",
+        "long_temper",
+        "meddler",
+        "permanent_wound",
+        "proud",
+        "short_temper",
+        "unconventional",
+        "unkempt"
+      ],
+      "campaign_advantages": [
+        "family_reckoning_righteous_sting",
+        "highest_regard",
+        "minor_clan_major_ally_fox",
+        "minor_clan_major_ally_mantis"
+      ],
+      "campaign_disadvantages": [
+        "lion_enmity",
+        "scorpion_advocate"
+      ],
+      "specializations": [
+        {
+          "text": "Especially good at manipulating aspects of 'perceived implied insult'",
+          "skills": [
+            "manipulation"
+          ]
+        }
+      ],
+      "honor": 3.0,
+      "rank": 7.5,
+      "rank_locked": true,
+      "recognition": 7.5,
+      "recognition_halved": false,
+      "starting_xp": 150,
+      "earned_xp": 50
+    }
+  ]
+}
