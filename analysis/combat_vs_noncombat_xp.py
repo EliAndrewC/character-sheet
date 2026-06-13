@@ -85,6 +85,9 @@ from app.services.xp import calculate_xp_breakdown
 HERE = pathlib.Path(__file__).resolve().parent
 SNAP_DIR = HERE / "combat_xp_snapshots"
 
+# Public production site - character names in the report link to their sheets.
+SITE_URL = "https://l7r-character-sheet.fly.dev"
+
 # --- roster ----------------------------------------------------------------
 # Captured = every published, non-hidden (i.e. shared) character. The report
 # then drops these ids. Currently just "Monk" (id 5): a placeholder-named
@@ -256,8 +259,9 @@ def _md_table(rows: list) -> str:
         "|---|---|--:|--:|--:|--:|--:|",
     ]
     for r in rows:
+        name = f"[{r['name']}]({SITE_URL}/characters/{r['id']})"
         out.append(
-            f"| {r['name']} | {r['school_name']} | {r['combat']} | {r['noncombat']} "
+            f"| {name} | {r['school_name']} | {r['combat']} | {r['noncombat']} "
             f"| {r['total']} | {r['combat_pct']:.1f}% | {100 - r['combat_pct']:.1f}% |"
         )
     return "\n".join(out)

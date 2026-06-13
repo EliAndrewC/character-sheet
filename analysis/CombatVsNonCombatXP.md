@@ -62,16 +62,16 @@ a total above 200.
 
 | Character | School | Combat XP | Non-combat XP | Total | Combat % | Non-combat % |
 |---|---|--:|--:|--:|--:|--:|
-| Tsuruchi Jimen | Shosuro Actor | 232 | 23 | 255 | 91.0% | 9.0% |
-| Tsuruchi Yudai 勇大 | Kakita Duelist | 215 | 55 | 270 | 79.6% | 20.4% |
-| Asako Tadashi | Isawa Ishi | 186 | 51 | 237 | 78.5% | 21.5% |
-| Kitsune Moriko | Kitsune Warden | 176 | 51 | 227 | 77.5% | 22.5% |
-| Tsuruchi Tetsuro | Ikoma Bard | 180 | 61 | 241 | 74.7% | 25.3% |
-| Tsuruchi Toshihiro | Akodo Bushi | 158 | 54 | 212 | 74.5% | 25.5% |
-| Tsuruchi Hidemasa | Yogo Warden | 161 | 56 | 217 | 74.2% | 25.8% |
-| Tsuruchi Makoto 鶴知誠 | Shosuro Actor | 160 | 71 | 231 | 69.3% | 30.7% |
-| Tsuruchi Shizukanaken  | Hiruma Scout | 140 | 95 | 235 | 59.6% | 40.4% |
-| Tsuruchi Sadakichi | Mantis Wave-Treader | 117 | 103 | 220 | 53.2% | 46.8% |
+| [Tsuruchi Jimen](https://l7r-character-sheet.fly.dev/characters/3) | Shosuro Actor | 232 | 23 | 255 | 91.0% | 9.0% |
+| [Tsuruchi Yudai 勇大](https://l7r-character-sheet.fly.dev/characters/20) | Kakita Duelist | 215 | 55 | 270 | 79.6% | 20.4% |
+| [Asako Tadashi](https://l7r-character-sheet.fly.dev/characters/14) | Isawa Ishi | 186 | 51 | 237 | 78.5% | 21.5% |
+| [Kitsune Moriko](https://l7r-character-sheet.fly.dev/characters/17) | Kitsune Warden | 176 | 51 | 227 | 77.5% | 22.5% |
+| [Tsuruchi Tetsuro](https://l7r-character-sheet.fly.dev/characters/18) | Ikoma Bard | 180 | 61 | 241 | 74.7% | 25.3% |
+| [Tsuruchi Toshihiro](https://l7r-character-sheet.fly.dev/characters/8) | Akodo Bushi | 158 | 54 | 212 | 74.5% | 25.5% |
+| [Tsuruchi Hidemasa](https://l7r-character-sheet.fly.dev/characters/2) | Yogo Warden | 161 | 56 | 217 | 74.2% | 25.8% |
+| [Tsuruchi Makoto 鶴知誠](https://l7r-character-sheet.fly.dev/characters/16) | Shosuro Actor | 160 | 71 | 231 | 69.3% | 30.7% |
+| [Tsuruchi Shizukanaken ](https://l7r-character-sheet.fly.dev/characters/10) | Hiruma Scout | 140 | 95 | 235 | 59.6% | 40.4% |
+| [Tsuruchi Sadakichi](https://l7r-character-sheet.fly.dev/characters/1) | Mantis Wave-Treader | 117 | 103 | 220 | 53.2% | 46.8% |
 
 - Combat share - mean 73.2%, median 74.6%, range 53.2% to 91.0% (a 37.8-point spread).
 - Non-combat share - mean 26.8%, median 25.4%, range 9.0% to 46.8%.
@@ -144,5 +144,7 @@ balance move - `... report --date YYYY-MM-DD` re-runs any past snapshot, and
 - "Combat" here means *personal* combat effectiveness. A skill like Strategy
   (which Tactician boosts) matters in mass battle but does nothing for your
   attack roll, so it is counted as non-combat.
-- A snapshot reflects each sheet's current built state at capture time, drafts
-  of unpublished edits included.
+- A snapshot reflects each sheet's current built state at capture time, which
+  would include any unpublished draft edits in progress. For the 2026-06-13
+  snapshot every character was fully published with no pending edits, so the
+  figures all reflect published builds.
