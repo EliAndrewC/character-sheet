@@ -6626,6 +6626,79 @@ class TestRollImageEndpoint:
         assert resp.status_code == 200
         assert resp.content.startswith(b"\x89PNG\r\n\x1a\n")
 
+    def _img(self, client, cid, payload):
+        resp = client.post(f"/characters/{cid}/roll-image", json=payload)
+        assert resp.status_code == 200
+        return resp.content
+
+    def test_owner_roll_has_no_attribution_banner(self, client):
+        """When the owner copies their own roll, the card carries no
+        'Roll made by' banner - and a client-supplied rolled_by is
+        ignored (never trusted)."""
+        cid = _seed_character(client, name="OwnerRoll",
+                              owner_discord_id="183026066498125825")
+        payload = {"title": "Bragging", "kept": [{"parts": [9]}], "total": 9}
+        owner_png = self._img(client, cid, payload)
+        spoofed = self._img(client, cid, {**payload, "rolled_by": "Somebody Else"})
+        # The spoofed value is stripped, so it renders identically to the
+        # clean owner card.
+        assert spoofed == owner_png
+
+    def test_other_logged_in_roller_gets_attribution(self, client):
+        """A logged-in viewer rolling on someone else's sheet produces a
+        different (annotated) card than the owner's clean one."""
+        cid = _seed_character(client, name="SomeoneElsesSheet",
+                              owner_discord_id="a_different_owner")
+        payload = {"title": "Manipulation", "kept": [{"parts": [9]}], "total": 9}
+        # Default test client is "183026066498125825:testplayer" != owner.
+        annotated = self._img(client, cid, payload)
+        # Render the same roll as the owner for comparison.
+        client.headers["X-Test-User"] = "a_different_owner:Owner"
+        owner_clean = self._img(client, cid, payload)
+        client.headers["X-Test-User"] = "183026066498125825:testplayer"
+        assert annotated != owner_clean
+
+    def test_anonymous_roller_gets_unknown_user_attribution(self, client):
+        """A logged-out viewer rolling on a public sheet is annotated
+        'unknown user', distinct from the owner's clean card."""
+        cid = _seed_character(client, name="PublicSheet",
+                              owner_discord_id="a_different_owner")
+        payload = {"title": "Sincerity", "kept": [{"parts": [8]}], "total": 8}
+        client.headers["X-Test-User"] = "a_different_owner:Owner"
+        owner_clean = self._img(client, cid, payload)
+        client.headers.pop("X-Test-User", None)
+        anon = self._img(client, cid, payload)
+        client.headers["X-Test-User"] = "183026066498125825:testplayer"
+        assert anon != owner_clean
+
+
+class TestRollAttribution:
+    """Unit coverage for the _roll_attribution helper that decides the
+    'Roll made by X' banner."""
+
+    def test_owner_gets_no_banner(self):
+        from app.routes.characters import _roll_attribution
+        user = {"discord_id": "abc", "display_name": "Owner"}
+        assert _roll_attribution(user, "abc") is None
+
+    def test_different_logged_in_user_gets_display_name(self):
+        from app.routes.characters import _roll_attribution
+        user = {"discord_id": "xyz", "display_name": "Visitor"}
+        assert _roll_attribution(user, "abc") == "Visitor"
+
+    def test_display_name_falls_back_to_discord_name(self):
+        from app.routes.characters import _roll_attribution
+        user = {"discord_id": "xyz", "discord_name": "raw_handle"}
+        assert _roll_attribution(user, "abc") == "raw_handle"
+
+    def test_user_without_any_name_is_unknown(self):
+        from app.routes.characters import _roll_attribution
+        assert _roll_attribution({"discord_id": "xyz"}, "abc") == "unknown user"
+
+    def test_anonymous_viewer_is_unknown_user(self):
+        from app.routes.characters import _roll_attribution
+        assert _roll_attribution(None, "abc") == "unknown user"
+
 
 class TestMoneyAddEndpoint:
     """``POST /characters/{id}/money/add`` appends an income or expense

@@ -66,6 +66,12 @@ class TestParsePayload:
         assert card.total == 0
         assert card.footer is None
 
+    def test_rolled_by_defaults_to_none_and_parses_when_set(self):
+        assert parse_payload(_basic_payload()).rolled_by is None
+        assert parse_payload({"title": "T", "rolled_by": ""}).rolled_by is None
+        card = parse_payload({"title": "T", "rolled_by": "Akodo Bob"})
+        assert card.rolled_by == "Akodo Bob"
+
     def test_bare_int_die_normalizes_to_single_part_cell(self):
         """The frontend usually sends ``{parts: [v]}`` for each die,
         but a payload with bare ints should still resolve correctly."""
@@ -285,6 +291,23 @@ class TestBuildSvg:
         # appear as <text>...</text> tags.
         for n in (9, 8, 7, 6, 4):
             assert f">{n}</text>" in svg
+
+    def test_rolled_by_banner_renders_only_when_set(self):
+        without = build_svg(parse_payload(_basic_payload()))
+        assert "Roll made by" not in without
+        with_banner = build_svg(parse_payload(_basic_payload(rolled_by="Shosuro Sly")))
+        assert ">Roll made by Shosuro Sly</text>" in with_banner
+
+    def test_rolled_by_banner_widens_narrow_card(self):
+        """A long attribution on an otherwise tiny card widens it so the
+        banner is not clipped."""
+        import re
+        base = {"title": "T", "formula": "", "kept": [{"parts": [1]}], "total": 1}
+        narrow = int(re.search(r'width="(\d+)"', build_svg(parse_payload(base))).group(1))
+        wide = int(re.search(r'width="(\d+)"', build_svg(parse_payload(
+            {**base, "rolled_by": "A Very Long Player Display Name Indeed"}
+        ))).group(1))
+        assert wide > narrow
 
     def test_xml_escapes_user_supplied_text(self):
         """A label like ``</text><script>...</script>`` must NOT be

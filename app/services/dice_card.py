@@ -165,6 +165,12 @@ class RollCard:
     # where the trophy would have been so callers can label the dice
     # rows ("Action dice").
     show_total: bool = True
+    # Attribution banner: set ONLY when the roll was made by someone who
+    # is not the character's owner (a viewer rolling on another player's
+    # sheet, or an anonymous "unknown user"). The /roll-image route sets
+    # this server-side from the session; None means the owner rolled it
+    # (the normal case) and no banner renders.
+    rolled_by: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +316,7 @@ def parse_payload(payload: dict) -> RollCard:
         footer=_coerce_text(payload.get("footer")) or None,
         alternatives=_coerce_alternatives(payload.get("alternatives")),
         extras=_coerce_extras(payload.get("extras")),
+        rolled_by=_coerce_text(payload.get("rolled_by")) or None,
         # Default True so all existing roll types keep their TOTAL
         # trophy. Initiative payloads pass ``show_total: false`` to
         # suppress it.
@@ -547,6 +554,8 @@ def _content_width(card: RollCard, bonus_plan: dict, alt_plan: dict,
         extras_plan["block_w"],
         _measure_text(str(card.total), 56, weight=700, family="serif"),
         _measure_text(card.footer or "", 14, weight=400, family="serif"),
+        (_measure_text("Roll made by " + card.rolled_by, 15, weight=700,
+                       family="sans") if card.rolled_by else 0),
         alt_plan["block_w"],
     )
 
@@ -598,6 +607,15 @@ def build_svg(card: RollCard) -> str:
     parts.append(_text(cx, formula_y, card.formula, size=18, weight=400,
                        opacity=0.65))
     rule_y = formula_y + 18
+    # Cross-roller attribution banner. Present only when someone other than
+    # the character's owner made the roll, so a roll accidentally made on
+    # another player's sheet is obvious on the pasted card. Accent-coloured
+    # to catch the eye; pushes the rule (and the whole body below it) down.
+    if card.rolled_by:
+        attribution_y = formula_y + 20
+        parts.append(_text(cx, attribution_y, "Roll made by " + card.rolled_by,
+                           size=15, weight=700, fill=ACCENT, family="sans"))
+        rule_y = attribution_y + 16
     parts.append(_hr(rule_y, card_w))
 
     # Dice

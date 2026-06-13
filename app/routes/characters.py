@@ -1,6 +1,6 @@
 """Character API routes — CRUD, auto-save, publish, revert, and HTMX partials."""
 
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -1082,6 +1082,24 @@ async def money_delete(
     })
 
 
+def _roll_attribution(
+    user: Optional[dict], owner_discord_id: Optional[str]
+) -> Optional[str]:
+    """Name to stamp on a copied roll image, or None for no banner.
+
+    Returns None when the character's own owner made the roll (the normal
+    case). Otherwise it is the roller's display name - or "unknown user"
+    for a logged-out viewer - so a roll made on another player's sheet by
+    mistake is obvious on the pasted image.
+    """
+    roller_id = user.get("discord_id") if user else None
+    if roller_id is not None and roller_id == owner_discord_id:
+        return None
+    if not user:
+        return "unknown user"
+    return user.get("display_name") or user.get("discord_name") or "unknown user"
+
+
 @router.post("/{char_id}/roll-image")
 async def roll_image(
     request: Request, char_id: int, db: Session = Depends(get_db)
@@ -1123,6 +1141,15 @@ async def roll_image(
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
     if not isinstance(payload, dict):
         return JSONResponse({"error": "Invalid payload"}, status_code=400)
+
+    # Stamp who made the roll when it was not the character's owner. Set
+    # server-side from the session (never trust a client-supplied value)
+    # so a roll made on someone else's sheet is unmistakable on the card.
+    attribution = _roll_attribution(user, character.owner_discord_id)
+    if attribution:
+        payload["rolled_by"] = attribution
+    else:
+        payload.pop("rolled_by", None)
 
     png = render_png(payload)
     return Response(
