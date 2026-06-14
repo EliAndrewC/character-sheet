@@ -809,6 +809,8 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Knack roll trigger renders the d10 "kite" SVG icon (shared `#d10-die` sprite), visibly sized, and still triggers the roll on click - not the d6 die-face emoji → `test_rolls.py::test_knack_roll_trigger_shows_d10_kite_icon`
 - [x] Roll-result modal carries a "Copy as image" button that pre-renders a PNG dice card while the animation is on screen and writes it to the clipboard on click (verifies the PNG actually lands on the clipboard) → `test_rolls.py::test_roll_result_copy_as_image_button`
 - [x] Copy-as-image button is hidden during the dice animation and surfaces only once the pre-rendered PNG is ready → `test_rolls.py::test_roll_result_copy_button_hidden_during_animation`
+- [x] On a share-capable touch device the result panel shows "Share image" (not Copy) and clicking it hands the PNG File to navigator.share → `test_rolls.py::test_roll_result_share_button_on_mobile`
+- [x] Desktop default (no coarse pointer) keeps Copy and never shows the Share button → `test_rolls.py::test_roll_result_shows_copy_not_share_on_desktop`
 - [x] Copy-as-image on the freeform-roll modal (its own Alpine scope with a local copy of the prerender state) → `test_rolls.py::test_freeform_modal_has_copy_as_image_button`
 - [x] Copy-as-image on the dice-roller initiative result (action-dice panel) → `test_rolls.py::test_initiative_result_has_copy_as_image_button`
 - [x] Initiative card carries dropped dice alongside the action dice AND passes ``show_total: false`` so the renderer skips the misleading "TOTAL <n>" trophy → `test_rolls.py::test_initiative_image_payload_includes_dropped_dice_and_no_total`

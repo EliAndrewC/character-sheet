@@ -12,9 +12,15 @@
             ffPrefs: { dice_animation_enabled: true, dice_sound_enabled: true },
             _ffEarthRing: {{ ring_map['Earth'] }},
 
+            // Roll-image share state (mobile path; see share_image.js and the
+            // shared copy/share button partial).
+            _useShareImage: false,
+            rollShareStatus: 'ready',  // 'ready' | 'sharing' | 'shared' | 'failed'
+
             init() {
                 if (this._ffInited) return;
                 this._ffInited = true;
+                this._useShareImage = !!window.L7RUseShareImage;
                 try {
                     const p = JSON.parse(document.getElementById('user-prefs').textContent || '{}');
                     this.ffPrefs.dice_animation_enabled = p.dice_animation_enabled !== false;
@@ -38,6 +44,7 @@
                 this.ffTotal = 0;
                 this.ffFormulaText = '';
                 this.rollImageStatus = 'idle';
+                this.rollShareStatus = 'ready';
                 this.rollImageBlob = null;
                 this._rollImageReqId++;
                 this._lastPayloadSig = '';
@@ -108,6 +115,7 @@
                 const reqId = ++this._rollImageReqId;
                 this.rollImageBlob = null;
                 this.rollImageStatus = 'rendering';
+                this.rollShareStatus = 'ready';
                 fetch('/characters/' + t._charId + '/roll-image', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -144,6 +152,22 @@
                     }, 1800);
                 } catch (e) {
                     this.rollImageStatus = 'failed';
+                }
+            },
+
+            async shareRollImage() {
+                if (!this.rollImageBlob) return;
+                this.rollShareStatus = 'sharing';
+                const r = await window.L7RShareImageBlob(this.rollImageBlob);
+                if (r === 'shared') {
+                    this.rollShareStatus = 'shared';
+                    setTimeout(() => {
+                        if (this.rollShareStatus === 'shared') this.rollShareStatus = 'ready';
+                    }, 1800);
+                } else {
+                    // 'cancelled' / 'unsupported' fall back to the resting label;
+                    // only a real error surfaces "Share failed".
+                    this.rollShareStatus = (r === 'failed') ? 'failed' : 'ready';
                 }
             },
 
@@ -831,6 +855,12 @@
             rollImageBlob: null,
             rollImageStatus: 'idle',
             _rollImageReqId: 0,
+            // Mobile "Share" path (see share_image.js): on touch devices that
+            // can use the OS share sheet we offer Share instead of Copy, which
+            // Discord's mobile app cannot paste. ``rollShareStatus`` drives the
+            // Share button label the way ``rollImageStatus`` drives Copy's.
+            _useShareImage: false,
+            rollShareStatus: 'ready',  // 'ready' | 'sharing' | 'shared' | 'failed'
             // Signature of the most-recent payload sent to /roll-image.
             // The post-roll-mutation watcher compares against this to
             // skip a redundant re-render when nothing visible actually
@@ -937,6 +967,7 @@
                 // Guard so event listeners only register once.
                 if (this._inited) return;
                 this._inited = true;
+                this._useShareImage = !!window.L7RUseShareImage;
                 try {
                     this.formulas = JSON.parse(document.getElementById('roll-formulas').textContent || '{}');
                 } catch (e) { this.formulas = {}; }
@@ -2461,6 +2492,7 @@
                 const reqId = ++this._rollImageReqId;
                 this.rollImageBlob = null;
                 this.rollImageStatus = 'rendering';
+                this.rollShareStatus = 'ready';
                 const payload = payloadOrNull || this._buildRollImagePayload();
                 // Stamp the payload signature so the post-roll-mutation
                 // watcher can dedupe: a re-prerender that arrives with
@@ -3085,6 +3117,25 @@
                     }, 1800);
                 } catch (e) {
                     this.rollImageStatus = 'failed';
+                }
+            },
+
+            async shareRollImage() {
+                // Mobile path: hand the pre-rendered PNG to the OS share sheet
+                // (see share_image.js). The blob is already resolved, so this
+                // stays inside the tap gesture up to navigator.share.
+                if (!this.rollImageBlob) return;
+                this.rollShareStatus = 'sharing';
+                const r = await window.L7RShareImageBlob(this.rollImageBlob);
+                if (r === 'shared') {
+                    this.rollShareStatus = 'shared';
+                    setTimeout(() => {
+                        if (this.rollShareStatus === 'shared') this.rollShareStatus = 'ready';
+                    }, 1800);
+                } else {
+                    // 'cancelled' / 'unsupported' rest at the default label;
+                    // only a real error surfaces "Share failed".
+                    this.rollShareStatus = (r === 'failed') ? 'failed' : 'ready';
                 }
             },
 

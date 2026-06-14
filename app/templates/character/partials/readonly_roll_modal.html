@@ -112,11 +112,23 @@
 
             <div class="flex justify-end gap-2">
                 <button type="button" @click="copyRollImage()"
+                        x-show="!_useShareImage"
                         :disabled="rollImageStatus !== 'ready'"
                         data-action="copy-readonly-roll-image"
                         class="btn-secondary px-3 py-1.5 rounded text-sm disabled:opacity-30">
                     <span x-show="rollImageStatus !== 'copied'">Copy as image</span>
                     <span x-show="rollImageStatus === 'copied'" x-cloak>Copied!</span>
+                </button>
+                <button type="button" @click="shareRollImage()"
+                        x-show="_useShareImage" x-cloak
+                        :disabled="rollImageStatus !== 'ready' || rollShareStatus === 'sharing'"
+                        data-action="share-readonly-roll-image"
+                        class="btn-secondary px-3 py-1.5 rounded text-sm disabled:opacity-30">
+                    <span x-show="rollShareStatus === 'sharing'">Sharing...</span>
+                    <span x-show="rollShareStatus === 'shared'" x-cloak>Shared!</span>
+                    <span x-show="rollShareStatus === 'failed'" x-cloak>Share failed</span>
+                    <span x-show="rollShareStatus !== 'sharing' && rollShareStatus !== 'shared'
+                                  && rollShareStatus !== 'failed'">Share image</span>
                 </button>
                 <button type="button" @click="close()" data-action="close-readonly-roll-footer"
                         class="btn-primary px-3 py-1.5 rounded text-sm">
@@ -138,14 +150,20 @@
             rollImageBlob: null,
             _rollImageReqId: 0,
             _charId: {{ character.id }},
+            // Mobile share path (see share_image.js): offer Share instead of
+            // Copy on touch devices, where Discord can't paste the clipboard.
+            _useShareImage: false,
+            rollShareStatus: 'ready',  // 'ready' | 'sharing' | 'shared' | 'failed'
 
             init() {
+                this._useShareImage = !!window.L7RUseShareImage;
                 window.addEventListener('open-readonly-roll', (e) => {
                     const r = e.detail || {};
                     this.payload = r.payload || {};
                     this.description = r.description || null;
                     this.tn = (r.tn !== undefined) ? r.tn : null;
                     this.rollImageStatus = 'idle';
+                    this.rollShareStatus = 'ready';
                     this.rollImageBlob = null;
                     this.open = true;
                     this._prerender();
@@ -187,6 +205,7 @@
                 if (!this.payload) return;
                 const reqId = ++this._rollImageReqId;
                 this.rollImageStatus = 'rendering';
+                this.rollShareStatus = 'ready';
                 fetch('/characters/' + this._charId + '/roll-image', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -218,6 +237,20 @@
                     }, 1800);
                 } catch (e) {
                     this.rollImageStatus = 'failed';
+                }
+            },
+
+            async shareRollImage() {
+                if (!this.rollImageBlob) return;
+                this.rollShareStatus = 'sharing';
+                const r = await window.L7RShareImageBlob(this.rollImageBlob);
+                if (r === 'shared') {
+                    this.rollShareStatus = 'shared';
+                    setTimeout(() => {
+                        if (this.rollShareStatus === 'shared') this.rollShareStatus = 'ready';
+                    }, 1800);
+                } else {
+                    this.rollShareStatus = (r === 'failed') ? 'failed' : 'ready';
                 }
             },
         };
