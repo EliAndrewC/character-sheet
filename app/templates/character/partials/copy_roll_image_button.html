@@ -17,8 +17,12 @@
    ``_prerenderRollImage(<modal-specific payload>)`` at the right
    phase transition and resetting ``rollImageStatus = 'idle'`` when a
    new roll for that modal begins. #}
+{# Desktop: copy the PNG to the clipboard for pasting into Discord. Hidden on
+   touch devices that can use the OS share sheet (``_useShareImage``), where the
+   clipboard path is a dead end (Discord mobile pastes the clipboard URI as
+   text, not the image). #}
 <button type="button"
-        x-show="rollImageStatus !== 'idle'"
+        x-show="rollImageStatus !== 'idle' && !_useShareImage"
         x-cloak
         @click="copyRollImage()"
         :disabled="rollImageStatus !== 'ready' && rollImageStatus !== 'copied'"
@@ -35,4 +39,28 @@
     <span x-show="rollImageStatus === 'ready'">Copy as image</span>
     <span x-show="rollImageStatus === 'copied'">Copied!</span>
     <span x-show="rollImageStatus === 'failed'">Copy failed</span>
+</button>
+{# Mobile: hand the PNG to the OS share sheet so it can go straight into
+   Discord. Shown in place of Copy on share-capable touch devices. #}
+<button type="button"
+        x-show="rollImageStatus !== 'idle' && _useShareImage"
+        x-cloak
+        @click="shareRollImage()"
+        :disabled="(rollImageStatus !== 'ready' && rollImageStatus !== 'copied')
+                   || rollShareStatus === 'sharing'"
+        :class="(rollShareStatus === 'failed')
+                ? 'bg-ink/5 text-ink/40'
+                : (rollShareStatus === 'shared')
+                  ? 'bg-accent/10 text-accent'
+                  : 'btn-secondary'"
+        class="text-xs font-medium px-2.5 py-1 rounded transition-colors disabled:opacity-40 disabled:cursor-wait"
+        data-action="share-roll-image"
+        :data-state="rollShareStatus"
+        title="Share the roll image (e.g. straight into Discord)">
+    <span x-show="rollImageStatus === 'rendering'">Preparing...</span>
+    <span x-show="rollImageStatus !== 'rendering' && rollShareStatus === 'sharing'">Sharing...</span>
+    <span x-show="rollImageStatus !== 'rendering' && rollShareStatus === 'shared'">Shared!</span>
+    <span x-show="rollImageStatus !== 'rendering' && rollShareStatus === 'failed'">Share failed</span>
+    <span x-show="rollImageStatus !== 'rendering' && rollShareStatus !== 'sharing'
+                  && rollShareStatus !== 'shared' && rollShareStatus !== 'failed'">Share image</span>
 </button>

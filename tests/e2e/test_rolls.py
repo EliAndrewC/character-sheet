@@ -1631,6 +1631,101 @@ def test_roll_result_copy_as_image_button(page, live_server_url):
     assert has_png, "Expected a PNG to land on the clipboard"
 
 
+# Stub a share-capable touch device BEFORE any page script runs (an IIFE so
+# Playwright executes it on injection), so share_image.js computes
+# window.L7RUseShareImage = true.
+_MOBILE_SHARE_INIT = """(() => {
+    const def = (obj, name, val) => {
+        try { Object.defineProperty(obj, name, {value: val, configurable: true}); }
+        catch (e) { obj[name] = val; }
+    };
+    def(navigator, 'canShare', () => true);
+    window.__shareCalls = [];
+    def(navigator, 'share', (d) => { window.__shareCalls.push(d); return Promise.resolve(); });
+    const real = window.matchMedia ? window.matchMedia.bind(window) : null;
+    window.matchMedia = (q) => String(q).includes('coarse')
+        ? {matches: true, media: q, addEventListener(){}, removeEventListener(){},
+           addListener(){}, removeListener(){}}
+        : (real ? real(q) : {matches: false, media: q, addEventListener(){},
+           removeEventListener(){}, addListener(){}, removeListener(){}});
+})()"""
+
+
+def test_roll_result_share_button_on_mobile(page, live_server_url):
+    """On a touch device that can share a file via the OS share sheet, the
+    result panel shows a "Share image" button (in place of Copy) that hands
+    the pre-rendered PNG to navigator.share - the working path on mobile,
+    where Discord cannot paste a clipboard image."""
+    page.add_init_script(_MOBILE_SHARE_INIT)
+    _create_roller(page, live_server_url, "ShareImg")
+    # Sanity: the helper computed "use share" mode from the stubbed device.
+    assert page.evaluate("window.L7RUseShareImage") is True
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_for_roll_result(page)
+    # Wait for the prerender to land so the Share button is enabled.
+    page.wait_for_function(
+        """() => {
+            const el = document.querySelector(
+                '[data-modal="dice-roller"] [data-action="share-roll-image"]');
+            return el && getComputedStyle(el).display !== 'none' && !el.disabled;
+        }""",
+        timeout=10000,
+    )
+    share_btn = page.locator(
+        '[data-modal="dice-roller"] [data-action="share-roll-image"]:visible'
+    )
+    assert share_btn.is_visible()
+    assert "Share image" in share_btn.text_content()
+    # Copy is replaced by Share in this mode - no visible Copy button.
+    assert page.locator(
+        '[data-modal="dice-roller"] [data-action="copy-roll-image"]:visible'
+    ).count() == 0
+
+    share_btn.click()
+    page.wait_for_function(
+        """() => {
+            const el = document.querySelector(
+                '[data-modal="dice-roller"] [data-action="share-roll-image"]');
+            return el && el.getAttribute('data-state') === 'shared';
+        }""",
+        timeout=3000,
+    )
+    assert "Shared" in share_btn.text_content()
+    # navigator.share was called with a single PNG File.
+    shared = page.evaluate("""() => {
+        const calls = window.__shareCalls || [];
+        if (!calls.length) return null;
+        const f = ((calls[0] || {}).files || [])[0];
+        return f ? {type: f.type, isFile: f instanceof File} : null;
+    }""")
+    assert shared is not None, "navigator.share should have been called"
+    assert shared["type"] == "image/png"
+    assert shared["isFile"] is True
+
+
+def test_roll_result_shows_copy_not_share_on_desktop(page, live_server_url):
+    """The desktop default (no coarse pointer) keeps Copy and never shows
+    the Share button."""
+    _create_roller(page, live_server_url, "DesktopCopy")
+    assert page.evaluate("window.L7RUseShareImage") is False
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_for_roll_result(page)
+    page.wait_for_function(
+        """() => {
+            const el = document.querySelector(
+                '[data-modal="dice-roller"] [data-action="copy-roll-image"]');
+            return el && el.getAttribute('data-state') === 'ready';
+        }""",
+        timeout=10000,
+    )
+    assert page.locator(
+        '[data-modal="dice-roller"] [data-action="copy-roll-image"]:visible'
+    ).is_visible()
+    assert page.locator(
+        '[data-modal="dice-roller"] [data-action="share-roll-image"]:visible'
+    ).count() == 0
+
+
 def test_roll_result_copy_button_hidden_during_animation(page, live_server_url):
     """The Copy button is gated on ``rollImageStatus !== 'idle'`` so
     a brand-new roll doesn't flash a non-functional button on screen
