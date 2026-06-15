@@ -7,6 +7,7 @@ side-effects or database dependencies.
 
 from __future__ import annotations
 
+import re
 from typing import Dict, List, Optional
 
 from app.game_data import (
@@ -39,12 +40,67 @@ from app.game_data import (
     SKILL_MAX,
     SKILLS,
     SUPERNATURAL_KNACK_IDS,
+    XP_PROFILE_BANDS,
+    XP_PROFILE_TIER_BREAK,
     max_recognition,
     ring_raise_cost,
     skill_raise_cost,
     total_skill_cost,
 )
 from app.services.rolls import compute_dan
+
+
+# ---------------------------------------------------------------------------
+# Combat vs non-combat categorization (single source of truth)
+# ---------------------------------------------------------------------------
+# These rules decide which XP counts as "combat". They drive the NPC XP profile
+# the GM sees in the editor and the standalone combat-vs-non-combat analysis in
+# analysis/ (which imports them from here so the two never drift). The rationale
+# for each call lives in analysis/CombatVsNonCombatXP.md.
+
+# Advantages with a combat application, by game-data id.
+COMBAT_ADVANTAGE_IDS = {"lucky", "strength_of_the_earth", "quick_healer"}
+# A Specialization is combat only if its chosen domain is a combat skill/action.
+COMBAT_SPEC_RE = re.compile(
+    r"fight|attack|parry|unarmed|weapon|knuckle|lunge|iaijutsu|kenjutsu|archery|brawl|grapple",
+    re.I,
+)
+# Schools whose Special Ability (not 3rd Dan) keys off a general skill, making
+# that skill count as combat.
+SPECIAL_ABILITY_COMBAT_SKILL_IDS = {"shosuro_actor": {"acting"}}
+
+_THIRD_DAN_RE = re.compile(r"X is your ([a-z]+) skill", re.I)
+_SKILL_NAME_TO_ID = {s.name.lower(): sid for sid, s in SKILLS.items()}
+
+
+def combat_skill_names(school_id: str) -> set:
+    """Display names of the general skills that count as COMBAT for this school.
+
+    The skill named in the 3rd Dan "X is your ___ skill" technique (when it is a
+    general social/knowledge skill - attack/parry-powered schools add nothing),
+    plus any Special-Ability-powered skill. Derived from the canonical rules text
+    so it stays correct as schools are added or reworded.
+    """
+    ids = set()
+    school = SCHOOLS.get(school_id)
+    if school:
+        m = _THIRD_DAN_RE.search(school.techniques.get(3, "") or "")
+        if m and m.group(1).lower() in _SKILL_NAME_TO_ID:
+            ids.add(_SKILL_NAME_TO_ID[m.group(1).lower()])
+    ids |= SPECIAL_ABILITY_COMBAT_SKILL_IDS.get(school_id, set())
+    return {SKILLS[sid].name for sid in ids}
+
+
+def _combat_advantage_labels() -> set:
+    return {ADVANTAGES[a].name for a in COMBAT_ADVANTAGE_IDS if a in ADVANTAGES}
+
+
+def _advantage_is_combat(label: str, combat_labels: set) -> bool:
+    if label in combat_labels:
+        return True
+    if label.startswith("Specialization"):
+        return bool(COMBAT_SPEC_RE.search(label))
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -633,6 +689,114 @@ def calculate_xp_breakdown(character_data: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Combat / non-combat split and the NPC XP profile
+# ---------------------------------------------------------------------------
+
+def combat_noncombat_split(character_data: dict) -> dict:
+    """Split a character's spent XP into combat vs non-combat, plus the ring and
+    school-knack subtotals.
+
+    Combat = rings + school knacks (incl. other-school knacks) + Attack/Parry +
+    the school's combat skill + combat advantages. Non-combat = everything else
+    (other general skills, non-combat advantages, Honor/Rank/Recognition).
+    Disadvantages are not bucketed; their refund already shows up in what was
+    bought, so ``total`` (= combat + noncombat) is total positive XP spent.
+    """
+    b = calculate_xp_breakdown(character_data)
+    combat_skills = combat_skill_names(character_data.get("school", ""))
+    combat_adv_labels = _combat_advantage_labels()
+
+    rings = b["rings"]["total"]
+    knacks = b["school_knacks"]["total"] + b["foreign_knacks"]["total"]
+    atk_parry = b["combat_skills"]["total"]
+
+    skill_combat = 0
+    skill_total = 0
+    for sub in b["skills"]["subsections"]:
+        for row in sub["rows"]:
+            skill_total += row["xp"]
+            if row["label"] in combat_skills:
+                skill_combat += row["xp"]
+
+    adv_combat = sum(
+        row["xp"] for row in b["advantages"]["rows"]
+        if _advantage_is_combat(row["label"], combat_adv_labels)
+    )
+
+    combat = rings + knacks + atk_parry + skill_combat + adv_combat
+    noncombat = (
+        (skill_total - skill_combat)
+        + (b["advantages"]["total"] - adv_combat)
+        + b["honor_rank_recognition"]["total"]
+    )
+    return {
+        "combat": combat,
+        "noncombat": noncombat,
+        "rings": rings,
+        "knacks": knacks,
+        "total": combat + noncombat,
+    }
+
+
+def _profile_level(pct: float, low: float, high: float) -> str:
+    if pct <= low:
+        return "low"
+    if pct > high:
+        return "high"
+    return "medium"
+
+
+def profile_tier(total_xp: float) -> str:
+    """"developing" vs "veteran" - which set of (XP-dependent) bands applies."""
+    return "veteran" if total_xp > XP_PROFILE_TIER_BREAK else "developing"
+
+
+def _profile_band(metric: str, tier: str) -> tuple:
+    """Resolve the (low, high) cutoffs for a metric, tiered by XP if needed."""
+    spec = XP_PROFILE_BANDS[metric]
+    if isinstance(spec, dict):  # rings / knacks: drift with total XP
+        return spec[tier]
+    return spec                 # combat: XP-stable, one band
+
+
+def xp_profile(character_data: dict) -> dict:
+    """Three-number NPC profile a GM uses to gauge a build: the share of total
+    spent XP that goes to combat, to rings, and to school knacks, each tagged
+    ``low`` / ``medium`` / ``high`` against :data:`XP_PROFILE_BANDS`.
+
+    ``rings_pct`` and ``knacks_pct`` are freestanding shares of the same total -
+    they are *subsets* of combat, so they do not sum to anything with combat_pct.
+    Because rings% rises and knacks% falls as a character accumulates XP, those
+    two are judged against ``developing`` vs ``veteran`` bands (see
+    :func:`profile_tier`); combat% uses one band. ``total_xp == 0`` (an un-built
+    character) yields zero shares; the editor hides the profile in that case.
+    """
+    s = combat_noncombat_split(character_data)
+    total = s["total"]
+    tier = profile_tier(total)
+
+    def pct(x):
+        return round(100.0 * x / total, 1) if total else 0.0
+
+    combat_pct = pct(s["combat"])
+    rings_pct = pct(s["rings"])
+    knacks_pct = pct(s["knacks"])
+    return {
+        "combat_pct": combat_pct,
+        "noncombat_pct": round(100.0 - combat_pct, 1) if total else 0.0,
+        "rings_pct": rings_pct,
+        "knacks_pct": knacks_pct,
+        "combat_xp": s["combat"],
+        "noncombat_xp": s["noncombat"],
+        "total_xp": total,
+        "tier": tier,
+        "combat_level": _profile_level(combat_pct, *_profile_band("combat", tier)),
+        "rings_level": _profile_level(rings_pct, *_profile_band("rings", tier)),
+        "knacks_level": _profile_level(knacks_pct, *_profile_band("knacks", tier)),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Aggregation helpers
 # ---------------------------------------------------------------------------
 
@@ -833,6 +997,7 @@ def editor_xp_view(character_data: dict) -> dict:
         "totals": totals,
         "costs": costs,
         "marginal": marginal,
+        "profile": xp_profile(character_data),
     }
 
 

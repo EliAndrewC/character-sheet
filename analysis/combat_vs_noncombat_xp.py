@@ -76,11 +76,19 @@ import argparse
 import datetime
 import json
 import pathlib
-import re
 import statistics
 
-from app.game_data import ADVANTAGES, SCHOOLS, SKILLS
-from app.services.xp import calculate_xp_breakdown
+from app.game_data import SCHOOLS
+# Categorization lives in the app (single source of truth); see the rules in the
+# module docstring. We import the helpers so the analysis and the in-app NPC
+# profile can never drift. Re-exported here so sibling analysis scripts can keep
+# importing them from this module.
+from app.services.xp import (  # noqa: F401
+    calculate_xp_breakdown,
+    combat_skill_names,
+    _advantage_is_combat,
+    _combat_advantage_labels,
+)
 
 HERE = pathlib.Path(__file__).resolve().parent
 SNAP_DIR = HERE / "combat_xp_snapshots"
@@ -95,20 +103,6 @@ SITE_URL = "https://l7r-character-sheet.fly.dev"
 # campaign's player characters. Edit if the roster changes.
 EXCLUDE_IDS = {5}
 
-# --- categorization config (see module docstring + the .md) ----------------
-# Advantages with a combat application, by game-data id (mapped to display
-# names at runtime so a label re-wording can't silently break the match).
-COMBAT_ADVANTAGE_IDS = {"lucky", "strength_of_the_earth", "quick_healer"}
-# A Specialization is combat only if its chosen domain is a combat skill/action.
-COMBAT_SPEC_RE = re.compile(
-    r"fight|attack|parry|unarmed|weapon|knuckle|lunge|iaijutsu|kenjutsu|archery|brawl|grapple",
-    re.I,
-)
-# Schools whose Special Ability (not 3rd Dan) keys off a general skill, making
-# that skill combat. The 3rd-Dan-powered skill is auto-derived below; this dict
-# is only for the rarer special-ability case.
-SPECIAL_ABILITY_COMBAT_SKILL_IDS = {"shosuro_actor": {"acting"}}
-
 # Fields copied into a snapshot - everything calculate_xp_breakdown needs,
 # plus id/name for the table and starting/earned XP for the record.
 SNAPSHOT_FIELDS = [
@@ -118,38 +112,6 @@ SNAPSHOT_FIELDS = [
     "honor", "rank", "rank_locked", "recognition", "recognition_halved",
     "starting_xp", "earned_xp",
 ]
-
-_THIRD_DAN_RE = re.compile(r"X is your ([a-z]+) skill", re.I)
-_SKILL_NAME_TO_ID = {s.name.lower(): sid for sid, s in SKILLS.items()}
-
-
-def combat_skill_names(school_id: str) -> set:
-    """Display names of the general skills that count as COMBAT for this school.
-
-    The skill named in the 3rd Dan "X is your ___ skill" technique (when it is
-    one of the general social/knowledge skills - attack/parry-powered schools
-    add nothing here), plus any Special-Ability-powered skill.
-    """
-    ids = set()
-    school = SCHOOLS.get(school_id)
-    if school:
-        m = _THIRD_DAN_RE.search(school.techniques.get(3, "") or "")
-        if m and m.group(1).lower() in _SKILL_NAME_TO_ID:
-            ids.add(_SKILL_NAME_TO_ID[m.group(1).lower()])
-    ids |= SPECIAL_ABILITY_COMBAT_SKILL_IDS.get(school_id, set())
-    return {SKILLS[sid].name for sid in ids}
-
-
-def _combat_advantage_labels() -> set:
-    return {ADVANTAGES[a].name for a in COMBAT_ADVANTAGE_IDS if a in ADVANTAGES}
-
-
-def _advantage_is_combat(label: str, combat_labels: set) -> bool:
-    if label in combat_labels:
-        return True
-    if label.startswith("Specialization"):
-        return bool(COMBAT_SPEC_RE.search(label))
-    return False
 
 
 def categorize(char: dict) -> dict:

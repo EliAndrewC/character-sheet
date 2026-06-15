@@ -103,3 +103,31 @@ def test_xp_updates_on_combat_skill_change(page, live_server_url):
     select_school(page, "akodo_bushi")
     click_plus(page, "attack", 1)  # 1->2 = 4 XP
     _wait_text(page, SPENT, "4")
+
+
+# --- GM-only NPC XP profile (combat / rings / knacks, low/medium/high) --------
+
+GM_PROFILE = '[data-testid="gm-xp-profile"]'
+
+
+@pytest.mark.xp_summary
+def test_gm_profile_visible_for_admin(page, live_server_url):
+    """An admin (GM) sees the combat/rings/knacks profile once XP is spent."""
+    _go_to_editor(page, live_server_url)
+    select_school(page, "akodo_bushi")
+    click_plus(page, "ring_fire", 1)  # spend 15 so total_xp > 0
+    _wait_text(page, SPENT, "15")
+    page.wait_for_selector(GM_PROFILE, state="visible")
+    text = page.inner_text(GM_PROFILE)
+    assert "Combat" in text and "Rings" in text and "Knacks" in text
+    assert any(level in text for level in ("low", "medium", "high"))
+
+
+@pytest.mark.xp_summary
+def test_gm_profile_hidden_for_nonadmin(page_nonadmin, live_server_url):
+    """A non-admin editor never sees the GM profile (server-gated, not in DOM)."""
+    _go_to_editor(page_nonadmin, live_server_url)
+    select_school(page_nonadmin, "akodo_bushi")
+    click_plus(page_nonadmin, "ring_fire", 1)
+    _wait_text(page_nonadmin, SPENT, "15")
+    assert page_nonadmin.locator(GM_PROFILE).count() == 0
