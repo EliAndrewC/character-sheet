@@ -58,6 +58,22 @@ Rules for this variant:
 Example: `combat_vs_noncombat_xp.py` (capture/report/trend) ->
 `CombatVsNonCombatXP.md` + `combat_xp_snapshots/<date>.json`.
 
+**Characters from previous campaigns stay in a standalone script, never folded
+into the live one.** Old PCs predate the app, have no database row, and were
+hand-parsed from archived sheets (e.g. `old-character-sheets/*.odt`); they also
+tend to follow different campaign rules (different starting Rank/Recognition,
+Honor/Rank/Recognition advanced through play rather than bought, etc.). Keep them
+in their own companion script that reuses the *downstream* machinery - the cost
+tables and the categorization rules imported from the live analysis - but
+hand-encodes the raw stats and applies its own campaign assumptions. Do not add
+them as rows to the live capture/report/trend, whose job is to track the current
+party over time; mixing eras would pollute that signal and force campaign-specific
+special-casing into the live script. Cross-reference them in the `.md` instead.
+Different source formats can each get their own standalone script feeding the
+same `.md` section: `combat_xp_past_campaigns.py` (hand-encoded from `.odt`
+character sheets) and `combat_xp_past_ledgers.py` (parsed from `*Points.xls` XP
+ledgers) both feed the "Looking back" section of `CombatVsNonCombatXP.md`.
+
 ## Conventions
 
 - **Run from the repo root** so the `app` package imports resolve:
