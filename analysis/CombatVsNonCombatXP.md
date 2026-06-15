@@ -10,6 +10,7 @@ character sheets, with some characters from past campaigns thrown in.
 - [Results (snapshot)](#results-snapshot-2026-06-13-n--10)
 - [Reading the results](#reading-the-results)
 - [Looking back: nine characters across past campaigns](#looking-back-nine-characters-across-past-campaigns)
+- [XP profile: combat / rings / knacks](#xp-profile-combat--rings--knacks)
   - [Per-source measurement notes and judgment calls](#per-source-measurement-notes-and-judgment-calls)
 - [Reproducing and updating this table](#reproducing-and-updating-this-table)
 - [Caveats](#caveats)
@@ -211,6 +212,105 @@ party's shares are unlikely to swing much, and that where a character sits is
 mostly where they chose to sit on day one - with whatever drift there is bending
 gently toward the party's ~70% center.
 
+## XP profile: combat / rings / knacks
+
+The combat/non-combat split is one lens. For building NPCs it helps to read a
+character as **three freestanding shares of total spent XP**:
+
+- **combat %** - the split above (combat / total);
+- **rings %** - raw-attribute investment (ring XP / total);
+- **school knacks %** - school-technique investment (school plus any
+  other-school knack XP / total).
+
+Rings and knacks are *subsets* of combat, so they do not sum with anything -
+they are independent dials. Reading all three says more than combat % alone: two
+characters both at 74% combat can be a ring-pumping stat-monster and a
+technique-and-weapon specialist. Surfacing rings % directly is also the cleanest
+answer to "are all rings really combat?": rather than re-bucket Air/Water, the
+GM just sees how ring-heavy a build is.
+
+### Ranges and low / medium / high bands
+
+Over the 19 built characters here (the live party plus every past-campaign PC at
+its final state), the overall ranges are:
+
+| Metric | Min | Median | Mean | Max |
+|---|--:|--:|--:|--:|
+| Combat % | 53.2% | 74.1% | 72.1% | 91.0% |
+| Rings % | 13.0% | 33.2% | 33.4% | 51.9% |
+| Knacks % | 0.0% | 21.2% | 20.9% | 36.3% |
+
+combat% holds steady across a campaign, so it uses a single band. rings% rises
+and knacks% falls as XP accumulates (see the drift note below), so those two are
+banded separately for **developing** (<=300 total XP) and **veteran** (>300)
+characters. The cutoffs are the 33rd / 67th percentiles of each group:
+
+| Metric | Tier | low <= | high > |
+|---|---|--:|--:|
+| Combat % | any | 69% | 75% |
+| Rings % | developing | 26% | 30% |
+| Rings % | veteran | 37% | 39% |
+| Knacks % | developing | 22% | 26% |
+| Knacks % | veteran | 18% | 19% |
+
+The 300-XP break falls in a natural gap (the live party sits at <=270 XP, the
+"finished" past PCs at >=319). In words:
+
+- **Combat** - low (<=69%) is a generalist or face; medium (~69-75%) is the
+  standard PC; high (>75%) is combat-focused.
+- **Rings** - a *developing* PC reads ring-heavy past ~30% but a *veteran* only
+  past ~39% (veterans naturally carry more ring XP); raw-stat investors (duelists
+  pumping Fire/Void, wound-check tanks) sit at the top of either tier.
+- **Knacks** - high is >26% for a developing PC but only >19% for a veteran (the
+  knack share shrinks as other XP piles up); below ~22% / ~18% is technique-light.
+
+### What the three numbers say in practice
+
+- **Rings are the biggest discretionary chunk and the best differentiator** -
+  about a third of XP on average, but the widest range (13% to 52%). Ring-monsters
+  (Naritsugu 51%, Tozasu 52%, Hidemasa 46%) versus ring-light builds (Makoto 13%)
+  are genuinely different characters.
+- **Knacks are the tightest band, so the weakest differentiator** - three school
+  knacks at a useful rank cost a fairly fixed chunk, so most schooled characters
+  land between 15% and 32%. (Tozasu the peasant has no school and so no school
+  knacks at all - the one case the knacks band does not describe.)
+- **The profile drifts over a campaign, which is why two of the bands are
+  XP-tiered.** Knacks are *front-loaded* - you max them early, so the share falls
+  as total XP grows (Naritsugu 33% -> 18%, Tetsu 28% -> 18%) - while rings are
+  bought *continuously*, so their share rises (Naritsugu 39% -> 51%, Junichiro
+  20% -> 29%). A 200-XP NPC and a 450-XP NPC therefore profile differently even at
+  the same build philosophy, so rings% and knacks% are judged against the
+  developing-vs-veteran bands above while combat% needs only one.
+
+Current live party:
+
+| Character | School | Total XP | Combat % | Rings % | Knacks % |
+|---|---|--:|--:|--:|--:|
+| Tsuruchi Jimen | Shosuro Actor | 255 | 91.0% | 39.2% | 21.2% |
+| Tsuruchi Yudai 勇大 | Kakita Duelist | 270 | 79.6% | 22.2% | 36.3% |
+| Asako Tadashi | Isawa Ishi | 237 | 78.5% | 29.5% | 35.4% |
+| Kitsune Moriko | Kitsune Warden | 227 | 77.5% | 26.4% | 28.2% |
+| Tsuruchi Tetsuro | Ikoma Bard | 241 | 74.7% | 33.2% | 22.4% |
+| Tsuruchi Toshihiro | Akodo Bushi | 212 | 74.5% | 28.3% | 25.5% |
+| Tsuruchi Hidemasa | Yogo Warden | 217 | 74.2% | 46.1% | 13.8% |
+| Tsuruchi Makoto 鶴知誠 | Shosuro Actor | 231 | 69.3% | 13.0% | 23.4% |
+| Tsuruchi Shizukanaken | Hiruma Scout | 235 | 59.6% | 19.1% | 23.0% |
+| Tsuruchi Sadakichi | Mantis Wave-Treader | 220 | 53.2% | 27.3% | 13.6% |
+
+(The past-campaign characters, which also feed the bands, are listed by
+`analysis/xp_profile_ranges.py`.)
+
+### In the app
+
+The character editor shows this profile to a GM (admin) while they build: combat
+/ rings / knacks %, each tagged low / medium / high, prefixed with the
+character's tier (e.g. "GM profile (veteran):") so the GM knows the rings/knacks
+labels are XP-relative. It is computed by `xp_profile()` in `app/services/xp.py`
+- using the same combat categorization as this analysis, imported from there so
+the two never drift - and the band cutoffs and 300-XP tier break live in
+`XP_PROFILE_BANDS` / `XP_PROFILE_TIER_BREAK` in `app/game_data.py`. The line is
+admin-gated and stays hidden until the character has spent any XP.
+
 ## Reproducing and updating this table
 
 This reads the live campaign database, so it works in two steps: a **capture**
@@ -240,11 +340,11 @@ balance move - `... report --date YYYY-MM-DD` re-runs any past snapshot, and
 |---|--:|--:|--:|---|
 | 2026-06-13 | 10 | 73.2% | 74.6% | 53.2% - 91.0% |
 
-The "Looking back" section comes from two separate scripts, because those
-characters predate the app and have no database row. Both reuse the same
-categorization machinery, print their tables plus per-character change, and need
-no database (the `.xls` reader needs `xlrd`: `pip install --break-system-packages
-xlrd`):
+The "Looking back" and "XP profile" sections come from three more scripts,
+because those characters predate the app and have no database row. All reuse the
+same categorization machinery (imported from `app.services.xp`), print their
+tables, and need no database (`.xls` reading uses `xlrd`, already in
+`requirements.txt`):
 
 ```sh
 # Kitsuki Tetsu + Wakuu, re-costed from hand-encoded .odt stats
@@ -253,6 +353,9 @@ PYTHONPATH=. python3 analysis/combat_xp_past_campaigns.py
 # the seven *Points.xls XP ledgers (Isamu, Naritsugu, Junichiro, Takumi,
 # Masumune, Shori, Tozasu) - costs read straight from each ledger row
 PYTHONPATH=. python3 analysis/combat_xp_past_ledgers.py
+
+# the three-number profile (combat / rings / knacks %) + ranges and bands
+PYTHONPATH=. python3 analysis/xp_profile_ranges.py
 ```
 
 ## Caveats

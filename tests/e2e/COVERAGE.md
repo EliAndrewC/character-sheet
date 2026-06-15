@@ -1012,6 +1012,11 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] School ring max 5 below 4th Dan (+ disabled) → `test_editor_controls.py::test_school_ring_below_4th_dan_max_5`
 - [x] XP overspend turns remaining red → `test_live_xp.py::test_remaining_goes_negative_on_overspend`
 
+## Character Editor — GM XP profile
+
+- [x] Admin sees combat/rings/knacks profile with low/medium/high once XP is spent → `test_live_xp.py::test_gm_profile_visible_for_admin`
+- [x] Non-admin editor never sees the GM profile (server-gated) → `test_live_xp.py::test_gm_profile_hidden_for_nonadmin`
+
 ## Character Editor — Knacks
 
 - [x] Knack +/- buttons update XP → `test_live_xp.py::test_xp_updates_on_knack_change`

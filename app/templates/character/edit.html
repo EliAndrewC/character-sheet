@@ -1562,6 +1562,23 @@
                             Unspent: <strong class="font-mono" x-text="xp.remaining"></strong>
                         </span>
                     </div>
+                    {# GM-only NPC build profile: combat / rings / school-knack share of #}
+                    {# spent XP, each tagged low/medium/high. See xp_profile() in xp.py. #}
+                    {% if viewer_is_admin %}
+                    <div class="text-xs text-ink/70 mt-1" data-testid="gm-xp-profile"
+                         x-show="xp.profile && xp.profile.total_xp > 0">
+                        <span class="font-semibold">GM profile</span><span class="text-ink/50"
+                              x-text="' (' + (xp.profile?.tier ?? '') + '):'"></span>
+                        <span>Combat <span class="font-mono" x-text="(xp.profile?.combat_pct ?? 0) + '%'"></span>
+                            <span class="font-semibold" x-text="'(' + (xp.profile?.combat_level ?? '') + ')'"></span></span>
+                        <span class="mx-1 text-ink/40">|</span>
+                        <span>Rings <span class="font-mono" x-text="(xp.profile?.rings_pct ?? 0) + '%'"></span>
+                            <span class="font-semibold" x-text="'(' + (xp.profile?.rings_level ?? '') + ')'"></span></span>
+                        <span class="mx-1 text-ink/40">|</span>
+                        <span>Knacks <span class="font-mono" x-text="(xp.profile?.knacks_pct ?? 0) + '%'"></span>
+                            <span class="font-semibold" x-text="'(' + (xp.profile?.knacks_level ?? '') + ')'"></span></span>
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                     <span class="text-xs sm:text-sm text-ink/60" x-text="saveStatus"></span>

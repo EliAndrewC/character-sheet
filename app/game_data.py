@@ -64,6 +64,33 @@ KNACK_COSTS = ADVANCED_SKILL_COSTS  # knacks use advanced cost table
 SKILL_MAX = 5
 KNACK_MAX = 5
 
+# ---------------------------------------------------------------------------
+# NPC XP PROFILE BANDS
+# ---------------------------------------------------------------------------
+# Low / medium / high cutoffs for the three-number XP profile a GM sees when
+# building a character: the share of total spent XP that goes to combat, to
+# rings, and to school knacks (the latter two are freestanding shares, not parts
+# of a 100% split). A share <= the low cutoff reads as "low", > the high cutoff
+# as "high", in between as "medium".
+#
+# Cutoffs are the 33rd / 67th percentiles of a 19-character reference population
+# (the live party plus the past-campaign PCs), computed in
+# analysis/xp_profile_ranges.py and documented in analysis/CombatVsNonCombatXP.md
+# (rounded to whole percents here).
+#
+# rings% drifts UP with total XP and knacks% drifts DOWN (knacks are front-
+# loaded, rings are bought throughout a campaign), so those two are banded
+# separately for "developing" vs "veteran" characters, split at
+# XP_PROFILE_TIER_BREAK total spent XP. combat% is XP-stable, so it keeps one
+# band. A metric whose value is a (low, high) tuple is not tiered; a dict is
+# keyed by tier.
+XP_PROFILE_TIER_BREAK = 300  # total spent XP: <= is "developing", > is "veteran"
+XP_PROFILE_BANDS: "Dict[str, object]" = {
+    "combat": (69.0, 75.0),
+    "rings": {"developing": (26.0, 30.0), "veteran": (37.0, 39.0)},
+    "knacks": {"developing": (22.0, 26.0), "veteran": (18.0, 19.0)},
+}
+
 
 def skill_raise_cost(new_rank: int, is_advanced: bool) -> int:
     """Return XP cost to raise a skill (or knack) to *new_rank*."""
