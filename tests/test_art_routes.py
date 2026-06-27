@@ -1056,7 +1056,7 @@ class TestGenerateReviewPage:
 
 
 class TestGenerateSubmit:
-    """Submit route - kicks off an async Imagen job (Phase 8)."""
+    """Submit route - kicks off an async Gemini image-generation job (Phase 8)."""
 
     @pytest.fixture(autouse=True)
     def _enabled_and_sync(self, monkeypatch):

@@ -1,7 +1,8 @@
 """Tests for ``app.services.art_generate``.
 
-Covers the real Imagen HTTP path (mocked via ``httpx.MockTransport``),
-the stub mode used by e2e tests, and all the typed error branches.
+Covers the real Gemini image-generation HTTP path (mocked via
+``httpx.MockTransport``), the stub mode used by e2e tests, and all the
+typed error branches.
 """
 
 from __future__ import annotations
@@ -30,10 +31,18 @@ def _png_bytes(width: int = 384, height: int = 512) -> bytes:
     return buf.getvalue()
 
 
-def _imagen_response(png: bytes) -> httpx.Response:
+def _gemini_response(png: bytes, *, with_text_part: bool = True) -> httpx.Response:
+    """Build a Gemini image response: a candidate whose content parts carry
+    the image inline as ``inlineData``. Real responses often precede the
+    image with a narration text part, so include one by default to exercise
+    the "skip text part, find the image part" path."""
     b64 = base64.b64encode(png).decode("ascii")
+    parts = []
+    if with_text_part:
+        parts.append({"text": "Here is the portrait you requested."})
+    parts.append({"inlineData": {"mimeType": "image/png", "data": b64}})
     return httpx.Response(
-        200, json={"predictions": [{"bytesBase64Encoded": b64}]},
+        200, json={"candidates": [{"content": {"parts": parts}}]},
     )
 
 
@@ -71,7 +80,7 @@ def _real_mode(monkeypatch):
 class TestConfig:
     def test_default_model(self, monkeypatch):
         monkeypatch.delenv("GEMINI_ART_MODEL", raising=False)
-        assert art_generate.art_model() == "imagen-4.0-generate-001"
+        assert art_generate.art_model() == "gemini-3.1-flash-image"
 
     def test_env_override(self, monkeypatch):
         monkeypatch.setenv("GEMINI_ART_MODEL", "custom-model-x")
@@ -96,38 +105,42 @@ class TestConfig:
 class TestGenerateImageHappyPath:
     def test_returns_decoded_png_bytes(self, monkeypatch):
         png = _png_bytes()
-        _install_transport(monkeypatch, lambda _req: _imagen_response(png))
+        _install_transport(monkeypatch, lambda _req: _gemini_response(png))
         out = art_generate.generate_image("any prompt")
         assert out == png
 
-    def test_posts_to_predict_endpoint(self, monkeypatch):
+    def test_posts_to_generatecontent_endpoint(self, monkeypatch):
         seen = {}
 
         def handler(req):
             seen["url"] = str(req.url)
             seen["body"] = req.content
             seen["api_key"] = req.headers.get("X-goog-api-key")
-            return _imagen_response(_png_bytes())
+            return _gemini_response(_png_bytes())
 
         _install_transport(monkeypatch, handler)
         art_generate.generate_image("prompt X")
-        assert seen["url"].endswith(":predict")
-        # httpx serialises without spaces between keys/values
-        assert b'"prompt":"prompt X"' in seen["body"]
+        assert seen["url"].endswith(":generateContent")
+        # httpx serialises without spaces between keys/values. The prompt now
+        # rides inside contents[].parts[].text, and the request carries the
+        # IMAGE response modality + the 3:4 aspect ratio.
+        assert b'"text":"prompt X"' in seen["body"]
+        assert b'"responseModalities":["TEXT","IMAGE"]' in seen["body"]
         assert b'"aspectRatio":"3:4"' in seen["body"]
         assert seen["api_key"] == "fake-key"
 
     def test_custom_model_used_in_url(self, monkeypatch):
-        monkeypatch.setenv("GEMINI_ART_MODEL", "imagen-4.0-preview")
+        monkeypatch.setenv("GEMINI_ART_MODEL", "gemini-custom-image")
         seen = {}
 
         def handler(req):
             seen["url"] = str(req.url)
-            return _imagen_response(_png_bytes())
+            return _gemini_response(_png_bytes())
 
         _install_transport(monkeypatch, handler)
         art_generate.generate_image("p")
-        assert "imagen-4.0-preview" in seen["url"]
+        assert "gemini-custom-image" in seen["url"]
+        assert seen["url"].endswith(":generateContent")
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +178,7 @@ class TestRetryAndErrors:
             calls["n"] += 1
             if calls["n"] == 1:
                 return httpx.Response(500)
-            return _imagen_response(_png_bytes())
+            return _gemini_response(_png_bytes())
 
         _install_transport(monkeypatch, handler)
         out = art_generate.generate_image("p")
@@ -228,47 +241,76 @@ class TestInvalidResponseBody:
         with pytest.raises(art_generate.ImageInvalidResponseError):
             art_generate.generate_image("p")
 
-    def test_200_missing_predictions(self, monkeypatch):
+    def test_image_only_part_no_text(self, monkeypatch):
+        """A candidate with only the image part (no preceding text) still
+        decodes - the extractor doesn't require a text part."""
+        png = _png_bytes()
+        _install_transport(
+            monkeypatch,
+            lambda _req: _gemini_response(png, with_text_part=False),
+        )
+        assert art_generate.generate_image("p") == png
+
+    def test_200_missing_candidates(self, monkeypatch):
         def handler(_req):
-            return httpx.Response(200, json={"not_predictions": []})
+            return httpx.Response(200, json={"not_candidates": []})
 
         _install_transport(monkeypatch, handler)
         with pytest.raises(art_generate.ImageInvalidResponseError,
-                            match="missing 'predictions'"):
+                            match="missing 'candidates'"):
             art_generate.generate_image("p")
 
-    def test_200_predictions_not_a_list(self, monkeypatch):
+    def test_200_candidates_empty_list(self, monkeypatch):
         def handler(_req):
-            return httpx.Response(200, json={"predictions": "oops"})
+            return httpx.Response(200, json={"candidates": []})
 
         _install_transport(monkeypatch, handler)
-        with pytest.raises(art_generate.ImageInvalidResponseError):
+        with pytest.raises(art_generate.ImageInvalidResponseError,
+                            match="missing 'candidates'"):
             art_generate.generate_image("p")
 
-    def test_200_predictions_item_not_an_object(self, monkeypatch):
+    def test_200_candidate_not_an_object(self, monkeypatch):
         def handler(_req):
-            return httpx.Response(200, json={"predictions": [["string", "list"]]})
+            return httpx.Response(200, json={"candidates": [["string", "list"]]})
 
         _install_transport(monkeypatch, handler)
         with pytest.raises(art_generate.ImageInvalidResponseError,
                             match="not an object"):
             art_generate.generate_image("p")
 
-    def test_200_missing_bytes_base64_encoded(self, monkeypatch):
+    def test_200_missing_content_parts(self, monkeypatch):
+        """Candidate present but no ``content.parts`` (e.g. blocked output)."""
         def handler(_req):
-            return httpx.Response(200, json={"predictions": [{"foo": "bar"}]})
+            return httpx.Response(
+                200, json={"candidates": [{"finishReason": "SAFETY"}]},
+            )
 
         _install_transport(monkeypatch, handler)
         with pytest.raises(art_generate.ImageInvalidResponseError,
-                            match="missing 'bytesBase64Encoded'"):
+                            match="missing 'content.parts'"):
+            art_generate.generate_image("p")
+
+    def test_200_parts_carry_no_inline_image(self, monkeypatch):
+        """Parts exist but none carry inline image data: a non-dict part,
+        a text-only part, and an ``inlineData`` part with no ``data`` are all
+        skipped, so extraction reports no image."""
+        def handler(_req):
+            return httpx.Response(200, json={"candidates": [{"content": {"parts": [
+                ["not", "a", "dict"],
+                {"text": "I cannot draw that."},
+                {"inlineData": {"mimeType": "image/png"}},
+            ]}}]})
+
+        _install_transport(monkeypatch, handler)
+        with pytest.raises(art_generate.ImageInvalidResponseError,
+                            match="no inline image data"):
             art_generate.generate_image("p")
 
     def test_200_invalid_base64(self, monkeypatch):
         def handler(_req):
-            return httpx.Response(
-                200,
-                json={"predictions": [{"bytesBase64Encoded": "!!!not-base64!!!"}]},
-            )
+            return httpx.Response(200, json={"candidates": [{"content": {"parts": [
+                {"inlineData": {"mimeType": "image/png", "data": "!!!not-base64!!!"}},
+            ]}}]})
 
         _install_transport(monkeypatch, handler)
         with pytest.raises(art_generate.ImageInvalidResponseError,

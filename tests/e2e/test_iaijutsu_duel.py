@@ -67,6 +67,69 @@ def test_duel_option_in_iaijutsu_menu(page, live_server_url):
     assert menu.locator('button:text("Iaijutsu Duel")').is_visible()
 
 
+def _wait_dice_done(page):
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+
+
+def test_evaluate_stance_option_in_iaijutsu_menu(page, live_server_url):
+    """The iaijutsu roll menu includes an 'Evaluate Stance' (Air) option."""
+    _create_duelist(page, live_server_url, "EvalOption")
+    _wait_alpine(page)
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    btn = menu.locator('[data-action="evaluate-stance"]')
+    btn.wait_for(state="visible", timeout=5000)
+    assert "rolled with Air" in btn.inner_text()
+
+
+def test_evaluate_stance_roll_shows_info_panel(page, live_server_url):
+    """Rolling Evaluate Stance opens the dice-roller result with an info
+    panel explaining the discernible Fire Ring and TN, with bounds anchored
+    to the actual roll total (per L7RRollMath.evaluateStanceInfo)."""
+    _create_duelist(page, live_server_url, "EvalRoll")
+    _wait_alpine(page)
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    menu.locator('[data-action="evaluate-stance"]').click()
+    _wait_dice_done(page)
+
+    # The roll ran as the evaluate variant, not the plain iaijutsu / strike.
+    key = page.evaluate("() => window._diceRoller && window._diceRoller.currentRollKey")
+    assert key == "knack:iaijutsu:evaluate"
+
+    info = page.locator('[data-testid="evaluate-stance-info"]')
+    info.wait_for(state="visible", timeout=5000)
+    fire = page.locator('[data-testid="evaluate-stance-fire"]')
+    tn = page.locator('[data-testid="evaluate-stance-tn"]')
+    assert fire.is_visible()
+    assert tn.is_visible()
+
+    # Drive baseTotal (the reactive Alpine proxy) to the canonical 27 so the
+    # bounds are deterministic: X = floor(27/5) = 5, so exact Fire if <= 4 else
+    # "5 or higher", exact TN if <= 26 else "27 or higher".
+    page.evaluate("() => { window._diceRoller.baseTotal = 27; }")
+    page.wait_for_timeout(100)
+    fire_text = fire.inner_text()
+    assert "4 or less" in fire_text and "5 or higher" in fire_text
+    tn_text = tn.inner_text()
+    assert "26 or less" in tn_text and "27 or higher" in tn_text
+
+    # A high result (bound >= the ring cap of 6) makes the Fire Ring certain.
+    page.evaluate("() => { window._diceRoller.baseTotal = 46; }")
+    page.wait_for_timeout(100)
+    certain_text = fire.inner_text()
+    assert "exact value" in certain_text and "high enough" in certain_text
+
+
 def test_duel_modal_opens_with_setup(page, live_server_url):
     """Iaijutsu Duel opens to the setup phase showing player TN."""
     _create_duelist(page, live_server_url, "DuelSetup")

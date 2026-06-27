@@ -3721,6 +3721,66 @@ class TestForeignKnackDice:
         assert "knack:iaijutsu:strike" in formulas
         assert formulas["knack:iaijutsu:strike"]["reroll_tens"] is False
 
+    # --- Iaijutsu "Evaluate Stance" variant (duel stance phase, Air) ---
+    def test_iaijutsu_evaluate_stance_formula_exposed(self):
+        """Any character with iaijutsu gets a ``knack:iaijutsu:evaluate`` key:
+        the duel's opening stance roll, kept with Air, labelled accordingly,
+        and (unlike the strike) a normal roll that rerolls 10s."""
+        char = make_character_data(
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        assert "knack:iaijutsu:evaluate" in formulas
+        ev = formulas["knack:iaijutsu:evaluate"]
+        assert ev["label"].startswith("Evaluate Stance")
+        assert "(Air)" in ev["label"]
+        assert ev["is_evaluate_stance"] is True
+        assert ev["reroll_tens"] is True
+
+    def test_iaijutsu_evaluate_stance_rolled_with_air_not_fire(self):
+        """Evaluate Stance swaps Fire for Air on the kept/rolled dice but
+        keeps every other iaijutsu bonus, so it differs from the base
+        iaijutsu roll only by the Air-minus-Fire ring delta."""
+        char = make_character_data(
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        formulas = build_all_roll_formulas(char)
+        base = formulas["knack:iaijutsu"]   # Fire
+        ev = formulas["knack:iaijutsu:evaluate"]  # Air
+        delta = 4 - 2  # Air - Fire
+        assert ev["kept"] - base["kept"] == delta
+        assert ev["rolled"] - base["rolled"] == delta
+        assert ev["flat"] == base["flat"]
+        # force_ring must NOT set the Kitsune-swap result annotation.
+        assert not ev.get("kitsune_swap_to_ring")
+        assert not ev.get("kitsune_swap_from_ring")
+
+    def test_iaijutsu_evaluate_stance_works_for_foreign_iaijutsu(self):
+        """Foreign iaijutsu (school list doesn't include it) still gets the
+        Evaluate Stance roll, mirroring the strike."""
+        char = make_character_data(
+            school="asahina_artisan",
+            knacks={"sincerity_calligraphy": 1, "tea_ceremony": 1, "conviction": 1},
+            foreign_knacks={"iaijutsu": 1},
+        )
+        char["school_ring_choice"] = "Air"
+        formulas = build_all_roll_formulas(char)
+        assert "knack:iaijutsu:evaluate" in formulas
+
+    def test_build_knack_formula_force_ring_swaps_without_swap_annotation(self):
+        """``force_ring`` keeps the iaijutsu knack on a non-natural ring with
+        no Kitsune-swap metadata (that path is ``ring_override``)."""
+        char = make_character_data(
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            rings={"Air": 5, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        air = build_knack_formula("iaijutsu", char, force_ring="Air")
+        assert air is not None
+        assert "(Air)" in air.label
+        assert not air.kitsune_swap_to_ring
+
     def test_kakita_iaijutsu_attack_does_not_fire_for_non_kakita_foreign(self):
         # Foreign iaijutsu does NOT grant the Kakita-specific Phase-0
         # iaijutsu-as-attack workflow.

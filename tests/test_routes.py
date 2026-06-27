@@ -1487,6 +1487,62 @@ class TestInitiativePerRoundResetFlags:
         assert flags.get("priest_round_conviction_refresh") is False
 
 
+class TestAkodoCombatVpFreeRaiseFlag:
+    """Akodo Bushi 4th Dan: spend void points post-roll for a free raise (+5
+    each) on any combat roll for which void points may be spent, exempt from
+    the normal per-roll VP cap. Gated by ``akodo_combat_vp_free_raise`` (Akodo,
+    4th Dan+). Distinct from the wound-check-only ``wc_vp_free_raise`` config
+    flag, which Yogo Warden 4th Dan also gets.
+    """
+
+    def _flags(self, client, cid):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        sa = re.search(r'id="school-abilities">(.*?)</script>', resp.text, re.DOTALL)
+        vc = re.search(r'id="void-spend-config">(.*?)</script>', resp.text, re.DOTALL)
+        assert sa is not None and vc is not None
+        return json.loads(sa.group(1)), json.loads(vc.group(1))
+
+    def test_akodo_4th_dan_has_combat_vp_free_raise_and_wc(self, client):
+        cid = _seed_character(
+            client, name="Akodo4D", school="akodo_bushi",
+            knacks={"double_attack": 4, "feint": 4, "iaijutsu": 4},
+        )
+        abilities, void_cfg = self._flags(client, cid)
+        assert abilities.get("akodo_combat_vp_free_raise") is True
+        # The wound-check post-roll free raise still applies too.
+        assert void_cfg.get("wc_vp_free_raise") is True
+
+    def test_akodo_3rd_dan_has_neither(self, client):
+        cid = _seed_character(
+            client, name="Akodo3D", school="akodo_bushi",
+            knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
+        )
+        abilities, void_cfg = self._flags(client, cid)
+        assert abilities.get("akodo_combat_vp_free_raise") is False
+        assert void_cfg.get("wc_vp_free_raise") is False
+
+    def test_yogo_4th_dan_has_wc_only_not_combat(self, client):
+        # Yogo Warden 4th Dan keeps the wound-check-only VP free raise; it does
+        # NOT get the generalized combat version.
+        cid = _seed_character(
+            client, name="Yogo4D", school="yogo_warden",
+            knacks={"double_attack": 4, "iaijutsu": 4, "feint": 4},
+        )
+        abilities, void_cfg = self._flags(client, cid)
+        assert abilities.get("akodo_combat_vp_free_raise") is False
+        assert void_cfg.get("wc_vp_free_raise") is True
+
+    def test_non_akodo_does_not_have_combat_vp_free_raise(self, client):
+        cid = _seed_character(
+            client, name="Mirumoto4D", school="mirumoto_bushi",
+            knacks={"counterattack": 4, "iaijutsu": 4, "lunge": 4},
+        )
+        abilities, _ = self._flags(client, cid)
+        assert abilities.get("akodo_combat_vp_free_raise") is False
+
+
 class TestPriestPreceptsPoolContext:
     """The ``priest_precepts_pool`` flag gates the Priest 3rd Dan precepts
     dice pool UI section. It is True only for priests at 3rd Dan or higher.
@@ -6015,8 +6071,13 @@ class TestMoneyPrivacy:
         resp = client.get(f"/characters/{cid}",
                           headers={"X-Test-User": "test_user_1:T1"})
         assert resp.status_code == 200
-        # Stipend stays visible.
-        assert "koku/year stipend" in resp.text
+        # Stipend stays visible. "koku" is now a clickable glossary term
+        # (a <span>), so the suffix renders as "</span>/year stipend"; the
+        # stable visible text is "/year stipend".
+        assert "/year stipend" in resp.text
+        # The koku glossary term renders for non-editors too (it is purely
+        # informational and gated by nothing).
+        assert 'data-action="koku-info-open"' in resp.text
         # The private fields must not be present in the embedded
         # money_state JSON. The label is a unique sentinel for the
         # ledger entry.
@@ -6024,9 +6085,9 @@ class TestMoneyPrivacy:
         # The "Money calculations:" header is the title of the
         # ledger section the template gates behind viewer_can_edit.
         assert "Money calculations:" not in resp.text
-        # The "koku on-hand" suffix only renders inside the gated
-        # on-hand block. (The Money row label stays "Money".)
-        assert "koku on-hand" not in resp.text
+        # The on-hand block (with its "on-hand" suffix) only renders inside
+        # the gated editor block. (The Money row label stays "Money".)
+        assert "on-hand" not in resp.text
 
     def test_editor_sheet_includes_on_hand_and_entries(self, client):
         cid = _seed_character(
@@ -6041,7 +6102,7 @@ class TestMoneyPrivacy:
                           headers={"X-Test-User": f"{OWNER_ID}:owner"})
         assert resp.status_code == 200
         # Editor sees the on-hand block AND the ledger entry.
-        assert "koku on-hand" in resp.text
+        assert "on-hand" in resp.text
         assert "Sold a horse" in resp.text
         assert "Money calculations:" in resp.text
 

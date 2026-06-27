@@ -661,6 +661,7 @@ def build_knack_formula(
     knack_id: str,
     character_data: dict,
     ring_override: Optional[str] = None,
+    force_ring: Optional[str] = None,
 ) -> Optional[RollFormula]:
     """Build a roll formula for a school knack the character has at rank >= 1.
 
@@ -668,6 +669,11 @@ def build_knack_formula(
     iaijutsu knack is excluded by the rules; passing ``ring_override`` for
     iaijutsu raises ValueError as a defense-in-depth check (the UI never
     offers the swap on iaijutsu).
+
+    ``force_ring`` swaps the ring the knack is kept on (e.g. iaijutsu's
+    "Evaluate Stance" stance phase is rolled with Air instead of its natural
+    Fire) while keeping every other knack bonus and WITHOUT the Kitsune-swap
+    result annotation that ``ring_override`` carries.
     """
     if knack_id == "iaijutsu" and ring_override:
         raise ValueError("ring_override is not supported on iaijutsu")
@@ -709,6 +715,10 @@ def build_knack_formula(
         # Knacks without a ring (e.g. passive) — use the lowest ring as a placeholder.
         # In practice these aren't typically rolled; the formula is best-effort.
         ring_name = "Earth"
+    # Force a non-natural ring (Evaluate Stance rolls iaijutsu with Air). Done
+    # before the Kitsune ``ring_override`` path so no swap annotation is set.
+    if force_ring and force_ring in {r.value for r in Ring}:
+        ring_name = force_ring
     swapped_from_ring: Optional[str] = None
     if ring_override and ring_override in {r.value for r in Ring} and ring_override != ring_name:
         swapped_from_ring = ring_name
@@ -1592,6 +1602,28 @@ def build_all_roll_formulas(
             strike["no_reroll_reason"] = "iaijutsu_strike"
             out["knack:iaijutsu:strike"] = _annotate_third_dan(
                 "knack:iaijutsu:strike", strike
+            )
+
+    # Iaijutsu "Evaluate Stance" variant: the opening stance phase of an
+    # iaijutsu duel. An open roll of iaijutsu kept with Air (NOT its natural
+    # Fire) but with every iaijutsu bonus, used to discern the opponent's Fire
+    # Ring and starting TN to be hit (see the Iaijutsu Duels combat rules).
+    # Unlike the strike, this is a normal roll: 10s reroll and void may be
+    # spent. Annotated as the base ``knack:iaijutsu`` so it inherits 3rd Dan
+    # adventure free raises wherever the plain iaijutsu roll would.
+    if "knack:iaijutsu" in out:
+        eval_formula = build_knack_formula(
+            "iaijutsu", knack_char_data, force_ring="Air"
+        )
+        if eval_formula is not None:
+            ev = eval_formula.to_dict()
+            # "Iaijutsu (Air)" -> "Evaluate Stance (Air)"
+            ev["label"] = eval_formula.label.replace(
+                "Iaijutsu", "Evaluate Stance", 1
+            )
+            ev["is_evaluate_stance"] = True
+            out["knack:iaijutsu:evaluate"] = _annotate_third_dan(
+                "knack:iaijutsu", ev
             )
 
     # Kakita Duelist: iaijutsu used as an attack (Phase-0 interrupts,

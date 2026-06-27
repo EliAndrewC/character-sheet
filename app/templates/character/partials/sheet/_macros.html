@@ -1,7 +1,24 @@
 {# Shared macros for the character sheet partials. Imported by sheet.html and
    any sheet partial that calls them:
-       {% from "character/partials/sheet/_macros.html" import render_rows, precepts_pool_block %}
+       {% from "character/partials/sheet/_macros.html" import render_rows, precepts_pool_block, koku_term %}
 #}
+
+{# Macro: render the word "koku" as a clickable glossary term. Renders in
+   the theme gold, swaps the cursor to the help cursor (distinct from the
+   surrounding pointer cursor on the Money row), and on click/Enter/Space
+   dispatches a window-level ``koku-info-open`` event that the currency
+   reference modal (see status.html) listens for. ``.stop`` keeps the
+   click from also toggling the Money row's expand/collapse. Purely
+   informational - no state is mutated - so it works for every viewer,
+   including non-editors in read-only mode. #}
+{% macro koku_term() %}<span class="koku-term text-gold font-medium cursor-help hover:underline focus:outline-none focus:underline"
+      role="button"
+      tabindex="0"
+      data-action="koku-info-open"
+      title="Click for Rokugani currency denominations"
+      @click.stop="$dispatch('koku-info-open')"
+      @keydown.enter.stop="$dispatch('koku-info-open')"
+      @keydown.space.stop.prevent="$dispatch('koku-info-open')">koku</span>{% endmacro %}
 
 {# Macro: render a flat list of XP line rows as a 3-column grid (XP | label | from→to).
    ``align`` controls the horizontal alignment of the label column - most

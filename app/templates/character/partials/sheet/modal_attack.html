@@ -494,6 +494,12 @@
                              data-testid="atk-post-roll-bonus-breakdown">
                             &bull; <span x-text="(atkPostRollBonusApplied >= 0 ? '+' : '') + atkPostRollBonusApplied"></span> extra bonus
                         </div>
+                        <div x-show="akodoPostRollVpSpent > 0" x-cloak
+                             class="text-xs text-ink/70 mt-0.5"
+                             data-testid="akodo-attack-vp-breakdown">
+                            &bull; +<span x-text="akodoPostRollVpSpent * 5"></span>
+                            from <span x-text="akodoPostRollVpSpent"></span> VP spent post-roll (Akodo 4th Dan, +5 each)
+                        </div>
                     </div>
 
                     {# Post-roll "Extra bonus": GM-grant adjustment
@@ -521,6 +527,35 @@
                                    x-ref="atkPostRollBonusInput"
                                    data-testid="atk-post-roll-bonus-amount"
                                    class="w-24 border rounded px-2 py-1 text-sm text-center">
+                        </div>
+                    </div>
+
+                    {# Akodo Bushi 4th Dan: spend void points post-roll for a
+                       free raise (+5 each) on this attack, ignoring the normal
+                       per-roll VP cap (only limited by available VP). #}
+                    <div x-show="atkPhase === 'result' && schoolAbilities.akodo_combat_vp_free_raise" x-cloak
+                         data-testid="akodo-attack-vp-block"
+                         class="bg-accent/5 border border-accent/20 rounded p-3">
+                        <div class="text-xs text-ink/60 mb-1">
+                            Akodo 4th Dan: spend void points for a free raise (+5 each), ignoring the normal per-roll limit.
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button"
+                                    data-action="akodo-attack-vp-spend"
+                                    x-show="(window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
+                                    @click="akodoVpSpend('attack')"
+                                    class="btn-primary px-3 py-1.5 rounded text-sm font-medium">
+                                Spend VP (+5)
+                            </button>
+                            <button type="button"
+                                    x-show="akodoPostRollVpSpent > 0"
+                                    @click="akodoVpUndo('attack')"
+                                    class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
+                                Undo VP
+                            </button>
+                            <span x-show="akodoPostRollVpSpent > 0" x-cloak class="text-xs text-accent">
+                                +<span x-text="akodoPostRollVpSpent * 5"></span> from <span x-text="akodoPostRollVpSpent"></span> VP (4th Dan)
+                            </span>
                         </div>
                     </div>
 

@@ -195,6 +195,17 @@
                             class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors border-b border-ink/10">
                         Iaijutsu Strike <span class="text-xs text-ink/50">(10s not rerolled)</span>
                     </button>
+                    {# Evaluate Stance: the duel's opening stance phase, rolled
+                       with Air instead of Fire (all iaijutsu bonuses kept).
+                       Discerns the opponent's Fire Ring and starting TN. #}
+                    <template x-if="formulas['knack:iaijutsu:evaluate']">
+                        <button type="button"
+                                data-action="evaluate-stance"
+                                @click="executeRoll('knack:iaijutsu:evaluate', 0, null)"
+                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors">
+                            Evaluate Stance <span class="text-xs text-ink/50">(rolled with Air)</span>
+                        </button>
+                    </template>
                 </div>
             </template>
             <div class="relative"

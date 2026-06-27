@@ -181,6 +181,59 @@ test("duelTn = floor(totalXp / 10)", () => {
   assert.equal(M.duelTn(0), 0);
 });
 
+test("evaluateStanceInfo: roll 27 reveals Fire<=4 exactly / >=5, TN<=26 / 27+", () => {
+  // The canonical example from the rules: a 27 means X = floor(27/5) = 5,
+  // so the exact Fire Ring is learned iff it is 4 or less, otherwise only
+  // "at least 5"; the exact TN is learned iff it is 26 or less, else "27+".
+  const info = M.evaluateStanceInfo(27);
+  assert.deepEqual(info, {
+    roll: 27,
+    fireBound: 5,
+    fireExactMax: 4,
+    fireCertain: false, // bound 5 < cap 6: a Fire of 6 would read only "5+"
+    tnBound: 27,
+    tnExactMax: 26,
+  });
+});
+
+test("evaluateStanceInfo: bound at/above the ring cap means Fire is certain", () => {
+  // roll 30 -> X = 6 = RING_MAX_SCHOOL, so "at least 6" pins it to exactly 6.
+  const info = M.evaluateStanceInfo(30);
+  assert.equal(info.fireBound, 6);
+  assert.equal(info.fireCertain, true);
+  // Well above (the reported 46) is also certain.
+  assert.equal(M.evaluateStanceInfo(46).fireCertain, true);
+  // Just below the threshold is not.
+  assert.equal(M.evaluateStanceInfo(29).fireCertain, false);
+});
+
+test("evaluateStanceInfo: maxRing override changes the certainty threshold", () => {
+  // With a cap of 5, a bound of 5 (roll 25) is already certain.
+  assert.equal(M.evaluateStanceInfo(25, 5).fireCertain, true);
+  assert.equal(M.evaluateStanceInfo(24, 5).fireCertain, false);
+});
+
+test("evaluateStanceInfo: exact divisor boundary (25 -> X=5)", () => {
+  const info = M.evaluateStanceInfo(25);
+  assert.equal(info.fireBound, 5);
+  assert.equal(info.fireExactMax, 4);
+  assert.equal(info.tnBound, 25);
+  assert.equal(info.tnExactMax, 24);
+});
+
+test("evaluateStanceInfo: low / non-integer / nullish rolls clamp safely", () => {
+  // A 0 roll learns nothing: fireBound 0, fireExactMax -1 (no ring qualifies).
+  assert.deepEqual(M.evaluateStanceInfo(0), {
+    roll: 0, fireBound: 0, fireExactMax: -1, fireCertain: false,
+    tnBound: 0, tnExactMax: -1,
+  });
+  // Fractional totals floor; negatives and nullish clamp to 0.
+  assert.equal(M.evaluateStanceInfo(33.9).fireBound, 6); // floor(33/5)
+  assert.equal(M.evaluateStanceInfo(33.9).roll, 33);
+  assert.equal(M.evaluateStanceInfo(-7).roll, 0);
+  assert.equal(M.evaluateStanceInfo(undefined).roll, 0);
+});
+
 test("hidaRerollMax: X, 2X on counterattack, halved-up when impaired", () => {
   assert.equal(M.hidaRerollMax(3, false, false), 3);
   assert.equal(M.hidaRerollMax(3, true, false), 6); // counterattack

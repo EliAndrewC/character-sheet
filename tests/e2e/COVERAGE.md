@@ -162,6 +162,8 @@ The three failures were:
 - [x] Strike wound check without conviction auto-applies failure as before -> `test_iaijutsu_duel.py::test_duel_strike_wound_check_auto_applies_without_conviction`
 - [x] Manual Iaijutsu Strike Wound Check button also offers own conviction only -> `test_iaijutsu_duel.py::test_manual_strike_wound_check_offers_conviction`
 - [x] Party priest 5th Dan conviction hidden on strike wound checks -> `test_groups.py::test_party_priest_ally_conviction_hidden_on_strike_wound_check`
+- [x] Evaluate Stance (rolled with Air) option present in iaijutsu menu -> `test_iaijutsu_duel.py::test_evaluate_stance_option_in_iaijutsu_menu`
+- [x] Evaluate Stance roll result shows Fire-Ring / TN info panel anchored to roll total -> `test_iaijutsu_duel.py::test_evaluate_stance_roll_shows_info_panel`
 
 ## UI Interactions (cross-cutting)
 
@@ -182,6 +184,12 @@ The three failures were:
 - [x] 3rd Dan wound check banks bonus for next attack -> `test_school_abilities.py::test_akodo_3rd_dan_bank_and_apply_behavioral`
 - [x] 4th Dan Spend VP (+5) on passed wound check -> `test_school_abilities.py::test_akodo_4th_dan_vp_on_passed_wound_check`
 - [x] 4th Dan Spend VP (+5) on failed wound check -> `test_school_abilities.py::test_akodo_4th_dan_vp_on_failed_wound_check`
+- [x] 4th Dan post-roll VP free raise (+5) on attack, with undo + VP deduction -> `test_school_abilities.py::test_akodo_4th_dan_attack_post_roll_vp_free_raise`
+- [x] 4th Dan post-roll VP free raise ignores the normal per-roll VP cap -> `test_school_abilities.py::test_akodo_4th_dan_attack_vp_ignores_per_roll_cap`
+- [x] 4th Dan post-roll VP free raise (+5) on parry (dice-roller modal) -> `test_school_abilities.py::test_akodo_4th_dan_parry_post_roll_vp_free_raise`
+- [x] 4th Dan post-roll VP block absent for non-Akodo -> `test_school_abilities.py::test_non_akodo_4th_dan_has_no_combat_vp_block`
+- [x] 4th Dan post-roll VP block absent below 4th Dan -> `test_school_abilities.py::test_akodo_3rd_dan_has_no_combat_vp_block`
+- [x] 4th Dan post-roll VP free raise on attack does not mutate a non-editor's VP (read-only) -> `test_readonly_rolls.py::test_non_editor_akodo_4th_dan_post_roll_vp_does_not_change_vp`
 - [x] 5th Dan reflect damage UI elements appear -> `test_school_abilities.py::test_akodo_5th_dan_reflect_damage_ui`
 - [x] 5th Dan reflect damage behavioral flow -> `test_school_abilities.py::test_akodo_5th_dan_reflect_ui_behavioral`
 
@@ -1223,6 +1231,10 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Modal client-side validation rejects a non-positive amount without posting → `test_sheet_advanced.py::test_money_modal_rejects_non_positive_amount`
 - [x] A fractional amount rounds half-up to the nearest tenth (1.65 → 1.7) and the rounded value is what flows into on-hand and the ledger row → `test_sheet_advanced.py::test_money_fractional_amount_rounds_half_up_to_tenth`
 - [x] Non-editor viewing someone else's published sheet sees the stipend but not the cash on-hand, the ledger entries, or the add-income/expense buttons; the private fields are also stripped from the embedded Alpine state so they can't be read via DevTools → `test_sheet_advanced.py::test_money_non_editor_sees_stipend_but_not_on_hand_or_ledger`
+- [x] The "koku" glossary term renders in theme gold (rgb(184,134,11)) with the help cursor, distinct from the pointer cursor on the rest of the Money row → `test_sheet_advanced.py::test_koku_term_is_gold_with_help_cursor`
+- [x] Clicking the koku term opens the currency reference modal (koku/bu/zeni/sen denominations) and does not toggle the Money row's expand/collapse → `test_sheet_advanced.py::test_koku_click_opens_currency_modal`
+- [x] The currency modal closes via its X button and via Escape → `test_sheet_advanced.py::test_koku_modal_closes_via_button_and_escape`
+- [x] A non-editor can open the currency reference modal from the stipend line (informational, not gated by read-only mode) → `test_sheet_advanced.py::test_koku_modal_available_to_non_editor`
 
 ## Character Sheet — Tracking
 
