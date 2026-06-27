@@ -12,28 +12,45 @@
  * detected - add those to `safelist`.
  */
 module.exports = {
+  // Dark mode is opt-in per user (Profile > Appearance). It's toggled by a
+  // `dark` class on <html> (server-rendered from the account preference / a
+  // cookie - see app/main.py dark_mode_enabled), NOT the `media` default, so
+  // a user's choice always wins over their OS setting.
+  darkMode: 'class',
   content: [
     './app/templates/**/*.html',
     './app/static/js/**/*.js',
   ],
   theme: {
     extend: {
+      // The theme palette is driven by CSS custom properties (defined in
+      // tailwind-input.css for both light `:root` and `.dark`). Because every
+      // `bg-ink`, `text-ink/60`, `bg-parchment`, etc. resolves through these
+      // variables, flipping the `.dark` class re-themes the whole site without
+      // per-element `dark:` variants. The `<alpha-value>` placeholder keeps
+      // Tailwind's opacity modifiers (e.g. `text-ink/50`) working.
       colors: {
-        parchment: '#f5f0e8',
-        ink: '#2c1810',
-        accent: '#8b0000',
-        gold: '#b8860b',
-        success: { DEFAULT: '#4d6b46', dark: '#3a5235' },
-        info: { DEFAULT: '#3f5d70', dark: '#324a5a' },
+        parchment: 'rgb(var(--color-parchment) / <alpha-value>)',
+        ink: 'rgb(var(--color-ink) / <alpha-value>)',
+        accent: 'rgb(var(--color-accent) / <alpha-value>)',
+        gold: 'rgb(var(--color-gold) / <alpha-value>)',
+        success: {
+          DEFAULT: 'rgb(var(--color-success) / <alpha-value>)',
+          dark: 'rgb(var(--color-success-dark) / <alpha-value>)',
+        },
+        info: {
+          DEFAULT: 'rgb(var(--color-info) / <alpha-value>)',
+          dark: 'rgb(var(--color-info-dark) / <alpha-value>)',
+        },
       },
       fontFamily: {
         display: ['var(--font-display)', 'Georgia', 'Cambria', 'serif'],
       },
       boxShadow: {
-        sm: '0 1px 2px 0 rgba(44,24,16,0.07)',
-        DEFAULT: '0 1px 3px 0 rgba(44,24,16,0.10), 0 1px 2px -1px rgba(44,24,16,0.08)',
-        md: '0 4px 6px -1px rgba(44,24,16,0.10), 0 2px 4px -2px rgba(44,24,16,0.08)',
-        lg: '0 10px 15px -3px rgba(44,24,16,0.13), 0 4px 6px -4px rgba(44,24,16,0.10)',
+        sm: '0 1px 2px 0 rgb(var(--shadow-rgb) / 0.07)',
+        DEFAULT: '0 1px 3px 0 rgb(var(--shadow-rgb) / 0.10), 0 1px 2px -1px rgb(var(--shadow-rgb) / 0.08)',
+        md: '0 4px 6px -1px rgb(var(--shadow-rgb) / 0.10), 0 2px 4px -2px rgb(var(--shadow-rgb) / 0.08)',
+        lg: '0 10px 15px -3px rgb(var(--shadow-rgb) / 0.13), 0 4px 6px -4px rgb(var(--shadow-rgb) / 0.10)',
       },
     },
   },

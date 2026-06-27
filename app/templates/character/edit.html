@@ -62,6 +62,20 @@
     .ql-toolbar.ql-snow { border-top-left-radius: 0.375rem; border-top-right-radius: 0.375rem; border-color: rgba(44,24,16,0.2); }
     .ql-container.ql-snow { border-bottom-left-radius: 0.375rem; border-bottom-right-radius: 0.375rem; border-color: rgba(44,24,16,0.2); min-height: 8rem; background: white; }
     .ql-editor { min-height: 8rem; }
+    /* Dark mode: Quill's snow theme hardcodes a white editor + dark toolbar
+       icons, so theme the surfaces, text, icon strokes and the picker popups. */
+    .dark .ql-toolbar.ql-snow,
+    .dark .ql-container.ql-snow { background: rgb(var(--color-surface)); border-color: rgb(var(--color-ink) / 0.25); }
+    .dark .ql-editor { color: rgb(var(--color-ink)); }
+    .dark .ql-editor.ql-blank::before { color: rgb(var(--color-ink) / 0.5); }
+    .dark .ql-snow .ql-stroke { stroke: rgb(var(--color-ink) / 0.85); }
+    .dark .ql-snow .ql-fill { fill: rgb(var(--color-ink) / 0.85); }
+    .dark .ql-snow .ql-picker { color: rgb(var(--color-ink)); }
+    .dark .ql-snow .ql-picker-options { background: rgb(var(--color-surface)); border-color: rgb(var(--color-ink) / 0.25); }
+    .dark .ql-snow.ql-toolbar button:hover .ql-stroke,
+    .dark .ql-snow.ql-toolbar button.ql-active .ql-stroke { stroke: rgb(var(--color-accent)); }
+    .dark .ql-snow.ql-toolbar button:hover .ql-fill,
+    .dark .ql-snow.ql-toolbar button.ql-active .ql-fill { fill: rgb(var(--color-accent)); }
 </style>
 <div x-data="characterForm()">
     <!-- Discard Changes modal -->

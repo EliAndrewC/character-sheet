@@ -1327,10 +1327,12 @@ async def update_profile(request: Request, db: Session = Depends(get_db)):
     if new_name:
         user_obj.display_name = new_name
 
-    # Parse dice roll preference checkboxes
+    # Parse dice roll + appearance preference checkboxes
     prefs = dict(user_obj.preferences or {})
     prefs["dice_animation_enabled"] = form.get("dice_animation") == "on"
     prefs["dice_sound_enabled"] = form.get("dice_sound") == "on"
+    dark_mode = form.get("dark_mode") == "on"
+    prefs["dark_mode_enabled"] = dark_mode
     user_obj.preferences = prefs
 
     # Parse granted account checkboxes
@@ -1349,7 +1351,19 @@ async def update_profile(request: Request, db: Session = Depends(get_db)):
 
     db.commit()
 
-    return RedirectResponse("/profile", status_code=303)
+    resp = RedirectResponse("/profile", status_code=303)
+    # Mirror the dark-mode choice into a cookie so the theme renders correctly
+    # on every page even when the account preference isn't available on the
+    # request (logged-out pages, the test-auth bypass) - see
+    # app.main.dark_mode_enabled. The DB preference remains authoritative for
+    # a real session and follows the user across devices.
+    resp.set_cookie(
+        "dark_mode",
+        "1" if dark_mode else "0",
+        max_age=60 * 60 * 24 * 365,
+        samesite="lax",
+    )
+    return resp
 
 
 # ---------------------------------------------------------------------------

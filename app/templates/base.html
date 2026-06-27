@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+{# `dark` class drives dark mode (Tailwind darkMode:'class'). Server-rendered
+   from the viewer's account preference, with a cookie fallback for the test
+   bypass / logged-out visitors - see app/main.py dark_mode_enabled. #}
+<html lang="en"{% if dark_mode_enabled(request) %} class="dark"{% endif %}>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,7 +12,11 @@
        scripts/build-css.sh locally after changing templates/classes. The theme
        lives in tailwind.config.js. #}
     <link rel="preload" href="/static/fonts/spectral-600.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/static/css/app.css">
+    {# Cache-busted so a rebuilt stylesheet (e.g. new dark-mode rules) is fetched
+       fresh instead of served from a stale browser cache - app.css ships with
+       only etag/last-modified, so without a versioned URL browsers can keep an
+       old copy via heuristic caching. Mirrors the ?v= on the JS assets below. #}
+    <link rel="stylesheet" href="/static/css/app.css?v={{ static_v('css/app.css') }}">
     <script src="/static/js/htmx.min.js"></script>
     {# Pure roll-math helpers (window.L7RRollMath). Loaded before Alpine so the
        sheet's components can call it. Logic lives here (unit-testable) rather
@@ -53,14 +60,14 @@
         .rich-section ul { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
         .rich-section ol { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }
         .rich-section li { margin: 0.15em 0; }
-        .rich-section blockquote { border-left: 3px solid rgba(44,24,16,0.25); padding-left: 0.75em; color: rgba(44,24,16,0.7); margin: 0.5em 0; }
-        .rich-section code { background: rgba(44,24,16,0.08); padding: 0.1em 0.35em; border-radius: 0.2em; font-family: ui-monospace, monospace; }
-        .rich-section pre { background: rgba(44,24,16,0.08); padding: 0.75em; border-radius: 0.3em; overflow-x: auto; }
+        .rich-section blockquote { border-left: 3px solid rgb(var(--color-ink) / 0.25); padding-left: 0.75em; color: rgb(var(--color-ink) / 0.7); margin: 0.5em 0; }
+        .rich-section code { background: rgb(var(--color-ink) / 0.08); padding: 0.1em 0.35em; border-radius: 0.2em; font-family: ui-monospace, monospace; }
+        .rich-section pre { background: rgb(var(--color-ink) / 0.08); padding: 0.75em; border-radius: 0.3em; overflow-x: auto; }
         .rich-section pre code { background: none; padding: 0; }
-        .rich-section a { color: #8b0000; text-decoration: underline; }
+        .rich-section a { color: rgb(var(--color-accent)); text-decoration: underline; }
         .rich-section table { border-collapse: collapse; margin: 0.5em 0; }
-        .rich-section th, .rich-section td { border: 1px solid rgba(44,24,16,0.3); padding: 0.3em 0.6em; }
-        .rich-section th { background: rgba(44,24,16,0.05); font-weight: bold; }
+        .rich-section th, .rich-section td { border: 1px solid rgb(var(--color-ink) / 0.3); padding: 0.3em 0.6em; }
+        .rich-section th { background: rgb(var(--color-ink) / 0.05); font-weight: bold; }
         /* Dice roll animation: each die is an inline SVG of a "regular kite"
          * pentagonal-trapezohedron face (angles 36/108/108/108, long/short
          * edge ratio φ²). The polygon's stroke gives a real outline that
@@ -143,11 +150,11 @@
             opacity: 0.4;
         }
         svg.die.action-die.spent .die-shape {
-            fill: rgba(44,24,16,0.05);
-            stroke: rgba(44,24,16,0.3);
+            fill: rgb(var(--color-ink) / 0.05);
+            stroke: rgb(var(--color-ink) / 0.3);
         }
         svg.die.action-die.spent .die-text {
-            fill: rgba(44,24,16,0.4);
+            fill: rgb(var(--color-ink) / 0.4);
             text-decoration: line-through;
         }
         /* Kakita Phase-0 dice carry ``.phase-zero`` as a DOM marker but render
@@ -286,7 +293,7 @@
         }
         .ring-node:hover {
             transform: scale(1.08);
-            box-shadow: 0 0 16px rgba(44,24,16,0.18);
+            box-shadow: 0 0 16px rgb(var(--color-ink) / 0.18);
         }
         .ring-node.ring-school {
             border-width: 8px;
@@ -302,7 +309,7 @@
             font-size: 1.75rem;
             font-weight: 800;
             line-height: 1;
-            color: #2c1810;
+            color: rgb(var(--color-ink));
         }
         .ring-school-badge {
             font-size: 0.55rem;
@@ -358,7 +365,7 @@
 
         /* Accent-tinted focus ring fallback for any control that lacks an
            explicit focus style (most inputs/buttons already set their own). */
-        :focus-visible { outline: 2px solid rgba(139, 0, 0, 0.45); outline-offset: 2px; }
+        :focus-visible { outline: 2px solid rgb(var(--color-accent) / 0.55); outline-offset: 2px; }
     </style>
     {# Tailwind theme now lives in /tailwind.config.js (compiled into app.css),
        not an inline runtime config. #}

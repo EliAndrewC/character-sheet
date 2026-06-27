@@ -950,6 +950,11 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] GM badge and access note shown → `test_profile_e2e.py::test_profile_gm_badge`
 - [x] Sound toggle saves preference → `test_profile_e2e.py::test_sound_toggle_saves`
 
+### Appearance / Dark mode
+
+- [x] Dark mode toggle saves, applies `dark` class on <html> site-wide, persists on reload, and reverts when disabled → `test_profile_e2e.py::test_dark_mode_toggle_applies_site_wide`
+- [x] Dark mode: bare form controls (text input, <select>) render on a dark surface, not the UA white field → `test_profile_e2e.py::test_dark_mode_form_fields_are_readable`
+
 ## Character Editor — Basics (edit.html)
 
 - [x] Character name can be edited and auto-saves → `test_edit_character.py::test_edit_auto_saves`

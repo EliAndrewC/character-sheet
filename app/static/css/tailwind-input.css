@@ -2,6 +2,50 @@
    scripts/build-css.sh and the Dockerfile cssbuild stage). The app's
    hand-written CSS lives inline in base.html's <style> block, not here. */
 @tailwind base;
+
+/* ── Theme palette as CSS custom properties ─────────────────────────────────
+   tailwind.config.js maps every theme colour (parchment/ink/accent/gold/…) to
+   `rgb(var(--color-*) / <alpha-value>)`, so swapping these variables re-themes
+   the entire site. Light mode is `:root`; dark mode is `.dark` on <html>
+   (server-rendered from the per-user preference - see app/main.py
+   dark_mode_enabled). Values are space-separated RGB channels so Tailwind's
+   opacity modifiers (`text-ink/50`, `bg-accent/10`) keep working.
+
+   `ink` doubles as both the body text colour AND a few full-opacity "inverted"
+   chrome surfaces (navbar, tooltips, dark buttons, modal scrims). The swap
+   below flips ink->light / parchment->dark for the common text+page case; the
+   `.dark` override blocks AFTER `@tailwind utilities` re-pin the palette on
+   those inverted surfaces so they stay dark-with-light-text in both themes. */
+@layer base {
+  :root {
+    --color-parchment: 245 240 232;
+    --color-ink: 44 24 16;
+    --color-accent: 139 0 0;
+    --color-gold: 184 134 11;
+    --color-success: 77 107 70;
+    --color-success-dark: 58 82 53;
+    --color-info: 63 93 112;
+    --color-info-dark: 50 74 90;
+    /* Elevated card surface. Light mode keeps the literal white that
+       `bg-white` already paints; only the dark override below consults it. */
+    --color-surface: 255 255 255;
+    --shadow-rgb: 44 24 16;
+  }
+
+  .dark {
+    --color-parchment: 26 23 20;     /* page background (warm near-black) */
+    --color-ink: 233 227 216;        /* body text (warm off-white) */
+    --color-accent: 184 58 50;       /* crimson, brightened for dark contrast */
+    --color-gold: 206 162 74;
+    --color-success: 110 154 98;
+    --color-success-dark: 92 130 82;
+    --color-info: 108 140 160;
+    --color-info-dark: 88 118 138;
+    --color-surface: 37 33 29;       /* cards: a step above the page */
+    --shadow-rgb: 0 0 0;
+  }
+}
+
 @tailwind components;
 
 /* ── Button system ──────────────────────────────────────────────────────────
@@ -24,3 +68,98 @@
 }
 
 @tailwind utilities;
+
+/* ── Dark-mode fixups ───────────────────────────────────────────────────────
+   Everything below only applies under `.dark`. The variable swap above already
+   re-themes the bulk of the site (anything using parchment/ink/accent/gold);
+   these rules patch the cases a blanket swap can't reach:
+     1. inverted surfaces that must stay dark-with-light-text,
+     2. modal scrims that must stay dark,
+     3. `bg-white` cards -> an elevated dark surface,
+     4. standard-Tailwind status palettes (red/amber/orange/rose) that don't
+        flow through the theme variables.
+*/
+
+/* (1) Inverted/chrome surfaces. These elements paint `bg-ink text-parchment`
+   to be a dark chip on a light page; in dark mode they should STILL be a dark
+   chip with light text, not invert with the page. Re-pin the two variables
+   locally so all their `bg-ink` / `text-parchment` / `border-parchment/10`
+   children resolve to the chrome palette. `nav` covers the navbar and its
+   descendant dropdowns; `.dark-surface` is an opt-in for standalone dark
+   menus/buttons outside the navbar. */
+.dark nav,
+.dark .tooltip-content,
+.dark .dark-surface {
+  --color-ink: 20 17 15;
+  --color-parchment: 240 234 224;
+}
+
+/* (2) Modal scrims (`fixed inset-0 ... bg-ink/60|80`). With ink flipped light
+   these would become a bright veil; force them back to a dark scrim. Also
+   catches the View-Sheet edit button's `hover:bg-ink/80` (a dark button), which
+   is fine as a near-black hover. */
+.dark .bg-ink\/60 { background-color: rgb(6 5 4 / 0.6); }
+.dark .bg-ink\/80 { background-color: rgb(6 5 4 / 0.72); }
+
+/* (3) Cards: `bg-white` -> elevated dark surface (and its translucent variants). */
+.dark .bg-white      { background-color: rgb(var(--color-surface) / 1); }
+.dark .bg-white\/60  { background-color: rgb(var(--color-surface) / 0.6); }
+.dark .bg-white\/40  { background-color: rgb(var(--color-surface) / 0.4); }
+
+/* btn-danger keeps light text (its red-800 fill stays dark in dark mode, so the
+   parchment->dark text flip would otherwise be dark-on-dark). */
+.dark .btn-danger { color: rgb(244 239 230); }
+
+/* (4) Status palettes. Keep the semantic hue but invert each notice to a
+   dark-tinted fill with a light foreground so it reads on a dark page. */
+.dark .bg-red-50,
+.dark .bg-red-100      { background-color: rgb(127 29 29 / 0.30); }
+.dark .border-red-200,
+.dark .border-red-300,
+.dark .border-red-400  { border-color: rgb(190 72 68 / 0.45); }
+.dark .text-red-600,
+.dark .text-red-700,
+.dark .text-red-800,
+.dark .text-red-900    { color: #f0a8a0; }
+
+.dark .bg-amber-50,
+.dark .bg-amber-100,
+.dark .bg-amber-200,
+.dark .bg-amber-300    { background-color: rgb(124 74 22 / 0.32); }
+.dark .border-amber-300,
+.dark .border-amber-400 { border-color: rgb(196 146 64 / 0.45); }
+.dark .text-amber-700,
+.dark .text-amber-800,
+.dark .text-amber-900  { color: #efce95; }
+.dark .text-amber-900\/70 { color: rgb(239 206 149 / 0.78); }
+.dark .text-amber-900\/40 { color: rgb(239 206 149 / 0.45); }
+
+.dark .bg-orange-50    { background-color: rgb(124 45 18 / 0.30); }
+.dark .border-orange-200 { border-color: rgb(186 96 44 / 0.45); }
+.dark .text-orange-600,
+.dark .text-orange-700,
+.dark .text-orange-900 { color: #f3b487; }
+
+.dark .bg-rose-100     { background-color: rgb(136 19 55 / 0.30); }
+.dark .text-rose-700,
+.dark .text-rose-900   { color: #f4a6b3; }
+
+/* (5) Form controls. `color-scheme: dark` themes the bits CSS can't reach -
+   native <select> dropdown popups, number-spinner / date-picker widgets, and
+   scrollbars. On top of that, give every text-like control a dark surface so
+   fields WITHOUT an explicit `bg-*` utility (which otherwise fall back to the
+   UA white field and render as light-text-on-white) match the ones that do.
+   `:where()` keeps this at single-class specificity so an explicit
+   `.dark .bg-white` field override still wins. Checkboxes/radios (accent-accent)
+   and buttons are excluded so their own styling stands. */
+.dark { color-scheme: dark; }
+.dark :where(
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=submit]):not([type=button]):not([type=image]),
+  textarea,
+  select
+) {
+  background-color: rgb(var(--color-surface));
+  color: rgb(var(--color-ink));
+  border-color: rgb(var(--color-ink) / 0.25);
+}
+.dark ::placeholder { color: rgb(var(--color-ink) / 0.5); }
