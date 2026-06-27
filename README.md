@@ -29,12 +29,12 @@ podman run --interactive --tty --rm \
 
 ## Backlog
 
-- initiative freeform edits
 - award money button on the group page for the GM to use
+- initiative freeform edits
 - smarter action die spending, e.g. schools that can take interrupt actions for the cost of 1 action die
 - ide diplomat feint temp vp vs 5th dan temp vp
 - priest 3rd dan freeform edits and interaction with custom modals (Kakita 5th dan attacks, Dragon tattoo rolls, etc)
-- should parry also get a probability chart?  (for parry schools, probably so, but no one has one of those in the current campaign)
+- parry should get a probability chart
 - headshot not automatically selected on image upload
 - doesn't warn you about art generation overriding what you've already got saved
 - verify the old images are deleted

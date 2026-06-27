@@ -3718,6 +3718,8 @@
                 this.luckyOriginalWasHigher = false;
                 this.luckyRollPair = null;
                 this.convictionSpentThisRoll = 0;
+                this.akodoPostRollVpSpent = 0;
+                this.akodoPostRollVpSources = [];
                 this.duelPhase = 'contested-rolling';
                 this.formula = f;
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
@@ -4564,6 +4566,10 @@
                     this.atkRollTotal += 5;
                     this.baseTotal += 5;
                     this._atkUpdateHitState();
+                } else if (mode === 'duel-contested') {
+                    // The duel contested roll tracks its own total (like the
+                    // conviction spend here, which only bumps duelContestedRoll).
+                    this.duelContestedRoll += 5;
                 } else {
                     this.baseTotal += 5;
                 }
@@ -4584,6 +4590,8 @@
                     this.atkRollTotal -= 5;
                     this.baseTotal -= 5;
                     this._atkUpdateHitState();
+                } else if (mode === 'duel-contested') {
+                    this.duelContestedRoll -= 5;
                 } else {
                     this.baseTotal -= 5;
                 }
@@ -4595,7 +4603,16 @@
             // through the attack modal instead; the iaijutsu strike forbids VP.
             akodoRollEligible() {
                 if (!this.schoolAbilities.akodo_combat_vp_free_raise) return false;
-                return ['parry', 'athletics:parry', 'knack:feint'].includes(this.currentRollKey);
+                // VP-eligible combat rolls handled by the dice-roller modal:
+                // parry, athletics parry, feint, and the iaijutsu combat rolls
+                // (the plain knack roll and Evaluate Stance). The iaijutsu
+                // strike is excluded - no VP may be spent on it. Attack-type
+                // knacks (double attack, counterattack, lunge) go through the
+                // attack modal; the duel contested roll has its own block.
+                return [
+                    'parry', 'athletics:parry', 'knack:feint',
+                    'knack:iaijutsu', 'knack:iaijutsu:evaluate',
+                ].includes(this.currentRollKey);
             },
 
             atkHitChance(voidCount) {
