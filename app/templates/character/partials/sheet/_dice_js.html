@@ -946,6 +946,8 @@
             akodoSpentThisRoll: 0,  // amount spent from banked bonuses on current roll
             wcPostRollVpSpent: 0,   // VP spent post-roll on wound check (Akodo/Yogo 4th Dan)
             wcPostRollVpSources: [], // tracks which VP type each post-roll spend came from
+            akodoPostRollVpSpent: 0,   // VP spent post-roll for a free raise (Akodo 4th Dan, attack/parry/feint)
+            akodoPostRollVpSources: [], // tracks which VP type each Akodo post-roll spend came from
             wcMatsuBonusApplied: 0, // Matsu 3rd Dan banked bonus applied to this wound check
             wcExcessSpentThisRoll: 0, // Isawa 5th Dan banked excess spent on this WC
             wcBayushiHalfLw: false, // whether Bayushi 5th Dan half-LW was applied this check
@@ -1850,6 +1852,8 @@
                 this.luckyOriginalWasHigher = false;
                 this.luckyRollPair = null;
                 this.mirumotoPointsSpentThisRoll = 0;
+                this.akodoPostRollVpSpent = 0;
+                this.akodoPostRollVpSources = [];
                 this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
                 // Kitsune Warden Special Ability swap (Phase 10): predeclared
@@ -1924,6 +1928,8 @@
                 this.luckyOriginalWasHigher = false;
                 this.luckyRollPair = null;
                 this.mirumotoPointsSpentThisRoll = 0;
+                this.akodoPostRollVpSpent = 0;
+                this.akodoPostRollVpSources = [];
                 this.currentRollKey = key;
                 const f = { ...this.formulas[key] };
                 // Kitsune Warden Special Ability: the user opted in to roll
@@ -3990,6 +3996,8 @@
                 this.atkPostRollBonusEnabled = false;
                 this.atkPostRollBonusAmount = 5;
                 this.atkPostRollBonusApplied = 0;
+                this.akodoPostRollVpSpent = 0;
+                this.akodoPostRollVpSources = [];
                 // Reset the copy-as-image state so a previous roll's
                 // blob doesn't bleed under this modal's Copy button.
                 this.rollImageStatus = 'idle';
@@ -4527,6 +4535,67 @@
                     this.atkPostRollBonusApplied = newAmt;
                     this._atkUpdateHitState();
                 }
+            },
+
+            // Akodo Bushi 4th Dan: spend a void point post-roll for a free
+            // raise (+5) on a VP-eligible combat roll. Unlike normal void
+            // spending this is NOT subject to the per-roll VP cap - the only
+            // limit is available void points. `mode` is 'attack' (updates the
+            // attack total + hit/excess) or 'roll' (updates baseTotal on the
+            // dice-roller modal). Read-only Roll Mode: a non-editor sees the
+            // +5 reflected in the roll total but their VP counter and DB state
+            // never move (the deduction is gated on t.canEdit).
+            akodoVpSpend(mode) {
+                const t = window._trackingBridge;
+                if (!t || (t.anyVPAvailable?.() || 0) <= 0) return;
+                let src;
+                if ((t.tempVoidPoints || 0) > 0) src = 'temp';
+                else if ((t.voidPoints || 0) > 0) src = 'regular';
+                else src = 'worldliness';
+                if (t.canEdit) {
+                    if (src === 'temp') t.tempVoidPoints--;
+                    else if (src === 'regular') t.voidPoints--;
+                    else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1);
+                    t.save();
+                }
+                this.akodoPostRollVpSources.push(src);
+                this.akodoPostRollVpSpent++;
+                if (mode === 'attack') {
+                    this.atkRollTotal += 5;
+                    this.baseTotal += 5;
+                    this._atkUpdateHitState();
+                } else {
+                    this.baseTotal += 5;
+                }
+            },
+
+            akodoVpUndo(mode) {
+                if ((this.akodoPostRollVpSpent || 0) <= 0) return;
+                const t = window._trackingBridge;
+                const src = this.akodoPostRollVpSources.pop();
+                if (t && t.canEdit) {
+                    if (src === 'temp') t.tempVoidPoints++;
+                    else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1));
+                    else t.voidPoints++;
+                    t.save();
+                }
+                this.akodoPostRollVpSpent--;
+                if (mode === 'attack') {
+                    this.atkRollTotal -= 5;
+                    this.baseTotal -= 5;
+                    this._atkUpdateHitState();
+                } else {
+                    this.baseTotal -= 5;
+                }
+            },
+
+            // Whether the current dice-roller roll is a VP-eligible combat roll
+            // the Akodo 4th Dan post-roll free raise applies to. Attack-type
+            // knacks (double attack, counterattack, lunge) and plain attacks go
+            // through the attack modal instead; the iaijutsu strike forbids VP.
+            akodoRollEligible() {
+                if (!this.schoolAbilities.akodo_combat_vp_free_raise) return false;
+                return ['parry', 'athletics:parry', 'knack:feint'].includes(this.currentRollKey);
             },
 
             atkHitChance(voidCount) {

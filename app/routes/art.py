@@ -603,7 +603,7 @@ def art_generate_submit(
     prompt: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    """Kick off an async Imagen job for the staged prompt.
+    """Kick off an async Gemini image-generation job for the staged prompt.
 
     The review page posts here via fetch, so this returns JSON. The
     browser then polls ``GET /art/generate/status/{staging_id}`` for

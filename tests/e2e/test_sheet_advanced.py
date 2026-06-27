@@ -378,12 +378,13 @@ def test_money_non_editor_sees_stipend_but_not_on_hand_or_ledger(
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector('[data-status-row="money"]', timeout=5000)
     body = page_nonadmin.content()
-    # Stipend stays visible.
-    assert "koku/year stipend" in body
+    # Stipend stays visible. "koku" is now a clickable glossary <span>, so
+    # the visible suffix is "/year stipend".
+    assert "/year stipend" in body
     # Private fields stripped from the markup.
     assert "Sold the family heirloom" not in body
     assert "Money calculations:" not in body
-    assert "koku on-hand" not in body
+    assert "on-hand" not in body
     # And from the Alpine state, so a curious viewer can't read them
     # via DevTools or page-source.
     state_json = page_nonadmin.evaluate("""() => {
@@ -393,3 +394,75 @@ def test_money_non_editor_sees_stipend_but_not_on_hand_or_ledger(
     assert state_json is not None
     assert "on_hand" not in state_json
     assert "entries" not in state_json
+
+
+# --- Koku currency glossary term + reference modal -------------------------
+
+def test_koku_term_is_gold_with_help_cursor(page, live_server_url):
+    """The word "koku" in the Money section renders as a glossary term:
+    theme gold (#b8860b = rgb(184,134,11)) with the help cursor, which is
+    visibly distinct from the pointer cursor on the rest of the row."""
+    create_and_apply(page, live_server_url, "Koku Cursor")
+    term = page.locator('.koku-term').first
+    term.wait_for(state="visible", timeout=5000)
+    color = term.evaluate("el => getComputedStyle(el).color")
+    cursor = term.evaluate("el => getComputedStyle(el).cursor")
+    assert color == "rgb(184, 134, 11)", color
+    assert cursor == "help", cursor
+    # The surrounding Money row uses the pointer cursor, so the koku term
+    # is genuinely distinct.
+    row_cursor = page.locator('[data-status-row="money"] .cursor-pointer').first.evaluate(
+        "el => getComputedStyle(el).cursor")
+    assert row_cursor == "pointer", row_cursor
+
+
+def test_koku_click_opens_currency_modal(page, live_server_url):
+    """Clicking the koku glossary term opens the currency reference modal
+    listing every denomination, and the click does NOT toggle the Money
+    row's expand/collapse (the handler uses .stop)."""
+    create_and_apply(page, live_server_url, "Koku Modal")
+    money_row = page.locator('[data-status-row="money"]')
+    # The expandable detail stays hidden before AND after the koku click.
+    detail = money_row.locator(':text("Wasp campaign base")')
+    assert detail.is_visible() is False
+    page.locator('.koku-term').first.click()
+    modal = page.locator('[data-modal="koku-info"]')
+    modal.wait_for(state="visible", timeout=3000)
+    text = modal.text_content()
+    assert "Rokugani currency" in text
+    assert "10 bu" in text
+    assert "10 zeni" in text
+    assert "10 sen" in text
+    assert "gold coin" in text
+    # Clicking koku must not have expanded the Money row.
+    assert detail.is_visible() is False
+
+
+def test_koku_modal_closes_via_button_and_escape(page, live_server_url):
+    """The currency modal closes with its X button and with Escape."""
+    create_and_apply(page, live_server_url, "Koku Close")
+    modal = page.locator('[data-modal="koku-info"]')
+    # Close via the X button.
+    page.locator('.koku-term').first.click()
+    modal.wait_for(state="visible", timeout=3000)
+    page.locator('[data-action="koku-info-close"]').click()
+    modal.wait_for(state="hidden", timeout=3000)
+    # Re-open and close via Escape.
+    page.locator('.koku-term').first.click()
+    modal.wait_for(state="visible", timeout=3000)
+    page.keyboard.press("Escape")
+    modal.wait_for(state="hidden", timeout=3000)
+
+
+def test_koku_modal_available_to_non_editor(page, page_nonadmin, live_server_url):
+    """The currency reference is purely informational, so a non-editor
+    viewing someone else's published sheet can open it from the stipend
+    line too (read-only mode does not gate it)."""
+    create_and_apply(page, live_server_url, "Koku ReadOnly")
+    sheet_url = page.url
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector('[data-status-row="money"]', timeout=5000)
+    page_nonadmin.locator('.koku-term').first.click()
+    modal = page_nonadmin.locator('[data-modal="koku-info"]')
+    modal.wait_for(state="visible", timeout=3000)
+    assert "10 sen" in modal.text_content()

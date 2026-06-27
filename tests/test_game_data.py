@@ -328,3 +328,17 @@ class TestSpells:
         for element, spells in SPELLS_BY_ELEMENT.items():
             levels = sorted(s.mastery_level for s in spells)
             assert levels == [3, 4, 5], f"{element} mastery levels: {levels}"
+
+
+class TestAkodo4thDanWording:
+    def test_akodo_4th_dan_generalized_to_combat_rolls_and_cap_exempt(self):
+        text = SCHOOLS["akodo_bushi"].techniques[4]
+        # Generalized from wound checks to any VP-eligible combat roll.
+        assert "any combat roll for which void points may be spent" in text
+        # No longer wound-check-only.
+        assert "after rolling a wound check" not in text
+        # Carries the cap exemption.
+        assert "not subject to the normal limit" in text
+        # Keeps the free-raise-per-VP payout and the Water raise/discount.
+        assert "free raise for each void point spent" in text
+        assert "Raise your current and maximum Water by 1" in text

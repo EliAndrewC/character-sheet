@@ -5,7 +5,7 @@ top, the fixed suffix at the bottom, and a stack of checkbox rows in
 between. Ticking a row appends that row's sentence to the assembled
 prompt. This module is the server-side half - given the form values,
 it produces the exact string that gets shown in the review textarea
-(and ultimately POSTed to Imagen in Phase 8).
+(and ultimately POSTed to Gemini in Phase 8).
 
 Kept as a pure function with no I/O so it can be exhaustively
 unit-tested.

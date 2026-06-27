@@ -259,6 +259,15 @@
                             from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
                         </div>
 
+                        {# Akodo 4th Dan VP free raises spent post-roll on this roll #}
+                        <div x-show="akodoPostRollVpSpent > 0" x-cloak
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5"
+                             data-testid="akodo-roll-vp-breakdown">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            +<span x-text="akodoPostRollVpSpent * 5"></span>
+                            from <span x-text="akodoPostRollVpSpent"></span> VP spent post-roll (Akodo 4th Dan, +5 each)
+                        </div>
+
                         <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
                             <div class="mt-2 pt-2 border-t border-ink/10">
                                 <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
@@ -549,6 +558,46 @@
                         <span class="text-xs text-ink/40">(result <span x-text="baseTotal"></span> / 5)</span>
                     </div>
 
+                    {# Iaijutsu Evaluate Stance: explain what this open Air roll
+                       reveals about the opponent's Fire Ring and starting TN
+                       to be hit. Reactive to baseTotal (conviction/raises spent
+                       on the stance roll reveal more). See L7RRollMath. #}
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:iaijutsu:evaluate'" x-cloak
+                         data-testid="evaluate-stance-info"
+                         class="bg-accent/5 border border-accent/20 rounded p-3 text-sm text-ink/70 space-y-2">
+                        <div class="font-medium text-ink/80">
+                            Evaluate Stance - what you learn (result <span x-text="baseTotal"></span>)
+                        </div>
+                        <div data-testid="evaluate-stance-fire">
+                            <span class="font-medium">Opponent's Fire Ring:</span>
+                            {# Result is high enough that the lower bound meets
+                               the ring cap, so the exact value is always known. #}
+                            <template x-if="window.L7RRollMath.evaluateStanceInfo(baseTotal).fireCertain">
+                                <span>you know its exact value (your result is high enough to read any Fire Ring).</span>
+                            </template>
+                            <template x-if="!window.L7RRollMath.evaluateStanceInfo(baseTotal).fireCertain && window.L7RRollMath.evaluateStanceInfo(baseTotal).fireExactMax >= 1">
+                                <span>you know its exact value if it is
+                                    <span class="font-bold text-accent" x-text="window.L7RRollMath.evaluateStanceInfo(baseTotal).fireExactMax"></span>
+                                    or less; otherwise you learn only that it is
+                                    <span class="font-bold text-accent" x-text="window.L7RRollMath.evaluateStanceInfo(baseTotal).fireBound"></span>
+                                    or higher.</span>
+                            </template>
+                            <template x-if="!window.L7RRollMath.evaluateStanceInfo(baseTotal).fireCertain && window.L7RRollMath.evaluateStanceInfo(baseTotal).fireExactMax < 1">
+                                <span>your result is too low to pin down an exact value; you learn only that it is
+                                    <span class="font-bold text-accent" x-text="window.L7RRollMath.evaluateStanceInfo(baseTotal).fireBound"></span>
+                                    or higher.</span>
+                            </template>
+                        </div>
+                        <div data-testid="evaluate-stance-tn">
+                            <span class="font-medium">Opponent's iaijutsu TN to be hit:</span>
+                            you learn its exact value if it is
+                            <span class="font-bold text-accent" x-text="window.L7RRollMath.evaluateStanceInfo(baseTotal).tnExactMax"></span>
+                            or less; otherwise you learn only that it is
+                            <span class="font-bold text-accent" x-text="window.L7RRollMath.evaluateStanceInfo(baseTotal).tnBound"></span>
+                            or higher.
+                        </div>
+                    </div>
+
                     {# Courtier 4th Dan: temp VP after successful manipulation #}
                     <div x-show="phase === 'done' && currentRollKey === 'skill:manipulation' && schoolAbilities.courtier_temp_vp_on_hit" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
@@ -673,6 +722,37 @@
                     <div x-show="phase === 'done' && schoolAbilities.kitsuki_reduce_rings" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-xs text-ink/70">
                         Kitsuki 5th Dan: you may reduce chosen characters' Air, Fire, and Water by 1. You may target any one character, or multiple characters whose total XP does not exceed yours. Does not work during iaijutsu duels. Does not stack with other Kitsuki Magistrates.
+                    </div>
+
+                    {# Akodo Bushi 4th Dan: spend void points post-roll for a
+                       free raise (+5 each) on a VP-eligible combat roll handled
+                       by the dice-roller modal (parry, athletics parry, feint).
+                       Not subject to the normal per-roll VP cap; only limited by
+                       available VP. Attack-type knacks use the attack modal. #}
+                    <div x-show="phase === 'done' && akodoRollEligible()" x-cloak
+                         data-testid="akodo-roll-vp-block"
+                         class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
+                        <div class="text-xs text-ink/60 mb-1">
+                            Akodo 4th Dan: spend void points for a free raise (+5 each), ignoring the normal per-roll limit.
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button"
+                                    data-action="akodo-roll-vp-spend"
+                                    x-show="(window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
+                                    @click="akodoVpSpend('roll')"
+                                    class="btn-primary px-3 py-1 rounded text-xs">
+                                Spend VP (+5)
+                            </button>
+                            <button type="button"
+                                    x-show="akodoPostRollVpSpent > 0"
+                                    @click="akodoVpUndo('roll')"
+                                    class="btn-secondary px-3 py-1 rounded text-xs">
+                                Undo VP
+                            </button>
+                            <span x-show="akodoPostRollVpSpent > 0" x-cloak class="text-xs text-accent">
+                                +<span x-text="akodoPostRollVpSpent * 5"></span> from <span x-text="akodoPostRollVpSpent"></span> VP (4th Dan)
+                            </span>
+                        </div>
                     </div>
 
                     {# Merchant Special: post-roll VP spending (1 VP at a time, re-rolls with extra dice) #}

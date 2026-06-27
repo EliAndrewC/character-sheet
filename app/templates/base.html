@@ -14,7 +14,7 @@
     {# Pure roll-math helpers (window.L7RRollMath). Loaded before Alpine so the
        sheet's components can call it. Logic lives here (unit-testable) rather
        than inline in Alpine handlers. #}
-    <script src="/static/js/roll_math.js"></script>
+    <script src="/static/js/roll_math.js?v={{ static_v('js/roll_math.js') }}"></script>
     {# Native share-sheet helper for roll-card PNGs (window.L7RShareImageBlob /
        L7RUseShareImage). Mobile uses this instead of clipboard copy, which
        Discord's mobile app can't paste. Loaded before Alpine like roll_math. #}

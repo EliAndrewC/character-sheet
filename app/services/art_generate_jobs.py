@@ -1,7 +1,7 @@
 """Async job registry for character-art generation (Phase 8).
 
 Mirrors ``import_jobs.py``: the submit route dispatches a worker
-thread that calls Imagen, validates the returned bytes, and fills
+thread that calls Gemini, validates the returned bytes, and fills
 them into the same ``StagedArt`` slot the Phase 7 prompt-review flow
 created. The review page polls ``/art/generate/status/{staging_id}``
 for progress.
@@ -142,7 +142,7 @@ def _execute_job(*, staging_id: str, prompt: str) -> None:
     job = get_job(staging_id)
     if job is None:  # pragma: no cover - we just created it
         return
-    job.touch(state=STATE_RUNNING, stage="Calling Imagen")
+    job.touch(state=STATE_RUNNING, stage="Generating image")
 
     # Guard: the staging slot may have been reaped if the user abandoned
     # the flow for 15+ minutes between steps.
@@ -177,7 +177,7 @@ def _execute_job(*, staging_id: str, prompt: str) -> None:
         return
 
     # Validate the bytes through the same pipeline uploads use. If
-    # Imagen returned something malformed (wrong format, weird dims),
+    # Gemini returned something malformed (wrong format, weird dims),
     # we reject it rather than staging nonsense the crop step would
     # choke on.
     try:

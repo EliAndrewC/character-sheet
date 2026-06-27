@@ -201,6 +201,41 @@
       return Math.floor(totalXp / 10);
     },
 
+    /**
+     * Iaijutsu "Evaluate Stance" (duel stance phase). An open iaijutsu roll
+     * kept with Air discerns the opponent's Fire Ring and starting TN to be
+     * hit. Per the combat rules: it tells you the opponent has at least X
+     * Fire, where X is your roll / 5 (rounded down); if X exceeds their Fire
+     * you know it exactly. The TN is discerned the same way but on the roll's
+     * own scale - you learn it exactly if your roll exceeds it, otherwise only
+     * that it is at least your roll.
+     *
+     * ``maxRing`` is the highest Fire Ring an opponent could have (defaults to
+     * RING_MAX_SCHOOL = 6, the cap when Fire is a school ring). Once the lower
+     * bound reaches that cap, "at least the cap" pins the value exactly, so the
+     * exact Fire Ring is always known - reported via ``fireCertain``.
+     *
+     * @returns {{roll, fireBound, fireExactMax, fireCertain, tnBound, tnExactMax}}
+     *   fireBound    - opponent's Fire is known to be at least this.
+     *   fireExactMax - exact Fire learned iff their Fire is <= this (= bound-1).
+     *   fireCertain  - exact Fire is guaranteed (bound >= the ring cap).
+     *   tnBound      - opponent's TN is known to be at least this (= the roll).
+     *   tnExactMax   - exact TN learned iff their TN is <= this (= roll-1).
+     */
+    evaluateStanceInfo: function (rollTotal, maxRing) {
+      var r = Math.max(0, Math.floor(rollTotal || 0));
+      var cap = maxRing || 6; // RING_MAX_SCHOOL: highest Fire an opponent has
+      var fireBound = Math.floor(r / 5);
+      return {
+        roll: r,
+        fireBound: fireBound,
+        fireExactMax: fireBound - 1,
+        fireCertain: fireBound >= cap,
+        tnBound: r,
+        tnExactMax: r - 1,
+      };
+    },
+
     // ----------------------------------------------------------------- //
     // Group F - iaijutsu duel focus/strike odds chart                    //
     //                                                                    //

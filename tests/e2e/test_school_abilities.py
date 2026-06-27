@@ -24,6 +24,18 @@ def _create_char(page, live_server_url, name, school, knack_overrides=None, skil
     apply_changes(page, "Setup")
 
 
+def _wait_alpine(page):
+    """Wait for the diceRoller Alpine component to initialize (phase idle)."""
+    page.wait_for_function("""() => {
+        const els = document.querySelectorAll('[x-data]');
+        for (const el of els) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'idle') return true;
+        }
+        return false;
+    }""", timeout=5000)
+
+
 def _wait_roll_done(page):
     """Wait for a regular roll to complete."""
     page.wait_for_function("""() => {
@@ -11334,3 +11346,97 @@ def test_kitsune_skill_submenu_hidden_when_air_equals_water_in_value(page, live_
     assert not block.is_visible(), \
         "Swap block must NOT show when Air's value equals Water's value"
 
+
+
+# ---------------------------------------------------------------------------
+# Akodo Bushi 4th Dan: post-roll VP free raise on any VP-eligible combat roll
+# (attack/parry/feint), exempt from the normal per-roll VP cap.
+# ---------------------------------------------------------------------------
+
+
+def _vp_avail(page):
+    return page.evaluate("() => window._trackingBridge.anyVPAvailable()")
+
+
+def test_akodo_4th_dan_attack_post_roll_vp_free_raise(page, live_server_url):
+    """Akodo 4th Dan: spend VP post-roll on an attack for +5 each; undo
+    reverses it and the void points are actually deducted."""
+    _create_char(page, live_server_url, "Akodo4Atk", "akodo_bushi",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    _wait_alpine(page)
+    _open_attack_modal_and_roll(page, "attack")
+    block = page.locator('[data-testid="akodo-attack-vp-block"]')
+    assert block.is_visible()
+    before_total = page.evaluate("() => window._diceRoller.atkRollTotal")
+    before_vp = _vp_avail(page)
+    assert before_vp >= 2
+    page.locator('[data-action="akodo-attack-vp-spend"]').click()
+    page.wait_for_timeout(100)
+    assert page.evaluate("() => window._diceRoller.atkRollTotal") == before_total + 5
+    assert page.evaluate("() => window._diceRoller.akodoPostRollVpSpent") == 1
+    assert _vp_avail(page) == before_vp - 1
+    # Undo returns both the bonus and the void point.
+    block.locator('button:has-text("Undo VP")').click()
+    page.wait_for_timeout(100)
+    assert page.evaluate("() => window._diceRoller.atkRollTotal") == before_total
+    assert page.evaluate("() => window._diceRoller.akodoPostRollVpSpent") == 0
+    assert _vp_avail(page) == before_vp
+
+
+def test_akodo_4th_dan_attack_vp_ignores_per_roll_cap(page, live_server_url):
+    """The Akodo 4th Dan post-roll spend is exempt from the normal per-roll
+    VP cap: with the cap at 2, the player can still spend 3 VP for +15."""
+    _create_char(page, live_server_url, "Akodo4Cap", "akodo_bushi",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    _wait_alpine(page)
+    assert page.evaluate("() => window._diceRoller.voidSpendConfig.cap") == 2
+    # Stock the bridge with plenty of temp VP so availability isn't the limiter.
+    page.evaluate("() => { window._trackingBridge.tempVoidPoints = 5; }")
+    _open_attack_modal_and_roll(page, "attack")
+    before_total = page.evaluate("() => window._diceRoller.atkRollTotal")
+    for _ in range(3):
+        page.locator('[data-action="akodo-attack-vp-spend"]').click()
+        page.wait_for_timeout(80)
+    assert page.evaluate("() => window._diceRoller.akodoPostRollVpSpent") == 3
+    assert page.evaluate("() => window._diceRoller.atkRollTotal") == before_total + 15
+
+
+def test_akodo_4th_dan_parry_post_roll_vp_free_raise(page, live_server_url):
+    """Akodo 4th Dan: the post-roll VP free raise also appears on parry,
+    which resolves in the dice-roller modal."""
+    _create_char(page, live_server_url, "Akodo4Parry", "akodo_bushi",
+                 knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
+    _wait_alpine(page)
+    _roll_via_menu_or_direct(page, "parry")
+    # The dice-roller modal must have settled on the parry roll before the
+    # Akodo block (gated on phase==='done' && currentRollKey==='parry') paints.
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.phase === 'done'"
+        " && window._diceRoller.currentRollKey === 'parry'",
+        timeout=10000,
+    )
+    block = page.locator('[data-testid="akodo-roll-vp-block"]')
+    block.wait_for(state="visible", timeout=5000)
+    before_total = page.evaluate("() => window._diceRoller.baseTotal")
+    page.locator('[data-action="akodo-roll-vp-spend"]').click()
+    page.wait_for_timeout(100)
+    assert page.evaluate("() => window._diceRoller.baseTotal") == before_total + 5
+    assert page.evaluate("() => window._diceRoller.akodoPostRollVpSpent") == 1
+
+
+def test_non_akodo_4th_dan_has_no_combat_vp_block(page, live_server_url):
+    """A non-Akodo 4th Dan attacker does not get the post-roll VP block."""
+    _create_char(page, live_server_url, "Hida4", "hida_bushi",
+                 knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
+    _wait_alpine(page)
+    _open_attack_modal_and_roll(page, "attack")
+    assert page.locator('[data-testid="akodo-attack-vp-block"]').is_visible() is False
+
+
+def test_akodo_3rd_dan_has_no_combat_vp_block(page, live_server_url):
+    """Akodo below 4th Dan does not get the post-roll VP block."""
+    _create_char(page, live_server_url, "Akodo3", "akodo_bushi",
+                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3})
+    _wait_alpine(page)
+    _open_attack_modal_and_roll(page, "attack")
+    assert page.locator('[data-testid="akodo-attack-vp-block"]').is_visible() is False

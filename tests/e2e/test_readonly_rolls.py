@@ -16,7 +16,10 @@ Roll-interaction tests land in later phases (Phase 2+).
 
 import pytest
 
-from tests.e2e.helpers import create_and_apply
+from tests.e2e.helpers import (
+    create_and_apply, select_school, click_plus, apply_changes,
+    start_new_character,
+)
 
 pytestmark = [pytest.mark.readonly_rolls]
 
@@ -1263,3 +1266,64 @@ def test_action_dice_clear_button_editor_only(
     assert page_anon.locator(
         '[data-action="clear-action-dice"]'
     ).count() == 0
+
+
+def _published_akodo_4th_with_vp(page, live_server_url):
+    """Create and publish an Akodo Bushi at 4th Dan (all three school knacks at
+    rank 4) with void points seeded at max. Returns (sheet_url, starting_vp)."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Readonly Akodo 4th")
+    select_school(page, "akodo_bushi")
+    for knack in ("double_attack", "feint", "iaijutsu"):
+        for _ in range(3):  # 1 -> 4
+            click_plus(page, f"knack_{knack}", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Akodo 4th Dan")
+    url = page.url
+    page.evaluate(
+        "async () => { const t = window._trackingBridge; t.voidPoints = t.voidMax; await t.save(); }"
+    )
+    page.wait_for_timeout(200)
+    starting_vp = page.evaluate("window._trackingBridge.voidPoints")
+    return url, starting_vp
+
+
+def test_non_editor_akodo_4th_dan_post_roll_vp_does_not_change_vp(
+    page, page_nonadmin, live_server_url
+):
+    """A non-editor on an Akodo 4th Dan sheet can walk through the post-roll VP
+    free raise (the +5 is reflected in the attack total) but the sheet's
+    displayed void points never move - the deduction is gated on canEdit."""
+    sheet_url, starting_vp = _published_akodo_4th_with_vp(page, live_server_url)
+    assert starting_vp >= 2
+
+    _disable_dice_animations(page_nonadmin)
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+    assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
+
+    page_nonadmin.locator('[data-roll-key="attack"]').click()
+    page_nonadmin.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
+    modal = page_nonadmin.locator('[data-modal="attack"]')
+    modal.locator('[data-action="roll-attack"]').click()
+    page_nonadmin.wait_for_function("""() => {
+        const el = document.querySelector('[data-modal="attack"]');
+        const data = el && window.Alpine && window.Alpine.$data(el);
+        return data && data.atkPhase === 'result';
+    }""", timeout=10000)
+
+    block = modal.locator('[data-testid="akodo-attack-vp-block"]')
+    assert block.is_visible()
+    before_total = page_nonadmin.evaluate("() => window._diceRoller.atkRollTotal")
+    page_nonadmin.locator('[data-action="akodo-attack-vp-spend"]').click()
+    page_nonadmin.wait_for_timeout(100)
+    # The roll-effect simulation applies (+5) but the void points stay put.
+    assert page_nonadmin.evaluate("() => window._diceRoller.atkRollTotal") == before_total + 5
+    assert page_nonadmin.evaluate("() => window._diceRoller.akodoPostRollVpSpent") == 1
+    assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
+
+    page_nonadmin.reload()
+    page_nonadmin.wait_for_selector("h1")
+    assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp

@@ -1,8 +1,19 @@
-"""Imagen-backed character-art generation (Phase 8).
+"""Gemini-backed character-art generation (Phase 8).
 
 Given an assembled prompt string, ``generate_image`` POSTs to the
-Imagen REST endpoint, decodes the returned base64 bytes, and hands
-back raw PNG bytes the caller pipes through ``art_image.validate_upload``.
+Gemini image-generation REST endpoint (``:generateContent``), decodes
+the returned base64 bytes, and hands back raw PNG bytes the caller
+pipes through ``art_image.validate_upload``.
+
+Migrated off the Imagen ``:predict`` endpoints (``imagen-4.0-*``), which
+Google discontinues on 2026-08-17, to ``gemini-3.1-flash-image``. The
+two APIs differ in both request and response shape: Imagen used
+``{"instances": [...], "parameters": {...}}`` -> ``{"predictions":
+[{"bytesBase64Encoded": ...}]}``; the Gemini image model uses the same
+``contents`` / ``generationConfig`` request as the rest of the Gemini
+API and returns the image inline as ``candidates[0].content.parts[]``
+with an ``inlineData`` part (the same shape the importer already sends
+PDF pages in).
 
 No use of ``google-generativeai``; we make plain ``httpx`` calls, same
 pattern as ``import_llm.py`` and ``services/sheets.py`` - keeps the
@@ -12,7 +23,7 @@ Test stub: when ``ART_GEN_USE_TEST_STUB=1`` the HTTP call is skipped
 and one of three canned PNGs from
 ``tests/import_fixtures/art/stub_outputs/`` is returned based on
 keywords in the prompt. This lets clicktests drive the full
-generation flow end-to-end without a real Imagen API key.
+generation flow end-to-end without a real Gemini API key.
 """
 
 from __future__ import annotations
@@ -37,9 +48,8 @@ logger = logging.getLogger(__name__)
 
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-DEFAULT_ART_MODEL = "imagen-4.0-generate-001"
+DEFAULT_ART_MODEL = "gemini-3.1-flash-image"
 DEFAULT_ASPECT_RATIO = "3:4"   # Matches HEADSHOT_ASPECT_RATIO (3/4 portrait)
-DEFAULT_SAMPLE_COUNT = 1
 
 
 def _env_int(name: str, default: int) -> int:
@@ -101,12 +111,12 @@ class ImageGenNotConfiguredError(ImageGenerationError):
 
 
 class ImageTransportError(ImageGenerationError):
-    """Network failure or persistent 5xx from Imagen."""
+    """Network failure or persistent 5xx from Gemini."""
     error_code = "gen_transport"
 
 
 class ImageRateLimitError(ImageGenerationError):
-    """Imagen returned HTTP 429 after retries (shared quota)."""
+    """Gemini returned HTTP 429 after retries (shared quota)."""
     error_code = "gen_rate_limited"
     user_message = (
         "Our image provider is rate-limiting us. Try again shortly."
@@ -114,7 +124,7 @@ class ImageRateLimitError(ImageGenerationError):
 
 
 class ImageInvalidResponseError(ImageGenerationError):
-    """200 from Imagen but the body didn't contain PNG bytes."""
+    """200 from Gemini but the body didn't contain image bytes."""
     error_code = "gen_invalid_response"
 
 
@@ -154,21 +164,24 @@ def _stub_bytes_for(prompt: str) -> bytes:
 _RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
 
 
-def _imagen_url(model: str) -> str:
-    return f"{GEMINI_BASE_URL}/models/{model}:predict"
+def _generate_url(model: str) -> str:
+    return f"{GEMINI_BASE_URL}/models/{model}:generateContent"
 
 
 def _build_request_body(
     prompt: str,
     *,
     aspect_ratio: str = DEFAULT_ASPECT_RATIO,
-    sample_count: int = DEFAULT_SAMPLE_COUNT,
 ) -> dict:
+    # Gemini image models take the standard ``contents`` request and need
+    # ``IMAGE`` in ``responseModalities`` to emit an image; the aspect ratio
+    # is set via ``generationConfig.imageConfig.aspectRatio`` (the Imagen
+    # ``parameters.aspectRatio`` knob is gone).
     return {
-        "instances": [{"prompt": prompt}],
-        "parameters": {
-            "sampleCount": sample_count,
-            "aspectRatio": aspect_ratio,
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseModalities": ["TEXT", "IMAGE"],
+            "imageConfig": {"aspectRatio": aspect_ratio},
         },
     }
 
@@ -188,32 +201,55 @@ def _post_json(
 
 
 def _extract_png_bytes(body: dict) -> bytes:
-    """Pull the first generated image's bytes out of the Imagen response.
+    """Pull the first generated image's bytes out of the Gemini response.
 
-    Imagen returns ``{"predictions": [{"bytesBase64Encoded": "..."}]}``.
-    Any shape deviation raises ``ImageInvalidResponseError`` so the caller
-    can convert to a user-visible banner.
+    A Gemini image response is shaped like::
+
+        {"candidates": [{"content": {"parts": [
+            {"text": "..."},
+            {"inlineData": {"mimeType": "image/png", "data": "<base64>"}}
+        ]}}]}
+
+    The image part can be preceded by a text part (the model often narrates
+    what it drew), so we scan the parts for the first one carrying inline
+    image data. Any shape deviation raises ``ImageInvalidResponseError`` so
+    the caller can convert it to a user-visible banner.
     """
-    preds = body.get("predictions") if isinstance(body, dict) else None
-    if not isinstance(preds, list) or not preds:
+    candidates = body.get("candidates") if isinstance(body, dict) else None
+    if not isinstance(candidates, list) or not candidates:
         raise ImageInvalidResponseError(
-            "Imagen response missing 'predictions'."
+            "Gemini response missing 'candidates'."
         )
-    first = preds[0]
+    first = candidates[0]
     if not isinstance(first, dict):
         raise ImageInvalidResponseError(
-            "Imagen response 'predictions[0]' is not an object."
+            "Gemini response 'candidates[0]' is not an object."
         )
-    b64 = first.get("bytesBase64Encoded")
-    if not isinstance(b64, str) or not b64:
+    content = first.get("content")
+    parts = content.get("parts") if isinstance(content, dict) else None
+    if not isinstance(parts, list) or not parts:
         raise ImageInvalidResponseError(
-            "Imagen response missing 'bytesBase64Encoded'."
+            "Gemini response missing 'content.parts'."
+        )
+    b64: Optional[str] = None
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        inline = part.get("inlineData")
+        if isinstance(inline, dict):
+            data = inline.get("data")
+            if isinstance(data, str) and data:
+                b64 = data
+                break
+    if not b64:
+        raise ImageInvalidResponseError(
+            "Gemini response contained no inline image data."
         )
     try:
         return base64.b64decode(b64, validate=True)
     except (ValueError, base64.binascii.Error) as exc:
         raise ImageInvalidResponseError(
-            "Imagen response bytesBase64Encoded was not valid base64."
+            "Gemini response image data was not valid base64."
         ) from exc
 
 
@@ -233,7 +269,7 @@ def generate_image(prompt: str, *, max_retries: int = 1) -> bytes:
     if _stub_mode():
         return _stub_bytes_for(prompt)
 
-    url = _imagen_url(art_model())
+    url = _generate_url(art_model())
     api_key = _api_key()
     body = _build_request_body(prompt)
 
@@ -249,7 +285,7 @@ def generate_image(prompt: str, *, max_retries: int = 1) -> bytes:
                 time.sleep(ART_GEN_RETRY_BACKOFF_SEC)
                 continue
             raise ImageTransportError(
-                f"Imagen request timed out after {ART_GEN_TIMEOUT_SEC}s."
+                f"Gemini request timed out after {ART_GEN_TIMEOUT_SEC}s."
             ) from exc
         except httpx.HTTPError as exc:
             last_exc = exc
@@ -257,7 +293,7 @@ def generate_image(prompt: str, *, max_retries: int = 1) -> bytes:
                 time.sleep(ART_GEN_RETRY_BACKOFF_SEC)
                 continue
             raise ImageTransportError(
-                f"Imagen request failed: {exc}"
+                f"Gemini request failed: {exc}"
             ) from exc
 
         if response.status_code == 200:
@@ -265,7 +301,7 @@ def generate_image(prompt: str, *, max_retries: int = 1) -> bytes:
                 parsed = response.json()
             except ValueError as exc:
                 raise ImageInvalidResponseError(
-                    "Imagen returned 200 but the body was not JSON."
+                    "Gemini returned 200 but the body was not JSON."
                 ) from exc
             return _extract_png_bytes(parsed)
 
@@ -275,22 +311,22 @@ def generate_image(prompt: str, *, max_retries: int = 1) -> bytes:
                 continue
             if response.status_code == 429:
                 raise ImageRateLimitError(
-                    "Imagen returned 429 (rate limit / quota) after retries."
+                    "Gemini returned 429 (rate limit / quota) after retries."
                 )
             raise ImageTransportError(
-                f"Imagen returned HTTP {response.status_code} after retries."
+                f"Gemini returned HTTP {response.status_code} after retries."
             )
 
         # Non-retryable 4xx - surface the body for the log so we can
         # diagnose auth / bad-request issues.
         detail = _safe_error_detail(response)
         raise ImageTransportError(
-            f"Imagen returned HTTP {response.status_code}: {detail}"
+            f"Gemini returned HTTP {response.status_code}: {detail}"
         )
 
     # Unreachable; the loop always returns or raises.
     raise ImageTransportError(  # pragma: no cover - defensive
-        f"Imagen retries exhausted; last error: {last_exc}"
+        f"Gemini retries exhausted; last error: {last_exc}"
     )
 
 

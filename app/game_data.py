@@ -1140,7 +1140,7 @@ _SCHOOLS_LIST: List[School] = [
                 "After you exceed the TN of a wound check, divide the difference between your wound check and the damage roll by 5, rounding down.  You may add that number multiplied by X to any future type of attack roll this combat, where X is your attack skill."
             ),
             4: (
-                "Raise your current and maximum Water by 1.  Raising your Water now costs 5 fewer XP.  You may spend void points after rolling a wound check to receive a free raise for each void point spent."
+                "Raise your current and maximum Water by 1.  Raising your Water now costs 5 fewer XP.  After making any combat roll for which void points may be spent, you may spend void points to receive a free raise for each void point spent.  Void points spent this way are not subject to the normal limit on how many void points may be spent on a single roll."
             ),
             5: (
                 "After you take damage, you may spend void points to deal 10 light wounds to the attacker for each void point spent, up to the amount of damage you took."
@@ -1332,7 +1332,7 @@ _SCHOOLS_LIST: List[School] = [
         school_knacks=["athletics", "iaijutsu", "worldliness"],
         techniques={
             1: "Roll one extra die on initiative, athletics, and wound checks.",
-            2: "You get a free raise on any type of roll.",
+            2: "You get a free raise on any one type of roll.",
             3: (
                 "After making an attack roll during a phase in which you have chosen an offensive posture, you may spend one action die from any phase to give yourself +X to attack and damage rolls for the rest of the round, where X is your attack skill.  After seeing the result of an attack roll made against you while fighting with a defensive posture, you may spend one action die from any phase to increase your wound checks and TN to be hit by X for the remainder of the round, where X is your attack skill."
             ),
@@ -1357,8 +1357,8 @@ _SCHOOLS_LIST: List[School] = [
         ),
         school_knacks=["absorb_void", "commune", "iaijutsu"],
         techniques={
-            1: "Roll one extra die on any three rolls.",
-            2: "You get a free raise on any type of roll.",
+            1: "Roll one extra die on any three types of rolls.",
+            2: "You get a free raise on any one type of roll.",
             3: (
                 "Each adventure you get 2X free raises, where X is your precepts skill, which may be spent after seeing your roll on attack, wound checks, and any three skills.  You may not spend more than X of these free raises on a single roll.  You may also perform priest rituals at the cost of one free raise per ritual."
             ),
@@ -1658,8 +1658,8 @@ _SCHOOLS_LIST: List[School] = [
         ),
         school_knacks=["double_attack", "feint", "worldliness"],
         techniques={
-            1: "Roll one extra die on precepts and any two rolls.",
-            2: "You get a free raise on any type of roll.",
+            1: "Roll one extra die on precepts and any two types of rolls.",
+            2: "You get a free raise on any one type of roll.",
             3: (
                 "After seeing the result of any TN or contested skill roll, you may spend a void point to subtract Xk1 from the roll, where X is your tact skill.  You know the result of TN and contested rolls except sincerity and interrogation."
             ),
@@ -1712,7 +1712,7 @@ _SCHOOLS_LIST: List[School] = [
         school_knacks=["oppose_social", "pontificate", "worldliness"],
         techniques={
             1: "Roll one extra die on precepts, commerce, and wound checks.",
-            2: "You get a free raise on any type of roll.",
+            2: "You get a free raise on any one type of roll.",
             3: (
                 "Each adventure you get 2X free raises, where X is your precepts skill, which may be spent after seeing your roll on commerce, heraldry, sincerity, tact, attack, and wound checks.  You may not spend more than X of these free raises on a single roll."
             ),
@@ -1788,7 +1788,7 @@ _SCHOOLS_LIST: List[School] = [
         school_knacks=["absorb_void", "kharmic_spin", "otherworldliness"],
         techniques={
             1: "Roll one extra die on precepts and any two types of rolls.",
-            2: "You get a free raise on rolls for any skill.",
+            2: "You get a free raise on rolls for any one skill.",
             3: (
                 "After another character makes a roll for which void points may be spent, you may spend one void point to roll Xk1 and add the result to their total, where X is your precepts skill.  You may only do this once per roll."
             ),

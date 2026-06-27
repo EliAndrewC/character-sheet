@@ -674,6 +674,13 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # The lunge is made without the normal lunge penalty. Not mechanized -
         # it requires combat-phase tracking, so the player executes it manually.
         "hiruma_post_parry_interrupt_lunge": character.school == "hiruma_scout" and dan >= 3,
+        # Akodo 4th Dan: spend VP post-roll for a free raise (+5 each) on any
+        # combat roll for which void points may be spent (attack, parry, and
+        # the combat knacks), exempt from the normal per-roll VP cap. The
+        # wound-check case is handled separately via voidSpendConfig.wc_vp_free_raise
+        # (which Yogo Warden 4th Dan shares); this flag is Akodo-only and drives
+        # the attack and dice-roller result modals.
+        "akodo_combat_vp_free_raise": character.school == "akodo_bushi" and dan >= 4,
         # Akodo 3rd Dan: bank wound check excess * attack for attack bonus
         "akodo_wc_attack_bonus": character.school == "akodo_bushi" and dan >= 3,
         "akodo_attack_skill": attack_skill if character.school == "akodo_bushi" and dan >= 3 else 0,

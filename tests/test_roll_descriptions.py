@@ -139,6 +139,13 @@ def test_knack_variant_in_title():
     assert "strike" in out["title"]
 
 
+def test_iaijutsu_evaluate_variant_description():
+    out = describe_roll("knack:iaijutsu:evaluate")
+    assert out["title"] == "Evaluate Stance (iaijutsu with Air)"
+    assert "Fire Ring" in out["body"]
+    assert "TN" in out["body"]
+
+
 def test_pontificate_as_skill_variant_title():
     out = describe_roll("knack:pontificate:as:bragging")
     assert out["title"] == "Pontificate (as Bragging)"

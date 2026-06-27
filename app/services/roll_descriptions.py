@@ -183,6 +183,21 @@ def describe_roll(roll_key: Optional[str]) -> Dict[str, str]:
         parts = rest.split(":")
         kid = parts[0]
         variant = parts[1] if len(parts) > 1 else None
+        # Iaijutsu "Evaluate Stance": the duel stance phase rolled with Air.
+        if kid == "iaijutsu" and variant == "evaluate":
+            return {
+                "title": "Evaluate Stance (iaijutsu with Air)",
+                "body": (
+                    "The opening stance phase of an iaijutsu duel: an open "
+                    "roll of iaijutsu kept with Air (with all iaijutsu "
+                    "bonuses) to discern your opponent's Fire Ring and "
+                    "starting TN to be hit. You learn their exact Fire Ring "
+                    "if your roll divided by 5 (rounded down) exceeds it, "
+                    "otherwise only that it is at least that high; you learn "
+                    "their exact TN if your roll exceeds it, otherwise only "
+                    "that it is at least your roll."
+                ),
+            }
         knack = SCHOOL_KNACKS.get(kid)
         if knack is not None:
             title = f"{knack.name} (knack)"
