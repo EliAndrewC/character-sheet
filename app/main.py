@@ -61,6 +61,29 @@ def get_backup_error():
 
 templates.env.globals["get_backup_error"] = get_backup_error
 
+
+def dark_mode_enabled(request) -> bool:
+    """Whether the current viewer's UI should render in dark mode.
+
+    The account-level preference (persisted in ``User.preferences``) is
+    authoritative whenever it is known for this request: a real Discord
+    session carries it via ``request.state.user`` (``User.to_dict()`` always
+    includes the ``preferences`` dict). When the preference is unknown -
+    logged-out visitors, and the header-based test-auth bypass, whose synthetic
+    user dict has no ``preferences`` key - we fall back to the ``dark_mode``
+    cookie that ``POST /profile`` sets, so the chosen theme still applies
+    across pages. Read at request time and registered as a Jinja global so
+    base.html can gate the ``dark`` class without every route passing it in.
+    """
+    user = getattr(request.state, "user", None)
+    prefs = user.get("preferences") if isinstance(user, dict) else None
+    if isinstance(prefs, dict):
+        return bool(prefs.get("dark_mode_enabled"))
+    return request.cookies.get("dark_mode") == "1"
+
+
+templates.env.globals["dark_mode_enabled"] = dark_mode_enabled
+
 # Static files
 # Ensure correct font MIME types - Python's mimetypes doesn't know woff2 by
 # default, so StaticFiles would otherwise serve fonts as text/plain.
