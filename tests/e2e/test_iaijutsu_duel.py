@@ -1017,3 +1017,70 @@ def test_manual_strike_wound_check_offers_conviction(page, live_server_url):
     assert not wc.locator('[data-action="spend-conviction-wc"]').is_visible()
     state = _duel_state(page, "wcResultApplied")
     assert state["wcResultApplied"] is False
+
+
+# ---------------------------------------------------------------------------
+# Akodo Bushi 4th Dan post-roll VP free raise on iaijutsu combat rolls:
+# the duel contested roll and Evaluate Stance.
+# ---------------------------------------------------------------------------
+
+
+def _create_akodo_4th(page, live_server_url, name):
+    """Create + publish an Akodo Bushi at 4th Dan (all school knacks at rank 4)."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, "akodo_bushi")
+    for knack in ("double_attack", "feint", "iaijutsu"):
+        for _ in range(3):  # 1 -> 4
+            click_plus(page, f"knack_{knack}", 1)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Akodo 4th Dan")
+
+
+def test_akodo_4th_dan_duel_contested_vp_free_raise(page, live_server_url):
+    """Akodo 4th Dan: the post-roll VP free raise appears on the duel contested
+    roll (where discretionary spends ARE allowed) and adds +5 to the total."""
+    _create_akodo_4th(page, live_server_url, "Akodo4Duel")
+    _wait_alpine(page)
+    _open_duel_modal(page)
+    modal = page.locator('[data-modal="iaijutsu-duel"]')
+    modal.locator('input[placeholder="e.g. 200"]').fill("200")
+    modal.locator('button:text("Proceed to Contested Roll")').click()
+    modal.locator('button:text("Roll Contested Iaijutsu")').wait_for(state='visible', timeout=10000)
+    modal.locator('button:text("Roll Contested Iaijutsu")').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.duelPhase === 'contested-result'",
+        timeout=15000,
+    )
+    block = modal.locator('[data-testid="akodo-duel-contested-vp-block"]')
+    block.wait_for(state="visible", timeout=5000)
+    before = page.evaluate("() => window._diceRoller.duelContestedRoll")
+    page.locator('[data-action="akodo-duel-contested-vp-spend"]').click()
+    page.wait_for_timeout(100)
+    assert page.evaluate("() => window._diceRoller.duelContestedRoll") == before + 5
+    assert page.evaluate("() => window._diceRoller.akodoPostRollVpSpent") == 1
+
+
+def test_akodo_4th_dan_evaluate_stance_vp_free_raise(page, live_server_url):
+    """Akodo 4th Dan: Evaluate Stance is a combat roll, so it offers the
+    post-roll VP free raise in the dice-roller modal."""
+    _create_akodo_4th(page, live_server_url, "Akodo4Eval")
+    _wait_alpine(page)
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.wait_for_timeout(300)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    menu.locator('[data-action="evaluate-stance"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller && window._diceRoller.phase === 'done'"
+        " && window._diceRoller.currentRollKey === 'knack:iaijutsu:evaluate'",
+        timeout=10000,
+    )
+    block = page.locator('[data-testid="akodo-roll-vp-block"]')
+    block.wait_for(state="visible", timeout=5000)
+    before = page.evaluate("() => window._diceRoller.baseTotal")
+    page.locator('[data-action="akodo-roll-vp-spend"]').click()
+    page.wait_for_timeout(100)
+    assert page.evaluate("() => window._diceRoller.baseTotal") == before + 5
+    assert page.evaluate("() => window._diceRoller.akodoPostRollVpSpent") == 1

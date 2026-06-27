@@ -190,6 +190,8 @@ The three failures were:
 - [x] 4th Dan post-roll VP block absent for non-Akodo -> `test_school_abilities.py::test_non_akodo_4th_dan_has_no_combat_vp_block`
 - [x] 4th Dan post-roll VP block absent below 4th Dan -> `test_school_abilities.py::test_akodo_3rd_dan_has_no_combat_vp_block`
 - [x] 4th Dan post-roll VP free raise on attack does not mutate a non-editor's VP (read-only) -> `test_readonly_rolls.py::test_non_editor_akodo_4th_dan_post_roll_vp_does_not_change_vp`
+- [x] 4th Dan post-roll VP free raise (+5) on the duel contested roll -> `test_iaijutsu_duel.py::test_akodo_4th_dan_duel_contested_vp_free_raise`
+- [x] 4th Dan post-roll VP free raise (+5) on Evaluate Stance (iaijutsu combat roll) -> `test_iaijutsu_duel.py::test_akodo_4th_dan_evaluate_stance_vp_free_raise`
 - [x] 5th Dan reflect damage UI elements appear -> `test_school_abilities.py::test_akodo_5th_dan_reflect_damage_ui`
 - [x] 5th Dan reflect damage behavioral flow -> `test_school_abilities.py::test_akodo_5th_dan_reflect_ui_behavioral`
 
