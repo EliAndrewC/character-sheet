@@ -83,6 +83,13 @@ test("parrySkillFromTn = max(1, floor((tn-5)/step))", () => {
   assert.equal(M.parrySkillFromTn(5, 5), 1); // floor(0) -> min 1
 });
 
+test("parryEffectiveTarget = max(0, tn - flat)", () => {
+  assert.equal(M.parryEffectiveTarget(30, 0), 30); // no bonuses
+  assert.equal(M.parryEffectiveTarget(30, 5), 25); // predeclared +5
+  assert.equal(M.parryEffectiveTarget(30, 8), 22); // formula flat folded in
+  assert.equal(M.parryEffectiveTarget(5, 20), 0); // bonuses exceed TN -> clamp 0
+});
+
 test("attackSpecBonus = 10 * count", () => {
   assert.equal(M.attackSpecBonus(0), 0);
   assert.equal(M.attackSpecBonus(3), 30);

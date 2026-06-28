@@ -1083,14 +1083,12 @@ def test_non_editor_mirumoto_parry_does_not_grant_temp_vp(
         "window._trackingBridge.tempVoidPoints"
     )
 
-    # Parry uses a small menu - click "Roll Parry" inside it.
+    # Parry opens the parry modal - roll from its "Roll Parry" button.
     page_nonadmin.locator('[data-roll-key="parry"]').click()
     page_nonadmin.wait_for_selector(
-        '[data-parry-menu]', state='visible', timeout=5000,
+        '[data-modal="parry"]', state='visible', timeout=5000,
     )
-    page_nonadmin.locator(
-        '[data-parry-menu] button:has-text("Roll Parry")'
-    ).first.click()
+    page_nonadmin.locator('[data-action="roll-parry-go"]').click()
     page_nonadmin.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {

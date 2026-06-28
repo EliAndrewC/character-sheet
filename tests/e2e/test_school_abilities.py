@@ -61,10 +61,16 @@ def _roll_via_menu_or_direct(page, roll_key):
     opens the bare-vs-athletics picker, where the athletics row is
     addressable via ``data-ring-athletics="<Ring>"``.
     """
-    if roll_key == "athletics:parry":
+    if roll_key in ("parry", "athletics:parry"):
+        # Parry now opens a dedicated modal (TN + probability chart); the
+        # roll fires from its "Roll Parry" button. Athletics-parry is the
+        # modal's athletics toggle.
         page.locator('[data-roll-key="parry"]').click()
-        page.wait_for_timeout(200)
-        page.locator('[data-parry-menu-athletics]').click()
+        page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+        if roll_key == "athletics:parry":
+            page.locator('[data-testid="parry-use-athletics"]').check()
+            page.wait_for_timeout(100)
+        page.locator('[data-action="roll-parry-go"]').click()
         _wait_roll_done(page)
         return
     if roll_key.startswith("athletics:") and roll_key not in ("athletics:attack",):
@@ -935,19 +941,16 @@ def test_mirumoto_5th_dan_vp_plus_10(page, live_server_url):
     page.evaluate("window._trackingBridge.voidPoints = 1")
     page.wait_for_timeout(200)
 
-    # Roll parry with 1 VP via the roll menu
+    # Roll parry with 1 VP via the parry modal's void stepper.
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_timeout(300)
-    # Click the "Spend 1 void point" option in the roll menu
-    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
-    if menu.is_visible():
-        vp_btn = menu.locator('button.text-accent').first
-        if vp_btn.is_visible():
-            vp_btn.click()
-            _wait_roll_done(page)
-            # The +10 bonus should appear in the result breakdown
-            result_text = page.locator('[data-modal="dice-roller"]').text_content()
-            assert "5th Dan" in result_text
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    page.locator('[data-modal="parry"] button.btn-pip:has-text("+")').click()
+    assert page.locator('[data-modal="parry"] span.w-8').text_content().strip() == "1"
+    page.locator('[data-action="roll-parry-go"]').click()
+    _wait_roll_done(page)
+    # The +10 bonus should appear in the result breakdown.
+    result_text = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "5th Dan" in result_text
 def test_mirumoto_5th_dan_prob_charts_include_bonus(page, live_server_url):
     """Mirumoto 5th Dan: attack and wound check probability charts include +10/VP."""
     _create_char(page, live_server_url, "Miru5Prob", "mirumoto_bushi",
@@ -2773,9 +2776,9 @@ def test_priest_3rd_dan_pool_appears_on_own_parry_roll(page, live_server_url):
     _create_priest_3rd_dan(page, live_server_url, "PriestParryPool", precepts=3)
     _seed_own_pool(page, [9, 5, 2])
     page.locator('[data-roll-key="parry"]').click()
-    # Parry goes through a small menu first with "Roll Parry" option.
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=5000)
-    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.click()
+    # Parry opens the parry modal; roll from its "Roll Parry" button.
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=5000)
+    page.locator('[data-action="roll-parry-go"]').click()
     page.wait_for_function("""() => {
         const d = window._diceRoller;
         return d && d.phase === 'done';
@@ -2957,8 +2960,8 @@ def test_priest_3rd_dan_empty_pool_does_not_render_block(page, live_server_url):
     _create_priest_3rd_dan(page, live_server_url, "PriestEmptyPool", precepts=3)
     # Do NOT seed a pool - preceptsPool stays [].
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=5000)
-    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.click()
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=5000)
+    page.locator('[data-action="roll-parry-go"]').click()
     page.wait_for_function("""() => {
         const d = window._diceRoller;
         return d && d.phase === 'done';
@@ -3969,8 +3972,7 @@ def test_kakita_phase_zero_die_menu_shows_only_iaijutsu_attack(page, live_server
     page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="iaijutsu-attack"]:visible').count() == 1
     for kind in ("attack", "parry", "double-attack", "counterattack",
-                 "lunge", "feint", "predeclared-parry", "athletics-attack",
-                 "athletics-parry", "athletics-predeclared-parry"):
+                 "lunge", "feint", "athletics-attack", "athletics-parry"):
         assert page.locator(
             f'[data-action-die-menu-item="{kind}"]:visible'
         ).count() == 0, f"{kind} leaked into the phase-0 menu"
@@ -6372,8 +6374,8 @@ def test_togashi_non_athletics_parry_skips_athletics_die(page, live_server_url):
     """)
     page.wait_for_timeout(150)
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_timeout(200)
-    page.locator('[data-parry-menu] button:has-text("Roll")').first.click()
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-parry-go"]').click()
     _wait_roll_done(page)
     dice = page.evaluate("window._trackingBridge.actionDice")
     ath = next(d for d in dice if d.get("athletics_only"))
@@ -6399,6 +6401,9 @@ def test_togashi_athletics_parry_can_spend_athletics_die(page, live_server_url):
     # Open the athletics-only die's menu (it's the first die).
     page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
     page.locator('[data-action-die-menu-item="athletics-parry"]:visible').click()
+    # The parry modal opens (athletics variant pre-selected); roll from it.
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-parry-go"]').click()
     _wait_roll_done(page)
     dice = page.evaluate("window._trackingBridge.actionDice")
     ath = next(d for d in dice if d.get("athletics_only"))
@@ -9833,7 +9838,8 @@ def test_mantis_4th_dan_die_flags_survive_reload(page, live_server_url):
     section = page.locator('[data-testid="action-dice-section"]')
     assert section.locator(f'[data-action="action-die"][data-die-index="{idx}"]'
                            ' svg.athletics-only').count() == 1
-    # Opening the menu still shows Athletics Attack / Parry / Predeclared Parry.
+    # Opening the menu still shows Athletics Attack / Parry (predeclared is
+    # now a checkbox inside the parry modal, not a separate menu row).
     section.locator('[data-action="action-die"]').nth(idx).click()
     page.wait_for_selector('[data-action-die-menu-item="athletics-attack"]:visible',
                            timeout=2000)
@@ -9842,13 +9848,13 @@ def test_mantis_4th_dan_die_flags_survive_reload(page, live_server_url):
     page.locator('[data-action-die-menu-item="athletics-parry"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 1
     assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible'
-                        ).count() == 1
+                        ).count() == 0
 
 
 @pytest.mark.school_abilities
 def test_mantis_regular_die_menu_hides_athletics_options(page, live_server_url):
     """Regular (non-bonus) Mantis action dice must NOT surface the Athletics
-    Attack / Parry / Predeclared Parry options in the per-die menu."""
+    Attack / Parry options in the per-die menu."""
     _make_mantis_dan_4(page, live_server_url, "MantisDieNoAth")
     _seed_action_dice(page, [3, 5])
     # Open the first (regular) die's menu.
@@ -9862,14 +9868,13 @@ def test_mantis_regular_die_menu_hides_athletics_options(page, live_server_url):
     # Athletics variants are hidden.
     assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 0
     assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 0
-    assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').count() == 0
 
 
 @pytest.mark.school_abilities
 def test_mantis_4th_dan_die_menu_shows_only_athletics_and_3rd_dan(page, live_server_url):
-    """The Mantis 4th Dan athletics-only die surfaces Athletics Attack/Parry/
-    Predeclared Parry, hides regular Attack/Parry, and (in offensive posture)
-    also shows the Mantis 3rd Dan offensive option."""
+    """The Mantis 4th Dan athletics-only die surfaces Athletics Attack/Parry,
+    hides regular Attack/Parry, and (in offensive posture) also shows the
+    Mantis 3rd Dan offensive option."""
     _make_mantis_dan_4(page, live_server_url, "Mantis4DieMenu")
     _roll_initiative(page)
     # Find the Mantis 4th Dan die (athletics-only) and open its menu.
@@ -9888,8 +9893,7 @@ def test_mantis_4th_dan_die_menu_shows_only_athletics_and_3rd_dan(page, live_ser
     assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 1
     page.locator('[data-action-die-menu-item="athletics-parry"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 1
-    page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').first.wait_for(state="visible", timeout=5000)
-    assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').count() == 0
     page.locator('[data-action-die-menu-item="mantis-3rd-dan-offensive"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="mantis-3rd-dan-offensive"]:visible').count() == 1
     # Regular combat variants are not offered.
@@ -9916,13 +9920,13 @@ def test_mantis_attack_skill_menu_no_athletics_choice(page, live_server_url):
 
 @pytest.mark.school_abilities
 def test_mantis_parry_skill_menu_no_athletics_row(page, live_server_url):
-    """Clicking the Parry skill on a Mantis character opens the parry menu
-    without the Athletics Parry row."""
+    """Clicking the Parry skill on a Mantis character opens the parry modal
+    without the Athletics-parry toggle."""
     _create_char(page, live_server_url, "MantisParryNoAth", "mantis_wave_treader")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    # The parry menu is present but without the athletics option.
-    assert page.locator('[data-parry-menu] [data-parry-menu-athletics]').count() == 0
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    # The parry modal is present but without the athletics toggle.
+    assert page.locator('[data-testid="parry-use-athletics"]').count() == 0
 
 
 @pytest.mark.school_abilities
@@ -9938,18 +9942,18 @@ def test_togashi_attack_skill_menu_shows_athletics_choice(page, live_server_url)
 
 @pytest.mark.school_abilities
 def test_togashi_parry_skill_menu_shows_athletics_row(page, live_server_url):
-    """Togashi Ise Zumi's Parry menu still includes the Athletics Parry row."""
+    """Togashi Ise Zumi's parry modal includes the Athletics-parry toggle."""
     _create_char(page, live_server_url, "TogashiParryAth", "togashi_ise_zumi")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    page.locator('[data-parry-menu] [data-parry-menu-athletics]').wait_for(state="visible", timeout=5000)
-    assert page.locator('[data-parry-menu] [data-parry-menu-athletics]').is_visible()
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="parry-use-athletics"]').wait_for(state="visible", timeout=5000)
+    assert page.locator('[data-testid="parry-use-athletics"]').is_visible()
 
 
 @pytest.mark.school_abilities
 def test_togashi_regular_die_menu_shows_athletics_options(page, live_server_url):
     """Regression for Togashi: regular (non-athletics-only) action dice still
-    surface the Athletics Attack/Parry/Predeclared Parry options."""
+    surface the Athletics Attack/Parry options."""
     _create_char(page, live_server_url, "TogashiDieAth", "togashi_ise_zumi")
     _seed_action_dice(page, [3, 5])
     page.locator('[data-testid="action-dice-section"] [data-action="action-die"]').first.click()
@@ -9958,8 +9962,7 @@ def test_togashi_regular_die_menu_shows_athletics_options(page, live_server_url)
     assert page.locator('[data-action-die-menu-item="athletics-attack"]:visible').count() == 1
     page.locator('[data-action-die-menu-item="athletics-parry"]:visible').first.wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="athletics-parry"]:visible').count() == 1
-    page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').first.wait_for(state="visible", timeout=5000)
-    assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').count() == 1
+    assert page.locator('[data-action-die-menu-item="athletics-predeclared-parry"]:visible').count() == 0
 
 
 @pytest.mark.school_abilities
@@ -11138,16 +11141,13 @@ def test_kitsune_wc_modal_swap_persists_into_roll_results_annotation(page, live_
 @pytest.mark.school_abilities
 def test_kitsune_parry_menu_shows_swap_block_when_school_ring_higher_than_air(page, live_server_url):
     """A Dan-1 Kitsune with Water ring raised to 4 (and Air at 2) sees the
-    Kitsune-parry-swap-block in the parry menu."""
+    Kitsune-swap checkbox in the parry modal."""
     _make_kitsune_with_ring_setup(page, live_server_url, "K10ParryHigh", "Water")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_timeout(300)
-    block = page.locator('[data-testid="kitsune-parry-swap-block"]')
-    block.wait_for(state="visible", timeout=5000)
-    assert block.is_visible()
-    # Both swap entries visible inside the block.
-    assert block.locator('[data-testid="kitsune-parry-swap-roll"]').is_visible()
-    assert block.locator('[data-testid="kitsune-parry-swap-predeclared"]').is_visible()
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    swap = page.locator('[data-testid="parry-kitsune-swap"]')
+    swap.wait_for(state="visible", timeout=5000)
+    assert swap.is_visible()
 
 
 @pytest.mark.school_abilities
@@ -11155,9 +11155,8 @@ def test_kitsune_parry_menu_no_swap_block_when_school_ring_is_air(page, live_ser
     """When school ring is Air (the parry default), no swap to offer."""
     _make_kitsune_with_ring_setup(page, live_server_url, "K10ParryAir", "Air")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_timeout(300)
-    block = page.locator('[data-testid="kitsune-parry-swap-block"]')
-    assert not block.is_visible()
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    assert page.locator('[data-testid="parry-kitsune-swap"]').count() == 0
 
 
 @pytest.mark.school_abilities
@@ -11187,9 +11186,8 @@ def test_kitsune_parry_menu_no_swap_block_when_school_ring_value_equals_air_valu
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Equal Air-Earth")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_timeout(300)
-    block = page.locator('[data-testid="kitsune-parry-swap-block"]')
-    assert not block.is_visible()
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    assert page.locator('[data-testid="parry-kitsune-swap"]').count() == 0
 
 
 @pytest.mark.school_abilities
@@ -11198,8 +11196,9 @@ def test_kitsune_parry_school_ring_entry_uses_school_ring_in_formula(page, live_
     rolled/kept dimensions and stamps the swap-metadata on the formula."""
     _make_kitsune_with_ring_setup(page, live_server_url, "K10ParryRoll", "Water")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_timeout(300)
-    page.locator('[data-testid="kitsune-parry-swap-roll"]').click()
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="parry-kitsune-swap"]').check()
+    page.locator('[data-action="roll-parry-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -11233,8 +11232,10 @@ def test_kitsune_parry_predeclared_school_ring_entry_includes_plus_5(page, live_
     """The predeclared swap entry adds +5 flat AND uses the swapped ring."""
     _make_kitsune_with_ring_setup(page, live_server_url, "K10ParryPre", "Water")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_timeout(300)
-    page.locator('[data-testid="kitsune-parry-swap-predeclared"]').click()
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="parry-kitsune-swap"]').check()
+    page.locator('[data-testid="parry-predeclared"]').check()
+    page.locator('[data-action="roll-parry-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -11272,19 +11273,12 @@ def test_kitsune_parry_swap_with_void_spend_carries_through(page, live_server_ur
     page.evaluate("window._trackingBridge.voidPoints = 1; window._trackingBridge.save && window._trackingBridge.save();")
     page.wait_for_timeout(200)
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_timeout(300)
-    # Hover the swap-roll entry to surface its VP submenu, then click the
-    # +1 VP option. Use a JS hover to reliably trigger Alpine's @mouseenter.
-    page.evaluate("""() => {
-        const els = document.querySelectorAll('[x-data]');
-        for (const el of els) {
-            const d = window.Alpine && window.Alpine.$data(el);
-            if (d && d.parryHoverRow !== undefined) { d.parryHoverRow = 'kitsune-roll'; return; }
-        }
-    }""")
-    page.wait_for_timeout(200)
-    submenu = page.locator('[data-parry-void-submenu="kitsune-roll"]')
-    submenu.locator('button').first.click()  # +1 VP option
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    # Check the Kitsune swap, then bump void to 1 via the stepper.
+    page.locator('[data-testid="parry-kitsune-swap"]').check()
+    page.locator('[data-modal="parry"] button.btn-pip:has-text("+")').click()
+    assert page.locator('[data-modal="parry"] span.w-8').text_content().strip() == "1"
+    page.locator('[data-action="roll-parry-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {

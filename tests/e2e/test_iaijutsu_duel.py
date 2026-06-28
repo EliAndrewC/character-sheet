@@ -469,7 +469,7 @@ def test_kitsune_warden_iaijutsu_duel_offers_no_special_ability_swap(page, live_
     assert modal.locator('[data-testid="kitsune-skill-swap-block"]').count() == 0
     assert modal.locator('[data-testid="kitsune-attack-ring-swap"]').count() == 0
     assert modal.locator('[data-testid="kitsune-wc-ring-swap"]').count() == 0
-    assert modal.locator('[data-testid="kitsune-parry-swap-block"]').count() == 0
+    assert modal.locator('[data-testid="parry-kitsune-swap"]').count() == 0
 
 
 def test_kitsune_warden_iaijutsu_strike_has_no_swap_in_roll_menu(page, live_server_url):

@@ -29,7 +29,6 @@ podman run --interactive --tty --rm \
 
 ## Backlog
 
-- award money button on the group page for the GM to use
 - initiative freeform edits
 - smarter action die spending, e.g. schools that can take interrupt actions for the cost of 1 action die
 - ide diplomat feint temp vp vs 5th dan temp vp

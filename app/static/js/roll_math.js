@@ -90,6 +90,17 @@
       return Math.max(1, Math.floor((tn - 5) / tnStep));
     },
 
+    /**
+     * Parry probability-chart target. A parry succeeds when the roll total
+     * meets or beats the attacker's TN, so the kept-dice total needs to reach
+     * TN minus every flat bonus folded into the roll (formula flat, the
+     * predeclared +5, per-VP combat flat bonuses, etc.). Clamped at 0 so the
+     * probability lookup never indexes a negative target.
+     */
+    parryEffectiveTarget: function (tn, flat) {
+      return Math.max(0, tn - flat);
+    },
+
     /** +10 per checked Attack Specialization. */
     attackSpecBonus: function (checkedCount) {
       return 10 * checkedCount;

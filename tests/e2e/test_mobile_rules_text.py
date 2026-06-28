@@ -136,8 +136,9 @@ def test_attack_tap_opens_menu_with_roll_and_view_rules(page, live_server_url):
 
 
 def test_parry_menu_includes_view_rules_text_on_touch(page, live_server_url):
-    """Parry already opens a menu on every device. On touch the new
-    'View rules text' row should be appended to that existing menu."""
+    """Parry opens its modal on click. On touch we first show a tiny menu
+    with a 'Roll Parry' row (opening the parry modal) plus the 'View rules
+    text' row, so the rules stay reachable without a hover tooltip."""
     sheet_url = _create_character(page, live_server_url, "MobileParry")
     _open_sheet_with_touch_stub(page, sheet_url)
 
@@ -145,11 +146,15 @@ def test_parry_menu_includes_view_rules_text_on_touch(page, live_server_url):
     menu = page.locator('[data-roll-menu="root"]')
     menu.wait_for(state="visible")
 
-    # Pre-existing parry rows are still there.
-    assert menu.locator('[data-parry-menu]').is_visible()
-    # And the new rules-text row was appended.
+    # The mobile-parry Roll row opens the parry modal.
+    roll_btn = menu.locator('[data-mobile-parry-roll]')
+    assert roll_btn.is_visible()
+    # And the rules-text row was appended.
     rules_btn = menu.locator('[data-action="view-rules-text"]')
     assert rules_btn.is_visible()
+
+    roll_btn.click()
+    page.locator('[data-modal="parry"]').wait_for(state="visible", timeout=3000)
 
 
 def _charming_advantage_row(page):

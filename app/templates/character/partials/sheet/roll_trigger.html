@@ -209,7 +209,7 @@
                 </div>
             </template>
             <div class="relative"
-                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasRingPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack && !rollMenuHasPontificate"
+                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasRingPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack && !rollMenuHasMobileParry && !rollMenuHasPontificate"
                  @mouseenter="owHoverRow = 'roll'"
                  @mouseleave="owHoverRow = null">
                 <button type="button"
@@ -231,7 +231,7 @@
                     </template>
                 </div>
             </div>
-            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasRingPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack || rollMenuHasPontificate ? [] : rollMenuOptions)" :key="'r'+opt.count">
+            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasRingPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack || rollMenuHasMobileParry || rollMenuHasPontificate ? [] : rollMenuOptions)" :key="'r'+opt.count">
                 <div class="relative"
                      @mouseenter="owHoverRow = 'r' + opt.count"
                      @mouseleave="owHoverRow = null">
@@ -264,7 +264,7 @@
             <template x-if="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker
                             && !rollMenuHasRingPicker
                             && !rollMenuHasParry && !rollMenuHasAttackChoice
-                            && !rollMenuHasMobileAttack
+                            && !rollMenuHasMobileAttack && !rollMenuHasMobileParry
                             && formulas[rollMenuKey]?.kitsune_swap">
                 <div class="border-t border-ink/10 mt-1 pt-1" data-testid="kitsune-skill-swap-block">
                     <div class="px-4 py-1 text-xs text-ink/50">
@@ -284,153 +284,6 @@
                                 class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
                             <span x-text="opt.label + ' (using ' + formulas[rollMenuKey].kitsune_swap.kitsune_swap_to_ring + ')'"></span>
                         </button>
-                    </template>
-                </div>
-            </template>
-            <template x-if="rollMenuHasParry">
-                <div data-parry-menu>
-                    <div class="relative"
-                         @mouseenter="parryHoverRow = 'roll'"
-                         @mouseleave="parryHoverRow = null">
-                        <button type="button"
-                                @click="executeRoll(rollMenuKey, 0, null)"
-                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
-                            <span>Roll <span x-text="rollMenuTitle"></span></span>
-                            <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
-                        </button>
-                        <div x-show="parryHoverRow === 'roll' && rollMenuOptions.length > 0"
-                             x-cloak
-                             data-parry-void-submenu="roll"
-                             class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
-                            <template x-for="opt in rollMenuOptions" :key="'pr'+opt.count">
-                                <button type="button"
-                                        @click="executeRoll(rollMenuKey, opt.count, opt)"
-                                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
-                                    <span x-text="opt.label"></span>
-                                </button>
-                            </template>
-                        </div>
-                    </div>
-                    <div class="relative"
-                         @mouseenter="parryHoverRow = 'predeclared'"
-                         @mouseleave="parryHoverRow = null">
-                        <button type="button"
-                                @click="executeRollWithExtraFlat(rollMenuKey, 0, null, 5, 'predeclared parry')"
-                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
-                            <span>Predeclared Parry <span class="text-xs text-ink/50">(+5)</span></span>
-                            <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
-                        </button>
-                        <div x-show="parryHoverRow === 'predeclared' && rollMenuOptions.length > 0"
-                             x-cloak
-                             data-parry-void-submenu="predeclared"
-                             class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
-                            <template x-for="opt in rollMenuOptions" :key="'pp'+opt.count">
-                                <button type="button"
-                                        @click="executeRollWithExtraFlat(rollMenuKey, opt.count, opt, 5, 'predeclared parry')"
-                                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
-                                    <span x-text="opt.label + ' + predeclared (+5)'"></span>
-                                </button>
-                            </template>
-                        </div>
-                    </div>
-                    {# Kitsune Warden Special Ability parry entries.
-                       Visible when the parry formula carries a kitsune_swap
-                       AND the swap is an UPGRADE (kept > kept). The user's
-                       spec calls out that downgrade swaps shouldn't clutter
-                       the menu; the gate `kitsune_swap.kept > kept` covers
-                       both "school ring isn't Air" (would have same kept
-                       only if values match, which kitsune_swap excludes
-                       upstream) and "school ring's value > Air's value"
-                       (the upgrade requirement). Each entry has its own
-                       VP submenu mirroring the existing Air parry entries. #}
-                    <template x-if="formulas[rollMenuKey]?.kitsune_swap
-                                    && formulas[rollMenuKey]?.kitsune_swap?.kept > (formulas[rollMenuKey]?.kept || 0)">
-                        <div data-testid="kitsune-parry-swap-block" class="border-t border-ink/10 pt-1 mt-1">
-                            <div class="px-4 py-1 text-xs text-ink/50">
-                                Kitsune Warden:
-                                <span x-text="formulas[rollMenuKey].kitsune_swap.kitsune_swap_to_ring"></span>
-                                instead of <span x-text="formulas[rollMenuKey].kitsune_swap.kitsune_swap_from_ring"></span>
-                            </div>
-                            <div class="relative"
-                                 @mouseenter="parryHoverRow = 'kitsune-roll'"
-                                 @mouseleave="parryHoverRow = null">
-                                <button type="button"
-                                        data-testid="kitsune-parry-swap-roll"
-                                        @click="executeRoll(rollMenuKey, 0, null, 0, true)"
-                                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
-                                    <span>Roll Parry (<span x-text="formulas[rollMenuKey].kitsune_swap.kitsune_swap_to_ring"></span>)</span>
-                                    <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
-                                </button>
-                                <div x-show="parryHoverRow === 'kitsune-roll' && rollMenuOptions.length > 0"
-                                     x-cloak
-                                     data-parry-void-submenu="kitsune-roll"
-                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
-                                    <template x-for="opt in rollMenuOptions" :key="'kpr'+opt.count">
-                                        <button type="button"
-                                                @click="executeRoll(rollMenuKey, opt.count, opt, 0, true)"
-                                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
-                                            <span x-text="opt.label"></span>
-                                        </button>
-                                    </template>
-                                </div>
-                            </div>
-                            <div class="relative"
-                                 @mouseenter="parryHoverRow = 'kitsune-predeclared'"
-                                 @mouseleave="parryHoverRow = null">
-                                <button type="button"
-                                        data-testid="kitsune-parry-swap-predeclared"
-                                        @click="executeRollWithExtraFlat(rollMenuKey, 0, null, 5, 'predeclared parry', true)"
-                                        class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
-                                    <span>Predeclared <span x-text="formulas[rollMenuKey].kitsune_swap.kitsune_swap_to_ring"></span>-Parry <span class="text-xs text-ink/50">(+5)</span></span>
-                                    <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
-                                </button>
-                                <div x-show="parryHoverRow === 'kitsune-predeclared' && rollMenuOptions.length > 0"
-                                     x-cloak
-                                     data-parry-void-submenu="kitsune-predeclared"
-                                     class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
-                                    <template x-for="opt in rollMenuOptions" :key="'kpp'+opt.count">
-                                        <button type="button"
-                                                @click="executeRollWithExtraFlat(rollMenuKey, opt.count, opt, 5, 'predeclared parry', true)"
-                                                class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
-                                            <span x-text="opt.label + ' + predeclared (+5)'"></span>
-                                        </button>
-                                    </template>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                    {# Athletics parry: only appears when the parry menu is
-                       for the regular ``parry`` key, an athletics:parry
-                       formula exists, AND the school treats athletics as a
-                       standard attack/parry variant (Togashi Ise Zumi). Other
-                       schools access Athletics parry through the Athletics
-                       skill directly. #}
-                    <template x-if="rollMenuKey === 'parry' && formulas['athletics:parry'] && schoolAbilities.athletics_combat_everywhere">
-                        <div class="relative border-t border-ink/10"
-                             @mouseenter="parryHoverRow = 'athletics'"
-                             @mouseleave="parryHoverRow = null">
-                            <button type="button"
-                                    data-parry-menu-athletics
-                                    @click="executeRoll('athletics:parry', 0, null)"
-                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
-                                <span>Athletics Parry
-                                    <span class="text-xs text-ink/50" x-text="'(' + (formulas['athletics:parry']?.rolled || 0) + 'k' + (formulas['athletics:parry']?.kept || 0) + ')'"></span>
-                                </span>
-                                <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
-                            </button>
-                            <div x-show="parryHoverRow === 'athletics' && rollMenuOptions.length > 0"
-                                 x-cloak
-                                 data-parry-void-submenu="athletics"
-                                 class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
-                                <template x-for="opt in rollMenuOptions" :key="'parryath'+opt.count">
-                                    <button type="button"
-                                            @click="executeRoll('athletics:parry', opt.count, opt)"
-                                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
-                                        <span x-text="opt.label"></span>
-                                    </button>
-                                </template>
-                            </div>
-                        </div>
                     </template>
                 </div>
             </template>
@@ -525,6 +378,19 @@
                     <button type="button"
                             data-mobile-attack-roll
                             @click="rollMenuOpen = false; openAttackModal(rollMenuKey)"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
+                        Roll <span x-text="rollMenuTitle"></span>
+                    </button>
+                </div>
+            </template>
+            {# Mobile parry: a touch-only "Roll Parry" row that opens the parry
+               modal, giving the View-rules-text row below somewhere to live
+               without jumping straight into the modal. #}
+            <template x-if="rollMenuHasMobileParry">
+                <div data-mobile-parry-menu>
+                    <button type="button"
+                            data-mobile-parry-roll
+                            @click="rollMenuOpen = false; openParryModal('parry')"
                             class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium">
                         Roll <span x-text="rollMenuTitle"></span>
                     </button>
