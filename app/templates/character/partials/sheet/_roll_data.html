@@ -4,6 +4,7 @@
     {% set adv_raises_max = namespace(val=0) %}
     {% for a in per_adventure %}{% if a.id == 'adventure_raises' %}{% set adv_raises_max.val = a.max %}{% endif %}{% endfor %}
     <script type="application/json" id="attack-probs">{{ attack_probs | tojson }}</script>
+    <script type="application/json" id="parry-probs">{{ parry_probs | tojson }}</script>
     <script type="application/json" id="damage-avgs">{{ damage_avgs | tojson }}</script>
     <script type="application/json" id="wound-check-probs">{{ wound_check_probs | tojson }}</script>
     <script type="application/json" id="duel-probs">{{ duel_probs | tojson }}</script>

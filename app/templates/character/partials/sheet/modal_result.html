@@ -143,6 +143,16 @@
                             </div>
                             {% include 'character/partials/copy_roll_image_button.html' %}
                         </div>
+
+                        {# Parry outcome vs the entered TN (only shown when a TN
+                           was entered in the parry modal). Reactive to baseTotal
+                           so post-roll spends (VP, Mirumoto points, conviction)
+                           flip the result live. #}
+                        <div x-show="parryResultText()" x-cloak
+                             data-testid="parry-result"
+                             class="font-bold mb-1"
+                             :class="parryResultSucceeded() ? 'text-success' : 'text-red-700'"
+                             x-text="parryResultText()"></div>
                         {# Only show the breakdown list when there are flat bonuses;
                            with no bonuses, the Total line above already says
                            everything (Total = sum of kept dice). #}

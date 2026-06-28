@@ -833,6 +833,26 @@
             //   'take_1_sw'      - PASSED: chose Take 1 Serious Wound
             //   'failure_applied' - FAILED: failure applied (sw_taken = wcSeriousWounds)
             wcResultChoice: '',
+            // Parry modal. Unlike attack/WC, the parry roll runs through the
+            // shared dice-roller result modal; this state only drives the
+            // pre-roll probability chart + the void/predeclared/variant
+            // pickers. parryTN starts null so the chart stays hidden until the
+            // player enters the attacker's roll result.
+            parryModalOpen: false,
+            parryKey: 'parry',
+            parryProbs: {},
+            parryTN: null,
+            // The TN the parry was actually rolled against (snapshotted from
+            // parryTN when the roll fires). Drives the succeeded/failed line
+            // in the result modal + copy-as-image footer; null means no TN
+            // was entered, so no outcome line is shown.
+            parryResultTN: null,
+            parryVoidSelected: 0,
+            parryPredeclared: false,
+            // Kitsune Warden swap: roll parry with the school ring not Air.
+            parryKitsuneSwap: false,
+            // Athletics-parry toggle (athletics_combat_everywhere schools).
+            parryUseAthletics: false,
             // Roll menu (void spending)
             rollMenuOpen: false,
             rollMenuKey: '',
@@ -895,6 +915,10 @@
             // rules text" rows so a tap user can read the description without
             // committing to a roll.
             rollMenuHasMobileAttack: false,
+            // On touch, parry shows a tiny menu (Roll Parry -> parry modal,
+            // plus the View-rules-text row) instead of jumping straight into
+            // the modal, so the rules text stays reachable without a hover.
+            rollMenuHasMobileParry: false,
             // HTML pulled from the trigger's .tooltip-content child when the
             // menu is opened on a touch device. When non-empty, the menu
             // renders a "View rules text" row at the bottom that opens the
@@ -1167,6 +1191,7 @@
                 const rulesHtml = isTouch ? this._readRulesText(el) : '';
                 this.rollMenuRulesHtml = rulesHtml;
                 this.rollMenuHasMobileAttack = false;
+                this.rollMenuHasMobileParry = false;
                 this.rollMenuHasPontificate = false;
 
                 // Athletics knack: show a ring picker instead of rolling the
@@ -1338,6 +1363,37 @@
                         return;
                     }
                     this.openAttackModal(key);
+                    return;
+                }
+
+                // Parry: open the dedicated parry modal (TN + probability
+                // chart + void / predeclared / Kitsune / Athletics controls)
+                // instead of the old void dropdown. On a touch device with
+                // rules text we first show a tiny menu so the player can read
+                // the rules without committing to the modal (mirrors attacks).
+                if (key === 'parry') {
+                    if (isTouch && rulesHtml) {
+                        const pos = this._computeRollMenuPos(el);
+                        this.rollMenuKey = key;
+                        this.rollMenuTitle = f.label;
+                        this.rollMenuPos = pos;
+                        this.rollMenuOptions = [];
+                        this.rollMenuHasStrike = false;
+                        this.rollMenuHasParry = false;
+                        this.rollMenuHasTogashiInit = false;
+                        this.rollMenuHasAthleticsPicker = false;
+                        this.rollMenuHasRingPicker = false;
+                        this.rollMenuHasAttackChoice = false;
+                        this.rollMenuHasMobileAttack = false;
+                        this.rollMenuHasMobileParry = true;
+                        this.rollMenuOwCapacity = 0;
+                        this.owHoverRow = null;
+                        this.athHoverRow = null;
+                        this.parryHoverRow = null;
+                        this.rollMenuOpen = true;
+                        return;
+                    }
+                    this.openParryModal('parry');
                     return;
                 }
 
@@ -1708,6 +1764,14 @@
                     // install it after clearing any stale index from a
                     // previously-cancelled modal.
                     this.openAttackModal(key, dieIndex);
+                    return;
+                }
+                // Parry actions open the parry modal (TN + probability chart);
+                // the dieIndex is stashed so the modal's roll spends that
+                // specific die. void/predeclared come from the modal's own
+                // controls, so any extraFlat/voidCount args are ignored here.
+                if (key === 'parry' || key === 'athletics:parry') {
+                    this.openParryModal(key, dieIndex);
                     return;
                 }
                 // For non-modal rolls the spend fires immediately inside
@@ -2454,7 +2518,7 @@
                     formulaText += ' (' + f.skill_name + ' skill: '
                                  + (f.skill_rank || 0) + ')';
                 }
-                return {
+                const payload = {
                     title: this.title || 'Roll',
                     formula: formulaText,
                     kept: kept,
@@ -2465,6 +2529,11 @@
                     total: this.baseTotal,
                     alternatives: this._alternativesForPayload(f),
                 };
+                // Parry rolls made against an entered TN carry their
+                // succeeded/failed-vs-TN outcome into the card footer.
+                const parryFooter = this.parryResultText();
+                if (parryFooter) payload.footer = parryFooter;
+                return payload;
             },
 
             // Pull formula.alternatives (e.g. "vs Wasp", "for servants
@@ -4052,6 +4121,139 @@
                 this.openAttackModal('knack:iaijutsu:attack', null);
                 this.atkForceAttackerPhase = 0;
                 this.atkKakitaInterrupt = true;
+            },
+
+            // --- Parry modal ---------------------------------------------- //
+
+            // Open the parry probability modal. Resets every picker so a
+            // previous parry's selections don't leak. Loads the precomputed
+            // parry_probs slice embedded in the page.
+            //
+            // preSpentDieIndex is non-null when opened from the per-die action
+            // menu; it's stashed (always overwritten, mirroring
+            // openAttackModal) so the eventual roll spends *that* die and a
+            // cancelled modal's index can't leak into the next parry. Passing
+            // the 'athletics:parry' key pre-selects the athletics variant.
+            openParryModal(key = 'parry', preSpentDieIndex = null) {
+                if (!this.formulas[key]) return;
+                this._preSpentDieIndex = preSpentDieIndex;
+                try {
+                    this.parryProbs = JSON.parse(
+                        document.getElementById('parry-probs')?.textContent || '{}');
+                } catch (e) { this.parryProbs = {}; }
+                this.parryKey = key;
+                this.parryTN = null;
+                this.parryVoidSelected = 0;
+                this.parryPredeclared = false;
+                this.parryKitsuneSwap = false;
+                this.parryUseAthletics = (key === 'athletics:parry');
+                this.parryModalOpen = true;
+            },
+
+            // Kitsune Warden swap is offered only when it's an upgrade
+            // (school ring keeps more dice than Air) - same gate the old
+            // parry dropdown used.
+            parryKitsuneSwapAvailable() {
+                const f = this.formulas['parry'];
+                return !!(f?.kitsune_swap && (f.kitsune_swap.kept || 0) > (f.kept || 0));
+            },
+
+            // Athletics parry is offered only for schools that treat
+            // Athletics as a standard combat skill everywhere.
+            parryAthleticsAvailable() {
+                return !!this.formulas['athletics:parry']
+                    && !!this.schoolAbilities.athletics_combat_everywhere;
+            },
+
+            // The formula key the modal currently rolls/charts.
+            parryCurrentKey() {
+                return this.parryUseAthletics ? 'athletics:parry' : 'parry';
+            },
+
+            // The probability slice for the current key, routed through the
+            // Kitsune Warden swap variant when that checkbox is active.
+            parryActiveProbs() {
+                const entry = this.parryProbs[this.parryCurrentKey()];
+                if (!entry) return null;
+                if (this.parryKitsuneSwap && entry.kitsune_swap && !this.parryUseAthletics) {
+                    return entry.kitsune_swap;
+                }
+                return entry;
+            },
+
+            // Max void selectable: the chart's cap, clamped to what the
+            // character can actually afford right now.
+            parryVoidCap() {
+                const cap = this.parryActiveProbs()?.void_cap ?? (this.voidSpendConfig.cap || 0);
+                return Math.min(this.computeVoidOptions().length, cap);
+            },
+
+            parryTNValid() {
+                const tn = parseInt(this.parryTN, 10);
+                return Number.isFinite(tn) && tn > 0;
+            },
+
+            // Success probability for a given void spend: P(roll >= TN) once
+            // the formula flat, the predeclared +5, and any per-VP combat
+            // flat bonus (Mirumoto 5th Dan) are folded into the target.
+            parryHitChance(voidCount) {
+                const probs = this.parryActiveProbs();
+                if (!probs || !probs.probs || !this.parryTNValid()) return null;
+                const key = probs.void_keys?.[String(voidCount)];
+                const arr = key ? probs.probs[key] : null;
+                if (!arr) return null;
+                const predeclared = this.parryPredeclared ? 5 : 0;
+                const vpFlat = voidCount * (this.voidSpendConfig.combat_vp_flat_bonus || 0);
+                const flat = (probs.flat || 0) + predeclared + vpFlat;
+                const tn = parseInt(this.parryTN, 10);
+                const target = window.L7RRollMath.parryEffectiveTarget(tn, flat);
+                return target < arr.length ? arr[target] : 0;
+            },
+
+            // Commit the parry. Delegates to the existing roll executors so
+            // all post-parry behaviour (Shinjo decrement, Mirumoto temp VP,
+            // Hiruma banking, the Shinjo phase picker, etc.) runs unchanged.
+            parryRoll() {
+                const key = this.parryCurrentKey();
+                const v = this.parryVoidSelected;
+                const opt = v > 0
+                    ? this.computeVoidOptions().find(o => o.count === v) : null;
+                const useSwap = this.parryKitsuneSwap && !this.parryUseAthletics
+                    && !!this.formulas[key]?.kitsune_swap;
+                // Snapshot the entered TN so the result modal + card can show
+                // the succeeded/failed-vs-TN outcome. Null when none entered.
+                this.parryResultTN = this.parryTNValid()
+                    ? parseInt(this.parryTN, 10) : null;
+                this.parryModalOpen = false;
+                if (this.parryPredeclared) {
+                    this.executeRollWithExtraFlat(key, v, opt, 5, 'predeclared parry', useSwap);
+                } else {
+                    this.executeRoll(key, v, opt, 0, useSwap);
+                }
+            },
+
+            // True when the current result is a parry rolled against an
+            // entered TN that met or beat it. Reads baseTotal so post-roll
+            // spends flip it live.
+            parryResultSucceeded() {
+                return this.parryResultTN != null
+                    && (this.baseTotal || 0) >= this.parryResultTN;
+            },
+
+            // Outcome line for a parry rolled against an entered TN, shown in
+            // the result modal and the copy-as-image footer. Empty string
+            // (so x-show hides it) when no TN was entered or the current roll
+            // isn't a parry - currentRollKey is reset by every roll, so a
+            // stale TN can't leak onto a later non-parry result.
+            parryResultText() {
+                if (this.parryResultTN == null) return '';
+                if (this.currentRollKey !== 'parry'
+                        && this.currentRollKey !== 'athletics:parry') return '';
+                const tn = this.parryResultTN;
+                const total = this.baseTotal || 0;
+                return total >= tn
+                    ? `vs TN ${tn} - Parry succeeded`
+                    : `vs TN ${tn} - Parry failed by ${tn - total}`;
             },
 
             // --- Kakita 5th Dan: Phase-0 contested iaijutsu modal ---

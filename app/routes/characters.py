@@ -1089,6 +1089,99 @@ async def money_delete(
     })
 
 
+@router.post("/{char_id}/money/edit")
+async def money_edit(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Edit a user-added ledger entry's label and amount in place. The
+    entry's id and kind (income/expense) are preserved. The locked
+    Spring equinox disbursal isn't stored in the ledger and cannot be
+    edited; a request to edit it 400s. Edit permission required.
+
+    Body: ``{"entry_id": str, "label": str, "amount": number}``.
+    Returns the updated state dict (same shape as
+    ``compute_money_state``) so the client can refresh inline."""
+    from app.services.status import (
+        SPRING_DISBURSAL_ID,
+        compute_effective_status,
+        compute_money_state,
+        round_to_tenth as _round_to_tenth,
+    )
+
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(
+        User.discord_id == character.owner_discord_id
+    ).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"], character.owner_discord_id, all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Invalid payload"}, status_code=400)
+
+    entry_id = body.get("entry_id")
+    if not isinstance(entry_id, str) or not entry_id:
+        return JSONResponse({"error": "entry_id is required"}, status_code=400)
+    if entry_id == SPRING_DISBURSAL_ID:
+        return JSONResponse(
+            {"error": "The Spring equinox disbursal cannot be edited"},
+            status_code=400,
+        )
+
+    label_raw = body.get("label")
+    label = label_raw.strip() if isinstance(label_raw, str) else ""
+    if not label:
+        return JSONResponse({"error": "label is required"}, status_code=400)
+    if len(label) > 200:
+        label = label[:200]
+    raw_amount = body.get("amount")
+    if isinstance(raw_amount, bool) or not isinstance(raw_amount, (int, float)):
+        return JSONResponse({"error": "amount must be a number"}, status_code=400)
+    amount = _round_to_tenth(raw_amount)
+    if amount <= 0:
+        return JSONResponse({"error": "amount must be positive"}, status_code=400)
+
+    # Rebuild the ledger with the matched entry's label + amount updated;
+    # id and kind are preserved. Fresh dicts so SQLAlchemy marks the JSON
+    # column dirty.
+    found = False
+    new_ledger = []
+    for e in (character.money_ledger or []):
+        ne = dict(e)
+        if ne.get("id") == entry_id:
+            found = True
+            ne["label"] = label
+            ne["amount"] = amount
+        new_ledger.append(ne)
+    if not found:
+        return JSONResponse({"error": "Entry not found"}, status_code=404)
+    character.money_ledger = new_ledger
+    db.commit()
+
+    char_dict = character.to_dict()
+    effective = compute_effective_status(char_dict)
+    return JSONResponse({
+        "ok": True,
+        "money": compute_money_state(effective.stipend, character.money_ledger),
+    })
+
+
 def _roll_attribution(
     user: Optional[dict], owner_discord_id: Optional[str]
 ) -> Optional[str]:

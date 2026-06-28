@@ -1,7 +1,7 @@
 """Page routes — serve full HTML pages via Jinja2 templates."""
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -36,7 +36,9 @@ from app.services.rolls import compute_skill_roll
 from app.services.status import (
     compute_effective_status,
     compute_money_state,
+    new_ledger_entry,
     public_money_state,
+    round_to_tenth,
 )
 from app.services.versions import compute_version_diff
 from app.services.xp import (
@@ -263,6 +265,136 @@ def group_summary(request: Request, group_id: int, db: Session = Depends(get_db)
             "player_names": player_names,
         },
     )
+
+
+@router.get("/groups/{group_id}/money", response_class=HTMLResponse)
+def group_money(request: Request, group_id: int, db: Session = Depends(get_db)):
+    """GM money-awards page for one gaming group. Admin-only.
+
+    Shows each visible (non-hidden) character's full money ledger
+    (the same ``compute_money_state`` the player sees on their sheet)
+    and lets the GM make an income award to one character inline or
+    the same award to everyone in the group at once - all driven by
+    AJAX against ``POST /groups/{id}/money/award``, no page reload.
+    """
+    deny = _require_admin(request)
+    if deny is not None:
+        return deny
+    group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
+    if not group:
+        return HTMLResponse("Group not found", status_code=404)
+
+    chars = sorted(
+        [c for c in db.query(Character)
+         .filter(Character.gaming_group_id == group_id).all()
+         if not c.is_hidden],
+        key=lambda c: (c.name or "").lower(),
+    )
+    owner_ids = {c.owner_discord_id for c in chars if c.owner_discord_id}
+    owners = (
+        db.query(UserModel).filter(UserModel.discord_id.in_(owner_ids)).all()
+        if owner_ids else []
+    )
+    owner_names = {u.discord_id: u.display_name or u.discord_name for u in owners}
+
+    cards = []
+    for c in chars:
+        effective = compute_effective_status(c.to_dict())
+        cards.append({
+            "id": c.id,
+            "name": c.name,
+            "owner_display_name": owner_names.get(c.owner_discord_id, c.player_name),
+            "money": compute_money_state(effective.stipend, c.money_ledger),
+        })
+
+    return _templates().TemplateResponse(
+        request=request,
+        name="group_money.html",
+        context={"group": group, "cards": cards},
+    )
+
+
+@router.post("/groups/{group_id}/money/award")
+async def group_money_award(
+    request: Request, group_id: int, db: Session = Depends(get_db)
+):
+    """Award koku to characters in a gaming group. Admin-only.
+
+    Body: ``{"char_id": int|null, "label": str, "amount": number}``.
+    With ``char_id`` set, the award goes to that one character (it must
+    belong to the group and be visible); with ``char_id`` omitted or
+    null, the same award goes to every visible character in the group.
+    Each award appends an income entry to that character's money ledger.
+
+    Returns ``{"ok": true, "awards": {"<char_id>": <money_state>, ...}}``
+    so the page can refresh each affected ledger inline.
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not is_admin(user["discord_id"]):
+        return JSONResponse({"error": "Admin access required"}, status_code=403)
+
+    group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
+    if not group:
+        return JSONResponse({"error": "Group not found"}, status_code=404)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Invalid payload"}, status_code=400)
+
+    label_raw = body.get("label")
+    label = label_raw.strip() if isinstance(label_raw, str) else ""
+    if not label:
+        return JSONResponse({"error": "label is required"}, status_code=400)
+    if len(label) > 200:
+        label = label[:200]
+    # Mirror the per-character money endpoint's amount handling: reject
+    # bools (which are ints in Python) and non-numbers, round half-up to
+    # the tenth-koku, and require a positive value (awards add money).
+    raw_amount = body.get("amount")
+    if isinstance(raw_amount, bool) or not isinstance(raw_amount, (int, float)):
+        return JSONResponse({"error": "amount must be a number"}, status_code=400)
+    amount = round_to_tenth(raw_amount)
+    if amount <= 0:
+        return JSONResponse({"error": "amount must be positive"}, status_code=400)
+
+    group_chars = [
+        c for c in db.query(Character)
+        .filter(Character.gaming_group_id == group_id).all()
+        if not c.is_hidden
+    ]
+    char_id = body.get("char_id")
+    if char_id is not None:
+        if isinstance(char_id, bool) or not isinstance(char_id, int):
+            return JSONResponse(
+                {"error": "char_id must be an integer"}, status_code=400
+            )
+        targets = [c for c in group_chars if c.id == char_id]
+        if not targets:
+            return JSONResponse(
+                {"error": "Character not in this group"}, status_code=404
+            )
+    else:
+        targets = group_chars
+
+    for c in targets:
+        # Fresh list of fresh dicts so SQLAlchemy marks the JSON column
+        # dirty (in-place mutation isn't detected).
+        new_ledger = [dict(e) for e in (c.money_ledger or [])]
+        new_ledger.append(new_ledger_entry("income", label, amount))
+        c.money_ledger = new_ledger
+    db.commit()
+
+    awards = {}
+    for c in targets:
+        effective = compute_effective_status(c.to_dict())
+        awards[str(c.id)] = compute_money_state(effective.stipend, c.money_ledger)
+
+    return JSONResponse({"ok": True, "awards": awards})
 
 
 @router.get("/characters/{char_id}", response_class=HTMLResponse)
@@ -969,6 +1101,59 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                         )
             ap["kitsune_swap"] = swap_entry
 
+    # Compute parry probability slices for the parry-type formulas (the parry
+    # skill and, where available, Athletics-parry). A parry succeeds when the
+    # roll meets or beats the attacker's TN, so these are the same
+    # "P(roll >= target)" slices the attack chart uses - the parry modal looks
+    # up probs[effective_target] for whatever TN the player enters. Reroll-10s
+    # follows the same impairment rule as attacks. When the parry formula
+    # carries a Kitsune Warden swap, a parallel slice is attached so the modal
+    # checkbox can switch baselines.
+    parry_probs = {}
+    for key in ("parry", "athletics:parry"):
+        formula = roll_formulas.get(key)
+        if not formula:
+            continue
+        base_r = formula["rolled"]
+        base_k = formula["kept"]
+        flat = formula.get("flat", 0)
+        pp = {"flat": flat, "void_cap": void_spend_cap, "probs": {}, "void_keys": {}}
+        for v in range(void_spend_cap + 1):
+            r, k = base_r + v, base_k + v
+            if r > 10: k += r - 10; r = 10
+            if k > 10: k = 10
+            rk = f"{r},{k}"
+            pp["void_keys"][str(v)] = rk
+            if rk not in pp["probs"]:
+                pp["probs"][rk] = [
+                    round(_prob_table[reroll_for_attack][r, k, x], 4)
+                    for x in range(151)
+                ]
+        parry_probs[key] = pp
+
+        p_swap = formula.get("kitsune_swap")
+        if p_swap:
+            swap_r0 = p_swap["rolled"]
+            swap_k0 = p_swap["kept"]
+            swap_entry = {
+                "flat": flat,
+                "void_cap": void_spend_cap,
+                "probs": {},
+                "void_keys": {},
+            }
+            for v in range(void_spend_cap + 1):
+                r, k = swap_r0 + v, swap_k0 + v
+                if r > 10: k += r - 10; r = 10
+                if k > 10: k = 10
+                rk = f"{r},{k}"
+                swap_entry["void_keys"][str(v)] = rk
+                if rk not in swap_entry["probs"]:
+                    swap_entry["probs"][rk] = [
+                        round(_prob_table[reroll_for_attack][r, k, x], 4)
+                        for x in range(151)
+                    ]
+            pp["kitsune_swap"] = swap_entry
+
     # Damage average lookup table: avg of NkM with reroll-10s for reasonable combos
     damage_avgs = {}
     for r in range(1, 16):
@@ -1087,6 +1272,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "void_spend_config": void_spend_config,
             "wound_check_probs": wc_probs,
             "attack_probs": attack_probs,
+            "parry_probs": parry_probs,
             "damage_avgs": damage_avgs,
             "duel_probs": duel_probs,
             "has_temp_void": character.school in SCHOOLS_WITH_TEMP_VOID,

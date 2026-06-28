@@ -640,16 +640,12 @@ def test_predeclared_parry_with_bonus(page, live_server_url):
     """Predeclared parry rolls with +5 bonus shown in result."""
     _create_char(page, live_server_url, "PreParry", "akodo_bushi")
     page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_timeout(300)
-    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
-    if menu.is_visible():
-        # Click predeclared parry option
-        predeclare_btn = menu.locator('button:has-text("Predeclared Parry")')
-        if predeclare_btn.count() > 0:
-            predeclare_btn.first.click()
-            _wait_roll_done(page)
-            result = page.locator('[data-modal="dice-roller"]').text_content()
-            assert "predeclared" in result.lower() or "+5" in result
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="parry-predeclared"]').check()
+    page.locator('[data-action="roll-parry-go"]').click()
+    _wait_roll_done(page)
+    result = page.locator('[data-modal="dice-roller"]').text_content()
+    assert "predeclared" in result.lower() or "+5" in result
 
 
 # ---------------------------------------------------------------------------

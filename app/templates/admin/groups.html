@@ -37,6 +37,10 @@
                         </button>
                     </form>
                     <span class="text-sm text-ink/60 whitespace-nowrap">{{ counts[g.id] }} character{{ '' if counts[g.id] == 1 else 's' }}</span>
+                    <a href="/groups/{{ g.id }}/money"
+                       class="btn-secondary px-3 py-2 rounded text-sm font-medium whitespace-nowrap transition-colors">
+                        Money
+                    </a>
                     <form method="POST" action="/admin/groups/{{ g.id }}/delete"
                           onsubmit="return confirm('Delete &quot;{{ g.name }}&quot;? Its characters will become unassigned.');">
                         <button type="submit"

@@ -458,6 +458,217 @@ class TestGroupSummaryPage:
         assert "PublicChar" in resp.text
 
 
+class TestGroupMoneyAwards:
+    """``GET /groups/{id}/money`` (GM money page) and
+    ``POST /groups/{id}/money/award`` (individual + mass awards)."""
+
+    NONADMIN = {"X-Test-User": "test_user_1:NotGm"}
+
+    def _make_group_with(self, client, *characters, group_name="Money Group"):
+        from app.models import GamingGroup
+        session = client._test_session_factory()
+        group = GamingGroup(name=group_name)
+        session.add(group); session.commit()
+        ids = []
+        for kwargs in characters:
+            ids.append(_seed_character(
+                client, gaming_group_id=group.id, is_published=True, **kwargs))
+        return group.id, ids
+
+    def _ledger(self, client, char_id):
+        return query_db(client).filter(Character.id == char_id).first().money_ledger or []
+
+    # ---- page ----
+
+    def test_page_requires_admin(self, client):
+        gid, _ = self._make_group_with(client, {"name": "PageGate"})
+        resp = client.get(f"/groups/{gid}/money", headers=self.NONADMIN)
+        assert resp.status_code == 403
+
+    def test_page_404_when_group_missing(self, client):
+        resp = client.get("/groups/99999/money")
+        assert resp.status_code == 404
+
+    def test_page_lists_characters_and_history(self, client):
+        gid, _ = self._make_group_with(
+            client,
+            {"name": "Hotaru", "money_ledger": [
+                {"id": "x", "kind": "income", "label": "Bounty payout", "amount": 12},
+            ]},
+        )
+        resp = client.get(f"/groups/{gid}/money")
+        assert resp.status_code == 200
+        assert "Hotaru" in resp.text
+        assert "Bounty payout" in resp.text  # full history embedded for Alpine
+
+    def test_page_excludes_hidden_characters(self, client):
+        gid, _ = self._make_group_with(
+            client,
+            {"name": "VisiblePC"},
+            {"name": "HiddenPC", "is_hidden": True},
+        )
+        resp = client.get(f"/groups/{gid}/money")
+        assert resp.status_code == 200
+        assert "VisiblePC" in resp.text
+        assert "HiddenPC" not in resp.text
+
+    def test_page_empty_group_renders_empty_state(self, client):
+        gid, _ = self._make_group_with(client, {"name": "OnlyHidden", "is_hidden": True})
+        resp = client.get(f"/groups/{gid}/money")
+        assert resp.status_code == 200
+        assert "No visible characters" in resp.text
+
+    # ---- award endpoint: auth ----
+
+    def test_award_anonymous_401(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        client.headers.pop("X-Test-User", None)
+        resp = client.post(f"/groups/{gid}/money/award", json={"label": "x", "amount": 5})
+        assert resp.status_code == 401
+
+    def test_award_non_admin_403(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"label": "Stipend", "amount": 5}, headers=self.NONADMIN,
+        )
+        assert resp.status_code == 403
+
+    def test_award_group_missing_404(self, client):
+        resp = client.post("/groups/99999/money/award", json={"label": "x", "amount": 5})
+        assert resp.status_code == 404
+
+    # ---- award endpoint: individual ----
+
+    def test_individual_award_adds_income_entry(self, client):
+        gid, ids = self._make_group_with(client, {"name": "Solo"}, {"name": "Other"})
+        target = ids[0]
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"char_id": target, "label": "Bounty", "amount": 12.5},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+        # Only the targeted character is in the awards map.
+        assert set(data["awards"].keys()) == {str(target)}
+        entries = data["awards"][str(target)]["entries"]
+        assert any(e["label"] == "Bounty" and e["amount"] == 12.5
+                   and e["kind"] == "income" for e in entries)
+        # Persisted; the other character is untouched.
+        assert any(e["label"] == "Bounty" for e in self._ledger(client, target))
+        assert self._ledger(client, ids[1]) == []
+
+    def test_individual_award_rounds_half_up_to_tenth(self, client):
+        gid, ids = self._make_group_with(client, {"name": "Round"})
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"char_id": ids[0], "label": "Stipend", "amount": 1.65},
+        )
+        assert resp.status_code == 200
+        entry = [e for e in resp.json()["awards"][str(ids[0])]["entries"]
+                 if e["label"] == "Stipend"][0]
+        assert entry["amount"] == 1.7
+
+    def test_individual_award_char_not_in_group_404(self, client):
+        gid, _ = self._make_group_with(client, {"name": "InGroup"})
+        # A character that exists but belongs to no/another group.
+        other = _seed_character(client, name="Outsider", is_published=True)
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"char_id": other, "label": "x", "amount": 5},
+        )
+        assert resp.status_code == 404
+
+    def test_individual_award_hidden_char_404(self, client):
+        gid, ids = self._make_group_with(
+            client, {"name": "Hid", "is_hidden": True})
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"char_id": ids[0], "label": "x", "amount": 5},
+        )
+        assert resp.status_code == 404
+
+    def test_award_char_id_must_be_int(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"char_id": "5", "label": "x", "amount": 5},
+        )
+        assert resp.status_code == 400
+
+    # ---- award endpoint: mass ----
+
+    def test_mass_award_hits_all_visible_excludes_hidden(self, client):
+        gid, ids = self._make_group_with(
+            client,
+            {"name": "PC1"},
+            {"name": "PC2"},
+            {"name": "HiddenPC", "is_hidden": True},
+        )
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"label": "Winter stipend", "amount": 10},
+        )
+        assert resp.status_code == 200
+        awards = resp.json()["awards"]
+        # Both visible PCs, not the hidden one.
+        assert set(awards.keys()) == {str(ids[0]), str(ids[1])}
+        for cid in (ids[0], ids[1]):
+            assert any(e["label"] == "Winter stipend" and e["amount"] == 10
+                       for e in self._ledger(client, cid))
+        assert self._ledger(client, ids[2]) == []
+
+    # ---- award endpoint: validation ----
+
+    def test_award_requires_label(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(f"/groups/{gid}/money/award", json={"label": "  ", "amount": 5})
+        assert resp.status_code == 400
+
+    def test_award_amount_must_be_number(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(
+            f"/groups/{gid}/money/award", json={"label": "x", "amount": "lots"})
+        assert resp.status_code == 400
+
+    def test_award_amount_bool_rejected(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(
+            f"/groups/{gid}/money/award", json={"label": "x", "amount": True})
+        assert resp.status_code == 400
+
+    def test_award_amount_must_be_positive(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(
+            f"/groups/{gid}/money/award", json={"label": "x", "amount": 0})
+        assert resp.status_code == 400
+
+    def test_award_long_label_truncated(self, client):
+        gid, ids = self._make_group_with(client, {"name": "A"})
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"char_id": ids[0], "label": "z" * 300, "amount": 5},
+        )
+        assert resp.status_code == 200
+        entry = resp.json()["awards"][str(ids[0])]["entries"][-1]
+        assert len(entry["label"]) == 200
+
+    def test_award_invalid_json_400(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            content=b"not json",
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code == 400
+
+    def test_award_non_dict_payload_400(self, client):
+        gid, _ = self._make_group_with(client, {"name": "A"})
+        resp = client.post(f"/groups/{gid}/money/award", json=[1, 2, 3])
+        assert resp.status_code == 400
+
+
 class TestCreateCharacter:
     def test_create_redirects_to_edit(self, client):
         resp = client.post("/characters", follow_redirects=False)
@@ -5375,8 +5586,8 @@ class TestAthleticsOnlyActionDie:
 
 class TestActionDieActionMenu:
     """Clicking an action die surfaces a menu with every action the die
-    can pay for. Parry and feint options carry a void-spend flyout; attack
-    variants open the attack modal (void is chosen inside). Athletics-
+    can pay for. Feint options carry a void-spend flyout; parry and attack
+    variants open their dedicated modals (void is chosen inside). Athletics-
     only dice (Togashi special) are limited to athletics actions plus
     the manual mark-spent/unspent item.
 
@@ -5419,10 +5630,11 @@ class TestActionDieActionMenu:
     def test_menu_lists_core_actions_for_regular_die(self, client):
         cid = _seed_character(client, name="ADMenuRegular")
         block = self._action_menu_block(client.get(f"/characters/{cid}").text)
-        # Every regular die offers at least these three actions.
+        # Every regular die offers at least attack + parry. Predeclared is
+        # now a checkbox inside the parry modal, not a separate menu row.
         assert 'data-action-die-menu-item="attack"' in block
         assert 'data-action-die-menu-item="parry"' in block
-        assert 'data-action-die-menu-item="predeclared-parry"' in block
+        assert 'data-action-die-menu-item="predeclared-parry"' not in block
 
     def test_menu_includes_school_specific_actions_when_formulas_exist(self, client):
         """Akodo's school knacks include double_attack, feint, iaijutsu.
@@ -5461,7 +5673,8 @@ class TestActionDieActionMenu:
         block = self._action_menu_block(client.get(f"/characters/{cid}").text)
         assert 'data-action-die-menu-item="athletics-attack"' in block
         assert 'data-action-die-menu-item="athletics-parry"' in block
-        assert 'data-action-die-menu-item="athletics-predeclared-parry"' in block
+        # Athletics predeclared is folded into the parry modal's checkbox.
+        assert 'data-action-die-menu-item="athletics-predeclared-parry"' not in block
 
     def test_athletics_only_die_gate_excludes_non_athletics_items(self, client):
         """Each action row is gated by ``!die.athletics_only`` unless the
@@ -5482,12 +5695,15 @@ class TestActionDieActionMenu:
         wrapper_slice = block[wrapper_start:atk_start]
         assert "!die.athletics_only" in wrapper_slice
 
-    def test_parry_option_offers_void_submenu(self, client):
-        """Parry and predeclared-parry carry void flyouts."""
+    def test_parry_option_opens_modal_no_void_submenu(self, client):
+        """The per-die parry row now opens the parry modal (TN + chart +
+        void/predeclared controls) via rollForActionDie, so it carries no
+        inline void flyout of its own."""
         cid = _seed_character(client, name="ADMenuParryVoid")
         block = self._action_menu_block(client.get(f"/characters/{cid}").text)
-        assert 'data-action-die-void-submenu="parry"' in block
-        assert 'data-action-die-void-submenu="predeclared-parry"' in block
+        assert "rollForActionDie('parry', i)" in block
+        assert 'data-action-die-void-submenu="parry"' not in block
+        assert 'data-action-die-void-submenu="predeclared-parry"' not in block
 
 
 class TestResetAdventureClearsActionDice:
@@ -6599,6 +6815,85 @@ class TestKitsuneWardenSwapProbs:
         assert "kitsune_swap" not in wp
 
 
+class TestParryProbs:
+    """The parry modal's probability chart is driven by ``parry_probs``,
+    computed in routes/pages.py and embedded as the ``parry-probs`` JSON
+    script. A parry succeeds when the roll meets the attacker's TN, so the
+    slices are P(roll >= target) arrays - same shape as the attack slices."""
+
+    def _read_json_script(self, client, cid: int, dom_id: str):
+        import json, re
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        m = re.search(rf'id="{dom_id}">(.*?)</script>', resp.text, re.DOTALL)
+        assert m is not None, f"Could not find script id={dom_id} on sheet"
+        return json.loads(m.group(1))
+
+    def test_parry_probs_has_parry_slice(self, client):
+        cid = _seed_character(
+            client, name="ParryProbs", school="akodo_bushi",
+            school_ring_choice="Water", ring_water=3, ring_air=2,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            parry=2,
+        )
+        pp = self._read_json_script(client, cid, "parry-probs")
+        assert "parry" in pp
+        entry = pp["parry"]
+        # Structural fields mirror the attack slices.
+        assert "flat" in entry and "void_cap" in entry
+        assert "probs" in entry and "void_keys" in entry
+        # Parry 2 + Air 2 = 4 rolled, 2 kept at 0 void.
+        assert entry["void_keys"]["0"] == "4,2"
+        rk = entry["void_keys"]["0"]
+        arr = entry["probs"][rk]
+        # P(roll >= x): full-length survival array, starts at 1.0, non-increasing.
+        assert len(arr) == 151
+        assert arr[0] == 1.0
+        assert all(0.0 <= p <= 1.0 for p in arr)
+        assert all(a >= b for a, b in zip(arr, arr[1:]))
+
+    def test_parry_probs_void_keys_scale_with_void(self, client):
+        cid = _seed_character(
+            client, name="ParryVoid", school="akodo_bushi",
+            school_ring_choice="Water", ring_water=3, ring_air=2, ring_void=3,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            parry=2,
+        )
+        pp = self._read_json_script(client, cid, "parry-probs")
+        entry = pp["parry"]
+        # One extra rolled+kept die per void point spent.
+        assert entry["void_keys"]["0"] == "4,2"
+        assert entry["void_keys"]["1"] == "5,3"
+
+    def test_parry_probs_includes_kitsune_swap_for_kitsune_warden(self, client):
+        cid = _seed_character(
+            client, name="KParryProbs", school="kitsune_warden",
+            school_ring_choice="Water",
+            ring_water=4, ring_air=2, ring_fire=2, ring_earth=2, ring_void=2,
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+            attack=2, parry=2,
+        )
+        pp = self._read_json_script(client, cid, "parry-probs")
+        assert "kitsune_swap" in pp["parry"], \
+            f"Expected kitsune_swap on parry_probs[parry]; keys: {list(pp['parry'].keys())}"
+        swap = pp["parry"]["kitsune_swap"]
+        assert "void_keys" in swap and "probs" in swap
+        # Default parry: rank 2 + Air 2 = 4 rolled, 2 kept.
+        # Swap to Water 4: rank 2 + Water 4 = 6 rolled, 4 kept.
+        assert pp["parry"]["void_keys"]["0"] == "4,2"
+        assert swap["void_keys"]["0"] == "6,4"
+
+    def test_non_kitsune_parry_probs_has_no_kitsune_swap(self, client):
+        cid = _seed_character(
+            client, name="AkodoParryNoSwap", school="akodo_bushi",
+            school_ring_choice="Water", ring_water=3,
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            attack=2, parry=2,
+        )
+        pp = self._read_json_script(client, cid, "parry-probs")
+        assert "kitsune_swap" not in pp.get("parry", {})
+
+
 class TestRollImageEndpoint:
     """``POST /characters/{id}/roll-image`` renders the roll-result
     "copy as image" PNG card."""
@@ -7039,6 +7334,184 @@ class TestMoneyDeleteEndpoint:
         resp = client.post(
             f"/characters/{cid}/money/delete", json=["x"]
         )
+        assert resp.status_code == 400
+
+
+class TestMoneyEditEndpoint:
+    """``POST /characters/{id}/money/edit`` updates a user-added entry's
+    label and amount in place, preserving its id and kind. The locked
+    Spring equinox disbursal cannot be edited."""
+
+    def _seed_entry(self, client, cid, kind="income", label="Sold a horse", amount=10):
+        client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": kind, "label": label, "amount": amount},
+        )
+        char = query_db(client).filter(Character.id == cid).first()
+        return char.money_ledger[0]["id"]
+
+    def test_edits_label_and_amount_preserving_id_and_kind(self, client):
+        cid = _seed_character(client, name="MoneyEdit",
+                              owner_discord_id="183026066498125825")
+        entry_id = self._seed_entry(client, cid)
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": entry_id, "label": "Bounty (corrected)", "amount": 25},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        e = char.money_ledger[0]
+        assert e["id"] == entry_id  # preserved
+        assert e["kind"] == "income"  # preserved
+        assert e["label"] == "Bounty (corrected)"
+        assert e["amount"] == 25
+        # Returned state reflects the edit.
+        edited = [x for x in resp.json()["money"]["entries"] if x["id"] == entry_id][0]
+        assert edited["label"] == "Bounty (corrected)"
+        assert edited["amount"] == 25
+
+    def test_preserves_expense_kind(self, client):
+        cid = _seed_character(client, name="MoneyEditExp",
+                              owner_discord_id="183026066498125825")
+        entry_id = self._seed_entry(client, cid, kind="expense", label="Inn", amount=5)
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": entry_id, "label": "Inn (two nights)", "amount": 8},
+        )
+        assert resp.status_code == 200
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.money_ledger[0]["kind"] == "expense"
+
+    def test_rounds_half_up_to_tenth(self, client):
+        cid = _seed_character(client, name="MoneyEditRound",
+                              owner_discord_id="183026066498125825")
+        entry_id = self._seed_entry(client, cid)
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": entry_id, "label": "x", "amount": 1.65},
+        )
+        assert resp.status_code == 200
+        assert query_db(client).filter(Character.id == cid).first().money_ledger[0]["amount"] == 1.7
+
+    def test_truncates_long_label(self, client):
+        cid = _seed_character(client, name="MoneyEditLong",
+                              owner_discord_id="183026066498125825")
+        entry_id = self._seed_entry(client, cid)
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": entry_id, "label": "z" * 300, "amount": 5},
+        )
+        assert resp.status_code == 200
+        assert len(query_db(client).filter(Character.id == cid).first().money_ledger[0]["label"]) == 200
+
+    def test_refuses_to_edit_locked_disbursal(self, client):
+        from app.services.status import SPRING_DISBURSAL_ID
+        cid = _seed_character(client, name="MoneyEditLocked",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": SPRING_DISBURSAL_ID, "label": "x", "amount": 5},
+        )
+        assert resp.status_code == 400
+        assert "cannot be edited" in resp.json()["error"]
+
+    def test_404_when_entry_not_found(self, client):
+        cid = _seed_character(client, name="MoneyEditMissing",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": "not-real", "label": "x", "amount": 5},
+        )
+        assert resp.status_code == 404
+
+    def test_400_when_entry_id_missing(self, client):
+        cid = _seed_character(client, name="MoneyEditNoId",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/edit", json={"label": "x", "amount": 5})
+        assert resp.status_code == 400
+
+    def test_400_when_label_blank(self, client):
+        cid = _seed_character(client, name="MoneyEditBlank",
+                              owner_discord_id="183026066498125825")
+        entry_id = self._seed_entry(client, cid)
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": entry_id, "label": "  ", "amount": 5},
+        )
+        assert resp.status_code == 400
+
+    def test_400_when_amount_not_number(self, client):
+        cid = _seed_character(client, name="MoneyEditNaN",
+                              owner_discord_id="183026066498125825")
+        entry_id = self._seed_entry(client, cid)
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": entry_id, "label": "x", "amount": "lots"},
+        )
+        assert resp.status_code == 400
+
+    def test_400_when_amount_bool(self, client):
+        cid = _seed_character(client, name="MoneyEditBool",
+                              owner_discord_id="183026066498125825")
+        entry_id = self._seed_entry(client, cid)
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": entry_id, "label": "x", "amount": True},
+        )
+        assert resp.status_code == 400
+
+    def test_400_when_amount_not_positive(self, client):
+        cid = _seed_character(client, name="MoneyEditZero",
+                              owner_discord_id="183026066498125825")
+        entry_id = self._seed_entry(client, cid)
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": entry_id, "label": "x", "amount": 0},
+        )
+        assert resp.status_code == 400
+
+    def test_401_when_anonymous(self, client):
+        cid = _seed_character(client, name="MoneyEditAnon",
+                              owner_discord_id="183026066498125825")
+        client.headers.pop("X-Test-User", None)
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": "x", "label": "y", "amount": 5},
+        )
+        assert resp.status_code == 401
+
+    def test_403_when_non_editor(self, client):
+        cid = _seed_character(client, name="MoneyEditNonEditor",
+                              owner_discord_id="someone_else")
+        client.headers["X-Test-User"] = "non_editor:NonEditor"
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": "x", "label": "y", "amount": 5},
+        )
+        assert resp.status_code == 403
+
+    def test_404_when_character_missing(self, client):
+        resp = client.post(
+            "/characters/99999/money/edit",
+            json={"entry_id": "x", "label": "y", "amount": 5},
+        )
+        assert resp.status_code == 404
+
+    def test_rejects_malformed_json(self, client):
+        cid = _seed_character(client, name="MoneyEditBadJson",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            content=b"{nope",
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code == 400
+
+    def test_rejects_non_dict_payload(self, client):
+        cid = _seed_character(client, name="MoneyEditArray",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(f"/characters/{cid}/money/edit", json=["x"])
         assert resp.status_code == 400
 
 

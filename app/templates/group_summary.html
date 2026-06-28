@@ -5,8 +5,13 @@
 {# The group name lives in the nav title bar (rather than a body H1)
    so the cards start at the top of the page. The L7R Character
    Builder link in the nav already gets the user back to the
-   character list, so the in-page back link is gone too. #}
-{% block nav_center %}{{ group.name }}{% endblock %}
+   character list, so the in-page back link is gone too.
+
+   For admins, a small "Money" link sits just to the right of the
+   group name (matching the right-side nav links' size) - the GM's
+   entry point to the money-awards page. It needs pointer-events-auto
+   because the centered title wrapper is pointer-events-none. #}
+{% block nav_center %}{{ group.name }}{% if request.state.user and is_admin(request.state.user.discord_id) %}<span class="mx-2 align-middle text-parchment/40" aria-hidden="true">&middot;</span><a href="/groups/{{ group.id }}/money" data-testid="group-money-link" class="pointer-events-auto align-middle text-sm font-normal text-parchment/70 hover:text-parchment transition-colors">Money</a>{% endif %}{% endblock %}
 
 {# Hide the "New Character" control on this page - it lives on every
    other page already and isn't a primary action while reviewing the

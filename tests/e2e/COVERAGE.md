@@ -434,9 +434,9 @@ The three failures were:
 - [x] Special Ability wound-check checkbox hidden when school ring is Water (default) -> `test_school_abilities.py::test_kitsune_wc_modal_checkbox_hidden_when_school_ring_is_water`
 - [x] Special Ability attack-modal swap persists into roll-results annotation -> `test_school_abilities.py::test_kitsune_attack_modal_swap_persists_into_roll_results_annotation`
 - [x] Special Ability wound-check modal swap persists into roll-results annotation -> `test_school_abilities.py::test_kitsune_wc_modal_swap_persists_into_roll_results_annotation`
-- [x] Special Ability parry swap block visible when school ring higher than Air -> `test_school_abilities.py::test_kitsune_parry_menu_shows_swap_block_when_school_ring_higher_than_air`
-- [x] Special Ability parry swap block hidden when school ring is Air -> `test_school_abilities.py::test_kitsune_parry_menu_no_swap_block_when_school_ring_is_air`
-- [x] Special Ability parry swap block hidden when school ring value equals Air value -> `test_school_abilities.py::test_kitsune_parry_menu_no_swap_block_when_school_ring_value_equals_air_value`
+- [x] Special Ability parry swap checkbox visible in the parry modal when school ring higher than Air -> `test_school_abilities.py::test_kitsune_parry_menu_shows_swap_block_when_school_ring_higher_than_air`
+- [x] Special Ability parry swap checkbox hidden when school ring is Air -> `test_school_abilities.py::test_kitsune_parry_menu_no_swap_block_when_school_ring_is_air`
+- [x] Special Ability parry swap checkbox hidden when school ring value equals Air value -> `test_school_abilities.py::test_kitsune_parry_menu_no_swap_block_when_school_ring_value_equals_air_value`
 - [x] Special Ability parry school-ring entry uses school ring in formula -> `test_school_abilities.py::test_kitsune_parry_school_ring_entry_uses_school_ring_in_formula`
 - [x] Special Ability parry predeclared school-ring entry includes +5 -> `test_school_abilities.py::test_kitsune_parry_predeclared_school_ring_entry_includes_plus_5`
 - [x] Special Ability parry swap with void spend carries through -> `test_school_abilities.py::test_kitsune_parry_swap_with_void_spend_carries_through`
@@ -742,12 +742,12 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [ ] 4th Dan reroll hidden on athletics:parry -> `test_school_abilities.py::test_togashi_4th_dan_reroll_hidden_on_athletics_parry`
 - [x] Togashi initiative: athletics-only bonus die persists to the Actions side panel with blue variant + tooltip -> `test_school_abilities.py::test_togashi_init_athletics_die_appears_in_side_panel`
 - [x] Non-athletics parry auto-spend skips the athletics-only die even when it has the lowest value -> `test_school_abilities.py::test_togashi_non_athletics_parry_skips_athletics_die`
-- [x] Athletics-only die's per-die menu offers Athletics Parry and selecting it spends that die -> `test_school_abilities.py::test_togashi_athletics_parry_can_spend_athletics_die`
-- [x] Per-die action menu lists core options (attack/parry/predeclared-parry) -> `test_rolls.py::test_action_die_menu_shows_action_options`
-- [x] Per-die Parry spends that specific die (not the lowest) -> `test_rolls.py::test_action_die_menu_parry_spends_that_die`
+- [x] Athletics-only die's per-die menu offers Athletics Parry; selecting it opens the parry modal and rolling spends that die -> `test_school_abilities.py::test_togashi_athletics_parry_can_spend_athletics_die`
+- [x] Per-die action menu lists core options (attack/parry); predeclared is now a checkbox in the parry modal -> `test_rolls.py::test_action_die_menu_shows_action_options`
+- [x] Per-die Parry opens the parry modal; rolling spends that specific die (not the lowest) -> `test_rolls.py::test_action_die_menu_parry_spends_that_die`
 - [x] Per-die Attack opens the attack modal and commits the die on Roll -> `test_rolls.py::test_action_die_menu_attack_opens_modal_spends_on_roll`
 - [x] Cancelling the attack modal opened from a per-die menu leaves the die unspent -> `test_rolls.py::test_action_die_menu_attack_cancel_does_not_spend`
-- [x] Athletics-only die's menu omits regular attack/parry/predeclared rows -> `test_rolls.py::test_athletics_only_die_menu_restricts_to_athletics`
+- [x] Athletics-only die's menu omits regular attack/parry rows -> `test_rolls.py::test_athletics_only_die_menu_restricts_to_athletics`
 - [x] Dragon Tattoo does not offer void spending (damage roll, not skill roll) -> `test_school_abilities.py::test_togashi_dragon_tattoo_no_void_spend`
 - [x] Conviction spend button appears on skill roll results -> `test_school_abilities.py::test_conviction_button_appears_on_skill_roll`
 - [x] Conviction spend button does NOT appear on initiative rolls -> `test_school_abilities.py::test_conviction_not_on_initiative`
@@ -804,12 +804,17 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Click a skill row opens the modal with the skill name → `test_rolls.py::test_click_skill_opens_modal_with_skill_name`
 - [x] Unskilled advanced skill rolls show the -10 penalty in the breakdown → `test_rolls.py::test_unskilled_advanced_skill_shows_minus_10_in_breakdown`
 - [x] Click Attack opens attack modal → `test_rolls.py::test_click_attack_opens_attack_modal`
-- [x] Click Parry shows menu with Roll Parry and Predeclared Parry options → `test_rolls.py::test_click_parry_shows_predeclare_option`
-- [x] Hovering Roll Parry reveals a void-spend submenu when VP available → `test_rolls.py::test_parry_hover_reveals_void_submenu_on_roll`
-- [x] Hovering Predeclared Parry reveals its own void-spend submenu with +5 label → `test_rolls.py::test_parry_hover_reveals_void_submenu_on_predeclared`
-- [x] Clicking a void option under Roll Parry rolls with void spent → `test_rolls.py::test_parry_void_submenu_click_rolls_with_void`
-- [x] Clicking a void option under Predeclared Parry rolls with +5 and void spent → `test_rolls.py::test_parry_void_submenu_click_rolls_predeclared_with_void`
-- [x] Parry menu hides void-submenu arrows when VP is 0 → `test_rolls.py::test_parry_no_void_submenu_arrow_when_no_vp`
+- [x] Click Parry opens the dedicated parry modal (not a dropdown); TN prompt shown, chart hidden until a TN is entered, predeclared checkbox present → `test_rolls.py::test_click_parry_opens_parry_modal`
+- [x] Entering a TN reveals the parry probability chart with a None (0 void) row → `test_rolls.py::test_parry_modal_chart_appears_after_tn`
+- [x] Rolling from the parry modal produces a Parry result in the shared dice-roller modal → `test_rolls.py::test_parry_modal_rolls_with_tn`
+- [x] Checking predeclared raises the charted success % (or holds at 100%) and rolls the +5 bonus → `test_rolls.py::test_parry_modal_predeclared_raises_odds_and_rolls_bonus`
+- [x] Selecting a void point in the parry modal and rolling deducts the VP → `test_rolls.py::test_parry_modal_void_selection_spends_vp`
+- [x] Parry modal void + stepper is disabled with 0 VP → `test_rolls.py::test_parry_modal_void_stepper_disabled_with_no_vp`
+- [x] Parry rolled vs an entered TN it beats shows "Parry succeeded" + the TN in the result modal and the copy-as-image footer → `test_rolls.py::test_parry_result_shows_success_vs_tn`
+- [x] Parry rolled vs an unreachable TN shows "Parry failed by N" + the TN in the result modal and the copy-as-image footer → `test_rolls.py::test_parry_result_shows_failure_vs_tn`
+- [x] Parry rolled without a TN shows no outcome line and no copy-as-image footer → `test_rolls.py::test_parry_result_no_outcome_without_tn`
+- [x] Parry modal shows the Athletics-parry toggle for athletics-everywhere schools (Togashi); toggling re-titles the modal → `test_rolls.py::test_parry_modal_shows_athletics_toggle`
+- [x] Parry modal has no Athletics toggle for non-athletics-everywhere schools → `test_rolls.py::test_parry_modal_no_athletics_toggle_for_non_athletics_character`
 - [x] Click a Ring on a character WITHOUT the athletics knack opens the picker with one row ("Roll <Ring>") and the resulting modal title is just the ring name → `test_rolls.py::test_click_ring_opens_bare_ring_modal_without_athletics`
 - [x] Click a Ring on a character WITH the athletics knack opens the picker with two rows (bare + athletics), each addressable via dedicated data attributes; the bare row's modal title omits "Athletics" → `test_rolls.py::test_ring_tile_picker_with_athletics_shows_both_rows`
 - [x] Ring tile picker rows each carry their own void-spending submenu so the player can pick VP independently for bare vs athletics → `test_rolls.py::test_ring_tile_picker_void_submenus_per_row`
@@ -844,8 +849,8 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Clicking Attack with athletics available opens a choice menu (Roll Attack / Athletics Attack) → `test_rolls.py::test_attack_button_shows_athletics_choice_when_athletics_available`
 - [x] Clicking Attack without athletics goes straight to the attack modal (no choice menu) → `test_rolls.py::test_attack_button_no_choice_menu_for_non_athletics_character`
 - [x] Selecting Athletics Attack from the choice menu opens the modal with the doubled-TN dropdown → `test_rolls.py::test_attack_choice_athletics_opens_modal_with_doubled_tn`
-- [x] Parry menu includes an Athletics Parry entry when athletics is available → `test_rolls.py::test_parry_menu_shows_athletics_parry_option`
-- [x] Parry menu has no Athletics Parry entry for characters without athletics → `test_rolls.py::test_parry_menu_no_athletics_for_non_athletics_character`
+- [x] Parry modal shows an Athletics-parry toggle when athletics-everywhere is available; toggling re-titles the modal → `test_rolls.py::test_parry_modal_shows_athletics_toggle`
+- [x] Parry modal has no Athletics toggle for characters without athletics-everywhere → `test_rolls.py::test_parry_modal_no_athletics_toggle_for_non_athletics_character`
 - [x] Modal shows Total and dice after the animation phase → `test_rolls.py::test_modal_shows_total_and_dice_after_animation`
 - [x] Modal close button hides the modal → `test_rolls.py::test_modal_close_button`
 - [x] Impaired character's roll modal shows "10s not rerolled" note → `test_rolls.py::test_impaired_character_modal_shows_no_reroll_note`
@@ -931,6 +936,15 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Admin can create a new group → `test_groups.py::test_admin_create_new_group`
 - [x] Admin can rename a group → `test_groups.py::test_admin_rename_group`
 - [x] Admin can delete a group; member characters become unassigned → `test_groups.py::test_admin_delete_group_unassigns_characters`
+
+## GM — Group Money Awards (group_money.html)
+
+- [x] Mass award adds the same income entry to every character and refreshes each on-hand inline (no reload) → `test_group_money.py::test_mass_award_updates_all_characters_inline`
+- [x] Inline individual award updates only the targeted character's ledger + on-hand (no reload) → `test_group_money.py::test_individual_award_updates_only_that_character_inline`
+- [x] GM money link hidden from non-admins and the money page rejects them (403) → `test_group_money.py::test_money_page_is_admin_only`
+- [x] An existing award can be edited inline (label + amount + on-hand update, no reload) → `test_group_money.py::test_edit_existing_award_inline`
+- [x] An existing award can be deleted inline via a confirm step (entry removed, on-hand drops, no reload) → `test_group_money.py::test_delete_existing_award_inline`
+- [x] The locked Spring equinox disbursal row offers no edit/delete controls → `test_group_money.py::test_locked_disbursal_has_no_edit_or_delete`
 
 ## Homepage (index.html)
 

@@ -62,96 +62,142 @@ def test_click_attack_opens_attack_modal(page, live_server_url):
     assert "Attack" in title
 
 
-def test_click_parry_shows_predeclare_option(page, live_server_url):
-    """Clicking parry shows roll menu with Roll Parry and Predeclared Parry."""
+def _open_parry_modal(page):
+    """Click the parry skill tile and wait for the parry modal."""
+    page.locator('[data-roll-key="parry"]').click()
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+
+
+def _parry_success_pct(page, void=0):
+    """Read the integer success % for a given void row in the parry chart."""
+    cell = page.locator(f'[data-parry-row="{void}"] td').last
+    return int(cell.text_content().strip().rstrip('%'))
+
+
+def test_click_parry_opens_parry_modal(page, live_server_url):
+    """Clicking parry opens the dedicated parry modal (not a dropdown),
+    with the TN prompt shown and no chart until a TN is entered."""
     _create_roller(page, live_server_url, "ClickParry")
-    page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    menu = page.locator('[data-parry-menu]')
-    text = menu.text_content()
-    assert "Roll Parry" in text
-    assert "Predeclared Parry" in text
-    # Click the Roll Parry option to roll normally
-    menu.locator('button:has-text("Roll Parry")').first.click()
+    _open_parry_modal(page)
+    # No old dropdown.
+    assert page.locator('[data-parry-menu]').count() == 0
+    # TN prompt visible, chart hidden until a TN is entered.
+    assert page.locator('[data-testid="parry-tn-prompt"]').is_visible()
+    assert page.locator('[data-testid="parry-prob-table"]').count() == 0
+    # Predeclared checkbox is present.
+    assert page.locator('[data-testid="parry-predeclared"]').count() == 1
+
+
+def test_parry_modal_chart_appears_after_tn(page, live_server_url):
+    """Entering a TN reveals the probability chart with a None (0 void) row."""
+    _create_roller(page, live_server_url, "ParryChart")
+    _open_parry_modal(page)
+    page.fill('[data-testid="parry-tn-input"]', "20")
+    page.wait_for_selector('[data-testid="parry-prob-table"]', state='visible', timeout=3000)
+    assert page.locator('[data-parry-row="0"]').is_visible()
+    # The success cell renders a percentage.
+    txt = page.locator('[data-parry-row="0"] td').last.text_content()
+    assert txt.strip().endswith('%')
+
+
+def test_parry_modal_rolls_with_tn(page, live_server_url):
+    """Rolling from the parry modal produces a Parry result in the shared
+    dice-roller result modal."""
+    _create_roller(page, live_server_url, "ParryRoll")
+    _open_parry_modal(page)
+    page.fill('[data-testid="parry-tn-input"]', "15")
+    page.locator('[data-action="roll-parry-go"]').click()
     _wait_for_roll_result(page)
     title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
     assert "Parry" in title
 
 
-def test_parry_hover_reveals_void_submenu_on_roll(page, live_server_url):
-    """Hovering Roll Parry reveals the void-spend submenu when VP is available."""
-    _create_roller(page, live_server_url, "ParryHoverRoll")
-    page.evaluate("window._trackingBridge.voidPoints = 2; window._trackingBridge.save()")
-    page.wait_for_timeout(200)
-    page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.hover()
-    page.wait_for_selector('[data-parry-void-submenu="roll"]', state='visible', timeout=3000)
-    submenu = page.locator('[data-parry-void-submenu="roll"]')
-    text = submenu.text_content()
-    assert "Spend 1 void point" in text
-    assert "Spend 2 void points" in text
-
-
-def test_parry_hover_reveals_void_submenu_on_predeclared(page, live_server_url):
-    """Hovering Predeclared Parry reveals its own void-spend submenu with +5 label."""
-    _create_roller(page, live_server_url, "ParryHoverPre")
-    page.evaluate("window._trackingBridge.voidPoints = 1; window._trackingBridge.save()")
-    page.wait_for_timeout(200)
-    page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    page.locator('[data-parry-menu] button:has-text("Predeclared Parry")').first.hover()
-    page.wait_for_selector('[data-parry-void-submenu="predeclared"]', state='visible', timeout=3000)
-    submenu = page.locator('[data-parry-void-submenu="predeclared"]')
-    text = submenu.text_content()
-    assert "Spend 1 void point" in text
-    assert "predeclared" in text.lower()
-
-
-def test_parry_void_submenu_click_rolls_with_void(page, live_server_url):
-    """Clicking a void option under Roll Parry rolls parry with void spent."""
-    _create_roller(page, live_server_url, "ParryVoidRoll")
-    page.evaluate("window._trackingBridge.voidPoints = 1; window._trackingBridge.save()")
-    page.wait_for_timeout(200)
-    page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.hover()
-    page.wait_for_selector('[data-parry-void-submenu="roll"]', state='visible', timeout=3000)
-    page.locator('[data-parry-void-submenu="roll"] button:has-text("Spend 1 void point")').click()
-    _wait_for_roll_result(page)
-    title = page.locator('[data-modal="dice-roller"] h3.text-accent').text_content()
-    assert "Parry" in title
-    # VP should have been deducted
-    vp_after = page.evaluate("window._trackingBridge.voidPoints")
-    assert vp_after == 0
-
-
-def test_parry_void_submenu_click_rolls_predeclared_with_void(page, live_server_url):
-    """Clicking a void option under Predeclared Parry rolls with +5 bonus and void spent."""
-    _create_roller(page, live_server_url, "ParryVoidPre")
-    page.evaluate("window._trackingBridge.voidPoints = 1; window._trackingBridge.save()")
-    page.wait_for_timeout(200)
-    page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    page.locator('[data-parry-menu] button:has-text("Predeclared Parry")').first.hover()
-    page.wait_for_selector('[data-parry-void-submenu="predeclared"]', state='visible', timeout=3000)
-    page.locator('[data-parry-void-submenu="predeclared"] button').first.click()
+def test_parry_modal_predeclared_raises_odds_and_rolls_bonus(page, live_server_url):
+    """Checking predeclared lifts the charted success % (or holds at 100%)
+    and rolls the +5 bonus into the result."""
+    _create_roller(page, live_server_url, "ParryPre")
+    _open_parry_modal(page)
+    page.fill('[data-testid="parry-tn-input"]', "30")
+    page.wait_for_selector('[data-parry-row="0"]', state='visible', timeout=3000)
+    before = _parry_success_pct(page, 0)
+    page.locator('[data-testid="parry-predeclared"]').check()
+    page.wait_for_timeout(100)
+    after = _parry_success_pct(page, 0)
+    assert after >= before
+    page.locator('[data-action="roll-parry-go"]').click()
     _wait_for_roll_result(page)
     result = page.locator('[data-modal="dice-roller"]').text_content()
     assert "predeclared" in result.lower() or "+5" in result
 
 
-def test_parry_no_void_submenu_arrow_when_no_vp(page, live_server_url):
-    """With 0 VP, the parry options do not show the void-submenu arrow indicator."""
-    _create_roller(page, live_server_url, "ParryNoVP")
-    # _create_roller already sets VP to 0
-    page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    # Hovering should not reveal any submenu
-    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.hover()
+def test_parry_modal_void_selection_spends_vp(page, live_server_url):
+    """Selecting a void point in the modal and rolling deducts the VP."""
+    _create_roller(page, live_server_url, "ParryVoid")
+    page.evaluate("window._trackingBridge.voidPoints = 1; window._trackingBridge.save()")
     page.wait_for_timeout(200)
-    assert page.locator('[data-parry-void-submenu="roll"]').count() == 0 \
-        or not page.locator('[data-parry-void-submenu="roll"]').is_visible()
+    _open_parry_modal(page)
+    page.fill('[data-testid="parry-tn-input"]', "20")
+    # Bump void selection from 0 -> 1 via the + stepper.
+    page.locator('[data-modal="parry"] button.btn-pip:has-text("+")').click()
+    assert page.locator('[data-modal="parry"] span.w-8').text_content().strip() == "1"
+    page.locator('[data-action="roll-parry-go"]').click()
+    _wait_for_roll_result(page)
+    assert page.evaluate("window._trackingBridge.voidPoints") == 0
+
+
+def test_parry_modal_void_stepper_disabled_with_no_vp(page, live_server_url):
+    """With 0 VP the void + stepper is disabled (can't select void to spend)."""
+    _create_roller(page, live_server_url, "ParryNoVP")
+    _open_parry_modal(page)
+    plus = page.locator('[data-modal="parry"] button.btn-pip:has-text("+")')
+    assert plus.is_disabled()
+
+
+def test_parry_result_shows_success_vs_tn(page, live_server_url):
+    """A parry rolled against a TN it beats shows 'Parry succeeded' + the TN
+    in the result modal, and the copy-as-image footer carries the same line."""
+    _create_roller(page, live_server_url, "ParryWin")
+    _open_parry_modal(page)
+    page.fill('[data-testid="parry-tn-input"]', "1")  # always beaten
+    page.locator('[data-action="roll-parry-go"]').click()
+    _wait_for_roll_result(page)
+    outcome = page.locator('[data-testid="parry-result"]')
+    outcome.wait_for(state="visible", timeout=3000)
+    text = outcome.text_content()
+    assert "Parry succeeded" in text
+    assert "TN 1" in text
+    # The copy-as-image payload carries the same outcome line (incl. the TN).
+    footer = page.evaluate("() => window._diceRoller._buildRollImagePayload().footer")
+    assert footer and "Parry succeeded" in footer and "TN 1" in footer
+
+
+def test_parry_result_shows_failure_vs_tn(page, live_server_url):
+    """A parry rolled against an unreachable TN shows 'Parry failed' + the TN
+    in the result modal and the copy-as-image footer."""
+    _create_roller(page, live_server_url, "ParryLose")
+    _open_parry_modal(page)
+    page.fill('[data-testid="parry-tn-input"]', "150")  # unreachable for a low char
+    page.locator('[data-action="roll-parry-go"]').click()
+    _wait_for_roll_result(page)
+    outcome = page.locator('[data-testid="parry-result"]')
+    outcome.wait_for(state="visible", timeout=3000)
+    text = outcome.text_content()
+    assert "Parry failed" in text
+    assert "TN 150" in text
+    footer = page.evaluate("() => window._diceRoller._buildRollImagePayload().footer")
+    assert footer and "Parry failed" in footer and "TN 150" in footer
+
+
+def test_parry_result_no_outcome_without_tn(page, live_server_url):
+    """Rolling parry without entering a TN shows no outcome line and no
+    footer on the copy-as-image payload."""
+    _create_roller(page, live_server_url, "ParryNoTN")
+    _open_parry_modal(page)
+    page.locator('[data-action="roll-parry-go"]').click()
+    _wait_for_roll_result(page)
+    assert not page.locator('[data-testid="parry-result"]').is_visible()
+    footer = page.evaluate("() => window._diceRoller._buildRollImagePayload().footer")
+    assert not footer
 
 
 def test_click_ring_opens_bare_ring_modal_without_athletics(page, live_server_url):
@@ -456,22 +502,26 @@ def test_attack_choice_athletics_opens_modal_with_doubled_tn(page, live_server_u
     assert "35 (Parry 3)" in body
 
 
-def test_parry_menu_shows_athletics_parry_option(page, live_server_url):
-    """Clicking parry with athletics available shows an Athletics Parry option
-    in the parry menu."""
+def test_parry_modal_shows_athletics_toggle(page, live_server_url):
+    """The parry modal exposes an Athletics-parry toggle for schools that
+    treat athletics as a standard combat skill (Togashi). Toggling it
+    re-titles the modal."""
     _create_athletics_knack_char(page, live_server_url, "ParryAth")
-    page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    page.locator('[data-parry-menu-athletics]').wait_for(state="visible", timeout=5000)
-    assert page.locator('[data-parry-menu-athletics]').is_visible()
+    _open_parry_modal(page)
+    toggle = page.locator('[data-testid="parry-use-athletics"]')
+    toggle.wait_for(state="visible", timeout=5000)
+    assert toggle.is_visible()
+    toggle.check()
+    page.wait_for_timeout(100)
+    title = page.locator('[data-modal="parry"] h3.text-accent').text_content()
+    assert "Athletics Parry" in title
 
 
-def test_parry_menu_no_athletics_for_non_athletics_character(page, live_server_url):
-    """Akodo (no athletics knack) parry menu has no Athletics Parry entry."""
+def test_parry_modal_no_athletics_toggle_for_non_athletics_character(page, live_server_url):
+    """Akodo (no athletics-everywhere) parry modal has no Athletics toggle."""
     _create_roller(page, live_server_url, "AkodoParry")
-    page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    assert not page.locator('[data-parry-menu-athletics]').is_visible()
+    _open_parry_modal(page)
+    assert page.locator('[data-testid="parry-use-athletics"]').count() == 0
 
 
 def test_modal_shows_total_and_dice_after_animation(page, live_server_url):
@@ -1255,9 +1305,8 @@ def test_parry_auto_spends_lowest_action_die(page, live_server_url):
         "window._trackingBridge.setActionDice([3, 5, 7]);"
     )
     page.wait_for_timeout(100)
-    page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.click()
+    _open_parry_modal(page)
+    page.locator('[data-action="roll-parry-go"]').click()
     _wait_for_roll_result(page)
     dice = page.evaluate("window._trackingBridge.actionDice")
     # Lowest (value 3) should be spent, others untouched.
@@ -1322,9 +1371,8 @@ def test_parry_annotates_spent_die_with_result(page, live_server_url):
     _create_roller(page, live_server_url, "ActionDieParryTooltip")
     page.evaluate("window._trackingBridge.setActionDice([3, 5, 7]);")
     page.wait_for_timeout(100)
-    page.locator('[data-roll-key="parry"]').click()
-    page.wait_for_selector('[data-parry-menu]', state='visible', timeout=3000)
-    page.locator('[data-parry-menu] button:has-text("Roll Parry")').first.click()
+    _open_parry_modal(page)
+    page.locator('[data-action="roll-parry-go"]').click()
     _wait_for_roll_result(page)
     # Close the dice modal, then inspect the annotated die.
     page.locator('[data-modal="dice-roller"] button:has-text("×")').click()
@@ -1442,7 +1490,7 @@ def test_manual_spend_does_not_set_spent_by(page, live_server_url):
 
 def test_action_die_menu_shows_action_options(page, live_server_url):
     """Clicking an unspent action die opens a menu listing Roll Attack,
-    Roll Parry, Predeclared Parry (+5), and Mark as spent at minimum."""
+    Parry (opens the parry modal), and Mark as spent at minimum."""
     _create_roller(page, live_server_url, "ADMenuOptions")
     page.evaluate("""
         window._trackingBridge.actionDice = [{value: 5, spent: false}];
@@ -1455,13 +1503,14 @@ def test_action_die_menu_shows_action_options(page, live_server_url):
     page.locator('[data-action-die-menu-item="attack"]').wait_for(state="visible", timeout=5000)
     assert page.locator('[data-action-die-menu-item="attack"]').is_visible()
     assert page.locator('[data-action-die-menu-item="parry"]').is_visible()
-    assert page.locator('[data-action-die-menu-item="predeclared-parry"]').is_visible()
+    # Predeclared is now a checkbox inside the parry modal, not a menu row.
+    assert page.locator('[data-action-die-menu-item="predeclared-parry"]').count() == 0
     assert page.locator('[data-action="action-die-spent"]').is_visible()
 
 
 def test_action_die_menu_parry_spends_that_die(page, live_server_url):
-    """Picking Parry from the per-die menu must spend *that* specific die,
-    not the lowest unspent die."""
+    """Picking Parry from the per-die menu opens the parry modal; rolling
+    from it must spend *that* specific die, not the lowest unspent die."""
     _create_roller(page, live_server_url, "ADMenuParry")
     page.evaluate("""
         window._trackingBridge.actionDice = [
@@ -1476,6 +1525,9 @@ def test_action_die_menu_parry_spends_that_die(page, live_server_url):
     dice.nth(1).click()
     # Each die renders its own (hidden) menu, so scope to the open one.
     page.locator('[data-action-die-menu-item="parry"]:visible').click()
+    # The parry modal opens; roll from it.
+    page.wait_for_selector('[data-modal="parry"]', state='visible', timeout=3000)
+    page.locator('[data-action="roll-parry-go"]').click()
     # Wait for parry roll to complete.
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
@@ -1560,7 +1612,6 @@ def test_athletics_only_die_menu_restricts_to_athletics(page, live_server_url):
     # Regular rows are gated behind !die.athletics_only and must not render.
     assert page.locator('[data-action-die-menu-item="attack"]').count() == 0
     assert page.locator('[data-action-die-menu-item="parry"]').count() == 0
-    assert page.locator('[data-action-die-menu-item="predeclared-parry"]').count() == 0
     # Manual mark-spent is always available.
     assert page.locator('[data-action="action-die-spent"]').count() == 1
 

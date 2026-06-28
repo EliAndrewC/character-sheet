@@ -1,0 +1,128 @@
+        {# ── Parry Modal ── #}
+        {# Pre-roll probability chart for parry rolls. Unlike the attack and
+           wound-check modals, the parry roll itself still runs through the
+           shared dice-roller result modal (executeRoll /
+           executeRollWithExtraFlat), so every existing post-parry behaviour
+           (Shinjo 3rd Dan action-die decrement, Mirumoto temp VP, Hiruma
+           banking, the Shinjo phase picker, etc.) is preserved untouched.
+           This modal only collects the attacker's TN plus the player's
+           void / predeclared / variant choices and shows the odds. #}
+        <div x-show="parryModalOpen" x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+             data-modal="parry">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent"
+                        x-text="parryUseAthletics ? 'Athletics Parry' : 'Parry'"></h3>
+                    <button type="button" @click="parryModalOpen = false"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+                {% include 'character/partials/read_only_roll_banner.html' %}
+
+                <div class="space-y-4">
+                    {# Target number. Typically the attack roll made against you,
+                       but the player can enter any TN. The chart only renders
+                       once a valid TN is present. #}
+                    <div>
+                        <label class="block text-sm font-medium mb-1">
+                            Target Number
+                            <span class="text-xs text-ink/60 font-normal">(the attack roll made against you)</span>
+                        </label>
+                        <input type="number" x-model.number="parryTN" min="1" max="150"
+                               data-testid="parry-tn-input"
+                               placeholder="Enter the attacker's roll result"
+                               class="w-full border rounded px-2 py-1.5 text-sm">
+                    </div>
+
+                    {# Predeclared parry: a +5 free raise locked in when the
+                       parry is declared before the attack roll. Toggling it
+                       updates the probability chart immediately. #}
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" x-model="parryPredeclared"
+                               data-testid="parry-predeclared" class="rounded text-accent">
+                        <span>Predeclared parry
+                            <span class="text-xs text-ink/50">(+5; declared before the attack roll)</span></span>
+                    </label>
+
+                    {# Kitsune Warden Special Ability: roll the parry with the
+                       school ring instead of Air. Only offered when the swap
+                       is an upgrade (mirrors the old parry-menu gate). #}
+                    <template x-if="parryKitsuneSwapAvailable()">
+                        <label class="flex items-center gap-2 text-sm bg-parchment rounded p-2 cursor-pointer">
+                            <input type="checkbox" x-model="parryKitsuneSwap"
+                                   data-testid="parry-kitsune-swap">
+                            <span>Use Kitsune Warden Special Ability
+                                (roll with <span class="font-bold" x-text="formulas.parry?.kitsune_swap?.kitsune_swap_to_ring"></span>
+                                instead of <span x-text="formulas.parry?.kitsune_swap?.kitsune_swap_from_ring"></span>)</span>
+                        </label>
+                    </template>
+
+                    {# Athletics parry: schools that treat Athletics as a
+                       standard combat skill (athletics_combat_everywhere) can
+                       parry with it. Switching the toggle re-points the chart
+                       and the roll at the athletics:parry formula. #}
+                    <template x-if="parryAthleticsAvailable()">
+                        <label class="flex items-center gap-2 text-sm bg-parchment rounded p-2 cursor-pointer">
+                            <input type="checkbox" x-model="parryUseAthletics"
+                                   data-testid="parry-use-athletics">
+                            <span>Use Athletics to parry
+                                (<span x-text="(formulas['athletics:parry']?.rolled || 0) + 'k' + (formulas['athletics:parry']?.kept || 0)"></span>)</span>
+                        </label>
+                    </template>
+
+                    {# Probability table - one row per void spend, success % is
+                       P(roll >= TN) with the predeclared +5 and per-VP combat
+                       bonuses folded in. Rendered only once a TN is entered. #}
+                    <template x-if="parryTNValid()">
+                        <div class="overflow-x-auto" data-testid="parry-prob-table">
+                            <table class="text-sm w-full">
+                                <thead>
+                                    <tr class="border-b border-ink/20">
+                                        <th class="text-left py-1 pr-3">Void</th>
+                                        <th class="text-right py-1 px-2">Parry Roll</th>
+                                        <th class="text-right py-1 px-2">Success %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="v in Array.from({length: (parryActiveProbs()?.void_cap || 0) + 1}, (_, i) => i)" :key="v">
+                                        <tr class="border-b border-ink/5"
+                                            :data-parry-row="v"
+                                            :class="v === parryVoidSelected ? 'bg-accent/10 font-medium' : ''">
+                                            <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
+                                            <td class="text-right py-1 px-2 font-mono text-xs text-ink/70"
+                                                x-text="(parryActiveProbs()?.void_keys?.[String(v)] || '').replace(',', 'k')"></td>
+                                            <td class="text-right py-1 px-2 text-success"
+                                                x-text="parryHitChance(v) === null ? '-' : Math.round(parryHitChance(v) * 100) + '%'"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                    <template x-if="!parryTNValid()">
+                        <div class="text-sm text-ink/50 italic" data-testid="parry-tn-prompt">
+                            Enter the target number to see your success odds.
+                        </div>
+                    </template>
+
+                    {# Void selector + roll button #}
+                    <div class="flex items-center gap-3">
+                        <label class="text-sm font-medium">Void points:</label>
+                        <div class="flex items-center gap-1">
+                            <button type="button" @click="parryVoidSelected = Math.max(0, parryVoidSelected - 1)"
+                                    :disabled="parryVoidSelected <= 0"
+                                    class="btn-pip">-</button>
+                            <span class="w-8 text-center font-bold text-lg" x-text="parryVoidSelected"></span>
+                            <button type="button" @click="parryVoidSelected = Math.min(parryVoidSelected + 1, parryVoidCap())"
+                                    :disabled="parryVoidSelected >= parryVoidCap()"
+                                    class="btn-pip">+</button>
+                        </div>
+                        <button type="button" @click="parryRoll()"
+                                data-action="roll-parry-go"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium ml-auto">
+                            Roll <span x-text="parryUseAthletics ? 'Athletics Parry' : 'Parry'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
