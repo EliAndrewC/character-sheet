@@ -185,6 +185,8 @@ class TestCharacterDeleteRemovesArt:
         monkeypatch.setenv("S3_BACKUP_REGION", "us-east-1")
         s3 = MagicMock()
         mock_client_factory.return_value = s3
+        # No retained previous versions for this character.
+        _stub_pagination(s3, [])
 
         session = client._test_session_factory()
         c = Character(
@@ -207,6 +209,42 @@ class TestCharacterDeleteRemovesArt:
             "character_art/5/full-x.webp",
             "character_art/5/head-x.webp",
         }
+
+    @patch("app.services.art_storage._get_s3_client")
+    def test_delete_character_also_purges_archived_versions(
+        self, mock_client_factory, client, monkeypatch,
+    ):
+        """A hard character delete removes retained previous versions too -
+        they live under a prefix the orphan sweep never visits."""
+        monkeypatch.setenv("S3_BACKUP_BUCKET", "test-bucket")
+        monkeypatch.setenv("S3_BACKUP_REGION", "us-east-1")
+        s3 = MagicMock()
+        mock_client_factory.return_value = s3
+        _stub_pagination(s3, [
+            "character_art_archive/7/full-old.webp",
+            "character_art_archive/7/head-old.webp",
+        ])
+
+        session = client._test_session_factory()
+        c = Character(
+            name="Archived", owner_discord_id=USER_ID,
+            art_s3_key="character_art/7/full-x.webp",
+            headshot_s3_key="character_art/7/head-x.webp",
+        )
+        session.add(c)
+        session.commit()
+        cid = c.id
+        session.close()
+
+        resp = client.post(f"/characters/{cid}/delete", follow_redirects=False)
+        assert resp.status_code == 303
+
+        deleted_keys = {
+            call.kwargs["Key"] for call in s3.delete_object.call_args_list
+        }
+        assert "character_art/7/full-x.webp" in deleted_keys      # live
+        assert "character_art_archive/7/full-old.webp" in deleted_keys  # archived
+        assert "character_art_archive/7/head-old.webp" in deleted_keys
 
         # Character row is gone
         session = client._test_session_factory()

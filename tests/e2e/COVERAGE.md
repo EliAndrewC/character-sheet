@@ -1626,13 +1626,24 @@ JS-error sanity:
       (library concern: we'd be testing Cropper.js, not our code)
 - [x] Save-crop writes full + headshot, redirects back to edit page with success banner ->
       `test_character_art_upload.py::test_upload_and_save_crop_end_to_end`
-- [x] Overwrite confirm modal appears when replacing existing art ->
-      `test_character_art_upload.py::test_overwrite_modal_appears_when_replacing_existing_art`
+- [x] Replacing existing art: "Upload new art" navigates straight to the art
+      page (no confirm modal; the art page explains retention + recovery) ->
+      `test_character_art_upload.py::test_upload_new_art_goes_straight_to_art_page_when_art_exists`
 - [x] Delete-art confirm modal removes art and reverts to placeholder ->
       `test_character_art_upload.py::test_delete_art_dropdown_entry_appears_when_art_exists`
       (covers dropdown entry visibility + successful deletion + banner;
       the 2-click Alpine confirm itself is timing-flaky in Playwright and
       is unit-tested via `test_art_routes.py::TestDeleteEndpoint`)
+- [x] "Your current art is safe" retention note hidden with no art, shown on the
+      art page once art exists ->
+      `test_character_art_upload.py::test_retention_note_shows_once_art_exists`
+      (also shown on the generate wizard step 1 when art exists, unit-verified
+      via `test_art_routes.py` landing tests)
+- [x] "Previous versions" panel lists archived versions and Restore rolls one
+      back (edit page shows the restored banner) ->
+      `test_character_art_upload.py::test_previous_versions_panel_and_restore`
+      (the 2-click Alpine restore confirm is timing-flaky in Playwright and is
+      unit-tested via `test_art_routes.py::TestRestore`)
 - [x] Character list page shows headshot for characters that have art ->
       `test_character_art_display.py::test_list_page_shows_headshot_for_character_with_art`
 - [x] Character list page shows placeholder for characters without art ->

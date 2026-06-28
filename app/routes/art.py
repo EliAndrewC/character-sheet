@@ -101,6 +101,49 @@ def _bucket_and_region() -> tuple[Optional[str], str]:
     return bucket, region
 
 
+def _format_archive_ts(ts: str) -> str:
+    """Render an archive timestamp token as a human-readable UTC label."""
+    try:
+        dt = datetime.strptime(ts, "%Y-%m-%dT%H-%M-%SZ")
+        return dt.strftime("%Y-%m-%d %H:%M UTC")
+    except ValueError:
+        return ts
+
+
+def _archived_versions_for_template(character: Character) -> list[dict]:
+    """Build the "Previous versions" view-model for the art landing page.
+
+    Returns an empty list when storage is unconfigured or the listing
+    fails - the art page must render either way.
+    """
+    bucket, region = _bucket_and_region()
+    if not bucket:
+        return []
+    out: list[dict] = []
+    try:
+        for v in art_storage.archived_versions(
+            character.id, bucket=bucket, region=region,
+        ):
+            out.append({
+                "token": v["ts"],
+                "date_label": _format_archive_ts(v["ts"]),
+                "full_url": art_storage.public_url(
+                    v["full_key"], bucket=bucket, region=region,
+                ),
+                "head_url": (
+                    art_storage.public_url(
+                        v["head_key"], bucket=bucket, region=region,
+                    )
+                    if v["head_key"] else None
+                ),
+            })
+    except Exception:
+        log.exception(
+            "Listing archived art failed for character %s", character.id,
+        )
+    return out
+
+
 # ---------------------------------------------------------------------------
 # GET /characters/{id}/art - landing page
 # ---------------------------------------------------------------------------
@@ -115,12 +158,12 @@ def art_landing(
         return err
 
     headshot_url = None
-    if character.headshot_s3_key:
-        bucket, region = _bucket_and_region()
-        if bucket:
-            headshot_url = art_storage.public_url(
-                character.headshot_s3_key, bucket=bucket, region=region,
-            )
+    archived_versions = _archived_versions_for_template(character)
+    bucket, region = _bucket_and_region()
+    if bucket and character.headshot_s3_key:
+        headshot_url = art_storage.public_url(
+            character.headshot_s3_key, bucket=bucket, region=region,
+        )
 
     return _templates().TemplateResponse(
         request=request,
@@ -128,6 +171,7 @@ def art_landing(
         context={
             "character": character,
             "headshot_url": headshot_url,
+            "archived_versions": archived_versions,
             "max_upload_mb": art_image.MAX_UPLOAD_BYTES // (1024 * 1024),
         },
     )
@@ -158,6 +202,7 @@ def _render_landing_with_error(
         context={
             "character": character,
             "headshot_url": headshot_url,
+            "archived_versions": _archived_versions_for_template(character),
             "error_message": error_message,
             "max_upload_mb": art_image.MAX_UPLOAD_BYTES // (1024 * 1024),
         },
@@ -357,14 +402,17 @@ def art_crop_save(
             status_code=303,
         )
 
-    # Clean up the previous art from S3 before overwriting the keys on
-    # the Character row. Failures here are non-fatal - the orphan-cleanup
-    # sweep in Phase 9 is the safety net.
-    old_keys = [character.art_s3_key, character.headshot_s3_key]
+    # Archive the previous art instead of deleting it, so an editor (or
+    # the GM) can restore an earlier version from the art page. Failures
+    # here are non-fatal - the new art is already in S3 and on the row.
     try:
-        art_storage.delete_art(bucket, region, *old_keys)
+        art_storage.archive_art(
+            bucket, region,
+            character.art_s3_key, character.headshot_s3_key,
+        )
+        art_storage.prune_archive(char_id, bucket=bucket, region=region)
     except Exception:
-        log.exception("Old art cleanup failed for character %s", char_id)
+        log.exception("Old art archival failed for character %s", char_id)
 
     # Update the PUBLISHED Character row. Never flips is_published,
     # never touches an existing Draft's stats.
@@ -379,6 +427,94 @@ def art_crop_save(
 
     return RedirectResponse(
         f"/characters/{char_id}/edit?art_saved=1",
+        status_code=303,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /characters/{id}/art/restore/{version} - roll back to a kept version
+# ---------------------------------------------------------------------------
+
+
+@router.post("/characters/{char_id}/art/restore/{version}")
+def art_restore(
+    request: Request,
+    char_id: int,
+    version: str,
+    db: Session = Depends(get_db),
+):
+    character, err = _load_character_for_edit(request, db, char_id)
+    if err is not None:
+        return err
+
+    bucket, region = _bucket_and_region()
+    if not bucket:
+        return RedirectResponse(
+            f"/characters/{char_id}/art?art_error=storage_not_configured",
+            status_code=303,
+        )
+
+    # Rebuild the archive keys from the (path-constrained) version token
+    # rather than trusting a client-supplied key, then confirm the chosen
+    # version actually exists in this character's archive.
+    prefix = art_storage.archive_prefix()
+    full_archive = f"{prefix}{char_id}/full-{version}.webp"
+    head_archive = f"{prefix}{char_id}/head-{version}.webp"
+    existing = set(
+        art_storage.list_archived_keys(char_id, bucket=bucket, region=region)
+    )
+    if full_archive not in existing:
+        return RedirectResponse(
+            f"/characters/{char_id}/art?art_error=restore_not_found",
+            status_code=303,
+        )
+
+    # Archive the currently-live art first so a restore is itself
+    # reversible (the just-replaced art becomes a kept version too).
+    try:
+        art_storage.archive_art(
+            bucket, region,
+            character.art_s3_key, character.headshot_s3_key,
+        )
+    except Exception:
+        log.exception(
+            "Archiving current art before restore failed for %s", char_id,
+        )
+
+    # Copy the chosen archived pair to fresh live keys (leaving the
+    # archived copy in place as history).
+    new_full, new_head = art_storage.make_art_keys(char_id)
+    try:
+        art_storage.copy_object_key(
+            full_archive, new_full, bucket=bucket, region=region,
+        )
+        if head_archive in existing:
+            art_storage.copy_object_key(
+                head_archive, new_head, bucket=bucket, region=region,
+            )
+        else:
+            # Defensive: a version whose headshot is missing restores the
+            # full art with no headshot rather than failing outright.
+            new_head = None
+    except Exception:
+        log.exception("Restoring archived art failed for character %s", char_id)
+        return RedirectResponse(
+            f"/characters/{char_id}/art?art_error=restore_failed",
+            status_code=303,
+        )
+
+    character.art_s3_key = new_full
+    character.headshot_s3_key = new_head
+    character.art_updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    try:
+        art_storage.prune_archive(char_id, bucket=bucket, region=region)
+    except Exception:
+        log.exception("Pruning archive after restore failed for %s", char_id)
+
+    return RedirectResponse(
+        f"/characters/{char_id}/edit?art_restored=1",
         status_code=303,
     )
 
@@ -408,12 +544,15 @@ def art_delete(
     bucket, region = _bucket_and_region()
     if bucket:
         try:
-            art_storage.delete_art(
+            # Archive rather than hard-delete so the removed art can still
+            # be restored from the art page's "Previous versions" list.
+            art_storage.archive_art(
                 bucket, region,
                 character.art_s3_key, character.headshot_s3_key,
             )
+            art_storage.prune_archive(char_id, bucket=bucket, region=region)
         except Exception:
-            log.exception("Art delete from S3 failed for character %s", char_id)
+            log.exception("Art archival on delete failed for character %s", char_id)
             # Keep going - clear the columns so the UI reflects the
             # intended state. Orphan cleanup will sweep the S3 leftovers.
 
@@ -453,7 +592,12 @@ def art_generate_gender(
     return _templates().TemplateResponse(
         request=request,
         name="character/art_generate_gender.html",
-        context={"character": character},
+        context={
+            "character": character,
+            "has_existing_art": bool(
+                character.art_s3_key or character.headshot_s3_key
+            ),
+        },
     )
 
 

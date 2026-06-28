@@ -145,22 +145,20 @@ def test_generate_review_and_in_place_crop_have_no_js_errors(
 
 
 def test_edit_page_with_art_has_no_js_errors(page, live_server_url):
-    """Edit page with art present renders the dropdown, the
-    overwrite-confirm modal (initially hidden via x-show), and the
-    delete-art form - each with its own nested Alpine scope."""
+    """Edit page with art present renders the Character Art dropdown and
+    the nested delete-art form (its own Alpine scope) without throwing."""
     sheet_url = _create_minimal_character(page, live_server_url, "EditJS")
     _upload_art(page, sheet_url)
     errors = _collect_errors(page)
     page.goto(sheet_url + "/edit")
     page.wait_for_selector('[data-action="character-art-menu"]')
     page.locator('[data-action="character-art-menu"]').click()
-    page.locator('[data-action="upload-new-art"]').click()
-    # The overwrite modal should open without throwing
-    page.wait_for_selector(
-        '[data-testid="art-overwrite-modal"]', state="visible",
-    )
+    # Dropdown opens and exposes its entries (upload link + delete form)
+    # without errors. "Upload new art" now just links to the art page.
+    page.wait_for_selector('[data-action="upload-new-art"]', state="visible")
+    page.wait_for_selector('[data-action="delete-art"]', state="visible")
     page.wait_for_timeout(300)
-    _assert_no_errors(errors, "edit page (with art) + overwrite modal")
+    _assert_no_errors(errors, "edit page (with art) + art dropdown")
 
 
 def test_sheet_page_with_art_has_no_js_errors(page, live_server_url):

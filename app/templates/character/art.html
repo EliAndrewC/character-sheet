@@ -23,6 +23,10 @@
         Could not save the art - the upload to S3 failed. Please try again.
         {% elif request.query_params.get('art_error') == 'expired' %}
         That upload expired before you could crop it. Please upload again.
+        {% elif request.query_params.get('art_error') == 'restore_not_found' %}
+        That version is no longer available to restore.
+        {% elif request.query_params.get('art_error') == 'restore_failed' %}
+        Could not restore that version. Please try again.
         {% else %}
         Could not save the art. Please try again.
         {% endif %}
@@ -37,6 +41,8 @@
     {% endif %}
 
     {% if headshot_url %}
+    {% include "character/partials/art/art_retention_note.html" %}
+
     <div class="flex items-start gap-4 bg-white rounded-lg shadow p-4 border border-ink/10 mb-6"
          data-testid="current-art-panel"
          x-data="{ confirmingDelete: false }">
@@ -46,16 +52,49 @@
         <div class="flex-1">
             <div class="font-semibold mb-1">Current headshot</div>
             <p class="text-sm text-ink/70 mb-3">
-                Uploading new art will replace this. This cannot be undone.
+                Uploading or generating new art replaces this, and deleting
+                removes it from the sheet. Either way your previous versions
+                are kept, so you can roll back from "Previous versions" below.
             </p>
             <form method="POST" action="/characters/{{ character.id }}/art/delete"
                   @submit="if (!confirmingDelete) { $event.preventDefault(); confirmingDelete = true; }">
                 <button type="submit"
-                        class="bg-red-700 hover:bg-red-800 text-parchment px-3 py-2 rounded text-sm font-medium"
+                        class="btn-danger px-3 py-2 rounded text-sm font-medium"
                         data-action="delete-art"
                         x-text="confirmingDelete ? 'Click again to confirm deletion' : 'Delete current art'">Delete current art</button>
             </form>
         </div>
+    </div>
+    {% endif %}
+
+    {% if archived_versions %}
+    <div class="bg-white rounded-lg shadow p-4 border border-ink/10 mb-6"
+         data-testid="art-history-panel">
+        <div class="font-semibold mb-1">Previous versions</div>
+        <p class="text-sm text-ink/70 mb-3">
+            The last several saved versions are kept so you can roll back.
+            Restoring makes that version current; the art you have now is
+            kept too.
+        </p>
+        <ul class="space-y-3">
+            {% for v in archived_versions %}
+            <li class="flex items-center gap-3" data-testid="art-history-item"
+                x-data="{ confirmingRestore: false }">
+                <img src="{{ v.head_url or v.full_url }}" alt="Previous headshot"
+                     class="rounded object-cover border border-ink/10"
+                     style="width: 48px; height: 64px;">
+                <div class="flex-1 text-sm text-ink/70">{{ v.date_label }}</div>
+                <form method="POST"
+                      action="/characters/{{ character.id }}/art/restore/{{ v.token }}"
+                      @submit="if (!confirmingRestore) { $event.preventDefault(); confirmingRestore = true; }">
+                    <button type="submit"
+                            class="btn-secondary px-3 py-2 rounded text-sm font-medium"
+                            data-action="restore-art"
+                            x-text="confirmingRestore ? 'Click again to restore' : 'Restore'">Restore</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
     </div>
     {% endif %}
 

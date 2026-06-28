@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
@@ -226,20 +227,36 @@ def public_url(key: str, bucket: str, region: str) -> str:
     )
 
 
-def list_art_keys(bucket: str, region: str) -> list[str]:
-    """List every S3 key under the art prefix."""
+def _list_keys_under(prefix: str, bucket: str, region: str) -> list[str]:
+    """List S3 keys whose name starts with ``prefix`` (stub-aware).
+
+    In stub mode every art object (live *and* archived) shares one flat
+    directory, so we must filter by the decoded key's prefix - otherwise
+    archived keys would leak into ``list_art_keys`` and the orphan sweep
+    would treat them as deletable. Real S3 filters server-side via the
+    ``Prefix`` argument, so the two paths stay equivalent."""
     if use_disk_stub():
         d = _stub_dir()
         if not os.path.isdir(d):
             return []
-        return [_stub_key_from_path(os.path.join(d, f)) for f in os.listdir(d)]
+        out: list[str] = []
+        for f in os.listdir(d):
+            key = _stub_key_from_path(os.path.join(d, f))
+            if key.startswith(prefix):
+                out.append(key)
+        return out
     client = _get_s3_client(region)
     keys: list[str] = []
     paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=bucket, Prefix=art_prefix()):
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
             keys.append(obj["Key"])
     return keys
+
+
+def list_art_keys(bucket: str, region: str) -> list[str]:
+    """List every S3 key under the *live* art prefix (excludes archive)."""
+    return _list_keys_under(art_prefix(), bucket, region)
 
 
 def list_orphaned_keys(
@@ -255,3 +272,169 @@ def list_orphaned_keys(
     """
     all_keys = list_art_keys(bucket, region)
     return [k for k in all_keys if k not in known_keys]
+
+
+# ---------------------------------------------------------------------------
+# Previous-version archive
+#
+# When art is replaced or deleted we don't destroy the old object; we
+# move it under a separate archive prefix so an editor (or the GM) can
+# restore an earlier version. The archive prefix is deliberately
+# disjoint from ``art_prefix()`` (note the trailing slash) so the
+# live-art orphan sweep never touches it. Retention is bounded per
+# character by ``prune_archive``.
+# ---------------------------------------------------------------------------
+
+
+def archive_prefix() -> str:
+    """Return the S3 key prefix for retained previous art (trailing /)."""
+    prefix = os.environ.get(
+        "S3_CHARACTER_ART_ARCHIVE_PREFIX", "character_art_archive/",
+    )
+    if not prefix.endswith("/"):
+        prefix = prefix + "/"
+    return prefix
+
+
+def archive_keep_default() -> int:
+    """How many previous versions to keep per character (default 10)."""
+    raw = os.environ.get("ART_ARCHIVE_KEEP", "10")
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 10
+
+
+def archive_key_for(live_key: str) -> str:
+    """Map a live art key to its archive location.
+
+    Preserves the ``{char_id}/{full|head}-{ts}.webp`` tail so the
+    timestamp (which records when the art was current) and the
+    full/head distinction survive the move.
+    """
+    live = art_prefix()
+    tail = live_key[len(live):] if live_key.startswith(live) else live_key
+    return archive_prefix() + tail
+
+
+def archive_art(bucket: str, region: str, *keys: Optional[str]) -> list[str]:
+    """Move live art objects into the archive prefix (copy then delete).
+
+    ``None`` keys are ignored so callers can pass
+    ``character.art_s3_key`` / ``headshot_s3_key`` directly. Returns the
+    list of archive keys created.
+    """
+    real = [k for k in keys if k]
+    created: list[str] = []
+    if not real:
+        return created
+    if use_disk_stub():
+        os.makedirs(_stub_dir(), exist_ok=True)
+        for key in real:
+            akey = archive_key_for(key)
+            src = _stub_path(key)
+            if os.path.isfile(src):
+                shutil.move(src, _stub_path(akey))
+            created.append(akey)
+        return created
+    client = _get_s3_client(region)
+    for key in real:
+        akey = archive_key_for(key)
+        client.copy_object(
+            Bucket=bucket, Key=akey,
+            CopySource={"Bucket": bucket, "Key": key},
+        )
+        client.delete_object(Bucket=bucket, Key=key)
+        created.append(akey)
+    return created
+
+
+def copy_object_key(
+    src_key: str, dst_key: str, *, bucket: str, region: str,
+) -> None:
+    """Copy one object to a new key, leaving the source in place.
+
+    Used by restore to copy an archived version back to a fresh live key
+    without consuming the archived copy.
+    """
+    if use_disk_stub():
+        os.makedirs(_stub_dir(), exist_ok=True)
+        shutil.copyfile(_stub_path(src_key), _stub_path(dst_key))
+        return
+    client = _get_s3_client(region)
+    client.copy_object(
+        Bucket=bucket, Key=dst_key,
+        CopySource={"Bucket": bucket, "Key": src_key},
+    )
+
+
+def list_archived_keys(char_id: int, *, bucket: str, region: str) -> list[str]:
+    """List every archived art key for a single character."""
+    return _list_keys_under(f"{archive_prefix()}{char_id}/", bucket, region)
+
+
+def list_all_archived_keys(bucket: str, region: str) -> list[str]:
+    """List every archived art key across all characters."""
+    return _list_keys_under(archive_prefix(), bucket, region)
+
+
+def _parse_archive_basename(key: str) -> Optional[Tuple[str, str]]:
+    """Return ``(kind, ts)`` from an archive key, or ``None`` if the
+    basename doesn't match the ``{full|head}-{ts}.webp`` pattern."""
+    base = key.rsplit("/", 1)[-1]
+    if not base.endswith(".webp"):
+        return None
+    stem = base[: -len(".webp")]
+    for kind in ("full", "head"):
+        marker = kind + "-"
+        if stem.startswith(marker):
+            return kind, stem[len(marker):]
+    return None
+
+
+def archived_versions(char_id: int, *, bucket: str, region: str) -> list[dict]:
+    """Return a character's retained versions, newest first.
+
+    Each item is ``{"ts": token, "full_key": str, "head_key": str|None}``.
+    Full and head objects share a timestamp token and are grouped into
+    one version; a token with no full object is skipped (nothing to
+    restore). The ISO-style token sorts lexically by time.
+    """
+    by_ts: dict[str, dict] = {}
+    for key in list_archived_keys(char_id, bucket=bucket, region=region):
+        parsed = _parse_archive_basename(key)
+        if parsed is None:
+            continue
+        kind, ts = parsed
+        slot = by_ts.setdefault(
+            ts, {"ts": ts, "full_key": None, "head_key": None},
+        )
+        slot[f"{kind}_key"] = key
+    versions = [v for v in by_ts.values() if v["full_key"]]
+    versions.sort(key=lambda v: v["ts"], reverse=True)
+    return versions
+
+
+def prune_archive(
+    char_id: int, *, bucket: str, region: str, keep: Optional[int] = None,
+) -> int:
+    """Delete archived versions beyond the newest ``keep``. Returns count."""
+    if keep is None:
+        keep = archive_keep_default()
+    stale = archived_versions(char_id, bucket=bucket, region=region)[keep:]
+    to_delete: list[str] = []
+    for v in stale:
+        to_delete.append(v["full_key"])
+        if v["head_key"]:
+            to_delete.append(v["head_key"])
+    if to_delete:
+        delete_art(bucket, region, *to_delete)
+    return len(to_delete)
+
+
+def delete_archive_for_char(char_id: int, *, bucket: str, region: str) -> int:
+    """Hard-delete every archived art object for a character. Returns count."""
+    keys = list_archived_keys(char_id, bucket=bucket, region=region)
+    if keys:
+        delete_art(bucket, region, *keys)
+    return len(keys)
