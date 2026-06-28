@@ -352,8 +352,15 @@ def delete_character(request: Request, char_id: int, db: Session = Depends(get_d
             if bucket:
                 region = os.environ.get("S3_BACKUP_REGION", "us-east-1")
                 try:
-                    from app.services.art_storage import delete_art
+                    from app.services.art_storage import (
+                        delete_art, delete_archive_for_char,
+                    )
                     delete_art(bucket, region, art_key, head_key)
+                    # Also purge any retained previous versions - they live
+                    # under a separate prefix the orphan sweep never visits.
+                    delete_archive_for_char(
+                        char_id, bucket=bucket, region=region,
+                    )
                 except Exception as exc:
                     logging.getLogger(__name__).exception(
                         "Failed to clean art for deleted character %s: %s",

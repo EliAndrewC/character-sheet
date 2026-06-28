@@ -104,6 +104,11 @@ def _mock_presigner():
             )
 
         client.generate_presigned_url.side_effect = _presign
+        # Default: no archived versions. Tests that exercise the
+        # "Previous versions" list override this per-test.
+        client.get_paginator.return_value.paginate.return_value = [
+            {"Contents": []},
+        ]
         factory.return_value = client
         yield client
 
@@ -145,6 +150,43 @@ class TestLandingPage:
         assert resp.status_code == 200
         # With no bucket, no URL is rendered and the panel is hidden
         assert b"current-art-panel" not in resp.content
+
+    def test_shows_retention_note_when_art_exists(self, client):
+        char = _make_character(client, headshot_s3_key="character_art/1/head-x.webp")
+        resp = client.get(f"/characters/{char.id}/art")
+        assert b"art-retention-note" in resp.content
+
+    def test_hides_retention_note_without_art(self, client):
+        char = _make_character(client)
+        resp = client.get(f"/characters/{char.id}/art")
+        assert b"art-retention-note" not in resp.content
+
+    def test_lists_previous_versions_with_restore_link(self, client, s3_client):
+        char = _make_character(client, headshot_s3_key="character_art/1/head-x.webp")
+        ts = "2026-03-01T00-00-00Z"
+        s3_client.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [
+                {"Key": f"character_art_archive/{char.id}/full-{ts}.webp"},
+                {"Key": f"character_art_archive/{char.id}/head-{ts}.webp"},
+            ]},
+        ]
+        resp = client.get(f"/characters/{char.id}/art")
+        assert b"art-history-panel" in resp.content
+        assert f"/characters/{char.id}/art/restore/{ts}".encode() in resp.content
+
+    def test_no_history_panel_when_archive_empty(self, client, s3_client):
+        char = _make_character(client, headshot_s3_key="character_art/1/head-x.webp")
+        resp = client.get(f"/characters/{char.id}/art")
+        assert b"art-history-panel" not in resp.content
+
+    def test_history_listing_failure_is_swallowed(self, client, s3_client):
+        """If listing archived versions throws, the art page still renders
+        (just without the history panel)."""
+        char = _make_character(client, headshot_s3_key="character_art/1/head-x.webp")
+        s3_client.get_paginator.side_effect = Exception("list boom")
+        resp = client.get(f"/characters/{char.id}/art")
+        assert resp.status_code == 200
+        assert b"art-history-panel" not in resp.content
 
     def test_404_for_missing_character(self, client):
         resp = client.get("/characters/9999/art")
@@ -446,7 +488,7 @@ class TestCropSave:
         # Staging slot cleaned up
         assert art_jobs.get_staged(sid) is None
 
-    def test_overwrites_previous_art_and_cleans_up_old_keys(self, client, s3_client):
+    def test_overwrites_previous_art_and_archives_old_keys(self, client, s3_client):
         char = _make_character(
             client,
             art_s3_key="old_full", headshot_s3_key="old_head",
@@ -457,7 +499,13 @@ class TestCropSave:
             data={"x": 10, "y": 10, "w": 300, "h": 400},
             follow_redirects=False,
         )
-        # Old keys got deleted
+        # Old keys were archived (copied to the archive prefix) ...
+        copy_dests = {
+            c.kwargs["Key"] for c in s3_client.copy_object.call_args_list
+        }
+        assert "character_art_archive/old_full" in copy_dests
+        assert "character_art_archive/old_head" in copy_dests
+        # ... then the live originals removed.
         delete_keys = [c.kwargs["Key"] for c in s3_client.delete_object.call_args_list]
         assert "old_full" in delete_keys
         assert "old_head" in delete_keys
@@ -562,6 +610,155 @@ class TestCropSave:
 
 
 # ---------------------------------------------------------------------------
+# POST /characters/{id}/art/restore/{version}
+# ---------------------------------------------------------------------------
+
+
+class TestRestore:
+    @staticmethod
+    def _set_archive(s3_client, keys):
+        s3_client.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": k} for k in keys]},
+        ]
+
+    def test_happy_path_restores_version(self, client, s3_client):
+        char = _make_character(
+            client,
+            art_s3_key="character_art/cur/full-cur.webp",
+            headshot_s3_key="character_art/cur/head-cur.webp",
+        )
+        ts = "2026-01-01T00-00-00Z"
+        self._set_archive(s3_client, [
+            f"character_art_archive/{char.id}/full-{ts}.webp",
+            f"character_art_archive/{char.id}/head-{ts}.webp",
+        ])
+        resp = client.post(
+            f"/characters/{char.id}/art/restore/{ts}",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert resp.headers["location"] == (
+            f"/characters/{char.id}/edit?art_restored=1"
+        )
+        copy_dests = [c.kwargs["Key"] for c in s3_client.copy_object.call_args_list]
+        # Current art archived before the swap ...
+        assert any(d.startswith("character_art_archive/") for d in copy_dests)
+        # ... and the chosen version copied to a fresh live key.
+        assert any(
+            d.startswith(f"character_art/{char.id}/full-") for d in copy_dests
+        )
+        refreshed = _refresh(client, char.id)
+        assert refreshed.art_s3_key.startswith(f"character_art/{char.id}/full-")
+        assert refreshed.headshot_s3_key.startswith(f"character_art/{char.id}/head-")
+        assert refreshed.art_updated_at is not None
+
+    def test_restore_missing_headshot_restores_full_only(self, client, s3_client):
+        char = _make_character(client)
+        ts = "2026-02-02T00-00-00Z"
+        # Only the full-art object survives for this version.
+        self._set_archive(s3_client, [
+            f"character_art_archive/{char.id}/full-{ts}.webp",
+        ])
+        resp = client.post(
+            f"/characters/{char.id}/art/restore/{ts}",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert "art_restored=1" in resp.headers["location"]
+        refreshed = _refresh(client, char.id)
+        assert refreshed.art_s3_key.startswith(f"character_art/{char.id}/full-")
+        assert refreshed.headshot_s3_key is None
+
+    def test_unknown_version_redirects_not_found(self, client, s3_client):
+        char = _make_character(client)
+        self._set_archive(s3_client, [])  # nothing archived
+        resp = client.post(
+            f"/characters/{char.id}/art/restore/2026-01-01T00-00-00Z",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert "art_error=restore_not_found" in resp.headers["location"]
+
+    def test_storage_not_configured_redirects_with_error(self, client, monkeypatch):
+        monkeypatch.delenv("S3_BACKUP_BUCKET", raising=False)
+        char = _make_character(client)
+        resp = client.post(
+            f"/characters/{char.id}/art/restore/2026-01-01T00-00-00Z",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert "art_error=storage_not_configured" in resp.headers["location"]
+
+    def test_copy_failure_redirects_with_error_and_keeps_row(self, client, s3_client):
+        char = _make_character(
+            client,
+            art_s3_key="character_art/cur/full-cur.webp",
+            headshot_s3_key="character_art/cur/head-cur.webp",
+        )
+        ts = "2026-01-01T00-00-00Z"
+        self._set_archive(s3_client, [
+            f"character_art_archive/{char.id}/full-{ts}.webp",
+            f"character_art_archive/{char.id}/head-{ts}.webp",
+        ])
+        s3_client.copy_object.side_effect = Exception("copy boom")
+        resp = client.post(
+            f"/characters/{char.id}/art/restore/{ts}",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert "art_error=restore_failed" in resp.headers["location"]
+        # Row untouched because the restore copy failed.
+        refreshed = _refresh(client, char.id)
+        assert refreshed.art_s3_key == "character_art/cur/full-cur.webp"
+
+    def test_403_for_non_editor(self, client):
+        char = _make_character(client, owner_id=OTHER_ID)
+        resp = client.post(
+            f"/characters/{char.id}/art/restore/2026-01-01T00-00-00Z",
+            headers={"X-Test-User": "plainuser:Nobody"},
+        )
+        assert resp.status_code == 403
+
+    def test_prune_failure_after_restore_is_swallowed(
+        self, client, s3_client, monkeypatch,
+    ):
+        char = _make_character(
+            client,
+            art_s3_key="character_art/cur/full-cur.webp",
+            headshot_s3_key="character_art/cur/head-cur.webp",
+        )
+        ts = "2026-01-01T00-00-00Z"
+        self._set_archive(s3_client, [
+            f"character_art_archive/{char.id}/full-{ts}.webp",
+            f"character_art_archive/{char.id}/head-{ts}.webp",
+        ])
+
+        def _boom(*a, **k):
+            raise Exception("prune boom")
+
+        monkeypatch.setattr("app.services.art_storage.prune_archive", _boom)
+        resp = client.post(
+            f"/characters/{char.id}/art/restore/{ts}",
+            follow_redirects=False,
+        )
+        # Restore still succeeds and commits despite the prune failure.
+        assert resp.status_code == 303
+        assert "art_restored=1" in resp.headers["location"]
+        refreshed = _refresh(client, char.id)
+        assert refreshed.art_s3_key.startswith(f"character_art/{char.id}/full-")
+
+
+class TestArchiveTimestampFormat:
+    def test_formats_valid_token(self):
+        from app.routes.art import _format_archive_ts
+        assert _format_archive_ts("2026-03-01T08-30-00Z") == "2026-03-01 08:30 UTC"
+
+    def test_returns_token_unchanged_when_unparseable(self):
+        from app.routes.art import _format_archive_ts
+        assert _format_archive_ts("not-a-timestamp") == "not-a-timestamp"
+
+
+# ---------------------------------------------------------------------------
 # POST /characters/{id}/art/delete
 # ---------------------------------------------------------------------------
 
@@ -578,6 +775,12 @@ class TestDeleteEndpoint:
         )
         assert resp.status_code == 303
         assert resp.headers["location"] == f"/characters/{char.id}/edit?art_deleted=1"
+        # Deleting archives the current art (so it can be restored) rather
+        # than hard-deleting: the old objects are copied to the archive
+        # prefix and the live originals removed.
+        copy_dests = {c.kwargs["Key"] for c in s3_client.copy_object.call_args_list}
+        assert "character_art_archive/full_k" in copy_dests
+        assert "character_art_archive/head_k" in copy_dests
         delete_keys = [c.kwargs["Key"] for c in s3_client.delete_object.call_args_list]
         assert "full_k" in delete_keys
         assert "head_k" in delete_keys
@@ -695,17 +898,20 @@ class TestEditPageIntegration:
         resp_yes = client.get(f"/characters/{char_yes.id}/edit")
         assert b'data-action="delete-art"' in resp_yes.content
 
-    def test_overwrite_modal_only_shows_when_art_exists(self, client):
+    def test_upload_new_art_links_to_art_page_with_or_without_art(self, client):
+        """The "Upload new art" entry always links straight to the art
+        page (no overwrite-confirm modal, which was removed)."""
         char_no = _make_character(client)
-        assert b"art-overwrite-modal" not in client.get(
-            f"/characters/{char_no.id}/edit"
-        ).content
+        body_no = client.get(f"/characters/{char_no.id}/edit").content
+        assert b"art-overwrite-modal" not in body_no
+        assert f'/characters/{char_no.id}/art"'.encode() in body_no
+
         char_yes = _make_character(
             client, headshot_s3_key="character_art/2/head-x.webp",
         )
-        assert b"art-overwrite-modal" in client.get(
-            f"/characters/{char_yes.id}/edit"
-        ).content
+        body_yes = client.get(f"/characters/{char_yes.id}/edit").content
+        assert b"art-overwrite-modal" not in body_yes
+        assert f'/characters/{char_yes.id}/art"'.encode() in body_yes
 
 
 # ---------------------------------------------------------------------------

@@ -14,6 +14,10 @@
         pronouns used in the prompt.
     </p>
 
+    {% if has_existing_art %}
+    {% include "character/partials/art/art_retention_note.html" %}
+    {% endif %}
+
     <form method="GET"
           action="/characters/{{ character.id }}/art/generate/options"
           class="space-y-6 bg-white rounded-lg shadow p-6 border border-ink/10">

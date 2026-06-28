@@ -381,6 +381,307 @@ class TestDiskStub:
         assert "/" not in encoded
         assert art_storage.stub_key_decoded(encoded) == original
 
+    def test_list_art_keys_excludes_archived_keys(self, tmp_path):
+        """Live + archived objects share the flat stub dir; the live
+        listing must not return archived keys (else the orphan sweep
+        would delete them)."""
+        (tmp_path / "character_art__5__full-x.webp").write_bytes(b"live")
+        (tmp_path / "character_art_archive__5__full-x.webp").write_bytes(b"arch")
+        with patch("app.services.art_storage._get_s3_client") as factory:
+            keys = art_storage.list_art_keys("b", "us-east-1")
+            factory.assert_not_called()
+        assert keys == ["character_art/5/full-x.webp"]
+
+    def test_archive_art_moves_file_to_archive_prefix(self, tmp_path):
+        (tmp_path / "character_art__5__full-x.webp").write_bytes(b"payload")
+        with patch("app.services.art_storage._get_s3_client") as factory:
+            created = art_storage.archive_art(
+                "b", "us-east-1", "character_art/5/full-x.webp",
+            )
+            factory.assert_not_called()
+        assert created == ["character_art_archive/5/full-x.webp"]
+        # The live file is gone and the archive file holds the bytes.
+        assert not (tmp_path / "character_art__5__full-x.webp").exists()
+        moved = tmp_path / "character_art_archive__5__full-x.webp"
+        assert moved.read_bytes() == b"payload"
+
+    def test_archive_art_skips_missing_source_but_returns_key(self, tmp_path):
+        with patch("app.services.art_storage._get_s3_client") as factory:
+            created = art_storage.archive_art(
+                "b", "us-east-1", "character_art/5/gone.webp",
+            )
+            factory.assert_not_called()
+        assert created == ["character_art_archive/5/gone.webp"]
+
+    def test_copy_object_key_copies_in_stub(self, tmp_path):
+        (tmp_path / "character_art_archive__5__full-x.webp").write_bytes(b"src")
+        with patch("app.services.art_storage._get_s3_client") as factory:
+            art_storage.copy_object_key(
+                "character_art_archive/5/full-x.webp",
+                "character_art/5/full-new.webp",
+                bucket="b", region="us-east-1",
+            )
+            factory.assert_not_called()
+        # Source preserved, destination written.
+        assert (tmp_path / "character_art_archive__5__full-x.webp").exists()
+        assert (tmp_path / "character_art__5__full-new.webp").read_bytes() == b"src"
+
+    def test_list_archived_keys_filters_by_char_in_stub(self, tmp_path):
+        (tmp_path / "character_art_archive__5__full-x.webp").write_bytes(b"a")
+        (tmp_path / "character_art_archive__9__full-y.webp").write_bytes(b"b")
+        with patch("app.services.art_storage._get_s3_client") as factory:
+            keys = art_storage.list_archived_keys(5, bucket="b", region="us-east-1")
+            factory.assert_not_called()
+        assert keys == ["character_art_archive/5/full-x.webp"]
+
+
+class TestArchivePrefix:
+    def test_default_prefix(self, monkeypatch):
+        monkeypatch.delenv("S3_CHARACTER_ART_ARCHIVE_PREFIX", raising=False)
+        assert art_storage.archive_prefix() == "character_art_archive/"
+
+    def test_custom_prefix_respected(self, monkeypatch):
+        monkeypatch.setenv("S3_CHARACTER_ART_ARCHIVE_PREFIX", "arch/")
+        assert art_storage.archive_prefix() == "arch/"
+
+    def test_trailing_slash_added(self, monkeypatch):
+        monkeypatch.setenv("S3_CHARACTER_ART_ARCHIVE_PREFIX", "arch")
+        assert art_storage.archive_prefix() == "arch/"
+
+    def test_archive_prefix_is_disjoint_from_live_prefix(self, monkeypatch):
+        """The orphan sweep lists the live prefix; the archive prefix must
+        not be a string-prefix of it (else archives would be swept)."""
+        monkeypatch.delenv("S3_CHARACTER_ART_PREFIX", raising=False)
+        monkeypatch.delenv("S3_CHARACTER_ART_ARCHIVE_PREFIX", raising=False)
+        live = art_storage.art_prefix()
+        archive = art_storage.archive_prefix()
+        assert not archive.startswith(live)
+        # A concrete archive key must not start with the live prefix.
+        assert not f"{archive}5/full-x.webp".startswith(live)
+
+
+class TestArchiveKeepDefault:
+    def test_default_is_ten(self, monkeypatch):
+        monkeypatch.delenv("ART_ARCHIVE_KEEP", raising=False)
+        assert art_storage.archive_keep_default() == 10
+
+    def test_custom_value(self, monkeypatch):
+        monkeypatch.setenv("ART_ARCHIVE_KEEP", "3")
+        assert art_storage.archive_keep_default() == 3
+
+    def test_negative_clamped_to_zero(self, monkeypatch):
+        monkeypatch.setenv("ART_ARCHIVE_KEEP", "-4")
+        assert art_storage.archive_keep_default() == 0
+
+    def test_invalid_falls_back_to_ten(self, monkeypatch):
+        monkeypatch.setenv("ART_ARCHIVE_KEEP", "lots")
+        assert art_storage.archive_keep_default() == 10
+
+
+class TestArchiveKeyFor:
+    def test_maps_live_key_into_archive_prefix(self, monkeypatch):
+        monkeypatch.delenv("S3_CHARACTER_ART_PREFIX", raising=False)
+        monkeypatch.delenv("S3_CHARACTER_ART_ARCHIVE_PREFIX", raising=False)
+        akey = art_storage.archive_key_for("character_art/5/full-x.webp")
+        assert akey == "character_art_archive/5/full-x.webp"
+
+    def test_non_prefixed_key_is_prepended(self, monkeypatch):
+        monkeypatch.delenv("S3_CHARACTER_ART_ARCHIVE_PREFIX", raising=False)
+        # Defensive: a key that doesn't start with the live prefix still
+        # lands under the archive prefix.
+        assert art_storage.archive_key_for("old_full") == (
+            "character_art_archive/old_full"
+        )
+
+
+class TestArchiveArt:
+    @patch("app.services.art_storage._get_s3_client")
+    def test_copies_then_deletes_each_live_key(self, mock_get_client):
+        client = MagicMock()
+        mock_get_client.return_value = client
+        created = art_storage.archive_art(
+            "bucket", "us-east-1",
+            "character_art/5/full-x.webp",
+            "character_art/5/head-x.webp",
+        )
+        assert created == [
+            "character_art_archive/5/full-x.webp",
+            "character_art_archive/5/head-x.webp",
+        ]
+        assert client.copy_object.call_count == 2
+        first = client.copy_object.call_args_list[0].kwargs
+        assert first["Bucket"] == "bucket"
+        assert first["Key"] == "character_art_archive/5/full-x.webp"
+        assert first["CopySource"] == {
+            "Bucket": "bucket", "Key": "character_art/5/full-x.webp",
+        }
+        deleted = {c.kwargs["Key"] for c in client.delete_object.call_args_list}
+        assert deleted == {
+            "character_art/5/full-x.webp", "character_art/5/head-x.webp",
+        }
+
+    @patch("app.services.art_storage._get_s3_client")
+    def test_ignores_none_keys(self, mock_get_client):
+        client = MagicMock()
+        mock_get_client.return_value = client
+        created = art_storage.archive_art(
+            "b", "us-east-1", None, "character_art/1/full.webp", None,
+        )
+        assert created == ["character_art_archive/1/full.webp"]
+        assert client.copy_object.call_count == 1
+
+    @patch("app.services.art_storage._get_s3_client")
+    def test_no_client_when_all_none(self, mock_get_client):
+        assert art_storage.archive_art("b", "us-east-1", None, None) == []
+        mock_get_client.assert_not_called()
+
+
+class TestCopyObjectKey:
+    @patch("app.services.art_storage._get_s3_client")
+    def test_copies_without_deleting_source(self, mock_get_client):
+        client = MagicMock()
+        mock_get_client.return_value = client
+        art_storage.copy_object_key(
+            "character_art_archive/5/full-x.webp",
+            "character_art/5/full-new.webp",
+            bucket="b", region="us-east-1",
+        )
+        client.copy_object.assert_called_once_with(
+            Bucket="b", Key="character_art/5/full-new.webp",
+            CopySource={"Bucket": "b", "Key": "character_art_archive/5/full-x.webp"},
+        )
+        client.delete_object.assert_not_called()
+
+
+class TestListArchivedKeys:
+    @patch("app.services.art_storage._get_s3_client")
+    def test_lists_under_char_prefix(self, mock_get_client):
+        client = MagicMock()
+        mock_get_client.return_value = client
+        paginator = MagicMock()
+        client.get_paginator.return_value = paginator
+        paginator.paginate.return_value = [
+            {"Contents": [
+                {"Key": "character_art_archive/5/full-a.webp"},
+                {"Key": "character_art_archive/5/head-a.webp"},
+            ]},
+        ]
+        keys = art_storage.list_archived_keys(5, bucket="b", region="us-east-1")
+        assert keys == [
+            "character_art_archive/5/full-a.webp",
+            "character_art_archive/5/head-a.webp",
+        ]
+        # Paginated under the per-character archive prefix.
+        _, kwargs = paginator.paginate.call_args
+        assert kwargs["Prefix"] == "character_art_archive/5/"
+
+    @patch("app.services.art_storage._get_s3_client")
+    def test_list_all_uses_bare_archive_prefix(self, mock_get_client):
+        client = MagicMock()
+        mock_get_client.return_value = client
+        paginator = MagicMock()
+        client.get_paginator.return_value = paginator
+        paginator.paginate.return_value = [{"Contents": []}]
+        art_storage.list_all_archived_keys("b", "us-east-1")
+        _, kwargs = paginator.paginate.call_args
+        assert kwargs["Prefix"] == "character_art_archive/"
+
+
+class TestArchivedVersions:
+    @patch("app.services.art_storage.list_archived_keys")
+    def test_groups_full_and_head_and_sorts_newest_first(self, mock_list):
+        mock_list.return_value = [
+            "character_art_archive/5/full-2026-01-01T00-00-00Z.webp",
+            "character_art_archive/5/head-2026-01-01T00-00-00Z.webp",
+            "character_art_archive/5/full-2026-03-09T08-00-00Z.webp",
+            "character_art_archive/5/head-2026-03-09T08-00-00Z.webp",
+        ]
+        versions = art_storage.archived_versions(5, bucket="b", region="r")
+        assert [v["ts"] for v in versions] == [
+            "2026-03-09T08-00-00Z", "2026-01-01T00-00-00Z",
+        ]
+        assert versions[0]["full_key"].endswith("full-2026-03-09T08-00-00Z.webp")
+        assert versions[0]["head_key"].endswith("head-2026-03-09T08-00-00Z.webp")
+
+    @patch("app.services.art_storage.list_archived_keys")
+    def test_skips_non_matching_and_full_less_versions(self, mock_list):
+        mock_list.return_value = [
+            "character_art_archive/5/full-2026-01-01T00-00-00Z.webp",
+            "character_art_archive/5/head-2026-02-02T00-00-00Z.webp",  # no full
+            "character_art_archive/5/notes.txt",                        # not webp
+            "character_art_archive/5/thumb-2026-01-01T00-00-00Z.webp",  # bad kind
+        ]
+        versions = art_storage.archived_versions(5, bucket="b", region="r")
+        # Only the one ts that has a full key survives.
+        assert len(versions) == 1
+        assert versions[0]["ts"] == "2026-01-01T00-00-00Z"
+        assert versions[0]["head_key"] is None
+
+
+class TestPruneArchive:
+    @patch("app.services.art_storage.delete_art")
+    @patch("app.services.art_storage.list_archived_keys")
+    def test_deletes_versions_beyond_keep(self, mock_list, mock_delete):
+        # Three versions; keep newest 1 -> the two oldest (4 objects) go.
+        mock_list.return_value = [
+            f"character_art_archive/5/{k}-{ts}.webp"
+            for ts in ("2026-01-01T00-00-00Z",
+                       "2026-02-01T00-00-00Z",
+                       "2026-03-01T00-00-00Z")
+            for k in ("full", "head")
+        ]
+        n = art_storage.prune_archive(5, bucket="b", region="r", keep=1)
+        assert n == 4
+        deleted = set(mock_delete.call_args.args[2:])
+        assert deleted == {
+            "character_art_archive/5/full-2026-01-01T00-00-00Z.webp",
+            "character_art_archive/5/head-2026-01-01T00-00-00Z.webp",
+            "character_art_archive/5/full-2026-02-01T00-00-00Z.webp",
+            "character_art_archive/5/head-2026-02-01T00-00-00Z.webp",
+        }
+
+    @patch("app.services.art_storage.delete_art")
+    @patch("app.services.art_storage.list_archived_keys")
+    def test_nothing_deleted_within_limit(self, mock_list, mock_delete):
+        mock_list.return_value = [
+            "character_art_archive/5/full-2026-03-01T00-00-00Z.webp",
+            "character_art_archive/5/head-2026-03-01T00-00-00Z.webp",
+        ]
+        assert art_storage.prune_archive(5, bucket="b", region="r", keep=5) == 0
+        mock_delete.assert_not_called()
+
+    @patch("app.services.art_storage.delete_art")
+    @patch("app.services.art_storage.list_archived_keys")
+    def test_uses_default_keep_when_unspecified(self, mock_list, mock_delete, monkeypatch):
+        monkeypatch.setenv("ART_ARCHIVE_KEEP", "0")
+        mock_list.return_value = [
+            "character_art_archive/5/full-2026-03-01T00-00-00Z.webp",
+        ]
+        # keep=0 -> everything is stale
+        assert art_storage.prune_archive(5, bucket="b", region="r") == 1
+
+
+class TestDeleteArchiveForChar:
+    @patch("app.services.art_storage.delete_art")
+    @patch("app.services.art_storage.list_archived_keys")
+    def test_deletes_all_archived_keys(self, mock_list, mock_delete):
+        mock_list.return_value = [
+            "character_art_archive/5/full-x.webp",
+            "character_art_archive/5/head-x.webp",
+        ]
+        assert art_storage.delete_archive_for_char(5, bucket="b", region="r") == 2
+        assert mock_delete.call_args.args[2:] == (
+            "character_art_archive/5/full-x.webp",
+            "character_art_archive/5/head-x.webp",
+        )
+
+    @patch("app.services.art_storage.delete_art")
+    @patch("app.services.art_storage.list_archived_keys")
+    def test_noop_when_empty(self, mock_list, mock_delete):
+        mock_list.return_value = []
+        assert art_storage.delete_archive_for_char(5, bucket="b", region="r") == 0
+        mock_delete.assert_not_called()
+
 
 class TestTestArtStubRoute:
     """The ``/test-art-stub/{key}`` route serves bytes from the disk stub."""

@@ -302,6 +302,12 @@
         Character art removed.
     </div>
     {% endif %}
+    {% if request.query_params.get('art_restored') %}
+    <div class="bg-success/10 border border-success/50 text-success rounded px-4 py-2 text-sm mb-4"
+         data-testid="art-restored-banner">
+        Previous character art restored.
+    </div>
+    {% endif %}
 
     {# Import Notes banner - shown when the character has an Import
        Notes section (i.e. was created via the import pipeline). #}
@@ -1637,7 +1643,7 @@
                         </div>
                     </div>
                     <div class="relative"
-                         x-data="{ artMenu: false, confirmOverwrite: false, confirmingDelete: false }">
+                         x-data="{ artMenu: false, confirmingDelete: false }">
                         <button type="button" @click="artMenu = !artMenu"
                                 class="btn-info px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm flex items-center gap-1"
                                 data-action="character-art-menu">
@@ -1646,20 +1652,11 @@
                         </button>
                         <div x-show="artMenu" x-cloak @click.outside="artMenu = false"
                              class="absolute bottom-full mb-1 right-0 bg-white border border-ink/20 rounded shadow-lg z-20 text-sm w-56">
-                            {% if character.headshot_s3_key %}
-                            <a href="#"
-                               @click.prevent="confirmOverwrite = true; artMenu = false"
-                               class="block w-full text-left px-3 py-2 hover:bg-parchment text-ink"
-                               data-action="upload-new-art">
-                                Upload new art
-                            </a>
-                            {% else %}
                             <a href="/characters/{{ character.id }}/art"
                                class="block w-full text-left px-3 py-2 hover:bg-parchment text-ink"
                                data-action="upload-new-art">
                                 Upload new art
                             </a>
-                            {% endif %}
                             {% if art_gen_enabled() %}
                             <a href="/characters/{{ character.id }}/art/generate"
                                class="block w-full text-left px-3 py-2 hover:bg-parchment text-ink border-t border-ink/10"
@@ -1687,30 +1684,6 @@
                             </form>
                             {% endif %}
                         </div>
-                        {% if character.headshot_s3_key %}
-                        <div x-show="confirmOverwrite" x-cloak
-                             data-testid="art-overwrite-modal"
-                             class="fixed inset-0 bg-black/40 flex items-center justify-center z-30"
-                             @click.self="confirmOverwrite = false">
-                            <div class="bg-white rounded-lg shadow-xl max-w-md p-6">
-                                <h3 class="text-lg font-bold mb-3">Replace current art?</h3>
-                                <p class="text-sm text-ink/80 mb-4">
-                                    This will replace the current character art, which cannot be undone.
-                                </p>
-                                <div class="flex gap-3 justify-end">
-                                    <button type="button" @click="confirmOverwrite = false"
-                                            class="px-4 py-2 rounded btn-secondary text-sm">
-                                        Cancel
-                                    </button>
-                                    <a href="/characters/{{ character.id }}/art"
-                                       class="px-4 py-2 rounded btn-primary text-sm font-medium"
-                                       data-action="confirm-overwrite">
-                                        Continue
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
                     </div>
                     {# Apply Changes shows whenever the player has anything
                        to commit:
