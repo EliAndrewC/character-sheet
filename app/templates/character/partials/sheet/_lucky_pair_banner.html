@@ -11,10 +11,13 @@
    attack-result banner, etc. Omit it for the WC modal etc. where there
    is no downstream step. The structure mirrors the readonly-modal Lucky
    section in ``readonly_roll_modal.html`` for visual consistency. #}
-<div x-show="luckyUsedThisRoll && luckyRollPair && !formula?.is_initiative" x-cloak
+{# Also rendered for a Player Character Point reroll, which is mechanically
+   identical (keep-better) and sets the same luckyRollPair with source='pcp'. #}
+<div x-show="(luckyUsedThisRoll || pcpRerollUsedThisRoll) && luckyRollPair && !formula?.is_initiative" x-cloak
      class="bg-amber-50 border border-amber-300 rounded p-2 text-sm text-amber-800"
      data-testid="lucky-pair-banner">
-    <div class="font-medium mb-1">Lucky reroll:</div>
+    <div class="font-medium mb-1"
+         x-text="(luckyRollPair?.source === 'pcp' ? 'Player Character Point' : 'Lucky') + ' reroll:'"></div>
     <div class="flex items-center gap-2">
         <span class="text-amber-900/70 w-16">Original:</span>
         <span class="font-mono font-bold tabular-nums"

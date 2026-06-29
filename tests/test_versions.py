@@ -126,6 +126,24 @@ class TestDiffSummary:
         diffs = compute_diff_summary(old, new)
         assert any("Lucky" in d for d in diffs)
 
+    def test_pcp_spent(self):
+        old = {"pcp_count": 0}
+        new = {"pcp_count": 1}
+        diffs = compute_diff_summary(old, new)
+        assert any("Spent a Player Character Point" in d and "1" in d
+                   for d in diffs)
+
+    def test_pcp_undone(self):
+        old = {"pcp_count": 3}
+        new = {"pcp_count": 2}
+        diffs = compute_diff_summary(old, new)
+        assert any("Undid a Player Character Point" in d and "2" in d
+                   for d in diffs)
+
+    def test_pcp_unchanged_emits_nothing(self):
+        diffs = compute_diff_summary({"pcp_count": 2}, {"pcp_count": 2})
+        assert not any("Player Character Point" in d for d in diffs)
+
     def test_foreign_knack_added(self):
         old = {"foreign_knacks": {}}
         new = {"foreign_knacks": {"athletics": 2}}
@@ -495,6 +513,29 @@ class TestRevertCharacter:
 
         assert char.ring_fire == 2
         assert char.honor == 1.0
+
+    def test_publish_then_undo_pcp_discard_restores_count(self, db):
+        """Spending a PCP publishes (pcp_count=1). Undoing it on the draft
+        (pcp_count=0) is a discardable change that restores to 1."""
+        from app.services.versions import discard_draft_changes
+        char = Character(name="P", school="akodo_bushi",
+                         school_ring_choice="Water",
+                         knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1})
+        db.add(char)
+        db.flush()
+        char.pcp_count = 1
+        publish_character(char, db)
+        assert char.published_state["pcp_count"] == 1
+
+        # Undo as a draft change.
+        char.pcp_count = 0
+        db.flush()
+        assert char.has_unpublished_changes
+
+        discard_draft_changes(char, db)
+        db.flush()
+        assert char.pcp_count == 1
+        assert not char.has_unpublished_changes
 
 
 class TestDiscardDraftChanges:

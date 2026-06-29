@@ -234,6 +234,12 @@ class Character(Base):
     # XP tracking
     starting_xp: Mapped[int] = mapped_column(default=150)
     earned_xp: Mapped[int] = mapped_column(default=0)
+    # Player Character Points: the number of times this character has spent a
+    # PCP. Versioned build state (each spend immediately publishes a new
+    # version; undoing a spend is a discardable draft change). The escalating
+    # XP cost of N spends is the Nth triangular number, N*(N+1)//2 - see
+    # services/xp.pcp_total_cost. See rules/10-player_character_points.md.
+    pcp_count: Mapped[int] = mapped_column(default=0)
 
     # Combat tracking (mutable session state)
     current_light_wounds: Mapped[int] = mapped_column(default=0)
@@ -387,7 +393,8 @@ class Character(Base):
                     "notes": "", "sections": [],
                     "rank_recognition_awards": [],
                     "specializations": [], "technique_choices": {},
-                    "foreign_knacks": {}, "recognition_halved": False}
+                    "foreign_knacks": {}, "recognition_halved": False,
+                    "pcp_count": 0}
         for key in current:
             if key in skip:
                 continue
@@ -479,6 +486,7 @@ class Character(Base):
             "rank_recognition_awards": self.rank_recognition_awards or [],
             "starting_xp": self.starting_xp,
             "earned_xp": self.earned_xp,
+            "pcp_count": self.pcp_count or 0,
             "current_light_wounds": self.current_light_wounds,
             "current_serious_wounds": self.current_serious_wounds,
             "current_void_points": self.current_void_points,
@@ -555,6 +563,7 @@ class Character(Base):
             rank_recognition_awards=data.get("rank_recognition_awards", []),
             starting_xp=data.get("starting_xp", 150),
             earned_xp=data.get("earned_xp", 0),
+            pcp_count=data.get("pcp_count", 0),
             current_light_wounds=data.get("current_light_wounds", 0),
             current_serious_wounds=data.get("current_serious_wounds", 0),
             current_void_points=data.get("current_void_points", 0),

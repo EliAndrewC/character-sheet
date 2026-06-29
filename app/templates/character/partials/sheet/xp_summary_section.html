@@ -1,6 +1,66 @@
 {% from "character/partials/sheet/_macros.html" import render_rows %}
+    {# Budget figures, computed server-side. Player Character Points are an XP
+       sink on top of the build's gross spent (grand_total + disadvantage
+       refund). They are kept Alpine-reactive (pcpCount/pcpCost) so a PCP spent
+       live during a roll updates the card + Unspent figure without a reload. #}
+    {% set dis_xp = xp_breakdown.disadvantages.total | abs %}
+    {% set base_gross_spent = xp_breakdown.grand_total + dis_xp %}
+    {% set budget = character.starting_xp + character.earned_xp + dis_xp %}
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
-             x-data="{ expanded: null }">
+             x-data="{
+                expanded: null,
+                pcpCount: {{ xp_breakdown.pcp.count }},
+                baseGrossSpent: {{ base_gross_spent }},
+                budget: {{ budget }},
+                pcpUndoError: false,
+                _math() { return window.L7RRollMath; },
+                get pcpCost() { return this._math() ? this._math().pcpTotalCost(this.pcpCount) : 0; },
+                get grossSpent() { return this.baseGrossSpent + this.pcpCost; },
+                get unspent() { return this.budget - this.grossSpent; },
+                pcpOrdinal(n) {
+                    const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+                    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+                },
+                pcpRows() {
+                    const rows = [];
+                    for (let k = 1; k <= this.pcpCount; k++) {
+                        rows.push({ k, label: this.pcpOrdinal(k) + ' Player Character Point' });
+                    }
+                    return rows;
+                },
+                onPcpSpent(e) {
+                    if (e.detail && typeof e.detail.pcp_count === 'number') {
+                        this.pcpCount = e.detail.pcp_count;
+                    }
+                },
+                async undoPcp() {
+                    if (this._undoing) return;          // guard double-clicks
+                    this._undoing = true;
+                    const oldCount = this.pcpCount;
+                    try {
+                        const resp = await fetch('/characters/{{ character.id }}/undo-pcp', { method: 'POST' });
+                        if (!resp.ok) { this.pcpUndoError = true; return; }
+                        this.pcpUndoError = false;
+                        const data = await resp.json();
+                        this.pcpCount = data.pcp_count;
+                        // Keep the tracking bridge (which drives the roll-modal
+                        // confirm's next-cost / unspent breakdown) in sync so a
+                        // later spend isn't charged the pre-undo escalated price.
+                        const t = window._trackingBridge;
+                        if (t) {
+                            const refunded = this._math()
+                                ? this._math().pcpTotalCost(oldCount) - this._math().pcpTotalCost(data.pcp_count)
+                                : 0;
+                            t.pcpCount = data.pcp_count;
+                            t.pcpXpRemaining = (t.pcpXpRemaining || 0) + refunded;
+                        }
+                        if (this.pcpCount === 0) this.expanded = null;
+                    } finally {
+                        this._undoing = false;
+                    }
+                },
+             }"
+             @pcp-spent.window="onPcpSpent($event)">
         <h2 class="text-xl font-bold mb-4 text-accent">XP Summary</h2>
 
         {# Six clickable category cards in a 2/3-column grid (plus an optional
@@ -47,6 +107,16 @@
                 <span>Disadvantages</span>
                 <span class="font-mono font-bold text-success">{{ dis_section.total }}</span>
             </div>
+            {# Player Character Points: a rare, escalating XP sink. Shown only
+               once the character has spent at least one. Alpine-reactive so a
+               live spend during a roll makes it appear. #}
+            <div data-xp-card="pcp" x-show="pcpCount > 0" x-cloak
+                 class="flex justify-between px-3 py-2 bg-parchment rounded select-none cursor-pointer hover:bg-parchment/70"
+                 @click="expanded = expanded === 'pcp' ? null : 'pcp'"
+                 :class="expanded === 'pcp' ? 'ring-2 ring-accent' : ''">
+                <span>Player Character Points</span>
+                <span class="font-mono font-bold" x-text="pcpCost"></span>
+            </div>
         </div>
 
         {# Single shared expansion panel #}
@@ -70,22 +140,47 @@
                     {% endif %}
                 </div>
             {% endfor %}
+            {# Player Character Points detail: Alpine-rendered so it tracks live
+               spends/undos. One row per spend (Nth = N XP), plus an editor-only
+               undo control (a discardable draft change - see the note). #}
+            <div x-show="expanded === 'pcp'" x-cloak data-xp-detail="pcp">
+                <h3 class="font-bold text-sm text-accent mb-2">Player Character Points</h3>
+                <template x-for="row in pcpRows()" :key="row.k">
+                    <div class="flex justify-between items-center py-0.5 text-sm">
+                        <span x-text="row.label"></span>
+                        <span class="font-mono" x-text="row.k"></span>
+                    </div>
+                </template>
+                {% if viewer_can_edit %}
+                <div class="mt-2 pt-2 border-t border-ink/10">
+                    <button type="button" data-action="pcp-undo" @click="undoPcp()"
+                            class="btn-danger-soft px-3 py-1 rounded text-xs font-medium">
+                        Undo last Player Character Point
+                    </button>
+                </div>
+                {% endif %}
+            </div>
         </div>
 
-        {# Budget summary line #}
-        {% set dis_xp = xp_breakdown.disadvantages.total | abs %}
-        {% set gross_spent = xp_breakdown.grand_total + dis_xp %}
-        {% set budget = character.starting_xp + character.earned_xp + dis_xp %}
-        {% set remaining = budget - gross_spent %}
+        {# Undo is immediate + permanent now; only surface the blocked case
+           (the character has unapplied build edits, so the undo can't publish). #}
+        <p x-show="pcpUndoError" x-cloak data-testid="pcp-undo-error"
+           class="text-xs text-red-600 mb-3">
+            Couldn't undo: apply or discard your pending changes on the edit page first.
+        </p>
+
+        {# Budget summary line. Spent and Unspent are Alpine-reactive so a PCP
+           spent/undone live updates them; PCP cost is folded into gross spent
+           and Unspent goes red on overspend / XP debt. #}
         <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm font-medium">
-            <span>Spent: <span class="font-mono">{{ gross_spent }}</span></span>
+            <span>Spent: <span class="font-mono" x-text="grossSpent">{{ base_gross_spent }}</span></span>
             <span>Total: <span class="font-mono">{{ budget }}</span>
                 {% if dis_xp > 0 %}
                 <span class="text-xs text-ink/50">({{ character.starting_xp }} starting + {{ character.earned_xp }} earned + {{ dis_xp }} disadvantages)</span>
                 {% endif %}
             </span>
-            <span class="{{ 'text-success' if remaining >= 0 else 'text-red-600 font-bold' }}">
-                Unspent: <span class="font-mono">{{ remaining }}</span>
+            <span :class="unspent >= 0 ? 'text-success' : 'text-red-600 font-bold'">
+                Unspent: <span class="font-mono" x-text="unspent">{{ budget - base_gross_spent }}</span>
             </span>
         </div>
 

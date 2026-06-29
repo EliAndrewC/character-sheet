@@ -1,11 +1,22 @@
+{% from "character/partials/sheet/_macros.html" import pcp_kebab %}
         <div x-show="duelOpen" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
              data-modal="iaijutsu-duel">
             <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-start justify-between mb-3">
                     <h3 class="text-xl font-bold text-accent">Iaijutsu Duel</h3>
-                    <button type="button" @click="duelOpen = false"
-                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                    <div class="flex items-center gap-1">
+                        {{ pcp_kebab([
+                            {'label': 'Spend PCP to reroll', 'can': "duelPhase === 'contested-result' && canUsePcpReroll()", 'click': 'requestPcpRerollDuelContested()', 'action': 'pcp-reroll-duel-contested'},
+                            {'label': 'Spend PCP for a free raise', 'can': "duelPhase === 'contested-result' && canSpendPcpRaise()", 'click': 'requestPcpRaiseDuelContested()', 'action': 'pcp-raise-duel-contested'},
+                            {'label': 'Spend PCP to reroll 10s', 'can': "duelPhase === 'contested-result' && canPcpRerollTensDuelContested()", 'click': 'requestPcpRerollTensDuelContested()', 'action': 'pcp-reroll-tens-duel-contested'},
+                            {'label': 'Spend PCP to reroll strike', 'can': "duelPhase === 'strike-result' && canUsePcpReroll()", 'click': 'requestPcpRerollDuelStrike()', 'action': 'pcp-reroll-duel-strike'},
+                            {'label': 'Spend PCP for a free raise', 'can': "duelPhase === 'strike-result' && canSpendPcpRaise()", 'click': 'requestPcpRaiseDuelStrike()', 'action': 'pcp-raise-duel-strike'},
+                            {'label': 'Spend PCP to reroll damage', 'can': "duelPhase === 'damage-result' && canUsePcpReroll()", 'click': 'requestPcpRerollDuelDamage()', 'action': 'pcp-reroll-duel-damage'},
+                        ]) }}
+                        <button type="button" @click="duelOpen = false"
+                                class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                    </div>
                 </div>
                 {% include 'character/partials/read_only_roll_banner.html' %}
 
@@ -95,6 +106,14 @@
                         <div x-show="convictionSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="convictionSpentThisRoll"></span>
                             from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
+                        </div>
+                        {# Player Character Point free raise / reroll-10s (rules/10). #}
+                        <div x-show="pcpRaisesSpentThisRoll > 0" x-cloak class="text-xs text-gold mt-0.5"
+                             data-testid="pcp-raise-line-duel-contested">
+                            &bull; +5 from a Player Character Point free raise
+                        </div>
+                        <div x-show="pcpTensRerolledThisRoll" x-cloak class="text-xs text-gold mt-0.5">
+                            &bull; rerolled 10s while impaired by spending a Player Character Point
                         </div>
                     </div>
 
@@ -314,6 +333,11 @@
                         <div x-show="convictionSpentThisRoll > 0" x-cloak class="text-xs text-ink/70 mt-0.5">
                             &bull; +<span x-text="convictionSpentThisRoll"></span>
                             from <span x-text="convictionSpentThisRoll"></span> Conviction point<span x-show="convictionSpentThisRoll > 1">s</span>
+                        </div>
+                        {# Player Character Point free raise (the strike may not reroll 10s). #}
+                        <div x-show="pcpRaisesSpentThisRoll > 0" x-cloak class="text-xs text-gold mt-0.5"
+                             data-testid="pcp-raise-line-duel-strike">
+                            &bull; +5 from a Player Character Point free raise
                         </div>
                         <div x-show="finalDice.some(d => d.value === 10)" x-cloak class="text-xs italic text-red-700 mt-1">
                             10s not rerolled for the strike in an iaijutsu duel

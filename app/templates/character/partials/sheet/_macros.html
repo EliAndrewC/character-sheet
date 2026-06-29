@@ -121,3 +121,39 @@
     </div>
 </template>
 {% endmacro %}
+
+{# Player Character Point kebab menu (rules/10). PCPs are an extremely rare
+   resort, so rather than prominent buttons each roll-result panel hosts a
+   compact "⋮" menu in its action row. ``items`` is a list of dicts with
+   ``label`` / ``can`` (JS bool expr) / ``click`` (JS expr) / ``action``
+   (data-action value). The kebab hides entirely when no option applies, and
+   each item hides on its own ``can``. Lives in the diceRoller() scope; the
+   menu open state (``pcpMenu``) is local to the kebab. #}
+{% macro pcp_kebab(items) %}
+<div class="relative inline-block text-left" x-data="{ pcpMenu: false, pcpPos: {top: 0, left: 0} }"
+     @click.outside="pcpMenu = false"
+     x-show="{{ items | map(attribute='can') | join(' || ') }}" x-cloak>
+    {# Open the menu and anchor it (position: fixed) just below the button's
+       right edge, opening down-and-left. Fixed positioning escapes the
+       scrollable modal's overflow clipping (the attack/WC/duel modals are
+       max-h + overflow-y-auto), which a plain absolute dropdown gets clipped
+       by. Mirrors the roll-menu / precepts-menu pattern. #}
+    <button type="button" data-action="pcp-menu"
+            @click="pcpMenu = !pcpMenu; if (pcpMenu) { const r = $el.getBoundingClientRect(); pcpPos = {top: r.bottom, left: r.right}; }"
+            title="Player Character Point options" aria-label="Player Character Point options"
+            class="btn-ghost px-2 py-1 rounded text-2xl leading-none font-bold">&#8942;</button>
+    <div x-show="pcpMenu" x-cloak
+         :style="'position: fixed; top: ' + pcpPos.top + 'px; left: ' + pcpPos.left + 'px; transform: translate(-100%, 4px)'"
+         class="z-[60] bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[230px]">
+        <div class="px-4 py-1.5 text-[10px] uppercase tracking-wide text-ink/40 border-b border-ink/10">
+            Spend a Player Character Point
+        </div>
+        {% for it in items %}
+        <button type="button" x-show="{{ it.can }}" x-cloak
+                data-action="{{ it.action }}"
+                @click="{{ it.click }}; pcpMenu = false"
+                class="block w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors">{{ it.label }}</button>
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}

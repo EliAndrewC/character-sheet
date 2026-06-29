@@ -148,6 +148,19 @@
                     {% endif %}
                 </div>
             </div>
+            {# Player Character Point void refresh (rules/10): regain one spent
+               void point at the escalating PCP XP cost. Editor-only (it's a
+               persisted change that publishes a version); shown only when below
+               the void max. Routes through the dice-roller confirmation modal. #}
+            {% if viewer_can_edit %}
+            <div class="flex justify-end" x-show="voidPoints < voidMax" x-cloak>
+                <button type="button" data-action="pcp-void-refresh"
+                        @click="window._diceRoller && window._diceRoller.openPcpConfirm('void_refresh', null)"
+                        class="btn-gold px-2 py-1 rounded text-xs font-medium mt-1">
+                    Spend PCP to regain a void point
+                </button>
+            </div>
+            {% endif %}
             {% if has_temp_void %}
             <div class="flex items-center justify-between gap-4" data-testid="temp-void-row">
                 <div class="text-sm text-ink/60">Temp Void</div>

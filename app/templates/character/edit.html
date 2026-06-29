@@ -1582,6 +1582,18 @@
                             Unspent: <strong class="font-mono" x-text="xp.remaining"></strong>
                         </span>
                     </div>
+                    {# Player Character Points: rare, escalating XP sink. Shown
+                       only once at least one has been spent; the editor can undo
+                       the most recent spend (a discardable draft change). #}
+                    <div class="text-xs sm:text-sm mt-0.5" x-show="pcpCount > 0" x-cloak
+                         data-testid="pcp-editor-line">
+                        <span>Player Character Points: <strong class="font-mono" x-text="pcpCount"></strong>
+                            (<span class="font-mono" x-text="xp.pcp_cost"></span> XP)</span>
+                        <button type="button" data-action="pcp-undo" @click="undoPcp()"
+                                class="btn-danger-soft px-2 py-0.5 rounded text-xs font-medium ml-1">
+                            Undo last
+                        </button>
+                    </div>
                     {# GM-only NPC build profile: combat / rings / school-knack share of #}
                     {# spent XP, each tagged low/medium/high. See xp_profile() in xp.py. #}
                     {% if viewer_is_admin %}
@@ -1868,6 +1880,10 @@ function characterForm() {
         schoolRingChoice: '{{ character.school_ring_choice }}',
         startingXp: 150,
         earnedXp: {{ character.earned_xp }},
+        // Player Character Points spent so far. Editable here only via Undo
+        // (decrement) - spending happens on the View Sheet during rolls. A
+        // decrement is a normal draft change (autosaved, discardable).
+        pcpCount: {{ character.pcp_count or 0 }},
         // Server-computed XP - the single source of truth (app/services/xp.py
         // ::editor_xp_view), replacing the former client-side Alpine calc.
         // Seeded from the page render, then refreshed (debounced) from
@@ -2061,6 +2077,15 @@ function characterForm() {
             this.refreshXp();
         },
 
+        // Undo the most recent Player Character Point spend. Decrementing
+        // pcp_count is a normal draft edit: markDirty() autosaves it and
+        // refreshes the XP footer; Discard Changes reverts it.
+        undoPcp() {
+            if (this.pcpCount <= 0) return;
+            this.pcpCount -= 1;
+            this.markDirty();
+        },
+
         // Live XP display: ask the server (single source of truth) to compute
         // the totals + per-control cost hints from the current (unsaved) state.
         // Debounced short (~250ms) so it feels near-instant while coalescing
@@ -2094,6 +2119,7 @@ function characterForm() {
                 recognition: this.recognition,
                 recognition_halved: this.recognitionHalved,
                 earned_xp: this.earnedXp,
+                pcp_count: this.pcpCount,
             };
         },
 
@@ -2211,6 +2237,7 @@ function characterForm() {
                     recognition_halved: this.recognitionHalved,
                     rank_recognition_awards: this.rankRecognitionAwards,
                     earned_xp: parseInt(document.querySelector('input[name="earned_xp"]')?.value || '0'),
+                    pcp_count: this.pcpCount,
                     sections: window._sectionsManager ? window._sectionsManager.serialize() : [],
                 };
 

@@ -1482,6 +1482,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `apply_changes` | Apply Changes modal | `test_create_character.py`, `test_publish_revert.py`, `test_apply_modal.py` |
 | `permissions` | Edit/delete visibility, non-editor | `test_permissions.py` |
 | `banners` | Draft status banners | `test_banners.py` |
+| `pcp` | Player Character Points (confirm modal, reroll/free-raise/reroll-10s, void refresh, XP category, undo, read-only) | `test_pcp.py` |
 | `status_display` | Status section on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
 | `tracking` | Wounds, void points, per-adventure | `test_tracking.py`, `test_tracking_advanced.py`, `test_light_wounds.py`, `test_sheet_advanced.py` |
 | `skill_rolls` | Skill roll display with bonuses | `test_sheet_display.py`, `test_skill_rolls_display.py` |
@@ -1913,9 +1914,24 @@ Phase 8 runs the full regression suite as the exit gate.
 
 ---
 
+## Player Character Points (rules/10; sheet.html, modal_pcp_confirm.html, xp_summary_section.html, tracking.html, edit.html)
+
+- [x] PCP confirmation modal opens on a roll-result option with the ordinal spend count, escalating XP cost, and the unspent-vs-debt breakdown; Cancel closes without spending → `test_pcp.py::test_confirm_modal_opens_with_cost_and_breakdown`
+- [x] PCP free raise applies +5 to the roll, shows the result-panel line, persists (pcp_count bumps), and is once-per-roll (button hides) → `test_pcp.py::test_free_raise_applies_and_persists`
+- [x] PCP reroll does not stack with Lucky (using one hides the other) → `test_pcp.py::test_reroll_does_not_stack_with_lucky`
+- [x] PCP reroll persists, blocks a second reroll, and shows the keep-better pair banner labelled "Player Character Point reroll" → `test_pcp.py::test_pcp_reroll_persists_and_blocks_further_reroll`
+- [x] Reroll-10s option is gated on impaired + a 10 rolled + a 10s-rerollable roll (excludes initiative, iaijutsu strike, unskilled) → `test_pcp.py::test_reroll_tens_gating`
+- [x] Void-refresh button spends a PCP and regains one spent void point (capped at max) → `test_pcp.py::test_void_refresh_spends_pcp_and_regains_point`
+- [x] Spend is blocked (accept disabled + message) when the sheet has pending draft changes → `test_pcp.py::test_gate_blocks_spend_when_modified`
+- [x] XP Summary shows the PCP category card live after a spend; Undo collapses it and surfaces the pending-change note → `test_pcp.py::test_xp_summary_category_and_undo_on_view_sheet`
+- [x] Edit page shows the PCP spend line with an Undo control that decrements it as a draft change → `test_pcp.py::test_edit_page_shows_pcp_undo_line`
+- [x] A non-editor walking through a PCP free raise sees the +5 effect but nothing persists (read-only contract) → `test_pcp.py::test_readonly_viewer_effect_is_local_only`
+
+---
+
 ## Coverage Summary
 
-**Covered:** ~280 test functions across 32 test files
+**Covered:** ~290 test functions across 33 test files
 **Uncovered:** 0
 
 All interactive UI features are covered by at least one e2e clicktest.

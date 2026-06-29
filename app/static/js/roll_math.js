@@ -207,6 +207,89 @@
       return seriousWounds >= earthRing;
     },
 
+    /**
+     * Sum of the highest ``k`` values in ``values`` (a kept-dice pool). Used
+     * when recomputing a roll after a PCP "reroll 10s while impaired" explodes
+     * some dice and may change which dice are kept. ``k`` is clamped to the
+     * pool size; a non-positive ``k`` keeps nothing.
+     */
+    keepHighestSum: function (values, k) {
+      if (!(k > 0)) return 0;
+      var sorted = values.slice().sort(function (a, b) { return a - b; });
+      var kept = sorted.slice(Math.max(0, sorted.length - k));
+      return kept.reduce(function (a, b) { return a + b; }, 0);
+    },
+
+    /**
+     * PCP "reroll 10s while impaired" (rules/10). The impaired roll's 10s never
+     * exploded, so this is NOT a full reroll: KEEP every die and let each one
+     * showing a 10 explode (reroll-and-add). ``dice`` is the rolled pool
+     * ([{value, parts?}]); ``rerolls`` are the exploding rerolls ({value, parts})
+     * for the 10s, in order; ``keptCount`` is how many dice are kept. A 10 whose
+     * reroll chain is [10, 3] (value 13) becomes 10 + 13 = 23 with parts
+     * [10, 10, 3]. Returns {dice: [{value, parts, kept}], keptSum} with the
+     * highest ``keptCount`` dice flagged kept.
+     */
+    pcpExplodeTens: function (dice, rerolls, keptCount) {
+      var out = [], ri = 0;
+      for (var i = 0; i < dice.length; i++) {
+        var d = dice[i];
+        if (d.value === 10) {
+          var rr = rerolls[ri++] || { value: 0, parts: [] };
+          var chain = (rr.parts && rr.parts.length) ? rr.parts : [rr.value];
+          out.push({ value: 10 + rr.value, parts: [10].concat(chain), kept: false });
+        } else {
+          out.push({
+            value: d.value,
+            parts: (d.parts && d.parts.length) ? d.parts.slice() : [d.value],
+            kept: false,
+          });
+        }
+      }
+      var keptSum = this.keepHighestSum(out.map(function (d) { return d.value; }), keptCount);
+      // Flag the highest ``keptCount`` dice as kept (same ordering keepHighestSum
+      // sums, so the flagged dice and keptSum always agree).
+      var order = out
+        .map(function (d, i) { return { i: i, v: d.value }; })
+        .sort(function (a, b) { return a.v - b.v; });
+      var keep = Math.max(0, Math.min(keptCount, out.length));
+      for (var k = order.length - keep; k < order.length; k++) {
+        out[order[k].i].kept = true;
+      }
+      return { dice: out, keptSum: keptSum };
+    },
+
+    /**
+     * Player Character Point cost math. The Nth PCP a character spends costs
+     * N XP, so ``count`` spends total to the Nth triangular number.
+     * See rules/10-player_character_points.md and services/xp.pcp_total_cost.
+     */
+    pcpTotalCost: function (count) {
+      var n = Math.max(0, Math.floor(count || 0));
+      return (n * (n + 1)) / 2;
+    },
+
+    /** XP cost of the next (count+1th) PCP spend. */
+    pcpNextCost: function (count) {
+      return Math.max(0, Math.floor(count || 0)) + 1;
+    },
+
+    /**
+     * Split a PCP's XP cost into the part drawn from unspent XP and the part
+     * that goes into XP debt (future earned XP). ``remainingBefore`` may be
+     * negative (already in debt), in which case the whole cost deepens it.
+     * Returns {fromUnspent, fromDebt, remainingAfter}; the two parts sum to
+     * ``cost``.
+     */
+    pcpSpendBreakdown: function (remainingBefore, cost) {
+      var fromUnspent = Math.max(0, Math.min(remainingBefore, cost));
+      return {
+        fromUnspent: fromUnspent,
+        fromDebt: cost - fromUnspent,
+        remainingAfter: remainingBefore - cost,
+      };
+    },
+
     /** Iaijutsu duel TN = total XP / 10 (round down). */
     duelTn: function (totalXp) {
       return Math.floor(totalXp / 10);

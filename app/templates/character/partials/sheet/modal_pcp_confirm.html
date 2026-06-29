@@ -1,0 +1,96 @@
+{# Player Character Point confirmation modal (rules/10).
+
+   PCPs are a rare, easily-forgotten resort, so spending one never happens on a
+   single click - this modal explains what a PCP is, shows how many have been
+   spent and the escalating cost, and spells out whether the cost comes out of
+   unspent XP or pushes the character into XP debt. Only on confirm does the
+   spend proceed. Lives in the diceRoller() scope (state: ``pcpConfirm``); the
+   void-refresh entry point opens it via window._diceRoller. #}
+        <div x-show="pcpConfirm.open" x-cloak
+             class="fixed inset-0 z-[60] flex items-center justify-center bg-ink/80"
+             data-modal="pcp-confirm"
+             @click.self="cancelPcpConfirm()">
+            <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-lg w-full mx-4">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="text-xl font-bold text-accent">Spend a Player Character Point?</h3>
+                    <button type="button" @click="cancelPcpConfirm()"
+                            class="text-ink/60 hover:text-ink text-2xl leading-none px-2">&times;</button>
+                </div>
+
+                <div class="space-y-3 text-sm text-ink/80">
+                    <p>
+                        A <strong>Player Character Point</strong> (PCP) is a rare resort for
+                        desperate moments. Spending one here will
+                        <strong x-text="pcpUseLabel(pcpConfirm.use)"></strong>.
+                    </p>
+                    <p>
+                        This would be your
+                        <strong x-text="pcpOrdinal(pcpConfirm.count + 1)"></strong>
+                        PCP, which costs
+                        <strong><span x-text="pcpConfirm.nextCost"></span> XP</strong>
+                        (each PCP costs more than the last).
+                    </p>
+
+                    {# Unspent-vs-debt breakdown. #}
+                    <div class="bg-parchment/60 rounded p-3" data-testid="pcp-confirm-breakdown">
+                        <template x-if="pcpConfirm.fromDebt === 0">
+                            <p>
+                                You have
+                                <strong class="font-mono" x-text="pcpConfirm.remaining"></strong>
+                                unspent XP. This spends
+                                <strong class="font-mono" x-text="pcpConfirm.nextCost"></strong>
+                                of it, leaving
+                                <strong class="font-mono" x-text="pcpConfirm.remainingAfter"></strong>.
+                            </p>
+                        </template>
+                        <template x-if="pcpConfirm.fromDebt > 0 && pcpConfirm.fromUnspent > 0">
+                            <p>
+                                You have only
+                                <strong class="font-mono" x-text="pcpConfirm.remaining"></strong>
+                                unspent XP: this spends those
+                                <strong class="font-mono" x-text="pcpConfirm.fromUnspent"></strong>
+                                and pushes you
+                                <strong class="font-mono text-red-600" x-text="pcpConfirm.fromDebt"></strong>
+                                XP into debt (you'll lose that much of the next XP you earn).
+                            </p>
+                        </template>
+                        <template x-if="pcpConfirm.fromDebt > 0 && pcpConfirm.fromUnspent === 0">
+                            <p>
+                                You have no unspent XP, so this goes entirely into
+                                <strong class="font-mono text-red-600" x-text="pcpConfirm.fromDebt"></strong>
+                                XP of debt (you'll lose that much of the next XP you earn).
+                            </p>
+                        </template>
+                    </div>
+
+                    {# Read-only walk-through note (non-editors). #}
+                    <p x-show="!pcpConfirm.canEdit" x-cloak
+                       data-testid="pcp-confirm-readonly"
+                       class="text-xs text-ink/60 italic">
+                        You don't have edit access, so this won't change the character -
+                        you'll just see the effect on this roll.
+                    </p>
+
+                    {# Editor with pending draft edits: the spend auto-publishes a
+                       version, so it's blocked until the sheet is clean. #}
+                    <p x-show="pcpConfirm.canEdit && !pcpConfirm.canSpend" x-cloak
+                       data-testid="pcp-confirm-blocked"
+                       class="text-xs text-red-600">
+                        You have unapplied changes. Apply or discard them on the edit page
+                        before spending a Player Character Point.
+                    </p>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-4">
+                    <button type="button" @click="cancelPcpConfirm()"
+                            class="btn-secondary px-4 py-2 rounded text-sm font-medium">Cancel</button>
+                    <button type="button" data-action="pcp-confirm-accept"
+                            @click="acceptPcpConfirm()"
+                            :disabled="!pcpConfirm.canSpend || pcpSpending"
+                            class="btn-gold px-4 py-2 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-show="!pcpSpending">Spend Player Character Point</span>
+                        <span x-show="pcpSpending" x-cloak>Spending...</span>
+                    </button>
+                </div>
+            </div>
+        </div>

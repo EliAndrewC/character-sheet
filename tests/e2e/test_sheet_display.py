@@ -454,10 +454,12 @@ def test_xp_summary_new_labels_and_ordering(page, live_server_url):
     # (those words still appear elsewhere on the sheet, hence section-scoped check)
     for word in ("Knacks ", " Honor ", " Rank ", " Recognition "):
         assert word.strip() != "Knacks" or "School Knacks" in section
-    # Verify the data-xp-card order is the new one
+    # Verify the data-xp-card order is the new one. The Player Character Points
+    # card is always in the DOM (x-show'd so it can appear live on a spend) and
+    # sorts last, after Disadvantages.
     keys = [el.get_attribute("data-xp-card") for el in page.locator('[data-xp-card]').all()]
     expected_prefix = ['rings', 'school_knacks', 'skills', 'combat_skills',
-                       'advantages', 'honor_rank_recognition', 'disadvantages']
+                       'advantages', 'honor_rank_recognition', 'disadvantages', 'pcp']
     assert keys == expected_prefix
 
 

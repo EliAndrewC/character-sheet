@@ -337,6 +337,15 @@ class TestPublishStatus:
         assert c.has_unpublished_changes is True
         assert c.publish_status == "modified"
 
+    def test_spending_pcp_flips_to_modified(self, db):
+        # pcp_count is versioned build state: changing it (e.g. the undo
+        # path decrementing it) must flip the character to "modified" so a
+        # Discard can roll it back.
+        c = self._published(db)
+        c.pcp_count = 1
+        assert c.has_unpublished_changes is True
+        assert c.publish_status == "modified"
+
     def test_advantage_details_text_only_change_does_not_flip(self, db):
         # The freeform ``text`` field is metadata - retyping the
         # description on an existing advantage must NOT enable Apply
@@ -729,3 +738,23 @@ class TestRollHistory:
         db.commit()
         assert roll.is_hidden is False
         assert roll.annotation == ""
+
+
+class TestPcpCount:
+    def test_to_dict_includes_pcp_count_default_zero(self):
+        c = Character(name="Test", school="akodo_bushi")
+        assert c.to_dict()["pcp_count"] == 0
+
+    def test_to_dict_includes_pcp_count(self, db):
+        c = Character(name="Test", school="akodo_bushi", pcp_count=3)
+        db.add(c)
+        db.flush()
+        assert c.to_dict()["pcp_count"] == 3
+
+    def test_from_dict_round_trips_pcp_count(self):
+        c = Character.from_dict({"name": "Test", "pcp_count": 4})
+        assert c.pcp_count == 4
+
+    def test_from_dict_defaults_pcp_count_zero(self):
+        c = Character.from_dict({"name": "Test"})
+        assert c.pcp_count == 0

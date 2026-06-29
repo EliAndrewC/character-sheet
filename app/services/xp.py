@@ -684,6 +684,16 @@ def calculate_xp_breakdown(character_data: dict) -> dict:
             "total": dis_total,
             "rows": dis_list,
         },
+        # Player Character Points are a separate XP sink from the build; they
+        # are NOT folded into grand_total (which stays equal to
+        # calculate_total_xp(...)["total"]). The XP Summary's budget line adds
+        # this category's total into gross spent separately.
+        "pcp": {
+            "label": "Player Character Points",
+            "total": pcp_total_cost(character_data.get("pcp_count", 0)),
+            "rows": pcp_breakdown_rows(character_data.get("pcp_count", 0)),
+            "count": max(0, int(character_data.get("pcp_count", 0) or 0)),
+        },
         "grand_total": grand_total,
     }
 
@@ -895,6 +905,67 @@ def calculate_available_xp(
     return starting_xp + earned_xp
 
 
+# ---------------------------------------------------------------------------
+# Player Character Points (PCP)
+# ---------------------------------------------------------------------------
+# See rules/10-player_character_points.md: the Nth PCP a character spends costs
+# N XP, so the total XP cost of ``count`` spends is the Nth triangular number.
+# If the character has no banked XP, the cost is paid out of future earned XP
+# (XP debt) - this shows up naturally as a negative "remaining" once the PCP
+# cost is folded into spent XP.
+
+def pcp_total_cost(count: int) -> int:
+    """Total XP cost of having spent ``count`` Player Character Points.
+
+    The 1st spend costs 1, the 2nd costs 2, ... so the running total is
+    ``count*(count+1)//2``. Negative counts are clamped to 0.
+    """
+    n = max(0, int(count or 0))
+    return n * (n + 1) // 2
+
+
+def pcp_next_cost(count: int) -> int:
+    """XP cost of the *next* (``count+1``th) PCP spend."""
+    return max(0, int(count or 0)) + 1
+
+
+def pcp_spend_breakdown(remaining_before: int, cost: int) -> dict:
+    """Split a PCP's XP cost into the part drawn from unspent XP and the part
+    that goes into XP debt (future earned XP).
+
+    ``remaining_before`` is the character's unspent XP before this spend (may
+    already be negative if the character is in debt). Returns
+    ``{"from_unspent", "from_debt", "remaining_after"}`` where the two parts
+    sum to ``cost``. When the character is already in debt, the whole cost
+    deepens the debt.
+    """
+    from_unspent = max(0, min(remaining_before, cost))
+    from_debt = cost - from_unspent
+    return {
+        "from_unspent": from_unspent,
+        "from_debt": from_debt,
+        "remaining_after": remaining_before - cost,
+    }
+
+
+def pcp_breakdown_rows(count: int) -> List[dict]:
+    """One ``{"xp", "label"}`` row per PCP spend, for the XP Summary panel."""
+    n = max(0, int(count or 0))
+    return [
+        {"xp": k, "label": f"{_ordinal(k)} Player Character Point"}
+        for k in range(1, n + 1)
+    ]
+
+
+def _ordinal(n: int) -> str:
+    """Return the ordinal string for ``n`` (1 -> '1st', 2 -> '2nd', ...)."""
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
 def editor_xp_view(character_data: dict) -> dict:
     """Everything the editor's live XP display needs, computed server-side.
 
@@ -926,6 +997,12 @@ def editor_xp_view(character_data: dict) -> dict:
     # Disadvantage categories are <= 0 (XP gained back); they raise the budget.
     dis_gain = -(totals["disadvantages"] + totals["campaign_disadvantages"])
     budget = available + dis_gain
+    # Player Character Points are positive XP spent (escalating cost). Fold the
+    # running total into ``spent`` so ``remaining`` (and the overspend-red
+    # styling) account for them; going negative is the XP-debt case.
+    pcp_count = max(0, int(character_data.get("pcp_count", 0) or 0))
+    pcp_cost = pcp_total_cost(pcp_count)
+    spent += pcp_cost
     remaining = budget - spent
 
     school_ring = character_data.get("school_ring_choice", "")
@@ -998,6 +1075,9 @@ def editor_xp_view(character_data: dict) -> dict:
         "costs": costs,
         "marginal": marginal,
         "profile": xp_profile(character_data),
+        "pcp_count": pcp_count,
+        "pcp_cost": pcp_cost,
+        "pcp_next_cost": pcp_next_cost(pcp_count),
     }
 
 

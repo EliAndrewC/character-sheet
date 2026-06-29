@@ -185,6 +185,15 @@
                 // short-circuits so nothing persists. Banner copy and the
                 // login link come from the same flags.
                 canEdit: {{ 'true' if viewer_can_edit else 'false' }},
+                // Player Character Points (rules/10). pcpCount + pcpXpRemaining
+                // are anchored to the server values; for a non-editor walking
+                // through Roll Mode they never change (read-only contract).
+                // pcpPublishedClean is the spend gate: a PCP spend immediately
+                // publishes a version, so it's only allowed from a clean
+                // published sheet.
+                pcpCount: {{ character.pcp_count or 0 }},
+                pcpXpRemaining: {{ pcp_xp_remaining }},
+                pcpPublishedClean: {{ 'true' if pcp_publish_clean else 'false' }},
                 isLoggedIn: {{ 'true' if viewer_is_logged_in else 'false' }},
                 ownerName: {{ (owner_display_name or '')|tojson }},
                 loginUrl: {{ login_url_for_return_to_sheet|tojson }},
@@ -236,6 +245,49 @@
                         }),
                     });
                     this._saving = false;
+                },
+
+                // --- Player Character Points (rules/10) -------------------
+                // The escalating XP cost of the NEXT spend.
+                pcpNextCost() {
+                    return window.L7RRollMath
+                        ? window.L7RRollMath.pcpNextCost(this.pcpCount)
+                        : this.pcpCount + 1;
+                },
+                // Whether a PCP can actually be spent. Editors need a clean
+                // published sheet (the spend auto-publishes a version); a
+                // non-editor can always walk through it (nothing persists).
+                canSpendPcp() {
+                    return this.canEdit ? this.pcpPublishedClean : true;
+                },
+                // Spend a PCP for ``use``. Editors POST to /spend-pcp (which
+                // bumps pcp_count + publishes a version); the local pcpCount /
+                // pcpXpRemaining / void points are updated from the response
+                // and a ``pcp-spent`` event lets the XP Summary update live.
+                // Non-editors: no-op persistence (read-only contract) - the
+                // caller still applies the roll effect locally. Returns true
+                // when the effect may proceed, false on a server error.
+                async spendPcp(use) {
+                    if (!this.canEdit) return true;
+                    const prevCost = window.L7RRollMath
+                        ? window.L7RRollMath.pcpTotalCost(this.pcpCount) : 0;
+                    try {
+                        const resp = await fetch(
+                            '/characters/' + this._charId + '/spend-pcp', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ use }),
+                        });
+                        if (!resp.ok) return false;
+                        const data = await resp.json();
+                        this.pcpXpRemaining -= (data.pcp_total_cost - prevCost);
+                        this.pcpCount = data.pcp_count;
+                        if (use === 'void_refresh') {
+                            this.voidPoints = data.current_void_points;
+                        }
+                        window.dispatchEvent(new CustomEvent('pcp-spent', { detail: data }));
+                        return true;
+                    } catch (e) { return false; }
                 },
 
                 setActionDice(dice) {

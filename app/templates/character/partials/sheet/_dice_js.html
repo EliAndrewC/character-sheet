@@ -253,6 +253,23 @@
             courtier5thApplied: false,
             // Lucky reroll
             luckyUsedThisRoll: false,
+            // Player Character Point per-roll state (rules/10). A PCP reroll
+            // shares the one-reroll-per-roll lock with Lucky; the free raise
+            // is once per roll; the reroll-10s-while-impaired is once per roll.
+            // ``_rerollSource`` tags luckyRollPair so the result panel / Roll
+            // History / dice card can label the pair "Lucky" vs "PCP".
+            pcpRerollUsedThisRoll: false,
+            pcpRaisesSpentThisRoll: 0,
+            pcpTensRerolledThisRoll: false,
+            _rerollSource: 'lucky',
+            // PCP confirmation modal: a rarely-used rule, so spending always
+            // routes through an explaining modal. ``use`` selects the effect,
+            // ``onAccept`` is invoked once the player confirms.
+            pcpConfirm: { open: false, use: null, onAccept: null },
+            // Guards the confirm-accept against double-clicks: a PCP spend POSTs
+            // and publishes a version, so re-entrancy would fire multiple
+            // rerolls / spends. Set for the duration of acceptPcpConfirm().
+            pcpSpending: false,
             togashiRerollUsed: false,
             togashiOrigTotal: 0,
             luckyPrevTotal: 0,
@@ -313,17 +330,20 @@
 
             _genericDiscretionaryTotal() {
                 return (this.raisesSpentThisRoll || 0) * 5
+                    + (this.pcpRaisesSpentThisRoll || 0) * 5
                     + (this.mirumotoPointsSpentThisRoll || 0) * 2
                     + (this.courtier5thApplied ? (this.formula?.courtier_5th_dan_optional || 0) : 0);
             },
             _atkDiscretionaryTotal() {
                 return (this.atkRaisesSpent || 0) * 5
+                    + (this.pcpRaisesSpentThisRoll || 0) * 5
                     + (this.mirumotoPointsSpentThisRoll || 0) * 2
                     + (this.akodoSpentThisRoll || 0)
                     + (this.bayushiRaisesSpentThisRoll || 0) * 5;
             },
             _wcDiscretionaryTotal() {
                 return (this.wcRaisesSpent || 0) * 5
+                    + (this.pcpRaisesSpentThisRoll || 0) * 5
                     + (this.mirumotoPointsSpentThisRoll || 0) * 2
                     + (this.wcMatsuBonusApplied || 0)
                     + (this.wcPostRollVpSpent || 0) * 5
@@ -408,6 +428,9 @@
                     kept: res.keepReroll ? 'reroll' : 'original',
                     original: origHalf,
                     reroll: rerollHalf,
+                    // 'lucky' or 'pcp' - drives the result-panel / Roll History
+                    // / dice-card label on the reroll pair.
+                    source: this._rerollSource,
                 };
                 return {
                     total: res.keepReroll ? newTotal : origTotal,
@@ -427,6 +450,16 @@
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                this._rerollSource = 'lucky';
+                this._performGenericReroll();
+            },
+
+            // The generic reroll mechanic, shared by Lucky and PCP. Caller has
+            // already set the source flag/toggle. Snapshots the dice BEFORE
+            // runRoll wipes them so the auto-use-higher rule can restore the
+            // original; carried-over discretionary bonuses (raises, PCP raises,
+            // etc.) survive the reroll.
+            _performGenericReroll() {
                 const isInit = this.formula?.is_initiative;
                 const disc = this._genericDiscretionaryTotal();
                 const origTotal = this.baseTotal;
@@ -451,6 +484,253 @@
                 });
             },
 
+            // ---- Player Character Point roll options (generic panel) ------
+            // All three route through the confirmation modal first (rare rule).
+            // The reroll shares the one-reroll lock with Lucky; the free raise
+            // and reroll-10s are each once per roll.
+            canUsePcpReroll() {
+                return !this.luckyUsedThisRoll && !this.pcpRerollUsedThisRoll;
+            },
+            canSpendPcpRaise() {
+                return this.pcpRaisesSpentThisRoll < 1;
+            },
+            // Reroll 10s only makes sense when the character is impaired (so 10s
+            // did NOT explode on the original roll), on a roll that would
+            // normally reroll 10s (not initiative / unskilled / iaijutsu
+            // strike), and only if a 10 was actually rolled.
+            canPcpRerollTens() {
+                if (this.pcpTensRerolledThisRoll) return false;
+                if (!this._impairedNow()) return false;
+                const f = this.formula;
+                if (!f || f.is_initiative || f.is_unskilled) return false;
+                if (this.currentRollKey === 'knack:iaijutsu:strike') return false;
+                return (this.finalDice || []).some(d => d.value === 10);
+            },
+            // Open the explaining confirmation modal for ``use``; ``onAccept``
+            // runs once the player confirms (and, for editors, the spend POST
+            // succeeds). Snapshots the cost / unspent-vs-debt breakdown from
+            // the tracking bridge so the modal is pure dice-roller state.
+            openPcpConfirm(use, onAccept) {
+                const t = window._trackingBridge;
+                const count = t ? (t.pcpCount || 0) : 0;
+                const nextCost = t ? t.pcpNextCost() : (count + 1);
+                const remaining = t ? (t.pcpXpRemaining || 0) : 0;
+                const bd = window.L7RRollMath.pcpSpendBreakdown(remaining, nextCost);
+                this.pcpConfirm = {
+                    open: true, use, onAccept,
+                    count, nextCost, remaining,
+                    fromUnspent: bd.fromUnspent,
+                    fromDebt: bd.fromDebt,
+                    remainingAfter: bd.remainingAfter,
+                    canSpend: t ? t.canSpendPcp() : false,
+                    canEdit: t ? t.canEdit : false,
+                };
+            },
+            cancelPcpConfirm() {
+                this.pcpConfirm = { open: false, use: null, onAccept: null };
+            },
+            pcpOrdinal(n) {
+                const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+                return n + (s[(v - 20) % 10] || s[v] || s[0]);
+            },
+            pcpUseLabel(use) {
+                return {
+                    reroll: 'reroll this roll (keeping whichever result is better)',
+                    free_raise: 'give yourself one free raise (+5)',
+                    reroll_tens: 'reroll the 10s on this roll',
+                    void_refresh: 'regain one spent void point',
+                }[use] || '';
+            },
+            async acceptPcpConfirm() {
+                // Re-entrancy guard: each spend POSTs + publishes a version, so
+                // a double-click would fire multiple rerolls/spends. Bail if a
+                // spend is already in flight.
+                if (this.pcpSpending) return;
+                const t = window._trackingBridge;
+                const use = this.pcpConfirm.use;
+                const cb = this.pcpConfirm.onAccept;
+                if (!t || !t.canSpendPcp()) return;
+                this.pcpSpending = true;
+                // Close the modal and apply the (local) effect immediately so it
+                // feels instant and the accept button can't be clicked again;
+                // persist the spend (POST + version) in the background. The
+                // per-roll lock (e.g. pcpRerollUsedThisRoll) is set inside the
+                // effect, so a second reroll can't slip in. void_refresh has no
+                // effect callback - spendPcp itself updates the void points.
+                this.pcpConfirm = { open: false, use: null, onAccept: null };
+                try {
+                    if (cb) await cb();
+                    await t.spendPcp(use);
+                } finally {
+                    this.pcpSpending = false;
+                }
+            },
+            // -- Shared PCP mechanics, used by every roll-result panel ------
+            // Each panel supplies a "flow" descriptor (total accessor +
+            // recompute + image) and/or its extracted reroll core. The reroll
+            // shares the one-reroll lock with Lucky; the free raise and the
+            // reroll-10s are each once per roll. Reroll + raise gates are
+            // flow-agnostic (canUsePcpReroll / canSpendPcpRaise); only the
+            // reroll-10s gate differs per panel.
+            _pcpReroll(coreFn) {
+                if (this.luckyUsedThisRoll || this.pcpRerollUsedThisRoll) return;
+                this.openPcpConfirm('reroll', async () => {
+                    this.pcpRerollUsedThisRoll = true;
+                    this._rerollSource = 'pcp';
+                    await coreFn();
+                });
+            },
+            _pcpFreeRaise(flow) {
+                if ((this.pcpRaisesSpentThisRoll || 0) >= 1) return;
+                this.openPcpConfirm('free_raise', () => {
+                    this.pcpRaisesSpentThisRoll++;
+                    flow.setTotal(flow.getTotal() + 5);
+                    if (flow.recompute) flow.recompute();
+                    if (flow.image) this._prerenderRollImage(flow.image());
+                    this._patchRollHistoryNow();
+                });
+            },
+            // Explode the 10s an impaired character couldn't (they didn't
+            // explode on the original roll); re-pick the highest kept dice and
+            // recompute off the (possibly higher) result.
+            _pcpRerollTens(flow) {
+                if (this.pcpTensRerolledThisRoll) return;
+                this.openPcpConfirm('reroll_tens', async () => {
+                    this.pcpTensRerolledThisRoll = true;
+                    const f = flow.formula();
+                    // This is NOT a full reroll: the impaired roll's 10s never
+                    // exploded, so we KEEP every die as-is and only let each die
+                    // showing a 10 explode (reroll-and-add). A 10 that rerolls
+                    // 10 then 3 becomes 10 + (10+3) = 23, displayed as an
+                    // exploding die with parts [10, 10, 3].
+                    const tens = this.finalDice.filter(d => d.value === 10).length;
+                    if (tens === 0) return;
+                    // Animate just the 10s rerolling (with explosions) in the tray.
+                    if (flow.enterRolling) flow.enterRolling();
+                    const rerolls = await this._rerollDice(tens, true, flow.tray || 'dice-animation');
+                    if (flow.exitRolling) flow.exitRolling();
+                    // Keep every die; explode only the 10s and re-pick kept.
+                    const res = window.L7RRollMath.pcpExplodeTens(
+                        this.finalDice, rerolls, f.kept,
+                    );
+                    this.finalDice = res.dice;
+                    this.keptDice = res.dice.filter(d => d.kept);
+                    this.unkeptDice = res.dice.filter(d => !d.kept);
+                    this.keptSum = res.keptSum;
+                    flow.setTotal(this.keptSum + (f.flat || 0) + flow.disc());
+                    if (flow.recompute) flow.recompute();
+                    if (flow.image) this._prerenderRollImage(flow.image());
+                    this._patchRollHistoryNow();
+                });
+            },
+            // Reroll-10s gate for the combat panels (attack / duel contested):
+            // those rolls always reroll 10s when unimpaired, so the only extra
+            // condition beyond "impaired + a 10 was rolled" is that we haven't
+            // already done it this roll.
+            _pcpCanRerollTensHere() {
+                return !this.pcpTensRerolledThisRoll && this._impairedNow()
+                    && (this.finalDice || []).some(d => d.value === 10);
+            },
+            // Recompute helpers used by free-raise / reroll-10s on panels whose
+            // result depends on the (possibly changed) total.
+            _wcRecomputeFromTotal() {
+                const wc = window.L7RRollMath.woundCheckResult(
+                    this.wcRollTotal, this.wcLightWounds,
+                    this.formulas['wound_check']?.bayushi_5th_dan_half_lw,
+                );
+                this.wcPassed = wc.passed;
+                this.wcMargin = wc.margin;
+                this.wcSeriousWounds = wc.seriousWounds;
+                this.wcResultApplied = false;
+            },
+            _duelStrikeRecompute() {
+                const excess = this.duelStrikeRoll - this.duelOpponentTN;
+                this.duelStrikeHit = excess >= 0;
+                this.duelStrikeExcess = excess;
+            },
+            // Per-flow descriptors.
+            _pcpFlowGeneric() {
+                return {
+                    getTotal: () => this.baseTotal, setTotal: (v) => { this.baseTotal = v; },
+                    recompute: null, formula: () => this.formula,
+                    disc: () => this._genericDiscretionaryTotal(),
+                    tray: 'dice-animation',
+                    enterRolling: () => { this.phase = 'rolling'; },
+                    exitRolling: () => { this.phase = 'done'; },
+                    image: () => this.formula?.is_initiative
+                        ? this._buildInitiativeImagePayload() : this._buildRollImagePayload(),
+                };
+            },
+            _pcpFlowAttack() {
+                return {
+                    getTotal: () => this.atkRollTotal,
+                    setTotal: (v) => { this.atkRollTotal = v; this.baseTotal = v; },
+                    recompute: () => this._atkUpdateHitState(),
+                    formula: () => this.formula, disc: () => this._atkDiscretionaryTotal(),
+                    tray: 'dice-animation-atk',
+                    enterRolling: () => { this.atkPhase = 'rolling'; },
+                    exitRolling: () => { this.atkPhase = 'result'; },
+                    image: () => this._buildAttackImagePayload(),
+                };
+            },
+            _pcpFlowWoundCheck() {
+                return {
+                    getTotal: () => this.wcRollTotal,
+                    setTotal: (v) => { this.wcRollTotal = v; this.baseTotal = v; },
+                    recompute: () => this._wcRecomputeFromTotal(),
+                    formula: () => this.formula, disc: () => this._wcDiscretionaryTotal(),
+                    tray: 'dice-animation-wc', image: () => this._buildWoundCheckImagePayload(),
+                };
+            },
+            _pcpFlowDuelContested() {
+                return {
+                    getTotal: () => this.duelContestedRoll,
+                    setTotal: (v) => { this.duelContestedRoll = v; this.baseTotal = v; },
+                    recompute: null, formula: () => this.formula,
+                    disc: () => (this.convictionSpentThisRoll || 0) + (this.pcpRaisesSpentThisRoll || 0) * 5,
+                    tray: 'dice-animation-duel',
+                    enterRolling: () => { this.duelPhase = 'contested-rolling'; },
+                    exitRolling: () => { this.duelPhase = 'contested-result'; },
+                    image: () => this._buildDuelContestedImagePayload(),
+                };
+            },
+            _pcpFlowDuelStrike() {
+                return {
+                    getTotal: () => this.duelStrikeRoll,
+                    setTotal: (v) => { this.duelStrikeRoll = v; this.baseTotal = v; },
+                    recompute: () => this._duelStrikeRecompute(),
+                    formula: () => this.formula,
+                    disc: () => (this.convictionSpentThisRoll || 0) + (this.pcpRaisesSpentThisRoll || 0) * 5,
+                    tray: 'dice-animation-duel', image: () => this._buildDuelStrikeImagePayload(),
+                };
+            },
+            // ---- Generic (done) panel ----
+            requestPcpReroll() { this._pcpReroll(() => this._performGenericReroll()); },
+            requestPcpRaise() { this._pcpFreeRaise(this._pcpFlowGeneric()); },
+            requestPcpRerollTens() {
+                if (!this.canPcpRerollTens()) return;
+                this._pcpRerollTens(this._pcpFlowGeneric());
+            },
+            // ---- Attack panel ----
+            canPcpRerollTensAttack() { return this._pcpCanRerollTensHere(); },
+            requestPcpRerollAttack() { this._pcpReroll(() => this._rerollAttackCore()); },
+            requestPcpRaiseAttack() { this._pcpFreeRaise(this._pcpFlowAttack()); },
+            requestPcpRerollTensAttack() { this._pcpRerollTens(this._pcpFlowAttack()); },
+            // ---- Wound check panel (no reroll-10s: WC always rerolls 10s) ----
+            requestPcpRerollWoundCheck() { this._pcpReroll(() => this._rerollWoundCheckCore()); },
+            requestPcpRaiseWoundCheck() { this._pcpFreeRaise(this._pcpFlowWoundCheck()); },
+            // ---- Duel contested panel ----
+            canPcpRerollTensDuelContested() { return this._pcpCanRerollTensHere(); },
+            requestPcpRerollDuelContested() { this._pcpReroll(() => this._rerollDuelContestedCore()); },
+            requestPcpRaiseDuelContested() { this._pcpFreeRaise(this._pcpFlowDuelContested()); },
+            requestPcpRerollTensDuelContested() { this._pcpRerollTens(this._pcpFlowDuelContested()); },
+            // ---- Duel strike panel (no reroll-10s: strike excluded by rule) ----
+            requestPcpRerollDuelStrike() { this._pcpReroll(() => this._rerollDuelStrikeCore()); },
+            requestPcpRaiseDuelStrike() { this._pcpFreeRaise(this._pcpFlowDuelStrike()); },
+            // ---- Damage panels (reroll only) ----
+            requestPcpRerollDamage() { this._pcpReroll(() => this._rerollDamageCore()); },
+            requestPcpRerollDuelDamage() { this._pcpReroll(() => this._rerollDuelDamageCore()); },
+
             async _rerollDice(rolled, rerollTens, trayId) {
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
@@ -461,9 +741,12 @@
 
             async useLuckyWoundCheck() {
                 if (!this.canUseLucky()) return;
-                const t = window._trackingBridge;
-                t.setToggle('lucky_used', true);
+                window._trackingBridge.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                this._rerollSource = 'lucky';
+                await this._rerollWoundCheckCore();
+            },
+            async _rerollWoundCheckCore() {
                 const disc = this._wcDiscretionaryTotal();
                 const origTotal = this.wcRollTotal;
                 const origSnap = this._luckyDiceSnapshot();
@@ -502,9 +785,12 @@
 
             async useLuckyAttack() {
                 if (!this.canUseLucky()) return;
-                const t = window._trackingBridge;
-                t.setToggle('lucky_used', true);
+                window._trackingBridge.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                this._rerollSource = 'lucky';
+                await this._rerollAttackCore();
+            },
+            async _rerollAttackCore() {
                 const disc = this._atkDiscretionaryTotal();
                 const origTotal = this.atkRollTotal;
                 const origSnap = this._luckyDiceSnapshot();
@@ -539,9 +825,12 @@
 
             async useLuckyDamage() {
                 if (!this.canUseLucky()) return;
-                const t = window._trackingBridge;
-                t.setToggle('lucky_used', true);
+                window._trackingBridge.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                this._rerollSource = 'lucky';
+                await this._rerollDamageCore();
+            },
+            async _rerollDamageCore() {
                 const origTotal = this.atkDamageTotal;
                 const origShosuro = this.atkDamageShosuroBonus;
                 const origSnap = this._luckyDiceSnapshot();
@@ -579,9 +868,12 @@
 
             async useLuckyDuelContested() {
                 if (!this.canUseLucky()) return;
-                const t = window._trackingBridge;
-                t.setToggle('lucky_used', true);
+                window._trackingBridge.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                this._rerollSource = 'lucky';
+                await this._rerollDuelContestedCore();
+            },
+            async _rerollDuelContestedCore() {
                 const origTotal = this.duelContestedRoll;
                 const origSnap = this._luckyDiceSnapshot();
                 this.luckyPrevTotal = origTotal;
@@ -594,8 +886,9 @@
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                // Conviction spent before the reroll carries through.
-                const newTotal = this.keptSum + f.flat + (this.convictionSpentThisRoll || 0);
+                // Conviction + any PCP free raise carry through the reroll.
+                const newTotal = this.keptSum + f.flat + (this.convictionSpentThisRoll || 0)
+                    + (this.pcpRaisesSpentThisRoll || 0) * 5;
                 const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
                 this.baseTotal = r.total;
                 this.duelContestedRoll = r.total;
@@ -606,9 +899,12 @@
 
             async useLuckyDuelStrike() {
                 if (!this.canUseLucky()) return;
-                const t = window._trackingBridge;
-                t.setToggle('lucky_used', true);
+                window._trackingBridge.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                this._rerollSource = 'lucky';
+                await this._rerollDuelStrikeCore();
+            },
+            async _rerollDuelStrikeCore() {
                 const origTotal = this.duelStrikeRoll;
                 const origSnap = this._luckyDiceSnapshot();
                 this.luckyPrevTotal = origTotal;
@@ -621,9 +917,9 @@
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                // Conviction spent before the reroll carries through (same
-                // rule as every other reroll path).
-                const newTotal = this.keptSum + f.flat + (this.convictionSpentThisRoll || 0);
+                // Conviction + any PCP free raise carry through the reroll.
+                const newTotal = this.keptSum + f.flat + (this.convictionSpentThisRoll || 0)
+                    + (this.pcpRaisesSpentThisRoll || 0) * 5;
                 const r = this._resolveLucky(origSnap, origTotal, newTotal, false);
                 this.baseTotal = r.total;
                 this.duelStrikeRoll = r.total;
@@ -639,9 +935,12 @@
 
             async useLuckyDuelDamage() {
                 if (!this.canUseLucky()) return;
-                const t = window._trackingBridge;
-                t.setToggle('lucky_used', true);
+                window._trackingBridge.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
+                this._rerollSource = 'lucky';
+                await this._rerollDuelDamageCore();
+            },
+            async _rerollDuelDamageCore() {
                 const origTotal = this.duelDamageTotal;
                 const origSnap = this._luckyDiceSnapshot();
                 this.luckyPrevTotal = origTotal;
@@ -1903,7 +2202,7 @@
                 this.rollMenuOpen = false;
                 this.parryHoverRow = null;
                 if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
-                this.luckyUsedThisRoll = false;
+                this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
@@ -1979,7 +2278,7 @@
                 this._rollHistoryId = null;
                 clearTimeout(this._rollHistoryUpdateTimer);
                 if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
-                this.luckyUsedThisRoll = false;
+                this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
@@ -2444,6 +2743,16 @@
                 }
                 if (this.togashiRerollUsed) {
                     extras.push('Togashi reroll used');
+                }
+                // Player Character Point uses (rules/10).
+                if (this.pcpRerollUsedThisRoll) {
+                    extras.push('Player Character Point reroll used');
+                }
+                if ((this.pcpRaisesSpentThisRoll || 0) > 0) {
+                    extras.push('+5 from a Player Character Point free raise');
+                }
+                if (this.pcpTensRerolledThisRoll) {
+                    extras.push('Rerolled 10s while impaired by spending a Player Character Point');
                 }
                 return extras;
             },
@@ -2969,9 +3278,18 @@
                 // page can render the pair with a Lucky badge. The server
                 // stores the JSON verbatim and the dice-card renderer
                 // ignores unknown fields, so this needs no Python change.
-                if (this.luckyUsedThisRoll && this.luckyRollPair) {
+                if ((this.luckyUsedThisRoll || this.pcpRerollUsedThisRoll)
+                    && this.luckyRollPair) {
                     payload.lucky = this.luckyRollPair;
                 }
+                // Player Character Point usage summary, for the Roll History
+                // badge + detail (rules/10). Stored verbatim; unknown fields
+                // are ignored by the dice-card renderer.
+                const pcp = {};
+                if (this.pcpRerollUsedThisRoll) pcp.reroll = true;
+                if ((this.pcpRaisesSpentThisRoll || 0) > 0) pcp.free_raise = true;
+                if (this.pcpTensRerolledThisRoll) pcp.reroll_tens = true;
+                if (Object.keys(pcp).length) payload.pcp = pcp;
                 const {key, label} = this._currentRollHistoryKeyAndLabel(payload);
                 return {
                     roll_key: key,
@@ -3742,7 +4060,7 @@
                 this.duelOpponentCanFocus = true;
                 this.duelRestartBonus = 0;
                 this.duelVoidSelected = 0;
-                this.luckyUsedThisRoll = false;
+                this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
@@ -3781,7 +4099,7 @@
                     if (options[voidCount - 1]) this.deductVoidPoints(options[voidCount - 1]);
                 }
 
-                this.luckyUsedThisRoll = false;
+                this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
@@ -3912,7 +4230,7 @@
             async duelRollStrike() {
                 const f = { ...this.formulas['knack:iaijutsu:strike'] };
                 f.flat += this.duelRestartBonus;
-                this.luckyUsedThisRoll = false;
+                this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
@@ -3959,7 +4277,7 @@
 
             async duelRollDamage() {
                 const dmg = this.duelComputeDamage();
-                this.luckyUsedThisRoll = false;
+                this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
@@ -4051,6 +4369,15 @@
                 this.atkVoidSelected = 0;
                 this.atkRaisesSpent = 0;
                 this.atkConvictionSpent = 0;
+                // Clear any Lucky / PCP reroll state from a previous attack so
+                // its keep-better pair banner and per-roll locks don't leak into
+                // this freshly-opened attack (the other roll flows reset these
+                // at roll start; the attack modal does it on open).
+                this.luckyUsedThisRoll = false;
+                this.pcpRerollUsedThisRoll = false;
+                this.pcpRaisesSpentThisRoll = 0;
+                this.pcpTensRerolledThisRoll = false;
+                this.luckyRollPair = null;
                 // The togashi daily-athletics-raise pool is spendable on
                 // athletics:attack too; reset the per-roll counter so the
                 // cap tracks spends within this attack only.
@@ -5438,6 +5765,14 @@
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
                 this.preceptsPoolSwapBonuses = [];
+                // Damage is its own roll: clear the attack's reroll / pair state
+                // so its banner doesn't carry into the damage result and the
+                // damage roll can be (separately) rerolled once.
+                this.luckyUsedThisRoll = false;
+                this.pcpRerollUsedThisRoll = false;
+                this.pcpRaisesSpentThisRoll = 0;
+                this.pcpTensRerolledThisRoll = false;
+                this.luckyRollPair = null;
                 const isLunge = f.attack_variant === 'lunge';
                 const isDA = f.attack_variant === 'double_attack';
                 const trade = this.atkOtakuTradeDice ? 10 : 0;
@@ -5991,7 +6326,7 @@
                 this.rollMenuOpen = false;
                 this.owHoverRow = null;
                 this.parryHoverRow = null;
-                this.luckyUsedThisRoll = false;
+                this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
@@ -6048,7 +6383,7 @@
                 this.formulaText = `${x}k1`;
                 this.formula = { rolled: x, kept: 1, flat: 0, reroll_tens: true, is_initiative: false };
                 this.raisesSpentThisRoll = 0;
-                this.luckyUsedThisRoll = false;
+                this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.mirumotoPointsSpentThisRoll = 0;
