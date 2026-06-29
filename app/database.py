@@ -136,6 +136,9 @@ def _migrate_add_columns():
         ("sw_healing_received_new_since_rest", "BOOLEAN", "0"),
         ("sw_healing_became_injured_since_rest", "BOOLEAN", "0"),
         ("sw_healing_last_rest_was_healing_night", "BOOLEAN", "0"),
+        # Player Character Points spent so far (escalating XP cost). Defaults
+        # to 0 so pre-feature characters start with no PCP spends.
+        ("pcp_count", "INTEGER", "0"),
     ]
 
     # Migration bodies below are defensive first-run-on-old-schema branches.

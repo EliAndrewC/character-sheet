@@ -224,6 +224,15 @@ def compute_diff_summary(old_state: Dict[str, Any], new_state: Dict[str, Any]) -
     if old_xp != new_xp:
         diffs.append(f"Earned XP changed from {old_xp} to {new_xp}")
 
+    # Player Character Points
+    old_pcp = old_state.get("pcp_count", 0)
+    new_pcp = new_state.get("pcp_count", 0)
+    if old_pcp != new_pcp:
+        if new_pcp > old_pcp:
+            diffs.append(f"Spent a Player Character Point (now {new_pcp} total)")
+        else:
+            diffs.append(f"Undid a Player Character Point (now {new_pcp} total)")
+
     return diffs
 
 
@@ -527,6 +536,7 @@ def compute_version_diff(
     for field, label, default in (
         ("starting_xp", "Starting XP", 150),
         ("earned_xp", "Earned XP", 0),
+        ("pcp_count", "Player Character Points spent", 0),
     ):
         before = prev_state.get(field, default)
         after = new_state.get(field, default)
@@ -866,6 +876,7 @@ def _restore_character_from_state(character: Character, state: Dict[str, Any]):
     character.rank_recognition_awards = state.get("rank_recognition_awards", [])
     character.starting_xp = state.get("starting_xp", 150)
     character.earned_xp = state.get("earned_xp", 0)
+    character.pcp_count = state.get("pcp_count", 0)
 
 
 def discard_draft_changes(character: Character, db: Session) -> bool:

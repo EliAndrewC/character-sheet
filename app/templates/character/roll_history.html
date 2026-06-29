@@ -185,7 +185,7 @@
                                rendered in the Result column; this tag flags
                                that the row is a Lucky pair so it's
                                recognizable at a glance from the list. #}
-                            <template x-if="r.payload && r.payload.lucky">
+                            <template x-if="r.payload && r.payload.lucky && r.payload.lucky.source !== 'pcp'">
                                 <span class="tooltip-trigger relative align-middle cursor-help
                                              text-[10px] uppercase tracking-wide
                                              text-gold border border-gold/40 bg-gold/5 rounded px-1"
@@ -193,6 +193,21 @@
                                     lucky
                                     <div class="tooltip-content absolute left-0 top-full z-20 mt-1 p-3 bg-ink text-parchment text-xs font-normal normal-case tracking-normal leading-snug rounded shadow-lg w-64"
                                          data-testid="lucky-explainer">Lucky was used on this roll. Both the original and the rerolled totals are shown - the higher of the two was used to compute everything downstream (damage, serious wounds, etc.).</div>
+                                </span>
+                            </template>
+                            {# Player Character Point badge (rules/10). Covers a
+                               PCP reroll (shown as the original/reroll pair), a
+                               PCP free raise, and a PCP reroll-of-10s while
+                               impaired. #}
+                            <template x-if="r.payload && r.payload.pcp">
+                                <span class="tooltip-trigger relative align-middle cursor-help
+                                             text-[10px] uppercase tracking-wide
+                                             text-gold border border-gold/40 bg-gold/5 rounded px-1"
+                                      data-tooltip-clamp data-testid="pcp-tag">
+                                    pcp
+                                    <div class="tooltip-content absolute left-0 top-full z-20 mt-1 p-3 bg-ink text-parchment text-xs font-normal normal-case tracking-normal leading-snug rounded shadow-lg w-64"
+                                         data-testid="pcp-explainer">A Player Character Point was spent on this roll:
+                                        <span x-show="r.payload.pcp.reroll">a reroll (keeping the better result)</span><span x-show="r.payload.pcp.free_raise">a free raise (+5)</span><span x-show="r.payload.pcp.reroll_tens">a reroll of its 10s while impaired</span>.</div>
                                 </span>
                             </template>
                             <template x-if="r.is_hidden">

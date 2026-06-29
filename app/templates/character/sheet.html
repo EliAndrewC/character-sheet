@@ -159,6 +159,10 @@
 {% include 'character/partials/sheet/modal_attack.html' %}
 {% include 'character/partials/sheet/modal_parry.html' %}
 {% include 'character/partials/sheet/modal_duel.html' %}
+{# Must precede modal_result.html: that partial's trailing </div> closes the
+   diceRoller x-data wrapper opened above, so anything included after it falls
+   outside the diceRoller Alpine scope. #}
+{% include 'character/partials/sheet/modal_pcp_confirm.html' %}
 {% include 'character/partials/sheet/modal_result.html' %}
     </div>
 

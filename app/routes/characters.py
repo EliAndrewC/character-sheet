@@ -26,7 +26,8 @@ from app.services.versions import (
     revert_character,
     stringify_version_diff_entries,
 )
-from app.services.xp import editor_xp_view
+from app.services.xp import editor_xp_view, pcp_next_cost, pcp_total_cost
+from app.services.nights_rest import _void_max
 
 router = APIRouter(prefix="/characters")
 
@@ -752,6 +753,10 @@ async def autosave_character(
         character.rank_recognition_awards = cleaned
     if "earned_xp" in body:
         character.earned_xp = body["earned_xp"]
+    if "pcp_count" in body:
+        # Clamp to >= 0: the editor only ever decrements this (Undo PCP);
+        # spending happens via the dedicated spend-pcp route.
+        character.pcp_count = max(0, int(body["pcp_count"]))
     if "notes" in body:
         character.notes = body["notes"]
     if "sections" in body:
@@ -792,6 +797,7 @@ def _editor_char_dict(body: dict, character: Character) -> dict:
         "recognition_halved": body.get("recognition_halved", character.recognition_halved),
         "earned_xp": body.get("earned_xp", character.earned_xp),
         "starting_xp": body.get("starting_xp", character.starting_xp),
+        "pcp_count": body.get("pcp_count", character.pcp_count),
     }
 
 
@@ -1415,6 +1421,157 @@ async def discard_changes_route(
         )
     db.commit()
     return JSONResponse({"status": "discarded"})
+
+
+# Player Character Point uses. ``void_refresh`` regains a spent void point;
+# the other three are roll effects (the dice work happens client-side - the
+# server only records the escalating XP cost by bumping pcp_count and
+# publishing a version). See rules/10-player_character_points.md.
+_PCP_USE_LABELS = {
+    "reroll": "reroll a roll",
+    "reroll_tens": "reroll 10s while impaired",
+    "free_raise": "a free raise",
+    "void_refresh": "refresh a void point",
+}
+
+
+@router.post("/{char_id}/spend-pcp")
+async def spend_pcp_route(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Spend a Player Character Point: bump ``pcp_count`` and immediately
+    publish a new version.
+
+    Editor-only. The character must be published AND clean (no pending draft
+    edits) so the auto-version captures only the PCP spend - returns 409
+    otherwise. ``use`` selects the effect; ``void_refresh`` also regains one
+    spent void point (capped at the character's void max).
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"], character.owner_discord_id, all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    use = body.get("use")
+    if use not in _PCP_USE_LABELS:
+        return JSONResponse({"error": "Invalid PCP use"}, status_code=400)
+
+    if character.publish_status != "published":
+        return JSONResponse(
+            {"error": "Apply or discard your pending changes before "
+                      "spending a Player Character Point."},
+            status_code=409,
+        )
+
+    new_count = (character.pcp_count or 0) + 1
+    character.pcp_count = new_count
+    cost = pcp_total_cost(new_count) - pcp_total_cost(new_count - 1)  # = new_count
+
+    void_max = _void_max(character)
+    if use == "void_refresh":
+        character.current_void_points = min(
+            void_max, (character.current_void_points or 0) + 1
+        )
+
+    summary = (
+        f"Spent Player Character Point #{new_count} ({cost} XP): "
+        f"{_PCP_USE_LABELS[use]}"
+    )
+    version = publish_character(
+        character, db, summary=summary, author_discord_id=user["discord_id"],
+    )
+    db.commit()
+
+    return JSONResponse({
+        "status": "spent",
+        "use": use,
+        "pcp_count": new_count,
+        "pcp_total_cost": pcp_total_cost(new_count),
+        "pcp_next_cost": pcp_next_cost(new_count),
+        "version_number": version.version_number,
+        "current_void_points": character.current_void_points,
+        "void_max": void_max,
+    })
+
+
+@router.post("/{char_id}/undo-pcp")
+async def undo_pcp_route(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Undo the most recent PCP spend by decrementing ``pcp_count``.
+
+    Editor-only, and symmetric with spend-pcp: it decrements the count and
+    **immediately publishes a new version**, so the XP cost drops permanently
+    (a previous draft-only model let a later Discard silently restore the
+    count). Requires the character to be published AND clean so the auto-version
+    captures only the undo; returns 409 otherwise, or when there's nothing to
+    undo.
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(
+        user["discord_id"], character.owner_discord_id, all_editors,
+    ):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    if (character.pcp_count or 0) <= 0:
+        return JSONResponse(
+            {"error": "No Player Character Point to undo."}, status_code=409,
+        )
+
+    if character.publish_status != "published":
+        return JSONResponse(
+            {"error": "Apply or discard your pending changes before "
+                      "undoing a Player Character Point."},
+            status_code=409,
+        )
+
+    new_count = character.pcp_count - 1
+    character.pcp_count = new_count
+    summary = (
+        f"Undid Player Character Point #{new_count + 1} (now {new_count} total)"
+    )
+    version = publish_character(
+        character, db, summary=summary, author_discord_id=user["discord_id"],
+    )
+    db.commit()
+
+    return JSONResponse({
+        "status": "undone",
+        "pcp_count": new_count,
+        "pcp_total_cost": pcp_total_cost(new_count),
+        "pcp_next_cost": pcp_next_cost(new_count),
+        "version_number": version.version_number,
+    })
 
 
 @router.get("/{char_id}/draft-diff")

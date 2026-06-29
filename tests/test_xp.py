@@ -17,6 +17,10 @@ from app.services.xp import (
     calculate_available_xp,
     editor_xp_view,
     foreign_knack_xp_items,
+    pcp_total_cost,
+    pcp_next_cost,
+    pcp_spend_breakdown,
+    pcp_breakdown_rows,
     validate_character,
 )
 from tests.conftest import make_character_data
@@ -980,6 +984,124 @@ class TestXpBreakdown:
         breakdown = calculate_xp_breakdown(data)
         assert breakdown["skills"]["subsections"][0]["rows"] == []
         assert breakdown["skills"]["subsections"][1]["rows"] == []
+
+
+class TestPcpCost:
+    """Player Character Point escalating XP cost helpers."""
+
+    @pytest.mark.parametrize("count,total", [
+        (0, 0), (1, 1), (2, 3), (3, 6), (4, 10), (5, 15),
+    ])
+    def test_total_cost_is_triangular(self, count, total):
+        assert pcp_total_cost(count) == total
+
+    def test_total_cost_clamps_negative_and_none(self):
+        assert pcp_total_cost(-2) == 0
+        assert pcp_total_cost(None) == 0
+
+    @pytest.mark.parametrize("count,nxt", [(0, 1), (1, 2), (4, 5)])
+    def test_next_cost(self, count, nxt):
+        assert pcp_next_cost(count) == nxt
+
+    def test_next_cost_clamps_negative(self):
+        assert pcp_next_cost(-5) == 1
+
+    def test_breakdown_rows_ordinals(self):
+        rows = pcp_breakdown_rows(3)
+        assert rows == [
+            {"xp": 1, "label": "1st Player Character Point"},
+            {"xp": 2, "label": "2nd Player Character Point"},
+            {"xp": 3, "label": "3rd Player Character Point"},
+        ]
+
+    def test_breakdown_rows_empty_for_zero(self):
+        assert pcp_breakdown_rows(0) == []
+
+    def test_breakdown_rows_teens_use_th(self):
+        # 11th/12th/13th, not 11st/12nd/13rd.
+        labels = [r["label"] for r in pcp_breakdown_rows(13)]
+        assert labels[10] == "11th Player Character Point"
+        assert labels[11] == "12th Player Character Point"
+        assert labels[12] == "13th Player Character Point"
+
+    def test_breakdown_rows_21st(self):
+        labels = [r["label"] for r in pcp_breakdown_rows(21)]
+        assert labels[20] == "21st Player Character Point"
+
+
+class TestPcpSpendBreakdown:
+    """Splitting a PCP cost into unspent-XP vs XP-debt parts."""
+
+    def test_fully_covered_by_unspent(self):
+        assert pcp_spend_breakdown(10, 3) == {
+            "from_unspent": 3, "from_debt": 0, "remaining_after": 7,
+        }
+
+    def test_partially_into_debt(self):
+        # 1 unspent, cost 2 -> spend the 1, go 1 into debt.
+        assert pcp_spend_breakdown(1, 2) == {
+            "from_unspent": 1, "from_debt": 1, "remaining_after": -1,
+        }
+
+    def test_no_unspent_all_debt(self):
+        assert pcp_spend_breakdown(0, 3) == {
+            "from_unspent": 0, "from_debt": 3, "remaining_after": -3,
+        }
+
+    def test_already_in_debt_deepens(self):
+        assert pcp_spend_breakdown(-2, 3) == {
+            "from_unspent": 0, "from_debt": 3, "remaining_after": -5,
+        }
+
+    def test_exact_cover(self):
+        assert pcp_spend_breakdown(2, 2) == {
+            "from_unspent": 2, "from_debt": 0, "remaining_after": 0,
+        }
+
+
+class TestPcpInBreakdownAndEditorView:
+    def test_breakdown_pcp_category_zero_by_default(self):
+        b = calculate_xp_breakdown(make_character_data())
+        assert b["pcp"]["label"] == "Player Character Points"
+        assert b["pcp"]["total"] == 0
+        assert b["pcp"]["rows"] == []
+        assert b["pcp"]["count"] == 0
+
+    def test_breakdown_pcp_category_with_spends(self):
+        b = calculate_xp_breakdown(make_character_data(pcp_count=3))
+        assert b["pcp"]["total"] == 6
+        assert b["pcp"]["count"] == 3
+        assert len(b["pcp"]["rows"]) == 3
+        assert b["pcp"]["rows"][2]["xp"] == 3
+
+    def test_pcp_not_folded_into_grand_total(self):
+        # grand_total must stay equal to calculate_total_xp(...)["total"];
+        # PCP is a separate sink.
+        data = make_character_data(pcp_count=4, skills={"bragging": 2})
+        b = calculate_xp_breakdown(data)
+        assert b["grand_total"] == calculate_total_xp(data)["total"]
+        assert b["pcp"]["total"] == 10
+
+    def test_editor_view_folds_pcp_into_spent_and_remaining(self):
+        base = editor_xp_view(make_character_data())
+        spent3 = editor_xp_view(make_character_data(pcp_count=3))
+        assert spent3["pcp_count"] == 3
+        assert spent3["pcp_cost"] == 6
+        assert spent3["pcp_next_cost"] == 4
+        assert spent3["spent"] == base["spent"] + 6
+        assert spent3["remaining"] == base["remaining"] - 6
+
+    def test_editor_view_pcp_can_drive_negative_remaining(self):
+        # Fresh character spends a lot of PCPs with little build -> debt.
+        v = editor_xp_view(make_character_data(starting_xp=0, pcp_count=5))
+        assert v["pcp_cost"] == 15
+        assert v["remaining"] < 0
+
+    def test_editor_view_default_pcp_fields(self):
+        v = editor_xp_view(make_character_data())
+        assert v["pcp_count"] == 0
+        assert v["pcp_cost"] == 0
+        assert v["pcp_next_cost"] == 1
 
 
 class TestEditorXpView:

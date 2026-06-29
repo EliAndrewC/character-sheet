@@ -2,6 +2,14 @@
 
 A character sheet and character builder web app for L7R, a Legend of the Five Rings homebrew tabletop RPG system.
 
+<!-- Dev-container config consumed by launch-container.sh (lives in the sibling gm-assistant repo). Format is HOST:CONTAINER. -->
+<!-- Primary = the FastAPI/uvicorn app (container 8080). Secondary (container 8090) is reserved for a future blind-eval webapp; nothing listens there yet. Host ports are unique across the GM's repos so several containers can run at once. -->
+<!-- container-ports: 8081:8080 8092:8090 -->
+<!-- Mount the parent l7r repo at /host-l7r-repo; its rules/ dir holds the canonical L7R rules this project encodes. -->
+<!-- container-mounts: ..:/host-l7r-repo -->
+<!-- container-workdir: /character-sheet -->
+<!-- (distinct mount path per repo so Claude memory under ~/.claude/projects/ stays separate across sibling repos) -->
+
 ## Tech Stack
 
 - **Backend:** Python / FastAPI
@@ -37,7 +45,7 @@ The sandbox container can be a newer Ubuntu release than Playwright supports, wh
   playwright install chromium && playwright install-deps chromium
   sudo cp /tmp/os-release.bak /etc/os-release    # restore - the downloaded browser runs fine on the real OS
   ```
-- **`node --test tests/js/` errors** with `Cannot find module '/workspace/tests/js'` on newer Node (e.g. v22.22). The directory-argument form is unreliable on that version; pass an explicit glob instead: `node --test tests/js/*.test.js`.
+- **`node --test tests/js/` errors** with `Cannot find module '/character-sheet/tests/js'` on newer Node (e.g. v22.22). The directory-argument form is unreliable on that version; pass an explicit glob instead: `node --test tests/js/*.test.js`.
 
 ## Environment Variables
 
@@ -178,9 +186,9 @@ tests/e2e/             - E2E clicktests (Playwright)
 
 ## L7R Rules
 
-The canonical rules live at: https://github.com/EliAndrewC/l7r/tree/master/rules
+The canonical rules live in the `rules/` directory of the GM's `l7r` repo. When this project runs in its dev container that repo is bind-mounted at `/host-l7r-repo`, so read the rules directly from the local filesystem - e.g. `/host-l7r-repo/rules/04-schools.md` - which is faster and more reliable than fetching them over the network. If that mount is not present (e.g. someone outside the GM's setup cloned this repo), fall back to the public GitHub copy at https://github.com/EliAndrewC/l7r/tree/master/rules.
 
-`app/game_data.py` encodes these rules as Python data structures. When rules change upstream, this file needs to be updated to match. The same is true for any campaign-specific supplemental rules, which will also live in public GitHub repos.
+`app/game_data.py` encodes these rules as Python data structures. When rules change upstream, this file needs to be updated to match. The same is true for any campaign-specific supplemental rules; prefer the local container mount when it is available, with the public GitHub repos as the fallback.
 
 ## Key Architectural Decisions
 

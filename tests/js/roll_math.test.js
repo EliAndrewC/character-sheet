@@ -188,6 +188,79 @@ test("duelTn = floor(totalXp / 10)", () => {
   assert.equal(M.duelTn(0), 0);
 });
 
+test("pcpTotalCost is the Nth triangular number", () => {
+  assert.equal(M.pcpTotalCost(0), 0);
+  assert.equal(M.pcpTotalCost(1), 1);
+  assert.equal(M.pcpTotalCost(2), 3);
+  assert.equal(M.pcpTotalCost(3), 6);
+  assert.equal(M.pcpTotalCost(5), 15);
+  assert.equal(M.pcpTotalCost(-4), 0); // clamps negative
+});
+
+test("pcpNextCost = count + 1 (clamped)", () => {
+  assert.equal(M.pcpNextCost(0), 1);
+  assert.equal(M.pcpNextCost(4), 5);
+  assert.equal(M.pcpNextCost(-2), 1);
+});
+
+test("keepHighestSum keeps the highest k values", () => {
+  assert.equal(M.keepHighestSum([3, 9, 1, 7], 2), 16); // 9 + 7
+  assert.equal(M.keepHighestSum([5], 1), 5);
+  assert.equal(M.keepHighestSum([5, 8], 5), 13); // k clamps to pool size
+  assert.equal(M.keepHighestSum([5, 8], 0), 0); // keep nothing
+  assert.equal(M.keepHighestSum([5, 8], -1), 0);
+});
+
+test("pcpExplodeTens explodes only the 10s and adds them (the canonical example)", () => {
+  // 7k4 rolled [10,10,10,6,5,3,2] = 36; reroll-10s adds 13, 8, 2 -> 59.
+  // The first 10's reroll chain is [10,3] (=13), so that die -> 10+13 = 23
+  // with parts [10,10,3]; the others -> 18 and 12.
+  const dice = [10, 10, 10, 6, 5, 3, 2].map((v) => ({ value: v }));
+  const rerolls = [
+    { value: 13, parts: [10, 3] },
+    { value: 8, parts: [8] },
+    { value: 2, parts: [2] },
+  ];
+  const res = M.pcpExplodeTens(dice, rerolls, 4);
+  assert.equal(res.keptSum, 59); // 23 + 18 + 12 + 6
+  // The exploded 10 keeps its face and shows the chain.
+  assert.deepEqual(res.dice[0], { value: 23, parts: [10, 10, 3], kept: true });
+  // Non-10 dice are untouched (just gain a single-part array).
+  assert.deepEqual(res.dice[3], { value: 6, parts: [6], kept: true });
+  assert.equal(res.dice[6].value, 2);   // a 2 stays a 2
+  assert.equal(res.dice[6].kept, false); // and isn't kept
+  // Exactly keptCount dice flagged kept.
+  assert.equal(res.dice.filter((d) => d.kept).length, 4);
+});
+
+test("pcpExplodeTens preserves existing parts on non-10 dice and handles no-part rerolls", () => {
+  const dice = [{ value: 10 }, { value: 7, parts: [7] }];
+  // reroll with only a value (no parts array) still works.
+  const res = M.pcpExplodeTens(dice, [{ value: 4 }], 2);
+  assert.deepEqual(res.dice[0], { value: 14, parts: [10, 4], kept: true });
+  assert.deepEqual(res.dice[1], { value: 7, parts: [7], kept: true });
+  assert.equal(res.keptSum, 21);
+});
+
+test("pcpExplodeTens is defensive when fewer rerolls than 10s are supplied", () => {
+  // Shouldn't happen (the caller supplies one reroll per 10), but a missing
+  // reroll must not crash - it contributes nothing.
+  const res = M.pcpExplodeTens([{ value: 10 }], [], 1);
+  assert.deepEqual(res.dice[0], { value: 10, parts: [10, 0], kept: true });
+  assert.equal(res.keptSum, 10);
+});
+
+test("pcpSpendBreakdown splits unspent vs debt", () => {
+  assert.deepEqual(M.pcpSpendBreakdown(10, 3),
+    { fromUnspent: 3, fromDebt: 0, remainingAfter: 7 });
+  assert.deepEqual(M.pcpSpendBreakdown(1, 2),
+    { fromUnspent: 1, fromDebt: 1, remainingAfter: -1 });
+  assert.deepEqual(M.pcpSpendBreakdown(0, 3),
+    { fromUnspent: 0, fromDebt: 3, remainingAfter: -3 });
+  assert.deepEqual(M.pcpSpendBreakdown(-2, 3),
+    { fromUnspent: 0, fromDebt: 3, remainingAfter: -5 });
+});
+
 test("evaluateStanceInfo: roll 27 reveals Fire<=4 exactly / >=5, TN<=26 / 27+", () => {
   // The canonical example from the rules: a 27 means X = floor(27/5) = 5,
   // so the exact Fire Ring is learned iff it is 4 or less, otherwise only

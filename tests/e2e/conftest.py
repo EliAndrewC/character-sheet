@@ -66,7 +66,7 @@ def live_server_url():
             # logging.flush() inside the ASGI response path.
             "--no-access-log",
         ],
-        cwd="/workspace",
+        cwd="/character-sheet",
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

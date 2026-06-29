@@ -30,7 +30,7 @@ from pathlib import Path
 # file is the repo root) or the Fly machine (where the package lives
 # under /app).
 _repo_root = Path(__file__).resolve().parent.parent
-for _candidate in (str(_repo_root), "/app", "/workspace"):
+for _candidate in (str(_repo_root), "/app", "/character-sheet"):
     if _candidate not in sys.path:
         sys.path.insert(0, _candidate)
 

@@ -260,6 +260,25 @@ class TestParsePayload:
         card = parse_payload(_basic_payload())
         assert card.extras == ()
 
+    def test_pcp_extras_carried_into_card(self):
+        # The "Copy as image" PNG surfaces PCP usage via the generic extras
+        # bullets the sheet attaches (rules/10).
+        card = parse_payload(_basic_payload(extras=[
+            "Player Character Point reroll used",
+            "+5 from a Player Character Point free raise",
+            "Rerolled 10s while impaired by spending a Player Character Point",
+        ]))
+        assert card.extras == (
+            "Player Character Point reroll used",
+            "+5 from a Player Character Point free raise",
+            "Rerolled 10s while impaired by spending a Player Character Point",
+        )
+        # And the card renders to a PNG without error.
+        png = render_png(_basic_payload(extras=[
+            "Player Character Point reroll used",
+        ]))
+        assert png[:8] == b"\x89PNG\r\n\x1a\n"
+
     def test_extras_non_list_collapses_to_empty(self):
         card = parse_payload(_basic_payload(extras="not a list"))
         assert card.extras == ()

@@ -1237,6 +1237,18 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "effective": effective,
             "skill_rolls": skill_rolls,
             "viewer_can_edit": viewer_can_edit,
+            # Player Character Points: the unspent XP before any new spend (so
+            # the confirmation modal can show unspent-vs-debt), and whether the
+            # character is published + clean (the spend gate).
+            # Disadvantage refund raises the budget but is also subtracted as
+            # gross spent, so it cancels: remaining = starting + earned -
+            # build spent - PCP spent.
+            "pcp_xp_remaining": (
+                character.starting_xp + character.earned_xp
+                - xp_breakdown["grand_total"]
+                - xp_breakdown["pcp"]["total"]
+            ),
+            "pcp_publish_clean": character.publish_status == "published",
             "viewer_is_logged_in": user is not None,
             "login_url_for_return_to_sheet": f"/auth/login?return_to=/characters/{char_id}",
             "versions": versions,
