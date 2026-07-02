@@ -129,21 +129,26 @@
    (data-action value). The kebab hides entirely when no option applies, and
    each item hides on its own ``can``. Lives in the diceRoller() scope; the
    menu open state (``pcpMenu``) is local to the kebab. #}
-{% macro pcp_kebab(items) %}
-<div class="relative inline-block text-left" x-data="{ pcpMenu: false, pcpPos: {top: 0, left: 0} }"
+{% macro pcp_kebab(items, compact=False) %}
+<div class="relative inline-block text-left align-middle" x-data="{ pcpMenu: false, pcpPos: {top: 0, left: 0} }"
      @click.outside="pcpMenu = false"
      x-show="{{ items | map(attribute='can') | join(' || ') }}" x-cloak>
     {# Open the menu and anchor it (position: fixed) just below the button's
        right edge, opening down-and-left. Fixed positioning escapes the
        scrollable modal's overflow clipping (the attack/WC/duel modals are
        max-h + overflow-y-auto), which a plain absolute dropdown gets clipped
-       by. Mirrors the roll-menu / precepts-menu pattern. #}
+       by. Mirrors the roll-menu / precepts-menu pattern. ``compact`` renders a
+       smaller button for inline use next to a label (e.g. the Void Points row). #}
+    {# ``compact`` kebabs sit on the LEFT (next to a label), so the menu opens
+       DOWN-and-RIGHT from the button's left edge; the header kebabs sit on the
+       RIGHT (next to the X), so they open DOWN-and-LEFT. Both are fixed so they
+       escape the scrollable-modal overflow clip. #}
     <button type="button" data-action="pcp-menu"
-            @click="pcpMenu = !pcpMenu; if (pcpMenu) { const r = $el.getBoundingClientRect(); pcpPos = {top: r.bottom, left: r.right}; }"
+            @click="pcpMenu = !pcpMenu; if (pcpMenu) { const r = $el.getBoundingClientRect(); pcpPos = {top: r.bottom, left: {{ 'r.left' if compact else 'r.right' }} }; }"
             title="Player Character Point options" aria-label="Player Character Point options"
-            class="btn-ghost px-2 py-1 rounded text-2xl leading-none font-bold">&#8942;</button>
+            class="btn-ghost rounded leading-none font-bold {{ 'px-1 text-base text-ink/40 hover:text-ink' if compact else 'px-2 py-1 text-2xl' }}">&#8942;</button>
     <div x-show="pcpMenu" x-cloak
-         :style="'position: fixed; top: ' + pcpPos.top + 'px; left: ' + pcpPos.left + 'px; transform: translate(-100%, 4px)'"
+         :style="'position: fixed; top: ' + pcpPos.top + 'px; left: ' + pcpPos.left + 'px; transform: translate({{ '0' if compact else '-100%' }}, 4px)'"
          class="z-[60] bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[230px]">
         <div class="px-4 py-1.5 text-[10px] uppercase tracking-wide text-ink/40 border-b border-ink/10">
             Spend a Player Character Point
