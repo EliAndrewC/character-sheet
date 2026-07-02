@@ -79,10 +79,11 @@ def _attack_to_result(page, tn=60):
 
 
 def _pcp_menu_item(page, action):
-    """Open the visible result panel's PCP kebab, then click the given option.
-    PCP options live in a compact ⋮ dropdown (one per panel; only the active
-    panel's is visible)."""
-    page.locator('[data-action="pcp-menu"]:visible').click()
+    """Open the open roll-modal's PCP kebab, then click the given option. PCP
+    options live in a compact ⋮ dropdown in each modal header; scope to the
+    kebab inside a [data-modal] so the separate Void-Points-row kebab (which
+    also lives on the sheet) isn't matched too."""
+    page.locator('[data-modal] [data-action="pcp-menu"]:visible').click()
     page.wait_for_timeout(150)
     page.locator(f'[data-action="{action}"]:visible').click()
 
@@ -133,7 +134,7 @@ def test_reroll_does_not_stack_with_lucky(page, live_server_url):
     page.locator('button:has-text("Use Lucky to reroll"):visible').click()
     page.wait_for_timeout(400)
     assert page.evaluate("window._diceRoller.canUsePcpReroll()") is False
-    page.locator('[data-action="pcp-menu"]:visible').click()
+    page.locator('[data-modal] [data-action="pcp-menu"]:visible').click()
     page.wait_for_timeout(150)
     assert not page.locator('[data-action="pcp-reroll"]').is_visible()
 
@@ -223,12 +224,16 @@ def test_reroll_tens_explodes_only_the_tens(page, live_server_url):
 
 def test_void_refresh_spends_pcp_and_regains_point(page, live_server_url):
     _create_roller(page, live_server_url, "PcpVoid")
+    # The void-refresh kebab is absent while void points are full...
+    assert not page.locator('[data-action="pcp-void-refresh"]').is_visible()
     # Drop a void point so a refresh has somewhere to go (max is 2).
     page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
     page.wait_for_timeout(150)
-    btn = page.locator('[data-action="pcp-void-refresh"]')
-    btn.wait_for(state="visible", timeout=4000)
-    btn.click()
+    # ...and appears (in the Void Points row kebab) once one is spent. No roll
+    # modal is open here, so the only visible kebab is the void-row one.
+    page.locator('[data-action="pcp-menu"]:visible').click()
+    page.wait_for_timeout(150)
+    page.locator('[data-action="pcp-void-refresh"]:visible').click()
     page.locator('[data-modal="pcp-confirm"]').wait_for(state="visible")
     assert "void point" in page.locator('[data-modal="pcp-confirm"]').text_content()
     page.locator('[data-action="pcp-confirm-accept"]').click()
