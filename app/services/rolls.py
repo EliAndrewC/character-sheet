@@ -356,6 +356,18 @@ def compute_skill_roll(
         bonus_parts.append(
             (0, "+20 to opponents' Manipulation from Thoughtless")
         )
+    # Withdrawn caps the result rather than adjusting the roll, so it is a
+    # note here and a max_total on the modal formula (see dice.py). Etiquette
+    # is always an open roll; sincerity is only capped when rolled openly.
+    if "withdrawn" in disadvantages:
+        if skill_id == "etiquette":
+            bonus_parts.append(
+                (0, "never considered higher than 15 from Withdrawn")
+            )
+        elif skill_id == "sincerity":
+            bonus_parts.append(
+                (0, "never considered higher than 15 on open rolls from Withdrawn")
+            )
 
     # --- Party-wide disadvantage notes from OTHER members ---
     # Thoughtless on a teammate adds +10 to opponents' Manipulation rolls

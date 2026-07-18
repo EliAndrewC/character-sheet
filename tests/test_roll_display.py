@@ -413,6 +413,56 @@ class TestDisadvantageNotes:
         assert "-10" in result.tooltip
         assert "unkempt" in result.tooltip
 
+    def test_withdrawn_etiquette_note(self):
+        data = make_character_data(
+            skills={"etiquette": 2},
+            disadvantages=["withdrawn"],
+        )
+        result = compute_skill_roll("etiquette", data)
+        assert "never considered higher than 15" in result.tooltip
+
+    def test_withdrawn_sincerity_note_says_open_rolls_only(self):
+        """Sincerity's cap is open-rolls-only; the note must say so or a
+        player will think their contested lying rolls are capped too."""
+        data = make_character_data(
+            skills={"sincerity": 2},
+            disadvantages=["withdrawn"],
+        )
+        result = compute_skill_roll("sincerity", data)
+        assert "never considered higher than 15 on open rolls" in result.tooltip
+
+    def test_withdrawn_is_a_note_not_a_flat_penalty(self):
+        """A cap is not a bonus - it must not touch flat_bonus."""
+        for skill in ("etiquette", "sincerity"):
+            data = make_character_data(
+                skills={skill: 2},
+                disadvantages=["withdrawn"],
+                honor=1.0,
+            )
+            capped = compute_skill_roll(skill, data)
+            data_no_dis = make_character_data(
+                skills={skill: 2}, disadvantages=[], honor=1.0,
+            )
+            uncapped = compute_skill_roll(skill, data_no_dis)
+            assert capped.flat_bonus == uncapped.flat_bonus
+            assert capped.rolled == uncapped.rolled
+            assert capped.kept == uncapped.kept
+
+    def test_withdrawn_no_note_on_other_skills(self):
+        for skill in ("tact", "culture", "bragging"):
+            data = make_character_data(
+                skills={skill: 2},
+                disadvantages=["withdrawn"],
+            )
+            result = compute_skill_roll(skill, data)
+            assert "15" not in result.tooltip or "Withdrawn" not in result.tooltip
+
+    def test_withdrawn_no_note_when_disadvantage_absent(self):
+        for skill in ("etiquette", "sincerity"):
+            data = make_character_data(skills={skill: 2}, disadvantages=[])
+            result = compute_skill_roll(skill, data)
+            assert "never considered higher than 15" not in result.tooltip
+
     def test_thoughtless_tact_note(self):
         data = make_character_data(
             skills={"tact": 1},

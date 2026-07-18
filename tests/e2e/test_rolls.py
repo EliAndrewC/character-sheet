@@ -1805,6 +1805,122 @@ def test_roll_result_copy_button_hidden_during_animation(page, live_server_url):
     ).count() == 1
 
 
+def _setup_withdrawn(page, live_server_url, skill, name):
+    """Create a Withdrawn character with 1 rank in ``skill`` and roll it."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, "akodo_bushi")
+    click_plus(page, f"skill_{skill}", 1)
+    page.check('input[name="dis_withdrawn"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Withdrawn setup")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.locator(f'[data-roll-key="skill:{skill}"]').click()
+    _wait_for_roll_result(page)
+
+
+def _set_base_total(page, value):
+    """Force the roller's uncapped total. The dice are random, so pinning
+    baseTotal is the only way to test the cap boundary deterministically -
+    and it doubles as a stand-in for a post-roll spend, which is exactly
+    how baseTotal gets moved after a roll resolves."""
+    page.evaluate(
+        """(v) => {
+            for (const el of document.querySelectorAll('[x-data]')) {
+                const d = window.Alpine && window.Alpine.$data(el);
+                if (d && d.phase === 'done' && typeof d.baseTotal === 'number') {
+                    d.baseTotal = v;
+                    return;
+                }
+            }
+            throw new Error('no dice roller in phase=done');
+        }""",
+        value,
+    )
+    page.wait_for_timeout(100)
+
+
+def _roll_total(page):
+    return int(page.locator(
+        '[data-modal="dice-roller"] [data-testid="roll-total"]'
+    ).text_content())
+
+
+def _open_rolls_row_text(page):
+    """The "on open rolls" Alternative-totals row, as *rendered*. Uses
+    inner_text rather than text_content so an x-show'd-off cap note counts
+    as absent - text_content would return it even while hidden."""
+    row = page.locator(
+        '[data-modal="dice-roller"] .border-t .text-sm'
+    ).filter(has_text="on open rolls").first
+    return " ".join((row.inner_text() or "").split())
+
+
+def test_withdrawn_caps_etiquette_roll_at_15(page, live_server_url):
+    """Withdrawn: etiquette rolls are never considered higher than 15."""
+    _setup_withdrawn(page, live_server_url, "etiquette", "WithdrawnEtq")
+
+    _set_base_total(page, 27)
+    assert _roll_total(page) == 15
+    breakdown = page.locator(
+        '[data-modal="dice-roller"] [data-testid="roll-total-cap-breakdown"]'
+    )
+    assert breakdown.is_visible()
+    text = " ".join((breakdown.text_content() or "").split())
+    assert "capped at 15 by Withdrawn (rolled 27)" in text
+
+
+def test_withdrawn_leaves_a_low_etiquette_roll_alone(page, live_server_url):
+    """The cap is a ceiling, not a floor - and the explanatory bullet only
+    shows when it actually bites."""
+    _setup_withdrawn(page, live_server_url, "etiquette", "WithdrawnEtqLow")
+
+    _set_base_total(page, 12)
+    assert _roll_total(page) == 12
+    assert not page.locator(
+        '[data-modal="dice-roller"] [data-testid="roll-total-cap-breakdown"]'
+    ).is_visible()
+
+
+def test_withdrawn_cap_survives_a_post_roll_spend(page, live_server_url):
+    """The regression this feature is most likely to grow: baseTotal is
+    mutated post-roll by free raises / Conviction / Mirumoto points. The cap
+    is applied at display time, so a spend that lifts the uncapped total from
+    14 to 19 must not lift the displayed result past 15."""
+    _setup_withdrawn(page, live_server_url, "etiquette", "WithdrawnEtqSpend")
+
+    _set_base_total(page, 14)
+    assert _roll_total(page) == 14
+    _set_base_total(page, 19)  # stands in for a +5 free raise
+    assert _roll_total(page) == 15
+
+
+def test_withdrawn_caps_open_sincerity_alternative_only(page, live_server_url):
+    """Sincerity is open or contested. The base total (a contested lying
+    roll) stays uncapped; only the open-roll alternative row is capped."""
+    _setup_withdrawn(page, live_server_url, "sincerity", "WithdrawnSinc")
+
+    _set_base_total(page, 24)
+    assert _roll_total(page) == 24, "contested sincerity must not be capped"
+
+    row_text = _open_rolls_row_text(page)
+    assert row_text.startswith("15"), f"expected capped 15, got: {row_text!r}"
+    assert "(capped by Withdrawn)" in row_text
+
+
+def test_withdrawn_sincerity_alternative_uncapped_when_under_15(page, live_server_url):
+    _setup_withdrawn(page, live_server_url, "sincerity", "WithdrawnSincLow")
+
+    _set_base_total(page, 5)
+    row_text = _open_rolls_row_text(page)
+    # Akodo Bushi starts at honor 1.0 -> +2 on open rolls; 5 + 2 = 7.
+    assert row_text.startswith("7"), f"expected uncapped 7, got: {row_text!r}"
+    assert "capped by" not in row_text
+
+
 def test_streetwise_surfaces_as_alternative_total(page, live_server_url):
     """Streetwise's +5 free raise is conditional on the bounty-hunter
     authority context, so it appears as an Alternative totals row on

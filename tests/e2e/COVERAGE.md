@@ -1344,6 +1344,20 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] No "if all of the above" line when only one alternative total → `test_rolls.py::test_alternative_totals_no_all_of_the_above_when_only_one`
 - [x] Streetwise +5 raise on etiquette/law/intimidation/underworld is purely conditional ("when invoking bounty hunter authority") - surfaces as an Alternative totals row, never baked into the unconditional flat → `test_rolls.py::test_streetwise_surfaces_as_alternative_total`
 
+### Withdrawn (result ceiling of 15)
+
+The codebase's only cap on a roll *result* rather than on dice. Applied at
+display time, so a post-roll spend can't lift the total back over it.
+
+- [x] Withdrawn note on Etiquette → `test_skill_rolls_display.py::test_withdrawn_note_on_etiquette`
+- [x] Withdrawn note on Sincerity is qualified "on open rolls" (contested lying rolls are uncapped) → `test_skill_rolls_display.py::test_withdrawn_note_on_sincerity_says_open_rolls`
+- [x] No Withdrawn note on unaffected skills; note IS present on Etiquette even when unskilled → `test_skill_rolls_display.py::test_withdrawn_no_note_on_unaffected_skill`
+- [x] Etiquette roll over 15 displays 15 + "capped at 15 by Withdrawn (rolled N)" breakdown bullet → `test_rolls.py::test_withdrawn_caps_etiquette_roll_at_15`
+- [x] Etiquette roll under 15 is untouched and shows no cap bullet (ceiling, not floor) → `test_rolls.py::test_withdrawn_leaves_a_low_etiquette_roll_alone`
+- [x] Cap survives a post-roll spend that lifts the uncapped total past 15 → `test_rolls.py::test_withdrawn_cap_survives_a_post_roll_spend`
+- [x] Sincerity: base (contested) total uncapped, "on open rolls" Alternative row capped at 15 with "(capped by Withdrawn)" → `test_rolls.py::test_withdrawn_caps_open_sincerity_alternative_only`
+- [x] Sincerity open-roll Alternative row under 15 is uncapped and shows no cap note → `test_rolls.py::test_withdrawn_sincerity_alternative_uncapped_when_under_15`
+
 ## Character Sheet — Advantages & Disadvantages Display
 
 - [x] Advantages listed → `test_sheet_display.py::test_advantages_listed_on_sheet`

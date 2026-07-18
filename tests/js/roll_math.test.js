@@ -126,6 +126,104 @@ test("applyDiceCap: kept>10 converts to +2 flat each", () => {
   });
 });
 
+test("applyTotalCap: total at or under the cap is untouched", () => {
+  assert.equal(M.applyTotalCap(12, 15), 12);
+  assert.equal(M.applyTotalCap(15, 15), 15);
+});
+
+test("applyTotalCap: total over the cap returns the cap", () => {
+  assert.equal(M.applyTotalCap(27, 15), 15);
+});
+
+test("applyTotalCap: no cap leaves the total alone", () => {
+  // 0 is the "no cap" sentinel on RollFormula.max_total, so an
+  // uncapped roll must not be flattened to 0.
+  assert.equal(M.applyTotalCap(27, 0), 27);
+  assert.equal(M.applyTotalCap(27, null), 27);
+  assert.equal(M.applyTotalCap(27, undefined), 27);
+  assert.equal(M.applyTotalCap(27, "15"), 27); // non-number is not a cap
+});
+
+test("applyTotalCap: caps a negative total up to the cap only when over", () => {
+  // Withdrawn caps at 15; a badly-failed roll stays where it is.
+  assert.equal(M.applyTotalCap(-3, 15), -3);
+});
+
+test("totalCapApplies: true only when the cap actually bites", () => {
+  assert.equal(M.totalCapApplies(27, 15), true);
+  assert.equal(M.totalCapApplies(15, 15), false);
+  assert.equal(M.totalCapApplies(12, 15), false);
+  assert.equal(M.totalCapApplies(27, 0), false);
+  assert.equal(M.totalCapApplies(27, null), false);
+});
+
+// --- Alternative-totals rows (conditional bonuses, optional ceilings) ---
+
+test("altCap: a row's own cap wins over the formula's", () => {
+  assert.equal(M.altCap({max_total: 15}, 0), 15);
+  assert.equal(M.altCap({max_total: 15}, 20), 15);
+});
+
+test("altCap: a row without its own cap inherits the formula's", () => {
+  // Withdrawn + Etiquette + a Specialization: the formula carries the cap,
+  // and the Specialization row is still an etiquette roll, so it inherits.
+  assert.equal(M.altCap({}, 15), 15);
+  assert.equal(M.altCap({extra_flat: 10}, 15), 15);
+});
+
+test("altCap: uncapped when neither row nor formula has one", () => {
+  assert.equal(M.altCap({extra_flat: 10}, 0), 0);
+  assert.equal(M.altCap({}, undefined), 0);
+  assert.equal(M.altCap(null, 0), 0);
+});
+
+test("altTotal: base + delta, clamped to the row's cap", () => {
+  // Withdrawn sincerity at Honor 3: 24 contested, open row capped at 15.
+  assert.equal(M.altTotal(24, {extra_flat: 6, max_total: 15}, 0), 15);
+  // Under the cap, untouched.
+  assert.equal(M.altTotal(5, {extra_flat: 2, max_total: 15}, 0), 7);
+  // Uncapped row.
+  assert.equal(M.altTotal(29, {extra_flat: 10}, 0), 39);
+  // Negative delta (Unkempt's -10 on Culture).
+  assert.equal(M.altTotal(29, {extra_flat: -10}, 0), 19);
+  // Missing delta counts as 0.
+  assert.equal(M.altTotal(24, {max_total: 15}, 0), 15);
+});
+
+test("altTotalAll: sums every delta when nothing is capped", () => {
+  assert.equal(M.altTotalAll(29, [{extra_flat: 10}, {extra_flat: 5}], 0), 44);
+});
+
+test("altTotalAll: the tightest cap among the rows binds", () => {
+  // A combined row that includes a capped condition is an instance of that
+  // condition, so it is capped too: 24 + 6 + 10 = 40 -> 15.
+  assert.equal(M.altTotalAll(24, [
+    {extra_flat: 6, max_total: 15},
+    {extra_flat: 10},
+  ], 0), 15);
+  // Two different caps -> the lower one wins.
+  assert.equal(M.altTotalAll(24, [
+    {extra_flat: 6, max_total: 20},
+    {extra_flat: 10, max_total: 15},
+  ], 0), 15);
+});
+
+test("altTotalAll: rows inherit the formula cap", () => {
+  assert.equal(M.altTotalAll(24, [{extra_flat: 6}, {extra_flat: 10}], 15), 15);
+});
+
+test("altTotalAll: empty list is just the base total", () => {
+  assert.equal(M.altTotalAll(24, [], 0), 24);
+  assert.equal(M.altTotalAll(24, null, 0), 24);
+});
+
+test("alt helpers tolerate malformed rows", () => {
+  // Defensive: a null row must not throw mid-render and take the whole
+  // result modal down with it.
+  assert.equal(M.altTotal(24, null, 0), 24);
+  assert.equal(M.altTotalAll(24, [null, {extra_flat: 5}], 0), 29);
+});
+
 test("damageDiceContestAdjust: round toward zero on both signs", () => {
   assert.equal(M.damageDiceContestAdjust(12), 2);
   assert.equal(M.damageDiceContestAdjust(0), 0);

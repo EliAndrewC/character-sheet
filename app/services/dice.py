@@ -52,6 +52,12 @@ _5TH_DAN_TN_NEVER = frozenset({
 })
 # All other skills: sometimes TN/contested (checkbox on roll result)
 
+# Withdrawn: "your etiquette and open sincerity rolls are never considered to
+# be higher than 15". Etiquette is always an open roll so its cap is
+# unconditional; sincerity is open OR contested (lying), so only its
+# open-roll alternatives carry the cap.
+WITHDRAWN_MAX_TOTAL = 15
+
 
 # ---------------------------------------------------------------------------
 # Result dataclass
@@ -194,6 +200,15 @@ class RollFormula:
     amounts equals ``flat``. The result modal renders this as either a single
     line (when there is exactly one bonus) or a "+N total flat bonus" line
     with sub-bullets (when there are several).
+
+    ``max_total`` is a ceiling on the *result* rather than a bonus: the total
+    is never displayed as higher than it (Withdrawn's "never considered to be
+    higher than 15"). 0 means uncapped. An entry in ``alternatives`` may carry
+    its own ``max_total`` when the ceiling applies only under that entry's
+    condition - Withdrawn caps open sincerity rolls but not contested ones.
+    The client applies the cap at *display* time, not by clamping the stored
+    total, so post-roll spends (free raises, Conviction) can't lift the result
+    back over it. See ``L7RRollMath.applyTotalCap``.
     """
     label: str
     rolled: int
@@ -213,6 +228,8 @@ class RollFormula:
     skill_name: str = ""
     alternatives: List[dict] = field(default_factory=list)
     bonuses: List[dict] = field(default_factory=list)
+    max_total: int = 0
+    max_total_source: str = ""
     adventure_raises_max_per_roll: int = 0
     courtier_5th_dan_optional: int = 0
     doji_5th_dan_always: bool = False
@@ -508,6 +525,7 @@ def build_skill_formula(
             formula.alternatives.append({
                 "label": "on open rolls with servants and the mistreated",
                 "extra_flat": honor_bonus + kind_eye_flat,
+                "open_roll": True,
             })
 
     # --- Disadvantage conditional alternatives ---
@@ -584,6 +602,7 @@ def build_skill_formula(
             formula.alternatives.append({
                 "label": "on open rolls (Priest 2nd Dan)",
                 "extra_flat": FREE_RAISE_VALUE,
+                "open_roll": True,
             })
         else:
             _add_flat_bonus(formula, "Priest 2nd Dan", FREE_RAISE_VALUE)
@@ -603,6 +622,7 @@ def build_skill_formula(
                 formula.alternatives.append({
                     "label": f"on open rolls ({label})",
                     "extra_flat": FREE_RAISE_VALUE,
+                    "open_roll": True,
                 })
             else:
                 _add_flat_bonus(formula, label, FREE_RAISE_VALUE)
@@ -617,6 +637,7 @@ def build_skill_formula(
                 formula.alternatives.append({
                     "label": "on open rolls",
                     "extra_flat": bonus,
+                    "open_roll": True,
                 })
             else:
                 _add_flat_bonus(formula, "Honor", bonus)
@@ -653,8 +674,41 @@ def build_skill_formula(
                 "extra_flat": 2 * FREE_RAISE_VALUE,
             })
 
+    _apply_withdrawn(formula, skill_id, disadvantages)
+
     _finalize_caps(formula)
     return formula
+
+
+def _apply_withdrawn(formula: "RollFormula", skill_id: str, disadvantages) -> None:
+    """Apply Withdrawn's 15 ceiling to etiquette and open sincerity rolls.
+
+    Runs after every alternative has been appended so the sincerity pass can
+    see all of them. Etiquette is always an open roll, so its cap rides on the
+    formula. Sincerity is open or contested, so the cap rides on the
+    open-roll alternative rows only - a contested lying roll is uncapped, and
+    its base total must stay uncapped to reflect that.
+    """
+    if "withdrawn" not in disadvantages:
+        return
+    if skill_id == "etiquette":
+        formula.max_total = WITHDRAWN_MAX_TOTAL
+        formula.max_total_source = "Withdrawn"
+    elif skill_id == "sincerity":
+        open_alts = [a for a in formula.alternatives if a.get("open_roll")]
+        if not open_alts:
+            # Honor 0 suppresses the "+2x Honor on open rolls" row, which is
+            # otherwise the only open-roll alternative a plain character has.
+            # Add a bonus-free row so the cap is still visible to the player.
+            open_alts = [{
+                "label": "on open rolls",
+                "extra_flat": 0,
+                "open_roll": True,
+            }]
+            formula.alternatives.append(open_alts[0])
+        for alt in open_alts:
+            alt["max_total"] = WITHDRAWN_MAX_TOTAL
+            alt["max_total_source"] = "Withdrawn"
 
 
 def build_knack_formula(
