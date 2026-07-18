@@ -222,6 +222,32 @@ class TestParsePayload:
         assert len(card.alternatives) == 1
         assert card.alternatives[0].label == "real"
 
+    def test_alternatives_max_total_parsed(self):
+        """Withdrawn caps open sincerity rolls at 15. The cap rides on the
+        alternative row, since the base (contested) roll is uncapped."""
+        card = parse_payload(_basic_payload(alternatives=[
+            {"label": "on open rolls", "extra_flat": 6, "max_total": 15},
+        ]))
+        assert card.alternatives[0].max_total == 15
+
+    def test_alternatives_max_total_defaults_to_uncapped(self):
+        card = parse_payload(_basic_payload(alternatives=[
+            {"label": "vs Wasp", "extra_flat": 10},
+        ]))
+        assert card.alternatives[0].max_total == 0
+
+    def test_alternatives_zero_delta_kept_when_capped(self):
+        """A cap-only row (Honor 0 Withdrawn sincerity) has no delta but must
+        still render - the cap is the only thing it has to say."""
+        card = parse_payload({
+            "title": "T", "kept": [{"parts": [9]}], "total": 24,
+            "alternatives": [
+                {"label": "on open rolls", "extra_flat": 0, "max_total": 15},
+            ],
+        })
+        assert len(card.alternatives) == 1
+        assert card.alternatives[0].max_total == 15
+
     def test_alternatives_clipped_to_max(self):
         too_many = [{"label": f"a{i}", "extra_flat": 1}
                     for i in range(dice_card.MAX_ALTERNATIVES + 5)]
@@ -454,6 +480,88 @@ class TestBuildSvg:
         assert "if all of the above" in svg
         # 29 + 10 + 5 = 44.
         assert ">44</text>" in svg
+
+    def test_alternatives_row_respects_max_total(self):
+        """A Withdrawn character's open sincerity row shows 15, not 24+6=30.
+        The base (contested) total is untouched."""
+        svg = build_svg(parse_payload(_basic_payload(
+            total=24,
+            alternatives=[
+                {"label": "on open rolls", "extra_flat": 6, "max_total": 15},
+            ],
+        )))
+        assert ">15</text>" in svg
+        assert ">30</text>" not in svg
+
+    def test_capped_alternative_row_names_the_cap_source(self):
+        """The on-screen modal appends "(capped by Withdrawn)" to a row whose
+        cap bit. The card is what gets pasted into chat, so it has to carry
+        the same explanation - otherwise a reader sees 15 next to a 24 and
+        has no way to know why."""
+        svg = build_svg(parse_payload(_basic_payload(
+            total=24,
+            alternatives=[
+                {"label": "on open rolls", "extra_flat": 6,
+                 "max_total": 15, "max_total_source": "Withdrawn"},
+            ],
+        )))
+        assert "on open rolls (capped by Withdrawn)" in svg
+
+    def test_uncapped_alternative_row_has_no_cap_note(self):
+        """The note appears only when the cap actually bites."""
+        svg = build_svg(parse_payload(_basic_payload(
+            total=5,
+            alternatives=[
+                {"label": "on open rolls", "extra_flat": 2,
+                 "max_total": 15, "max_total_source": "Withdrawn"},
+            ],
+        )))
+        assert "capped by" not in svg
+        assert ">on open rolls</text>" in svg
+
+    def test_capped_alternative_without_a_source_omits_the_note(self):
+        """Defensive: a cap with no named source renders the number alone
+        rather than "(capped by )"."""
+        svg = build_svg(parse_payload(_basic_payload(
+            total=24,
+            alternatives=[{"label": "on open rolls", "extra_flat": 6,
+                           "max_total": 15}],
+        )))
+        assert "capped by" not in svg
+
+    def test_alternatives_max_total_does_not_raise_a_low_total(self):
+        """The cap is a ceiling, not a floor - a roll under it is untouched."""
+        svg = build_svg(parse_payload(_basic_payload(
+            total=8,
+            alternatives=[
+                {"label": "on open rolls", "extra_flat": 2, "max_total": 15},
+            ],
+        )))
+        assert ">10</text>" in svg
+
+    def test_if_all_of_the_above_respects_the_tightest_cap(self):
+        """A combined row that includes a capped condition is itself an
+        instance of that condition, so the cap still applies."""
+        svg = build_svg(parse_payload(_basic_payload(
+            total=24,
+            alternatives=[
+                {"label": "on open rolls", "extra_flat": 6, "max_total": 15},
+                {"label": "if related to Specialization (haggling)", "extra_flat": 10},
+            ],
+        )))
+        assert "if all of the above" in svg
+        assert ">15</text>" in svg
+        assert ">40</text>" not in svg  # 24 + 6 + 10 uncapped
+
+    def test_if_all_of_the_above_uncapped_when_no_alt_is_capped(self):
+        svg = build_svg(parse_payload(_basic_payload(
+            total=24,
+            alternatives=[
+                {"label": "vs Wasp", "extra_flat": 6},
+                {"label": "in court", "extra_flat": 10},
+            ],
+        )))
+        assert ">40</text>" in svg
 
     def test_alternatives_no_if_all_with_single_alt(self):
         """A single alternative doesn't get the summing row - there's

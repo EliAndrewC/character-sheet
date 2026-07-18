@@ -21,7 +21,7 @@ import logging
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 from xml.sax.saxutils import escape as xml_escape
 
 import cairosvg
@@ -139,9 +139,18 @@ class Alternative:
     (e.g. ``+10 vs Wasp``, ``-10 in the eyes of those who judge the
     unkempt``). The card renders ``total + extra_flat`` next to the
     label and, when 2+ rows are present, an "if all of the above"
-    summing row."""
+    summing row.
+
+    ``max_total`` is a ceiling on this row's displayed value rather than
+    a delta - Withdrawn's "open sincerity rolls are never considered to
+    be higher than 15". 0 means uncapped. It lives on the row rather
+    than the card because the cap can be condition-specific: a Withdrawn
+    character's contested (lying) sincerity roll is not capped, only the
+    open-roll row is."""
     label: str
     extra_flat: int
+    max_total: int = 0
+    max_total_source: str = ""
 
 
 @dataclass(frozen=True)
@@ -265,7 +274,9 @@ def _coerce_alternatives(raw_list) -> Tuple[Alternative, ...]:
     Mirrors ``_coerce_bonuses`` but uses ``extra_flat`` (not ``amount``)
     to match the existing wire format on the View Sheet. Entries with
     no label or no delta are dropped - those would render as
-    contentless rows."""
+    contentless rows - unless they carry a ``max_total`` ceiling, which
+    is content in its own right (a Withdrawn character at Honor 0 has an
+    open-sincerity row whose only payload is the cap)."""
     if not isinstance(raw_list, list):
         return ()
     out: List[Alternative] = []
@@ -274,10 +285,45 @@ def _coerce_alternatives(raw_list) -> Tuple[Alternative, ...]:
             continue
         extra = _coerce_int(raw.get("extra_flat"), 0)
         label = _coerce_text(raw.get("label"))
-        if extra == 0 and not label:
+        max_total = max(0, _coerce_int(raw.get("max_total"), 0))
+        if extra == 0 and not label and not max_total:
             continue
-        out.append(Alternative(label=label, extra_flat=extra))
+        out.append(Alternative(
+            label=label, extra_flat=extra, max_total=max_total,
+            max_total_source=_coerce_text(raw.get("max_total_source")),
+        ))
     return tuple(out)
+
+
+def _alt_label(total: int, alt: "Alternative") -> str:
+    """This row's label, with "(capped by X)" appended when the row's
+    ceiling actually bit - mirroring the on-screen result modal, so a card
+    pasted into chat explains its own number. Both the layout pass and the
+    render pass go through here so the measured and drawn text can't drift."""
+    if (alt.max_total > 0 and alt.max_total_source
+            and total + alt.extra_flat > alt.max_total):
+        return f"{alt.label} (capped by {alt.max_total_source})"
+    return alt.label
+
+
+def _alt_total(total: int, alt: "Alternative") -> int:
+    """This row's displayed value: ``total + extra_flat``, clamped to the
+    row's ceiling when it has one (0 = uncapped)."""
+    value = total + alt.extra_flat
+    if alt.max_total > 0:
+        return min(value, alt.max_total)
+    return value
+
+
+def _alt_total_all(total: int, alts: Sequence["Alternative"]) -> int:
+    """The "if all of the above" row's value. A combined row that includes a
+    capped condition is itself an instance of that condition, so the tightest
+    cap among the rows still binds."""
+    value = total + sum(a.extra_flat for a in alts)
+    caps = [a.max_total for a in alts if a.max_total > 0]
+    if caps:
+        return min(value, min(caps))
+    return value
 
 
 def _coerce_extras(raw_list) -> Tuple[str, ...]:
@@ -498,17 +544,18 @@ def _plan_alternative_layout(card: RollCard) -> dict:
     # Width of each row's left column = mono total. Both the per-alt
     # rows and the "if all" row contribute candidate widths.
     amount_widths = [
-        _measure_text(str(base + a.extra_flat), ALT_FONT_SIZE,
+        _measure_text(str(_alt_total(base, a)), ALT_FONT_SIZE,
                       weight=700, family="mono")
         for a in alts
     ]
     label_widths = [
-        _measure_text(a.label, ALT_FONT_SIZE, weight=400, family="serif")
+        _measure_text(_alt_label(base, a), ALT_FONT_SIZE,
+                      weight=400, family="serif")
         for a in alts
     ]
     rows = len(alts)
     if len(alts) > 1:
-        total_all = base + sum(a.extra_flat for a in alts)
+        total_all = _alt_total_all(base, alts)
         amount_widths.append(
             _measure_text(str(total_all), ALT_FONT_SIZE,
                           weight=700, family="mono")
@@ -737,11 +784,12 @@ def build_svg(card: RollCard) -> str:
         anchor = block_left + alt_plan["max_amount_w"] + ALT_AMOUNT_LABEL_GAP
         row_y = alt_label_y + 22
         for a in card.alternatives:
-            total_str = str(card.total + a.extra_flat)
-            parts.append(_alt_line_svg(anchor, row_y, total_str, a.label))
+            total_str = str(_alt_total(card.total, a))
+            parts.append(_alt_line_svg(anchor, row_y, total_str,
+                                       _alt_label(card.total, a)))
             row_y += ALT_ROW_HEIGHT
         if len(card.alternatives) > 1:
-            total_all = card.total + sum(a.extra_flat for a in card.alternatives)
+            total_all = _alt_total_all(card.total, card.alternatives)
             parts.append(
                 _alt_line_svg(anchor, row_y, str(total_all), ALT_IF_ALL_LABEL)
             )

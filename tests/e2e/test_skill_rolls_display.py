@@ -151,6 +151,38 @@ def test_thoughtless_note_on_tact(page, live_server_url):
     assert "Manipulation" in page.text_content("body")
 
 
+def test_withdrawn_note_on_etiquette(page, live_server_url):
+    _create_char_with_skills(page, live_server_url,
+                              skills={"etiquette": 1}, disadvantages=["withdrawn"],
+                              name="Withdrawn Etiquette")
+    assert "never considered higher than 15 from Withdrawn" in page.text_content("body")
+
+
+def test_withdrawn_note_on_sincerity_says_open_rolls(page, live_server_url):
+    """The sincerity note must qualify the cap as open-rolls-only - a
+    contested lying roll is not capped."""
+    _create_char_with_skills(page, live_server_url,
+                              skills={"sincerity": 1}, disadvantages=["withdrawn"],
+                              name="Withdrawn Sincerity")
+    body = page.text_content("body")
+    assert "never considered higher than 15 on open rolls from Withdrawn" in body
+
+
+def test_withdrawn_no_note_on_unaffected_skill(page, live_server_url):
+    """Scoped to the Tact row, not the page: the Skills panel lists every
+    skill (unskilled ones included), so Etiquette's own note is on the page
+    for any Withdrawn character regardless of what they have ranks in."""
+    _create_char_with_skills(page, live_server_url,
+                              skills={"tact": 1}, disadvantages=["withdrawn"],
+                              name="Withdrawn Tact")
+    tact_row = page.locator('[data-roll-key="skill:tact"]').text_content() or ""
+    assert "never considered higher than 15" not in tact_row
+    # ...and it *is* present on Etiquette, even though the character is
+    # unskilled in it - the cap is on the roll, not on having ranks.
+    etiquette_row = page.locator('[data-roll-key="skill:etiquette"]').text_content() or ""
+    assert "never considered higher than 15" in etiquette_row
+
+
 def test_kind_eye_note_on_tact_and_sincerity(page, live_server_url):
     """Kind Eye surfaces the +20 servants-and-mistreated note on both skills."""
     _create_char_with_skills(page, live_server_url,

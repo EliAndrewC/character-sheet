@@ -542,6 +542,126 @@ class TestSkillFormula:
             "unkempt" in alt.get("label", "").lower() for alt in f.alternatives
         )
 
+    def test_withdrawn_caps_etiquette_total_at_15(self):
+        """Withdrawn: "your etiquette and open sincerity rolls are never
+        considered to be higher than 15". Etiquette is always an open roll,
+        so the cap is unconditional and rides on the formula itself."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"etiquette": 3},
+            disadvantages=["withdrawn"],
+        )
+        f = build_skill_formula("etiquette", char)
+        assert f.max_total == 15
+        assert f.max_total_source == "Withdrawn"
+        # A cap is not a bonus - it must not disturb the dice or flat total.
+        assert f.flat == 0
+        assert not f.alternatives
+
+    def test_withdrawn_etiquette_cap_survives_flat_bonuses(self):
+        """Charming's +5 stacks into flat as usual; the cap is orthogonal
+        and still rides at 15 (the client applies it to the final total)."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"etiquette": 3},
+            advantages=["charming"],
+            disadvantages=["withdrawn"],
+        )
+        f = build_skill_formula("etiquette", char)
+        assert f.max_total == 15
+        assert f.flat == 5
+
+    def test_withdrawn_caps_sincerity_open_roll_alternatives_only(self):
+        """Sincerity is open OR contested, so only the open-roll alternative
+        rows carry the cap. The base formula stays uncapped - a contested
+        lying roll is not affected by Withdrawn."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"sincerity": 3},
+            disadvantages=["withdrawn"],
+            honor=3.0,
+        )
+        f = build_skill_formula("sincerity", char)
+        assert f.max_total == 0, "base sincerity roll must not be capped"
+        open_alt = next(a for a in f.alternatives if a["label"] == "on open rolls")
+        assert open_alt["extra_flat"] == 6  # 2 x honor 3.0
+        assert open_alt["max_total"] == 15
+        assert open_alt["max_total_source"] == "Withdrawn"
+
+    def test_withdrawn_caps_every_open_sincerity_alternative(self):
+        """Kind Eye and Priest 2nd Dan each add their own open-roll row.
+        All of them are capped - the cap is on the roll, not the bonus."""
+        char = make_character_data(
+            school="priest",
+            knacks={"theology": 2, "meditation": 2, "sacred_weapon": 2},
+            skills={"sincerity": 3},
+            advantages=["kind_eye"],
+            disadvantages=["withdrawn"],
+            honor=3.0,
+        )
+        f = build_skill_formula("sincerity", char)
+        open_alts = [a for a in f.alternatives if a.get("open_roll")]
+        assert len(open_alts) == 3, f"expected 3 open-roll rows, got {open_alts!r}"
+        assert all(a["max_total"] == 15 for a in open_alts)
+
+    def test_withdrawn_sincerity_non_open_alternatives_are_uncapped(self):
+        """Specialization applies to contested lying rolls too, so its row
+        must not inherit the open-roll cap."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"sincerity": 3},
+            disadvantages=["withdrawn"],
+            specializations=[{"skills": ["sincerity"], "text": "haggling"}],
+            honor=3.0,
+        )
+        f = build_skill_formula("sincerity", char)
+        spec_alt = next(
+            a for a in f.alternatives if "Specialization" in a["label"]
+        )
+        assert "max_total" not in spec_alt
+        assert not spec_alt.get("open_roll")
+
+    def test_withdrawn_sincerity_open_row_exists_even_at_zero_honor(self):
+        """At Honor 0 the +2x Honor row is suppressed (bonus of 0), but the
+        cap still has to be shown somewhere - otherwise a Withdrawn character
+        gets no indication their open sincerity rolls are capped."""
+        char = make_character_data(
+            school="",
+            knacks={},
+            skills={"sincerity": 3},
+            disadvantages=["withdrawn"],
+            honor=0.0,
+        )
+        f = build_skill_formula("sincerity", char)
+        open_alt = next(a for a in f.alternatives if a["label"] == "on open rolls")
+        assert open_alt["extra_flat"] == 0
+        assert open_alt["max_total"] == 15
+
+    def test_withdrawn_does_not_cap_other_skills(self):
+        for skill in ("tact", "culture", "intimidation", "bragging"):
+            char = make_character_data(
+                school="",
+                knacks={},
+                skills={skill: 3},
+                disadvantages=["withdrawn"],
+            )
+            f = build_skill_formula(skill, char)
+            assert f.max_total == 0, f"{skill} must not be capped by Withdrawn"
+            assert not any(a.get("max_total") for a in f.alternatives)
+
+    def test_no_cap_without_withdrawn(self):
+        for skill in ("etiquette", "sincerity"):
+            char = make_character_data(
+                school="", knacks={}, skills={skill: 3}, disadvantages=[],
+            )
+            f = build_skill_formula(skill, char)
+            assert f.max_total == 0
+            assert not any(a.get("max_total") for a in f.alternatives)
+
     def test_charming_advantage_adds_5_to_etiquette(self):
         char = make_character_data(
             skills={"etiquette": 1},

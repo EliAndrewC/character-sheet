@@ -81,9 +81,15 @@ def _roll_wc(page):
 
 def test_wc_accept_result_applies_failure(page, live_server_url):
     """Accept Result on a failed wound check applies the serious wounds."""
-    _create_char(page, live_server_url, "WCAccept", "akodo_bushi",
-                 knack_overrides={"double_attack": 3, "feint": 3, "iaijutsu": 3},
-                 skill_overrides={"bragging": 1})
+    # Brotherhood monk, not Akodo Bushi: "Accept Result" only renders when the
+    # check has a discretionary spend to offer (wcHasDiscretionary). Conviction
+    # is a monk school knack, so this character always has one. An Akodo Bushi
+    # has no wound-check discretionary spend at all - its 3rd Dan is the banked
+    # attack bonus, not free raises - so the result auto-applies and the button
+    # never appears.
+    _create_char(page, live_server_url, "WCAccept", "brotherhood_of_shinsei_monk",
+                 knack_overrides={"conviction": 3, "otherworldliness": 3, "worldliness": 3},
+                 skill_overrides={"precepts": 1})
     sw_before = page.evaluate("window._trackingBridge?.seriousWounds || 0")
     # Add lots of LW to ensure failure
     _add_lw_and_open_wc(page, 80)
@@ -96,14 +102,18 @@ def test_wc_accept_result_applies_failure(page, live_server_url):
         }
         return false;
     }""")
-    if failed:
-        # The 3rd Dan raises make it discretionary, so Accept Result button should appear
-        accept_btn = page.locator('button:has-text("Accept Result")')
-        if accept_btn.is_visible():
-            accept_btn.click()
-            page.wait_for_timeout(300)
-            sw_after = page.evaluate("window._trackingBridge?.seriousWounds || 0")
-            assert sw_after > sw_before, f"SW should increase: {sw_before} -> {sw_after}"
+    # 80 LW fails the check deterministically - assert rather than guard, or
+    # a regression that stopped the modal reaching 'result' would pass here
+    # vacuously.
+    assert failed, "80 light wounds must fail the wound check"
+    # Address the button by data-action: the strike branch of this same modal
+    # has its own "Accept Result" button, so matching on text hits both.
+    accept_btn = page.locator('[data-action="wc-accept-result"]')
+    assert accept_btn.is_visible(), "Accept Result should be shown for a discretionary failed check"
+    accept_btn.click()
+    page.wait_for_timeout(300)
+    sw_after = page.evaluate("window._trackingBridge?.seriousWounds || 0")
+    assert sw_after > sw_before, f"SW should increase: {sw_before} -> {sw_after}"
 
 
 # ---------------------------------------------------------------------------

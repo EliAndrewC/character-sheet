@@ -136,6 +136,67 @@
     },
 
     /**
+     * Ceiling on a roll's *result* (not its dice), e.g. Withdrawn's "your
+     * etiquette and open sincerity rolls are never considered to be higher
+     * than 15". `maxTotal` is RollFormula.max_total, where 0 means "no cap".
+     *
+     * Callers must apply this at display time rather than baking it into
+     * baseTotal: post-roll spends (free raises, Conviction, Mirumoto points)
+     * mutate baseTotal after the roll resolves, and a one-shot cap would be
+     * undone by the next `baseTotal += 5`. The roll is never *considered*
+     * higher than the cap, so the ceiling has to outlive those spends.
+     */
+    applyTotalCap: function (total, maxTotal) {
+      if (typeof maxTotal !== "number" || !(maxTotal > 0)) return total;
+      return Math.min(total, maxTotal);
+    },
+
+    /** True iff a cap exists and is actually lowering `total`. */
+    totalCapApplies: function (total, maxTotal) {
+      if (typeof maxTotal !== "number" || !(maxTotal > 0)) return false;
+      return total > maxTotal;
+    },
+
+    /**
+     * The ceiling binding one "Alternative totals" row. A row may carry its
+     * own (Withdrawn caps *open* sincerity rolls, while the formula's base
+     * contested roll is uncapped); otherwise it inherits the formula's, since
+     * a conditional bonus on a capped roll is still that capped roll.
+     * Returns 0 when uncapped.
+     */
+    altCap: function (alt, formulaMaxTotal) {
+      var own = (alt || {}).max_total;
+      if (typeof own === "number") return own;
+      return typeof formulaMaxTotal === "number" ? formulaMaxTotal : 0;
+    },
+
+    /** One alternative row's displayed value: base + delta, capped. */
+    altTotal: function (baseTotal, alt, formulaMaxTotal) {
+      var extra = ((alt || {}).extra_flat) || 0;
+      return this.applyTotalCap(
+        baseTotal + extra, this.altCap(alt, formulaMaxTotal)
+      );
+    },
+
+    /**
+     * The "if all of the above" row. Any capped component makes the combined
+     * row an instance of that capped condition too, so the tightest cap among
+     * the rows binds.
+     */
+    altTotalAll: function (baseTotal, alts, formulaMaxTotal) {
+      var rows = alts || [];
+      var self = this;
+      var sum = rows.reduce(function (s, a) {
+        return s + ((a || {}).extra_flat || 0);
+      }, 0);
+      var caps = rows
+        .map(function (a) { return self.altCap(a, formulaMaxTotal); })
+        .filter(function (c) { return c > 0; });
+      var cap = caps.length ? Math.min.apply(Math, caps) : 0;
+      return this.applyTotalCap(baseTotal + sum, cap);
+    },
+
+    /**
      * Kakita 5th Dan contested-damage dice adjustment: +/- floor(|diff| / 5),
      * rounded toward zero (so a negative diff truncates toward 0, not down).
      */

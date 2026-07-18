@@ -2903,7 +2903,8 @@ SOCIAL_VISIBLE_DISADVANTAGES: set = {
     # ``permanent_wound`` are NOT chips: unconventional flows into
     # the Honor color highlight, bad_reputation's rank/recognition
     # penalty surfaces in the Rank and Recognition rows, withdrawn
-    # is a roll-only modifier, and permanent_wound is a fixed
+    # surfaces as the 15 result ceiling on etiquette / open sincerity
+    # rolls (``max_total`` in services/dice.py), and permanent_wound is a fixed
     # wound-track adjustment (already implied by the character's
     # combat numbers).
 }

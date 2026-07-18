@@ -116,7 +116,14 @@ def test_free_raise_applies_and_persists(page, live_server_url):
     page.wait_for_function(
         "(b) => window._diceRoller.baseTotal === b + 5", arg=before, timeout=4000,
     )
-    assert page.locator('[data-testid="pcp-raise-line"]').is_visible()
+    # baseTotal (JS state) and the pcp-raise-line's x-show gate
+    # (pcpRaisesSpentThisRoll) are set in the same handler, but Alpine flushes
+    # the x-show DOM mutation on a later microtask - so waiting on baseTotal
+    # can win the race against the repaint. wait_for retries; a bare
+    # is_visible() snapshot would flake.
+    raise_line = page.locator('[data-testid="pcp-raise-line"]')
+    raise_line.wait_for(state="visible", timeout=4000)
+    assert raise_line.is_visible()
     page.wait_for_function("() => window._trackingBridge.pcpCount === 1", timeout=4000)
     # Free raise is once per roll: the button is gone now.
     assert page.evaluate("window._diceRoller.canSpendPcpRaise()") is False

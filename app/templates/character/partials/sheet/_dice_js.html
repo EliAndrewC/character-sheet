@@ -2754,7 +2754,57 @@
                 if (this.pcpTensRerolledThisRoll) {
                     extras.push('Rerolled 10s while impaired by spending a Player Character Point');
                 }
+                // Result ceiling (Withdrawn). Listed last so it reads as the
+                // final word on a total the bullets above just built up.
+                if (window.L7RRollMath.totalCapApplies(this.baseTotal, f.max_total)) {
+                    extras.push(
+                        'Capped at ' + f.max_total + ' by '
+                        + (f.max_total_source || 'a disadvantage')
+                        + ' (rolled ' + this.baseTotal + ')'
+                    );
+                }
                 return extras;
+            },
+
+            // The result as it should be *displayed*: baseTotal, clamped to
+            // formula.max_total when a cap applies (Withdrawn). baseTotal
+            // itself stays uncapped - post-roll spends (free raises,
+            // Conviction, Mirumoto points) add to it after the roll resolves,
+            // and the cap has to outlive every one of them rather than be
+            // undone by the next `baseTotal += 5`.
+            cappedTotal() {
+                return window.L7RRollMath.applyTotalCap(
+                    this.baseTotal, (this.formula || {}).max_total
+                );
+            },
+
+            // "Alternative totals" rows. The arithmetic (delta, ceiling,
+            // inheritance, the "if all" min-of-caps) lives in L7RRollMath;
+            // these just bind it to the live formula. See roll_math.js.
+            altTotal(alt) {
+                return window.L7RRollMath.altTotal(
+                    this.baseTotal, alt, (this.formula || {}).max_total
+                );
+            },
+
+            altCapApplies(alt) {
+                return window.L7RRollMath.totalCapApplies(
+                    this.baseTotal + ((alt || {}).extra_flat || 0),
+                    window.L7RRollMath.altCap(alt, (this.formula || {}).max_total)
+                );
+            },
+
+            _altCap(alt) {
+                return window.L7RRollMath.altCap(
+                    alt, (this.formula || {}).max_total
+                );
+            },
+
+            altTotalAll() {
+                const f = this.formula || {};
+                return window.L7RRollMath.altTotalAll(
+                    this.baseTotal, f.alternatives || [], f.max_total
+                );
             },
 
             // Damage-roll extras. Includes:
@@ -2835,7 +2885,7 @@
                     bonuses: bonuses,
                     extras: this._extraBonusBullets(f),
                     kept_sum: this.keptSum || 0,
-                    total: this.baseTotal,
+                    total: this.cappedTotal(),
                     alternatives: this._alternativesForPayload(f),
                 };
                 // Parry rolls made against an entered TN carry their
@@ -2848,17 +2898,30 @@
             // Pull formula.alternatives (e.g. "vs Wasp", "for servants
             // and the mistreated", Streetwise's bounty-hunter row) into
             // the payload the dice-card renderer expects. Each entry
-            // is ``{label, extra_flat}``; we filter to entries that
-            // have a label so a malformed row doesn't render a blank
-            // line on the card.
+            // is ``{label, extra_flat}`` plus an optional ``max_total``
+            // ceiling (Withdrawn's open-sincerity cap); we filter to
+            // entries that have a label so a malformed row doesn't
+            // render a blank line on the card. A row is kept when it
+            // carries a cap even if its delta is 0 - the cap is the
+            // whole point of that row.
             _alternativesForPayload(formula) {
                 const alts = [];
                 for (const a of ((formula || {}).alternatives || [])) {
                     if (!a) continue;
                     const label = (a.label || '').trim();
                     const extra = parseInt(a.extra_flat, 10);
-                    if (!label || !Number.isFinite(extra) || extra === 0) continue;
-                    alts.push({label: label, extra_flat: extra});
+                    if (!label || !Number.isFinite(extra)) continue;
+                    const cap = this._altCap(a);
+                    const capped = typeof cap === 'number' && cap > 0;
+                    if (extra === 0 && !capped) continue;
+                    const row = {label: label, extra_flat: extra};
+                    if (capped) {
+                        row.max_total = cap;
+                        const src = a.max_total_source
+                                 || (formula || {}).max_total_source;
+                        if (src) row.max_total_source = src;
+                    }
+                    alts.push(row);
                 }
                 return alts;
             },

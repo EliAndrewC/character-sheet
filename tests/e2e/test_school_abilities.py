@@ -2832,11 +2832,10 @@ def test_pontificate_picks_higher_of_water_and_air_in_roll_modal(page, live_serv
     # Knack badge on the View Sheet should advertise both rings.
     assert "Water or Air" in page.text_content("body")
 
-    page.locator('[data-roll-key="knack:pontificate"]').click()
-    page.wait_for_function("""() => {
-        const d = window._diceRoller;
-        return d && d.phase === 'done';
-    }""", timeout=10_000)
+    # Pontificate opens the spend menu (a Priest has Otherworldliness), so it
+    # does not roll straight through - go via the helper that clicks the
+    # default "Roll X" option when the menu appears.
+    _roll_via_menu_or_direct(page, "knack:pontificate")
     modal = page.locator('[data-modal="dice-roller"]').text_content()
     # Higher ring (Air = 4) was used; "Pontificate (Air)" appears in the label.
     assert "Pontificate (Air)" in modal, (
@@ -2853,11 +2852,10 @@ def test_priest_3rd_dan_pool_does_not_appear_on_skill_roll(page, live_server_url
     # Precepts is a priest school knack, so it's rollable as knack:precepts,
     # but precepts as a *skill* isn't a roll key here. Pick a simple knack
     # that's definitely rollable: pontificate (priest school knack).
-    page.locator('[data-roll-key="knack:pontificate"]').click()
-    page.wait_for_function("""() => {
-        const d = window._diceRoller;
-        return d && d.phase === 'done';
-    }""", timeout=10000)
+    # Pontificate opens the spend menu (a Priest has Otherworldliness), so it
+    # does not roll straight through - go via the helper that clicks the
+    # default "Roll X" option when the menu appears.
+    _roll_via_menu_or_direct(page, "knack:pontificate")
     pool_block = page.locator('[data-modal="dice-roller"] [data-testid^="precepts-pool-in-roll-"]')
     assert pool_block.count() == 0
 
@@ -8630,7 +8628,7 @@ def test_mantis_defensive_posture_wc_modal_overlay(page, live_server_url):
     # Roll a low wound check so we can see the labeled entry in the post-roll
     # breakdown. WC fails, but the labeled line still appears.
     _mock_dice_low(page)
-    modal.locator('button:has-text("Roll Wound Check")').first.click()
+    modal.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -8847,7 +8845,7 @@ def test_mantis_5th_dan_wc_modal_defensive_accumulator(page, live_server_url):
     assert "+2 from Mantis 5th Dan (defensive posture count)" in pre_text
     # Roll and verify post-roll breakdown also contains the label.
     _mock_dice_low(page)
-    modal.locator('button:has-text("Roll Wound Check")').first.click()
+    modal.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -9327,7 +9325,7 @@ def test_mantis_3rd_dan_defensive_wc_overlay(page, live_server_url):
     assert "+3 from Mantis 3rd Dan (defensive)" in pre_text
     # Roll and verify post-roll breakdown still contains the label.
     _mock_dice_low(page)
-    modal.locator('button:has-text("Roll Wound Check")').first.click()
+    modal.locator('[data-action="roll-wound-check-go"]').click()
     page.wait_for_function("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {
@@ -11126,7 +11124,12 @@ def test_kitsune_wc_modal_swap_persists_into_roll_results_annotation(page, live_
         }
         return false;
     }""", timeout=10000)
+    # wcPhase (JS state) flips to 'result' before Alpine repaints the
+    # annotation's x-show gate (formula?.kitsune_swap_to_ring), so waiting on
+    # wcPhase can beat the repaint. wait_for retries; a bare is_visible()
+    # snapshot flakes. Same idiom as the parry-swap tests below.
     annotation = page.locator('[data-testid="kitsune-wc-swap-annotation"]')
+    annotation.wait_for(state="visible", timeout=5000)
     assert annotation.is_visible()
     text = annotation.text_content()
     assert "Earth" in text

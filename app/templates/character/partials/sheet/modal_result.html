@@ -145,8 +145,12 @@
                     {# Total + structured breakdown (not shown for initiative) #}
                     <div x-show="!formula || !formula.is_initiative" class="bg-ink/5 rounded p-3 text-sm">
                         <div class="flex items-center justify-between mb-1 gap-3">
+                            {# Total is capped for display only (Withdrawn);
+                               baseTotal stays uncapped so post-roll spends
+                               still accumulate against the real result. #}
                             <div class="font-bold text-lg">
-                                Total: <span class="text-accent" x-text="baseTotal"></span>
+                                Total: <span class="text-accent" data-testid="roll-total"
+                                             x-text="cappedTotal()"></span>
                             </div>
                             {% include 'character/partials/copy_roll_image_button.html' %}
                         </div>
@@ -301,18 +305,33 @@
                             from <span x-text="akodoPostRollVpSpent"></span> VP spent post-roll (Akodo 4th Dan, +5 each)
                         </div>
 
+                        {# Result ceiling (Withdrawn). Shown only when the cap
+                           actually bites, and reactive to baseTotal so it
+                           appears/disappears as post-roll spends push the
+                           uncapped result across the line. #}
+                        <div x-show="window.L7RRollMath.totalCapApplies(baseTotal, formula?.max_total)"
+                             x-cloak data-testid="roll-total-cap-breakdown"
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            capped at <span x-text="formula?.max_total"></span>
+                            by <span x-text="formula?.max_total_source"></span>
+                            (rolled <span x-text="baseTotal"></span>)
+                        </div>
+
                         <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
                             <div class="mt-2 pt-2 border-t border-ink/10">
                                 <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
                                 <template x-for="alt in (formula?.alternatives || [])" :key="alt.label">
                                     <div class="text-sm">
-                                        <span class="font-bold text-accent" x-text="baseTotal + alt.extra_flat"></span>
+                                        <span class="font-bold text-accent" x-text="altTotal(alt)"></span>
                                         <span x-text="alt.label"></span>
+                                        <span x-show="altCapApplies(alt)" x-cloak class="text-xs text-ink/50"
+                                        >(capped by <span x-text="alt.max_total_source || formula?.max_total_source"></span>)</span>
                                     </div>
                                 </template>
                                 <template x-if="(formula?.alternatives || []).length > 1">
                                     <div class="text-sm">
-                                        <span class="font-bold text-accent" x-text="baseTotal + (formula?.alternatives || []).reduce((s, a) => s + a.extra_flat, 0)"></span>
+                                        <span class="font-bold text-accent" x-text="altTotalAll()"></span>
                                         if all of the above
                                     </div>
                                 </template>

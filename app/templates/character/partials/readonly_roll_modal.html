@@ -67,11 +67,16 @@
                     <div class="mt-2 pt-2 border-t border-ink/10"
                          data-testid="readonly-alternatives">
                         <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
+                        {# A row may carry its own ceiling (Withdrawn caps
+                           open sincerity rolls but not contested ones). #}
                         <template x-for="(alt, i) in payload.alternatives" :key="i">
                             <div class="text-sm">
                                 <span class="font-bold text-accent"
-                                      x-text="(payload.total || 0) + (alt.extra_flat || 0)"></span>
+                                      x-text="window.L7RRollMath.applyTotalCap((payload.total || 0) + (alt.extra_flat || 0), alt.max_total)"></span>
                                 <span x-text="alt.label"></span>
+                                <span x-show="alt.max_total_source && window.L7RRollMath.totalCapApplies((payload.total || 0) + (alt.extra_flat || 0), alt.max_total)"
+                                      x-cloak class="text-xs text-ink/50"
+                                >(capped by <span x-text="alt.max_total_source"></span>)</span>
                             </div>
                         </template>
                     </div>
