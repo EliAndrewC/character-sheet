@@ -20,6 +20,10 @@
             init() {
                 if (this._ffInited) return;
                 this._ffInited = true;
+                // Expose for the e2e harness, which disables dice animation
+                // on this component's own ffPrefs (separate from _diceRoller)
+                // to keep animation timing out of the freeform-roll tests.
+                window._freeformRoller = this;
                 this._useShareImage = !!window.L7RUseShareImage;
                 try {
                     const p = JSON.parse(document.getElementById('user-prefs').textContent || '{}');
@@ -1505,7 +1509,7 @@
                     this.rollMenuTitle = 'Athletics';
                     this.rollMenuPos = pos;
                     this.rollMenuOptions = this.schoolAbilities.merchant_post_roll_vp
-                        ? [] : this.computeVoidOptions();
+                        ? [] : this.voidOptionsFor(f);
                     this.rollMenuHasStrike = false;
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = false;
@@ -1533,7 +1537,7 @@
                     this.rollMenuTitle = ring;
                     this.rollMenuPos = pos;
                     this.rollMenuOptions = this.schoolAbilities.merchant_post_roll_vp
-                        ? [] : this.computeVoidOptions();
+                        ? [] : this.voidOptionsFor(f);
                     this.rollMenuHasStrike = false;
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = false;
@@ -1562,7 +1566,7 @@
                     this.rollMenuTitle = f.label;
                     this.rollMenuPos = pos;
                     this.rollMenuOptions = this.schoolAbilities.merchant_post_roll_vp
-                        ? [] : this.computeVoidOptions();
+                        ? [] : this.voidOptionsFor(f);
                     this.rollMenuHasStrike = false;
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = false;
@@ -1700,7 +1704,7 @@
                 // so pre-roll VP options are hidden - no reason to commit in advance).
                 // Damage rolls (e.g. Dragon Tattoo) don't accept void spending.
                 const options = (this.schoolAbilities.merchant_post_roll_vp || f.is_damage_roll)
-                    ? [] : this.computeVoidOptions();
+                    ? [] : this.voidOptionsFor(f);
                 // Check for special roll variants
                 const hasStrike = key === 'knack:iaijutsu' && !!this.formulas['knack:iaijutsu:strike'];
                 const hasParry = key === 'parry';
@@ -1950,6 +1954,16 @@
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
                 this.baseTotal = this.keptSum + this.formula.flat + disc;
                 this.phase = 'done';
+            },
+
+            // Pre-roll void-spend options for a specific formula, honoring the
+            // Discordant disadvantage: a formula the server marked
+            // ``void_blocked`` (skill:*, attack, parry, school knacks) offers
+            // no void options. Wound checks, athletics, and bare ring rolls
+            // are not blocked, so they fall through to computeVoidOptions().
+            voidOptionsFor(f) {
+                if (f && f.void_blocked) return [];
+                return this.computeVoidOptions();
             },
 
             computeVoidOptions() {
@@ -4573,7 +4587,15 @@
 
             // Max void selectable: the chart's cap, clamped to what the
             // character can actually afford right now.
+            // Discordant: regular parry is a skill (void-blocked), but the
+            // athletics-parry variant is not - so this tracks the active
+            // variant, not a fixed flag.
+            parryVoidBlocked() {
+                return !!this.formulas[this.parryCurrentKey()]?.void_blocked;
+            },
+
             parryVoidCap() {
+                if (this.parryVoidBlocked()) return 0;
                 const cap = this.parryActiveProbs()?.void_cap ?? (this.voidSpendConfig.cap || 0);
                 return Math.min(this.computeVoidOptions().length, cap);
             },

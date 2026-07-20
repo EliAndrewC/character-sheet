@@ -2357,3 +2357,129 @@ def test_identical_payload_does_not_trigger_redundant_prerender(page, live_serve
         f"Spend+undo (net zero) should not spawn a redundant prerender; "
         f"got {count} POSTs (expected 1)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Discordant disadvantage: "may not spend void points on skills".
+# Per the GM ruling, "skills" = skill:* rolls, attack, parry, and school
+# knacks; void stays available on wound checks, athletics, and bare ring
+# rolls. Asserted mostly on JS state (unambiguous), plus the user-visible
+# attack-modal note. See build_all_roll_formulas / _discordant_blocks_void.
+# ---------------------------------------------------------------------------
+
+def _create_discordant(page, live_server_url, name="Discordant",
+                       school="mantis_wave_treader"):
+    """Mantis Wave Treader has athletics as a school knack, so it exposes the
+    knack:athletics entry-point key - useful for confirming athletics stays
+    allowed despite the knack: prefix."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, school)
+    page.check('input[name="dis_discordant"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Discordant setup")
+    page.evaluate("window._trackingBridge.voidPoints = 3; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+
+
+def _void_state(page):
+    """Return {key: {blocked, voidOpts}} for the representative roll keys,
+    read straight from the dice-roller Alpine component."""
+    return page.evaluate("""() => {
+        let dr = null;
+        for (const el of document.querySelectorAll('[x-data]')) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.voidOptionsFor === 'function') { dr = d; break; }
+        }
+        const F = dr.formulas;
+        const st = (key) => ({
+            blocked: !!F[key]?.void_blocked,
+            voidOpts: (dr.voidOptionsFor(F[key]) || []).length,
+        });
+        return {
+            raw: (dr.computeVoidOptions() || []).length,
+            'skill:etiquette': st('skill:etiquette'),
+            attack: st('attack'),
+            parry: st('parry'),
+            'knack:athletics': st('knack:athletics'),
+            'ring:Water': st('ring:Water'),
+            wound_check: st('wound_check'),
+        };
+    }""")
+
+
+def test_discordant_blocks_void_on_skills_allows_others(page, live_server_url):
+    _create_discordant(page, live_server_url, "DiscVoidState")
+    s = _void_state(page)
+    assert s["raw"] > 0, "character should have void points available in principle"
+    # Skills (skill:*, attack, parry, school knacks) - blocked, no options.
+    for key in ("skill:etiquette", "attack", "parry"):
+        assert s[key]["blocked"] is True, f"{key} should be void-blocked"
+        assert s[key]["voidOpts"] == 0, f"{key} should offer no void options"
+    # Not skills - void still available.
+    for key in ("knack:athletics", "ring:Water", "wound_check"):
+        assert s[key]["blocked"] is False, f"{key} should NOT be void-blocked"
+        assert s[key]["voidOpts"] > 0, f"{key} should still offer void options"
+
+
+def test_discordant_skill_roll_opens_no_void_menu(page, live_server_url):
+    """A skill roll with void otherwise available rolls straight through for a
+    Discordant character - no void-spend menu appears."""
+    _create_discordant(page, live_server_url, "DiscSkillDirect")
+    page.locator('[data-roll-key="skill:etiquette"]').click()
+    _wait_for_roll_result(page)
+    # The void-spend menu never opened; the result modal is showing instead.
+    assert page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border').count() == 0 \
+        or not page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border').is_visible()
+    assert page.locator('[data-modal="dice-roller"]').is_visible()
+
+
+def test_discordant_attack_modal_hides_void_shows_note(page, live_server_url):
+    _create_discordant(page, live_server_url, "DiscAttack")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=5000)
+    # The explanatory note is shown...
+    note = page.locator('[data-testid="discordant-no-void-attack"]')
+    assert note.is_visible()
+    assert "cannot spend void" in (note.inner_text() or "").lower()
+    # ...and the void stepper is gone.
+    assert not page.locator('[data-modal="attack"] label:has-text("Void points:")').is_visible()
+
+
+def test_non_discordant_attack_modal_keeps_void(page, live_server_url):
+    """Control: without Discordant, the attack void stepper is present and the
+    note absent - proves the gating is conditional, not always-on."""
+    _create_roller(page, live_server_url, "PlainAttack")
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=5000)
+    assert page.locator('[data-modal="attack"] label:has-text("Void points:")').is_visible()
+    assert page.locator('[data-testid="discordant-no-void-attack"]').count() == 0 \
+        or not page.locator('[data-testid="discordant-no-void-attack"]').is_visible()
+
+
+def test_discordant_parry_void_follows_active_variant(page, live_server_url):
+    """The parry modal toggles between regular parry (a skill, void-blocked)
+    and athletics-parry (not a skill, void allowed). The void controls must
+    follow the active variant, not a fixed flag."""
+    # Mantis Wave Treader has athletics, so the athletics-parry toggle exists.
+    _create_discordant(page, live_server_url, "DiscParry")
+    state = page.evaluate("""() => {
+        let dr = null;
+        for (const el of document.querySelectorAll('[x-data]')) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.parryVoidBlocked === 'function') { dr = d; break; }
+        }
+        // Regular parry active -> blocked; athletics-parry active -> allowed.
+        dr.parryUseAthletics = false;
+        const regular = { blocked: dr.parryVoidBlocked(), cap: dr.parryVoidCap() };
+        dr.parryUseAthletics = true;
+        const athletics = { blocked: dr.parryVoidBlocked(), cap: dr.parryVoidCap() };
+        dr.parryUseAthletics = false;
+        return { regular, athletics };
+    }""")
+    assert state["regular"]["blocked"] is True
+    assert state["regular"]["cap"] == 0
+    assert state["athletics"]["blocked"] is False
+    assert state["athletics"]["cap"] > 0

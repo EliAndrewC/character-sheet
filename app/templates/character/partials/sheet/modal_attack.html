@@ -347,7 +347,8 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="v in Array.from({length: (voidSpendConfig.cap || 0) + 1}, (_, i) => i)" :key="v">
+                                {# Discordant: attack is a skill, so no void may be spent - collapse the table to the void-0 row. #}
+                                <template x-for="v in Array.from({length: atkFormula?.void_blocked ? 1 : (voidSpendConfig.cap || 0) + 1}, (_, i) => i)" :key="v">
                                     <tr class="border-b border-ink/5"
                                         :class="v === atkVoidSelected ? 'bg-accent/10 font-medium' : ''">
                                         <td class="py-1 pr-3" x-text="v === 0 ? 'None' : v"></td>
@@ -367,16 +368,27 @@
 
                     {# Void selector + roll button #}
                     <div class="flex items-center gap-3">
-                        <label class="text-sm font-medium">Void points:</label>
-                        <div class="flex items-center gap-1">
-                            <button type="button" @click="atkVoidSelected = Math.max(0, atkVoidSelected - 1)"
-                                    :disabled="atkVoidSelected <= 0"
-                                    class="btn-pip">-</button>
-                            <span class="w-8 text-center font-bold text-lg" x-text="atkVoidSelected"></span>
-                            <button type="button" @click="atkVoidSelected = Math.min(atkVoidSelected + 1, Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0))"
-                                    :disabled="atkVoidSelected >= Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0)"
-                                    class="btn-pip">+</button>
-                        </div>
+                        {# Discordant: attack is a skill, so the void stepper is
+                           hidden and a note explains why. #}
+                        <template x-if="!atkFormula?.void_blocked">
+                            <div class="flex items-center gap-3">
+                                <label class="text-sm font-medium">Void points:</label>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" @click="atkVoidSelected = Math.max(0, atkVoidSelected - 1)"
+                                            :disabled="atkVoidSelected <= 0"
+                                            class="btn-pip">-</button>
+                                    <span class="w-8 text-center font-bold text-lg" x-text="atkVoidSelected"></span>
+                                    <button type="button" @click="atkVoidSelected = Math.min(atkVoidSelected + 1, Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0))"
+                                            :disabled="atkVoidSelected >= Math.min(computeVoidOptions().length, voidSpendConfig.cap || 0)"
+                                            class="btn-pip">+</button>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="atkFormula?.void_blocked">
+                            <span class="text-xs text-ink/60 italic" data-testid="discordant-no-void-attack">
+                                Discordant: cannot spend void points on skill rolls
+                            </span>
+                        </template>
                         <button type="button" @click="rollAttack()"
                                 data-action="roll-attack"
                                 :disabled="_kakita3rdDanNeedsPhase()"
