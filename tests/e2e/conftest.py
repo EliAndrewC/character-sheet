@@ -55,22 +55,37 @@ def live_server_url():
     env["S3_BACKUP_BUCKET"] = "stub-bucket"
     env["S3_BACKUP_REGION"] = "us-east-1"
 
+    # Server output goes to a FILE, not a pipe. A pipe is a fixed ~64KB
+    # kernel buffer, and nothing drains it during the session - once it
+    # fills, the server blocks forever inside its logging write and every
+    # subsequent test dies with "Page.goto: Timeout 30000ms exceeded".
+    # That is what --no-access-log below was papering over: it silenced the
+    # loudest writer instead of fixing the pipe. stderr still filled on long
+    # runs (~1300 tests), killing the back half of the suite. A file has no
+    # such limit, and keeps the output readable for the startup-failure path.
+    log_path = f"/tmp/l7r_test_server_{port}.log"
+    server_log = open(log_path, "w+b")
+
     proc = subprocess.Popen(
         [
             sys.executable, "-m", "uvicorn",
             "app.main:app",
             "--host", "127.0.0.1",
             "--port", str(port),
-            # Access logs go to stdout; without --no-access-log the PIPE fills
-            # up after a few hundred requests and the server deadlocks in
-            # logging.flush() inside the ASGI response path.
+            # Access logs are pure noise for the clicktests; keep them off so
+            # the log file stays small and greppable.
             "--no-access-log",
         ],
         cwd="/character-sheet",
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=server_log,
+        stderr=subprocess.STDOUT,
     )
+
+    def _read_server_log():
+        server_log.flush()
+        with open(log_path, "rb") as fh:
+            return fh.read().decode(errors="replace")
 
     # Wait for server to be ready
     base_url = f"http://127.0.0.1:{port}"
@@ -82,22 +97,69 @@ def live_server_url():
             time.sleep(0.1)
     else:
         proc.kill()
-        stdout, stderr = proc.communicate()
         raise RuntimeError(
             f"Server failed to start on port {port}.\n"
-            f"stdout: {stdout.decode()}\nstderr: {stderr.decode()}"
+            f"server output:\n{_read_server_log()}"
         )
 
     yield base_url
 
     proc.terminate()
-    proc.wait(timeout=5)
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        # A wedged server ignores SIGTERM; don't let teardown error out and
+        # mask the real failure. (This fired as a session ERROR on the run
+        # where the stderr pipe filled.)
+        proc.kill()
+        proc.wait(timeout=5)
+    server_log.close()
+    if os.path.exists(log_path):
+        os.remove(log_path)
     if os.path.exists(db_path):
         os.remove(db_path)
     # Clean up art storage stub tmpdir
     import shutil
     if os.path.isdir(art_stub_dir):
         shutil.rmtree(art_stub_dir, ignore_errors=True)
+
+
+# Disable dice animations in tests to eliminate timing flakiness. Installed
+# on EVERY page fixture below - `page_nonadmin` and `page_anon` drive the
+# read-only roll walkthrough (a viewer can roll on someone else's sheet), so
+# they need this just as much as the editor `page` does.
+#
+# This is flake protection, not a speedup: dice.js hands the caller its final
+# dice via onDiceReady BEFORE the ~3.2s animation starts, so Playwright's
+# `phase === 'done'` waits never block on it. What the animation does do is
+# burn a timer + DOM churn per roll, which under full-suite CPU load can
+# starve the Alpine tick a test is waiting on.
+_DISABLE_ANIMS_SCRIPT = """
+    window.__testDisableAnimations = true;
+    // Disable dice animation/sound on BOTH roll components: the main
+    // diceRoller (_diceRoller.prefs) and the separate freeform roller
+    // (_freeformRoller.ffPrefs). Without the latter, freeform rolls
+    // animate for ~3.2s and flake under full-suite CPU load.
+    const _disableAnims = () => {
+        if (window._diceRoller) {
+            window._diceRoller.prefs.dice_animation_enabled = false;
+            window._diceRoller.prefs.dice_sound_enabled = false;
+        }
+        if (window._freeformRoller) {
+            window._freeformRoller.ffPrefs.dice_animation_enabled = false;
+            window._freeformRoller.ffPrefs.dice_sound_enabled = false;
+        }
+    };
+    // After Alpine initializes, override the prefs. Keep polling until
+    // both components exist (they init independently). Pages that never
+    // instantiate both keep polling harmlessly until the context closes.
+    const _origInterval = setInterval(() => {
+        _disableAnims();
+        if (window._diceRoller && window._freeformRoller) clearInterval(_origInterval);
+    }, 50);
+    // Also disable for any future page loads
+    document.addEventListener('alpine:initialized', _disableAnims);
+"""
 
 
 @pytest.fixture()
@@ -107,26 +169,7 @@ def page(live_server_url, browser):
         extra_http_headers={"X-Test-User": "183026066498125825:eliandrewc"}
     )
     p = ctx.new_page()
-    # Disable dice animations in tests to eliminate timing flakiness
-    p.add_init_script("""
-        window.__testDisableAnimations = true;
-        const origDefineProperty = Object.defineProperty;
-        // After Alpine initializes diceRoller, override the prefs
-        const _origInterval = setInterval(() => {
-            if (window._diceRoller) {
-                window._diceRoller.prefs.dice_animation_enabled = false;
-                window._diceRoller.prefs.dice_sound_enabled = false;
-                clearInterval(_origInterval);
-            }
-        }, 50);
-        // Also disable for any future page loads
-        document.addEventListener('alpine:initialized', () => {
-            if (window._diceRoller) {
-                window._diceRoller.prefs.dice_animation_enabled = false;
-                window._diceRoller.prefs.dice_sound_enabled = false;
-            }
-        });
-    """)
+    p.add_init_script(_DISABLE_ANIMS_SCRIPT)
     yield p
     ctx.close()
 
@@ -138,6 +181,7 @@ def page_nonadmin(live_server_url, browser):
         extra_http_headers={"X-Test-User": "test_user_1:Test User 1"}
     )
     p = ctx.new_page()
+    p.add_init_script(_DISABLE_ANIMS_SCRIPT)
     yield p
     ctx.close()
 
@@ -147,5 +191,6 @@ def page_anon(live_server_url, browser):
     """Yield a Playwright page with no auth (anonymous visitor)."""
     ctx = browser.new_context()
     p = ctx.new_page()
+    p.add_init_script(_DISABLE_ANIMS_SCRIPT)
     yield p
     ctx.close()

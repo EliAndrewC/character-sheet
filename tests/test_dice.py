@@ -1727,6 +1727,68 @@ class TestBuildAllRollFormulas:
                 assert formula["reroll_tens"] is False
 
 
+class TestDiscordantVoidBlock:
+    """Discordant: 'may not spend void points on skills'. Per the GM ruling,
+    'skills' = skill:* rolls, attack, parry, and school knacks. Void is still
+    allowed on wound checks, athletics, and bare ring rolls. School-ability
+    void spends are separate handlers and unaffected. See build_all_roll_formulas."""
+
+    def _formulas(self, disadvantages, school="akodo_bushi"):
+        char = make_character_data(
+            school=school,
+            skills={"bragging": 2, "etiquette": 1},
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1, "athletics": 2},
+            attack=2,
+            parry=2,
+        )
+        char["disadvantages"] = disadvantages
+        return build_all_roll_formulas(char)
+
+    def test_void_blocked_defaults_false(self):
+        """Without Discordant, nothing is void-blocked."""
+        formulas = self._formulas([])
+        assert all(f.get("void_blocked") is False for f in formulas.values()), \
+            [k for k, f in formulas.items() if f.get("void_blocked")]
+
+    def test_discordant_blocks_skills_attack_parry_knacks(self):
+        formulas = self._formulas(["discordant"])
+        blocked = {"skill:bragging", "skill:etiquette", "attack", "parry",
+                   "knack:double_attack", "knack:feint", "knack:iaijutsu"}
+        for key in blocked:
+            assert formulas[key]["void_blocked"] is True, f"{key} should be void-blocked"
+
+    def test_discordant_allows_wound_check_athletics_rings(self):
+        formulas = self._formulas(["discordant"])
+        # Wound check: allowed.
+        assert formulas["wound_check"]["void_blocked"] is False
+        # Bare ring rolls: allowed.
+        for ring in ("Air", "Fire", "Earth", "Water"):
+            assert formulas[f"ring:{ring}"]["void_blocked"] is False
+        # Athletics ring rolls: allowed.
+        for key in formulas:
+            if key.startswith("athletics:"):
+                assert formulas[key]["void_blocked"] is False, f"{key} must stay allowed"
+
+    def test_discordant_allows_knack_athletics_entry_point(self):
+        """Athletics-school characters get a `knack:athletics` entry-point
+        formula; despite the knack: prefix it must NOT be void-blocked."""
+        formulas = self._formulas(["discordant"], school="mantis_wave_treader")
+        assert "knack:athletics" in formulas
+        assert formulas["knack:athletics"]["void_blocked"] is False
+
+    def test_discordant_blocks_iaijutsu_subvariants(self):
+        """Iaijutsu strike/evaluate are knack rolls, so they are skills too.
+        (Strike is already void-blocked for everyone; this is belt-and-braces.)"""
+        formulas = self._formulas(["discordant"])
+        for key in formulas:
+            if key.startswith("knack:iaijutsu"):
+                assert formulas[key]["void_blocked"] is True, f"{key} should be blocked"
+
+    def test_other_disadvantage_does_not_block_void(self):
+        formulas = self._formulas(["withdrawn", "unkempt"])
+        assert all(f.get("void_blocked") is False for f in formulas.values())
+
+
 # ---------------------------------------------------------------------------
 # School-specific ability tests
 # ---------------------------------------------------------------------------

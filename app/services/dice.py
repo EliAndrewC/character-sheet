@@ -239,6 +239,12 @@ class RollFormula:
     shinjo_phase_bonus_attack: bool = False
     shosuro_5th_dan: bool = False
     is_damage_roll: bool = False
+    # Discordant disadvantage: this roll is a "skill" the character may not
+    # spend void points on (skill:*, attack, parry, school knacks). Stamped by
+    # build_all_roll_formulas; the roll UI hides the void-spend controls when
+    # set. Wound checks, athletics, and bare ring rolls stay False. See
+    # _discordant_blocks_void.
+    void_blocked: bool = False
     otherworldliness_capacity: int = 0
     # Kitsune Warden Special Ability: the ring this formula was originally
     # going to use before the player substituted their school ring.
@@ -1820,7 +1826,35 @@ def build_all_roll_formulas(
         if swap_ring in {r.value for r in Ring} and swap_ring != "Void":
             _attach_kitsune_swaps(out, character_data, swap_ring)
 
+    # Discordant: mark skill-category rolls so the UI hides their void-spend
+    # controls. Done here (once, by roll key) rather than in each formula
+    # builder, since the key taxonomy is the cleanest expression of the rule.
+    # Stamped on every formula (including the hand-built initiative/wound_check
+    # dicts) so the flag is always present for the client to read.
+    discordant = "discordant" in (character_data.get("disadvantages") or [])
+    for key, fdict in out.items():
+        fdict["void_blocked"] = discordant and _discordant_blocks_void(key)
+
     return out
+
+
+def _discordant_blocks_void(key: str) -> bool:
+    """Whether the Discordant disadvantage blocks void-spending on this roll.
+
+    Per the GM ruling (2026-07-18), "skills" = skill:* rolls, attack, parry,
+    and school knacks. Void stays available on wound checks, athletics (its
+    2-ring-keep-ring base is its own system), and bare ring rolls. The
+    ``knack:athletics`` entry-point key is athletics, not a skill, so it is
+    excluded despite the ``knack:`` prefix.
+    """
+    if key == "knack:athletics":
+        return False
+    if key.startswith(("athletics:", "ring:", "initiative")):
+        return False
+    if key == "wound_check":
+        return False
+    return (key.startswith(("skill:", "knack:"))
+            or key in ("attack", "parry", "double_attack", "counterattack", "lunge"))
 
 
 def _attach_kitsune_swaps(

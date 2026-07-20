@@ -1358,6 +1358,20 @@ display time, so a post-roll spend can't lift the total back over it.
 - [x] Sincerity: base (contested) total uncapped, "on open rolls" Alternative row capped at 15 with "(capped by Withdrawn)" → `test_rolls.py::test_withdrawn_caps_open_sincerity_alternative_only`
 - [x] Sincerity open-roll Alternative row under 15 is uncapped and shows no cap note → `test_rolls.py::test_withdrawn_sincerity_alternative_uncapped_when_under_15`
 
+### Discordant (may not spend void points on skills)
+
+Per the GM ruling, "skills" = skill:* rolls, attack, parry, and school knacks.
+Void stays available on wound checks, athletics, and bare ring rolls. School-
+ability void spends are separate handlers and unaffected. Server stamps a
+per-formula `void_blocked` flag (`_discordant_blocks_void`); the roll UI hides
+void controls where set.
+
+- [x] Skill/attack/parry blocked (void_blocked + 0 options); athletics/ring/wound-check allowed → `test_rolls.py::test_discordant_blocks_void_on_skills_allows_others`
+- [x] A skill roll rolls straight through with no void-spend menu for a Discordant character → `test_rolls.py::test_discordant_skill_roll_opens_no_void_menu`
+- [x] Attack modal hides the void stepper and shows the "cannot spend void" note → `test_rolls.py::test_discordant_attack_modal_hides_void_shows_note`
+- [x] Control: non-Discordant attack modal keeps the void stepper, no note (gating is conditional) → `test_rolls.py::test_non_discordant_attack_modal_keeps_void`
+- [x] Parry void follows the active variant: regular parry blocked (cap 0), athletics-parry allowed (cap > 0) → `test_rolls.py::test_discordant_parry_void_follows_active_variant`
+
 ## Character Sheet — Advantages & Disadvantages Display
 
 - [x] Advantages listed → `test_sheet_display.py::test_advantages_listed_on_sheet`

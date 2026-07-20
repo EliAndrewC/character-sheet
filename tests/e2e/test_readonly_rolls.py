@@ -100,29 +100,6 @@ def test_non_editor_sees_banner_hidden_in_dom(page, page_nonadmin, live_server_u
 # ---------------------------------------------------------------------------
 
 
-def _disable_dice_animations(page):
-    """Mirror conftest's `page` fixture: kill dice animations client-side.
-
-    page_anon and page_nonadmin don't install this by default, which can
-    make roll tests flaky. Call before navigating to the sheet."""
-    page.add_init_script("""
-        window.__testDisableAnimations = true;
-        const _origInterval = setInterval(() => {
-            if (window._diceRoller) {
-                window._diceRoller.prefs.dice_animation_enabled = false;
-                window._diceRoller.prefs.dice_sound_enabled = false;
-                clearInterval(_origInterval);
-            }
-        }, 50);
-        document.addEventListener('alpine:initialized', () => {
-            if (window._diceRoller) {
-                window._diceRoller.prefs.dice_animation_enabled = false;
-                window._diceRoller.prefs.dice_sound_enabled = false;
-            }
-        });
-    """)
-
-
 def _roll_initiative_and_close_modal(p):
     """Click the Initiative row, wait for the roll to complete, close the
     dice modal so the action-dice panel is exposed underneath."""
@@ -153,7 +130,6 @@ def test_anon_init_roll_does_not_change_action_dice_display(
     section remains hidden because actionDice is still []."""
     sheet_url = _published_sheet_url(page, live_server_url)
 
-    _disable_dice_animations(page_anon)
     page_anon.goto(sheet_url)
     page_anon.wait_for_selector("h1")
 
@@ -180,7 +156,6 @@ def test_anon_init_roll_preserves_editor_action_dice(
     sheet_url = _published_sheet_url(page, live_server_url)
 
     # Editor rolls initiative so the server has a non-empty actionDice.
-    _disable_dice_animations(page)
     page.goto(sheet_url)
     page.wait_for_selector("h1")
     _roll_initiative_and_close_modal(page)
@@ -188,7 +163,6 @@ def test_anon_init_roll_preserves_editor_action_dice(
     assert len(seeded_dice) > 0
 
     # Non-editor sees those dice.
-    _disable_dice_animations(page_anon)
     page_anon.goto(sheet_url)
     page_anon.wait_for_selector("h1")
     pre_roll_dice = page_anon.evaluate("window._trackingBridge.actionDice")
@@ -221,7 +195,6 @@ def test_non_editor_action_die_menu_lacks_mark_spent_buttons(
     sheet_url = _published_sheet_url(page, live_server_url)
 
     # Editor rolls initiative so a non-editor has dice to interact with.
-    _disable_dice_animations(page)
     page.goto(sheet_url)
     page.wait_for_selector("h1")
     _roll_initiative_and_close_modal(page)
@@ -239,7 +212,6 @@ def test_non_editor_action_die_menu_lacks_mark_spent_buttons(
 
     # Non-editor: same setup, click the first die, assert menu has the
     # roll-action options but not the spent / unspent buttons.
-    _disable_dice_animations(page_anon)
     page_anon.goto(sheet_url)
     page_anon.wait_for_selector("h1")
     page_anon.locator(
@@ -273,7 +245,6 @@ def test_non_editor_action_die_menu_action_does_not_spend_die(
     sheet_url = _published_sheet_url(page, live_server_url)
 
     # Editor seeds action dice.
-    _disable_dice_animations(page)
     page.goto(sheet_url)
     page.wait_for_selector("h1")
     _roll_initiative_and_close_modal(page)
@@ -282,7 +253,6 @@ def test_non_editor_action_die_menu_action_does_not_spend_die(
     assert all(not d.get("spent") for d in seeded)
 
     # Non-editor picks Roll Attack from the first die's menu.
-    _disable_dice_animations(page_anon)
     page_anon.goto(sheet_url)
     page_anon.wait_for_selector("h1")
     page_anon.locator(
@@ -344,7 +314,6 @@ def test_non_editor_spends_vp_on_attack_does_not_change_vp(
     sheet_url, starting_vp = _published_with_vp(page, live_server_url)
     assert starting_vp >= 2, "default akodo_bushi should start with 2 VP"
 
-    _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
@@ -395,7 +364,6 @@ def test_non_editor_skill_roll_no_vp_no_banner(
     something - they chose VPs up-front via the roll menu, so a plain
     "Roll" with no spend doesn't need the warning."""
     sheet_url, _ = _published_with_vp(page, live_server_url)
-    _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
 
@@ -431,7 +399,6 @@ def test_non_editor_skill_roll_with_vp_shows_banner(
     menu, the dice-roller modal must show the banner so they know the
     spend isn't really happening."""
     sheet_url, _ = _published_with_vp(page, live_server_url)
-    _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
 
@@ -788,7 +755,6 @@ def test_non_editor_ally_conviction_no_persist(
     page.wait_for_timeout(200)
 
     # Non-editor loads the ally's sheet and exercises the attack flow.
-    _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(ally_url)
     page_nonadmin.wait_for_selector("h1")
 
@@ -894,7 +860,6 @@ def test_non_editor_generates_priest_pool_no_persist(
     # Admin's pool starts empty (we didn't roll it). Confirm.
     assert page.evaluate("window._trackingBridge.preceptsPool.length") == 0
 
-    _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
     page_nonadmin.wait_for_function(
@@ -960,7 +925,6 @@ def test_non_editor_rolls_wc_does_not_change_displayed_counts(
     stays anchored to the persisted server values throughout the
     walk-through. The banner is visible during the modal."""
     sheet_url = _seed_light_wounds(page, live_server_url, light_wounds=1)
-    _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.lightWounds") == 1
@@ -1009,7 +973,6 @@ def test_non_editor_lw_plus_does_not_change_displayed_lw(
     modal which then runs against TN=43. Throughout, the sheet's
     displayed lightWounds stays anchored at 0."""
     sheet_url = _published_sheet_url(page, live_server_url)
-    _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.lightWounds") == 0
@@ -1076,7 +1039,6 @@ def test_non_editor_mirumoto_parry_does_not_grant_temp_vp(
         name="MirumotoNonEditor", school="mirumoto_bushi",
         knack_overrides={},
     )
-    _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
     starting_temp = page_nonadmin.evaluate(
@@ -1142,7 +1104,6 @@ def test_non_editor_akodo_wc_vp_raise_does_not_change_vp(
         wc_modal.locator('button', has_text="×").first.click()
         page.wait_for_timeout(150)
 
-    _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate(
@@ -1245,7 +1206,6 @@ def test_action_dice_clear_button_editor_only(
     sheet_url = _published_sheet_url(page, live_server_url)
 
     # Editor rolls initiative to seed action dice on the server.
-    _disable_dice_animations(page)
     page.goto(sheet_url)
     page.wait_for_selector("h1")
     _roll_initiative_and_close_modal(page)
@@ -1255,7 +1215,6 @@ def test_action_dice_clear_button_editor_only(
     assert page.locator('[data-action="clear-action-dice"]').count() == 1
 
     # Non-editor: section is visible, but no Clear button in the DOM.
-    _disable_dice_animations(page_anon)
     page_anon.goto(sheet_url)
     page_anon.wait_for_selector("h1")
     section = page_anon.locator('[data-testid="action-dice-section"]')
@@ -1297,7 +1256,6 @@ def test_non_editor_akodo_4th_dan_post_roll_vp_does_not_change_vp(
     sheet_url, starting_vp = _published_akodo_4th_with_vp(page, live_server_url)
     assert starting_vp >= 2
 
-    _disable_dice_animations(page_nonadmin)
     page_nonadmin.goto(sheet_url)
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp

@@ -84,7 +84,8 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="v in Array.from({length: (parryActiveProbs()?.void_cap || 0) + 1}, (_, i) => i)" :key="v">
+                                    {# Discordant: collapse to the void-0 row when this parry variant is void-blocked. #}
+                                    <template x-for="v in Array.from({length: parryVoidBlocked() ? 1 : (parryActiveProbs()?.void_cap || 0) + 1}, (_, i) => i)" :key="v">
                                         <tr class="border-b border-ink/5"
                                             :data-parry-row="v"
                                             :class="v === parryVoidSelected ? 'bg-accent/10 font-medium' : ''">
@@ -107,16 +108,28 @@
 
                     {# Void selector + roll button #}
                     <div class="flex items-center gap-3">
-                        <label class="text-sm font-medium">Void points:</label>
-                        <div class="flex items-center gap-1">
-                            <button type="button" @click="parryVoidSelected = Math.max(0, parryVoidSelected - 1)"
-                                    :disabled="parryVoidSelected <= 0"
-                                    class="btn-pip">-</button>
-                            <span class="w-8 text-center font-bold text-lg" x-text="parryVoidSelected"></span>
-                            <button type="button" @click="parryVoidSelected = Math.min(parryVoidSelected + 1, parryVoidCap())"
-                                    :disabled="parryVoidSelected >= parryVoidCap()"
-                                    class="btn-pip">+</button>
-                        </div>
+                        {# Discordant: regular parry is a skill (no void), but
+                           athletics-parry is not - so the stepper follows the
+                           active variant via parryVoidBlocked(). #}
+                        <template x-if="!parryVoidBlocked()">
+                            <div class="flex items-center gap-3">
+                                <label class="text-sm font-medium">Void points:</label>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" @click="parryVoidSelected = Math.max(0, parryVoidSelected - 1)"
+                                            :disabled="parryVoidSelected <= 0"
+                                            class="btn-pip">-</button>
+                                    <span class="w-8 text-center font-bold text-lg" x-text="parryVoidSelected"></span>
+                                    <button type="button" @click="parryVoidSelected = Math.min(parryVoidSelected + 1, parryVoidCap())"
+                                            :disabled="parryVoidSelected >= parryVoidCap()"
+                                            class="btn-pip">+</button>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="parryVoidBlocked()">
+                            <span class="text-xs text-ink/60 italic" data-testid="discordant-no-void-parry">
+                                Discordant: cannot spend void points on skill rolls
+                            </span>
+                        </template>
                         <button type="button" @click="parryRoll()"
                                 data-action="roll-parry-go"
                                 class="btn-primary px-4 py-2 rounded text-sm font-medium ml-auto">
