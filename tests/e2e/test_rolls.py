@@ -1921,6 +1921,59 @@ def test_withdrawn_sincerity_alternative_uncapped_when_under_15(page, live_serve
     assert "capped by" not in row_text
 
 
+def test_withdrawn_hides_redundant_etiquette_alternative(page, live_server_url):
+    """Withdrawn + Streetwise on etiquette: the formula-wide 15 cap also
+    binds the conditional Streetwise row. While the roll is under the cap
+    the row is a genuine alternate total and renders; once the roll
+    displays as 15 the row would just repeat the only total, so the whole
+    "Alternative totals" section disappears."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "WithdrawnStreet")
+    select_school(page, "akodo_bushi")
+    click_plus(page, "skill_etiquette", 1)
+    page.check('input[name="dis_withdrawn"]')
+    page.check('input[name="camp_adv_streetwise"]')
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Withdrawn+Streetwise setup")
+    page.evaluate("window._trackingBridge.voidPoints = 0; window._trackingBridge.save()")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="skill:etiquette"]').click()
+    _wait_for_roll_result(page)
+
+    def alt_row_text():
+        row = page.locator(
+            '[data-modal="dice-roller"] .border-t .text-sm'
+        ).filter(has_text="when invoking bounty hunter authority").first
+        return " ".join((row.inner_text() or "").split())
+
+    def section_present():
+        return "Alternative totals" in (
+            page.locator('[data-modal="dice-roller"]').text_content() or ""
+        )
+
+    # Well under the cap: 8 + 5 = 13, an ordinary alternate total.
+    _set_base_total(page, 8)
+    assert section_present()
+    row = alt_row_text()
+    assert row.startswith("13"), f"expected 13, got: {row!r}"
+    assert "capped by" not in row
+
+    # Near the cap: 12 + 5 caps to 15 - still different from the displayed
+    # 12, so the row stays, now annotated with the cap source.
+    _set_base_total(page, 12)
+    row = alt_row_text()
+    assert row.startswith("15"), f"expected capped 15, got: {row!r}"
+    assert "(capped by Withdrawn)" in row
+
+    # Over the cap: the roll itself displays as 15, the row would repeat
+    # it, and the whole section must vanish.
+    _set_base_total(page, 27)
+    assert _roll_total(page) == 15
+    assert not section_present()
+
+
 def test_streetwise_surfaces_as_alternative_total(page, live_server_url):
     """Streetwise's +5 free raise is conditional on the bounty-hunter
     authority context, so it appears as an Alternative totals row on

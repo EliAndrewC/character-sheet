@@ -224,6 +224,53 @@ test("alt helpers tolerate malformed rows", () => {
   assert.equal(M.altTotalAll(24, [null, {extra_flat: 5}], 0), 29);
 });
 
+test("visibleAlternatives: uncapped rows always pass through", () => {
+  const rows = [{extra_flat: 5}, {extra_flat: -10}];
+  assert.deepEqual(M.visibleAlternatives(24, rows, 0), rows);
+});
+
+test("visibleAlternatives: drops a row the formula cap makes redundant", () => {
+  // Withdrawn + Etiquette + Streetwise: the roll displays as 15 (capped)
+  // and the "+5 when invoking bounty hunter authority" row also caps at
+  // 15 - it repeats the only total, so it must not render.
+  assert.deepEqual(M.visibleAlternatives(27, [{extra_flat: 5}], 15), []);
+  // Exactly at the cap: 15 + 5 -> 15 == displayed 15, still redundant.
+  assert.deepEqual(M.visibleAlternatives(15, [{extra_flat: 5}], 15), []);
+});
+
+test("visibleAlternatives: keeps a capped row that still moves the total", () => {
+  // Base 12 (under the cap): the row shows 15 vs a displayed 12 - a real
+  // alternate total, so it stays.
+  const row = {extra_flat: 5};
+  assert.deepEqual(M.visibleAlternatives(12, [row], 15), [row]);
+});
+
+test("visibleAlternatives: row-level cap compares against the uncapped base", () => {
+  // Withdrawn sincerity: the contested base is uncapped (24), the open-roll
+  // row caps at 15 - different numbers, so the row stays...
+  const capped = {extra_flat: 0, max_total: 15};
+  assert.deepEqual(M.visibleAlternatives(24, [capped], 0), [capped]);
+  // ...but when the base is under the cap and the delta is 0, the row
+  // repeats the base total and is dropped.
+  assert.deepEqual(M.visibleAlternatives(10, [capped], 0), []);
+});
+
+test("visibleAlternatives: filters per-row within a mixed list", () => {
+  // Sincerity at the cap boundary: the open-roll honor row is swallowed
+  // (15 + 5 -> 15 == base 15) while the uncapped Specialization row is not.
+  const open = {extra_flat: 5, max_total: 15};
+  const spec = {extra_flat: 10};
+  assert.deepEqual(M.visibleAlternatives(15, [open, spec], 0), [spec]);
+});
+
+test("visibleAlternatives: tolerates null rows and a null list", () => {
+  assert.deepEqual(M.visibleAlternatives(24, null, 0), []);
+  // A null row's total equals the base (no delta, no cap) -> dropped,
+  // and it must not throw.
+  assert.deepEqual(M.visibleAlternatives(24, [null, {extra_flat: 5}], 0),
+                   [{extra_flat: 5}]);
+});
+
 test("damageDiceContestAdjust: round toward zero on both signs", () => {
   assert.equal(M.damageDiceContestAdjust(12), 2);
   assert.equal(M.damageDiceContestAdjust(0), 0);

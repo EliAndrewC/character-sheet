@@ -1357,6 +1357,7 @@ display time, so a post-roll spend can't lift the total back over it.
 - [x] Cap survives a post-roll spend that lifts the uncapped total past 15 → `test_rolls.py::test_withdrawn_cap_survives_a_post_roll_spend`
 - [x] Sincerity: base (contested) total uncapped, "on open rolls" Alternative row capped at 15 with "(capped by Withdrawn)" → `test_rolls.py::test_withdrawn_caps_open_sincerity_alternative_only`
 - [x] Sincerity open-roll Alternative row under 15 is uncapped and shows no cap note → `test_rolls.py::test_withdrawn_sincerity_alternative_uncapped_when_under_15`
+- [x] Etiquette + a conditional bonus (Streetwise): Alternative row renders normally under the cap, caps with "(capped by Withdrawn)" near it, and the whole "Alternative totals" section disappears once the roll itself displays as 15 (the row would repeat the only total) → `test_rolls.py::test_withdrawn_hides_redundant_etiquette_alternative`
 
 ### Discordant (may not spend void points on skills)
 

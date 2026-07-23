@@ -318,10 +318,14 @@
                             (rolled <span x-text="baseTotal"></span>)
                         </div>
 
-                        <template x-if="formula && formula.alternatives && formula.alternatives.length > 0">
+                        {# Rows a cap makes redundant (Withdrawn's etiquette
+                           15 swallowing a conditional bonus) are hidden -
+                           and the section with them - so only genuinely
+                           different totals render. See visibleAlts(). #}
+                        <template x-if="formula && visibleAlts().length > 0">
                             <div class="mt-2 pt-2 border-t border-ink/10">
                                 <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
-                                <template x-for="alt in (formula?.alternatives || [])" :key="alt.label">
+                                <template x-for="alt in visibleAlts()" :key="alt.label">
                                     <div class="text-sm">
                                         <span class="font-bold text-accent" x-text="altTotal(alt)"></span>
                                         <span x-text="alt.label"></span>
@@ -329,7 +333,7 @@
                                         >(capped by <span x-text="alt.max_total_source || formula?.max_total_source"></span>)</span>
                                     </div>
                                 </template>
-                                <template x-if="(formula?.alternatives || []).length > 1">
+                                <template x-if="visibleAlts().length > 1">
                                     <div class="text-sm">
                                         <span class="font-bold text-accent" x-text="altTotalAll()"></span>
                                         if all of the above

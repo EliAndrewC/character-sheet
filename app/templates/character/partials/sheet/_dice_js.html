@@ -2801,6 +2801,19 @@
                 );
             },
 
+            // The rows worth rendering: a row whose capped value equals the
+            // roll's own displayed total (Withdrawn's etiquette cap
+            // swallowing Streetwise's conditional +5) repeats the only
+            // total, so it - and the section, when nothing survives - is
+            // hidden. Reactive to baseTotal so post-roll spends can bring
+            // rows in and out.
+            visibleAlts() {
+                const f = this.formula || {};
+                return window.L7RRollMath.visibleAlternatives(
+                    this.baseTotal, f.alternatives || [], f.max_total
+                );
+            },
+
             altCapApplies(alt) {
                 return window.L7RRollMath.totalCapApplies(
                     this.baseTotal + ((alt || {}).extra_flat || 0),
@@ -2808,16 +2821,12 @@
                 );
             },
 
-            _altCap(alt) {
-                return window.L7RRollMath.altCap(
-                    alt, (this.formula || {}).max_total
-                );
-            },
-
             altTotalAll() {
-                const f = this.formula || {};
+                // Combine only the *visible* rows - a swallowed row is not
+                // "of the above".
                 return window.L7RRollMath.altTotalAll(
-                    this.baseTotal, f.alternatives || [], f.max_total
+                    this.baseTotal, this.visibleAlts(),
+                    (this.formula || {}).max_total
                 );
             },
 
@@ -2917,22 +2926,30 @@
             // entries that have a label so a malformed row doesn't
             // render a blank line on the card. A row is kept when it
             // carries a cap even if its delta is 0 - the cap is the
-            // whole point of that row.
-            _alternativesForPayload(formula) {
+            // whole point of that row. Rows the on-screen modal hides
+            // as redundant (capped to the roll's own displayed total)
+            // stay off the card too. ``total`` is the same value the
+            // caller puts in the payload's ``total`` field; it defaults
+            // to baseTotal for the plain dice-roller path.
+            _alternativesForPayload(formula, total) {
+                const f = formula || {};
+                const base = (typeof total === 'number')
+                    ? total : this.baseTotal;
                 const alts = [];
-                for (const a of ((formula || {}).alternatives || [])) {
-                    if (!a) continue;
+                const visible = window.L7RRollMath.visibleAlternatives(
+                    base, f.alternatives || [], f.max_total
+                );
+                for (const a of visible) {
                     const label = (a.label || '').trim();
                     const extra = parseInt(a.extra_flat, 10);
                     if (!label || !Number.isFinite(extra)) continue;
-                    const cap = this._altCap(a);
+                    const cap = window.L7RRollMath.altCap(a, f.max_total);
                     const capped = typeof cap === 'number' && cap > 0;
                     if (extra === 0 && !capped) continue;
                     const row = {label: label, extra_flat: extra};
                     if (capped) {
                         row.max_total = cap;
-                        const src = a.max_total_source
-                                 || (formula || {}).max_total_source;
+                        const src = a.max_total_source || f.max_total_source;
                         if (src) row.max_total_source = src;
                     }
                     alts.push(row);
@@ -3110,7 +3127,8 @@
                     kept_sum: this.keptSum || 0,
                     total: this.wcRollTotal || this.baseTotal || 0,
                     footer: footer,
-                    alternatives: this._alternativesForPayload(this.formula),
+                    alternatives: this._alternativesForPayload(
+                        this.formula, this.wcRollTotal || this.baseTotal || 0),
                 };
             },
 
@@ -3155,7 +3173,8 @@
                     kept_sum: this.keptSum || 0,
                     total: this.atkRollTotal || this.baseTotal || 0,
                     footer: footer,
-                    alternatives: this._alternativesForPayload(this.atkFormula),
+                    alternatives: this._alternativesForPayload(
+                        this.atkFormula, this.atkRollTotal || this.baseTotal || 0),
                 };
             },
 

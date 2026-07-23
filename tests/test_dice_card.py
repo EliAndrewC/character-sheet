@@ -248,6 +248,61 @@ class TestParsePayload:
         assert len(card.alternatives) == 1
         assert card.alternatives[0].max_total == 15
 
+    def test_alternatives_redundant_capped_row_dropped(self):
+        """Withdrawn + Etiquette + Streetwise: the card total is already
+        capped at 15 and the conditional row caps to the same 15 - it just
+        repeats the only total, so it must not render. The client filters
+        these before POSTing, but old persisted roll-history payloads
+        re-render through /roll-image unfiltered, so the server drops
+        them too."""
+        card = parse_payload(_basic_payload(
+            total=15,
+            alternatives=[
+                {"label": "when invoking bounty hunter authority",
+                 "extra_flat": 5, "max_total": 15,
+                 "max_total_source": "Withdrawn"},
+            ],
+        ))
+        assert card.alternatives == ()
+
+    def test_alternatives_capped_row_kept_while_it_moves_the_total(self):
+        """Base 12 (under the cap): the row shows 15 vs a displayed 12 -
+        a real alternate total, so it stays."""
+        card = parse_payload(_basic_payload(
+            total=12,
+            alternatives=[
+                {"label": "when invoking bounty hunter authority",
+                 "extra_flat": 5, "max_total": 15,
+                 "max_total_source": "Withdrawn"},
+            ],
+        ))
+        assert len(card.alternatives) == 1
+
+    def test_alternatives_zero_delta_capped_row_dropped_under_the_cap(self):
+        """The Honor-0 Withdrawn sincerity row exists to show the cap; when
+        the roll is under the cap it repeats the base total and conveys
+        nothing."""
+        card = parse_payload(_basic_payload(
+            total=10,
+            alternatives=[
+                {"label": "on open rolls", "extra_flat": 0, "max_total": 15},
+            ],
+        ))
+        assert card.alternatives == ()
+
+    def test_alternatives_redundancy_filter_is_per_row(self):
+        """A swallowed row is dropped while a meaningful sibling stays."""
+        card = parse_payload(_basic_payload(
+            total=15,
+            alternatives=[
+                {"label": "on open rolls", "extra_flat": 5, "max_total": 15},
+                {"label": "if related to Specialization (haggling)",
+                 "extra_flat": 10},
+            ],
+        ))
+        assert len(card.alternatives) == 1
+        assert card.alternatives[0].label.startswith("if related")
+
     def test_alternatives_clipped_to_max(self):
         too_many = [{"label": f"a{i}", "extra_flat": 1}
                     for i in range(dice_card.MAX_ALTERNATIVES + 5)]
@@ -264,11 +319,12 @@ class TestParsePayload:
 
     def test_alternatives_non_int_extra_flat_treated_as_zero(self):
         card = parse_payload({
-            "title": "T",
-            "alternatives": [{"label": "labeled", "extra_flat": "five"}],
+            "title": "T", "total": 24,
+            "alternatives": [{"label": "labeled", "extra_flat": "five",
+                              "max_total": 15}],
         })
-        # ``extra_flat`` coerces to 0; ``label`` survives so the entry
-        # isn't dropped (the renderer will show "[total] labeled").
+        # ``extra_flat`` coerces to 0; the cap keeps the row meaningful
+        # (15 vs the 24 total) so it isn't dropped as redundant.
         assert len(card.alternatives) == 1
         assert card.alternatives[0].extra_flat == 0
 

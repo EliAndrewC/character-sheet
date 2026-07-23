@@ -352,15 +352,25 @@ def parse_payload(payload: dict) -> RollCard:
     a stripped-down card than refuse the request."""
     if not isinstance(payload, dict):
         payload = {}
+    total = _coerce_int(payload.get("total"), 0)
+    # A row whose capped value equals the card's own (already-capped) total
+    # repeats the only total - Withdrawn's etiquette cap swallowing a
+    # conditional bonus - and must not render. The client filters these
+    # before POSTing, but old persisted roll-history payloads re-render
+    # through /roll-image unfiltered, so the server drops them too.
+    alternatives = tuple(
+        a for a in _coerce_alternatives(payload.get("alternatives"))
+        if _alt_total(total, a) != total
+    )
     return RollCard(
         title=_coerce_text(payload.get("title")) or "Roll",
         formula=_coerce_text(payload.get("formula")),
         kept=_coerce_cells(payload.get("kept")),
         dropped=_coerce_cells(payload.get("dropped")),
         bonuses=_coerce_bonuses(payload.get("bonuses")),
-        total=_coerce_int(payload.get("total"), 0),
+        total=total,
         footer=_coerce_text(payload.get("footer")) or None,
-        alternatives=_coerce_alternatives(payload.get("alternatives")),
+        alternatives=alternatives,
         extras=_coerce_extras(payload.get("extras")),
         rolled_by=_coerce_text(payload.get("rolled_by")) or None,
         # Default True so all existing roll types keep their TOTAL
