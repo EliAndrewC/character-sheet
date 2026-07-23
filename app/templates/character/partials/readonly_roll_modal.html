@@ -63,13 +63,17 @@
                     </p>
                 </template>
 
-                <template x-if="payload && payload.alternatives && payload.alternatives.length">
+                <template x-if="payload && visibleAlts().length">
                     <div class="mt-2 pt-2 border-t border-ink/10"
                          data-testid="readonly-alternatives">
                         <div class="text-xs font-bold text-ink/70 mb-1">Alternative totals:</div>
                         {# A row may carry its own ceiling (Withdrawn caps
-                           open sincerity rolls but not contested ones). #}
-                        <template x-for="(alt, i) in payload.alternatives" :key="i">
+                           open sincerity rolls but not contested ones).
+                           Rows whose capped value just repeats the roll's
+                           total are filtered out - new payloads arrive
+                           pre-filtered, but history rows saved before the
+                           filter existed still carry them. #}
+                        <template x-for="(alt, i) in visibleAlts()" :key="i">
                             <div class="text-sm">
                                 <span class="font-bold text-accent"
                                       x-text="window.L7RRollMath.applyTotalCap((payload.total || 0) + (alt.extra_flat || 0), alt.max_total)"></span>
@@ -173,6 +177,16 @@
                     this.open = true;
                     this._prerender();
                 });
+            },
+
+            visibleAlts() {
+                // The payload's rows carry their own max_total (inherited
+                // formula caps are baked in at save time), so no separate
+                // formula-level cap applies here.
+                const p = this.payload || {};
+                return window.L7RRollMath.visibleAlternatives(
+                    p.total || 0, p.alternatives || [], 0
+                );
             },
 
             breakdownItems() {

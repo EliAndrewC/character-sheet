@@ -197,6 +197,22 @@
     },
 
     /**
+     * The alternative rows worth rendering. A row whose capped value equals
+     * the roll's own displayed (capped) total conveys nothing - Withdrawn's
+     * etiquette cap swallows a conditional bonus like Streetwise's, leaving
+     * a row that just repeats the only total - so it is dropped. Callers
+     * hide the whole "Alternative totals" section when this comes back
+     * empty, and feed the survivors to altTotalAll.
+     */
+    visibleAlternatives: function (baseTotal, alts, formulaMaxTotal) {
+      var self = this;
+      var displayed = this.applyTotalCap(baseTotal, formulaMaxTotal);
+      return (alts || []).filter(function (a) {
+        return a && self.altTotal(baseTotal, a, formulaMaxTotal) !== displayed;
+      });
+    },
+
+    /**
      * Kakita 5th Dan contested-damage dice adjustment: +/- floor(|diff| / 5),
      * rounded toward zero (so a negative diff truncates toward 0, not down).
      */
