@@ -28,13 +28,15 @@ class TestAdvantageDetailsForDiff:
         )
         assert out == {"higher_purpose": {"skills": ["athletics"]}}
 
-    def test_player_field_survives(self):
-        # Dark Secret carries ``player`` (the knower). That's a
-        # structural choice, not metadata - keep it.
+    def test_dark_secret_entry_dropped_entirely(self):
+        # Dark Secret text AND its knower are private metadata (see
+        # services/dark_secret.py) - neither is version-significant.
         out = advantage_details_for_diff(
-            {"dark_secret": {"text": "secret", "player": "discord_id_42"}}
+            {"dark_secret": {"text": "secret", "knower_character_id": 7,
+                             "player": "discord_id_42"},
+             "virtue": {"text": "Courage", "skills": ["a"]}}
         )
-        assert out == {"dark_secret": {"player": "discord_id_42"}}
+        assert out == {"virtue": {"skills": ["a"]}}
 
     def test_non_dict_entry_kept_as_is(self):
         # Defensive path: legacy or hand-edited DB rows may have

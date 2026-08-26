@@ -1,6 +1,6 @@
 """E2E: Advantage detail fields (text, skill selection) appear and auto-save."""
 
-from tests.e2e.helpers import select_school, apply_changes, start_new_character, wait_xp
+from tests.e2e.helpers import select_school, apply_changes, start_new_character, wait_xp, create_and_apply
 import pytest
 
 pytestmark = pytest.mark.advantage_details
@@ -337,14 +337,155 @@ def test_specialization_dropdown_includes_attack_and_parry(page, live_server_url
 
 
 def test_dark_secret_shows_fields(page, live_server_url):
-    """Dark Secret shows text field and player dropdown."""
+    """Dark Secret shows the private click-to-edit box (no inline input) and
+    the not-yet-chosen knower line instead of a player dropdown."""
     _go_to_editor(page, live_server_url)
     page.check('input[name="dis_dark_secret"]')
-    page.wait_for_selector('input[placeholder="What is your secret?"]', timeout=3000)
-    page.locator('input[placeholder="What is your secret?"]').wait_for(state="visible", timeout=5000)
-    assert page.locator('input[placeholder="What is your secret?"]').is_visible()
-    page.locator('select', has=page.locator('option:text("Select player who knows...")')).wait_for(state="visible", timeout=5000)
-    assert page.locator('select', has=page.locator('option:text("Select player who knows...")')).is_visible()
+    box = page.locator('[data-testid="dark-secret-box"]')
+    box.wait_for(state="visible", timeout=5000)
+    assert page.locator('[data-action="open-dark-secret"]').is_visible()
+    assert page.locator('input[placeholder="What is your secret?"]').count() == 0
+    assert page.locator('option:text("Select player who knows...")').count() == 0
+    assert "GM has not yet chosen" in page.locator('[data-testid="dark-secret-knower-line"]').text_content()
+
+
+def test_dark_secret_modal_saves_without_draft(page, live_server_url):
+    """Clicking the box opens the modal (with the privacy explanation and a
+    textarea); saving persists across reload via the metadata endpoint and
+    does NOT flip a published character into Draft."""
+    url = create_and_apply(page, live_server_url, "Secret Keeper",
+                           disadvantages=["dark_secret"])
+    char_id = url.rstrip("/").split("/")[-1]
+    page.goto(f"{live_server_url}/characters/{char_id}/edit")
+    page.wait_for_selector('input[name="name"]')
+    # Published + clean: Apply Changes is hidden.
+    assert not page.locator('[data-action="apply-changes"]').is_visible()
+
+    page.locator('[data-action="open-dark-secret"]').click()
+    modal = page.locator('[data-modal="dark-secret"]')
+    modal.wait_for(state="visible", timeout=5000)
+    assert "visible only to" in modal.text_content()
+    assert "not even the player of the character" in modal.text_content()
+    # Owner (admin here) sees the GM-only knower dropdown; the help icon exists.
+    assert modal.locator('[data-testid="dark-secret-knower-help"]').count() == 1
+    page.fill('[data-field="dark-secret-text"]', "I am secretly a ronin")
+    page.locator('[data-action="save-dark-secret"]').click()
+    modal.wait_for(state="hidden", timeout=5000)
+
+    box = page.locator('[data-action="open-dark-secret"]')
+    box.wait_for(state="visible", timeout=5000)
+    assert "I am secretly a ronin" in box.text_content()
+    # Metadata only: still no Apply Changes button.
+    page.wait_for_timeout(500)
+    assert not page.locator('[data-action="apply-changes"]').is_visible()
+
+    page.reload()
+    page.wait_for_selector('input[name="name"]')
+    assert "I am secretly a ronin" in page.locator('[data-action="open-dark-secret"]').text_content()
+    assert not page.locator('[data-action="apply-changes"]').is_visible()
+
+    # Cancel leaves the stored text alone.
+    page.locator('[data-action="open-dark-secret"]').click()
+    modal.wait_for(state="visible", timeout=5000)
+    page.fill('[data-field="dark-secret-text"]', "discarded edit")
+    page.locator('[data-action="cancel-dark-secret"]').click()
+    modal.wait_for(state="hidden", timeout=5000)
+    assert "I am secretly a ronin" in page.locator('[data-action="open-dark-secret"]').text_content()
+
+    # Owner sees the secret on the View Sheet with the padlock.
+    page.goto(f"{live_server_url}/characters/{char_id}")
+    sheet_ds = page.locator('[data-testid="sheet-dark-secret"]')
+    sheet_ds.wait_for(state="visible", timeout=5000)
+    assert "I am secretly a ronin" in sheet_ds.text_content()
+
+
+def test_dark_secret_gm_sets_knower(page, live_server_url):
+    """The GM picks which other PC knows the secret from the modal dropdown;
+    the knower line, the View Sheet, and the reloaded editor all show it."""
+    create_and_apply(page, live_server_url, "Trusted Confidant")
+    url = create_and_apply(page, live_server_url, "Secret Holder",
+                           disadvantages=["dark_secret"])
+    char_id = url.rstrip("/").split("/")[-1]
+    page.goto(f"{live_server_url}/characters/{char_id}/edit")
+    page.wait_for_selector('input[name="name"]')
+    page.locator('[data-action="open-dark-secret"]').click()
+    modal = page.locator('[data-modal="dark-secret"]')
+    modal.wait_for(state="visible", timeout=5000)
+    page.select_option('[data-field="dark-secret-knower"]', label="Trusted Confidant")
+    page.locator('[data-action="save-dark-secret"]').click()
+    modal.wait_for(state="hidden", timeout=5000)
+    line = page.locator('[data-testid="dark-secret-knower-line"]')
+    assert "Trusted Confidant" in line.text_content()
+    assert not page.locator('[data-action="apply-changes"]').is_visible()
+
+    page.reload()
+    page.wait_for_selector('[data-testid="dark-secret-knower-line"]')
+    assert "Trusted Confidant" in page.locator('[data-testid="dark-secret-knower-line"]').text_content()
+
+    page.goto(f"{live_server_url}/characters/{char_id}")
+    sheet_ds = page.locator('[data-testid="sheet-dark-secret"]')
+    sheet_ds.wait_for(state="visible", timeout=5000)
+    assert "known by Trusted Confidant" in sheet_ds.text_content()
+
+
+def test_dark_secret_hidden_from_granted_editor_and_viewers(page, page_nonadmin, live_server_url):
+    """A non-owner with edit access sees the private notice (no text, no
+    modal) in the editor, a padlock on the sheet, and a 403 from the JSON
+    endpoint; a plain viewer sees the padlock too."""
+    url = create_and_apply(page, live_server_url, "Guarded Samurai",
+                           disadvantages=["dark_secret"])
+    char_id = url.rstrip("/").split("/")[-1]
+    page.goto(f"{live_server_url}/characters/{char_id}/edit")
+    page.wait_for_selector('input[name="name"]')
+    page.locator('[data-action="open-dark-secret"]').click()
+    page.locator('[data-modal="dark-secret"]').wait_for(state="visible", timeout=5000)
+    page.fill('[data-field="dark-secret-text"]', "xyzzy-secret-phrase")
+    page.locator('[data-action="save-dark-secret"]').click()
+    page.locator('[data-modal="dark-secret"]').wait_for(state="hidden", timeout=5000)
+
+    # Plain viewer (no edit access): padlock only.
+    page_nonadmin.goto(f"{live_server_url}/characters/{char_id}")
+    sheet_ds = page_nonadmin.locator('[data-testid="sheet-dark-secret"]')
+    sheet_ds.wait_for(state="visible", timeout=5000)
+    assert "private" in sheet_ds.text_content()
+    assert "xyzzy-secret-phrase" not in page_nonadmin.content()
+
+    # Grant edit access to the non-admin and check the editor.
+    page.goto(f"{live_server_url}/profile")
+    grant_cb = page.locator('input[name="grant_test_user_1"]')
+    if not grant_cb.is_checked():
+        grant_cb.check()
+    page.locator('button[type="submit"]', has_text="Save").click()
+    page.wait_for_load_state("networkidle")
+    try:
+        page_nonadmin.goto(f"{live_server_url}/characters/{char_id}/edit")
+        page_nonadmin.wait_for_selector('input[name="name"]', timeout=5000)
+        notice = page_nonadmin.locator('[data-testid="dark-secret-private-notice"]')
+        notice.wait_for(state="visible", timeout=5000)
+        assert page_nonadmin.locator('[data-action="open-dark-secret"]').count() == 0
+        assert "xyzzy-secret-phrase" not in page_nonadmin.content()
+        # A hand-crafted fetch is refused too.
+        status = page_nonadmin.evaluate(
+            "(id) => fetch('/characters/' + id + '/dark-secret').then(r => r.status)", char_id,
+        )
+        assert status == 403
+        post_status = page_nonadmin.evaluate(
+            "(id) => fetch('/characters/' + id + '/dark-secret', {method: 'POST', "
+            "headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: 'hijack'})})"
+            ".then(r => r.status)", char_id,
+        )
+        assert post_status == 403
+        # And the editor's autosave can't clobber it: the owner still sees it.
+        page.goto(f"{live_server_url}/characters/{char_id}/edit")
+        page.wait_for_selector('[data-action="open-dark-secret"]', timeout=5000)
+        assert "xyzzy-secret-phrase" in page.locator('[data-action="open-dark-secret"]').text_content()
+    finally:
+        page.goto(f"{live_server_url}/profile")
+        grant_cb = page.locator('input[name="grant_test_user_1"]')
+        if grant_cb.is_checked():
+            grant_cb.uncheck()
+        page.locator('button[type="submit"]', has_text="Save").click()
+        page.wait_for_load_state("networkidle")
 
 
 def test_jealousy_shows_text(page, live_server_url):

@@ -38,8 +38,11 @@ def advantage_details_for_diff(
     so a text-only edit (e.g. retyping the Good Reputation description)
     doesn't flip ``has_unpublished_changes`` or surface in revision
     history diffs. Structural choices on the same dict - ``skills`` for
-    Fierce/Specialization, ``player`` for Dark Secret - remain
-    version-significant.
+    Fierce/Specialization - remain version-significant.
+
+    The whole ``dark_secret`` entry is dropped: both the secret text and
+    the GM-chosen knower are private metadata (see
+    ``app/services/dark_secret.py``), never part of the versioned build.
 
     Entries that contain only a ``text`` value collapse to ``{}`` and are
     dropped entirely, so a player who first types a description and then
@@ -50,6 +53,8 @@ def advantage_details_for_diff(
         return {}
     stripped: Dict[str, Any] = {}
     for aid, raw in details.items():
+        if aid == "dark_secret":
+            continue
         if not isinstance(raw, dict):
             stripped[aid] = raw
             continue
@@ -433,6 +438,15 @@ class Character(Base):
                 "editor_discord_ids", "google_sheet_id"}
         for key in current:
             if key in skip:
+                continue
+            if key == "advantage_details":
+                # The dark secret is private metadata that the export
+                # may have omitted (non-owner exporter) or that the
+                # owner may have retyped since - neither makes the
+                # exported sheet stale.
+                from app.services.dark_secret import strip_dark_secret
+                if strip_dark_secret(current[key]) != strip_dark_secret(exported.get(key)):
+                    return True
                 continue
             if current[key] != exported.get(key):
                 return True

@@ -31,6 +31,15 @@ from app.game_data import (
 )
 from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
 from app.services.auth import can_edit_character, can_view_drafts, format_editor_list_text, get_admin_ids, get_all_editors, is_admin
+from app.services.dark_secret import (
+    DARK_SECRET_ID,
+    can_view_dark_secret,
+    dark_secret_view,
+    details_for_viewer,
+    knower_choices,
+    knower_display_name,
+    strip_dark_secret,
+)
 from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.rolls import compute_skill_roll
@@ -265,9 +274,25 @@ def group_summary(request: Request, group_id: int, db: Session = Depends(get_db)
             "disadvantages": DISADVANTAGES,
             "campaign_advantages": CAMPAIGN_ADVANTAGES,
             "campaign_disadvantages": CAMPAIGN_DISADVANTAGES,
+            # Dark secret text / knower only reach the page for cards the
+            # viewer owns (or if the viewer is the GM) - everyone else
+            # gets the details dict with that entry stripped.
             "advantage_details_by_char_id": {
-                card["character"].id: (card["character"].advantage_details or {})
+                card["character"].id: details_for_viewer(
+                    card["character"].advantage_details,
+                    user_id, card["character"].owner_discord_id,
+                    admin_ids=admin_ids_cache,
+                )
                 for card in cards
+            },
+            "dark_secret_knower_names": {
+                card["character"].id: knower_display_name(
+                    (card["character"].advantage_details or {}).get(DARK_SECRET_ID), db,
+                )
+                for card in cards
+                if can_view_dark_secret(
+                    user_id, card["character"].owner_discord_id, admin_ids=admin_ids_cache,
+                )
             },
             "schools": SCHOOLS,
             "wasp_lineages": WASP_LINEAGES,
@@ -1278,7 +1303,21 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "draft_diff": draft_diff,
             "owner_display_name": (owner.display_name or owner.discord_name) if owner else character.player_name,
             "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
-            "advantage_details": character.advantage_details or {},
+            # The dark secret is stripped unless the viewer is the owner
+            # or the GM - edit access alone is not enough.
+            "advantage_details": details_for_viewer(
+                character.advantage_details, user_id, character.owner_discord_id,
+            ),
+            "viewer_can_view_dark_secret": can_view_dark_secret(
+                user_id, character.owner_discord_id,
+            ),
+            "dark_secret_knower_name": (
+                knower_display_name(
+                    (character.advantage_details or {}).get(DARK_SECRET_ID), db,
+                )
+                if can_view_dark_secret(user_id, character.owner_discord_id)
+                else ""
+            ),
             "player_names": {u.discord_id: u.display_name or u.discord_name
                              for u in db.query(UserModel).all()},
             "per_adventure": per_adventure,
@@ -1487,6 +1526,14 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "all_groups": all_groups,
             "exclusive_pairs": EXCLUSIVE_PAIRS,
             "advantage_detail_fields": ADVANTAGE_DETAIL_FIELDS,
+            # The Alpine layer never holds the dark secret: it's stripped
+            # from the embedded details for every viewer and lives in the
+            # separate ``dark_secret`` payload (blank unless owner / GM).
+            "editor_advantage_details": strip_dark_secret(character.advantage_details),
+            "dark_secret": dark_secret_view(character, db, user["discord_id"]),
+            "dark_secret_knower_choices": (
+                knower_choices(character, db) if viewer_is_admin else []
+            ),
             "is_first_version": not character.is_published,
             "has_unpublished_changes": character.has_unpublished_changes,
             "editor_list_text": editor_list_text,

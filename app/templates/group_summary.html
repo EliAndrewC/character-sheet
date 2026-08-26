@@ -239,12 +239,17 @@
                     {% set dis = disadvantages.get(did) or campaign_disadvantages.get(did) %}
                     {% if dis %}
                     {% set detail = advantage_details.get(did, {}) %}
-                    {% set has_detail = detail.get('text') or (detail.get('player') and detail.player in player_names) %}
+                    {# Dark Secret: ``advantage_details`` arrives already
+                       stripped for viewers who may not read it, and the
+                       knower name only exists in the dict for those who
+                       may - so the chip is plain for everyone else. #}
+                    {% set ds_knower = dark_secret_knower_names.get(c.id, '') if did == 'dark_secret' else '' %}
+                    {% set has_detail = detail.get('text') or ds_knower or (did != 'dark_secret' and detail.get('player') and detail.player in player_names) %}
                     {% set chip_label = social_chip_labels.get(did, dis.name) %}
                     {% if has_detail %}
                     <span class="tooltip-trigger relative inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-rose-100 text-rose-900 text-xs font-medium cursor-help align-middle"
-                          data-dis-id="{{ did }}">{{ chip_label }}<span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-pre-line font-normal text-left">{%- if detail.get('text') -%}{{ detail.text }}{%- endif -%}{%- if detail.get('text') and detail.get('player') and detail.player in player_names %}
-{% endif %}{%- if detail.get('player') and detail.player in player_names -%}(known by {{ player_names[detail.player] }}){%- endif -%}</span></span>
+                          data-dis-id="{{ did }}">{{ chip_label }}<span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-pre-line font-normal text-left">{%- if detail.get('text') -%}{{ detail.text }}{%- endif -%}{%- if detail.get('text') and (ds_knower or (did != 'dark_secret' and detail.get('player') and detail.player in player_names)) %}
+{% endif %}{%- if ds_knower -%}(known by {{ ds_knower }}){%- elif did != 'dark_secret' and detail.get('player') and detail.player in player_names -%}(known by {{ player_names[detail.player] }}){%- endif -%}</span></span>
                     {% else %}
                     <span class="inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-rose-100 text-rose-900 text-xs font-medium align-middle"
                           data-dis-id="{{ did }}">{{ chip_label }}</span>

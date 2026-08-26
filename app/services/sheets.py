@@ -698,7 +698,9 @@ def create_spreadsheet(
         char_foreign_knacks=char_foreign_knacks,
     )
     skills_rows = _build_skills_rows(char_dict, skill_rolls)
-    adv_rows = _build_advantages_rows(char_dict, character.advantage_details or {})
+    # ``char_dict`` (not the row) so the caller's viewer-scoped stripping
+    # of the dark secret is honoured.
+    adv_rows = _build_advantages_rows(char_dict, char_dict.get("advantage_details") or {})
     xp_rows = _build_xp_rows(xp_breakdown, char_dict)
     notes_rows = _build_notes_rows(char_dict)
 

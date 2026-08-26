@@ -267,6 +267,82 @@
         </div>
     </div>
 
+    <!-- DARK SECRET MODAL (owner / GM only - see services/dark_secret.py) -->
+    <div x-show="showDarkSecretModal" x-cloak
+         data-modal="dark-secret"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60"
+         @click.self="cancelDarkSecretModal()"
+         @keydown.escape.window="if (showDarkSecretModal) cancelDarkSecretModal()">
+        <div class="bg-white rounded-lg shadow-xl px-6 py-5 max-w-lg w-full mx-4">
+            <h3 class="text-lg font-bold text-accent mb-3">Dark Secret</h3>
+            <p class="text-sm text-ink/70 mb-2 leading-snug">
+                What you write here is visible only to <strong>you and the Game Master</strong>.
+                Other players cannot read it - not even the player of the character
+                the GM picks as the one who knows your secret, and not even players
+                who have been granted edit access to this character. They may know
+                the broad strokes in play; the details you record here stay between
+                you and the GM.
+            </p>
+            <p class="text-xs text-ink/60 mb-3 leading-snug">
+                This is metadata, not a character-build change: saving it never puts
+                the character into Draft status and it never shows up in revision history.
+            </p>
+            <textarea x-model="darkSecretDraft" rows="6"
+                      data-field="dark-secret-text"
+                      placeholder="What is your secret? Be as specific as you like - only you and the GM will see this."
+                      class="w-full border border-ink/20 rounded px-3 py-2 bg-parchment text-sm"></textarea>
+
+            <div class="mt-4 pt-3 border-t border-ink/10">
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="font-medium text-ink/80">Who knows this secret:</span>
+                    <template x-if="darkSecret.can_set_knower">
+                        <select x-model="darkSecretKnowerDraft"
+                                data-field="dark-secret-knower"
+                                class="flex-1 min-w-0 text-sm border border-ink/20 rounded px-2 py-1 bg-parchment">
+                            <option value="">Not yet chosen</option>
+                            {% for kc in dark_secret_knower_choices %}
+                            <option value="{{ kc.id }}">{{ kc.name }}{% if kc.same_group %} (same group){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </template>
+                    <template x-if="!darkSecret.can_set_knower">
+                        <span data-testid="dark-secret-knower-readonly"
+                              class="flex-1 min-w-0 truncate"
+                              :class="darkSecret.knower_name ? 'text-ink' : 'text-ink/50 italic'"
+                              x-text="darkSecret.knower_name || 'Not yet chosen by the GM'"></span>
+                    </template>
+                    <span class="tooltip-trigger relative inline-flex items-center justify-center w-6 h-6 rounded-full bg-ink/10 text-ink/70 text-xs cursor-help shrink-0"
+                          data-testid="dark-secret-knower-help"
+                          aria-label="About who knows the secret">
+                        ?
+                        <span class="tooltip-content absolute right-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-72 whitespace-normal text-left font-normal">
+                            One other player character knows your dark secret. The Game Master
+                            chooses who that is - players (including you) can see the choice
+                            here but cannot change it. That character's player still cannot
+                            read the text above.
+                        </span>
+                    </span>
+                </div>
+            </div>
+
+            <p x-show="darkSecretError" x-cloak x-text="darkSecretError"
+               data-testid="dark-secret-error"
+               class="mt-3 text-sm text-red-700"></p>
+
+            <div class="flex justify-end gap-3 mt-4">
+                <button type="button" @click="cancelDarkSecretModal()"
+                        data-action="cancel-dark-secret"
+                        class="px-4 py-2 rounded text-sm btn-ghost">Cancel</button>
+                <button type="button" @click="saveDarkSecretModal()"
+                        :disabled="darkSecretSaving"
+                        data-action="save-dark-secret"
+                        class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-50">
+                    <span x-text="darkSecretSaving ? 'Saving...' : 'Save'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- GOOGLE SHEETS EXPORT BANNERS -->
     {% if request.query_params.get('sheets_url') %}
     <div class="bg-success/10 border border-success/50 text-success rounded px-4 py-2 text-sm flex items-center justify-between mb-4">
@@ -1276,15 +1352,6 @@
                                     {% endfor %}
                                 </select>
                                 {% endif %}
-                                {% if df.get('player') %}
-                                <select @change="if(!advantageDetails['{{ aid }}']) advantageDetails['{{ aid }}']={};advantageDetails['{{ aid }}'].player=$event.target.value;markDirty()"
-                                        class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
-                                    <option value="">Select player who knows...</option>
-                                    {% for p in all_players %}
-                                    <option value="{{ p.discord_id }}" :selected="(advantageDetails['{{ aid }}'] || {}).player === '{{ p.discord_id }}'">{{ p.display_name or p.discord_name }}</option>
-                                    {% endfor %}
-                                </select>
-                                {% endif %}
                             </div>
                             {% endif %}
                         </div>
@@ -1382,7 +1449,41 @@
                                  x-text='exclusionReason("{{ did }}") || {{ dis.description|tojson }}'>
                                 {{ dis.description }}
                             </div>
-                            {% if did in advantage_detail_fields %}
+                            {% if did == 'dark_secret' %}
+                            {# Dark Secret is private: the text is not edited
+                               inline - clicking the box opens a modal that
+                               explains who can see it. Only the owner and
+                               the GM get the text; the GM alone picks the
+                               knower. See services/dark_secret.py. #}
+                            <div x-show="disadvantages.dark_secret" x-cloak class="ml-6 mt-1 mb-2 space-y-1"
+                                 data-testid="dark-secret-box">
+                                <template x-if="darkSecret.can_view">
+                                    <button type="button" @click="openDarkSecretModal()"
+                                            data-action="open-dark-secret"
+                                            :class="!(darkSecret.text || '').trim() ? 'border-amber-400 bg-amber-50' : 'border-ink/20 bg-parchment'"
+                                            class="w-full text-left text-xs border rounded px-2 py-1 hover:border-accent truncate cursor-pointer">
+                                        <span class="text-ink/50 mr-1" aria-hidden="true">&#128274;</span>
+                                        <span x-show="(darkSecret.text || '').trim()" x-text="darkSecret.text" class="text-ink"></span>
+                                        <span x-show="!(darkSecret.text || '').trim()" class="text-ink/50 italic">What is your secret? Click to write it (private).</span>
+                                    </button>
+                                </template>
+                                <template x-if="!darkSecret.can_view">
+                                    <div data-testid="dark-secret-private-notice"
+                                         class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-ink/5 text-ink/60 italic">
+                                        <span aria-hidden="true">&#128274;</span>
+                                        This secret is private: only the character's player and the GM can read it.
+                                    </div>
+                                </template>
+                                <div class="text-xs text-ink/60" data-testid="dark-secret-knower-line">
+                                    <template x-if="darkSecret.can_view">
+                                        <span>
+                                            <span x-show="darkSecret.knower_name">Known by <span class="font-medium text-ink" x-text="darkSecret.knower_name"></span></span>
+                                            <span x-show="!darkSecret.knower_name" class="italic">The GM has not yet chosen who knows this secret.</span>
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                            {% elif did in advantage_detail_fields %}
                             {% set df = advantage_detail_fields[did] %}
                             <div x-show="disadvantages.{{ did }}" x-cloak class="ml-6 mt-1 mb-2 space-y-1"
                                  x-data="{ _prev: disadvantages.{{ did }} }"
@@ -1392,15 +1493,6 @@
                                        :value="(advantageDetails['{{ did }}'] || {}).text || ''"
                                        :class="disadvantages.{{ did }} && !((advantageDetails['{{ did }}'] || {}).text || '').trim() ? 'border-red-400 bg-red-50' : ''"
                                        class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
-                                {% if df.get('player') %}
-                                <select @change="if(!advantageDetails['{{ did }}']) advantageDetails['{{ did }}']={};advantageDetails['{{ did }}'].player=$event.target.value;markDirty()"
-                                        class="w-full text-xs border border-ink/20 rounded px-2 py-1 bg-parchment">
-                                    <option value="">Select player who knows...</option>
-                                    {% for p in all_players %}
-                                    <option value="{{ p.discord_id }}" :selected="(advantageDetails['{{ did }}'] || {}).player === '{{ p.discord_id }}'">{{ p.display_name or p.discord_name }}</option>
-                                    {% endfor %}
-                                </select>
-                                {% endif %}
                             </div>
                             {% endif %}
                         </div>
@@ -1941,7 +2033,16 @@ function characterForm() {
             {{ did }}: {{ 'true' if did in (character.campaign_disadvantages or []) else 'false' }},
             {% endfor %}
         },
-        advantageDetails: {{ (character.advantage_details or {})|tojson }},
+        advantageDetails: {{ editor_advantage_details|tojson }},
+        // Dark Secret: private metadata kept OUT of advantageDetails (so it
+        // never rides the autosave payload) and blank unless the viewer is
+        // the owner or the GM. See services/dark_secret.py.
+        darkSecret: {{ dark_secret|tojson }},
+        showDarkSecretModal: false,
+        darkSecretDraft: '',
+        darkSecretKnowerDraft: '',
+        darkSecretSaving: false,
+        darkSecretError: '',
         specializations: {{ (character.specializations or [])|tojson }},
         techniqueChoices: {{ (character.technique_choices or {})|tojson }},
         attack: {{ character.attack }},
@@ -2622,6 +2723,55 @@ function characterForm() {
             this.nameExplanation = this.explanationDraft;
             this.markDirty();
             this.showExplanationModal = false;
+        },
+
+        // ---- Dark Secret (private metadata; never touches markDirty) ----
+        openDarkSecretModal() {
+            if (!this.darkSecret.can_view) return;
+            this.darkSecretDraft = this.darkSecret.text || '';
+            this.darkSecretKnowerDraft = this.darkSecret.knower_character_id
+                ? String(this.darkSecret.knower_character_id) : '';
+            this.darkSecretError = '';
+            this.showDarkSecretModal = true;
+        },
+
+        cancelDarkSecretModal() {
+            this.showDarkSecretModal = false;
+        },
+
+        async saveDarkSecretModal() {
+            if (this.darkSecretSaving) return;
+            this.darkSecretSaving = true;
+            this.darkSecretError = '';
+            const body = { text: this.darkSecretDraft };
+            // Only the GM may send the knower key at all - the server
+            // 403s anyone else, so don't include it unless allowed.
+            if (this.darkSecret.can_set_knower) {
+                body.knower_character_id = this.darkSecretKnowerDraft
+                    ? parseInt(this.darkSecretKnowerDraft, 10) : null;
+            }
+            try {
+                const resp = await fetch('/characters/' + this._charId + '/dark-secret', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    this.darkSecretError = data.error || 'Could not save the dark secret.';
+                    return;
+                }
+                this.darkSecret = Object.assign({}, this.darkSecret, {
+                    text: data.text || '',
+                    knower_character_id: data.knower_character_id ?? null,
+                    knower_name: data.knower_name || '',
+                });
+                this.showDarkSecretModal = false;
+            } catch (e) {
+                this.darkSecretError = 'Could not save the dark secret.';
+            } finally {
+                this.darkSecretSaving = false;
+            }
         },
 
         openAwardModal() {

@@ -14,6 +14,7 @@ from app.database import get_db
 from app.game_data import SCHOOL_KNACKS, SCHOOLS, SKILLS, effective_knack_ring
 from app.models import Character, User as UserModel
 from app.services.auth import can_view_drafts
+from app.services.dark_secret import details_for_viewer
 from app.services.rolls import compute_skill_roll
 from app.services.sheets import create_spreadsheet
 from app.services.status import compute_effective_status
@@ -178,6 +179,11 @@ async def google_callback(
         return _error_redirect("not_found")
 
     char_dict = character.to_dict()
+    # The dark secret only goes into the spreadsheet when the person
+    # exporting is allowed to read it (owner or GM).
+    char_dict["advantage_details"] = details_for_viewer(
+        char_dict.get("advantage_details"), user["discord_id"], character.owner_discord_id,
+    )
     school = SCHOOLS.get(character.school)
 
     char_knacks = {}
