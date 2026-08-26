@@ -1090,6 +1090,32 @@ def test_school_ring_picker_locks_after_first_apply_changes(page, live_server_ur
     ).is_visible()
 
 
+def test_school_ring_picker_shows_persisted_ring_after_reload(page, live_server_url):
+    """The (locked) Choose School Ring dropdown must display the ring
+    that was actually persisted after Apply Changes and after a full
+    reload - its options are rendered by x-for after Alpine's initial
+    paint, so the value has to be re-applied once they exist."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "RingReload")
+    select_school(page, "mantis_wave_treader")
+    picker = page.locator('[data-testid="school-ring-choice"]')
+    picker.wait_for(state="visible", timeout=5000)
+    picker.select_option("Void")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Mantis Void ring")
+    assert "School Ring: Void" in page.text_content("body")
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('[data-testid="school-ring-choice"]', state="visible", timeout=5000)
+    page.wait_for_timeout(300)
+    assert page.locator('[data-testid="school-ring-choice"]').input_value() == "Void"
+    page.reload()
+    page.wait_for_selector('[data-testid="school-ring-choice"]', state="visible", timeout=5000)
+    page.wait_for_timeout(300)
+    assert page.locator('[data-testid="school-ring-choice"]').input_value() == "Void"
+
+
 def test_mantis_school_is_selectable_and_saves(page, live_server_url):
     """Mantis Wave-Treader can be selected, the draft saves, and Apply Changes
     creates the first version."""
