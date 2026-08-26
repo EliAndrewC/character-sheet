@@ -10235,6 +10235,56 @@ def test_sheet_techniques_list_shows_chosen_and_unchosen_picks(page, live_server
 
 
 @pytest.mark.school_abilities
+def test_flex_2nd_dan_picker_reflects_saved_pick_on_reload(page, live_server_url):
+    """Reopening the editor must show the persisted 2nd Dan pick in the
+    dropdown. The options are rendered by x-for after Alpine's initial
+    paint, so the select's value has to be (re)applied once they exist -
+    a plain x-model left it at "(none selected)" despite a saved pick."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Flex2Reload")
+    select_school(page, "suzume_overseer")
+    click_plus(page, "knack_oppose_social", 1)
+    click_plus(page, "knack_pontificate", 1)
+    click_plus(page, "knack_worldliness", 1)
+    page.wait_for_selector('[data-testid="flex-2nd-dan-select"]', state="visible", timeout=5000)
+    page.locator('[data-testid="flex-2nd-dan-select"]').select_option("wound_check")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Flex 2nd Dan reload")
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('[data-testid="flex-2nd-dan-select"]', state="visible", timeout=5000)
+    page.wait_for_timeout(300)
+    assert page.locator('[data-testid="flex-2nd-dan-select"]').input_value() == "wound_check"
+    # And a full reload, not just navigation.
+    page.reload()
+    page.wait_for_selector('[data-testid="flex-2nd-dan-select"]', state="visible", timeout=5000)
+    page.wait_for_timeout(300)
+    assert page.locator('[data-testid="flex-2nd-dan-select"]').input_value() == "wound_check"
+
+
+@pytest.mark.school_abilities
+def test_mantis_2nd_dan_picker_reflects_saved_pick_on_reload(page, live_server_url):
+    """Same contract as the flex picker for the Mantis-specific one."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Mantis2Reload")
+    select_school(page, "mantis_wave_treader")
+    click_plus(page, "knack_athletics", 1)
+    click_plus(page, "knack_iaijutsu", 1)
+    click_plus(page, "knack_worldliness", 1)
+    page.wait_for_selector('[data-testid="mantis-2nd-dan-select"]', state="visible", timeout=5000)
+    page.locator('[data-testid="mantis-2nd-dan-select"]').select_option("athletics")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Mantis 2nd Dan reload")
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('[data-testid="mantis-2nd-dan-select"]', state="visible", timeout=5000)
+    page.wait_for_timeout(300)
+    assert page.locator('[data-testid="mantis-2nd-dan-select"]').input_value() == "athletics"
+
+
+@pytest.mark.school_abilities
 def test_suzume_2nd_dan_picker_visible_and_saves(page, live_server_url):
     """Editor UI: the flexible 2nd Dan picker appears at Dan>=2 and saves."""
     page.goto(live_server_url)

@@ -653,6 +653,7 @@
                     2nd Dan free raise - pick one roll type
                 </label>
                 <select x-model="techniqueChoices.mantis_2nd_dan_free_raise"
+                        x-effect="$nextTick(() => $el.value = techniqueChoices.mantis_2nd_dan_free_raise || '')"
                         @change="markDirty()"
                         data-testid="mantis-2nd-dan-select"
                         class="border rounded px-3 py-2 text-sm w-full sm:w-auto">
@@ -862,6 +863,7 @@
                     2nd Dan free raise - pick one roll type
                 </label>
                 <select x-model="techniqueChoices.second_dan_choice"
+                        x-effect="$nextTick(() => $el.value = techniqueChoices.second_dan_choice || '')"
                         @change="markDirty()"
                         data-testid="flex-2nd-dan-select"
                         class="border rounded px-3 py-2 text-sm w-full sm:w-auto">

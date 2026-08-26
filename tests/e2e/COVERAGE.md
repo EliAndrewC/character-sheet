@@ -717,6 +717,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] 1st Dan: extra die on precepts -> `test_school_abilities.py::test_suzume_1st_dan_extra_die_on_precepts`
 - [x] 1st Dan: extra die on wound check -> `test_school_abilities.py::test_suzume_1st_dan_extra_die_on_wound_check`
 - [x] 2nd Dan: flexible picker visible at Dan 2, persists choice, applies +5 -> `test_school_abilities.py::test_suzume_2nd_dan_picker_visible_and_saves`
+- [x] 2nd Dan: reopening / reloading the editor shows the saved pick in the flexible dropdown (options render after Alpine init) -> `test_school_abilities.py::test_flex_2nd_dan_picker_reflects_saved_pick_on_reload`; Mantis-specific picker -> `::test_mantis_2nd_dan_picker_reflects_saved_pick_on_reload`
 - [x] View Sheet Techniques list shows "Chosen: ..." / "N of M not chosen yet" next to each flexible technique (Kitsune 1st/2nd Dan), nothing for unattained Dans or fixed-technique schools -> `test_school_abilities.py::test_sheet_techniques_list_shows_chosen_and_unchosen_picks`
 - [x] 2nd Dan: unset flexible pick publishes fine but is listed under View Sheet Validation Issues until chosen (same check covers Ide/Ishi/Kitsune/Shugenja, Mantis 2nd Dan, Kitsune 1st/3rd Dan, Ishi 1st Dan) -> `test_school_abilities.py::test_flexible_2nd_dan_unset_is_soft_validation_issue`
 - [x] 3rd Dan: spend raise on sincerity (precepts-driven adventure pool) -> `test_school_abilities.py::test_suzume_3rd_dan_precepts_raises`
