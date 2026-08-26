@@ -1096,9 +1096,15 @@ TECHNIQUE_CHOICE_REQUIREMENTS = [
         "label": "extra die on three rolls of your choice",
     },
     {
-        "schools": {"isawa_ishi"}, "dan": 1,
+        "schools": {"isawa_ishi", "ide_diplomat"}, "dan": 1,
         "key": "first_dan_choices", "count": 2,
-        "label": "extra die on two rolls of your choice",
+        "label": "extra die on two rolls of your choice, on top of precepts",
+    },
+    {
+        "schools": {"priest"}, "dan": 1,
+        "key": "first_dan_choices", "count": 2,
+        "label": "extra die on one skill and one combat roll type, "
+                 "on top of precepts",
     },
     {
         "schools": {

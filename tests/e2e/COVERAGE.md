@@ -285,6 +285,8 @@ The three failures were:
 ### Ide
 
 - [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_ide_1st_dan_skill_selection`
+- [x] 1st Dan picker (shared two-slot `flex-1st-dan-*` picker with Isawa Ishi): precepts auto +1 die, two picks +1 die, picks persist in editor -> `test_school_abilities.py::test_ide_1st_dan_picker_applies_extra_die`
+- [x] 1st Dan picks unset: publishes fine, View Sheet lists "2 of 2 roll types still need to be chosen" -> `test_school_abilities.py::test_ide_1st_dan_unset_is_soft_validation_issue`
 - [x] 2nd Dan skill selection dropdown -> `test_school_abilities.py::test_ide_2nd_dan_skill_selection`
 - [x] 3rd Dan subtract-from-roll button opens modal with dice animation and roll results -> `test_school_abilities.py::test_ide_3rd_dan_subtract_behavioral`
 - [x] Subtract button visible on applicable rolls -> `test_school_abilities.py::test_ide_subtract_button_visible`
@@ -600,6 +602,8 @@ The three failures were:
 ### Priest
 
 - [x] 1st Dan skill selection dropdown -> `test_school_abilities.py::test_priest_1st_dan_skill_selection`
+- [x] 1st Dan picker: skills-only slot (no precepts, no combat rolls) + combat-roll-only slot; precepts auto +1 die, picked skill and combat roll +1 die, picks persist in editor -> `test_school_abilities.py::test_priest_1st_dan_picker_skill_and_combat_slots`
+- [x] 1st Dan partial pick: publishes fine, View Sheet lists "1 of 2 roll types still need to be chosen" -> `test_school_abilities.py::test_priest_1st_dan_partial_pick_is_soft_validation_issue`
 - [x] Pontificate is rolled with whichever of Water/Air is higher (badge advertises both, modal label uses the higher ring) -> `test_school_abilities.py::test_pontificate_picks_higher_of_water_and_air_in_roll_modal`
 - [x] Pontificate menu: each main option (Roll / Spend N void) expands on hover into a submenu of eligible basic skills; excludes sneaking/heraldry/investigation -> `test_pontificate.py::test_pontificate_menu_has_skill_submenu`, `::test_pontificate_void_option_has_skill_submenu`
 - [x] Pontificate "(as <skill>)" roll inherits that skill's bonuses, titles "Pontificate (as Bragging)", and records the skill in the roll key/history -> `test_pontificate.py::test_pontificate_as_skill_rolls_with_bonuses`

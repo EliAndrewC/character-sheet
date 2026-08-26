@@ -25,8 +25,9 @@
 
 **Status:** Fully implemented via technique_choices.
 - `first_dan_extra_die: None` in `SCHOOL_TECHNIQUE_BONUSES` (choices are player-selected, not hardcoded).
-- Server: `app/models.py` stores player choices in `technique_choices` JSON column. `app/services/dice.py:_apply_school_technique_bonus()` applies +1 rolled die for chosen skills.
-- Editor UI allows selecting skills.
+- Precepts gets the extra die automatically (`AUTO_PRECEPTS_1ST_DAN_SCHOOLS` in `app/services/dice.py`; a redundant explicit precepts pick never doubles it).
+- Server: `app/models.py` stores player choices in `technique_choices.first_dan_choices`. `app/services/dice.py:_apply_school_technique_bonus()` applies +1 rolled die for chosen rolls (skills/knacks; attack, parry, initiative, wound check and damage are handled in their own formula builders).
+- Editor UI: two-slot picker (`flex-1st-dan-slot-0/1`, shared with Isawa Ishi) in `app/templates/character/edit.html`. Unset picks are a soft validation issue on the View Sheet (`TECHNIQUE_CHOICE_REQUIREMENTS` in `app/services/xp.py`).
 
 **Implementation:** `app/game_data.py` (`first_dan_extra_die: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
 

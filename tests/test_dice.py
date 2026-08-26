@@ -2985,18 +2985,49 @@ class TestSchoolAbilities:
         # rank 1 + Water 2 + 1 (single) = 4
         assert f.rolled == 4
 
-    def test_isawa_ishi_first_dan_does_not_affect_other_schools(self):
-        """The auto-precepts bonus is Ishi-only; another flexible-1st-Dan
-        school (Priest) does not get it without picking precepts."""
+    def test_auto_precepts_first_dan_does_not_affect_other_schools(self):
+        """The auto-precepts bonus belongs to the schools whose 1st Dan
+        reads "precepts and ..."; a flexible-1st-Dan school without that
+        wording (Shugenja) does not get it without picking precepts."""
         char = make_character_data(
-            school="priest",
+            school="shugenja",
             rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 3},
-            knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1},
+            knacks={"commune": 1, "pontificate": 1, "spellcasting": 1},
             skills={"precepts": 1},
         )
         f = build_skill_formula("precepts", char)
         # rank 1 + Water 2 (no auto) = 3
         assert f.rolled == 3
+
+    def test_ide_and_priest_first_dan_auto_precepts(self):
+        """Ide Diplomat ("precepts and any two rolls") and Priest
+        ("precepts, any one skill, and any one type of combat roll") get
+        the precepts die automatically, exactly like Isawa Ishi; the
+        picker only collects the remaining picks, and a redundant explicit
+        precepts pick never doubles it."""
+        for school, knacks in [
+            ("ide_diplomat", {"double_attack": 1, "feint": 1, "worldliness": 1}),
+            ("priest", {"conviction": 1, "otherworldliness": 1, "pontificate": 1}),
+        ]:
+            base = dict(
+                school=school,
+                rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 3},
+                knacks=knacks, skills={"precepts": 1, "bragging": 1},
+            )
+            # No picks at all: precepts still +1 (rank 1 + Water 2 + 1 = 4).
+            f = build_skill_formula("precepts", make_character_data(**base))
+            assert f.rolled == 4, school
+            # Picks: bragging gets +1, precepts unchanged.
+            char = make_character_data(
+                **base, technique_choices={"first_dan_choices": ["bragging", "attack"]}
+            )
+            assert build_skill_formula("bragging", char).rolled == 4, school
+            assert build_skill_formula("precepts", char).rolled == 4, school
+            # Redundant explicit precepts pick: no double.
+            char = make_character_data(
+                **base, technique_choices={"first_dan_choices": ["precepts", "attack"]}
+            )
+            assert build_skill_formula("precepts", char).rolled == 4, school
 
 
 # ---------------------------------------------------------------------------

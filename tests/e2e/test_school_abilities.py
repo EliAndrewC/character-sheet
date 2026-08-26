@@ -631,6 +631,45 @@ def test_ide_1st_dan_skill_selection(page, live_server_url):
     assert f["rolled"] == 4
 
 
+def test_ide_1st_dan_picker_applies_extra_die(page, live_server_url):
+    """Ide Diplomat shares the two-slot flexible 1st Dan picker with
+    Isawa Ishi: precepts auto-gets +1 die, the two picks add +1 die each,
+    and the picks survive a reload of the editor."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "IdePicker")
+    select_school(page, "ide_diplomat")
+    click_plus(page, "skill_precepts", 1)
+    click_plus(page, "skill_bragging", 2)
+    page.wait_for_selector('[data-testid="flex-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.locator('[data-testid="flex-1st-dan-slot-0"]').select_option("bragging")
+    page.wait_for_timeout(200)
+    page.locator('[data-testid="flex-1st-dan-slot-1"]').select_option("attack")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Pick Ide 1st Dan rolls")
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    # Precepts (Water): rank 1 + Water 3 (school ring) + 1 (auto) = 5
+    assert _get_formula(page, "skill:precepts")["rolled"] == 5
+    # Bragging (Air): rank 2 + Air 2 + 1 (picked) = 5
+    assert _get_formula(page, "skill:bragging")["rolled"] == 5
+    # No validation issue once both picks are made.
+    assert "1st Dan technique" not in page.text_content("body")
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('[data-testid="flex-1st-dan-slot-0"]', state="visible", timeout=5000)
+    assert page.locator('[data-testid="flex-1st-dan-slot-0"]').input_value() == "bragging"
+    assert page.locator('[data-testid="flex-1st-dan-slot-1"]').input_value() == "attack"
+
+
+def test_ide_1st_dan_unset_is_soft_validation_issue(page, live_server_url):
+    """Publishing an Ide Diplomat without 1st Dan picks is allowed but
+    the View Sheet lists "2 of 2" under Validation Issues."""
+    _create_char(page, live_server_url, "IdeUnset", "ide_diplomat")
+    body = page.text_content("body")
+    assert "Validation Issues" in body
+    assert "1st Dan technique: 2 of 2 roll types still need to be chosen" in body
+
+
 def test_ide_2nd_dan_skill_selection(page, live_server_url):
     """Ide Diplomat 2nd Dan: technique_choices apply +5 to chosen skill."""
     _create_char(page, live_server_url, "Ide2Dan", "ide_diplomat",
@@ -815,10 +854,10 @@ def test_isawa_ishi_1st_dan_picker_applies_extra_die(page, live_server_url):
     click_plus(page, "skill_precepts", 1)
     click_plus(page, "skill_bragging", 2)
     # Picker is visible at Dan 1 (default knacks all rank 1 = Dan 1).
-    page.wait_for_selector('[data-testid="ishi-1st-dan-slot-0"]', state="visible", timeout=5000)
-    page.locator('[data-testid="ishi-1st-dan-slot-0"]').select_option("bragging")
+    page.wait_for_selector('[data-testid="flex-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.locator('[data-testid="flex-1st-dan-slot-0"]').select_option("bragging")
     page.wait_for_timeout(200)
-    page.locator('[data-testid="ishi-1st-dan-slot-1"]').select_option("attack")
+    page.locator('[data-testid="flex-1st-dan-slot-1"]').select_option("attack")
     page.wait_for_selector('text="Saved"', timeout=5000)
     apply_changes(page, "Pick Ishi 1st Dan rolls")
     page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
@@ -841,10 +880,10 @@ def test_isawa_ishi_1st_dan_picks_persist_across_reload(page, live_server_url):
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "IshiPersist")
     select_school(page, "isawa_ishi")
-    page.wait_for_selector('[data-testid="ishi-1st-dan-slot-0"]', state="visible", timeout=5000)
-    page.locator('[data-testid="ishi-1st-dan-slot-0"]').select_option("attack")
+    page.wait_for_selector('[data-testid="flex-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.locator('[data-testid="flex-1st-dan-slot-0"]').select_option("attack")
     page.wait_for_timeout(200)
-    page.locator('[data-testid="ishi-1st-dan-slot-1"]').select_option("wound_check")
+    page.locator('[data-testid="flex-1st-dan-slot-1"]').select_option("wound_check")
     # Flush the autosave debounce before reload (mirrors Kitsune persist test).
     page.evaluate("""async () => {
         const els = document.querySelectorAll('[x-data]');
@@ -857,10 +896,10 @@ def test_isawa_ishi_1st_dan_picks_persist_across_reload(page, live_server_url):
         }
     }""")
     page.reload()
-    page.wait_for_selector('[data-testid="ishi-1st-dan-slot-0"]', state="visible", timeout=5000)
+    page.wait_for_selector('[data-testid="flex-1st-dan-slot-0"]', state="visible", timeout=5000)
     page.wait_for_timeout(300)
-    assert page.locator('[data-testid="ishi-1st-dan-slot-0"]').input_value() == "attack"
-    assert page.locator('[data-testid="ishi-1st-dan-slot-1"]').input_value() == "wound_check"
+    assert page.locator('[data-testid="flex-1st-dan-slot-0"]').input_value() == "attack"
+    assert page.locator('[data-testid="flex-1st-dan-slot-1"]').input_value() == "wound_check"
 
 
 def test_isawa_ishi_2nd_dan_skill_selection(page, live_server_url):
@@ -1084,6 +1123,63 @@ def test_priest_1st_dan_skill_selection(page, live_server_url):
     assert f is not None
     # precepts (Water) rank 1 + Water 3 (default school ring) + 1 (1st Dan) = 5
     assert f["rolled"] == 5
+
+
+def test_priest_1st_dan_picker_skill_and_combat_slots(page, live_server_url):
+    """Priest 1st Dan picker: a skills-only slot and a combat-roll-only
+    slot. Precepts auto-gets +1 die; the chosen skill and combat roll each
+    get +1 die; picks persist into the editor after Apply Changes."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PriestPicker")
+    select_school(page, "priest")
+    click_plus(page, "skill_precepts", 1)
+    click_plus(page, "skill_bragging", 2)
+    page.wait_for_selector('[data-testid="priest-1st-dan-skill"]', state="visible", timeout=5000)
+    skill_sel = page.locator('[data-testid="priest-1st-dan-skill"]')
+    combat_sel = page.locator('[data-testid="priest-1st-dan-combat"]')
+    skill_values = skill_sel.evaluate("el => Array.from(el.options).map(o => o.value)")
+    combat_values = combat_sel.evaluate("el => Array.from(el.options).map(o => o.value)")
+    assert "bragging" in skill_values and "precepts" not in skill_values
+    assert "attack" not in skill_values
+    assert sorted(v for v in combat_values if v) == \
+        ["attack", "damage", "initiative", "parry", "wound_check"]
+    skill_sel.select_option("bragging")
+    page.wait_for_timeout(200)
+    combat_sel.select_option("wound_check")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Pick Priest 1st Dan rolls")
+    page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
+    # Precepts (Water): rank 1 + Water 3 (school ring) + 1 (auto) = 5
+    assert _get_formula(page, "skill:precepts")["rolled"] == 5
+    # Bragging (Air): rank 2 + Air 2 + 1 (picked) = 5
+    assert _get_formula(page, "skill:bragging")["rolled"] == 5
+    # Wound check (Water 3 -> 4k3) + 1 picked = 5k3
+    wc = _get_formula(page, "wound_check")
+    assert wc["rolled"] == 5 and wc["kept"] == 3
+    assert "1st Dan technique" not in page.text_content("body")
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('[data-testid="priest-1st-dan-skill"]', state="visible", timeout=5000)
+    assert skill_sel.input_value() == "bragging"
+    assert combat_sel.input_value() == "wound_check"
+
+
+def test_priest_1st_dan_partial_pick_is_soft_validation_issue(page, live_server_url):
+    """Priest with only the combat roll chosen publishes fine but the View
+    Sheet reports "1 of 2" until the skill is chosen too."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "PriestPartial")
+    select_school(page, "priest")
+    page.wait_for_selector('[data-testid="priest-1st-dan-combat"]', state="visible", timeout=5000)
+    page.locator('[data-testid="priest-1st-dan-combat"]').select_option("attack")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Priest partial pick")
+    body = page.text_content("body")
+    assert "Validation Issues" in body
+    assert "1st Dan technique: 1 of 2 roll types still need to be chosen" in body
 
 
 def test_priest_sheet_links_to_rituals(page, live_server_url):

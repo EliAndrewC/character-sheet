@@ -92,6 +92,12 @@ PONTIFICATE_EXCLUDED_SKILLS = frozenset({
 })
 
 
+# Schools whose 1st Dan technique grants the extra die on precepts
+# unconditionally (the player's picks are on top of it). See
+# _apply_school_technique_bonus.
+AUTO_PRECEPTS_1ST_DAN_SCHOOLS = frozenset({"isawa_ishi", "ide_diplomat", "priest"})
+
+
 def _skill_formula_has_bonus(d: dict) -> bool:
     """True if a skill-formula dict carries at least one bonus a
     Pontificate-as-this-skill roll could inherit: a positive flat bonus,
@@ -353,13 +359,15 @@ def _apply_school_technique_bonus(
         if skill_or_knack_id in chosen:
             formula.rolled += 1
 
-    # Isawa Ishi 1st Dan auto-applies +1 die to precepts ("precepts AND any
-    # two types of rolls of your choice"); the picker only collects the two
-    # additional rolls. Skipped if the player redundantly picked precepts so
-    # the bonus never doubles.
+    # Schools whose 1st Dan reads "precepts and ..." (Isawa Ishi: "precepts
+    # AND any two types of rolls of your choice"; Ide Diplomat: "precepts
+    # and any two rolls"; Priest: "precepts, any one skill, and any one type
+    # of combat roll") auto-apply +1 die to precepts; the picker only
+    # collects the remaining picks. Skipped if the player redundantly picked
+    # precepts so the bonus never doubles.
     if (
         dan >= 1
-        and school_id == "isawa_ishi"
+        and school_id in AUTO_PRECEPTS_1ST_DAN_SCHOOLS
         and skill_or_knack_id == "precepts"
         and "precepts" not in ((technique_choices or {}).get("first_dan_choices") or [])
     ):
