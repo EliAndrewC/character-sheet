@@ -58,11 +58,32 @@
                     {% if is_campaign %}
                     <span class="text-xs text-ink/40">(campaign)</span>
                     {% endif %}
+                    {% if did == 'dark_secret' %}
+                    {# Private: the route strips the text unless the viewer is
+                       the owner or the GM, and passes the knower's name the
+                       same way. Everyone else just sees a padlock. #}
+                    <span data-testid="sheet-dark-secret">
+                        {% if viewer_can_view_dark_secret %}
+                        {% if detail.get('text') %}
+                        <span class="text-sm text-ink/60">- {{ detail.text }}</span>
+                        {% endif %}
+                        {% if dark_secret_knower_name %}
+                        <span class="text-xs text-ink/50">(known by {{ dark_secret_knower_name }})</span>
+                        {% else %}
+                        <span class="text-xs text-ink/50 italic">(the GM has not yet chosen who knows)</span>
+                        {% endif %}
+                        <span class="text-xs text-ink/40" title="Only you and the GM can see this">&#128274;</span>
+                        {% else %}
+                        <span class="text-xs text-ink/50 italic" title="Only the character's player and the GM can read a dark secret">&#128274; private</span>
+                        {% endif %}
+                    </span>
+                    {% else %}
                     {% if detail.get('text') %}
                     <span class="text-sm text-ink/60">- {{ detail.text }}</span>
                     {% endif %}
                     {% if detail.get('player') and detail.player in player_names %}
                     <span class="text-xs text-ink/50">(known by {{ player_names[detail.player] }})</span>
+                    {% endif %}
                     {% endif %}
                     <div class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg max-w-md whitespace-pre-line">
                         {{ dis.description }}

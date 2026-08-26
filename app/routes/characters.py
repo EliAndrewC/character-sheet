@@ -16,6 +16,13 @@ from app.game_data import (
 )
 from app.models import Character, CharacterVersion, GamingGroup, User
 from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids, get_all_editors
+from app.services.dark_secret import (
+    DARK_SECRET_ID,
+    can_set_dark_secret_knower,
+    can_view_dark_secret,
+    dark_secret_view,
+    merge_dark_secret,
+)
 from app.services.rolls import compute_dan
 from app.services.sanitize import sanitize_sections
 from app.services.versions import (
@@ -665,7 +672,13 @@ async def autosave_character(
     if "disadvantages" in body:
         character.disadvantages = body["disadvantages"]
     if "advantage_details" in body:
-        character.advantage_details = body["advantage_details"]
+        # The dark secret is private metadata written only through
+        # POST /dark-secret; whatever the client sends for it here is
+        # ignored and the persisted entry is carried forward, so an
+        # editor who can't see the secret can't blank it either.
+        character.advantage_details = merge_dark_secret(
+            body["advantage_details"], character.advantage_details,
+        )
     if "specializations" in body:
         character.specializations = _sanitize_specializations(
             body["specializations"]
@@ -934,6 +947,100 @@ async def set_award_source(
     character.rank_recognition_awards = new_awards
     db.commit()
     return JSONResponse({"ok": True})
+
+
+@router.get("/{char_id}/dark-secret")
+async def get_dark_secret(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Read the character's Dark Secret (text + knower).
+
+    Owner and GM only. Editors who are neither get a 403 even though
+    they can edit everything else on the sheet - the secret is the one
+    thing edit access does not cover (see services/dark_secret.py).
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    if not can_view_dark_secret(user["discord_id"], character.owner_discord_id):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    return JSONResponse(dark_secret_view(character, db, user["discord_id"]))
+
+
+@router.post("/{char_id}/dark-secret")
+async def set_dark_secret(
+    request: Request, char_id: int, db: Session = Depends(get_db)
+):
+    """Update the Dark Secret text and/or the GM-chosen knower.
+
+    Metadata endpoint in the same spirit as ``set_award_source``: it
+    bypasses the version system entirely (no draft flag, no diff line,
+    no snapshot). Body keys are optional and independent:
+
+    * ``text`` - the secret. Owner or GM.
+    * ``knower_character_id`` - id of the other PC who knows, or null to
+      clear. GM only; anyone else sending the key gets a 403 even if the
+      value is unchanged, so the UI can't be trivially bypassed.
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    if not can_view_dark_secret(user["discord_id"], character.owner_discord_id):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    body = await request.json()
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Expected a JSON object"}, status_code=400)
+
+    # Fresh dicts so SQLAlchemy notices the JSON column changed.
+    details = dict(character.advantage_details or {})
+    entry = dict(details.get(DARK_SECRET_ID) or {})
+
+    if "text" in body:
+        raw = body.get("text")
+        if raw is not None and not isinstance(raw, str):
+            return JSONResponse({"error": "text must be a string"}, status_code=400)
+        entry["text"] = (raw or "").strip()
+
+    if "knower_character_id" in body:
+        if not can_set_dark_secret_knower(user["discord_id"]):
+            return JSONResponse(
+                {"error": "Only the GM can choose who knows the secret"},
+                status_code=403,
+            )
+        raw_id = body.get("knower_character_id")
+        if raw_id in (None, ""):
+            entry["knower_character_id"] = None
+        else:
+            try:
+                kid = int(raw_id)
+            except (TypeError, ValueError):
+                return JSONResponse(
+                    {"error": "knower_character_id must be an integer"},
+                    status_code=400,
+                )
+            if kid == character.id:
+                return JSONResponse(
+                    {"error": "A character cannot be their own confidant"},
+                    status_code=400,
+                )
+            knower = db.query(Character).filter(Character.id == kid).first()
+            if not knower:
+                return JSONResponse({"error": "Knower not found"}, status_code=404)
+            entry["knower_character_id"] = kid
+        # Choosing a character supersedes the legacy player-id field.
+        entry.pop("player", None)
+
+    details[DARK_SECRET_ID] = entry
+    character.advantage_details = details
+    db.commit()
+    return JSONResponse({"ok": True, **dark_secret_view(character, db, user["discord_id"])})
 
 
 @router.post("/{char_id}/money/add")

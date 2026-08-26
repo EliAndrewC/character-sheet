@@ -1250,6 +1250,23 @@ def validate_character(character_data: dict) -> List[str]:
     )
     for taken_id in all_taken_ids:
         field_def = ADVANTAGE_DETAIL_FIELDS.get(taken_id)
+        if taken_id == "dark_secret":
+            # Private metadata (see services/dark_secret.py): both values
+            # are optional, and the messages must not reveal anything
+            # beyond "not set yet". The knower is chosen by the GM, so
+            # that warning points at the GM rather than the player.
+            detail = advantage_details.get(taken_id) or {}
+            if not (detail.get("text") or "").strip():
+                errors.append(
+                    "Dark Secret: no description has been written yet "
+                    "(only the character's player and the GM can read it)."
+                )
+            if not detail.get("knower_character_id") and not detail.get("player"):
+                errors.append(
+                    "Dark Secret: the GM has not yet chosen which "
+                    "character knows the secret."
+                )
+            continue
         if field_def and "text" in field_def:
             detail = advantage_details.get(taken_id) or {}
             text_val = (detail.get("text") or "").strip()

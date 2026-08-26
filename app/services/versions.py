@@ -21,6 +21,7 @@ from app.models import (
     advantage_details_for_diff,
     award_deltas_for_diff,
 )
+from app.services.dark_secret import merge_dark_secret, strip_dark_secret
 from app.services.rolls import compute_dan
 
 
@@ -33,9 +34,14 @@ def _snapshot_state(character: Character) -> Dict[str, Any]:
     are never restored by Discard / Revert, so they don't belong in the
     stored snapshot either. See METADATA_FIELDS in app/models.py.
     """
-    return {
+    state = {
         k: v for k, v in character.to_dict().items() if k not in METADATA_FIELDS
     }
+    # The dark secret (text + GM-chosen knower) is private metadata: it
+    # never enters a snapshot, so a stored version can't leak it and a
+    # Discard / Revert can't clobber it.
+    state["advantage_details"] = strip_dark_secret(state.get("advantage_details"))
+    return state
 
 
 def _label(key: str) -> str:
@@ -865,7 +871,10 @@ def _restore_character_from_state(character: Character, state: Dict[str, Any]):
     character.disadvantages = state.get("disadvantages", [])
     character.campaign_advantages = state.get("campaign_advantages", [])
     character.campaign_disadvantages = state.get("campaign_disadvantages", [])
-    character.advantage_details = state.get("advantage_details", {})
+    # Snapshots never contain the dark secret; carry the live one forward.
+    character.advantage_details = merge_dark_secret(
+        state.get("advantage_details", {}), character.advantage_details,
+    )
     character.specializations = state.get("specializations", [])
     character.technique_choices = state.get("technique_choices", {})
     character.honor = state.get("honor", 1.0)
