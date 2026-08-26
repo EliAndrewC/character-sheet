@@ -609,3 +609,95 @@ def test_group_summary_unlucky_chips_render_correct_styling_per_character(
     assert "line-through" not in alpha_classes
     assert "bg-ink/20" in beta_classes
     assert "line-through" in beta_classes
+
+
+def test_dark_secret_map_page(page, live_server_url):
+    """GM: the Dark Secret chip on the Group Summary links to the map; the
+    map draws an arrow knower -> holder with an instant hover tooltip, a
+    halo (with its own tooltip) on the uninvolved character, and links
+    back to the group."""
+    from tests.e2e.helpers import create_and_apply
+
+    # Holder (admin-owned) with Dark Secret; knower is Test User 1, who
+    # owns a second character in the group; a third character is haloed.
+    holder_url = create_and_apply(page, live_server_url, "Map Holder",
+                                  disadvantages=["dark_secret"])
+    holder_id = holder_url.rstrip("/").split("/")[-1]
+    knower_url = create_and_apply(page, live_server_url, "Map Knower")
+    knower_id = knower_url.rstrip("/").split("/")[-1]
+    saint_url = create_and_apply(page, live_server_url, "Map Saint")
+    saint_id = saint_url.rstrip("/").split("/")[-1]
+
+    # Create a group and put all three in it (admin manage-groups page +
+    # per-character set-group endpoint).
+    _create_admin_group(page, "Map Group")
+    gid = page.evaluate("""() => {
+        const el = [...document.querySelectorAll('[data-group-id]')]
+            .find(e => e.querySelector('input[name="name"]')?.value === 'Map Group');
+        return el ? el.dataset.groupId : null;
+    }""")
+    assert gid
+    for cid in (holder_id, knower_id, saint_id):
+        status = page.evaluate(
+            "([id, gid]) => fetch('/characters/' + id + '/set-group', {method: 'POST', "
+            "headers: {'Content-Type': 'application/json'}, "
+            "body: JSON.stringify({gaming_group_id: parseInt(gid)})}).then(r => r.status)",
+            [cid, gid],
+        )
+        assert status == 200
+
+    # Hand the knower character to Test User 1 via the owner dropdown.
+    page.goto(f"{live_server_url}/characters/{knower_id}/edit")
+    page.wait_for_selector('select[name="owner_discord_id"]')
+    page.select_option('select[name="owner_discord_id"]', value="test_user_1")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+
+    # GM picks Test User 1 as the one who knows the holder's secret.
+    page.goto(f"{live_server_url}/characters/{holder_id}/edit")
+    page.wait_for_selector('input[name="name"]')
+    page.locator('[data-action="open-dark-secret"]').click()
+    page.locator('[data-modal="dark-secret"]').wait_for(state="visible", timeout=5000)
+    page.select_option('[data-field="dark-secret-knower"]', value="test_user_1")
+    page.locator('[data-action="save-dark-secret"]').click()
+    page.locator('[data-modal="dark-secret"]').wait_for(state="hidden", timeout=5000)
+
+    # Chip on the group page links to the map.
+    page.goto(f"{live_server_url}/groups/{gid}")
+    link = page.locator('[data-testid="dark-secret-map-link"]')
+    link.wait_for(state="visible", timeout=5000)
+    link.click()
+    page.wait_for_url(f"**/groups/{gid}/dark-secrets", timeout=10000)
+
+    arrow = page.locator('[data-testid="ds-arrow"]')
+    assert arrow.count() == 1
+    assert arrow.get_attribute("data-from") == knower_id
+    assert arrow.get_attribute("data-to") == holder_id
+    names = page.locator('[data-testid="ds-node-name"]').all_text_contents()
+    assert {"Map Holder", "Map Knower", "Map Saint"} <= set(names)
+    halo_node = page.locator('[data-testid="ds-node"][data-halo="true"]')
+    assert halo_node.count() == 1
+    assert halo_node.get_attribute("data-node-id") == saint_id
+
+    # Hover the arrow: it lights up (accent stroke) and the tooltip appears at once.
+    tooltip = page.locator('[data-testid="ds-tooltip"]')
+    assert not tooltip.is_visible()
+    arrow.hover()
+    tooltip.wait_for(state="visible", timeout=2000)
+    assert "Map Holder's dark secret is known by Map Knower" in tooltip.text_content()
+    page.wait_for_function(
+        "() => getComputedStyle(document.querySelector('[data-testid=\"ds-arrow\"] .ds-arrow-line')).strokeWidth.startsWith('4')",
+        timeout=2000,
+    )
+
+    # Hover the halo: funny tooltip.
+    page.locator('[data-testid="ds-halo"] ellipse').first.hover()
+    tooltip.wait_for(state="visible", timeout=2000)
+    txt = tooltip.text_content()
+    assert "Righteousness is its own reward" in txt
+    assert "Map Saint has no dark secret and knows no dark secrets" in txt
+
+    # Moving away hides it; back link returns to the group page.
+    page.mouse.move(2, 2)
+    tooltip.wait_for(state="hidden", timeout=2000)
+    page.locator('[data-testid="ds-map-back"]').click()
+    page.wait_for_url(f"**/groups/{gid}", timeout=10000)

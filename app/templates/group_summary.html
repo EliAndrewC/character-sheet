@@ -24,6 +24,7 @@
 {% block main_pb %}pb-2{% endblock %}
 
 {% block content %}
+{% set viewer_is_admin = request.state.user and is_admin(request.state.user.discord_id) %}
 <div class="space-y-6">
     {# Two cards per row on desktop, one per row on mobile. #}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -246,7 +247,14 @@
                     {% set ds_knower = dark_secret_knower_names.get(c.id, '') if did == 'dark_secret' else '' %}
                     {% set has_detail = detail.get('text') or ds_knower or (did != 'dark_secret' and detail.get('player') and detail.player in player_names) %}
                     {% set chip_label = social_chip_labels.get(did, dis.name) %}
-                    {% if has_detail %}
+                    {% if did == 'dark_secret' and viewer_is_admin %}
+                    {# GM: the chip links to the group's Dark Secret map.
+                       The hover tooltip keeps showing the secret text. #}
+                    <a href="/groups/{{ group.id }}/dark-secrets"
+                       class="tooltip-trigger relative inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-rose-100 text-rose-900 text-xs font-medium cursor-pointer align-middle hover:bg-rose-200 underline decoration-dotted"
+                       data-dis-id="{{ did }}" data-testid="dark-secret-map-link">{{ chip_label }}{% if has_detail %}<span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-pre-line font-normal text-left no-underline">{%- if detail.get('text') -%}{{ detail.text }}{%- endif -%}{%- if detail.get('text') and ds_knower %}
+{% endif %}{%- if ds_knower -%}(known by {{ ds_knower }}){%- endif -%}</span>{% endif %}</a>
+                    {% elif has_detail %}
                     <span class="tooltip-trigger relative inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-rose-100 text-rose-900 text-xs font-medium cursor-help align-middle"
                           data-dis-id="{{ did }}">{{ chip_label }}<span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-pre-line font-normal text-left">{%- if detail.get('text') -%}{{ detail.text }}{%- endif -%}{%- if detail.get('text') and (ds_knower or (did != 'dark_secret' and detail.get('player') and detail.player in player_names)) %}
 {% endif %}{%- if ds_knower -%}(known by {{ ds_knower }}){%- elif did != 'dark_secret' and detail.get('player') and detail.player in player_names -%}(known by {{ player_names[detail.player] }}){%- endif -%}</span></span>

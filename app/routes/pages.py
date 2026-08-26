@@ -302,6 +302,40 @@ def group_summary(request: Request, group_id: int, db: Session = Depends(get_db)
     )
 
 
+@router.get("/groups/{group_id}/dark-secrets", response_class=HTMLResponse)
+def group_dark_secret_map(request: Request, group_id: int, db: Session = Depends(get_db)):
+    """GM-only map of which characters know which dark secrets.
+
+    Reached from the Dark Secret chip on the Group Summary (a link only
+    for admins). Admin-only because the "who knows" relation is private
+    to each owning player and the GM (see services/dark_secret.py).
+    """
+    deny = _require_admin(request)
+    if deny:
+        return deny
+    group = db.query(GamingGroup).filter(GamingGroup.id == group_id).first()
+    if not group:
+        return HTMLResponse("Group not found", status_code=404)
+    chars = sorted(
+        [c for c in db.query(Character)
+         .filter(Character.gaming_group_id == group_id).all()
+         if not c.is_hidden],
+        key=lambda c: (c.name or "").lower(),
+    )
+    if not chars:
+        return HTMLResponse("Group has no visible characters", status_code=404)
+    from app.main import headshot_url
+    from app.services.dark_secret_map import build_dark_secret_map
+    player_names = {u.discord_id: u.display_name or u.discord_name
+                    for u in db.query(UserModel).all()}
+    ds_map = build_dark_secret_map(chars, player_names, headshot_url)
+    return _templates().TemplateResponse(
+        request=request,
+        name="dark_secret_map.html",
+        context={"group": group, "map": ds_map},
+    )
+
+
 @router.get("/groups/{group_id}/money", response_class=HTMLResponse)
 def group_money(request: Request, group_id: int, db: Session = Depends(get_db)):
     """GM money-awards page for one gaming group. Admin-only.
