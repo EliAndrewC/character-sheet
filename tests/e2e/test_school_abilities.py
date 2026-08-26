@@ -920,6 +920,36 @@ def test_isawa_ishi_2nd_dan_skill_selection(page, live_server_url):
                for b in f.get("bonuses", []))
 
 
+def test_isawa_ishi_2nd_dan_picker_offers_skills_only(page, live_server_url):
+    """Ishi's 2nd Dan is "rolls for any one skill": the shared flexible
+    picker drops its combat-roll and knack groups for Ishi, relabels
+    itself, and a skill pick saves and shows on the sheet."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "IshiSkillOnly")
+    select_school(page, "isawa_ishi")
+    click_plus(page, "knack_absorb_void", 1)
+    click_plus(page, "knack_kharmic_spin", 1)
+    click_plus(page, "knack_otherworldliness", 1)
+    page.wait_for_selector('[data-testid="flex-2nd-dan-select"]', state="visible", timeout=5000)
+    picker = page.locator('[data-testid="flex-2nd-dan-picker"]')
+    assert "pick one skill" in picker.text_content()
+    select = page.locator('[data-testid="flex-2nd-dan-select"]')
+    values = select.evaluate("el => Array.from(el.options).map(o => o.value)")
+    for combat in ("attack", "damage", "parry", "wound_check"):
+        assert combat not in values, combat
+    for knack in ("kharmic_spin", "otherworldliness"):
+        assert knack not in values, knack
+    assert "bragging" in values and "precepts" in values
+    groups = select.evaluate("el => Array.from(el.querySelectorAll('optgroup')).map(g => g.label)")
+    assert groups == ["Skills"]
+    select.select_option("bragging")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Ishi skill pick")
+    assert "Chosen: Bragging" in page.locator('[data-testid="technique-choice-2"]').text_content()
+
+
 def test_isawa_ishi_absorb_void_has_per_day_reset_button(page, live_server_url):
     """Isawa Ishi's special ability resets Absorb Void on a full night's
     rest, so the tracker renders the per-day Reset button alongside the

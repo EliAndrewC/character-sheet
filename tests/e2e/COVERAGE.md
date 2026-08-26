@@ -322,6 +322,7 @@ The three failures were:
 - [x] 1st Dan picker (two slots, precepts auto) applies +1 die to chosen rolls -> `test_school_abilities.py::test_isawa_ishi_1st_dan_picker_applies_extra_die`
 - [x] 1st Dan picks persist across reload -> `test_school_abilities.py::test_isawa_ishi_1st_dan_picks_persist_across_reload`
 - [x] 2nd Dan skill selection dropdown -> `test_school_abilities.py::test_isawa_ishi_2nd_dan_skill_selection`
+- [x] 2nd Dan picker offers skills only for Ishi (no combat rolls / knacks, label says "pick one skill"), skill pick saves and shows on sheet -> `test_school_abilities.py::test_isawa_ishi_2nd_dan_picker_offers_skills_only`
 - [x] VP max display and spend cap behavioral -> `test_school_abilities.py::test_isawa_ishi_vp_max_behavioral`
 - [x] 3rd Dan add-to-roll button visible -> `test_school_abilities.py::test_ishi_3rd_dan_add_button_visible`
 - [x] 3rd Dan add-to-roll button deducts VP, opens modal, and records to Roll History -> `test_school_abilities.py::test_ishi_3rd_dan_add_roll`

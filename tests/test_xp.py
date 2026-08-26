@@ -1173,8 +1173,10 @@ class TestTechniqueChoiceValidation:
         ]:
             errors = validate_character(self._data(school, knacks, 2))
             assert any("2nd Dan technique" in e for e in errors), school
+            # Ishi's pick must be a skill; the others may pick a combat roll.
+            pick = "bragging" if school == "isawa_ishi" else "parry"
             errors = validate_character(
-                self._data(school, knacks, 2, {"second_dan_choice": "parry"})
+                self._data(school, knacks, 2, {"second_dan_choice": pick})
             )
             assert not any("2nd Dan technique" in e for e in errors), school
 
@@ -1270,6 +1272,28 @@ class TestTechniqueChoiceValidation:
             "priest", knacks, 1, {"first_dan_choices": ["bragging", "attack"]}
         ))
         assert not any("1st Dan technique" in e for e in errors)
+
+    def test_isawa_ishi_2nd_dan_must_be_a_skill(self):
+        """Ishi's 2nd Dan reads "rolls for any one skill": a combat roll
+        or knack pick is flagged (soft), a skill pick is fine, and other
+        flexible schools may still pick combat rolls."""
+        knacks = ["absorb_void", "kharmic_spin", "otherworldliness"]
+        for bad in ("attack", "wound_check", "kharmic_spin"):
+            errors = validate_character(
+                self._data("isawa_ishi", knacks, 2, {"second_dan_choice": bad})
+            )
+            assert any("2nd Dan technique" in e and "must be a skill" in e
+                       for e in errors), bad
+        errors = validate_character(
+            self._data("isawa_ishi", knacks, 2, {"second_dan_choice": "bragging"})
+        )
+        assert not any("2nd Dan technique" in e for e in errors)
+        errors = validate_character(self._data(
+            "kitsune_warden", ["absorb_void", "commune", "iaijutsu"], 2,
+            {"second_dan_choice": "attack",
+             "first_dan_choices": ["attack", "parry", "damage"]},
+        ))
+        assert not any("2nd Dan technique" in e for e in errors)
 
     def test_technique_choices_none_is_tolerated(self):
         knacks = ["double_attack", "feint", "worldliness"]
