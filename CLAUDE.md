@@ -59,6 +59,7 @@ A `.env` file (gitignored) holds credentials for deployment and external service
 - `MAGIC_LOGIN_TOKENS` - UUID-to-discord-id mapping for backup login URLs (format: `uuid:discord_id,uuid:discord_id`). Covers test users plus any campaign player who needs a Discord-bypass link. The legacy name `TEST_LOGIN_TOKENS` is still read for backward compat.
 - `GOOGLE_CLIENT_ID` - Google OAuth 2.0 client ID (for Google Sheets export)
 - `GOOGLE_CLIENT_SECRET` - Google OAuth 2.0 client secret
+- `GITHUB_TOKEN` - fine-grained GitHub PAT (contents: read/write, this repo only) that Claude Code uses to push (see "Git Workflow")
 
 Values with spaces or special characters must be quoted (e.g. `KEY="value with spaces"`). Load before deploying: `set -a && source .env && set +a`
 
@@ -169,6 +170,26 @@ The key distinction: unit tests use TDD (tests first), clicktests are written af
 7. **Deploy after UI changes.** Any change that touches the frontend (templates, CSS, client-side JS) should be deployed to Fly.io after tests pass so the live site stays current. **Before every deploy, `node --test tests/js/` MUST pass** (the pure roll-math layer, ~0.2s) - alongside the unit suite and the relevant clicktests.
 
 **Do NOT auto-run the full e2e suite.** The full suite takes ~46 minutes on the dev container and is not part of the per-feature loop. Targeted clicktests by `pytest.mark` (step 6) are the only e2e gate before declaring a feature done. Only run the full suite when the user explicitly asks for it.
+
+## Git Workflow (Claude commits and pushes)
+
+Claude Code handles git for this project. **After every round of changes** (tests green, clicktests for the touched area passing), commit and push to `main` without asking:
+
+```bash
+git add -A && git commit -m "<detailed message>" && git push origin main
+```
+
+- **Detailed commit messages.** A one-line summary, then a body explaining what changed and why, which tests/clicktests were run, and any deploy notes. End with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
+- **Append-only history.** Never `git push --force` / `--force-with-lease`, never rebase or amend commits that have been pushed, never delete or reset past commits, never delete branches on the remote. If a pushed commit is wrong, fix it with a new commit (`git revert` is fine).
+- **Never commit secrets.** `.env` stays gitignored; before `git add -A`, glance at `git status` for anything that looks like a credential or a local DB.
+- **Auth:** the remote is HTTPS and pushes authenticate with a fine-grained GitHub PAT (contents: read/write on this repo only). The token lives in `.env` as `GITHUB_TOKEN` and in `~/.git-credentials` (git `credential.helper store`), both outside version control. If a fresh container can't push, recreate `~/.git-credentials` from `.env`:
+  ```bash
+  set -a && source .env && set +a
+  printf 'https://x-access-token:%s@github.com\n' "$GITHUB_TOKEN" > ~/.git-credentials && chmod 600 ~/.git-credentials
+  git config --global credential.helper store
+  git remote set-url origin https://github.com/EliAndrewC/character-sheet.git
+  ```
+- Commit identity is set per-repo (`git config user.name` / `user.email`); set it again in a fresh container if `git commit` complains.
 
 ## Project Structure
 
