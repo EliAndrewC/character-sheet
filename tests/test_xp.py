@@ -1244,6 +1244,32 @@ class TestTechniqueChoiceValidation:
         ))
         assert not any("1st Dan technique" in e for e in errors)
 
+    def test_ide_1st_dan_needs_two_picks(self):
+        knacks = ["double_attack", "feint", "worldliness"]
+        errors = validate_character(self._data("ide_diplomat", knacks, 1))
+        first = [e for e in errors if "1st Dan technique" in e]
+        assert first and "2 of 2" in first[0]
+        errors = validate_character(self._data(
+            "ide_diplomat", knacks, 1, {"first_dan_choices": ["attack", "bragging"]}
+        ))
+        assert not any("1st Dan technique" in e for e in errors)
+
+    def test_priest_1st_dan_needs_skill_and_combat_roll(self):
+        knacks = ["conviction", "otherworldliness", "pontificate"]
+        errors = validate_character(self._data("priest", knacks, 1))
+        first = [e for e in errors if "1st Dan technique" in e]
+        assert first and "2 of 2" in first[0] and "combat roll" in first[0]
+        # Skill picked, combat slot blank: 1 of 2.
+        errors = validate_character(self._data(
+            "priest", knacks, 1, {"first_dan_choices": ["bragging", ""]}
+        ))
+        first = [e for e in errors if "1st Dan technique" in e]
+        assert first and "1 of 2" in first[0]
+        errors = validate_character(self._data(
+            "priest", knacks, 1, {"first_dan_choices": ["bragging", "attack"]}
+        ))
+        assert not any("1st Dan technique" in e for e in errors)
+
     def test_technique_choices_none_is_tolerated(self):
         knacks = ["double_attack", "feint", "worldliness"]
         data = self._data("ide_diplomat", knacks, 2)

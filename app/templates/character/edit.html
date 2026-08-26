@@ -721,14 +721,15 @@
                 </div>
             </div>
 
-            <!-- Isawa Ishi 1st Dan picker: precepts always gets +1 rolled die
-                 (handled server-side); the player picks two more roll types.
-                 Eligible options mirror the Kitsune Warden 1st Dan picker
-                 (skills, rollable knacks, 5 combat roll types). Persists into
-                 techniqueChoices.first_dan_choices. -->
-            <div x-show="school === 'isawa_ishi' && currentDan() >= 1"
+            <!-- Isawa Ishi / Ide Diplomat 1st Dan picker: precepts always
+                 gets +1 rolled die (handled server-side, see
+                 AUTO_PRECEPTS_1ST_DAN_SCHOOLS in dice.py); the player picks
+                 two more roll types. Eligible options mirror the Kitsune
+                 Warden 1st Dan picker (skills, rollable knacks, 5 combat
+                 roll types). Persists into techniqueChoices.first_dan_choices. -->
+            <div x-show="(school === 'isawa_ishi' || school === 'ide_diplomat') && currentDan() >= 1"
                  x-cloak class="mt-3 p-3 bg-white/60 border border-accent/20 rounded"
-                 data-testid="ishi-1st-dan-picker">
+                 data-testid="flex-1st-dan-picker">
                 <label class="block text-sm font-medium mb-1">
                     1st Dan extra die - pick two roll types
                 </label>
@@ -737,7 +738,7 @@
                 </p>
                 <div class="grid gap-2 sm:grid-cols-2">
                     <template x-for="slot in [0, 1]" :key="'i1d-slot-'+slot">
-                        <select :data-testid="'ishi-1st-dan-slot-' + slot"
+                        <select :data-testid="'flex-1st-dan-slot-' + slot"
                                 x-effect="$nextTick(() => $el.value = (techniqueChoices.first_dan_choices || [])[slot] || '')"
                                 @change="setIshi1stDanChoice(slot, $event.target.value)"
                                 class="border rounded px-3 py-2 text-sm w-full">
@@ -765,6 +766,43 @@
                             </optgroup>
                         </select>
                     </template>
+                </div>
+            </div>
+
+            <!-- Priest 1st Dan picker: "precepts, any one skill, and any one
+                 type of combat roll". Precepts is automatic (server-side);
+                 slot 0 is a skill (SKILLS table minus precepts), slot 1 is
+                 one of the 5 combat roll types. The two pools are disjoint
+                 so no cross-slot dedupe is needed. Persists into
+                 techniqueChoices.first_dan_choices as [skill, combat_roll]. -->
+            <div x-show="school === 'priest' && currentDan() >= 1"
+                 x-cloak class="mt-3 p-3 bg-white/60 border border-accent/20 rounded"
+                 data-testid="priest-1st-dan-picker">
+                <label class="block text-sm font-medium mb-1">
+                    1st Dan extra die - pick one skill and one combat roll
+                </label>
+                <p class="text-xs text-ink/60 mb-2">
+                    Precepts always gets the extra die. Pick one more skill and one type of combat roll.
+                </p>
+                <div class="grid gap-2 sm:grid-cols-2">
+                    <select data-testid="priest-1st-dan-skill"
+                            x-effect="$nextTick(() => $el.value = (techniqueChoices.first_dan_choices || [])[0] || '')"
+                            @change="setPriest1stDanChoice(0, $event.target.value)"
+                            class="border rounded px-3 py-2 text-sm w-full">
+                        <option value="">(no skill selected)</option>
+                        <template x-for="sid in ISHI_1ST_DAN_SKILL_IDS" :key="'p1s'+sid">
+                            <option :value="sid" x-text="SKILL_NAMES[sid] || sid"></option>
+                        </template>
+                    </select>
+                    <select data-testid="priest-1st-dan-combat"
+                            x-effect="$nextTick(() => $el.value = (techniqueChoices.first_dan_choices || [])[1] || '')"
+                            @change="setPriest1stDanChoice(1, $event.target.value)"
+                            class="border rounded px-3 py-2 text-sm w-full">
+                        <option value="">(no combat roll selected)</option>
+                        <template x-for="id in KITSUNE_1ST_DAN_COMBAT_ROLLS" :key="'p1c'+id">
+                            <option :value="id" x-text="KITSUNE_1ST_DAN_LABELS[id]"></option>
+                        </template>
+                    </select>
                 </div>
             </div>
 
@@ -2963,8 +3001,8 @@ function characterForm() {
             this.markDirty();
         },
 
-        // Isawa Ishi 1st Dan picker helpers. Two slots (precepts is auto-
-        // applied server-side, not picked here), but the storage shape
+        // Isawa Ishi / Ide Diplomat 1st Dan picker helpers. Two slots
+        // (precepts is auto-applied server-side, not picked here), but the storage shape
         // matches Kitsune Warden's: techniqueChoices.first_dan_choices as
         // a List[str].
         ishi1stDanEligibleKnacks() {
@@ -2988,6 +3026,13 @@ function characterForm() {
             while (picks.length > 0 && picks[picks.length - 1] === '') picks.pop();
             this.techniqueChoices.first_dan_choices = picks;
             this.markDirty();
+        },
+
+        // Priest 1st Dan picker: slot 0 = skill, slot 1 = combat roll type.
+        // Same storage shape (techniqueChoices.first_dan_choices, blank
+        // string for an empty slot, trailing blanks trimmed).
+        setPriest1stDanChoice(slot, value) {
+            this.setIshi1stDanChoice(slot, value);
         },
 
         // Kitsune Warden 3rd Dan picker helpers. Mirror of the 1st Dan
