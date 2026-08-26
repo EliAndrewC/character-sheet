@@ -26,9 +26,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from app.services.dark_secret import DARK_SECRET_ID
 
 WIDTH = 920
-HEIGHT = 600
+HEIGHT = 556
 CIRCLE_CX = 330
-CIRCLE_CY = 300
+CIRCLE_CY = 278
 CIRCLE_R = 200
 HALO_COLUMN_X = 790
 PORTRAIT_W = 80
@@ -198,7 +198,7 @@ def build_dark_secret_map(
     # Halo column: evenly spaced down the right edge.
     m = len(haloed)
     for i, c in enumerate(haloed):
-        y = HEIGHT / 2 if m == 1 else 110 + (HEIGHT - 220) * i / (m - 1)
+        y = HEIGHT / 2 if m == 1 else 90 + (HEIGHT - 180) * i / (m - 1)
         nodes.append({
             "kind": "character",
             "id": c.id,
