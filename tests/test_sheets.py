@@ -1,7 +1,7 @@
 """Unit tests for app.services.sheets (spreadsheet formatting logic)."""
 
 import pytest
-from app.game_data import SCHOOL_KNACKS, SCHOOLS, SKILLS
+from app.game_data import SCHOOL_KNACKS, SCHOOLS, SKILLS, effective_knack_ring
 from app.services.rolls import compute_skill_roll
 from app.services.sheets import (
     _build_advantages_rows,
@@ -40,14 +40,22 @@ class _FakeCharacter:
         self.rings = data.get("rings", {"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2})
 
 
-def _make_knacks(school_id: str, knacks_dict: dict) -> dict:
+def _make_knacks(
+    school_id: str, knacks_dict: dict, school_ring_choice: str = "Water"
+) -> dict:
+    """Mirror the per-character knack dict the export route builds, including
+    the resolved ``ring`` (commune -> the character's School Ring)."""
     school = SCHOOLS.get(school_id)
     result = {}
     if school:
         for knack_id in school.school_knacks:
             knack_data = SCHOOL_KNACKS.get(knack_id)
             rank = knacks_dict.get(knack_id, 1)
-            result[knack_id] = {"data": knack_data, "rank": rank}
+            result[knack_id] = {
+                "data": knack_data,
+                "rank": rank,
+                "ring": effective_knack_ring(knack_id, school_id, school_ring_choice),
+            }
     return result
 
 
@@ -742,3 +750,53 @@ class TestCreateSpreadsheet:
             existing_sheet_id="dead-id",
         )
         assert "fresh-id" in url
+
+
+class TestCommuneRingColumn:
+    """The exported Knack table's Ring column shows the character's resolved
+    ring for commune (their School Ring), not the catalog's "varies"."""
+
+    def _knack_row(self, rows, name):
+        for row in rows:
+            if row and row[0].get("userEnteredValue", {}).get("stringValue") == name:
+                return row
+        return None
+
+    def _rows(self, ring):
+        data = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice=ring,
+            knacks={"absorb_void": 2, "commune": 2, "iaijutsu": 2},
+        )
+        char = _FakeCharacter(data)
+        school = SCHOOLS.get("kitsune_warden")
+        knacks = _make_knacks("kitsune_warden", data["knacks"], ring)
+        effective = compute_effective_status(data)
+        return _build_overview_rows(char, data, school, knacks, 2, effective, {})
+
+    def test_commune_ring_column_is_the_school_ring(self):
+        row = self._knack_row(self._rows("Air"), "Commune")
+        assert row is not None
+        assert row[1]["userEnteredValue"]["stringValue"] == "Air"
+
+    def test_commune_ring_column_follows_the_choice(self):
+        row = self._knack_row(self._rows("Fire"), "Commune")
+        assert row[1]["userEnteredValue"]["stringValue"] == "Fire"
+
+    def test_other_knacks_keep_their_catalog_ring(self):
+        rows = self._rows("Air")
+        assert self._knack_row(rows, "Iaijutsu")[1]["userEnteredValue"]["stringValue"] == "Fire"
+        # Absorb Void is passive (no ring) - blank cell.
+        assert self._knack_row(rows, "Absorb Void")[1]["userEnteredValue"]["stringValue"] == ""
+
+    def test_falls_back_to_catalog_ring_without_a_resolved_ring(self):
+        """Older callers that don't stamp ``ring`` still export a value."""
+        data = make_character_data()
+        char = _FakeCharacter(data)
+        school = SCHOOLS.get("akodo_bushi")
+        knacks = {
+            "iaijutsu": {"data": SCHOOL_KNACKS["iaijutsu"], "rank": 1},
+        }
+        effective = compute_effective_status(data)
+        rows = _build_overview_rows(char, data, school, knacks, 1, effective, {})
+        assert self._knack_row(rows, "Iaijutsu")[1]["userEnteredValue"]["stringValue"] == "Fire"

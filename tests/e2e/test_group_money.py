@@ -140,6 +140,33 @@ def test_delete_existing_award_inline(page, live_server_url):
     assert page.evaluate("window.__noReload") is True
 
 
+def test_award_at_zeni_precision_survives_the_round_trip(page, live_server_url):
+    """A hundredth-koku award is stored and displayed as entered (the
+    ledger row and the on-hand total both keep the zeni), and editing
+    it to another zeni amount round-trips the same way."""
+    _make_money_group(page, live_server_url, ["ZeniPC"])
+    before = _on_hand(page, "ZeniPC")
+    _award_one(page, "ZeniPC", "Sold a fan", 2.25)
+
+    row = _card(page, "ZeniPC").locator(
+        '[data-testid="ledger-entry"]', has_text="Sold a fan")
+    assert "+2.25" in row.text_content()
+    assert abs(_on_hand(page, "ZeniPC") - (before + 2.25)) < 0.001
+
+    row.locator('[data-testid="entry-edit"]').click()
+    row.locator('[data-testid="entry-edit-amount"]').fill("0.07")
+    row.locator('[data-testid="entry-edit-save"]').click()
+    page.wait_for_function(
+        """() => {
+            const el = [...document.querySelectorAll('[data-testid="ledger-entry"]')]
+                .find(e => e.textContent.includes('Sold a fan'));
+            return el && el.textContent.includes('+0.07');
+        }""",
+        timeout=5000,
+    )
+    assert abs(_on_hand(page, "ZeniPC") - (before + 0.07)) < 0.001
+
+
 def test_locked_disbursal_has_no_edit_or_delete(page, live_server_url):
     """The computed Spring equinox disbursal row offers no edit/delete."""
     _make_money_group(page, live_server_url, ["LockedOnly"])

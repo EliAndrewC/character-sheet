@@ -224,7 +224,9 @@ def _build_overview_rows(
             bg = _row_bg(i)
             rows.append([
                 _str_cell(info["data"].name, **bg),
-                _str_cell(info["data"].ring or "", **bg),
+                # Per-character ring (commune resolves to the School Ring);
+                # falls back to the catalog value for older callers.
+                _str_cell(info.get("ring") or info["data"].ring or "", **bg),
                 _num_cell(info["rank"], **bg),
             ])
 
@@ -241,7 +243,7 @@ def _build_overview_rows(
                 bg = _row_bg(i)
                 rows.append([
                     _str_cell(info["data"].name, **bg),
-                    _str_cell(info["data"].ring or "", **bg),
+                    _str_cell(info.get("ring") or info["data"].ring or "", **bg),
                     _num_cell(info["rank"], **bg),
                 ])
 

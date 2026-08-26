@@ -997,17 +997,17 @@ async def money_add(
     if len(label) > 200:
         label = label[:200]
     # Accept any numeric amount (integer or fractional) and round
-    # half-up to the nearest tenth-koku before persisting. The
-    # validator must reject bool true/false (which pass ``isinstance
-    # int`` in Python) so a posted ``true`` doesn't sneak through as
-    # ``1.0``. Strings are rejected as malformed input.
-    from app.services.status import round_to_tenth as _round_to_tenth
+    # half-up to the nearest hundredth-koku (zeni) before persisting.
+    # The validator must reject bool true/false (which pass
+    # ``isinstance int`` in Python) so a posted ``true`` doesn't sneak
+    # through as ``1.0``. Strings are rejected as malformed input.
+    from app.services.status import round_to_hundredth as _round_to_hundredth
     raw_amount = body.get("amount")
     if isinstance(raw_amount, bool) or not isinstance(raw_amount, (int, float)):
         return JSONResponse(
             {"error": "amount must be a number"}, status_code=400
         )
-    amount = _round_to_tenth(raw_amount)
+    amount = _round_to_hundredth(raw_amount)
     if amount <= 0:
         return JSONResponse(
             {"error": "amount must be positive"}, status_code=400
@@ -1111,7 +1111,7 @@ async def money_edit(
         SPRING_DISBURSAL_ID,
         compute_effective_status,
         compute_money_state,
-        round_to_tenth as _round_to_tenth,
+        round_to_hundredth as _round_to_hundredth,
     )
 
     user = getattr(request.state, "user", None)
@@ -1159,7 +1159,7 @@ async def money_edit(
     raw_amount = body.get("amount")
     if isinstance(raw_amount, bool) or not isinstance(raw_amount, (int, float)):
         return JSONResponse({"error": "amount must be a number"}, status_code=400)
-    amount = _round_to_tenth(raw_amount)
+    amount = _round_to_hundredth(raw_amount)
     if amount <= 0:
         return JSONResponse({"error": "amount must be positive"}, status_code=400)
 

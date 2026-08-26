@@ -799,6 +799,30 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Otherworldliness spend on unskilled roll while Impaired keeps no-reroll → `test_void_spending.py::test_ow_spend_on_unskilled_roll_while_impaired_keeps_no_reroll`
 - [x] Otherworldliness submenu hidden when pool exhausted → `test_void_spending.py::test_ow_submenu_hidden_when_pool_exhausted`
 
+### Commune activation cost (1 VP to roll)
+
+- [x] Commune's roll menu states the 1-VP activation cost and labels the roll row "(1 VP)" → `test_rolls.py::test_commune_menu_states_its_void_cost`
+- [x] A knack with no activation cost (iaijutsu) shows no cost note and no VP suffix → `test_rolls.py::test_other_knack_menu_has_no_void_cost_note`
+- [x] Rolling commune deducts exactly 1 VP, adds no dice, and reports the activation in the result breakdown → `test_rolls.py::test_commune_roll_spends_one_void_point`
+- [x] The activation deduction persists across a reload (real save, not local state) → `test_rolls.py::test_commune_spend_deduction_persists_across_reload`
+- [x] Extra-VP options are capped by what's left after activation, while the per-roll cap itself is unchanged (commune offers 1, iaijutsu offers 2 from the same pool) → `test_rolls.py::test_commune_extra_void_capped_by_the_activation_cost`
+- [x] With exactly 1 VP the roll is still available but offers no extra spend, and empties the pool → `test_rolls.py::test_commune_with_one_void_point_offers_no_extra_spend`
+- [x] Choosing the extra point spends 2 total (1 activation + 1 for +1k1) → `test_rolls.py::test_commune_extra_void_spends_activation_and_dice_points`
+- [x] With 0 VP the menu shows "Not enough void points" and no roll rows; nothing rolls → `test_rolls.py::test_commune_blocked_with_an_empty_void_pool`
+- [x] Calling executeRoll directly with an empty pool is a no-op → `test_rolls.py::test_commune_blocked_roll_cannot_be_forced`
+- [x] Temporary void points pay the activation cost ahead of regular ones → `test_rolls.py::test_commune_spends_temporary_void_points_first`
+- [x] Commune offers no Kitsune ring-swap row (it already rolls the School Ring), just the plain roll row with its activation cost → `test_rolls.py::test_commune_offers_no_kitsune_ring_swap_row`
+- [x] Copy-as-image / roll-history `extras` carry the activation-cost detail → `test_rolls.py::test_commune_image_payload_includes_activation_detail`
+- [x] A non-editor can walk a commune roll through without the activation point leaving the sheet → `test_readonly_rolls.py::test_non_editor_commune_roll_does_not_spend_the_void_point`
+- [x] A non-editor is held to the same empty-pool gate an editor is (rules gate, not an edit gate) → `test_readonly_rolls.py::test_non_editor_commune_still_gated_on_the_persisted_void_pool`
+
+### Commune is rolled with the character's School Ring
+
+- [x] The sheet's Commune row is badged with the character's School Ring, not "varies" → `test_rolls.py::test_commune_badge_shows_the_school_ring`
+- [x] The badge tracks the chosen ring (a Fire-ringed fox shows Fire) → `test_rolls.py::test_commune_badge_follows_a_different_school_ring`
+- [x] The commune roll formula and the result modal name the School Ring → `test_rolls.py::test_commune_roll_menu_and_result_use_the_school_ring`
+- [x] Expanding the Commune knack spells the concrete ring out in the rules text → `test_rolls.py::test_commune_rules_text_names_the_school_ring`
+
 ## Dice Rolling
 
 - [x] Click a skill row opens the modal with the skill name → `test_rolls.py::test_click_skill_opens_modal_with_skill_name`
@@ -945,6 +969,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] An existing award can be edited inline (label + amount + on-hand update, no reload) → `test_group_money.py::test_edit_existing_award_inline`
 - [x] An existing award can be deleted inline via a confirm step (entry removed, on-hand drops, no reload) → `test_group_money.py::test_delete_existing_award_inline`
 - [x] The locked Spring equinox disbursal row offers no edit/delete controls → `test_group_money.py::test_locked_disbursal_has_no_edit_or_delete`
+- [x] An award at zeni precision (2.25, then edited to 0.07) round-trips into the ledger row and the on-hand total unrounded → `test_group_money.py::test_award_at_zeni_precision_survives_the_round_trip`
 
 ## Homepage (index.html)
 
@@ -1240,17 +1265,18 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Minor Clan Major Ally adds a ``+3.0 for <Clan>`` pill to Rank and Recognition → `test_sheet_display.py::test_status_minor_clan_major_ally_renders_for_clan_pill`
 - [x] Peasantborn campaign disadvantage renders a ``(0 in court)`` pill on the Rank row and the expanded bullet ``Peasantborn: <name> is never considered to be of peer standing with any samurai-born person.`` → `test_sheet_display.py::test_status_peasantborn_renders_zero_in_court_pill`
 - [x] Recognition displayed → `test_sheet_display.py::test_recognition_displayed`
-- [x] Money row displays both stipend and on-hand koku (locked Spring equinox disbursal rounded to the nearest tenth) → `test_sheet_display.py::test_money_row_displays_stipend_and_on_hand`
+- [x] Money row displays both stipend and on-hand koku (locked Spring equinox disbursal, tracked to the nearest hundredth i.e. the zeni) → `test_sheet_display.py::test_money_row_displays_stipend_and_on_hand`
 - [x] Money row chevron expands to show the stipend calculation breakdown alongside the ledger → `test_sheet_advanced.py::test_money_expand_shows_stipend_calculation`
 - [x] Household Wealth bumps the Money row's stipend and on-hand disbursal → `test_sheet_advanced.py::test_money_with_household_wealth`
-- [x] Merchant 4th Dan bumps the Money row's stipend (16 → 81) and on-hand disbursal rounds 81/4 = 20.25 to 20.3 → `test_sheet_advanced.py::test_money_with_merchant_4th_dan`
+- [x] Merchant 4th Dan bumps the Money row's stipend (16 → 81) and the on-hand disbursal shows 81/4 = 20.25 in full at zeni precision → `test_sheet_advanced.py::test_money_with_merchant_4th_dan`
 - [x] Spring equinox disbursal is locked: row renders but the × delete button is hidden → `test_sheet_advanced.py::test_money_locked_disbursal_has_no_visible_delete_button`
-- [x] Add income flow: button opens modal, submitting label + amount POSTs to /money/add and on-hand reflects the new income immediately (one-decimal display) → `test_sheet_advanced.py::test_money_add_income_flow`
-- [x] Add expense flow: amount deducts from on-hand and the entry's amount renders with a leading "-" (one-decimal display) → `test_sheet_advanced.py::test_money_add_expense_flow`
+- [x] Add income flow: button opens modal, submitting label + amount POSTs to /money/add and on-hand reflects the new income immediately (whole koku render with one decimal) → `test_sheet_advanced.py::test_money_add_income_flow`
+- [x] Add expense flow: amount deducts from on-hand and the entry's amount renders with a leading "-" (whole koku render with one decimal) → `test_sheet_advanced.py::test_money_add_expense_flow`
 - [x] A user-added entry can be deleted via its × button; on-hand rebases and the locked disbursal stays put → `test_sheet_advanced.py::test_money_user_entry_can_be_deleted`
 - [x] Modal client-side validation rejects a blank description without posting → `test_sheet_advanced.py::test_money_modal_rejects_blank_label`
 - [x] Modal client-side validation rejects a non-positive amount without posting → `test_sheet_advanced.py::test_money_modal_rejects_non_positive_amount`
-- [x] A fractional amount rounds half-up to the nearest tenth (1.65 → 1.7) and the rounded value is what flows into on-hand and the ledger row → `test_sheet_advanced.py::test_money_fractional_amount_rounds_half_up_to_tenth`
+- [x] A fractional amount rounds half-up to the nearest hundredth/zeni (1.655 → 1.66) and the rounded value is what flows into on-hand and the ledger row → `test_sheet_advanced.py::test_money_fractional_amount_rounds_half_up_to_zeni`
+- [x] A zeni-level amount (0.07) is kept at hundredth precision in the ledger row and on-hand, while whole-koku figures still render with a single decimal → `test_sheet_advanced.py::test_money_zeni_amount_kept_at_hundredth_precision`
 - [x] Non-editor viewing someone else's published sheet sees the stipend but not the cash on-hand, the ledger entries, or the add-income/expense buttons; the private fields are also stripped from the embedded Alpine state so they can't be read via DevTools → `test_sheet_advanced.py::test_money_non_editor_sees_stipend_but_not_on_hand_or_ledger`
 - [x] The "koku" glossary term renders in theme gold (rgb(184,134,11)) with the help cursor, distinct from the pointer cursor on the rest of the Money row → `test_sheet_advanced.py::test_koku_term_is_gold_with_help_cursor`
 - [x] Clicking the koku term opens the currency reference modal (koku/bu/zeni/sen denominations) and does not toggle the Money row's expand/collapse → `test_sheet_advanced.py::test_koku_click_opens_currency_modal`
@@ -1511,6 +1537,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `apply_changes` | Apply Changes modal | `test_create_character.py`, `test_publish_revert.py`, `test_apply_modal.py` |
 | `permissions` | Edit/delete visibility, non-editor | `test_permissions.py` |
 | `banners` | Draft status banners | `test_banners.py` |
+| `keepalive` | Fly Keep-alive Pinger | `test_keepalive.py` |
 | `pcp` | Player Character Points (confirm modal, reroll/free-raise/reroll-10s, void refresh, XP category, undo, read-only) | `test_pcp.py` |
 | `status_display` | Status section on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
 | `tracking` | Wounds, void points, per-adventure | `test_tracking.py`, `test_tracking_advanced.py`, `test_light_wounds.py`, `test_sheet_advanced.py` |
@@ -1958,9 +1985,20 @@ Phase 8 runs the full regression suite as the exit gate.
 
 ---
 
+## Fly Keep-alive Pinger (base.html, static/js/keepalive.js, GET /keepalive)
+
+Pure window logic (`shouldKeepAlive`, DST, option overrides) is pinned in `tests/js/keepalive.test.js`; these clicktests cover the browser wiring.
+
+- [x] `keepalive.js` is loaded on every page and exposes `window.L7RKeepAlive` (60s interval, `/keepalive` URL) - `test_keepalive.py::test_keepalive_script_loads_and_exposes_api`
+- [x] `tick()` inside the Mon/Tue 7-11pm New York window issues `GET /keepalive` -> 200 with `Cache-Control: no-store` - `test_keepalive.py::test_keepalive_tick_pings_server_inside_window`
+- [x] `tick()` outside the window sends no request - `test_keepalive.py::test_keepalive_tick_is_silent_outside_window`
+- [x] Script + endpoint work for an anonymous visitor (logged-out pages) - `test_keepalive.py::test_keepalive_works_for_anonymous_visitor`
+
+---
+
 ## Coverage Summary
 
-**Covered:** ~290 test functions across 33 test files
+**Covered:** ~294 test functions across 34 test files
 **Uncovered:** 0
 
 All interactive UI features are covered by at least one e2e clicktest.

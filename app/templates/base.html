@@ -26,6 +26,10 @@
        L7RUseShareImage). Mobile uses this instead of clipboard copy, which
        Discord's mobile app can't paste. Loaded before Alpine like roll_math. #}
     <script src="/static/js/share_image.js?v={{ static_v('js/share_image.js') }}"></script>
+    {# Fly keep-alive: pings /keepalive once a minute, but only Mon/Tue 7-11pm
+       America/New_York (game time) so idle open tabs don't keep the machine
+       running all week. Pure decision logic is unit-tested in tests/js/. #}
+    <script defer src="/static/js/keepalive.js?v={{ static_v('js/keepalive.js') }}"></script>
     <script defer src="/static/js/alpine.min.js"></script>
     <style>
         [x-cloak] { display: none !important; }

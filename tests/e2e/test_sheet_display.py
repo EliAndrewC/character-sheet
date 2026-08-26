@@ -293,8 +293,8 @@ def test_recognition_displayed(page, live_server_url):
 def test_money_row_displays_stipend_and_on_hand(page, live_server_url):
     """The Money row replaces the legacy Stipend row. Compact display
     shows two numbers: the annual stipend and the on-hand koku total
-    (which starts at the Spring equinox disbursal, rounded to the
-    nearest tenth-koku)."""
+    (which starts at the Spring equinox disbursal, tracked to the
+    nearest hundredth-koku i.e. the zeni)."""
     _create_full_character(page, live_server_url)
     money_row = page.locator('[data-status-row="money"]')
     assert money_row.is_visible()

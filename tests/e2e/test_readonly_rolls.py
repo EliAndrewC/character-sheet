@@ -1283,3 +1283,76 @@ def test_non_editor_akodo_4th_dan_post_roll_vp_does_not_change_vp(
     page_nonadmin.reload()
     page_nonadmin.wait_for_selector("h1")
     assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
+
+
+def test_non_editor_commune_roll_does_not_spend_the_void_point(
+    page, page_nonadmin, live_server_url
+):
+    """Commune costs a void point to activate. A non-editor may still walk the
+    roll through - the modal opens and resolves - but the activation point is
+    never taken off the sheet, here or in the DB."""
+    sheet_url = _publish_with_knacks(
+        page, live_server_url,
+        name="CommuneReader", school="kitsune_warden",
+        knack_overrides={"commune": 1},
+    )
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    page.evaluate(
+        "async () => { const t = window._trackingBridge;"
+        "  t.voidPoints = t.voidMax; await t.save(); }"
+    )
+    page.wait_for_timeout(150)
+    starting_vp = page.evaluate("window._trackingBridge.voidPoints")
+    assert starting_vp >= 1
+
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+    page_nonadmin.locator('[data-roll-key="knack:commune"]').click()
+    page_nonadmin.locator(
+        '[data-roll-menu="root"] button:has-text("Roll Commune")'
+    ).first.click()
+    page_nonadmin.wait_for_function("""() => {
+        for (const el of document.querySelectorAll('[x-data]')) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+
+    # The result panel still reports the activation cost (it is part of the
+    # roll's story) but the counter never moved.
+    assert page_nonadmin.locator('[data-testid="void-activation-note"]').is_visible()
+    assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
+    page_nonadmin.reload()
+    page_nonadmin.wait_for_selector("h1")
+    assert page_nonadmin.evaluate("window._trackingBridge.voidPoints") == starting_vp
+
+
+def test_non_editor_commune_still_gated_on_the_persisted_void_pool(
+    page, page_nonadmin, live_server_url
+):
+    """The gate is a rules gate, not an edit gate: with the character's
+    persisted pool at 0, the non-editor sees the same 'not enough void points'
+    message an editor would."""
+    sheet_url = _publish_with_knacks(
+        page, live_server_url,
+        name="CommuneReaderBroke", school="kitsune_warden",
+        knack_overrides={"commune": 1},
+    )
+    page.goto(sheet_url)
+    page.wait_for_selector("h1")
+    page.evaluate(
+        "async () => { const t = window._trackingBridge;"
+        "  t.voidPoints = 0; t.tempVoidPoints = 0; await t.save(); }"
+    )
+    page.wait_for_timeout(150)
+
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+    page_nonadmin.locator('[data-roll-key="knack:commune"]').click()
+    blocked = page_nonadmin.locator('[data-void-cost-blocked]')
+    blocked.wait_for(state="visible", timeout=5000)
+    assert "Not enough void points" in blocked.inner_text()
+    page_nonadmin.wait_for_timeout(300)
+    assert not page_nonadmin.locator('[data-modal="dice-roller"]').is_visible()

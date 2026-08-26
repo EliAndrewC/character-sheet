@@ -1,5 +1,8 @@
 """Tests for page and API routes."""
 
+import json
+import re
+
 import pytest
 
 from app.models import Character, CharacterVersion
@@ -559,16 +562,29 @@ class TestGroupMoneyAwards:
         assert any(e["label"] == "Bounty" for e in self._ledger(client, target))
         assert self._ledger(client, ids[1]) == []
 
-    def test_individual_award_rounds_half_up_to_tenth(self, client):
+    def test_individual_award_rounds_half_up_to_zeni(self, client):
         gid, ids = self._make_group_with(client, {"name": "Round"})
         resp = client.post(
             f"/groups/{gid}/money/award",
-            json={"char_id": ids[0], "label": "Stipend", "amount": 1.65},
+            json={"char_id": ids[0], "label": "Stipend", "amount": 1.655},
         )
         assert resp.status_code == 200
         entry = [e for e in resp.json()["awards"][str(ids[0])]["entries"]
                  if e["label"] == "Stipend"][0]
-        assert entry["amount"] == 1.7
+        assert entry["amount"] == 1.66
+
+    def test_individual_award_keeps_zeni_precision(self, client):
+        """A hundredth-koku award survives intact - only sub-zeni
+        (sen) precision is rounded away."""
+        gid, ids = self._make_group_with(client, {"name": "Zeni"})
+        resp = client.post(
+            f"/groups/{gid}/money/award",
+            json={"char_id": ids[0], "label": "Cut", "amount": 2.25},
+        )
+        assert resp.status_code == 200
+        entry = [e for e in resp.json()["awards"][str(ids[0])]["entries"]
+                 if e["label"] == "Cut"][0]
+        assert entry["amount"] == 2.25
 
     def test_individual_award_char_not_in_group_404(self, client):
         gid, _ = self._make_group_with(client, {"name": "InGroup"})
@@ -7146,38 +7162,65 @@ class TestMoneyAddEndpoint:
             )
             assert resp.status_code == 400
 
-    def test_accepts_fractional_amount_rounded_to_tenth(self, client):
-        """A 1.64-koku expense persists as 1.6; a 1.65 persists as 1.7
-        (half-up). The route rounds before storing so the ledger
-        never accumulates sub-tenth precision."""
+    def test_accepts_fractional_amount_rounded_to_zeni(self, client):
+        """A 1.654-koku expense persists as 1.65; a 1.655 persists as
+        1.66 (half-up). The route rounds before storing so the ledger
+        never accumulates sub-zeni (sen) precision."""
         cid = _seed_character(client, name="FracAmt",
                               owner_discord_id="183026066498125825")
         resp = client.post(
             f"/characters/{cid}/money/add",
-            json={"kind": "expense", "label": "rice", "amount": 1.64},
+            json={"kind": "expense", "label": "rice", "amount": 1.654},
         )
         assert resp.status_code == 200
         entry = resp.json()["money"]["entries"][1]
-        assert entry["amount"] == 1.6
+        assert entry["amount"] == 1.65
         resp = client.post(
             f"/characters/{cid}/money/add",
-            json={"kind": "expense", "label": "sake", "amount": 1.65},
+            json={"kind": "expense", "label": "sake", "amount": 1.655},
         )
         assert resp.status_code == 200
         entry = resp.json()["money"]["entries"][2]
-        assert entry["amount"] == 1.7
+        assert entry["amount"] == 1.66
+
+    def test_accepts_zeni_amount_untouched(self, client):
+        """A hundredth-koku (zeni) amount is stored as entered and
+        flows into on-hand at full precision."""
+        cid = _seed_character(client, name="ZeniAmt",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "expense", "label": "tea", "amount": 0.07},
+        )
+        assert resp.status_code == 200
+        data = resp.json()["money"]
+        assert data["entries"][1]["amount"] == 0.07
+        # Wasp campaign base stipend 16 -> disbursal 4.0; 4.0 - 0.07.
+        assert data["on_hand"] == 3.93
 
     def test_rejects_amount_that_rounds_to_zero(self, client):
-        """0.04 rounds to 0.0 - the validator catches this *after*
-        rounding so a tiny positive input doesn't sneak past the
-        "amount must be positive" gate."""
+        """0.004 (sub-half-zeni) rounds to 0.0 - the validator catches
+        this *after* rounding so a tiny positive input doesn't sneak
+        past the "amount must be positive" gate."""
         cid = _seed_character(client, name="TinyAmt",
                               owner_discord_id="183026066498125825")
         resp = client.post(
             f"/characters/{cid}/money/add",
-            json={"kind": "income", "label": "x", "amount": 0.04},
+            json={"kind": "income", "label": "x", "amount": 0.004},
         )
         assert resp.status_code == 400
+
+    def test_accepts_smallest_tracked_amount(self, client):
+        """One zeni (0.01 koku) is the smallest amount the ledger
+        tracks and must be accepted."""
+        cid = _seed_character(client, name="OneZeni",
+                              owner_discord_id="183026066498125825")
+        resp = client.post(
+            f"/characters/{cid}/money/add",
+            json={"kind": "income", "label": "a zeni", "amount": 0.01},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["money"]["entries"][1]["amount"] == 0.01
 
     def test_rejects_zero_or_negative_amount(self, client):
         cid = _seed_character(client, name="NegAmt",
@@ -7382,16 +7425,28 @@ class TestMoneyEditEndpoint:
         char = query_db(client).filter(Character.id == cid).first()
         assert char.money_ledger[0]["kind"] == "expense"
 
-    def test_rounds_half_up_to_tenth(self, client):
+    def test_rounds_half_up_to_zeni(self, client):
         cid = _seed_character(client, name="MoneyEditRound",
                               owner_discord_id="183026066498125825")
         entry_id = self._seed_entry(client, cid)
         resp = client.post(
             f"/characters/{cid}/money/edit",
-            json={"entry_id": entry_id, "label": "x", "amount": 1.65},
+            json={"entry_id": entry_id, "label": "x", "amount": 1.655},
         )
         assert resp.status_code == 200
-        assert query_db(client).filter(Character.id == cid).first().money_ledger[0]["amount"] == 1.7
+        assert query_db(client).filter(Character.id == cid).first().money_ledger[0]["amount"] == 1.66
+
+    def test_edit_keeps_zeni_precision(self, client):
+        """Editing to a hundredth-koku amount stores it as entered."""
+        cid = _seed_character(client, name="MoneyEditZeni",
+                              owner_discord_id="183026066498125825")
+        entry_id = self._seed_entry(client, cid)
+        resp = client.post(
+            f"/characters/{cid}/money/edit",
+            json={"entry_id": entry_id, "label": "x", "amount": 3.05},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["money"]["entries"][1]["amount"] == 3.05
 
     def test_truncates_long_label(self, client):
         cid = _seed_character(client, name="MoneyEditLong",
@@ -7576,3 +7631,90 @@ class TestNewMechanicalSchoolAbilityFlags:
         )
         flags = self._school_abilities(client, cid)
         assert flags.get("otaku_no_lunge_attacker_raise") is False
+
+
+class TestCommuneSchoolRing:
+    """Commune's catalog ring is "varies", but a character who has it as a
+    school knack always rolls it with their School Ring, so the sheet must
+    show and roll that concrete ring."""
+
+    def _fox(self, client, ring="Air", **extra):
+        return _seed_character(
+            client, name="Kitsune Ryosei", school="kitsune_warden",
+            school_ring_choice=ring,
+            knacks={"absorb_void": 2, "commune": 2, "iaijutsu": 2},
+            ring_air=4, ring_fire=2, ring_earth=2, ring_water=3, ring_void=2,
+            **extra,
+        )
+
+    def test_sheet_shows_school_ring_badge_not_varies(self, client):
+        cid = self._fox(client, ring="Air")
+        resp = client.get(f"/characters/{cid}")
+        assert resp.status_code == 200
+        # No knack ring badge anywhere on the sheet reads "varies".
+        assert ">varies</span>" not in resp.text
+        # The knack row renders "<ring badge> Commune".
+        assert re.search(
+            r'>Air</span>\s*<span class="font-medium">Commune</span>', resp.text
+        ), "commune's ring badge should read Air"
+
+    def test_sheet_badge_follows_a_different_school_ring(self, client):
+        cid = self._fox(client, ring="Water")
+        resp = client.get(f"/characters/{cid}")
+        assert ">varies</span>" not in resp.text
+        assert re.search(
+            r'>Water</span>\s*<span class="font-medium">Commune</span>', resp.text
+        )
+
+    def test_sheet_rules_text_spells_out_the_ring(self, client):
+        cid = self._fox(client, ring="Air")
+        resp = client.get(f"/characters/{cid}")
+        assert (
+            "Your School Ring is Air, so your commune rolls always use Air."
+            in resp.text
+        )
+
+    def test_sheet_roll_formula_uses_the_school_ring(self, client):
+        cid = self._fox(client, ring="Air")
+        resp = client.get(f"/characters/{cid}")
+        # rank(2) + Air(4) = 6k4, and the label names the ring.
+        formulas = json.loads(
+            re.search(
+                r'id="roll-formulas">(.*?)</script>', resp.text, re.S
+            ).group(1)
+        )
+        assert formulas["knack:commune"]["label"] == "Commune (Air)"
+        assert formulas["knack:commune"]["rolled"] == 6
+        assert formulas["knack:commune"]["kept"] == 4
+
+    def test_school_info_panel_says_school_ring(self, client):
+        """The editor's school reference panel has no character, so it shows
+        the words "School Ring" rather than "varies"."""
+        resp = client.get("/characters/api/school-info/kitsune_warden")
+        assert resp.status_code == 200
+        assert ">varies</span>" not in resp.text
+        assert ">School Ring</span>" in resp.text
+
+    def test_school_info_panel_keeps_varies_for_spellcasting(self, client):
+        """Spellcasting is per-spell, not per-character, so it still varies."""
+        resp = client.get("/characters/api/school-info/shugenja")
+        assert resp.status_code == 200
+        assert ">varies</span>" in resp.text
+        # ...and commune in the same panel does not.
+        assert ">School Ring</span>" in resp.text
+
+
+class TestKeepalive:
+    def test_keepalive_is_public_and_uncached(self, client):
+        # No X-Test-User header: the pinger runs on logged-out pages too.
+        from fastapi.testclient import TestClient
+        from app.main import app
+        resp = TestClient(app).get("/keepalive")
+        assert resp.status_code == 200
+        assert resp.text == "ok"
+        assert resp.headers["cache-control"] == "no-store"
+
+    def test_keepalive_script_included_on_pages(self, client):
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "/static/js/keepalive.js?v=" in resp.text

@@ -21,6 +21,11 @@
 
                 init() { /* nothing to wire up; state arrives via tojson */ },
 
+                // Display helper for every koku figure on the widget:
+                // rounded to the zeni, one decimal place normally and
+                // two when there are zeni to show (4.0 / 20.3 / 20.25).
+                fmt(n) { return window.L7RRollMath.formatKoku(n); },
+
                 openModal(kind) {
                     this.modalKind = kind;
                     this.modalLabel = '';
@@ -44,25 +49,25 @@
 
                 async submitModal() {
                     const label = (this.modalLabel || '').trim();
-                    // Round half-up to the nearest tenth-koku on the
-                    // client too so the validation error message
-                    // matches what the server would do. The server
-                    // is still authoritative - it rounds again on
-                    // ingest - but echoing the rule client-side
-                    // avoids a confusing "looks like 1.7, server
-                    // says 1.65 is fine" round-trip.
+                    // Round half-up to the nearest hundredth-koku (one
+                    // zeni) on the client too so the validation error
+                    // message matches what the server would do. The
+                    // server is still authoritative - it rounds again
+                    // on ingest - but echoing the rule client-side
+                    // avoids a confusing "looks like 1.66, server
+                    // says 1.655 is fine" round-trip.
                     const raw = parseFloat(this.modalAmount);
                     if (!label) {
                         this.modalError = 'Please enter a description.';
                         return;
                     }
                     if (!Number.isFinite(raw) || raw <= 0) {
-                        this.modalError = 'Amount must be a positive number (tenths of a koku ok, e.g. 1.6).';
+                        this.modalError = 'Amount must be a positive number (0.1 = 1 bu, 0.01 = 1 zeni).';
                         return;
                     }
-                    const amount = window.L7RRollMath.roundToTenths(raw);
+                    const amount = window.L7RRollMath.roundToHundredths(raw);
                     if (amount <= 0) {
-                        this.modalError = 'Amount rounds to zero - please enter at least 0.1.';
+                        this.modalError = 'Amount rounds to zero - please enter at least 0.01.';
                         return;
                     }
                     this.modalError = '';
