@@ -693,6 +693,13 @@ def test_dark_secret_map_page(page, live_server_url):
     page.locator('[data-testid="ds-halo"] ellipse').first.hover()
     tooltip.wait_for(state="visible", timeout=2000)
     txt = tooltip.text_content()
+    # Fixed width: the halo sits near the right edge, so the box must not
+    # shrink-wrap against the container - it keeps its 288px width and
+    # stays inside the map card.
+    box = tooltip.bounding_box()
+    card = page.locator('[data-testid="ds-map"]').bounding_box()
+    assert abs(box["width"] - 288) < 2
+    assert box["x"] + box["width"] <= card["x"] + card["width"] + 1
     assert "Righteousness is its own reward" in txt
     assert "Map Saint has no dark secret and knows no dark secrets" in txt
 
