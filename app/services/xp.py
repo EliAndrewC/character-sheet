@@ -1261,10 +1261,10 @@ def validate_character(character_data: dict) -> List[str]:
                     "Dark Secret: no description has been written yet "
                     "(only the character's player and the GM can read it)."
                 )
-            if not detail.get("knower_character_id") and not detail.get("player"):
+            if not detail.get("player"):
                 errors.append(
                     "Dark Secret: the GM has not yet chosen which "
-                    "character knows the secret."
+                    "player's character knows the secret."
                 )
             continue
         if field_def and "text" in field_def:

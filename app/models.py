@@ -41,7 +41,7 @@ def advantage_details_for_diff(
     Fierce/Specialization - remain version-significant.
 
     The whole ``dark_secret`` entry is dropped: both the secret text and
-    the GM-chosen knower are private metadata (see
+    the GM-chosen knowing player are private metadata (see
     ``app/services/dark_secret.py``), never part of the versioned build.
 
     Entries that contain only a ``text`` value collapse to ``{}`` and are

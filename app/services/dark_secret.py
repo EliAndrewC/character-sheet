@@ -14,10 +14,9 @@ endpoint; the general autosave path ignores any ``dark_secret`` entry
 the client sends and preserves whatever is persisted.
 
 Storage: ``Character.advantage_details["dark_secret"]`` is a dict with
-``text`` (the secret, owner + GM editable) and ``knower_character_id``
-(the PC who knows; GM-only editable). A legacy ``player`` key (a
-discord id from the old free-for-all dropdown) may still be present on
-old rows and is displayed as a fallback when no character is chosen.
+``text`` (the secret, owner + GM editable) and ``player`` (the discord
+id of the other player whose character knows the secret; GM-only
+editable - the owning player can see the pick but not change it).
 """
 
 from __future__ import annotations
@@ -106,21 +105,12 @@ def knower_display_name(
     detail: Optional[Dict[str, Any]],
     db: Session,
 ) -> str:
-    """Human-readable name of whoever knows the secret, or ``""``.
-
-    Prefers the chosen character's name; falls back to the legacy
-    ``player`` discord id's display name for rows written before the
-    knower became a GM-chosen character.
-    """
-    from app.models import Character, User
+    """Display name of the player whose character knows the secret, or
+    ``""`` when the GM hasn't chosen yet (or the id no longer resolves)."""
+    from app.models import User
 
     if not detail:
         return ""
-    cid = detail.get("knower_character_id")
-    if cid:
-        knower = db.query(Character).filter(Character.id == cid).first()
-        if knower:
-            return knower.name or ""
     pid = detail.get("player")
     if pid:
         user = db.query(User).filter(User.discord_id == pid).first()
@@ -145,44 +135,30 @@ def dark_secret_view(
             "can_view": False,
             "can_set_knower": False,
             "text": "",
-            "knower_character_id": None,
+            "knower_player_id": "",
             "knower_name": "",
         }
     return {
         "can_view": True,
         "can_set_knower": can_set_knower,
         "text": detail.get("text") or "",
-        "knower_character_id": detail.get("knower_character_id"),
+        "knower_player_id": detail.get("player") or "",
         "knower_name": knower_display_name(detail, db),
     }
 
 
 def knower_choices(character, db: Session) -> List[Dict[str, Any]]:
-    """Candidate PCs the GM can pick as the one who knows the secret.
+    """Players the GM can pick as the one whose character knows the
+    secret: every registered user except the character's own owner,
+    alphabetized by display name."""
+    from app.models import User
 
-    Every other visible (non-hidden) character, with the members of this
-    character's own gaming group listed first since that is almost always
-    where the knower lives.
-    """
-    from app.models import Character
-
-    others = [
-        c for c in db.query(Character).all()
-        if c.id != character.id and not c.is_hidden
+    users = [
+        u for u in db.query(User).all()
+        if u.discord_id != character.owner_discord_id
     ]
-    others.sort(key=lambda c: (
-        0 if (character.gaming_group_id is not None
-              and c.gaming_group_id == character.gaming_group_id) else 1,
-        (c.name or "").lower(),
-    ))
+    users.sort(key=lambda u: (u.display_name or u.discord_name or "").casefold())
     return [
-        {
-            "id": c.id,
-            "name": c.name or f"Character #{c.id}",
-            "same_group": (
-                character.gaming_group_id is not None
-                and c.gaming_group_id == character.gaming_group_id
-            ),
-        }
-        for c in others
+        {"discord_id": u.discord_id, "name": u.display_name or u.discord_name or u.discord_id}
+        for u in users
     ]

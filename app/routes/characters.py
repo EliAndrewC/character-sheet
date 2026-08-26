@@ -981,9 +981,10 @@ async def set_dark_secret(
     no snapshot). Body keys are optional and independent:
 
     * ``text`` - the secret. Owner or GM.
-    * ``knower_character_id`` - id of the other PC who knows, or null to
-      clear. GM only; anyone else sending the key gets a 403 even if the
-      value is unchanged, so the UI can't be trivially bypassed.
+    * ``player`` - discord id of the other player whose character knows,
+      or null to clear. GM only; anyone else sending the key gets a 403
+      even if the value is unchanged, so the UI can't be trivially
+      bypassed. The owning player is never a valid pick.
     """
     user = getattr(request.state, "user", None)
     if not user:
@@ -1008,34 +1009,30 @@ async def set_dark_secret(
             return JSONResponse({"error": "text must be a string"}, status_code=400)
         entry["text"] = (raw or "").strip()
 
-    if "knower_character_id" in body:
+    if "player" in body:
         if not can_set_dark_secret_knower(user["discord_id"]):
             return JSONResponse(
                 {"error": "Only the GM can choose who knows the secret"},
                 status_code=403,
             )
-        raw_id = body.get("knower_character_id")
+        raw_id = body.get("player")
         if raw_id in (None, ""):
-            entry["knower_character_id"] = None
+            entry["player"] = ""
         else:
-            try:
-                kid = int(raw_id)
-            except (TypeError, ValueError):
+            if not isinstance(raw_id, str):
                 return JSONResponse(
-                    {"error": "knower_character_id must be an integer"},
+                    {"error": "player must be a discord id string"},
                     status_code=400,
                 )
-            if kid == character.id:
+            if raw_id == character.owner_discord_id:
                 return JSONResponse(
-                    {"error": "A character cannot be their own confidant"},
+                    {"error": "The character's own player cannot be the confidant"},
                     status_code=400,
                 )
-            knower = db.query(Character).filter(Character.id == kid).first()
+            knower = db.query(User).filter(User.discord_id == raw_id).first()
             if not knower:
-                return JSONResponse({"error": "Knower not found"}, status_code=404)
-            entry["knower_character_id"] = kid
-        # Choosing a character supersedes the legacy player-id field.
-        entry.pop("player", None)
+                return JSONResponse({"error": "Player not found"}, status_code=404)
+            entry["player"] = raw_id
 
     details[DARK_SECRET_ID] = entry
     character.advantage_details = details
