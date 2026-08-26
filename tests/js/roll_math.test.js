@@ -466,10 +466,34 @@ test("hidaRerollMax: X, 2X on counterattack, halved-up when impaired", () => {
   assert.equal(M.hidaRerollMax(3, true, true), 3); // ceil(6/2)
 });
 
-test("roundToTenths: round half up to nearest 0.1", () => {
-  assert.equal(M.roundToTenths(1.64), 1.6);
-  assert.equal(M.roundToTenths(1.65), 1.7);
-  assert.equal(M.roundToTenths(2), 2);
+test("roundToHundredths: round half up to nearest 0.01 (the zeni)", () => {
+  assert.equal(M.roundToHundredths(1.654), 1.65);
+  assert.equal(M.roundToHundredths(1.655), 1.66);
+  assert.equal(M.roundToHundredths(2), 2);
+  // Tenths (bu) survive untouched now that hundredths are tracked.
+  assert.equal(M.roundToHundredths(1.65), 1.65);
+  assert.equal(M.roundToHundredths(20.25), 20.25);
+  // Float-representation traps: naive x*100 lands just under the .5
+  // boundary for these, which would round them down.
+  assert.equal(M.roundToHundredths(1.005), 1.01);
+  assert.equal(M.roundToHundredths(8.285), 8.29);
+  // Below half a zeni rounds away entirely.
+  assert.equal(M.roundToHundredths(0.004), 0);
+  assert.equal(M.roundToHundredths(0.005), 0.01);
+});
+
+test("formatKoku: one decimal normally, two when there are zeni", () => {
+  assert.equal(M.formatKoku(4), "4.0");
+  assert.equal(M.formatKoku(20.3), "20.3");
+  assert.equal(M.formatKoku(20.25), "20.25");
+  assert.equal(M.formatKoku(0), "0.0");
+  // Rounds before formatting, so sub-zeni input never leaks through.
+  assert.equal(M.formatKoku(1.005), "1.01");
+  // Defensive: a null/undefined/NaN amount renders as zero, not "NaN".
+  assert.equal(M.formatKoku(null), "0.0");
+  assert.equal(M.formatKoku(undefined), "0.0");
+  // Negatives (a corrupt persisted value) still render sanely.
+  assert.equal(M.formatKoku(-2.5), "-2.5");
 });
 
 // --- Akodo (already wired in the sheet) ---
@@ -510,4 +534,69 @@ test("luckyResolveReroll: initiative keeps both - never auto-pick", () => {
                    { keepReroll: true, originalHigher: false });
   assert.deepEqual(M.luckyResolveReroll(15, 22, true),
                    { keepReroll: true, originalHigher: false });
+});
+
+// --- Void-point allocation (spend menu + Commune's activation cost) ---
+
+test("allocateVoidSpend draws temp first, then regular, then worldliness", () => {
+  assert.deepEqual(M.allocateVoidSpend(1, 2, 3, 4), {
+    fromTemp: 1, fromRegular: 0, fromWorldliness: 0, allocated: 1, short: false,
+  });
+  assert.deepEqual(M.allocateVoidSpend(3, 2, 3, 4), {
+    fromTemp: 2, fromRegular: 1, fromWorldliness: 0, allocated: 3, short: false,
+  });
+  assert.deepEqual(M.allocateVoidSpend(6, 2, 3, 4), {
+    fromTemp: 2, fromRegular: 3, fromWorldliness: 1, allocated: 6, short: false,
+  });
+});
+
+test("allocateVoidSpend skips empty pools", () => {
+  assert.deepEqual(M.allocateVoidSpend(2, 0, 0, 5), {
+    fromTemp: 0, fromRegular: 0, fromWorldliness: 2, allocated: 2, short: false,
+  });
+  assert.deepEqual(M.allocateVoidSpend(2, 0, 5, 0), {
+    fromTemp: 0, fromRegular: 2, fromWorldliness: 0, allocated: 2, short: false,
+  });
+});
+
+test("allocateVoidSpend reports short when the pools can't cover the cost", () => {
+  const r = M.allocateVoidSpend(3, 1, 1, 0);
+  assert.deepEqual(r, {
+    fromTemp: 1, fromRegular: 1, fromWorldliness: 0, allocated: 2, short: true,
+  });
+  // Commune with an empty pool: nothing to draw, so the roll is unavailable.
+  assert.equal(M.allocateVoidSpend(1, 0, 0, 0).short, true);
+});
+
+test("allocateVoidSpend treats zero/negative/missing counts as no spend", () => {
+  const none = {
+    fromTemp: 0, fromRegular: 0, fromWorldliness: 0, allocated: 0, short: false,
+  };
+  assert.deepEqual(M.allocateVoidSpend(0, 3, 3, 3), none);
+  assert.deepEqual(M.allocateVoidSpend(-2, 3, 3, 3), none);
+  assert.deepEqual(M.allocateVoidSpend(undefined, 3, 3, 3), none);
+  // Negative / undefined pools are clamped to empty, not treated as credit.
+  assert.deepEqual(M.allocateVoidSpend(1, -5, undefined, null), {
+    fromTemp: 0, fromRegular: 0, fromWorldliness: 0, allocated: 0, short: true,
+  });
+});
+
+test("allocateVoidSpend is additive: reserving 1 then N == allocating N+1", () => {
+  // The Commune menu reserves the activation point and offers the rest; the
+  // roll re-derives the activation draw from the live pool. Both paths must
+  // agree, which holds because the priority order is monotone.
+  const pools = [3, 2, 1];
+  for (let n = 0; n <= 5; n++) {
+    const reserve = M.allocateVoidSpend(1, pools[0], pools[1], pools[2]);
+    const extra = M.allocateVoidSpend(
+      n,
+      pools[0] - reserve.fromTemp,
+      pools[1] - reserve.fromRegular,
+      pools[2] - reserve.fromWorldliness,
+    );
+    const combined = M.allocateVoidSpend(n + 1, pools[0], pools[1], pools[2]);
+    assert.equal(reserve.fromTemp + extra.fromTemp, combined.fromTemp);
+    assert.equal(reserve.fromRegular + extra.fromRegular, combined.fromRegular);
+    assert.equal(reserve.fromWorldliness + extra.fromWorldliness, combined.fromWorldliness);
+  }
 });

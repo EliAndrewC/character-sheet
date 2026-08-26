@@ -2690,11 +2690,10 @@ class TestSchoolAbilities:
             knacks={"commune": 5, "pontificate": 5, "spellcasting": 5},
             rings={"Air": 3, "Fire": 2, "Earth": 2, "Water": 4, "Void": 2},
         )
-        # Commune uses a ring (varies). For the knack formula, it falls back
-        # to Earth as default for "varies" ring. At 5th Dan, Earth should be +1.
+        # Commune rolls the character's School Ring (Water, from the
+        # make_character_data default). At 5th Dan that non-Void ring is +1.
         f = build_knack_formula("commune", char)
-        # Default ring = Earth(2) + 1 from 5th Dan = 3
-        assert f.kept == 3  # Earth(2) + 1
+        assert f.kept == 5  # Water(4) + 1
 
     def test_shugenja_5th_dan_spellcasting_ring_boost(self):
         char = make_character_data(
@@ -2725,6 +2724,73 @@ class TestSchoolAbilities:
         )
         f = build_knack_formula("commune", char)
         assert f.kept == 2  # No boost
+
+    def test_shugenja_5th_dan_void_school_ring_commune_not_boosted(self):
+        """A Void School Ring can't happen on Shugenja (any non-Void), but the
+        5th Dan boost must stay ring-gated rather than knack-gated."""
+        char = make_character_data(
+            school="shugenja",
+            school_ring_choice="Void",
+            knacks={"commune": 5, "pontificate": 5, "spellcasting": 5},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 3},
+        )
+        # "Void" is a real ring name, so effective_knack_ring pins commune to
+        # it; the 5th Dan boost excludes Void.
+        f = build_knack_formula("commune", char)
+        assert f.kept == 3  # Void(3), unboosted
+
+    # --- Commune is rolled with the character's School Ring ---
+    def test_commune_uses_school_ring_choice(self):
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="Air",
+            knacks={"absorb_void": 2, "commune": 2, "iaijutsu": 2},
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        f = build_knack_formula("commune", char)
+        assert f.label == "Commune (Air)"
+        assert f.rolled == 6  # rank(2) + Air(4)
+        assert f.kept == 4
+        # Still costs a void point to activate.
+        assert f.requires_void_point is True
+
+    def test_commune_school_ring_follows_the_choice(self):
+        """Changing the School Ring changes the ring commune rolls with."""
+        for ring, val in (("Air", 4), ("Fire", 5), ("Earth", 3), ("Water", 2)):
+            char = make_character_data(
+                school="shugenja",
+                school_ring_choice=ring,
+                knacks={"commune": 1, "pontificate": 1, "spellcasting": 1},
+                rings={"Air": 4, "Fire": 5, "Earth": 3, "Water": 2, "Void": 2},
+            )
+            f = build_knack_formula("commune", char)
+            assert f.label == f"Commune ({ring})", ring
+            assert f.kept == val, ring
+            assert f.rolled == 1 + val, ring
+
+    def test_commune_without_school_ring_choice_falls_back(self):
+        """A draft with no School Ring recorded keeps the old placeholder
+        rather than crashing or picking a ring at random."""
+        char = make_character_data(
+            school="kitsune_warden",
+            school_ring_choice="",
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        f = build_knack_formula("commune", char)
+        assert f.label == "Commune (Earth)"
+
+    def test_spellcasting_still_varies(self):
+        """Spellcasting's ring is per-spell, so it is NOT pinned to the
+        School Ring; it keeps the Earth placeholder."""
+        char = make_character_data(
+            school="shugenja",
+            school_ring_choice="Air",
+            knacks={"commune": 1, "pontificate": 1, "spellcasting": 1},
+            rings={"Air": 4, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
+        )
+        f = build_knack_formula("spellcasting", char)
+        assert f.label == "Spellcasting (Earth)"
 
     # --- Priest 2nd Dan: +5 on Honor bonus rolls (self) ---
     def test_priest_2nd_dan_bragging_bonus(self):
@@ -4328,8 +4394,9 @@ class TestKitsuneWarden:
     def test_first_dan_pick_on_knack_applies_extra_die(self):
         char = self._char(dan=1, picks=["commune"])
         f = build_knack_formula("commune", char)
-        # commune rolls Earth. rank(1) + Earth(2) + 1 = 4
-        assert f.rolled == 4
+        # commune rolls the School Ring (Water 3). rank(1) + Water(3) + 1 = 5
+        assert f.rolled == 5
+        assert f.kept == 3
 
     def test_first_dan_pick_on_iaijutsu_knack_applies_extra_die(self):
         """Regression guard: iaijutsu IS eligible for 1st Dan picks even
@@ -4689,14 +4756,45 @@ class TestKitsuneWarden:
         assert f.kitsune_swap_from_ring == ""
 
     def test_knack_roll_with_ring_override_uses_override_ring(self):
-        char = self._swap_char()
-        # Commune rolls Earth by default (rank 1 + Earth 2 = 3).
-        # Override to Water (4): 1 + 4 = 5 rolled, 4 kept.
+        # School Ring Earth, so commune rolls Earth by default
+        # (rank 1 + Earth 2 = 3). Override to Water (4): 1 + 4 = 5 rolled,
+        # 4 kept. (The Kitsune's own School Ring is the swap target in the
+        # real UI; this just exercises the override plumbing on a knack.)
+        char = self._swap_char(school_ring_choice="Earth")
         f = build_knack_formula("commune", char, ring_override="Water")
         assert f.rolled == 5
         assert f.kept == 4
         assert f.kitsune_swap_from_ring == "Earth"
         assert f.kitsune_swap_to_ring == "Water"
+
+    def test_no_school_knack_is_swappable(self):
+        """Guard for the removed school-knack branch of _attach_kitsune_swaps:
+        absorb_void isn't rolled, iaijutsu is excluded from the ability, and
+        commune already rolls the School Ring. If the school's knack list ever
+        gains a swappable knack, this fails and the branch must come back."""
+        from app.game_data import SCHOOLS as _SCHOOLS
+        from app.services.dice import NON_ROLLABLE_KNACKS as _NON_ROLLABLE
+        swappable = [
+            kid for kid in _SCHOOLS["kitsune_warden"].school_knacks
+            if kid not in _NON_ROLLABLE and kid != "iaijutsu"
+        ]
+        assert swappable == ["commune"]
+        char = self._swap_char()
+        formulas = build_all_roll_formulas(char)
+        for kid in swappable:
+            assert "kitsune_swap" not in formulas[f"knack:{kid}"]
+
+    def test_commune_swap_to_own_school_ring_is_a_noop(self):
+        """Commune already rolls the School Ring, so the Kitsune special
+        ability has nothing to swap - no annotation, no dice change."""
+        char = self._swap_char()  # School Ring Water (4)
+        f = build_knack_formula("commune", char, ring_override="Water")
+        assert f.rolled == 5  # rank(1) + Water(4)
+        assert f.kept == 4
+        assert f.kitsune_swap_from_ring == ""
+        assert f.kitsune_swap_to_ring == ""
+        formulas = build_all_roll_formulas(char)
+        assert "kitsune_swap" not in formulas["knack:commune"]
 
     def test_iaijutsu_attack_rejects_ring_override(self):
         """build_knack_formula raises ValueError when ring_override is
@@ -4964,3 +5062,58 @@ class TestSchoolCoverageBackfill:
         atk = build_all_roll_formulas(c)["attack"]
         assert atk["damage_flat_bonus"] == 3  # Air
         assert any("Courtier (Air)" in s for s in atk["damage_bonus_sources"])
+
+
+class TestCommuneVoidCost:
+    """Commune costs a void point to activate ("Spend a void point and roll
+    this knack..."). The formula carries ``requires_void_point`` so the roll
+    UI can gate the roll on having a point and deduct it on activation. The
+    per-roll void-spend cap itself is unchanged - the activation point comes
+    out of the character's available pool, not out of the cap."""
+
+    def _shugenja(self, **kw):
+        return make_character_data(
+            school="shugenja",
+            knacks={"commune": 2, "pontificate": 2, "spellcasting": 2},
+            **kw,
+        )
+
+    def test_commune_formula_requires_void_point(self):
+        f = build_knack_formula("commune", self._shugenja())
+        assert f.requires_void_point is True
+
+    def test_other_knacks_do_not_require_a_void_point(self):
+        char = self._shugenja()
+        for knack_id in ("pontificate", "spellcasting"):
+            f = build_knack_formula(knack_id, char)
+            assert f.requires_void_point is False, knack_id
+
+    def test_commune_flag_survives_build_all_roll_formulas(self):
+        formulas = build_all_roll_formulas(self._shugenja())
+        assert formulas["knack:commune"]["requires_void_point"] is True
+
+    def test_only_commune_is_flagged(self):
+        """Every other rollable formula on the sheet is free to roll."""
+        formulas = build_all_roll_formulas(self._shugenja())
+        flagged = {k for k, f in formulas.items() if f.get("requires_void_point")}
+        assert flagged == {"knack:commune"}
+
+    def test_commune_flagged_for_kitsune_warden_too(self):
+        """Commune is a Kitsune Warden school knack as well as a Shugenja one."""
+        char = make_character_data(
+            school="kitsune_warden",
+            knacks={"absorb_void": 2, "commune": 2, "iaijutsu": 2},
+            school_ring_choice="Water",
+        )
+        assert build_all_roll_formulas(char)["knack:commune"]["requires_void_point"] is True
+
+    def test_commune_as_foreign_knack_is_flagged(self):
+        """Defense in depth: if a commune formula is ever built off the
+        foreign-knack column, it still carries the cost."""
+        char = make_character_data(
+            school="akodo_bushi",
+            knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+            foreign_knacks={"commune": 1},
+        )
+        f = build_knack_formula("commune", char)
+        assert f.requires_void_point is True

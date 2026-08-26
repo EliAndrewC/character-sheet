@@ -38,7 +38,7 @@
                         {% if viewer_can_edit %}
                         <div class="text-xl font-bold whitespace-nowrap">
                             <span data-money-on-hand
-                                  x-text="state.on_hand.toFixed(1)"></span>
+                                  x-text="fmt(state.on_hand)"></span>
                             <span class="text-sm font-normal text-ink/50">{{ koku_term() }} on-hand</span>
                         </div>
                         {% endif %}
@@ -76,8 +76,8 @@
                                 <li class="font-mono text-sm flex items-baseline gap-2"
                                     :data-money-entry="entry.id">
                                     <span :class="entry.kind === 'income' ? 'text-success' : 'text-rose-700'"
-                                          class="font-bold inline-block w-14 text-right shrink-0"
-                                          x-text="(entry.kind === 'income' ? '+' : '-') + entry.amount.toFixed(1)"></span>
+                                          class="font-bold inline-block w-16 text-right shrink-0"
+                                          x-text="(entry.kind === 'income' ? '+' : '-') + fmt(entry.amount)"></span>
                                     <span class="text-ink/80 grow" x-text="entry.label"></span>
                                     <button type="button"
                                             x-show="!entry.locked"
@@ -90,7 +90,7 @@
                             </template>
                         </ul>
                         <p class="font-medium pt-1 border-t border-ink/10 mt-1">
-                            = <span x-text="state.on_hand.toFixed(1)"></span> {{ koku_term() }} on-hand
+                            = <span x-text="fmt(state.on_hand)"></span> {{ koku_term() }} on-hand
                         </p>
                     </div>
                     {% endif %}
@@ -137,10 +137,10 @@
                                        :placeholder="modalKind === 'income' ? 'e.g. Sold a bounty' : 'e.g. Bought provisions'">
                             </label>
                             <label class="block">
-                                <span class="text-sm text-ink/70">Amount (koku, tenths ok)</span>
+                                <span class="text-sm text-ink/70">Amount (koku - 0.1 = 1 bu, 0.01 = 1 zeni)</span>
                                 <input type="number"
-                                       min="0.1"
-                                       step="0.1"
+                                       min="0.01"
+                                       step="0.01"
                                        x-model.number="modalAmount"
                                        x-ref="modalAmountInput"
                                        @keydown.enter.prevent="submitModal()"
@@ -224,6 +224,10 @@
                         </table>
                         <p class="text-xs text-ink/50">
                             Sen are minted as a connected line of 10 that can be severed to make change.
+                        </p>
+                        <p class="text-xs text-ink/50">
+                            This sheet tracks money down to the zeni: 20.25 koku means 20 koku,
+                            2 bu, and 5 zeni. Sen are too small for a samurai to bother counting.
                         </p>
                     </div>
                 </div>

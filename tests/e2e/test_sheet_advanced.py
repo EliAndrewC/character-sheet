@@ -42,8 +42,8 @@ def test_money_with_merchant_4th_dan(page, live_server_url):
     """Merchant school's 4th Dan stipend bump flows through the Money
     row's two numbers. Bumping all three Merchant school knacks to
     rank 4 makes Dan = 4 and the bump triggers: base 4 + 5 = 9, so
-    stipend = 9^2 = 81 koku/year. 81 / 4 = 20.25 -> rounds to 20.3
-    at tenth-koku precision."""
+    stipend = 9^2 = 81 koku/year. 81 / 4 = 20.25, which the widget
+    shows in full now that money is tracked to the zeni."""
     page.goto(live_server_url)
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
@@ -56,7 +56,7 @@ def test_money_with_merchant_4th_dan(page, live_server_url):
     apply_changes(page, "Merchant 4th Dan")
     money_row = page.locator('[data-status-row="money"]')
     assert money_row.locator('[data-money-stipend]').text_content().strip() == "81"
-    assert money_row.locator('[data-money-on-hand]').text_content().strip() == "20.3"
+    assert money_row.locator('[data-money-on-hand]').text_content().strip() == "20.25"
 
 
 def test_xp_overspend_red(page, live_server_url):
@@ -328,9 +328,9 @@ def test_money_modal_rejects_non_positive_amount(page, live_server_url):
     assert "positive" in err.text_content().lower()
 
 
-def test_money_fractional_amount_rounds_half_up_to_tenth(page, live_server_url):
-    """A 1.65-koku expense rounds half-up to 1.7 (not banker's-round
-    1.6). The displayed entry amount and the on-hand subtraction both
+def test_money_fractional_amount_rounds_half_up_to_zeni(page, live_server_url):
+    """A 1.655-koku expense rounds half-up to 1.66 (not banker's-round
+    1.65). The displayed entry amount and the on-hand subtraction both
     reflect the rounded value."""
     create_and_apply(page, live_server_url, "MoneyFrac")
     money_row = page.locator('[data-status-row="money"]')
@@ -339,15 +339,43 @@ def test_money_fractional_amount_rounds_half_up_to_tenth(page, live_server_url):
     money_row.locator('[data-action="money-add-expense"]').click()
     page.wait_for_selector('[data-modal="money-entry"]', state='visible', timeout=3000)
     page.locator('[data-testid="money-modal-label"]').fill("rice")
-    page.locator('[data-testid="money-modal-amount"]').fill("1.65")
+    page.locator('[data-testid="money-modal-amount"]').fill("1.655")
     page.locator('[data-testid="money-modal-submit"]').click()
     page.wait_for_selector('[data-modal="money-entry"]', state='hidden', timeout=3000)
-    # Starting 4.0 - 1.7 = 2.3.
+    # Starting 4.0 - 1.66 = 2.34.
     page.wait_for_function(
-        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '2.3'""",
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '2.34'""",
         timeout=3000,
     )
-    assert "-1.7" in money_row.text_content()
+    assert "-1.66" in money_row.text_content()
+
+
+def test_money_zeni_amount_kept_at_hundredth_precision(page, live_server_url):
+    """A hundredth-koku (zeni) expense is kept as entered: the ledger
+    row shows both decimals and on-hand carries the zeni through. The
+    second decimal only appears when there are zeni to show, so the
+    whole-koku disbursal above it still reads "4.0"."""
+    create_and_apply(page, live_server_url, "MoneyZeni")
+    money_row = page.locator('[data-status-row="money"]')
+    money_row.locator('div').first.click()
+    page.wait_for_timeout(150)
+    # Starting on-hand for the default character = 16/4 = 4.0 koku.
+    assert money_row.locator('[data-money-on-hand]').text_content().strip() == "4.0"
+    money_row.locator('[data-action="money-add-expense"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='visible', timeout=3000)
+    page.locator('[data-testid="money-modal-label"]').fill("Bowl of rice")
+    page.locator('[data-testid="money-modal-amount"]').fill("0.07")
+    page.locator('[data-testid="money-modal-submit"]').click()
+    page.wait_for_selector('[data-modal="money-entry"]', state='hidden', timeout=3000)
+    # 4.0 - 0.07 = 3.93.
+    page.wait_for_function(
+        """() => document.querySelector('[data-money-on-hand]').textContent.trim() === '3.93'""",
+        timeout=3000,
+    )
+    assert "-0.07" in money_row.text_content()
+    # The locked disbursal row is a whole number of koku - one decimal.
+    locked = money_row.locator('[data-money-entry="spring-equinox-disbursal"]')
+    assert "+4.0" in locked.text_content()
 
 
 def test_money_non_editor_sees_stipend_but_not_on_hand_or_ledger(

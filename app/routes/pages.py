@@ -1,7 +1,7 @@
 """Page routes — serve full HTML pages via Jinja2 templates."""
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -27,6 +27,7 @@ from app.game_data import (
     SUPERNATURAL_KNACK_IDS,
     WASP_LINEAGES,
     Ring,
+    effective_knack_ring,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
 from app.services.auth import can_edit_character, can_view_drafts, format_editor_list_text, get_admin_ids, get_all_editors, is_admin
@@ -38,7 +39,7 @@ from app.services.status import (
     compute_money_state,
     new_ledger_entry,
     public_money_state,
-    round_to_tenth,
+    round_to_hundredth,
 )
 from app.services.versions import compute_version_diff
 from app.services.xp import (
@@ -53,6 +54,15 @@ router = APIRouter()
 def _templates():
     from app.main import templates
     return templates
+
+
+@router.get("/keepalive")
+def keepalive():
+    """No-op endpoint pinged once a minute by ``static/js/keepalive.js``
+    during scheduled game sessions so Fly's auto-stop doesn't reclaim the
+    machine mid-session. Public and unauthenticated on purpose: it does no
+    work and touches no state - the inbound request itself is the point."""
+    return PlainTextResponse("ok", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/terms", response_class=HTMLResponse)
@@ -354,11 +364,12 @@ async def group_money_award(
         label = label[:200]
     # Mirror the per-character money endpoint's amount handling: reject
     # bools (which are ints in Python) and non-numbers, round half-up to
-    # the tenth-koku, and require a positive value (awards add money).
+    # the hundredth-koku (zeni), and require a positive value (awards add
+    # money).
     raw_amount = body.get("amount")
     if isinstance(raw_amount, bool) or not isinstance(raw_amount, (int, float)):
         return JSONResponse({"error": "amount must be a number"}, status_code=400)
-    amount = round_to_tenth(raw_amount)
+    amount = round_to_hundredth(raw_amount)
     if amount <= 0:
         return JSONResponse({"error": "amount must be positive"}, status_code=400)
 
@@ -425,13 +436,21 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     errors = validate_character(char_dict)
     school = SCHOOLS.get(character.school)
 
-    # Build the knack list for this character's school
+    # Build the knack list for this character's school. ``ring`` is the ring
+    # THIS character rolls the knack with, which for commune is their School
+    # Ring rather than the catalog's "varies" (see effective_knack_ring).
     char_knacks = {}
     if school:
         for knack_id in school.school_knacks:
             knack_data = SCHOOL_KNACKS.get(knack_id)
             rank = character.knacks.get(knack_id, 1) if character.knacks else 1
-            char_knacks[knack_id] = {"data": knack_data, "rank": rank}
+            char_knacks[knack_id] = {
+                "data": knack_data,
+                "rank": rank,
+                "ring": effective_knack_ring(
+                    knack_id, character.school or "", character.school_ring_choice or ""
+                ),
+            }
 
     # Foreign school knacks the character has acquired separately. Listed
     # below the native ones on the sheet, with distinct styling and a per-knack
@@ -441,7 +460,11 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         knack_data = SCHOOL_KNACKS.get(knack_id)
         if knack_data is None:
             continue
-        char_foreign_knacks[knack_id] = {"data": knack_data, "rank": rank}
+        char_foreign_knacks[knack_id] = {
+            "data": knack_data,
+            "rank": rank,
+            "ring": knack_data.ring,
+        }
 
     # Dan = lowest school knack
     knack_ranks = [char_knacks[k]["rank"] for k in char_knacks] if char_knacks else [0]

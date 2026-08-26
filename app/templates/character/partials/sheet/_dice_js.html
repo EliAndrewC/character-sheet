@@ -1169,6 +1169,11 @@
             rollMenuHasRingPicker: false,
             ringPickerRing: '',
             ringPickerHover: null,
+            // Void points this menu's roll costs just to be made (Commune: 1;
+            // everything else 0), and whether the character is short of them -
+            // in which case the roll rows are replaced by an explanation.
+            rollMenuVoidCost: 0,
+            rollMenuVoidShort: false,
             // Roll-result image clipboard state. ``rollImageBlob`` is
             // pre-rendered by the server while the dice animation is
             // still on screen so the Copy button can paste instantly.
@@ -1496,6 +1501,11 @@
                 this.rollMenuHasMobileAttack = false;
                 this.rollMenuHasMobileParry = false;
                 this.rollMenuHasPontificate = false;
+                // Activation cost (Commune). Reset up front so a previous
+                // menu's cost can't leak into the pickers below, which all
+                // return early; the generic path re-sets both from the formula.
+                this.rollMenuVoidCost = 0;
+                this.rollMenuVoidShort = false;
 
                 // Athletics knack: show a ring picker instead of rolling the
                 // default-ring formula, since Athletics varies by ring.
@@ -1714,11 +1724,17 @@
                 // Otherworldliness submenu also keeps the menu open
                 const owCap = f.otherworldliness_capacity || 0;
                 const owMax = Math.min(owCap, this.getOwPoolAvail());
+                // Commune costs a void point just to be rolled. Always open the
+                // menu so the price is stated before the point is spent - and
+                // so a character with an empty pool is told why they can't roll.
+                const voidCost = this.voidActivationCost(f);
+                const voidShort = voidCost > this.voidPools().total;
 
                 // If no options, no special variants, and no OW available, roll directly.
                 // Exception: on touch with rules text we still open the menu so the
                 // player can tap "View rules text" from the bottom row.
-                if (options.length === 0 && !hasStrike && !hasParry && !isAthleticsRing && owMax === 0 && !rulesHtml) {
+                if (options.length === 0 && !hasStrike && !hasParry && !isAthleticsRing
+                        && owMax === 0 && voidCost === 0 && !rulesHtml) {
                     this.executeRoll(key, 0, null);
                     return;
                 }
@@ -1729,6 +1745,8 @@
                 this.rollMenuKey = key;
                 this.rollMenuTitle = f.label;
                 this.rollMenuPos = pos;
+                this.rollMenuVoidCost = voidCost;
+                this.rollMenuVoidShort = voidShort;
                 this.rollMenuOptions = options;
                 this.rollMenuHasStrike = hasStrike;
                 this.rollMenuHasParry = hasParry;
@@ -1963,32 +1981,63 @@
             // are not blocked, so they fall through to computeVoidOptions().
             voidOptionsFor(f) {
                 if (f && f.void_blocked) return [];
-                return this.computeVoidOptions();
+                return this.computeVoidOptions(this.voidActivationCost(f));
             },
 
-            computeVoidOptions() {
+            // The three pools a void-point spend draws on, in the order the
+            // sheet spends them: temporary points first, then regular, then
+            // the Worldliness per-adventure allowance.
+            voidPools() {
                 const t = window._trackingBridge;
-                if (!t) return [];
-                const tempVoid = t.tempVoidPoints || 0;
-                const regularVoid = t.voidPoints || 0;
+                if (!t) return { temp: 0, regular: 0, worldliness: 0, total: 0 };
                 const wMax = this.voidSpendConfig.worldliness_max || 0;
                 const wUsed = wMax > 0 ? (t.getCount('worldliness') || 0) : 0;
-                const wAvail = Math.max(0, wMax - wUsed);
-                const totalAvail = tempVoid + regularVoid + wAvail;
+                const temp = t.tempVoidPoints || 0;
+                const regular = t.voidPoints || 0;
+                const worldliness = Math.max(0, wMax - wUsed);
+                return { temp, regular, worldliness, total: temp + regular + worldliness };
+            },
+
+            // Void points a roll costs simply to be made, before any +1k1
+            // spending. Commune ("Spend a void point and roll this knack...")
+            // is the only such roll; every other formula returns 0.
+            voidActivationCost(f) {
+                return (f && f.requires_void_point) ? 1 : 0;
+            },
+
+            // ``reserve`` is an activation cost paid off the top. It does not
+            // lower the per-roll void cap - it lowers how many points are left
+            // to spend against that cap, so a character with a lowest ring of
+            // 3 but only 2 points left may put just 1 into a Commune roll.
+            computeVoidOptions(reserve = 0) {
+                const t = window._trackingBridge;
+                if (!t) return [];
+                const pools = this.voidPools();
+                const res = window.L7RRollMath.allocateVoidSpend(
+                    reserve, pools.temp, pools.regular, pools.worldliness
+                );
+                if (res.short) return [];
+                const tempVoid = pools.temp - res.fromTemp;
+                const regularVoid = pools.regular - res.fromRegular;
+                const wAvail = pools.worldliness - res.fromWorldliness;
                 const cap = this.voidSpendConfig.cap || 0;
-                const maxSpend = Math.min(totalAvail, cap);
+                const maxSpend = Math.min(tempVoid + regularVoid + wAvail, cap);
                 if (maxSpend <= 0) return [];
 
                 const options = [];
                 for (let n = 1; n <= maxSpend; n++) {
-                    const fromTemp = Math.min(n, tempVoid);
-                    let rem = n - fromTemp;
-                    const fromRegular = Math.min(rem, regularVoid);
-                    rem -= fromRegular;
-                    const fromWorldliness = rem;
+                    const alloc = window.L7RRollMath.allocateVoidSpend(
+                        n, tempVoid, regularVoid, wAvail
+                    );
+                    const fromTemp = alloc.fromTemp;
+                    const fromRegular = alloc.fromRegular;
+                    const fromWorldliness = alloc.fromWorldliness;
 
-                    // Build label
-                    let label = `Spend ${n} void point${n > 1 ? 's' : ''}`;
+                    // Build label ("more" once an activation point is already
+                    // being paid, so the count reads as extra dice, not total).
+                    let label = reserve > 0
+                        ? `Spend ${n} more void point${n > 1 ? 's' : ''}`
+                        : `Spend ${n} void point${n > 1 ? 's' : ''}`;
                     const sources = [];
                     if (fromTemp > 0) sources.push(`${fromTemp} temporary`);
                     if (fromRegular > 0) sources.push(`${fromRegular} regular`);
@@ -2273,6 +2322,15 @@
             },
 
             executeRoll(key, voidSpent, option, owSpent = 0, useKitsuneSwap = false) {
+                // Activation cost (Commune): without a point to pay it there
+                // is no roll at all. The menu already withholds the roll rows
+                // in that case; this guard fires before any per-roll state is
+                // reset so a blocked click leaves the sheet exactly as it was.
+                const activationCost = this.voidActivationCost(this.formulas[key]);
+                if (activationCost > this.voidPools().total) {
+                    this.rollMenuOpen = false;
+                    return;
+                }
                 this.rollMenuOpen = false;
                 this.owHoverRow = null;
                 this.parryHoverRow = null;
@@ -2346,6 +2404,26 @@
                     }
                 }
 
+                // Fold any activation cost into the same spend as the dice
+                // points so the pools are debited (and school side effects
+                // fire) exactly once. The activation draw is re-derived from
+                // the live pool; because the draw order is fixed it lands on
+                // the same points the menu reserved when it built ``option``.
+                let spendOption = option;
+                if (activationCost > 0) {
+                    const pools = this.voidPools();
+                    const act = window.L7RRollMath.allocateVoidSpend(
+                        activationCost, pools.temp, pools.regular, pools.worldliness
+                    );
+                    f.void_activation_cost = act.allocated;
+                    spendOption = {
+                        count: (option?.count || 0) + act.allocated,
+                        fromTemp: (option?.fromTemp || 0) + act.fromTemp,
+                        fromRegular: (option?.fromRegular || 0) + act.fromRegular,
+                        fromWorldliness: (option?.fromWorldliness || 0) + act.fromWorldliness,
+                    };
+                }
+
                 if (voidSpent > 0 && option) {
                     f.rolled += voidSpent;
                     f.kept += voidSpent;
@@ -2356,9 +2434,12 @@
                     if (combatBonus > 0) {
                         f.flat += voidSpent * combatBonus;
                     }
+                }
 
-                    // Deduct void points via tracking bridge
-                    this.deductVoidPoints(option);
+                // Deduct void points via tracking bridge
+                if (spendOption && ((spendOption.fromTemp || 0) + (spendOption.fromRegular || 0)
+                                    + (spendOption.fromWorldliness || 0)) > 0) {
+                    this.deductVoidPoints(spendOption);
                 }
 
                 // Apply 10k10 caps client-side (after both OW and VP additions)
@@ -2694,6 +2775,13 @@
             _extraBonusBullets(formula) {
                 const f = formula || this.formula || {};
                 const extras = [];
+                const act = f.void_activation_cost || 0;
+                if (act > 0) {
+                    extras.push(
+                        act + ' void point' + (act > 1 ? 's' : '')
+                        + ' spent to activate ' + (f.label || this.title || 'this roll')
+                    );
+                }
                 const v = f.void_spent || 0;
                 if (v > 0) {
                     extras.push(

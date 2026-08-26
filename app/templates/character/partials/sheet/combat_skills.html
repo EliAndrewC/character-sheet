@@ -67,8 +67,10 @@
             <div class="bg-parchment rounded-lg p-3" x-data="{ expanded: false }">
                 <div class="flex items-center justify-between cursor-pointer" @click="expanded = !expanded">
                     <div class="flex items-center gap-2">
-                        {% if info.data.ring %}
-                        <span class="text-xs bg-ink/10 rounded px-1.5 py-0.5">{{ info.data.ring }}</span>
+                        {# ``info.ring`` is this character's ring for the knack -
+                           commune resolves to their School Ring, not "varies". #}
+                        {% if info.ring %}
+                        <span class="text-xs bg-ink/10 rounded px-1.5 py-0.5">{{ info.ring }}</span>
                         {% endif %}
                         <span class="font-medium">{{ info.data.name }}</span>
                     </div>
@@ -88,7 +90,7 @@
                     </div>
                 </div>
                 <div x-show="expanded" x-cloak class="mt-2 text-sm text-ink/80 whitespace-pre-line">
-                    {{ knack_rules_text_html(info.data, character.school) }}
+                    {{ knack_rules_text_html(info.data, character.school, info.ring) }}
                 </div>
             </div>
             {% endif %}
@@ -107,8 +109,8 @@
                      data-testid="foreign-knack-{{ kid }}">
                     <div class="flex items-center justify-between cursor-pointer" @click="expanded = !expanded">
                         <div class="flex items-center gap-2">
-                            {% if info.data.ring %}
-                            <span class="text-xs bg-ink/10 rounded px-1.5 py-0.5">{{ info.data.ring }}</span>
+                            {% if info.ring %}
+                            <span class="text-xs bg-ink/10 rounded px-1.5 py-0.5">{{ info.ring }}</span>
                             {% endif %}
                             <span class="font-medium italic">{{ info.data.name }}</span>
                             <span class="text-[10px] uppercase tracking-wide bg-accent/10 text-accent rounded px-1.5 py-0.5">foreign</span>

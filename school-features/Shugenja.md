@@ -3,7 +3,9 @@
 **School ID:** `shugenja`
 **Category:** Spellcaster
 **School Ring:** "any non-Void" - Player chooses from Air, Fire, Earth, or Water. Confirmed in `SCHOOL_RING_OPTIONS`.
-**School Knacks:** commune, pontificate, spellcasting - Commune is rollable (varies by element). Pontificate is rollable with whichever of Water or Air is higher at roll time. Spellcasting is rollable (varies by element).
+**School Knacks:** commune, pontificate, spellcasting - Commune is rolled with the character's School Ring (see "Commune rolls the School Ring" below). Pontificate is rollable with whichever of Water or Air is higher at roll time. Spellcasting is rollable (varies by element).
+
+Commune costs a void point to activate (see "Commune activation cost" below) and is rolled with the character's School Ring (see "Commune rolls the School Ring" below).
 
 **DISABLED IN UI:** The Shugenja school is currently disabled in the school selection dropdown with "(not yet implemented)" label. See `app/templates/character/edit.html`.
 
@@ -89,3 +91,37 @@
 - Server: `app/services/dice.py:build_knack_formula()` adds +1 to non-Void ring values when computing commune and spellcasting formulas for shugenja at 5th Dan.
 
 **Missing:**
+
+---
+
+## Commune rolls the School Ring
+
+> Commune (rules 05-school_knacks): "Spend a void point and roll this knack with the Ring of the element of the spirits you are questioning."
+
+**Status:** Fully implemented.
+
+**GM ruling (2026-08-08):** the knack's ring "varies" in the abstract, but a character who has commune as a school knack is trained to commune with the kami of their own school element, so their commune rolls always use their School Ring. A Shugenja with School Ring Air shows Commune badged "Air" and always rolls Air.
+
+- **Server:** `app/game_data.py::effective_knack_ring` resolves the pinned ring from `SCHOOL_RING_KNACK_IDS` (currently just commune) plus `Character.school_ring_choice`. `build_knack_formula` uses it for the dice and the "Commune (Air)" label; the sheet and Google Sheets export routes stamp it as `info["ring"]` on each knack entry.
+- **Catalog unchanged:** `SCHOOL_KNACKS["commune"].ring` is still `"varies"` - only a character's copy is pinned. Spellcasting deliberately stays "varies" (its ring is per-spell, not per-character).
+- **UI:** the sheet's knack row badges `info.ring`; the expanded rules text appends "Your School Ring is X, so your commune rolls always use X." The editor's school-reference panel has no character, so it badges commune with the words "School Ring".
+- **Fallback:** a draft with no School Ring recorded keeps the old Earth placeholder rather than guessing.
+- **Interaction with Shugenja 5th Dan:** the +1-to-non-Void-rings boost now lands on the School Ring, since that is the ring commune rolls with.
+- **Tests:** `tests/test_game_data.py::TestEffectiveKnackRing`, `tests/test_dice.py` (commune School Ring group), `tests/test_routes.py::TestCommuneSchoolRing`, `tests/test_sheets.py::TestCommuneRingColumn`, `tests/e2e/test_rolls.py::test_commune_badge_*` / `test_commune_roll_menu_and_result_use_the_school_ring` / `test_commune_rules_text_names_the_school_ring`.
+
+---
+
+## Commune activation cost
+
+> Commune (rules 05-school_knacks): "Spend a void point and roll this knack with the Ring of the element of the spirits you are questioning."
+
+**Status:** Fully implemented.
+
+- The void point is an **activation cost**, not a dice bonus: it buys the roll and adds nothing to it. With an empty void pool the roll is unavailable.
+- The per-roll void-spend cap is **unchanged** - the activation point simply comes out of the pool first. A character whose cap is 2 but who has only 2 points left may put 1 into the roll (1 pays for the roll itself).
+- Points are drawn in the sheet's standing order: temporary, then regular, then the Worldliness allowance.
+- **Server:** `RollFormula.requires_void_point`, set for commune in `app/services/dice.py::build_knack_formula`.
+- **Client:** `voidActivationCost()` / `voidPools()` in `_dice_js.html`; `computeVoidOptions(reserve)` withholds the reserved point from the extra-spend options; `executeRoll` folds the activation into a single `deductVoidPoints` call and refuses to roll with an empty pool. The menu (`roll_trigger.html`) states the cost, labels the roll row "(1 VP)", and replaces the roll rows with an explanation when the pool is empty; `modal_result.html` reports the activation in the result breakdown.
+- **Read-only mode:** the cost is never deducted for a non-editor (`deductVoidPoints` early-returns), but the empty-pool gate still applies - it is a rules gate, not an edit gate.
+- **Discordant:** unaffected. Per the GM ruling, Discordant blocks the generic "+1k1 per void point" menu on knacks, not school-ability void costs; a Discordant character still pays commune's activation point and still gets no extra-dice options.
+- **Tests:** `tests/test_dice.py::TestCommuneVoidCost`, `tests/js/roll_math.test.js` (allocateVoidSpend), `tests/e2e/test_rolls.py` (commune group), `tests/e2e/test_readonly_rolls.py::test_non_editor_commune_*`.

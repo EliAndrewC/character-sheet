@@ -534,9 +534,29 @@
       return max;
     },
 
-    /** Round a koku amount to the nearest tenth (round half up). */
-    roundToTenths: function (raw) {
-      return Math.floor(raw * 10 + 0.5) / 10;
+    /**
+     * Round a koku amount to the nearest hundredth - i.e. to the zeni,
+     * the copper coin worth 1/100 koku (round half up). Sub-zeni
+     * precision (sen) is deliberately not tracked.
+     *
+     * The inner toFixed(6) scrubs the binary-float noise that shifting
+     * by 100 exposes (1.005 * 100 === 100.49999999999999), which would
+     * otherwise round the value down. Mirrors ``round_to_hundredth`` in
+     * app/services/status.py - the server is still authoritative.
+     */
+    roundToHundredths: function (raw) {
+      return Math.floor(Number((raw * 100).toFixed(6)) + 0.5) / 100;
+    },
+
+    /**
+     * Format a koku amount for display: rounded to the zeni, with at
+     * least one decimal place and a second one only when there are
+     * zeni to show. 4 -> "4.0", 20.3 -> "20.3", 20.25 -> "20.25".
+     */
+    formatKoku: function (raw) {
+      var v = this.roundToHundredths(Number(raw) || 0);
+      var s = String(v);
+      return s.indexOf(".") === -1 ? s + ".0" : s;
     },
 
     /**
@@ -567,6 +587,37 @@
       if (isInitiative) return { keepReroll: true, originalHigher: false };
       var originalHigher = originalTotal > rerollTotal;
       return { keepReroll: !originalHigher, originalHigher: originalHigher };
+    },
+
+    /**
+     * Draw ``count`` void points out of the three pools a character can spend
+     * from, in the sheet's standing priority order: temporary points first
+     * (they evaporate), then regular points, then Worldliness (a per-adventure
+     * allowance of extra points). ``allocated`` is what could actually be
+     * drawn - less than ``count`` when the pools run dry, in which case
+     * ``short`` is true.
+     *
+     * Used both for the generic "+1k1 per void point" spend menu and for
+     * activation costs such as Commune's one-point price of entry.
+     *
+     * @returns {{fromTemp: number, fromRegular: number,
+     *            fromWorldliness: number, allocated: number, short: boolean}}
+     */
+    allocateVoidSpend: function (count, tempAvail, regularAvail, worldlinessAvail) {
+      var want = Math.max(0, Math.floor(Number(count) || 0));
+      var fromTemp = Math.min(want, Math.max(0, Number(tempAvail) || 0));
+      var rem = want - fromTemp;
+      var fromRegular = Math.min(rem, Math.max(0, Number(regularAvail) || 0));
+      rem -= fromRegular;
+      var fromWorldliness = Math.min(rem, Math.max(0, Number(worldlinessAvail) || 0));
+      var allocated = fromTemp + fromRegular + fromWorldliness;
+      return {
+        fromTemp: fromTemp,
+        fromRegular: fromRegular,
+        fromWorldliness: fromWorldliness,
+        allocated: allocated,
+        short: allocated < want,
+      };
     },
   };
 

@@ -21,6 +21,7 @@ configure_logging()
 from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
 from app.routes import art, auth, characters, google_sheets, import_char, names, pages, rolls
+from app.game_data import RING_NAMES, SCHOOL_RING_KNACK_IDS
 from app.services.auth import is_admin
 from app.services.import_rate_limit import import_enabled
 
@@ -206,7 +207,9 @@ _KNACK_RULES_LINKS: dict[str, tuple[str, str]] = {
 }
 
 
-def knack_rules_text_html(knack, school_id: str | None = None) -> Markup:
+def knack_rules_text_html(
+    knack, school_id: str | None = None, ring: str | None = None
+) -> Markup:
     """Render a knack's expanded rules text as HTML, linkifying any phrase
     that points at a rules section (currently just Iaijutsu's "the other
     combat rules"). Falls back to the short description when rules_text is
@@ -218,8 +221,20 @@ def knack_rules_text_html(knack, school_id: str | None = None) -> Markup:
     Foreign-knack callers pass ``None`` (or omit) so the canonical text
     renders even if the knack happens to match another school's
     override.
+
+    ``ring`` is the ring this character actually rolls the knack with (see
+    ``effective_knack_ring``). Commune's canonical text says the ring varies
+    with the spirits questioned, so when a concrete ring is known we spell it
+    out to keep the text consistent with the ring badge beside it.
     """
     text = (knack.rules_text or knack.description) or ""
+    if knack is not None and knack.id == "commune" and ring in RING_NAMES:
+        return Markup(
+            f"{escape(text)}"
+            "\n\n"
+            f"<em>Your School Ring is {escape(ring)}, so your commune "
+            f"rolls always use {escape(ring)}.</em>"
+        )
     # Isawa Ishi's special ability replaces Absorb Void's per-adventure
     # cadence with per-day. Render the swap inline so the player can
     # see both the canonical wording (struck through) and the school
@@ -253,6 +268,10 @@ def knack_rules_text_html(knack, school_id: str | None = None) -> Markup:
 
 
 templates.env.globals["knack_rules_text_html"] = knack_rules_text_html
+# Knacks whose ring badge is the character's School Ring rather than the
+# catalog value; the school-reference panel (no character in context) shows
+# the literal words "School Ring" for these.
+templates.env.globals["school_ring_knack_ids"] = SCHOOL_RING_KNACK_IDS
 
 
 # ---------------------------------------------------------------------------

@@ -2536,3 +2536,366 @@ def test_discordant_parry_void_follows_active_variant(page, live_server_url):
     assert state["regular"]["cap"] == 0
     assert state["athletics"]["blocked"] is False
     assert state["athletics"]["cap"] > 0
+
+
+# ---------------------------------------------------------------------------
+# Commune: costs a void point to activate
+# ---------------------------------------------------------------------------
+
+
+def _create_communer(page, live_server_url, name="Communer", void_points=2):
+    """Publish a Kitsune Warden (school knacks: absorb_void, commune, iaijutsu)
+    and set its void pool to ``void_points``.
+
+    Kitsune Warden rather than Shugenja because it uses the standard
+    void-spend cap (lowest ring = 2 on a fresh character) instead of the
+    shugenja lowest-ring-minus-1, which makes the activation-cost-vs-cap
+    arithmetic legible: cap 2, pool 2, so 1 point buys the roll and only
+    1 is left to put into dice.
+    """
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, "kitsune_warden")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Commune setup")
+    page.evaluate(
+        "async (vp) => {"
+        "  const t = window._trackingBridge;"
+        "  t.voidPoints = vp; t.tempVoidPoints = 0;"
+        "  await t.save();"
+        "}",
+        void_points,
+    )
+    page.wait_for_timeout(200)
+
+
+def _commune_void_options(page):
+    """Read the void-spend options the roll menu would offer for commune and
+    (as a control) for iaijutsu, straight from the dice-roller component."""
+    return page.evaluate("""() => {
+        let dr = null;
+        for (const el of document.querySelectorAll('[x-data]')) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.voidOptionsFor === 'function') { dr = d; break; }
+        }
+        return {
+            cap: dr.voidSpendConfig.cap,
+            pool: dr.voidPools().total,
+            communeCost: dr.voidActivationCost(dr.formulas['knack:commune']),
+            commune: (dr.voidOptionsFor(dr.formulas['knack:commune']) || []).map(o => o.count),
+            iaijutsu: (dr.voidOptionsFor(dr.formulas['knack:iaijutsu']) || []).map(o => o.count),
+        };
+    }""")
+
+
+def test_commune_menu_states_its_void_cost(page, live_server_url):
+    """Clicking commune opens the roll menu (never rolls straight through) and
+    states the one-point price of entry."""
+    _create_communer(page, live_server_url, "CommuneCost", void_points=2)
+    page.locator('[data-roll-key="knack:commune"]').click()
+    note = page.locator('[data-void-cost-note]')
+    note.wait_for(state="visible", timeout=5000)
+    assert "1 void point" in note.inner_text()
+    assert "activate" in note.inner_text()
+    # The roll row is offered, labelled with the cost; the blocked row is not.
+    roll_row = page.locator('[data-roll-menu="root"] button:has-text("Roll Commune")').first
+    assert roll_row.is_visible()
+    assert "1 VP" in roll_row.inner_text()
+    assert not page.locator('[data-void-cost-blocked]').is_visible()
+
+
+def test_other_knack_menu_has_no_void_cost_note(page, live_server_url):
+    """Control: iaijutsu is free to roll, so no cost note and no VP suffix."""
+    _create_communer(page, live_server_url, "IaiNoCost", void_points=2)
+    page.locator('[data-roll-key="knack:iaijutsu"]').click()
+    page.wait_for_selector('[data-roll-menu="root"]', state="visible", timeout=5000)
+    assert not page.locator('[data-void-cost-note]').is_visible()
+    assert not page.locator('[data-void-cost-blocked]').is_visible()
+    assert "VP)" not in page.locator(
+        '[data-roll-menu="root"] button:has-text("Roll Iaijutsu")'
+    ).first.inner_text()
+
+
+def test_commune_roll_spends_one_void_point(page, live_server_url):
+    """Rolling commune with no extra void deducts exactly the activation point
+    and says so in the result breakdown."""
+    _create_communer(page, live_server_url, "CommuneSpend", void_points=2)
+    page.locator('[data-roll-key="knack:commune"]').click()
+    page.locator('[data-roll-menu="root"] button:has-text("Roll Commune")').first.click()
+    _wait_for_roll_result(page)
+    assert page.evaluate("window._trackingBridge.voidPoints") == 1
+    note = page.locator('[data-testid="void-activation-note"]')
+    assert note.is_visible()
+    assert "1 void point" in note.inner_text()
+    assert "activate" in note.inner_text()
+    # The activation point buys the roll; it adds no dice.
+    dims = page.evaluate("""() => {
+        for (const el of document.querySelectorAll('[x-data]')) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.formula && d.currentRollKey === 'knack:commune') {
+                return {rolled: d.formula.rolled, kept: d.formula.kept,
+                        voidSpent: d.formula.void_spent || 0,
+                        activation: d.formula.void_activation_cost || 0};
+            }
+        }
+        return null;
+    }""")
+    assert dims["activation"] == 1
+    assert dims["voidSpent"] == 0
+    # Commune rolls the School Ring: rank 1 + Water 3, keep Water.
+    assert (dims["rolled"], dims["kept"]) == (4, 3)
+
+
+def test_commune_spend_deduction_persists_across_reload(page, live_server_url):
+    """The activation point is a real save, not just local Alpine state."""
+    _create_communer(page, live_server_url, "CommunePersist", void_points=2)
+    page.locator('[data-roll-key="knack:commune"]').click()
+    page.locator('[data-roll-menu="root"] button:has-text("Roll Commune")').first.click()
+    _wait_for_roll_result(page)
+    page.reload()
+    page.wait_for_selector("h1")
+    assert page.evaluate("window._trackingBridge.voidPoints") == 1
+
+
+def test_commune_extra_void_capped_by_the_activation_cost(page, live_server_url):
+    """The per-roll void cap is untouched - the activation point just comes out
+    of the pool first. Pool 2, cap 2: commune offers 1 extra point, a free
+    knack offers 2."""
+    _create_communer(page, live_server_url, "CommuneCap", void_points=2)
+    s = _commune_void_options(page)
+    assert s["cap"] == 2
+    assert s["pool"] == 2
+    assert s["communeCost"] == 1
+    assert s["commune"] == [1]
+    assert s["iaijutsu"] == [1, 2]
+
+
+def test_commune_with_one_void_point_offers_no_extra_spend(page, live_server_url):
+    """A single point covers activation and leaves nothing for dice."""
+    _create_communer(page, live_server_url, "CommuneOne", void_points=1)
+    s = _commune_void_options(page)
+    assert s["commune"] == []
+    assert s["iaijutsu"] == [1]
+    # Still rollable - and it empties the pool.
+    page.locator('[data-roll-key="knack:commune"]').click()
+    page.locator('[data-roll-menu="root"] button:has-text("Roll Commune")').first.click()
+    _wait_for_roll_result(page)
+    assert page.evaluate("window._trackingBridge.voidPoints") == 0
+
+
+def test_commune_extra_void_spends_activation_and_dice_points(page, live_server_url):
+    """Choosing the one available extra point spends 2 in total: 1 to activate,
+    1 for the +1k1."""
+    _create_communer(page, live_server_url, "CommuneExtra", void_points=2)
+    page.locator('[data-roll-key="knack:commune"]').click()
+    page.wait_for_selector('[data-roll-menu="root"]', state="visible", timeout=5000)
+    more = page.locator(
+        '[data-roll-menu="root"] button:not([data-kitsune-swap-vp]):has-text("Spend 1 more void point")'
+    )
+    assert more.count() == 1
+    more.click()
+    _wait_for_roll_result(page)
+    assert page.evaluate("window._trackingBridge.voidPoints") == 0
+    dims = page.evaluate("""() => {
+        for (const el of document.querySelectorAll('[x-data]')) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.formula && d.currentRollKey === 'knack:commune') {
+                return {rolled: d.formula.rolled, kept: d.formula.kept,
+                        voidSpent: d.formula.void_spent || 0,
+                        activation: d.formula.void_activation_cost || 0};
+            }
+        }
+        return null;
+    }""")
+    assert dims["activation"] == 1
+    assert dims["voidSpent"] == 1
+    assert (dims["rolled"], dims["kept"]) == (5, 4)  # 4k3 plus the +1k1
+
+
+def test_commune_blocked_with_an_empty_void_pool(page, live_server_url):
+    """No void point, no commune: the menu explains instead of offering the
+    roll, and nothing is rolled."""
+    _create_communer(page, live_server_url, "CommuneBroke", void_points=0)
+    page.locator('[data-roll-key="knack:commune"]').click()
+    blocked = page.locator('[data-void-cost-blocked]')
+    blocked.wait_for(state="visible", timeout=5000)
+    assert "Not enough void points" in blocked.inner_text()
+    rows = page.locator('[data-roll-menu="root"] button:has-text("Roll Commune")')
+    assert all(not rows.nth(i).is_visible() for i in range(rows.count()))
+    # No result modal opened.
+    page.wait_for_timeout(300)
+    assert not page.locator('[data-modal="dice-roller"]').is_visible()
+
+
+def test_commune_blocked_roll_cannot_be_forced(page, live_server_url):
+    """Belt-and-braces: calling executeRoll directly with an empty pool is a
+    no-op rather than a free commune."""
+    _create_communer(page, live_server_url, "CommuneForce", void_points=0)
+    page.evaluate("""() => {
+        for (const el of document.querySelectorAll('[x-data]')) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && typeof d.executeRoll === 'function' && d.formulas) {
+                d.executeRoll('knack:commune', 0, null);
+                return;
+            }
+        }
+    }""")
+    page.wait_for_timeout(500)
+    assert not page.locator('[data-modal="dice-roller"]').is_visible()
+    assert page.evaluate("window._trackingBridge.voidPoints") == 0
+
+
+def test_commune_spends_temporary_void_points_first(page, live_server_url):
+    """Temporary points are spent ahead of regular ones, activation included."""
+    _create_communer(page, live_server_url, "CommuneTemp", void_points=2)
+    page.evaluate(
+        "async () => { const t = window._trackingBridge;"
+        "  t.tempVoidPoints = 1; await t.save(); }"
+    )
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="knack:commune"]').click()
+    page.locator('[data-roll-menu="root"] button:has-text("Roll Commune")').first.click()
+    _wait_for_roll_result(page)
+    assert page.evaluate("window._trackingBridge.tempVoidPoints") == 0
+    assert page.evaluate("window._trackingBridge.voidPoints") == 2
+
+
+def test_commune_offers_no_kitsune_ring_swap_row(page, live_server_url):
+    """Commune already rolls with the School Ring, so the Kitsune Warden's
+    "substitute your School Ring" ability has nothing to substitute: the menu
+    shows only the plain roll row (with its activation cost), no swap row."""
+    _create_communer(page, live_server_url, "CommuneSwap", void_points=2)
+    page.locator('[data-roll-key="knack:commune"]').click()
+    page.wait_for_selector('[data-roll-menu="root"]', state="visible", timeout=5000)
+    swap = page.locator('[data-kitsune-swap-roll]')
+    assert swap.count() == 0 or not swap.first.is_visible()
+    roll_row = page.locator(
+        '[data-roll-menu="root"] button:has-text("Roll Commune")'
+    ).first
+    assert roll_row.is_visible()
+    assert "1 VP" in roll_row.inner_text()
+
+
+def test_commune_image_payload_includes_activation_detail(page, live_server_url):
+    """The copy-as-image / roll-history ``extras`` explain the activation cost
+    the same way they explain a dice spend."""
+    _create_communer(page, live_server_url, "CommuneExtras", void_points=2)
+    page.evaluate("window.__capturedRollImagePayload = null")
+    page.evaluate("""() => {
+        const origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            if (typeof url === 'string'
+                    && url.indexOf('/roll-image') !== -1
+                    && opts && opts.body) {
+                try {
+                    window.__capturedRollImagePayload = JSON.parse(opts.body);
+                } catch (e) { /* ignore */ }
+            }
+            return origFetch.apply(this, arguments);
+        };
+    }""")
+    page.locator('[data-roll-key="knack:commune"]').click()
+    page.locator('[data-roll-menu="root"] button:has-text("Roll Commune")').first.click()
+    _wait_for_roll_result(page)
+    payload = page.evaluate("() => window.__capturedRollImagePayload")
+    assert payload is not None, "Expected a /roll-image POST to be captured"
+    extras = payload.get("extras") or []
+    assert any("spent to activate" in e for e in extras), (
+        f"Expected an activation-cost detail in extras, got: {extras!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Commune is rolled with the character's School Ring
+# ---------------------------------------------------------------------------
+
+
+def _create_communer_with_ring(page, live_server_url, name, ring):
+    """Publish a Kitsune Warden whose School Ring is ``ring``, and land on the
+    sheet. Kitsune Warden's ring is "any non-Void", so the picker is offered."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_school(page, "kitsune_warden")
+    picker = page.locator('[data-testid="school-ring-choice"]')
+    picker.wait_for(state="visible", timeout=5000)
+    picker.select_option(ring)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, f"{ring} commune setup")
+
+
+def _commune_badge(page):
+    """The ring badge rendered immediately before the Commune knack name."""
+    return page.evaluate("""() => {
+        for (const span of document.querySelectorAll('span.font-medium')) {
+            if (span.textContent.trim() !== 'Commune') continue;
+            const badge = span.previousElementSibling;
+            return badge ? badge.textContent.trim() : null;
+        }
+        return null;
+    }""")
+
+
+def test_commune_badge_shows_the_school_ring(page, live_server_url):
+    """The sheet's Commune row is badged with the character's School Ring,
+    not the catalog's "varies"."""
+    _create_communer_with_ring(page, live_server_url, "CommuneAir", "Air")
+    assert _commune_badge(page) == "Air"
+
+
+def test_commune_badge_follows_a_different_school_ring(page, live_server_url):
+    """A Fire-ringed fox shows Fire, proving the badge tracks the choice."""
+    _create_communer_with_ring(page, live_server_url, "CommuneFire", "Fire")
+    assert _commune_badge(page) == "Fire"
+
+
+def test_commune_roll_menu_and_result_use_the_school_ring(page, live_server_url):
+    """The commune roll itself is keyed off the School Ring: the formula the
+    dice roller holds names that ring, and the result modal reports it."""
+    _create_communer_with_ring(page, live_server_url, "CommuneRolls", "Air")
+    page.evaluate(
+        "async () => {"
+        "  const t = window._trackingBridge;"
+        "  t.voidPoints = 2; t.tempVoidPoints = 0;"
+        "  await t.save();"
+        "}"
+    )
+    page.wait_for_timeout(200)
+    label = page.evaluate("""() => {
+        for (const el of document.querySelectorAll('[x-data]')) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.formulas && d.formulas['knack:commune']) {
+                return d.formulas['knack:commune'].label;
+            }
+        }
+        return null;
+    }""")
+    assert label == "Commune (Air)", label
+    page.locator('[data-roll-key="knack:commune"]').click()
+    page.locator(
+        '[data-roll-menu="root"] button:has-text("Roll Commune")'
+    ).first.click()
+    _wait_for_roll_result(page)
+    assert "Commune (Air)" in page.locator('[data-modal="dice-roller"]').inner_text()
+
+
+def test_commune_rules_text_names_the_school_ring(page, live_server_url):
+    """Expanding the Commune knack spells out the concrete ring so the rules
+    text agrees with the badge."""
+    _create_communer_with_ring(page, live_server_url, "CommuneText", "Water")
+    page.evaluate("""() => {
+        for (const span of document.querySelectorAll('span.font-medium')) {
+            if (span.textContent.trim() === 'Commune') {
+                span.closest('[x-data]').querySelector('div').click();
+                return;
+            }
+        }
+    }""")
+    page.wait_for_timeout(300)
+    assert (
+        "Your School Ring is Water, so your commune rolls always use Water."
+        in page.locator("body").inner_text()
+    )

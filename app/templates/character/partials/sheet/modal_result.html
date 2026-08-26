@@ -230,6 +230,17 @@
                             spent void point<span x-show="formula?.void_spent > 1">s</span>
                         </div>
 
+                        {# Activation cost (Commune): a void point buys the roll
+                           itself and adds no dice, so it gets its own line. #}
+                        <div x-show="formula?.void_activation_cost > 0" x-cloak
+                             data-testid="void-activation-note"
+                             class="text-xs text-ink/70 list-disc list-inside mt-0.5">
+                            <span class="inline-block w-3 text-center">&bull;</span>
+                            <span x-text="formula?.void_activation_cost"></span>
+                            void point<span x-show="formula?.void_activation_cost > 1">s</span>
+                            spent to activate <span x-text="title"></span>
+                        </div>
+
                         {# Otherworldliness spent on this roll #}
                         <div x-show="formula?.ow_spent > 0" x-cloak
                              class="text-xs text-ink/70 list-disc list-inside mt-0.5">

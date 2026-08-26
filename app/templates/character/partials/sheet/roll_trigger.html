@@ -208,14 +208,28 @@
                     </template>
                 </div>
             </template>
+            {# Activation cost (Commune): the roll itself costs a void point,
+               so the menu states the price above the roll row, and replaces
+               the roll rows entirely when the pool is empty. #}
+            <div x-show="rollMenuVoidCost > 0 && !rollMenuVoidShort" x-cloak
+                 data-void-cost-note
+                 class="px-4 py-1 text-xs text-ink/60 border-b border-ink/10">
+                Costs <span x-text="rollMenuVoidCost"></span> void point<span x-show="rollMenuVoidCost > 1">s</span> to activate.
+            </div>
+            <div x-show="rollMenuVoidShort" x-cloak
+                 data-void-cost-blocked
+                 class="px-4 py-2 text-sm text-ink/60 italic">
+                Not enough void points - <span x-text="rollMenuTitle"></span>
+                costs <span x-text="rollMenuVoidCost"></span> void point<span x-show="rollMenuVoidCost > 1">s</span> to activate.
+            </div>
             <div class="relative"
-                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasRingPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack && !rollMenuHasMobileParry && !rollMenuHasPontificate"
+                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasRingPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack && !rollMenuHasMobileParry && !rollMenuHasPontificate && !rollMenuVoidShort"
                  @mouseenter="owHoverRow = 'roll'"
                  @mouseleave="owHoverRow = null">
                 <button type="button"
                         @click="executeRoll(rollMenuKey, 0, null)"
                         class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
-                    <span>Roll <span x-text="rollMenuTitle"></span></span>
+                    <span>Roll <span x-text="rollMenuTitle"></span><span x-show="rollMenuVoidCost > 0" class="text-xs text-ink/50"> (<span x-text="rollMenuVoidCost"></span> VP)</span></span>
                     <span x-show="getOwMax() > 0" class="text-xs text-accent" title="Otherworldliness available">&#9656;</span>
                 </button>
                 <div x-show="owHoverRow === 'roll' && getOwMax() > 0"
@@ -231,7 +245,7 @@
                     </template>
                 </div>
             </div>
-            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasRingPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack || rollMenuHasMobileParry || rollMenuHasPontificate ? [] : rollMenuOptions)" :key="'r'+opt.count">
+            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasRingPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack || rollMenuHasMobileParry || rollMenuHasPontificate || rollMenuVoidShort ? [] : rollMenuOptions)" :key="'r'+opt.count">
                 <div class="relative"
                      @mouseenter="owHoverRow = 'r' + opt.count"
                      @mouseleave="owHoverRow = null">
@@ -265,6 +279,7 @@
                             && !rollMenuHasRingPicker
                             && !rollMenuHasParry && !rollMenuHasAttackChoice
                             && !rollMenuHasMobileAttack && !rollMenuHasMobileParry
+                            && !rollMenuVoidShort
                             && formulas[rollMenuKey]?.kitsune_swap">
                 <div class="border-t border-ink/10 mt-1 pt-1" data-testid="kitsune-skill-swap-block">
                     <div class="px-4 py-1 text-xs text-ink/50">

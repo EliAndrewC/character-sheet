@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session as DBSession
 
 from app.database import get_db
-from app.game_data import SCHOOL_KNACKS, SCHOOLS, SKILLS
+from app.game_data import SCHOOL_KNACKS, SCHOOLS, SKILLS, effective_knack_ring
 from app.models import Character, User as UserModel
 from app.services.auth import can_view_drafts
 from app.services.rolls import compute_skill_roll
@@ -185,14 +185,24 @@ async def google_callback(
         for knack_id in school.school_knacks:
             knack_data = SCHOOL_KNACKS.get(knack_id)
             rank = character.knacks.get(knack_id, 1) if character.knacks else 1
-            char_knacks[knack_id] = {"data": knack_data, "rank": rank}
+            char_knacks[knack_id] = {
+                "data": knack_data,
+                "rank": rank,
+                "ring": effective_knack_ring(
+                    knack_id, character.school or "", character.school_ring_choice or ""
+                ),
+            }
 
     char_foreign_knacks = {}
     for knack_id, rank in (character.foreign_knacks or {}).items():
         knack_data = SCHOOL_KNACKS.get(knack_id)
         if knack_data is None:
             continue
-        char_foreign_knacks[knack_id] = {"data": knack_data, "rank": rank}
+        char_foreign_knacks[knack_id] = {
+            "data": knack_data,
+            "rank": rank,
+            "ring": knack_data.ring,
+        }
 
     knack_ranks = [char_knacks[k]["rank"] for k in char_knacks] if char_knacks else [0]
     dan = min(knack_ranks) if knack_ranks else 0

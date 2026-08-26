@@ -10,11 +10,13 @@ from app.game_data import (
     SCHOOLS_BUSHI_NONBUSHI,
     SCHOOLS_BY_CATEGORY,
     SCHOOL_KNACKS,
+    SCHOOL_RING_KNACK_IDS,
     SCHOOL_RING_OPTIONS,
     SKILLS,
     SPELLS,
     SPELLS_BY_ELEMENT,
     Ring,
+    effective_knack_ring,
     ring_raise_cost,
     skill_raise_cost,
     total_skill_cost,
@@ -342,3 +344,38 @@ class TestAkodo4thDanWording:
         # Keeps the free-raise-per-VP payout and the Water raise/discount.
         assert "free raise for each void point spent" in text
         assert "Raise your current and maximum Water by 1" in text
+
+
+class TestEffectiveKnackRing:
+    """Commune is rolled with the character's School Ring, not "varies"."""
+
+    def test_commune_is_school_ring_pinned(self):
+        assert SCHOOL_RING_KNACK_IDS == frozenset({"commune"})
+
+    def test_catalog_still_says_varies(self):
+        # The knack itself genuinely varies; only a character's copy is pinned.
+        assert SCHOOL_KNACKS["commune"].ring == "varies"
+
+    def test_commune_resolves_to_school_ring_choice(self):
+        assert effective_knack_ring("commune", "kitsune_warden", "Air") == "Air"
+        assert effective_knack_ring("commune", "shugenja", "Fire") == "Fire"
+
+    def test_commune_unresolvable_keeps_catalog_value(self):
+        assert effective_knack_ring("commune", "kitsune_warden", "") == "varies"
+        assert effective_knack_ring("commune", "kitsune_warden", "Nonsense") == "varies"
+        assert effective_knack_ring("commune", "", "Air") == "varies"
+        assert effective_knack_ring("commune", "no_such_school", "Air") == "varies"
+
+    def test_commune_not_native_to_school_keeps_catalog_value(self):
+        # Commune is supernatural so it can't be a foreign knack, but a school
+        # that doesn't grant it must not pin it either.
+        assert effective_knack_ring("commune", "akodo_bushi", "Water") == "varies"
+
+    def test_other_knacks_keep_catalog_ring(self):
+        assert effective_knack_ring("counterattack", "hida_bushi", "Earth") == "Fire"
+        assert effective_knack_ring("spellcasting", "shugenja", "Fire") == "varies"
+        assert effective_knack_ring("athletics", "kitsune_warden", "Air") == "varies"
+        assert effective_knack_ring("absorb_void", "kitsune_warden", "Air") is None
+
+    def test_unknown_knack_id(self):
+        assert effective_knack_ring("no_such_knack", "shugenja", "Fire") is None

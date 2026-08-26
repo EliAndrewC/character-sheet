@@ -9,6 +9,8 @@ A character sheet and character builder web app for L7R, a Legend of the Five Ri
 <!-- container-mounts: ..:/host-l7r-repo -->
 <!-- container-workdir: /character-sheet -->
 <!-- (distinct mount path per repo so Claude memory under ~/.claude/projects/ stays separate across sibling repos) -->
+<!-- System packages auto-installed on a fresh container launch (see "Setup"); alsa-utils is added by the launcher for everyone. Language-level deps (pip, playwright) are NOT covered - still run those by hand. -->
+<!-- container-apt: libmagic1 antiword libcairo2 -->
 
 ## Tech Stack
 
@@ -33,6 +35,8 @@ playwright install-deps chromium
 `libmagic1` is required by `python-magic` (importer format detection) and `antiword` is required by the `.doc` ingest path in `app/services/import_ingest.py`. `libcairo2` is required by `cairocffi`/`CairoSVG`, used by the dice-card PNG renderer; without it `tests/test_dice_card.py` errors out at collection time. All three are missing from `requirements.txt` because they are system packages; without them `app.main` fails to import and large portions of the unit suite never run. `reportlab` is a dev-only dependency (PDF fixtures); it is not imported by `app/` at runtime, so it lives outside `requirements.txt`.
 
 If `apt-get install` can't find the packages, run `sudo apt-get update` first (a fresh container may have a stale package index).
+
+The three apt packages are also declared in the `container-apt:` directive at the top of this file, so `launch-container.sh` installs them (plus `alsa-utils`, for Claude Code's `/voice`) automatically when it creates a fresh container. That is best-effort - if the install failed, or you are in a container created before that directive existed, run the `apt-get` line by hand. The `pip` and `playwright` steps are never automated.
 
 ### Newer-than-supported OS quirks (e.g. Ubuntu 26.04 "resolute")
 
@@ -347,6 +351,10 @@ fly deploy
 Requires a persistent volume named `l7r_data` mounted at `/data`. The `DATABASE_URL` env var is set to `/data/l7r.db` in fly.toml. The VM is configured for 512MB RAM (shared CPU) to accommodate boto3 imports for the backup system.
 
 `fly deploy` builds the multi-stage `Dockerfile`: the `cssbuild` stage compiles the purged Tailwind stylesheet (see "Styling / CSS build") and the runtime stage copies it in, so each deploy ships a stylesheet matching that deploy's templates - no manual CSS step. `.dockerignore` keeps `.env`, `.git`, `bin/`, and dev DBs out of the image.
+
+## Fly Keep-alive Pinger
+
+Fly's `auto_stop_machines` reclaims the machine after a quiet spell, so the first request of a session pays a cold-boot delay. To avoid that during actual play without keeping the machine (and bill) running all week, every page loads `app/static/js/keepalive.js` (included from `base.html`), which once a minute checks the wall clock in **America/New_York** and, only on **Mon/Tue between 7:00pm and 11:00pm** (the campaign's session window), sends `GET /keepalive` - a public no-op endpoint in `app/routes/pages.py` that returns `ok` with `Cache-Control: no-store`. The window/timezone live in `DEFAULTS` at the top of `keepalive.js`; change them there if the session schedule changes. The pure decision logic (`shouldKeepAlive`, DST handling) is unit-tested in `tests/js/keepalive.test.js`; the browser wiring is covered by `tests/e2e/test_keepalive.py` (mark `keepalive`). Fly does not document the exact idle timeout, but it is on the order of minutes, so a 60s ping is comfortably inside it.
 
 ## Database Backups
 

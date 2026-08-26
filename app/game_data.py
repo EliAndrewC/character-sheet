@@ -1862,6 +1862,42 @@ _SCHOOLS_LIST: List[School] = [
 SCHOOLS: Dict[str, School] = {s.id: s for s in _SCHOOLS_LIST}
 
 
+# Knacks whose catalog ring is "varies" in the abstract but is pinned to the
+# character's School Ring in practice. Commune is rolled with the Ring of the
+# element of the spirits questioned; a character who has it as a school knack
+# is trained to commune with the kami of their own school element, so their
+# commune rolls always use their School Ring (GM ruling, 2026-08-08).
+# Spellcasting deliberately stays "varies": a shugenja casts spells drawn from
+# several elements, so its ring is per-spell rather than per-character.
+SCHOOL_RING_KNACK_IDS: frozenset = frozenset({"commune"})
+
+
+def effective_knack_ring(
+    knack_id: str, school_id: str, school_ring_choice: str = ""
+) -> Optional[str]:
+    """Return the Ring one character actually rolls a knack with.
+
+    For most knacks this is just the catalog value (a fixed Ring, ``"varies"``,
+    or ``None`` for passive knacks). For the school-ring-pinned knacks in
+    ``SCHOOL_RING_KNACK_IDS`` it resolves to the character's School Ring, i.e.
+    ``school_ring_choice`` (which the editor fills in for fixed-ring schools
+    too). Falls back to the catalog value when the pinning can't be resolved:
+    unknown school, knack not native to it, or no School Ring recorded yet on
+    a draft.
+    """
+    knack = SCHOOL_KNACKS.get(knack_id)
+    catalog_ring = knack.ring if knack is not None else None
+    if knack_id not in SCHOOL_RING_KNACK_IDS:
+        return catalog_ring
+    school = SCHOOLS.get(school_id)
+    if school is None or knack_id not in school.school_knacks:
+        return catalog_ring
+    choice = (school_ring_choice or "").strip()
+    if choice in RING_NAMES:
+        return choice
+    return catalog_ring
+
+
 # ---------------------------------------------------------------------------
 # ADVANTAGES
 # ---------------------------------------------------------------------------

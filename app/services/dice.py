@@ -25,6 +25,7 @@ from app.game_data import (
     SCHOOLS,
     SKILLS,
     Ring,
+    effective_knack_ring,
 )
 from app.services.rolls import (
     FREE_RAISE_VALUE,
@@ -245,6 +246,13 @@ class RollFormula:
     # set. Wound checks, athletics, and bare ring rolls stay False. See
     # _discordant_blocks_void.
     void_blocked: bool = False
+    # Commune: "Spend a void point and roll this knack with the Ring of the
+    # element of the spirits you are questioning." The point is an activation
+    # cost, not a dice bonus - the roll is unavailable without a point to
+    # spend, and paying it eats into the pool available for the usual
+    # +1k1-per-void-point spend (the per-roll cap itself is unchanged). The
+    # roll UI reads this flag; see voidActivationCost in _dice_js.html.
+    requires_void_point: bool = False
     otherworldliness_capacity: int = 0
     # Kitsune Warden Special Ability: the ring this formula was originally
     # going to use before the player substituted their school ring.
@@ -761,6 +769,7 @@ def build_knack_formula(
         )
 
     rings = character_data.get("rings", {})
+    school_id = character_data.get("school", "")
     # Knacks may have a fixed ring, "varies", a multi-ring "X or Y" value, or
     # something we don't recognise (treated as a passive knack with no ring).
     if knack_id == "pontificate":
@@ -769,12 +778,18 @@ def build_knack_formula(
         water = rings.get("Water", 2)
         air = rings.get("Air", 2)
         ring_name = "Water" if water >= air else "Air"
-    elif knack_def.ring in {r.value for r in Ring}:
-        ring_name = knack_def.ring
     else:
-        # Knacks without a ring (e.g. passive) — use the lowest ring as a placeholder.
-        # In practice these aren't typically rolled; the formula is best-effort.
-        ring_name = "Earth"
+        # A fixed catalog ring, or - for the school-ring-pinned knacks like
+        # commune - this character's School Ring.
+        resolved = effective_knack_ring(
+            knack_id, school_id, character_data.get("school_ring_choice", "")
+        )
+        if resolved in {r.value for r in Ring}:
+            ring_name = resolved
+        else:
+            # Knacks without a ring (e.g. passive) — use the lowest ring as a placeholder.
+            # In practice these aren't typically rolled; the formula is best-effort.
+            ring_name = "Earth"
     # Force a non-natural ring (Evaluate Stance rolls iaijutsu with Air). Done
     # before the Kitsune ``ring_override`` path so no swap annotation is set.
     if force_ring and force_ring in {r.value for r in Ring}:
@@ -785,7 +800,6 @@ def build_knack_formula(
         ring_name = ring_override
     ring_val = rings.get(ring_name, 2)
 
-    school_id = character_data.get("school", "")
     dan = compute_dan(native_knacks) if native_knacks else 0
 
     # Shugenja 5th Dan: non-Void rings +1 for commune and spellcasting
@@ -799,6 +813,8 @@ def build_knack_formula(
         rolled=rank + ring_val,
         kept=ring_val,
         flat=0,
+        # Commune costs a void point to activate (rules 05-school_knacks).
+        requires_void_point=(knack_id == "commune"),
         **_reroll_fields(character_data),
     )
     if swapped_from_ring:
@@ -1867,7 +1883,6 @@ def _attach_kitsune_swaps(
     override ring's value differs from the natural ring's value); equal-
     value swaps are skipped, matching the UI's gate."""
     skills = character_data.get("skills") or {}
-    school = SCHOOLS.get(character_data.get("school", ""))
 
     def _diff_or_none(key: str, swap_formula):
         if swap_formula is None:  # pragma: no cover - defensive; formula builders always return for valid inputs
@@ -1905,27 +1920,18 @@ def _attach_kitsune_swaps(
         sub = _diff_or_none(key, swap_f)
         if sub:
             out[key]["kitsune_swap"] = sub
-    # Knacks (excluding iaijutsu and any non-rollable knacks)
-    if school is not None:
-        rollable_knacks = [
-            kid for kid in school.school_knacks
-            if kid not in NON_ROLLABLE_KNACKS and kid != "iaijutsu"
-        ]
-        for knack_id in rollable_knacks:
-            key = f"knack:{knack_id}"
-            if key not in out:  # pragma: no cover - defensive; school knacks always have formulas
-                continue
-            swap_f = build_knack_formula(knack_id, character_data, ring_override=swap_ring)
-            sub = _diff_or_none(key, swap_f)
-            if sub:
-                out[key]["kitsune_swap"] = sub
+    # The Kitsune Warden's OWN school knacks are never swappable, so there is
+    # no loop over them here: absorb_void is not rolled, iaijutsu is excluded
+    # from the special ability, and commune already rolls with the School Ring
+    # (see effective_knack_ring), leaving the substitution a no-op. A guard
+    # test pins that knack list so this stays true if the school data changes.
     # Foreign rollable knacks (excluding iaijutsu)
     foreign = (character_data.get("foreign_knacks") or {}).keys()
     for knack_id in foreign:
         if knack_id == "iaijutsu" or knack_id in NON_ROLLABLE_KNACKS:  # pragma: no cover - defensive guard
             continue
         key = f"knack:{knack_id}"
-        if key not in out or "kitsune_swap" in (out[key] or {}):  # pragma: no cover - defensive; foreign knacks always build a formula and the school-knack loop has already excluded iaijutsu
+        if key not in out or "kitsune_swap" in (out[key] or {}):  # pragma: no cover - defensive; foreign knacks always build a formula and nothing above has stamped a knack swap
             continue
         swap_f = build_knack_formula(knack_id, character_data, ring_override=swap_ring)
         sub = _diff_or_none(key, swap_f)

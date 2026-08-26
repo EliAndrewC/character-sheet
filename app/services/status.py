@@ -360,29 +360,38 @@ SPRING_DISBURSAL_ID = "spring-equinox-disbursal"
 SPRING_DISBURSAL_LABEL = "Spring equinox stipend disbursal"
 
 
-# Half-up rounding to the nearest tenth-koku. Used for every koku
-# amount the player sees on the Money widget: the Spring equinox
-# disbursal AND every ledger entry. ``round(x, 1)`` is unsuitable -
-# it uses banker's rounding and is sensitive to binary-float
-# representation (``round(1.65, 1) == 1.6``), neither of which match
-# the player-visible rule we want ("1.65 rounds up to 1.7"). The
-# floor-after-shift trick gives clean half-up behaviour on every
-# value the UI can emit.
-def round_to_tenth(amount: float) -> float:
-    """Round ``amount`` half-up to the nearest tenth. 1.65 -> 1.7,
-    1.64 -> 1.6, 20.25 -> 20.3, 0 -> 0.0."""
-    return math.floor(float(amount) * 10 + 0.5) / 10
+# Half-up rounding to the nearest hundredth-koku (i.e. the zeni, the
+# copper coin worth 1/100 koku). Used for every koku amount the player
+# sees on the Money widget: the Spring equinox disbursal AND every
+# ledger entry. Sub-zeni precision (the sen, 1/1000 koku) is
+# deliberately not tracked - even poor samurai rarely bother counting
+# their sen.
+#
+# ``round(x, 2)`` is unsuitable - it uses banker's rounding and is
+# sensitive to binary-float representation (``round(1.005, 2) ==
+# 1.0``), neither of which match the player-visible rule we want
+# ("1.005 rounds up to 1.01"). The floor-after-shift trick gives clean
+# half-up behaviour; the inner ``round(..., 6)`` first scrubs the
+# representation noise that shifting by 100 exposes (``1.005 * 100 ==
+# 100.49999999999999``), which would otherwise round the value *down*.
+def round_to_hundredth(amount: float) -> float:
+    """Round ``amount`` half-up to the nearest hundredth. 1.655 -> 1.66,
+    1.654 -> 1.65, 20.25 -> 20.25, 0 -> 0.0."""
+    return math.floor(round(float(amount) * 100, 6) + 0.5) / 100
 
 
 def spring_disbursal_amount(stipend: int) -> float:
-    """25% of the annual stipend, rounded to the nearest tenth-koku.
+    """25% of the annual stipend, rounded to the nearest hundredth-koku.
 
-    Example: an 81-koku stipend disburses ``round(81 / 4) = 20.3``
-    koku at the Spring equinox; a 16-koku stipend disburses 4.0.
+    Example: an 81-koku stipend disburses ``81 / 4 = 20.25`` koku at
+    the Spring equinox; a 16-koku stipend disburses 4.0. A quarter of
+    a whole number of koku always lands exactly on a hundredth, so the
+    rounding here never actually discards anything - it just keeps the
+    return value in the same units as every other figure on the widget.
     """
     if stipend <= 0:
         return 0.0
-    return round_to_tenth(stipend / 4)
+    return round_to_hundredth(stipend / 4)
 
 
 def compute_money_state(
@@ -419,10 +428,10 @@ def compute_money_state(
         "locked": True,
     }
     entries: List[Dict[str, Any]] = [locked_entry]
-    # Accumulate in tenth-koku integer units so a long ledger of
-    # 0.1 / 0.2 / etc. entries doesn't drift via float addition.
-    # Convert back at the end.
-    on_hand_tenths = int(round(initial_amount * 10))
+    # Accumulate in hundredth-koku (zeni) integer units so a long
+    # ledger of 0.01 / 0.25 / etc. entries doesn't drift via float
+    # addition. Convert back at the end.
+    on_hand_zeni = int(round(initial_amount * 100))
     for raw in (ledger or []):
         if not isinstance(raw, dict):
             continue
@@ -430,7 +439,7 @@ def compute_money_state(
         if kind not in ("income", "expense"):
             continue
         try:
-            amount = round_to_tenth(raw.get("amount", 0))
+            amount = round_to_hundredth(raw.get("amount", 0))
         except (TypeError, ValueError):
             continue
         if amount <= 0:
@@ -451,14 +460,14 @@ def compute_money_state(
             "amount": amount,
             "locked": False,
         })
-        delta_tenths = int(round(amount * 10))
+        delta_zeni = int(round(amount * 100))
         if kind == "income":
-            on_hand_tenths += delta_tenths
+            on_hand_zeni += delta_zeni
         else:
-            on_hand_tenths -= delta_tenths
+            on_hand_zeni -= delta_zeni
     return {
         "stipend": stipend,
-        "on_hand": on_hand_tenths / 10,
+        "on_hand": on_hand_zeni / 100,
         "entries": entries,
     }
 
@@ -480,10 +489,11 @@ def new_ledger_entry(kind: str, label: str, amount: float) -> Dict[str, Any]:
     """Build a fresh entry dict suitable for appending to
     ``Character.money_ledger``. Used by the add-entry route after
     validating the inbound payload. The amount is rounded half-up to
-    the nearest tenth-koku so a 1.64 input persists as 1.6."""
+    the nearest hundredth-koku (zeni) so a 1.644 input persists as
+    1.64."""
     return {
         "id": uuid.uuid4().hex,
         "kind": kind,
         "label": label,
-        "amount": round_to_tenth(amount),
+        "amount": round_to_hundredth(amount),
     }
