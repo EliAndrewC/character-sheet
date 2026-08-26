@@ -3,6 +3,7 @@
 import pytest
 
 from app.services.xp import (
+    technique_choice_summary,
     calculate_advantage_xp,
     calculate_disadvantage_xp,
     calculate_foreign_knack_xp,
@@ -1276,3 +1277,51 @@ class TestTechniqueChoiceValidation:
         data["technique_choices"] = None
         errors = validate_character(data)
         assert any("2nd Dan technique" in e for e in errors)
+
+
+class TestTechniqueChoiceSummary:
+    """The View Sheet prints the player's actual picks next to each
+    flexible technique so a chosen (or unchosen) roll type is visible."""
+
+    def test_kitsune_summary_lists_chosen_and_missing(self):
+        data = make_character_data(
+            school="kitsune_warden",
+            knacks={"absorb_void": 3, "commune": 3, "iaijutsu": 3},
+            technique_choices={
+                "first_dan_choices": ["attack", "", "bragging"],
+                "second_dan_choice": "wound_check",
+                "third_dan_skill_choices": ["commune"],
+            },
+        )
+        summary = technique_choice_summary(data)
+        assert summary[1] == {"chosen": ["Attack", "Bragging"], "missing": 1, "count": 3}
+        assert summary[2] == {"chosen": ["Wound Check"], "missing": 0, "count": 1}
+        assert summary[3] == {"chosen": ["Commune"], "missing": 2, "count": 3}
+
+    def test_summary_only_covers_attained_dans(self):
+        data = make_character_data(
+            school="kitsune_warden",
+            knacks={"absorb_void": 1, "commune": 1, "iaijutsu": 1},
+        )
+        summary = technique_choice_summary(data)
+        assert set(summary) == {1}
+        assert summary[1] == {"chosen": [], "missing": 3, "count": 3}
+
+    def test_mantis_and_fixed_schools(self):
+        data = make_character_data(
+            school="mantis_wave_treader",
+            knacks={"athletics": 2, "iaijutsu": 2, "worldliness": 2},
+            technique_choices={"mantis_2nd_dan_free_raise": "athletics"},
+        )
+        assert technique_choice_summary(data) == {
+            2: {"chosen": ["Athletics"], "missing": 0, "count": 1}
+        }
+        assert technique_choice_summary(make_character_data()) == {}
+
+    def test_unknown_id_falls_back_to_raw_id(self):
+        data = make_character_data(
+            school="ide_diplomat",
+            knacks={"double_attack": 1, "feint": 1, "worldliness": 1},
+            technique_choices={"first_dan_choices": ["mystery_roll", "parry"]},
+        )
+        assert technique_choice_summary(data)[1]["chosen"] == ["mystery_roll", "Parry"]
