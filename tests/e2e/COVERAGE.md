@@ -717,6 +717,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] 1st Dan: extra die on precepts -> `test_school_abilities.py::test_suzume_1st_dan_extra_die_on_precepts`
 - [x] 1st Dan: extra die on wound check -> `test_school_abilities.py::test_suzume_1st_dan_extra_die_on_wound_check`
 - [x] 2nd Dan: flexible picker visible at Dan 2, persists choice, applies +5 -> `test_school_abilities.py::test_suzume_2nd_dan_picker_visible_and_saves`
+- [x] View Sheet Techniques list shows "Chosen: ..." / "N of M not chosen yet" next to each flexible technique (Kitsune 1st/2nd Dan), nothing for unattained Dans or fixed-technique schools -> `test_school_abilities.py::test_sheet_techniques_list_shows_chosen_and_unchosen_picks`
 - [x] 2nd Dan: unset flexible pick publishes fine but is listed under View Sheet Validation Issues until chosen (same check covers Ide/Ishi/Kitsune/Shugenja, Mantis 2nd Dan, Kitsune 1st/3rd Dan, Ishi 1st Dan) -> `test_school_abilities.py::test_flexible_2nd_dan_unset_is_soft_validation_issue`
 - [x] 3rd Dan: spend raise on sincerity (precepts-driven adventure pool) -> `test_school_abilities.py::test_suzume_3rd_dan_precepts_raises`
 - [x] 5th Dan: always-TN skill input (shared with Doji 5th Dan) -> `test_school_abilities.py::test_suzume_5th_dan_always_tn_skill_input`

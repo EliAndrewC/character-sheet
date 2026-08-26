@@ -54,6 +54,7 @@ from app.services.versions import compute_version_diff
 from app.services.xp import (
     calculate_xp_breakdown,
     editor_xp_view,
+    technique_choice_summary,
     validate_character,
 )
 
@@ -493,6 +494,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
 
     xp_breakdown = calculate_xp_breakdown(char_dict)
     errors = validate_character(char_dict)
+    technique_choices_summary = technique_choice_summary(char_dict)
     school = SCHOOLS.get(character.school)
 
     # Build the knack list for this character's school. ``ring`` is the ring
@@ -1303,6 +1305,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "school": school,
             "xp_breakdown": xp_breakdown,
             "errors": errors,
+            "technique_choices_summary": technique_choices_summary,
             "skills": SKILLS,
             "combat_skills": COMBAT_SKILLS,
             "attack_specs": attack_specs,

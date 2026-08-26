@@ -1127,6 +1127,53 @@ TECHNIQUE_CHOICE_REQUIREMENTS = [
 ]
 
 
+COMBAT_ROLL_LABELS = {
+    "attack": "Attack",
+    "damage": "Damage",
+    "initiative": "Initiative",
+    "parry": "Parry",
+    "wound_check": "Wound Check",
+}
+
+
+def _technique_choice_label(pick: str) -> str:
+    """Display name for a technique-choice id (skill, knack or combat roll)."""
+    if pick in SKILLS:
+        return SKILLS[pick].name
+    if pick in SCHOOL_KNACKS:
+        return SCHOOL_KNACKS[pick].name
+    return COMBAT_ROLL_LABELS.get(pick, pick)
+
+
+def _technique_choice_picks(character_data: dict, req: dict) -> List[str]:
+    """Non-blank picks stored for one TECHNIQUE_CHOICE_REQUIREMENTS entry."""
+    technique_choices = character_data.get("technique_choices") or {}
+    raw = technique_choices.get(req["key"])
+    picks = raw if isinstance(raw, list) else [raw]
+    return [p for p in picks if p]
+
+
+def technique_choice_summary(character_data: dict) -> Dict[int, dict]:
+    """Per-Dan summary of the player's technique roll-type picks, for the
+    View Sheet's Techniques list: ``{dan: {"chosen": [labels],
+    "missing": n, "count": m}}``. Only Dans the character has attained
+    for schools with a picker appear; fixed-technique schools get ``{}``."""
+    school_id = character_data.get("school", "")
+    knack_data = character_data.get("knacks", {})
+    dan = compute_dan(knack_data) if knack_data else 0
+    summary: Dict[int, dict] = {}
+    for req in TECHNIQUE_CHOICE_REQUIREMENTS:
+        if school_id not in req["schools"] or dan < req["dan"]:
+            continue
+        picks = _technique_choice_picks(character_data, req)
+        summary[req["dan"]] = {
+            "chosen": [_technique_choice_label(p) for p in picks],
+            "missing": max(0, req["count"] - len(picks)),
+            "count": req["count"],
+        }
+    return summary
+
+
 def validate_character(character_data: dict) -> List[str]:
     """Return a list of validation error strings.  Empty list means valid."""
     errors: List[str] = []
@@ -1326,14 +1373,10 @@ def validate_character(character_data: dict) -> List[str]:
     # or publishing (the editor allows it), but it is a soft issue on the
     # View Sheet so the player remembers to choose. Only pickers the
     # editor actually offers are listed here.
-    technique_choices = character_data.get("technique_choices") or {}
     for req in TECHNIQUE_CHOICE_REQUIREMENTS:
         if school_id not in req["schools"] or dan < req["dan"]:
             continue
-        raw = technique_choices.get(req["key"])
-        picks = raw if isinstance(raw, list) else [raw]
-        chosen = len([p for p in picks if p])
-        missing_count = req["count"] - chosen
+        missing_count = req["count"] - len(_technique_choice_picks(character_data, req))
         if missing_count <= 0:
             continue
         ordinal = {1: "1st", 2: "2nd", 3: "3rd"}[req["dan"]]

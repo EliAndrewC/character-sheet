@@ -21,7 +21,19 @@
         <div>
             <p class="text-sm font-medium mb-1">Techniques:</p>
             {% for d, desc in school.techniques.items() %}
-            <div class="text-sm mb-2 {{ 'font-semibold' if d <= dan else 'opacity-40' }}"><span class="font-medium {{ 'text-accent' if d <= dan else '' }}">{{ d }}{{ 'st' if d == 1 else ('nd' if d == 2 else ('rd' if d == 3 else 'th')) }} Dan:</span> <span class="whitespace-pre-line">{{ desc }}</span></div>
+            <div class="text-sm mb-2 {{ 'font-semibold' if d <= dan else 'opacity-40' }}"><span class="font-medium {{ 'text-accent' if d <= dan else '' }}">{{ d }}{{ 'st' if d == 1 else ('nd' if d == 2 else ('rd' if d == 3 else 'th')) }} Dan:</span> <span class="whitespace-pre-line">{{ desc }}</span>
+                {# Player-picked roll types for flexible techniques (see
+                   technique_choice_summary): show what was chosen, and
+                   flag what is still unchosen so a missing pick is visible
+                   here as well as under Validation Issues. #}
+                {% set tc = technique_choices_summary.get(d) if technique_choices_summary else none %}
+                {% if tc %}
+                <span class="block mt-1 text-xs" data-testid="technique-choice-{{ d }}">
+                    {% if tc.chosen %}<span class="text-accent">Chosen: {{ tc.chosen | join(', ') }}</span>{% endif %}
+                    {% if tc.missing %}<span class="text-red-700">{{ tc.missing }} of {{ tc.count }} not chosen yet - pick in the editor</span>{% endif %}
+                </span>
+                {% endif %}
+            </div>
             {% endfor %}
         </div>
         {% endif %}

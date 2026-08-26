@@ -10200,6 +10200,41 @@ def test_kitsune_2nd_dan_picker_visible_and_saves(page, live_server_url):
 
 
 @pytest.mark.school_abilities
+def test_sheet_techniques_list_shows_chosen_and_unchosen_picks(page, live_server_url):
+    """The View Sheet's Techniques list prints the player's picks next
+    to each flexible technique ("Chosen: ...") and flags unchosen ones
+    ("N of M not chosen yet"), so a missing pick is visible in the
+    school section and not only under Validation Issues."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "KitsuneTechList")
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    click_plus(page, "knack_absorb_void", 1)
+    click_plus(page, "knack_commune", 1)
+    click_plus(page, "knack_iaijutsu", 1)
+    page.wait_for_selector('[data-testid="kitsune-1st-dan-picker"]', state="visible", timeout=5000)
+    page.wait_for_selector('[data-testid="flex-2nd-dan-picker"]', state="visible", timeout=5000)
+    page.locator('[data-testid="kitsune-1st-dan-slot-0"]').select_option("attack")
+    page.wait_for_timeout(200)
+    page.locator('[data-testid="flex-2nd-dan-select"]').select_option("wound_check")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Kitsune technique list")
+    first = page.locator('[data-testid="technique-choice-1"]')
+    second = page.locator('[data-testid="technique-choice-2"]')
+    assert "Chosen: Attack" in first.text_content()
+    assert "2 of 3 not chosen yet" in first.text_content()
+    assert "Chosen: Wound Check" in second.text_content()
+    assert "not chosen" not in second.text_content()
+    # 3rd Dan not attained: no choice line under it.
+    assert page.locator('[data-testid="technique-choice-3"]').count() == 0
+    # Fixed-technique schools have no choice lines at all.
+    _create_char(page, live_server_url, "AkodoTechList", "akodo_bushi")
+    assert page.locator('[data-testid^="technique-choice-"]').count() == 0
+
+
+@pytest.mark.school_abilities
 def test_suzume_2nd_dan_picker_visible_and_saves(page, live_server_url):
     """Editor UI: the flexible 2nd Dan picker appears at Dan>=2 and saves."""
     page.goto(live_server_url)
