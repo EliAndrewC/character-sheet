@@ -860,25 +860,32 @@
             <div x-show="FLEXIBLE_2ND_DAN_SCHOOLS.has(school) && currentDan() >= 2"
                  x-cloak class="mt-3 p-3 bg-white/60 border border-accent/20 rounded"
                  data-testid="flex-2nd-dan-picker">
-                <label class="block text-sm font-medium mb-1">
+                <label class="block text-sm font-medium mb-1"
+                       x-text="school === 'isawa_ishi' ? '2nd Dan free raise - pick one skill' : '2nd Dan free raise - pick one roll type'">
                     2nd Dan free raise - pick one roll type
                 </label>
+                <!-- Isawa Ishi's 2nd Dan is "rolls for any one skill", so the
+                     combat-roll and knack groups are omitted for that school. -->
                 <select x-model="techniqueChoices.second_dan_choice"
                         x-effect="$nextTick(() => $el.value = techniqueChoices.second_dan_choice || '')"
                         @change="markDirty()"
                         data-testid="flex-2nd-dan-select"
                         class="border rounded px-3 py-2 text-sm w-full sm:w-auto">
                     <option value="">(none selected)</option>
-                    <optgroup label="Combat rolls">
-                        <template x-for="id in MANTIS_2ND_DAN_COMBAT_ROLLS" :key="'fc'+id">
-                            <option :value="id" x-text="MANTIS_2ND_DAN_LABELS[id]"></option>
-                        </template>
-                    </optgroup>
-                    <optgroup label="School knacks">
-                        <template x-for="kid in mantisEligibleKnacks()" :key="'fk'+kid">
-                            <option :value="kid" x-text="KNACK_NAMES[kid] || kid"></option>
-                        </template>
-                    </optgroup>
+                    <template x-if="school !== 'isawa_ishi'">
+                        <optgroup label="Combat rolls">
+                            <template x-for="id in MANTIS_2ND_DAN_COMBAT_ROLLS" :key="'fc'+id">
+                                <option :value="id" x-text="MANTIS_2ND_DAN_LABELS[id]"></option>
+                            </template>
+                        </optgroup>
+                    </template>
+                    <template x-if="school !== 'isawa_ishi'">
+                        <optgroup label="School knacks">
+                            <template x-for="kid in mantisEligibleKnacks()" :key="'fk'+kid">
+                                <option :value="kid" x-text="KNACK_NAMES[kid] || kid"></option>
+                            </template>
+                        </optgroup>
+                    </template>
                     <optgroup label="Skills">
                         <template x-for="sid in MANTIS_2ND_DAN_SKILL_IDS" :key="'fs'+sid">
                             <option :value="sid" x-text="SKILL_NAMES[sid] || sid"></option>

@@ -45,7 +45,7 @@
 **Status:** Fully implemented via technique_choices.
 - `second_dan_free_raise: None` in `SCHOOL_TECHNIQUE_BONUSES` (choice is player-selected, not hardcoded).
 - Server: `app/models.py` stores player choice in `technique_choices` JSON column. `app/services/dice.py:_apply_school_technique_bonus()` applies +5 flat bonus for the chosen skill.
-- Editor UI allows selecting skill.
+- Editor UI: the shared flexible 2nd Dan picker (`flex-2nd-dan-select`) offers **skills only** for Ishi (combat rolls / knacks omitted, label "pick one skill"); a stored non-skill pick is a soft validation issue on the View Sheet.
 
 **Implementation:** `app/game_data.py` (`second_dan_free_raise: None`), `app/models.py` (`technique_choices`), `app/services/dice.py:_apply_school_technique_bonus()`.
 

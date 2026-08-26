@@ -1373,6 +1373,19 @@ def validate_character(character_data: dict) -> List[str]:
     # or publishing (the editor allows it), but it is a soft issue on the
     # View Sheet so the player remembers to choose. Only pickers the
     # editor actually offers are listed here.
+    # Isawa Ishi's 2nd Dan is "rolls for any one skill" - narrower than the
+    # shared picker's roll-type pool - so a stored combat-roll / knack pick
+    # is flagged (softly) rather than silently honoured.
+    if school_id == "isawa_ishi" and dan >= 2:
+        ishi_pick = (character_data.get("technique_choices") or {}).get(
+            "second_dan_choice"
+        )
+        if ishi_pick and ishi_pick not in SKILLS:
+            errors.append(
+                f"2nd Dan technique: the free raise must be a skill, not "
+                f"{_technique_choice_label(ishi_pick)} (Isawa Ishi: \"rolls "
+                f"for any one skill\")."
+            )
     for req in TECHNIQUE_CHOICE_REQUIREMENTS:
         if school_id not in req["schools"] or dan < req["dan"]:
             continue
