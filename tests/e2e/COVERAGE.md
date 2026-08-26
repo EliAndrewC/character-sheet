@@ -1015,6 +1015,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Earned XP field updates budget → `test_editor_controls.py::test_earned_xp_updates_budget`
 - [x] Notes textarea saves → `test_editor_controls.py::test_notes_saves`
 - [x] Save status shows "Saved" → `test_editor_controls.py::test_save_status_indicator`
+- [x] Locked Choose School Ring picker displays the persisted ring (not the first option) after Apply Changes and after reload → `test_editor_controls.py::test_school_ring_picker_shows_persisted_ring_after_reload`
 
 ## Character Editor — Name Generator (edit.html)
 

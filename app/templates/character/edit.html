@@ -621,6 +621,7 @@
             <div x-show="school && SCHOOL_RING_OPTIONS[school] && SCHOOL_RING_OPTIONS[school].length > 1" class="mt-3">
                 <label class="block text-sm font-medium mb-1">Choose School Ring</label>
                 <select x-model="schoolRingChoice" @change="onSchoolRingChange()"
+                        x-effect="$nextTick(() => $el.value = schoolRingChoice || '')"
                         {% if not is_first_version %}disabled{% endif %}
                         data-testid="school-ring-choice"
                         class="border rounded px-3 py-2 {% if not is_first_version %}opacity-60 cursor-not-allowed{% endif %}">
