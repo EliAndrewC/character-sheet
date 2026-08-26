@@ -2,7 +2,7 @@
 
 {% block title %}L7R - {{ group.name }} money{% endblock %}
 
-{% block nav_center %}{{ group.name }} - Money{% endblock %}
+{% block nav_center %}<a href="/groups/{{ group.id }}" class="pointer-events-auto hover:underline" data-testid="group-nav-link">{{ group.name }}</a> Money{% endblock %}
 
 {# This is a GM tool; the "New Character" control isn't a primary action here. #}
 {% block nav_new_character %}{% endblock %}

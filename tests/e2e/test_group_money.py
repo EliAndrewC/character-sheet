@@ -1,6 +1,7 @@
 """E2E: GM group money-awards page (inline individual + mass awards)."""
 
 import uuid
+import re
 import pytest
 
 from tests.e2e.helpers import create_and_apply
@@ -174,6 +175,20 @@ def test_locked_disbursal_has_no_edit_or_delete(page, live_server_url):
     # The only entry is the locked disbursal; it has no edit/delete controls.
     assert card.locator('[data-testid="entry-edit"]').count() == 0
     assert card.locator('[data-testid="entry-delete"]').count() == 0
+
+
+def test_money_page_nav_title_links_back_to_group(page, live_server_url):
+    """Nav title reads "<Group> Money" with the group name (only) linking
+    back to the Group Summary - the standard convention for group sub-pages."""
+    _make_money_group(page, live_server_url, ["Nav Link Char"])
+    link = page.locator('[data-testid="group-nav-link"]')
+    gname = link.text_content().strip()
+    assert gname.startswith("Money-")
+    nav_text = " ".join(page.locator("nav").first.text_content().split())
+    assert f"{gname} Money" in nav_text
+    assert f"{gname} - Money" not in nav_text
+    link.click()
+    page.wait_for_url(re.compile(r".*/groups/\d+$"), timeout=10000)
 
 
 def test_money_page_is_admin_only(page, page_nonadmin, live_server_url):

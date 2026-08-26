@@ -967,6 +967,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 ## GM — Group Money Awards (group_money.html)
 
+- [x] Nav title reads "<Group> Money" with the group name linking back to the Group Summary (group sub-page convention) → `test_group_money.py::test_money_page_nav_title_links_back_to_group`
 - [x] Mass award adds the same income entry to every character and refreshes each on-hand inline (no reload) → `test_group_money.py::test_mass_award_updates_all_characters_inline`
 - [x] Inline individual award updates only the targeted character's ledger + on-hand (no reload) → `test_group_money.py::test_individual_award_updates_only_that_character_inline`
 - [x] GM money link hidden from non-admins and the money page rejects them (403) → `test_group_money.py::test_money_page_is_admin_only`
@@ -1268,7 +1269,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Homepage group header is a link to the Group Summary; chars listed alphabetically; social adv chip renders → `test_groups.py::test_homepage_group_header_links_to_group_summary`
 - [x] Group Summary hides ``is_hidden`` characters even from admins → `test_groups.py::test_group_summary_hides_hidden_characters`
 - [x] Dark Secret map: GM's Dark Secret chip on Group Summary links to `/groups/{id}/dark-secrets`; map renders knower -> holder arrow (data-from/data-to), portraits + names, halo on uninvolved character → `test_groups.py::test_dark_secret_map_page`
-- [x] Dark Secret map: hovering an arrow lights it up (accent, thicker stroke) and shows the instant "<holder>'s dark secret is known by <knower>" tooltip; hovering a halo shows the "Righteousness is its own reward..." tooltip; tooltip keeps a fixed 288px width and flips left of the cursor near the right edge; leaving hides it; the group-name nav link returns to the group → `test_groups.py::test_dark_secret_map_page`
+- [x] Dark Secret map: hovering an arrow lights it up (accent, thicker stroke) and shows the instant "<holder>'s dark secret is known by <knower>" tooltip; hovering a halo shows the "Righteousness is its own reward..." tooltip; tooltip keeps a fixed 288px width and flips left of the cursor near the right edge; leaving hides it; the group-name nav link (title reads "<Group> Dark Secrets") returns to the group → `test_groups.py::test_dark_secret_map_page`
 - [x] Group Summary Unlucky chips render correct styling per-character (gold unused vs gray strikethrough used) when multiple party members have populated adventure_state - regression for the double-quoted x-data attribute that truncated on embedded JSON → `test_groups.py::test_group_summary_unlucky_chips_render_correct_styling_per_character`
 - [x] Imperial Favor's family + post modifiers collapse into a single ``for Imperials`` pill (and the expanded view still shows both contexts) → `test_sheet_display.py::test_status_imperial_favor_alone_renders_single_pill`
 - [x] Lineage dropdown lifecycle (pick canonical, ``?`` help-tooltip carries the description, switch to Other, custom value round-trips, View Sheet shows it, metadata-only edit doesn't flip unpublished) → `test_apply_modal.py::test_lineage_metadata_full_lifecycle`

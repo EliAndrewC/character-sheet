@@ -251,7 +251,7 @@
                     {# GM: the chip links to the group's Dark Secret map.
                        The hover tooltip keeps showing the secret text. #}
                     <a href="/groups/{{ group.id }}/dark-secrets"
-                       class="tooltip-trigger relative inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-rose-100 text-rose-900 text-xs font-medium cursor-pointer align-middle hover:bg-rose-200 underline decoration-dotted"
+                       class="tooltip-trigger relative inline-flex items-center px-2 py-0.5 mr-1.5 mb-1.5 rounded-full bg-rose-100 text-rose-900 text-xs font-medium cursor-pointer align-middle hover:bg-rose-200"
                        data-dis-id="{{ did }}" data-testid="dark-secret-map-link">{{ chip_label }}{% if has_detail %}<span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-80 whitespace-pre-line font-normal text-left no-underline">{%- if detail.get('text') -%}{{ detail.text }}{%- endif -%}{%- if detail.get('text') and ds_knower %}
 {% endif %}{%- if ds_knower -%}(known by {{ ds_knower }}){%- endif -%}</span>{% endif %}</a>
                     {% elif has_detail %}
