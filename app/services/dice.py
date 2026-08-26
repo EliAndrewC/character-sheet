@@ -1413,14 +1413,18 @@ def build_all_roll_formulas(
             # Kitsune Warden 3rd Dan extension: applicable_to is the
             # always-on list (e.g. ["attack", "wound_check"]) and the
             # player picks `applicable_to_choices_count` extra skills via
-            # technique_choices.third_dan_skill_choices. Iaijutsu is never
-            # eligible (UI excludes it; this is a defense-in-depth drop).
+            # technique_choices.third_dan_skill_choices. Picks may be
+            # skills or commune (the one Kitsune school knack that is
+            # actually rolled and not rules-excluded). Iaijutsu is never
+            # eligible and non-rollable knacks (absorb void etc.) can't be
+            # raised; the UI excludes both and this is a defense-in-depth
+            # drop for crafted POSTs.
             if t3.get("applicable_to_choices_count"):
                 player_picks = (character_data.get("technique_choices") or {}).get(
                     "third_dan_skill_choices"
                 ) or []
                 for pick in player_picks:
-                    if pick and pick != "iaijutsu":
+                    if pick and pick != "iaijutsu" and pick not in NON_ROLLABLE_KNACKS:
                         third_dan_applicable.add(pick)
 
     def _annotate_third_dan(key: str, formula_dict: dict) -> dict:

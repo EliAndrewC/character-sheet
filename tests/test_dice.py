@@ -4532,6 +4532,28 @@ class TestKitsuneWarden:
         formulas = build_all_roll_formulas(char)
         assert formulas["knack:iaijutsu"]["adventure_raises_max_per_roll"] == 0
 
+    def test_third_dan_commune_pick_annotates_commune_knack_roll(self):
+        # GM ruling: commune is the one Kitsune school knack that may be
+        # chosen as a 3rd Dan pick (it is actually rolled, unlike absorb
+        # void, and is not rules-excluded like iaijutsu).
+        char = self._char_dan3(picks=["commune", "bragging", "tact"])
+        formulas = build_all_roll_formulas(char)
+        assert formulas["knack:commune"]["adventure_raises_max_per_roll"] == 3
+
+    def test_third_dan_commune_not_annotated_unless_picked(self):
+        char = self._char_dan3(picks=["bragging", "tact", "sincerity"])
+        formulas = build_all_roll_formulas(char)
+        assert formulas["knack:commune"]["adventure_raises_max_per_roll"] == 0
+
+    def test_third_dan_absorb_void_smuggled_pick_is_ignored(self):
+        # Absorb void is never rolled, so a crafted POST naming it must
+        # neither crash nor leak into the applicable set; the other picks
+        # still work.
+        char = self._char_dan3(picks=["absorb_void", "bragging", "tact"])
+        formulas = build_all_roll_formulas(char)
+        assert "knack:absorb_void" not in formulas
+        assert formulas["skill:bragging"]["adventure_raises_max_per_roll"] == 3
+
     def test_third_dan_per_adventure_pool_size_is_2x_precepts(self):
         """The per-adventure counter (built by routes/pages.py) reads
         2 * source_skill from the third_dan dict. Confirm Kitsune's

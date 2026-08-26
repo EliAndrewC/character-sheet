@@ -443,11 +443,13 @@ def compute_skill_roll(
         t3 = bonuses["third_dan"]
         applicable = set(t3["applicable_to"])
         # Kitsune Warden 3rd Dan: extend with player-chosen skills
-        # (technique_choices.third_dan_skill_choices). Iaijutsu is dropped
-        # defensively even if it sneaks into the picks.
+        # (technique_choices.third_dan_skill_choices) - skills or commune.
+        # Iaijutsu and non-rollable knacks (absorb void) are dropped
+        # defensively even if they sneak into the picks.
         if t3.get("applicable_to_choices_count"):
+            from app.services.dice import NON_ROLLABLE_KNACKS
             for pick in (technique_choices.get("third_dan_skill_choices") or []):
-                if pick and pick != "iaijutsu":
+                if pick and pick != "iaijutsu" and pick not in NON_ROLLABLE_KNACKS:
                     applicable.add(pick)
         if skill_id in applicable:
             source_rank = skills.get(t3["source_skill"], 0)

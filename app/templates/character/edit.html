@@ -706,7 +706,8 @@
                 </label>
                 <p class="text-xs text-ink/60 mb-2">
                     Attack and wound check rolls always qualify. Pick three
-                    skills (iaijutsu is not eligible) to add to the list.
+                    skills to add to the list. Commune is also eligible;
+                    iaijutsu and absorb void are not.
                 </p>
                 <div class="grid gap-2 sm:grid-cols-3">
                     <template x-for="slot in [0, 1, 2]" :key="'k3d-slot-'+slot">
@@ -715,11 +716,20 @@
                                 @change="setKitsune3rdDanChoice(slot, $event.target.value)"
                                 class="border rounded px-3 py-2 text-sm w-full">
                             <option value="">(none selected)</option>
-                            <template x-for="sid in KITSUNE_3RD_DAN_SKILL_IDS" :key="'k3s'+sid+slot">
-                                <option :value="sid"
-                                        :disabled="kitsune3rdDanIsTakenInOtherSlot(slot, sid)"
-                                        x-text="SKILL_NAMES[sid] || sid"></option>
-                            </template>
+                            <optgroup label="School knacks">
+                                <template x-for="kid in KITSUNE_3RD_DAN_KNACK_IDS" :key="'k3k'+kid+slot">
+                                    <option :value="kid"
+                                            :disabled="kitsune3rdDanIsTakenInOtherSlot(slot, kid)"
+                                            x-text="KNACK_NAMES[kid] || kid"></option>
+                                </template>
+                            </optgroup>
+                            <optgroup label="Skills">
+                                <template x-for="sid in KITSUNE_3RD_DAN_SKILL_IDS" :key="'k3s'+sid+slot">
+                                    <option :value="sid"
+                                            :disabled="kitsune3rdDanIsTakenInOtherSlot(slot, sid)"
+                                            x-text="SKILL_NAMES[sid] || sid"></option>
+                                </template>
+                            </optgroup>
                         </select>
                     </template>
                 </div>
@@ -1812,13 +1822,17 @@ const KITSUNE_1ST_DAN_LABELS = {
 };
 
 // Kitsune Warden 3rd Dan picker: "three skills of your choice" added to the
-// always-on attack + wound_check applicable_to list. SKILLS table only -
-// knacks and combat-roll-types are NOT eligible. Iaijutsu is explicitly
-// excluded (the 3rd Dan and special ability both bar iaijutsu, while the
-// 1st Dan picker does not). Persists into techniqueChoices.third_dan_skill_choices.
+// always-on attack + wound_check applicable_to list. Eligible: the SKILLS
+// table plus commune (GM ruling: the one Kitsune school knack that is
+// actually rolled and not rules-excluded). Combat-roll-types are NOT
+// eligible. Iaijutsu is explicitly excluded (the 3rd Dan and special
+// ability both bar iaijutsu, while the 1st/2nd Dan pickers do not) and
+// absorb void is never rolled. Persists into
+// techniqueChoices.third_dan_skill_choices.
 const KITSUNE_3RD_DAN_SKILL_IDS = MANTIS_2ND_DAN_SKILL_IDS.filter(
     sid => sid !== 'iaijutsu'
 );
+const KITSUNE_3RD_DAN_KNACK_IDS = ['commune'];
 
 // Isawa Ishi 1st Dan picker: "precepts and any two types of rolls of your
 // choice." Precepts is auto-applied server-side, so the option list omits

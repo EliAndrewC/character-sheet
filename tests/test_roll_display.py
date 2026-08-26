@@ -1054,6 +1054,14 @@ class TestKitsuneWardenSheetDisplay:
         r = compute_skill_roll("bragging", char)
         assert r.adventure_raises_available == 0
 
+    def test_third_dan_picks_absorb_void_dropped_defensively(self):
+        """Absorb void is never rolled; a smuggled pick is ignored and the
+        remaining picks still apply."""
+        char = self._kitsune(dan=3, third_picks=["absorb_void", "tact", "etiquette"])
+        for sid in ("tact", "etiquette"):
+            assert compute_skill_roll(sid, char).adventure_raises_available == 6
+        assert compute_skill_roll("bragging", char).adventure_raises_available == 0
+
     def test_dan_2_with_first_dan_pick_stacks(self):
         """A Dan 2 Kitsune with picks for both 1st and 2nd Dan on
         bragging stacks: +1 die AND +5 flat."""

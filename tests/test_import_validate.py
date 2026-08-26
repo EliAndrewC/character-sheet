@@ -444,6 +444,49 @@ def test_kitsune_warden_third_dan_skill_choices_resolved() -> None:
     ]
 
 
+def test_kitsune_warden_third_dan_accepts_commune() -> None:
+    """Commune is the one Kitsune school knack eligible as a 3rd Dan pick,
+    so it resolves to the knack id alongside ordinary skills."""
+    payload = _canonical_payload()
+    payload["third_dan_skill_choices"] = ["Commune", "Bragging", "Tact"]
+    data, report = _run(payload)
+    assert data["technique_choices"]["third_dan_skill_choices"] == [
+        "commune", "bragging", "tact",
+    ]
+    assert not any(d.kind == "technique_choice" for d in report.dropped)
+
+
+def test_kitsune_warden_third_dan_fuzzy_commune_flagged_ambiguous() -> None:
+    """A misspelled commune still resolves, but is recorded as an ambiguity
+    so the Import Notes flag the guess."""
+    payload = _canonical_payload()
+    payload["third_dan_skill_choices"] = ["Comune", "Bragging"]
+    data, report = _run(payload)
+    assert data["technique_choices"]["third_dan_skill_choices"] == [
+        "commune", "bragging",
+    ]
+    assert any(
+        a.kind == "technique_choice" and a.resolved_id == "commune"
+        and a.name_as_written == "Comune"
+        for a in report.ambiguities
+    )
+
+
+def test_kitsune_warden_third_dan_drops_absorb_void_with_warning() -> None:
+    """Absorb void is never rolled, so it is dropped with a rules reason."""
+    payload = _canonical_payload()
+    payload["third_dan_skill_choices"] = ["Absorb Void", "Bragging", "Tact"]
+    data, report = _run(payload)
+    assert data["technique_choices"]["third_dan_skill_choices"] == [
+        "bragging", "tact",
+    ]
+    assert any(
+        d.kind == "technique_choice" and d.name_as_written == "Absorb Void"
+        and "absorb void" in (d.reason or "").lower()
+        for d in report.dropped
+    )
+
+
 def test_kitsune_warden_third_dan_drops_iaijutsu_with_warning() -> None:
     """Iaijutsu in third_dan_skill_choices is dropped (rules-excluded)
     and surfaces a DroppedEntry with that reason in the import report."""

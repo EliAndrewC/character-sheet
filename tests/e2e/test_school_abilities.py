@@ -10347,6 +10347,82 @@ def test_kitsune_3rd_dan_skill_picker_excludes_iaijutsu(page, live_server_url):
 
 
 @pytest.mark.school_abilities
+def test_kitsune_3rd_dan_skill_picker_offers_commune_not_absorb_void(page, live_server_url):
+    """Editor: commune is the one Kitsune school knack eligible as a 3rd Dan
+    pick; absorb void (never rolled) is not offered."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    click_plus(page, "knack_absorb_void", 2)
+    click_plus(page, "knack_commune", 2)
+    click_plus(page, "knack_iaijutsu", 2)
+    page.wait_for_timeout(200)
+    page.wait_for_selector('[data-testid="kitsune-3rd-dan-picker"]', state="visible", timeout=5000)
+    for slot in (0, 1, 2):
+        options = page.locator(f'[data-testid="kitsune-3rd-dan-slot-{slot}"] option').all_text_contents()
+        assert any(o.strip() == "Commune" for o in options), \
+            f"Commune should be in 3rd Dan picker slot {slot}; got: {options}"
+        assert all("Absorb Void" not in o for o in options), \
+            f"Absorb Void should NOT be in 3rd Dan picker slot {slot}; got: {options}"
+    # Picking commune in slot 0 disables it in the other two slots.
+    page.locator('[data-testid="kitsune-3rd-dan-slot-0"]').select_option("commune")
+    page.wait_for_timeout(100)
+    assert page.locator('[data-testid="kitsune-3rd-dan-slot-1"] option[value="commune"]').is_disabled()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_3rd_dan_commune_pick_offers_raise_button(page, live_server_url):
+    """Picking commune as a 3rd Dan applicable roll exposes the Spend-raise
+    button when rolling the commune knack."""
+    _make_kitsune(page, live_server_url, "K3Commune", dan=3,
+                  picks=["commune", "tact", "sincerity"],
+                  skill_overrides={"precepts": 1})
+    formula_max = page.evaluate("""() => {
+        const el = document.getElementById('roll-formulas');
+        const data = JSON.parse(el.textContent || '{}');
+        return data['knack:commune']?.adventure_raises_max_per_roll || 0;
+    }""")
+    assert formula_max == 1, f"Expected adventure_raises_max_per_roll=1 on commune, got {formula_max}"
+    _roll_via_menu_or_direct(page, "knack:commune")
+    assert page.locator('[data-action="spend-raise"]').is_visible()
+
+
+@pytest.mark.school_abilities
+def test_kitsune_1st_dan_picker_excludes_absorb_void(page, live_server_url):
+    """Absorb void is never rolled, so the 1st Dan extra-die picker omits
+    it while still offering commune."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    select_school(page, "kitsune_warden")
+    page.wait_for_selector('[data-testid="kitsune-1st-dan-slot-0"]', state="visible", timeout=5000)
+    options = page.locator('[data-testid="kitsune-1st-dan-slot-0"] option').all_text_contents()
+    assert any(o.strip() == "Commune" for o in options), f"Expected Commune; got: {options}"
+    assert all("Absorb Void" not in o for o in options), f"Absorb Void should be absent; got: {options}"
+
+
+@pytest.mark.school_abilities
+def test_kitsune_2nd_dan_picker_offers_commune_and_iaijutsu_not_absorb_void(page, live_server_url):
+    """The flexible 2nd Dan free-raise picker offers commune and iaijutsu
+    (both rolled) but not absorb void."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    select_school(page, "kitsune_warden")
+    page.locator('text="Choose School Ring"').locator('..').locator('select').select_option("Water")
+    click_plus(page, "knack_absorb_void", 1)
+    click_plus(page, "knack_commune", 1)
+    click_plus(page, "knack_iaijutsu", 1)
+    page.wait_for_selector('[data-testid="flex-2nd-dan-picker"]', state="visible", timeout=5000)
+    options = page.locator('[data-testid="flex-2nd-dan-select"] option').all_text_contents()
+    assert any(o.strip() == "Commune" for o in options), f"Expected Commune; got: {options}"
+    assert any(o.strip() == "Iaijutsu" for o in options), f"Expected Iaijutsu; got: {options}"
+    assert all("Absorb Void" not in o for o in options), f"Absorb Void should be absent; got: {options}"
+
+
+@pytest.mark.school_abilities
 def test_kitsune_3rd_dan_chosen_skill_offers_raise_button(page, live_server_url):
     """Picking 'bragging' as a 3rd Dan applicable skill exposes the
     Spend-raise button when rolling bragging."""

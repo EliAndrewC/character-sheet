@@ -410,6 +410,10 @@ The three failures were:
 - [x] 2nd Dan flexible-free-raise picker visible and saves -> `test_school_abilities.py::test_kitsune_2nd_dan_picker_visible_and_saves`
 - [x] 3rd Dan skill picker excludes iaijutsu -> `test_school_abilities.py::test_kitsune_3rd_dan_skill_picker_excludes_iaijutsu`
 - [x] 3rd Dan chosen skill offers raise button -> `test_school_abilities.py::test_kitsune_3rd_dan_chosen_skill_offers_raise_button`
+- [x] 3rd Dan skill picker offers commune (in every slot, distinct across slots) but not absorb void -> `test_school_abilities.py::test_kitsune_3rd_dan_skill_picker_offers_commune_not_absorb_void`
+- [x] 3rd Dan commune pick offers raise button on the commune knack roll -> `test_school_abilities.py::test_kitsune_3rd_dan_commune_pick_offers_raise_button`
+- [x] 1st Dan picker offers commune but not absorb void -> `test_school_abilities.py::test_kitsune_1st_dan_picker_excludes_absorb_void`
+- [x] 2nd Dan picker offers commune + iaijutsu but not absorb void -> `test_school_abilities.py::test_kitsune_2nd_dan_picker_offers_commune_and_iaijutsu_not_absorb_void`
 - [x] 3rd Dan unpicked skill no raise button -> `test_school_abilities.py::test_kitsune_3rd_dan_unpicked_skill_no_raise_button`
 - [x] 3rd Dan attack always offers raise -> `test_school_abilities.py::test_kitsune_3rd_dan_attack_always_offers_raise`
 - [x] 3rd Dan wound check formula annotated even with no picks -> `test_school_abilities.py::test_kitsune_3rd_dan_wound_check_always_offers_raise`
