@@ -10139,6 +10139,36 @@ def test_suzume_2nd_dan_picker_visible_and_saves(page, live_server_url):
 
 
 @pytest.mark.school_abilities
+def test_flexible_2nd_dan_unset_is_soft_validation_issue(page, live_server_url):
+    """A flexible 2nd Dan school can save and publish without picking a
+    roll type, but the View Sheet lists the missing pick under
+    Validation Issues until one is chosen."""
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Suzume2Unset")
+    select_school(page, "suzume_overseer")
+    click_plus(page, "knack_oppose_social", 1)
+    click_plus(page, "knack_pontificate", 1)
+    click_plus(page, "knack_worldliness", 1)
+    page.wait_for_selector('[data-testid="flex-2nd-dan-picker"]', state="visible", timeout=5000)
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    # Publishing with no pick is allowed...
+    apply_changes(page, "Suzume no 2nd Dan pick")
+    body = page.text_content("body")
+    assert "Validation Issues" in body
+    assert "2nd Dan technique: no roll type has been chosen yet" in body
+    # ...and choosing one clears the issue.
+    page.locator('a:text-is("Edit")').click()
+    page.wait_for_selector('[data-testid="flex-2nd-dan-select"]', state="visible", timeout=5000)
+    page.locator('[data-testid="flex-2nd-dan-select"]').select_option("tact")
+    page.wait_for_selector('text="Saved"', timeout=5000)
+    apply_changes(page, "Suzume 2nd Dan pick")
+    body = page.text_content("body")
+    assert "2nd Dan technique: no roll type has been chosen yet" not in body
+
+
+@pytest.mark.school_abilities
 def test_suzume_3rd_dan_precepts_raises(page, live_server_url):
     """Suzume at 3rd Dan: rolling sincerity (in applicable_to) shows Spend button."""
     _make_suzume(page, live_server_url, "Suzume3", dan=3,

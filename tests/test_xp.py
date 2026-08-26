@@ -1145,3 +1145,108 @@ class TestEditorXpView:
         )
         assert halved["spent"] == base["spent"] - 3
         assert halved["costs"]["recognition"] == -3
+
+
+class TestTechniqueChoiceValidation:
+    """Schools whose 1st/2nd/3rd Dan technique is "pick a roll type"
+    must still save and publish without the pick, but the View Sheet
+    flags the missing selection as a validation issue."""
+
+    @staticmethod
+    def _data(school, knacks, dan, technique_choices=None):
+        return make_character_data(
+            school=school,
+            school_ring_choice="Water",
+            knacks={k: dan for k in knacks},
+            technique_choices=technique_choices or {},
+            earned_xp=500,
+        )
+
+    def test_flexible_2nd_dan_unset_flags_issue(self):
+        for school, knacks in [
+            ("ide_diplomat", ["double_attack", "feint", "worldliness"]),
+            ("kitsune_warden", ["absorb_void", "commune", "iaijutsu"]),
+            ("isawa_ishi", ["absorb_void", "kharmic_spin", "otherworldliness"]),
+            ("shugenja", ["commune", "pontificate", "spellcasting"]),
+            ("suzume_overseer", ["oppose_social", "pontificate", "worldliness"]),
+        ]:
+            errors = validate_character(self._data(school, knacks, 2))
+            assert any("2nd Dan technique" in e for e in errors), school
+            errors = validate_character(
+                self._data(school, knacks, 2, {"second_dan_choice": "parry"})
+            )
+            assert not any("2nd Dan technique" in e for e in errors), school
+
+    def test_flexible_2nd_dan_not_required_below_dan_2(self):
+        knacks = ["double_attack", "feint", "worldliness"]
+        errors = validate_character(self._data("ide_diplomat", knacks, 1))
+        assert not any("2nd Dan technique" in e for e in errors)
+
+    def test_fixed_2nd_dan_school_never_flagged(self):
+        errors = validate_character(
+            self._data("akodo_bushi", ["double_attack", "feint", "iaijutsu"], 3)
+        )
+        assert not any("Dan technique" in e for e in errors)
+
+    def test_mantis_2nd_dan_uses_its_own_key(self):
+        knacks = ["athletics", "iaijutsu", "worldliness"]
+        errors = validate_character(self._data("mantis_wave_treader", knacks, 2))
+        assert any("2nd Dan technique" in e for e in errors)
+        errors = validate_character(
+            self._data("mantis_wave_treader", knacks, 2,
+                       {"mantis_2nd_dan_free_raise": "athletics"})
+        )
+        assert not any("2nd Dan technique" in e for e in errors)
+
+    def test_kitsune_1st_and_3rd_dan_count_picks(self):
+        knacks = ["absorb_void", "commune", "iaijutsu"]
+        errors = validate_character(self._data("kitsune_warden", knacks, 3))
+        first = [e for e in errors if "1st Dan technique" in e]
+        third = [e for e in errors if "3rd Dan technique" in e]
+        assert first and "3 of 3" in first[0]
+        assert third and "3 of 3" in third[0]
+        # Partial picks (including blank slots) report how many remain.
+        errors = validate_character(self._data(
+            "kitsune_warden", knacks, 3,
+            {"first_dan_choices": ["attack", "", "parry"],
+             "third_dan_skill_choices": ["athletics"],
+             "second_dan_choice": "attack"},
+        ))
+        first = [e for e in errors if "1st Dan technique" in e]
+        third = [e for e in errors if "3rd Dan technique" in e]
+        assert first and "1 of 3" in first[0]
+        assert third and "2 of 3" in third[0]
+        # Fully chosen: nothing flagged.
+        errors = validate_character(self._data(
+            "kitsune_warden", knacks, 3,
+            {"first_dan_choices": ["attack", "parry", "wound_check"],
+             "third_dan_skill_choices": ["athletics", "sincerity", "etiquette"],
+             "second_dan_choice": "attack"},
+        ))
+        assert not any("Dan technique" in e for e in errors)
+
+    def test_kitsune_3rd_dan_not_required_at_dan_2(self):
+        knacks = ["absorb_void", "commune", "iaijutsu"]
+        errors = validate_character(self._data(
+            "kitsune_warden", knacks, 2,
+            {"first_dan_choices": ["attack", "parry", "wound_check"],
+             "second_dan_choice": "attack"},
+        ))
+        assert not any("3rd Dan technique" in e for e in errors)
+
+    def test_isawa_ishi_1st_dan_needs_two_picks(self):
+        knacks = ["absorb_void", "kharmic_spin", "otherworldliness"]
+        errors = validate_character(self._data("isawa_ishi", knacks, 1))
+        first = [e for e in errors if "1st Dan technique" in e]
+        assert first and "2 of 2" in first[0]
+        errors = validate_character(self._data(
+            "isawa_ishi", knacks, 1, {"first_dan_choices": ["attack", "parry"]}
+        ))
+        assert not any("1st Dan technique" in e for e in errors)
+
+    def test_technique_choices_none_is_tolerated(self):
+        knacks = ["double_attack", "feint", "worldliness"]
+        data = self._data("ide_diplomat", knacks, 2)
+        data["technique_choices"] = None
+        errors = validate_character(data)
+        assert any("2nd Dan technique" in e for e in errors)

@@ -1085,6 +1085,42 @@ def editor_xp_view(character_data: dict) -> dict:
 # Validation
 # ---------------------------------------------------------------------------
 
+# Player-chosen technique roll types, one entry per picker the editor
+# offers (see the *-dan-picker blocks in templates/character/edit.html).
+# ``key`` is the technique_choices entry, ``count`` how many non-blank
+# picks it must hold, ``dan`` the Dan at which the pick becomes due.
+TECHNIQUE_CHOICE_REQUIREMENTS = [
+    {
+        "schools": {"kitsune_warden"}, "dan": 1,
+        "key": "first_dan_choices", "count": 3,
+        "label": "extra die on three rolls of your choice",
+    },
+    {
+        "schools": {"isawa_ishi"}, "dan": 1,
+        "key": "first_dan_choices", "count": 2,
+        "label": "extra die on two rolls of your choice",
+    },
+    {
+        "schools": {
+            "ide_diplomat", "isawa_ishi", "kitsune_warden",
+            "shugenja", "suzume_overseer",
+        },
+        "dan": 2, "key": "second_dan_choice", "count": 1,
+        "label": "free raise on a roll type of your choice",
+    },
+    {
+        "schools": {"mantis_wave_treader"}, "dan": 2,
+        "key": "mantis_2nd_dan_free_raise", "count": 1,
+        "label": "free raise on a roll type of your choice",
+    },
+    {
+        "schools": {"kitsune_warden"}, "dan": 3,
+        "key": "third_dan_skill_choices", "count": 3,
+        "label": "three additional skills for adventure free raises",
+    },
+]
+
+
 def validate_character(character_data: dict) -> List[str]:
     """Return a list of validation error strings.  Empty list means valid."""
     errors: List[str] = []
@@ -1277,6 +1313,34 @@ def validate_character(character_data: dict) -> List[str]:
                 errors.append(
                     f"{name} requires a description: \"{field_def['text']}\""
                 )
+
+    # -- Player-chosen technique roll types --
+    # Schools whose 1st/2nd/3rd Dan technique is "pick a roll type" store
+    # the pick(s) in technique_choices. A missing pick never blocks saving
+    # or publishing (the editor allows it), but it is a soft issue on the
+    # View Sheet so the player remembers to choose. Only pickers the
+    # editor actually offers are listed here.
+    technique_choices = character_data.get("technique_choices") or {}
+    for req in TECHNIQUE_CHOICE_REQUIREMENTS:
+        if school_id not in req["schools"] or dan < req["dan"]:
+            continue
+        raw = technique_choices.get(req["key"])
+        picks = raw if isinstance(raw, list) else [raw]
+        chosen = len([p for p in picks if p])
+        missing_count = req["count"] - chosen
+        if missing_count <= 0:
+            continue
+        ordinal = {1: "1st", 2: "2nd", 3: "3rd"}[req["dan"]]
+        if req["count"] == 1:
+            errors.append(
+                f"{ordinal} Dan technique: no roll type has been chosen yet "
+                f"({req['label']})."
+            )
+        else:
+            errors.append(
+                f"{ordinal} Dan technique: {missing_count} of {req['count']} "
+                f"roll types still need to be chosen ({req['label']})."
+            )
 
     # -- XP budget --
     breakdown = calculate_total_xp(character_data)
