@@ -294,14 +294,14 @@
 
             <div class="mt-4 pt-3 border-t border-ink/10">
                 <div class="flex items-center gap-2 text-sm">
-                    <span class="font-medium text-ink/80">Who knows this secret:</span>
+                    <span class="font-medium text-ink/80">Which player's character knows:</span>
                     <template x-if="darkSecret.can_set_knower">
                         <select x-model="darkSecretKnowerDraft"
                                 data-field="dark-secret-knower"
                                 class="flex-1 min-w-0 text-sm border border-ink/20 rounded px-2 py-1 bg-parchment">
                             <option value="">Not yet chosen</option>
                             {% for kc in dark_secret_knower_choices %}
-                            <option value="{{ kc.id }}">{{ kc.name }}{% if kc.same_group %} (same group){% endif %}</option>
+                            <option value="{{ kc.discord_id }}">{{ kc.name }}</option>
                             {% endfor %}
                         </select>
                     </template>
@@ -316,9 +316,9 @@
                           aria-label="About who knows the secret">
                         ?
                         <span class="tooltip-content absolute right-0 top-full z-10 mt-1 p-3 bg-ink text-parchment text-xs rounded shadow-lg w-72 whitespace-normal text-left font-normal">
-                            One other player character knows your dark secret. The Game Master
-                            chooses who that is - players (including you) can see the choice
-                            here but cannot change it. That character's player still cannot
+                            One other player's character knows your dark secret. The Game
+                            Master chooses which player that is - players (including you) can
+                            see the choice here but cannot change it. That player still cannot
                             read the text above.
                         </span>
                     </span>
@@ -2729,8 +2729,7 @@ function characterForm() {
         openDarkSecretModal() {
             if (!this.darkSecret.can_view) return;
             this.darkSecretDraft = this.darkSecret.text || '';
-            this.darkSecretKnowerDraft = this.darkSecret.knower_character_id
-                ? String(this.darkSecret.knower_character_id) : '';
+            this.darkSecretKnowerDraft = this.darkSecret.knower_player_id || '';
             this.darkSecretError = '';
             this.showDarkSecretModal = true;
         },
@@ -2747,8 +2746,7 @@ function characterForm() {
             // Only the GM may send the knower key at all - the server
             // 403s anyone else, so don't include it unless allowed.
             if (this.darkSecret.can_set_knower) {
-                body.knower_character_id = this.darkSecretKnowerDraft
-                    ? parseInt(this.darkSecretKnowerDraft, 10) : null;
+                body.player = this.darkSecretKnowerDraft || null;
             }
             try {
                 const resp = await fetch('/characters/' + this._charId + '/dark-secret', {
@@ -2763,7 +2761,7 @@ function characterForm() {
                 }
                 this.darkSecret = Object.assign({}, this.darkSecret, {
                     text: data.text || '',
-                    knower_character_id: data.knower_character_id ?? null,
+                    knower_player_id: data.knower_player_id || '',
                     knower_name: data.knower_name || '',
                 });
                 this.showDarkSecretModal = false;

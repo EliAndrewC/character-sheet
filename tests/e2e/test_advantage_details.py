@@ -400,9 +400,9 @@ def test_dark_secret_modal_saves_without_draft(page, live_server_url):
 
 
 def test_dark_secret_gm_sets_knower(page, live_server_url):
-    """The GM picks which other PC knows the secret from the modal dropdown;
-    the knower line, the View Sheet, and the reloaded editor all show it."""
-    create_and_apply(page, live_server_url, "Trusted Confidant")
+    """The GM picks which other player's character knows the secret from
+    the modal dropdown; the knower line, the View Sheet, and the reloaded
+    editor all show that player's name."""
     url = create_and_apply(page, live_server_url, "Secret Holder",
                            disadvantages=["dark_secret"])
     char_id = url.rstrip("/").split("/")[-1]
@@ -411,21 +411,23 @@ def test_dark_secret_gm_sets_knower(page, live_server_url):
     page.locator('[data-action="open-dark-secret"]').click()
     modal = page.locator('[data-modal="dark-secret"]')
     modal.wait_for(state="visible", timeout=5000)
-    page.select_option('[data-field="dark-secret-knower"]', label="Trusted Confidant")
+    # The owner (the admin here) is never offered as their own confidant.
+    assert modal.locator('[data-field="dark-secret-knower"] option[value="183026066498125825"]').count() == 0
+    page.select_option('[data-field="dark-secret-knower"]', value="test_user_1")
     page.locator('[data-action="save-dark-secret"]').click()
     modal.wait_for(state="hidden", timeout=5000)
     line = page.locator('[data-testid="dark-secret-knower-line"]')
-    assert "Trusted Confidant" in line.text_content()
+    assert "Test User 1" in line.text_content()
     assert not page.locator('[data-action="apply-changes"]').is_visible()
 
     page.reload()
     page.wait_for_selector('[data-testid="dark-secret-knower-line"]')
-    assert "Trusted Confidant" in page.locator('[data-testid="dark-secret-knower-line"]').text_content()
+    assert "Test User 1" in page.locator('[data-testid="dark-secret-knower-line"]').text_content()
 
     page.goto(f"{live_server_url}/characters/{char_id}")
     sheet_ds = page.locator('[data-testid="sheet-dark-secret"]')
     sheet_ds.wait_for(state="visible", timeout=5000)
-    assert "known by Trusted Confidant" in sheet_ds.text_content()
+    assert "known by Test User 1" in sheet_ds.text_content()
 
 
 def test_dark_secret_hidden_from_granted_editor_and_viewers(page, page_nonadmin, live_server_url):

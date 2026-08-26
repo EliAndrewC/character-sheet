@@ -1190,8 +1190,8 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Dark Secret: private click-to-edit box + "GM has not yet chosen" knower line; no inline input / player dropdown → `test_advantage_details.py::test_dark_secret_shows_fields`
 - [x] Dark Secret modal: opens from the box, shows the privacy explanation + textarea + knower help icon; Save persists via POST /dark-secret, Cancel discards; reload keeps text → `test_advantage_details.py::test_dark_secret_modal_saves_without_draft`
 - [x] Dark Secret is metadata: saving text/knower never shows Apply Changes on a published character → `test_advantage_details.py::test_dark_secret_modal_saves_without_draft`, `test_dark_secret_gm_sets_knower`
-- [x] Dark Secret on View Sheet for owner: text + padlock; "known by <PC>" once the GM picks → `test_advantage_details.py::test_dark_secret_modal_saves_without_draft`, `test_dark_secret_gm_sets_knower`
-- [x] Dark Secret knower: GM-only dropdown in the modal; choice shown on the knower line, after reload, and on the sheet → `test_advantage_details.py::test_dark_secret_gm_sets_knower`
+- [x] Dark Secret on View Sheet for owner: text + padlock; "known by <player>" once the GM picks → `test_advantage_details.py::test_dark_secret_modal_saves_without_draft`, `test_dark_secret_gm_sets_knower`
+- [x] Dark Secret knower: GM-only player dropdown in the modal (owner never listed); choice shown on the knower line, after reload, and on the sheet → `test_advantage_details.py::test_dark_secret_gm_sets_knower`
 - [x] Dark Secret privacy: granted non-owner editor sees the private notice (no box/modal, no text in page source); GET/POST /dark-secret return 403 from a crafted fetch; owner's secret survives the editor's session → `test_advantage_details.py::test_dark_secret_hidden_from_granted_editor_and_viewers`
 - [x] Dark Secret privacy: plain viewer sees the padlock "private" note on the sheet and no text → `test_advantage_details.py::test_dark_secret_hidden_from_granted_editor_and_viewers`
 - [x] Jealousy: text field appears → `test_advantage_details.py::test_jealousy_shows_text`

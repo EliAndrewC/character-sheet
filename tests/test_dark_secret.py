@@ -56,7 +56,7 @@ def _seed(client, **kwargs):
         editor_discord_ids=[EDITOR],
         disadvantages=["dark_secret"],
         advantage_details={
-            DARK_SECRET_ID: {"text": SECRET, "knower_character_id": None},
+            DARK_SECRET_ID: {"text": SECRET, "player": ""},
         },
         is_published=True,
         is_hidden=False,
@@ -124,40 +124,25 @@ class TestHelpers:
         assert details_for_viewer(d, EDITOR, OWNER, admin_ids=[]) == {"virtue": {"text": "v"}}
 
     def test_knower_display_name(self, client):
-        cid = _seed(client)
-        kid = _seed_knower(client, name="Kakita Confidant")
+        _seed(client)
         db = client._test_session_factory()
         assert knower_display_name(None, db) == ""
         assert knower_display_name({}, db) == ""
-        assert knower_display_name({"knower_character_id": kid}, db) == "Kakita Confidant"
-        # Unknown character id falls through to the legacy player field.
-        assert knower_display_name({"knower_character_id": 999999, "player": OTHER}, db) == "Some Other Player"
         assert knower_display_name({"player": "nobody_here"}, db) == ""
         assert knower_display_name({"player": OTHER}, db) == "Some Other Player"
 
-    def test_knower_choices_orders_same_group_first_and_excludes_self_and_hidden(self, client):
-        db = client._test_session_factory()
-        g = GamingGroup(name="Tuesday")
-        db.add(g)
-        db.commit()
-        cid = _seed(client, gaming_group_id=g.id)
-        _seed_knower(client, name="Zed Same Group", gaming_group_id=g.id)
-        _seed_knower(client, name="Alpha Other Group")
-        _seed_knower(client, name="Hidden Draft", is_hidden=True)
-        me = db.query(Character).filter(Character.id == cid).first()
-        choices = knower_choices(me, db)
-        names = [c["name"] for c in choices]
-        assert names == ["Zed Same Group", "Alpha Other Group"]
-        assert choices[0]["same_group"] is True
-        assert choices[1]["same_group"] is False
-
-    def test_knower_choices_unnamed_character_gets_placeholder(self, client):
+    def test_knower_choices_excludes_owner_and_sorts(self, client):
         cid = _seed(client)
-        kid = _seed_knower(client, name="")
         db = client._test_session_factory()
+        db.add(User(discord_id="zz", discord_name="zz-handle", display_name=""))
+        db.commit()
         me = db.query(Character).filter(Character.id == cid).first()
         choices = knower_choices(me, db)
-        assert choices == [{"id": kid, "name": f"Character #{kid}", "same_group": False}]
+        ids = [c["discord_id"] for c in choices]
+        assert OWNER not in ids
+        names = [c["name"] for c in choices]
+        assert names == sorted(names, key=str.casefold)
+        assert {"discord_id": "zz", "name": "zz-handle"} in choices
 
     def test_dark_secret_view_blank_for_non_viewer(self, client):
         cid = _seed(client)
@@ -165,7 +150,7 @@ class TestHelpers:
         me = db.query(Character).filter(Character.id == cid).first()
         assert dark_secret_view(me, db, EDITOR) == {
             "can_view": False, "can_set_knower": False, "text": "",
-            "knower_character_id": None, "knower_name": "",
+            "knower_player_id": "", "knower_name": "",
         }
         owner_view = dark_secret_view(me, db, OWNER)
         assert owner_view["can_view"] and not owner_view["can_set_knower"]
@@ -187,13 +172,6 @@ class TestValidationWarnings:
         assert not any("Dark Secret requires" in e for e in errs)
 
     def test_text_and_knower_set(self):
-        data = make_character_data(
-            disadvantages=["dark_secret"],
-            advantage_details={DARK_SECRET_ID: {"text": "s", "knower_character_id": 3}},
-        )
-        assert not any("Dark Secret" in e for e in validate_character(data))
-
-    def test_legacy_player_counts_as_knower(self):
         data = make_character_data(
             disadvantages=["dark_secret"],
             advantage_details={DARK_SECRET_ID: {"text": "s", "player": "abc"}},
@@ -281,57 +259,49 @@ class TestSetDarkSecret:
 
     def test_owner_cannot_set_knower(self, client):
         cid = _seed(client)
-        kid = _seed_knower(client)
         resp = client.post(f"/characters/{cid}/dark-secret",
-                           json={"knower_character_id": kid}, headers=OWNER_HEADERS)
+                           json={"player": OTHER}, headers=OWNER_HEADERS)
         assert resp.status_code == 403
         char = query_db(client).filter(Character.id == cid).first()
-        assert char.advantage_details[DARK_SECRET_ID].get("knower_character_id") is None
+        assert not char.advantage_details[DARK_SECRET_ID].get("player")
 
-    def test_admin_sets_knower_and_drops_legacy_player(self, client):
-        cid = _seed(client, advantage_details={
-            DARK_SECRET_ID: {"text": SECRET, "player": OTHER},
-        })
-        kid = _seed_knower(client, name="Kakita Confidant")
-        resp = client.post(f"/characters/{cid}/dark-secret",
-                           json={"knower_character_id": str(kid)})
+    def test_admin_sets_knower(self, client):
+        cid = _seed(client)
+        resp = client.post(f"/characters/{cid}/dark-secret", json={"player": OTHER})
         assert resp.status_code == 200
-        assert resp.json()["knower_character_id"] == kid
-        assert resp.json()["knower_name"] == "Kakita Confidant"
+        assert resp.json()["knower_player_id"] == OTHER
+        assert resp.json()["knower_name"] == "Some Other Player"
         # Text untouched when only the knower is sent.
         assert resp.json()["text"] == SECRET
         char = query_db(client).filter(Character.id == cid).first()
-        assert "player" not in char.advantage_details[DARK_SECRET_ID]
+        assert char.advantage_details[DARK_SECRET_ID]["player"] == OTHER
 
     def test_admin_clears_knower(self, client):
-        kid = _seed_knower(client)
         cid = _seed(client, advantage_details={
-            DARK_SECRET_ID: {"text": SECRET, "knower_character_id": kid},
+            DARK_SECRET_ID: {"text": SECRET, "player": OTHER},
         })
         for empty in (None, ""):
-            resp = client.post(f"/characters/{cid}/dark-secret",
-                               json={"knower_character_id": empty})
+            resp = client.post(f"/characters/{cid}/dark-secret", json={"player": empty})
             assert resp.status_code == 200
-            assert resp.json()["knower_character_id"] is None
+            assert resp.json()["knower_player_id"] == ""
             assert resp.json()["knower_name"] == ""
 
     def test_admin_knower_validation(self, client):
         cid = _seed(client)
-        r = client.post(f"/characters/{cid}/dark-secret", json={"knower_character_id": "abc"})
+        r = client.post(f"/characters/{cid}/dark-secret", json={"player": 123})
         assert r.status_code == 400
-        r = client.post(f"/characters/{cid}/dark-secret", json={"knower_character_id": cid})
+        r = client.post(f"/characters/{cid}/dark-secret", json={"player": OWNER})
         assert r.status_code == 400
-        r = client.post(f"/characters/{cid}/dark-secret", json={"knower_character_id": 999999})
+        r = client.post(f"/characters/{cid}/dark-secret", json={"player": "no_such_user"})
         assert r.status_code == 404
 
     def test_admin_sets_text_and_knower_together(self, client):
         cid = _seed(client)
-        kid = _seed_knower(client)
         resp = client.post(f"/characters/{cid}/dark-secret",
-                           json={"text": "gm edit", "knower_character_id": kid})
+                           json={"text": "gm edit", "player": OTHER})
         assert resp.status_code == 200
         assert resp.json()["text"] == "gm edit"
-        assert resp.json()["knower_character_id"] == kid
+        assert resp.json()["knower_player_id"] == OTHER
 
     def test_first_write_on_character_without_entry(self, client):
         cid = _seed(client, advantage_details={})
@@ -355,7 +325,7 @@ class TestAutosaveIgnoresDarkSecret:
         char = query_db(client).filter(Character.id == cid).first()
         assert char.advantage_details == {
             "virtue": {"text": "Courage"},
-            DARK_SECRET_ID: {"text": SECRET, "knower_character_id": None},
+            DARK_SECRET_ID: {"text": SECRET, "player": ""},
         }
 
     def test_owner_autosave_with_dark_secret_key_is_ignored(self, client):
@@ -384,7 +354,6 @@ class TestVersioning:
 
     def test_edit_does_not_flip_draft_and_publish_omits_secret(self, client):
         cid = _seed(client, is_published=False, published_state=None)
-        kid = _seed_knower(client)
         resp = client.post(f"/characters/{cid}/publish", json={"summary": "Initial"})
         assert resp.status_code == 200
         char = query_db(client).filter(Character.id == cid).first()
@@ -395,7 +364,7 @@ class TestVersioning:
         assert SECRET not in str(version.state)
 
         client.post(f"/characters/{cid}/dark-secret",
-                    json={"text": "changed", "knower_character_id": kid})
+                    json={"text": "changed", "player": OTHER})
         char = query_db(client).filter(Character.id == cid).first()
         assert char.advantage_details[DARK_SECRET_ID]["text"] == "changed"
         assert not char.has_unpublished_changes
@@ -406,12 +375,11 @@ class TestVersioning:
 
     def test_discard_and_revert_preserve_current_secret(self, client):
         cid = _seed(client, is_published=False, published_state=None)
-        kid = _seed_knower(client)
         client.post(f"/characters/{cid}/publish", json={"summary": "v1"})
         client.post(f"/characters/{cid}/autosave", json={"honor": 2.0})
         client.post(f"/characters/{cid}/publish", json={"summary": "v2"})
         client.post(f"/characters/{cid}/dark-secret",
-                    json={"text": "latest", "knower_character_id": kid})
+                    json={"text": "latest", "player": OTHER})
 
         # Discard: dirty the draft, then discard - the secret survives.
         client.post(f"/characters/{cid}/autosave", json={"honor": 3.0})
@@ -419,7 +387,7 @@ class TestVersioning:
         char = query_db(client).filter(Character.id == cid).first()
         assert char.honor == 2.0
         assert char.advantage_details[DARK_SECRET_ID] == {
-            "text": "latest", "knower_character_id": kid,
+            "text": "latest", "player": OTHER,
         }
 
         # Revert to v1: same story.
@@ -452,14 +420,13 @@ class TestVersioning:
 
 class TestViewSheet:
     def test_owner_sees_secret_and_knower(self, client):
-        kid = _seed_knower(client, name="Kakita Confidant")
         cid = _seed(client, advantage_details={
-            DARK_SECRET_ID: {"text": SECRET, "knower_character_id": kid},
+            DARK_SECRET_ID: {"text": SECRET, "player": OTHER},
         })
         resp = client.get(f"/characters/{cid}", headers=OWNER_HEADERS)
         assert resp.status_code == 200
         assert SECRET in resp.text
-        assert "known by Kakita Confidant" in resp.text
+        assert "known by Some Other Player" in resp.text
 
     def test_owner_sees_unchosen_knower_note(self, client):
         cid = _seed(client)
@@ -472,9 +439,8 @@ class TestViewSheet:
 
     @pytest.mark.parametrize("headers", [EDITOR_HEADERS, OTHER_HEADERS, None])
     def test_everyone_else_sees_only_padlock(self, client, headers):
-        kid = _seed_knower(client, name="Kakita Confidant")
         cid = _seed(client, advantage_details={
-            DARK_SECRET_ID: {"text": SECRET, "knower_character_id": kid},
+            DARK_SECRET_ID: {"text": SECRET, "player": OTHER},
         })
         if headers is None:
             client.headers.pop("X-Test-User", None)
@@ -484,37 +450,35 @@ class TestViewSheet:
         assert resp.status_code == 200
         assert "Dark Secret" in resp.text
         assert SECRET not in resp.text
-        assert "Kakita Confidant" not in resp.text
+        assert "known by" not in resp.text
         assert "private" in resp.text
 
 
 class TestEditPage:
     def test_editor_page_has_no_secret(self, client):
-        kid = _seed_knower(client, name="Kakita Confidant")
         cid = _seed(client, advantage_details={
-            DARK_SECRET_ID: {"text": SECRET, "knower_character_id": kid},
+            DARK_SECRET_ID: {"text": SECRET, "player": OTHER},
         })
         resp = client.get(f"/characters/{cid}/edit", headers=EDITOR_HEADERS)
         assert resp.status_code == 200
         assert SECRET not in resp.text
-        assert "Kakita Confidant" not in resp.text
+        assert '"knower_player_id": ""' in resp.text
         assert '"can_view": false' in resp.text
 
     def test_owner_page_embeds_secret_but_no_knower_choices(self, client):
-        _seed_knower(client, name="Kakita Confidant")
         cid = _seed(client)
         resp = client.get(f"/characters/{cid}/edit", headers=OWNER_HEADERS)
         assert SECRET in resp.text
         assert '"can_set_knower": false' in resp.text
         # Knower dropdown options are admin-only markup.
-        assert "Kakita Confidant" not in resp.text
+        assert f'<option value="{OTHER}">' not in resp.text
 
     def test_admin_page_has_knower_choices(self, client):
-        _seed_knower(client, name="Kakita Confidant")
         cid = _seed(client)
         resp = client.get(f"/characters/{cid}/edit")
         assert '"can_set_knower": true' in resp.text
-        assert "Kakita Confidant" in resp.text
+        assert f'<option value="{OTHER}">Some Other Player</option>' in resp.text
+        assert f'<option value="{OWNER}">' not in resp.text
 
 
 class TestGroupSummary:
@@ -523,9 +487,9 @@ class TestGroupSummary:
         g = GamingGroup(name="Tuesday")
         db.add(g)
         db.commit()
-        kid = _seed_knower(client, name="Kakita Confidant", gaming_group_id=g.id)
+        _seed_knower(client, name="Kakita Confidant", gaming_group_id=g.id)
         cid = _seed(client, gaming_group_id=g.id, advantage_details={
-            DARK_SECRET_ID: {"text": SECRET, "knower_character_id": kid},
+            DARK_SECRET_ID: {"text": SECRET, "player": OTHER},
         })
         return g.id, cid
 
@@ -534,7 +498,7 @@ class TestGroupSummary:
         resp = client.get(f"/groups/{gid}")
         assert resp.status_code == 200
         assert SECRET in resp.text
-        assert "known by Kakita Confidant" in resp.text
+        assert "known by Some Other Player" in resp.text
 
     def test_owner_sees_own_secret(self, client):
         gid, _ = self._seed_group(client)
@@ -543,7 +507,7 @@ class TestGroupSummary:
 
     def test_other_player_sees_plain_chip(self, client):
         gid, _ = self._seed_group(client)
-        # OTHER owns the knower character, and still can't read the text.
+        # OTHER is the chosen knowing player, and still can't read the text.
         resp = client.get(f"/groups/{gid}", headers=OTHER_HEADERS)
         assert resp.status_code == 200
         assert 'data-dis-id="dark_secret"' in resp.text
