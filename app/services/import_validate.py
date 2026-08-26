@@ -405,20 +405,40 @@ def _normalise_technique_choices(
                 reason="unknown skill name",
             ))
 
-    # Kitsune Warden 3rd Dan: resolve the three player-chosen skills.
-    # Iaijutsu is dropped explicitly (rules-excluded) - and iaijutsu lives
-    # in SCHOOL_KNACKS not SKILLS, so we check for the iaijutsu knack alias
-    # first and report the rules-specific reason. Unknown names (not a
-    # skill, not a knack) are dropped with the generic "unknown" reason.
+    # Kitsune Warden 3rd Dan: resolve the three player-chosen picks. Picks
+    # are skills, plus commune - the one Kitsune school knack that is
+    # actually rolled and not rules-excluded. Iaijutsu (rules-excluded) and
+    # absorb void (never rolled) live in SCHOOL_KNACKS not SKILLS, so we
+    # check the knack alias first and report the rules-specific reason.
+    # Unknown names (not a skill, not a knack) are dropped with the generic
+    # "unknown" reason.
     resolved_third: List[str] = []
     for raw_name in extracted.third_dan_skill_choices or []:
-        knack_id, _kc = match_knack(raw_name)
+        knack_id, knack_confidence = match_knack(raw_name)
         if knack_id == "iaijutsu":
             report.dropped.append(DroppedEntry(
                 kind="technique_choice",
                 name_as_written=raw_name,
                 reason="iaijutsu is not eligible for Kitsune Warden 3rd Dan",
             ))
+            continue
+        if knack_id == "absorb_void":
+            report.dropped.append(DroppedEntry(
+                kind="technique_choice",
+                name_as_written=raw_name,
+                reason="absorb void is never rolled, so it is not eligible for Kitsune Warden 3rd Dan",
+            ))
+            continue
+        if knack_id == "commune":
+            if knack_confidence in (ALIASED, FUZZY):
+                report.ambiguities.append(AmbiguityEntry(
+                    kind="technique_choice",
+                    name_as_written=raw_name,
+                    resolved_id=knack_id,
+                    confidence=knack_confidence,
+                ))
+            if knack_id not in resolved_third:
+                resolved_third.append(knack_id)
             continue
         skill_id, confidence = match_skill(raw_name)
         if skill_id is None:
