@@ -30,6 +30,10 @@ def live_server_url():
     env["TEST_AUTH_BYPASS"] = "true"
     env["DISCORD_WHITELIST_IDS"] = "183026066498125825,test_user_1,test_user_2"
     env["ADMIN_DISCORD_IDS"] = "183026066498125825"
+    # Activity-based keep-alive is opt-in per account and empty by default.
+    # Opt the ``page`` fixture's user in (and nobody else) so the clicktests
+    # can see both sides of the gate.
+    env["EXTENDED_KEEPALIVE_DISCORD_IDS"] = "183026066498125825"
     # Keep the Gemini API offline for clicktests; the stub returns canned
     # responses based on markers in the uploaded document. See
     # app/services/import_llm.py::_stub_response_for.

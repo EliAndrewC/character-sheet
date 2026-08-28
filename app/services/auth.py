@@ -24,6 +24,24 @@ def get_admin_ids() -> List[str]:
     return _get_list_from_env("ADMIN_DISCORD_IDS")
 
 
+def get_extended_keepalive_ids() -> List[str]:
+    """Discord ids whose open tabs may keep the Fly machine warm.
+
+    The blanket keep-alive only runs during the Mon/Tue session window (see
+    ``app/static/js/keepalive.js``) so idle tabs don't keep the machine, and
+    the bill, running all week. This list opts specific accounts into an
+    additional activity-based window: while one of them has a page open,
+    pings continue for an hour after their last interaction with it.
+
+    Deliberately its own list rather than ``get_admin_ids()`` - "may keep
+    the machine warm" is about who is doing hands-on work right now (the GM
+    testing the Discord bot, say), not about who has GM privileges, and the
+    two should be able to diverge without either changing meaning. Empty by
+    default, so nobody has it unless it is set.
+    """
+    return _get_list_from_env("EXTENDED_KEEPALIVE_DISCORD_IDS")
+
+
 def get_magic_login_tokens() -> Dict[str, str]:
     """Parse MAGIC_LOGIN_TOKENS env var into {token: discord_id} mapping.
 

@@ -2009,12 +2009,23 @@ Phase 8 runs the full regression suite as the exit gate.
 
 ## Fly Keep-alive Pinger (base.html, static/js/keepalive.js, GET /keepalive)
 
-Pure window logic (`shouldKeepAlive`, DST, option overrides) is pinned in `tests/js/keepalive.test.js`; these clicktests cover the browser wiring.
+Pure window logic (`shouldKeepAlive`, `inSessionWindow` / `inActivityWindow`, DST, option overrides) is pinned in `tests/js/keepalive.test.js`; these clicktests cover the browser wiring.
 
 - [x] `keepalive.js` is loaded on every page and exposes `window.L7RKeepAlive` (60s interval, `/keepalive` URL) - `test_keepalive.py::test_keepalive_script_loads_and_exposes_api`
 - [x] `tick()` inside the Mon/Tue 7-11pm New York window issues `GET /keepalive` -> 200 with `Cache-Control: no-store` - `test_keepalive.py::test_keepalive_tick_pings_server_inside_window`
 - [x] `tick()` outside the window sends no request - `test_keepalive.py::test_keepalive_tick_is_silent_outside_window`
 - [x] Script + endpoint work for an anonymous visitor (logged-out pages) - `test_keepalive.py::test_keepalive_works_for_anonymous_visitor`
+
+### Activity window (`EXTENDED_KEEPALIVE_DISCORD_IDS`)
+
+Per-account opt-in: while a listed viewer has a page open, pings continue for an hour after their last interaction, on top of the Mon/Tue session window everyone gets. The e2e live server opts the `page` fixture's user in and nobody else.
+
+- [x] `data-extended-keepalive="1"` renders on `<html>` for a listed viewer, and `currentOptions().extended` is true - `test_keepalive.py::test_extended_flag_is_rendered_for_an_opted_in_viewer`
+- [x] The attribute is absent, and `extended` false, for everyone else - `test_keepalive.py::test_extended_flag_is_absent_for_everyone_else`
+- [x] Loading a page counts as an interaction, so `tick()` pings off-night straight away - `test_keepalive.py::test_loading_a_page_starts_the_activity_window`
+- [x] An hour after the last interaction the pings stop (a forgotten tab goes quiet) - `test_keepalive.py::test_an_hour_after_the_last_interaction_the_pings_stop`
+- [x] Clicking restarts the hour, and pings resume - `test_keepalive.py::test_clicking_restarts_the_activity_window`
+- [x] An ordinary viewer's off-night tab is still silent (the opt-in changes nothing for them) - `test_keepalive.py::test_off_night_is_still_silent_for_an_ordinary_viewer`
 
 ---
 

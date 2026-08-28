@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 {# `dark` class drives dark mode (Tailwind darkMode:'class'). Server-rendered
    from the viewer's account preference, with a cookie fallback for the test
-   bypass / logged-out visitors - see app/main.py dark_mode_enabled. #}
-<html lang="en"{% if dark_mode_enabled(request) %} class="dark"{% endif %}>
+   bypass / logged-out visitors - see app/main.py dark_mode_enabled.
+
+   `data-extended-keepalive` opts this viewer into keepalive.js's activity
+   window (see app/main.py extended_keepalive_enabled). Page-level flags the
+   server decides go here, on <html>, alongside the theme. #}
+<html lang="en"{% if dark_mode_enabled(request) %} class="dark"{% endif %}{% if extended_keepalive_enabled(request) %} data-extended-keepalive="1"{% endif %}>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
