@@ -544,6 +544,33 @@ def test_skill_rank_for_roll_pontificate_variant_key(db):
     assert skill_rank_for_roll("knack:pontificate:as:etiquette", char) == 3
 
 
+@pytest.mark.parametrize("key", ["iaijutsu:contested", "iaijutsu:strike"])
+def test_skill_rank_for_roll_unprefixed_iaijutsu(db, key):
+    """The contested-iaijutsu keys the sheet records carry no "knack:"."""
+    char = Character(name="X", knacks={"iaijutsu": 4})
+    assert skill_rank_for_roll(key, char) == 4
+
+
+@pytest.mark.parametrize(
+    "key", ["athletics:Water", "athletics:attack", "athletics:parry"],
+)
+def test_skill_rank_for_roll_unprefixed_athletics(db, key):
+    char = Character(name="X", knacks={}, foreign_knacks={"athletics": 2})
+    assert skill_rank_for_roll(key, char) == 2
+
+
+def test_skill_rank_for_roll_initiative_athletics_is_none(db):
+    """An initiative roll that yields an athletics die is not an athletics roll."""
+    char = Character(name="X", foreign_knacks={"athletics": 2})
+    assert skill_rank_for_roll("initiative:athletics", char) is None
+
+
+def test_skill_rank_for_roll_damage_is_none(db):
+    """"attack:damage" is a damage roll, not the attack skill."""
+    char = Character(name="X", attack=4)
+    assert skill_rank_for_roll("attack:damage", char) is None
+
+
 def test_skill_rank_for_roll_unknown_knack_is_none(db):
     char = Character(name="X", knacks={"iaijutsu": 4})
     assert skill_rank_for_roll("knack:not_a_knack", char) is None
@@ -563,7 +590,9 @@ def test_skill_rank_for_roll_parry(db):
 
 
 @pytest.mark.parametrize(
-    "key", ["", None, "wound_check", "initiative", "ring:Fire", "freeform"],
+    "key",
+    ["", None, "wound_check", "initiative", "ring:Fire", "freeform",
+     "spend_vp_xk1:isawa_ishi", "bless", "not_a_key:at_all"],
 )
 def test_skill_rank_for_roll_has_no_rank(db, key):
     char = Character(name="X", skills={"etiquette": 3})
