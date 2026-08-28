@@ -60,6 +60,8 @@ A `.env` file (gitignored) holds credentials for deployment and external service
 - `GOOGLE_CLIENT_ID` - Google OAuth 2.0 client ID (for Google Sheets export)
 - `GOOGLE_CLIENT_SECRET` - Google OAuth 2.0 client secret
 - `GITHUB_TOKEN` - fine-grained GitHub PAT (contents: read/write, this repo only) that Claude Code uses to push (see "Git Workflow")
+- `ROLL_QUERY_TOKEN` - shared secret for the GM read-only API (`/api/rolls`, `/api/characters`); see "GM read-only API and Discord integration". Also a Fly secret. Unset means those endpoints 503.
+- `DISCORD_BOT_TOKEN` - bot token for the "L7R Character Sheet" Discord application. Nothing reads it yet; reserved for the planned roll slash commands.
 
 Values with spaces or special characters must be quoted (e.g. `KEY="value with spaces"`). Load before deploying: `set -a && source .env && set +a`
 
@@ -69,6 +71,7 @@ The following are stored as **Fly secrets** (not in `.env`):
 - `DISCORD_WHITELIST_IDS` - comma-separated Discord IDs allowed to log in
 - `ADMIN_DISCORD_IDS` - comma-separated Discord IDs with GM/admin privileges
 - `MAGIC_LOGIN_TOKENS` - also set as a Fly secret (same value as in `.env`)
+- `ROLL_QUERY_TOKEN` - also set as a Fly secret (same value as in `.env`)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - also set as Fly secrets (same values as in `.env`)
 - `S3_BACKUP_BUCKET` - S3 bucket name for database backups (e.g. `l7r-character-sheet-backups`)
 - `S3_BACKUP_REGION` - AWS region (default: `us-east-1`)
@@ -204,6 +207,7 @@ app/
   routes/pages.py      - Full HTML page routes (index, create, view, edit)
   routes/characters.py - Character CRUD + HTMX partial endpoints
   routes/google_sheets.py - Google OAuth2 flow + Sheets export
+  routes/gm_api.py     - token-authed read-only JSON API for the GM's tooling
   templates/           - Jinja2 templates
 tests/                 - Unit test suite (pytest)
 tests/e2e/             - E2E clicktests (Playwright)
@@ -339,6 +343,128 @@ For local dev, the same vars go in `.env`. For e2e tests, the harness sets `IMPO
 - Image-file direct imports (deferred to a separate workflow).
 - `.sxw` (pre-fork OpenOffice) fixture (extractor code path exists; no real sample to test against - see `tests/import_fixtures/happy_path/DEFERRED.md`).
 - Cross-machine job registry if we scale beyond one Fly machine.
+
+## GM read-only API and Discord integration
+
+A token-authenticated, read-only JSON surface (`app/routes/gm_api.py`, mounted at `/api`) that
+lets the GM's out-of-band tooling - the `gm-assistant` REPL,
+<https://github.com/EliAndrewC/gm-assistant> - pull roll history and rank lookups across ALL
+characters in one call. It changes nothing about what the app records or how players use it.
+
+### Why it exists
+
+Players post their rolls into Discord, usually as the dice-card PNG the "Copy roll image" button
+produces. That PNG is rendered FROM a `roll_history` row (`app/services/dice_card.py` draws
+`RollHistory.payload`), so it is a lossy copy of structured data this app already holds. The REPL
+reads the Discord channel with a bot token (message author's discord id + message timestamp) and
+joins that against `GET /api/rolls` (`actor_discord_id` + `updated_at`, within a few minutes) to
+recover the exact roll, character and skill - no OCR. Crucially, an attachment's FILENAME cannot
+identify a roll card (a clipboard paste is `image.png`, and so are the memes in the same channel),
+so **the join is the detector**.
+
+`GET /characters/{id}/rolls` does not fit: it needs a browser session belonging to an editor of
+that one character, so a poll would cost one authenticated call per PC per tick.
+
+### Endpoints
+
+- `GET /api/rolls?since=<ISO-8601 with offset>&limit=<n>&group=<gaming_groups.id>` - rolls across
+  every character, **ascending by `(updated_at, id)`**, with a `more` flag; page by passing the
+  last row's `updated_at` back as `since` (the bound is inclusive, so the client de-duplicates by
+  `id`). `limit` defaults to 200, caps at 1000. `group` is a convenience - every row already
+  carries `gaming_group_id`.
+- `GET /api/characters` - every character with `id`, `name`, `owner_discord_id`,
+  `editor_discord_ids`, `gaming_group_id` / `gaming_group_name`, current `skills` and `knacks`,
+  plus the `gaming_groups` list. Needed because a hand-typed roll never touches `roll_history`, so
+  the Discord message author is the only handle on it, and because contested rolls are scored
+  partly on the opponent's rank. These are the ranks NOW, not as of a past roll.
+
+### Key decisions
+
+- **Auth is a single shared secret in `ROLL_QUERY_TOKEN`**, compared with `hmac.compare_digest`
+  and accepted ONLY from `Authorization: Bearer`. It grants read access to every character's
+  rolls including hidden ones, so it is GM-equivalent; a query-string token would leak into logs
+  and browser history. **Unset -> `503`, never open** (fail-closed, same spirit as
+  `IMPORT_ENABLED`).
+- **Filtering is on `updated_at`, not `created_at`.** A player can toggle post-roll discretionary
+  bonuses (the modal's `PATCH`) after the row exists and before pasting the card, so polling on
+  `updated_at` guarantees the REPL eventually sees a row's final state even if it first saw it
+  mid-edit.
+- **`since` must carry a timezone.** `roll_history` timestamps are SQLite `func.now()` naive UTC;
+  a naive input is a `400` rather than an assumed-UTC guess, because a client in the wrong zone
+  would silently skip half a session.
+- **Hidden rolls and the GM's own NPC characters are included.** The GM is the audience, and a
+  contested roll is scored on the difference between the two sides, so the NPC's roll matters as
+  much as the PC's.
+- **`skill_rank` is stamped into `payload` at record time** by `skill_rank_for_roll()`
+  (`app/services/rolls_history.py`), derived server-side from `roll_key` - never taken from the
+  client. The dice formula sums trait + skill, so the rank is unrecoverable afterwards, and
+  reading it off the character later would report today's rank. `update_roll` carries the
+  create-time value forward across a `PATCH`, since the client rebuilds the payload without it.
+  `null` means the roll has no single governing rank (rings, wound checks, initiative, bless,
+  freeform) or predates the stamp. **This is the only part of the feature that touches the write
+  path.**
+- **Response shape is flattened, not the raw payload:** `kept` / `dropped` are plain ints, one per
+  die, each the sum of an exploded chain (a 10 rerolled into a 7 is `17`); `bonuses` rows are
+  `{label, value}` (stored as `amount`); `alternatives` pass through as stored, caps included.
+- Read-only. No write endpoints under `/api`. No webhooks - the REPL polls every 15-30s during a
+  session, which costs nothing at that rate and is far simpler than a subscription.
+
+### Deployment
+
+```bash
+fly secrets set ROLL_QUERY_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
+```
+
+The same value goes into gm-assistant's gitignored `webapp/development-secrets.ini` as
+`[character_sheet] roll_query_token` (the GM does that by hand), and into this repo's `.env`.
+Smoke test:
+
+```bash
+curl -H "Authorization: Bearer $T" \
+  'https://l7r-character-sheet.fly.dev/api/rolls?since=2026-08-01T00:00:00Z&limit=5'
+```
+
+### Where the Discord integration is going
+
+Two separate Discord applications, split on the principle that **code goes where the WRITE
+happens** - reads cross a repo boundary cheaply over HTTP, writes need the domain's invariants
+close at hand:
+
+| repo | owns | Discord application |
+|---|---|---|
+| `EliAndrewC/gm-assistant` | everything that writes to Obsidian Portal | "L7R GM Assistant" (`1509288141985415300`), read-only |
+| this repo | everything that **makes a roll** | "L7R Character Sheet" (`1490400739934212116`) |
+
+A single Discord application has one interactions URL and effectively one gateway owner, so the
+two services cannot share one; two applications can each register slash commands in the same
+channel with no conflict (Discord groups the picker by app).
+
+**This app is expected to grow slash commands that roll dice** (`/etiquette`, ~40 of them, one
+per skill, registered from a table and dispatched into one shared handler). That belongs here
+because the dice math lives here (`build_all_roll_formulas`, the caps and bonuses, `RollHistory`,
+`dice_card.py` - **never reimplement the roll formulas outside this repo**), the authorization
+model lives here (`owner_discord_id`, `editor_discord_ids`, `get_admin_ids`), and a roll made
+through a slash command is born STRUCTURED - it writes its own `roll_history` row, so the
+image-matching problem this API exists to solve never arises for it.
+
+Slash commands need no gateway and no always-on process: Discord delivers them as signed HTTPS
+POSTs to an "Interactions Endpoint URL" registered in the developer portal (e.g.
+`/discord/interactions` on this app), with an Ed25519 signature to verify on every request. Mind
+the 3-second acknowledgement deadline - defer the ack and edit in the real response (up to 15
+minutes) if rolling and rendering the card takes longer. Register commands **guild-scoped** while
+developing (instant; global commands take up to an hour). Command names must be lowercase with no
+spaces, so knacks become `/discern-honor`; autocomplete on the OPTIONS can be personalized per
+invoker, the command NAME row cannot.
+
+The bot token lives in `DISCORD_BOT_TOKEN` (`.env`; a Fly secret when something finally reads it)
+- a different credential from the `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` pair used for
+website login. It does **not** need the Message Content privileged intent: slash commands arrive
+as structured payloads, and not needing that toggle keeps this app out of Discord's verification
+process. Invite it with scopes `bot` AND `applications.commands` (the second is what makes the
+commands visible) and `permissions=52224` (View Channel, Send Messages, Embed Links, Attach
+Files). Test against the GM's "Robot Role Call" server (guild `1543009570157236274`) before
+anything reaches the live channels, `case-of-the-mondays` (`832075590726844436`) and `a-team`
+(`832075722516201492`) in guild `745421621829042297`.
 
 ## Style & Design Preferences
 

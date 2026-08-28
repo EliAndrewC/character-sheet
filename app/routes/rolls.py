@@ -27,6 +27,7 @@ from app.services.rolls_history import (
     coerce_payload,
     coerce_tn,
     should_record_roll,
+    skill_rank_for_roll,
 )
 
 
@@ -155,6 +156,16 @@ async def create_roll(
     # may still send it; we ignore it.
     impaired = bool(body.get("impaired_at_roll", False))
 
+    # Stamp the governing skill / knack rank into the payload at record
+    # time. The dice formula sums trait + skill, so the rank cannot be
+    # recovered from the row afterwards, and looking it up on the
+    # character later would report today's rank rather than the one the
+    # roll was actually made with. Server-derived from roll_key (never
+    # taken from the client). See GET /api/rolls, which surfaces it.
+    rank = skill_rank_for_roll(roll_key, character)
+    if rank is not None:
+        payload["skill_rank"] = rank
+
     row = RollHistory(
         character_id=character.id,
         roll_key=roll_key,
@@ -216,7 +227,14 @@ async def update_roll(
 
     body = await request.json()
     if "payload" in body:
+        previous_rank = (row.payload or {}).get("skill_rank")
         row.payload = coerce_payload(body["payload"])
+        # The client PATCHes a freshly-built payload that has no notion of
+        # skill_rank (it is stamped server-side at create time), so carry
+        # the create-time value forward rather than letting a post-roll
+        # bonus toggle erase it.
+        if previous_rank is not None and "skill_rank" not in row.payload:
+            row.payload = {**row.payload, "skill_rank": previous_rank}
     if "action_die_spent" in body:
         row.action_die_spent = coerce_action_die_spent(body["action_die_spent"])
     db.commit()

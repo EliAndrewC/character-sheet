@@ -14,3 +14,7 @@ logs/
 
 # Tailwind standalone CLI (downloaded by scripts/build-css.sh)
 /bin/
+
+# Carries a live Discord bot token. Enforcement for the "never commit this" warning
+# at the top of the file itself - a rule nobody re-reads does not hold.
+externally-queryable-roll-results.md
