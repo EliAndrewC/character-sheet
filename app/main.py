@@ -21,7 +21,8 @@ configure_logging()
 from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
 from app.routes import (
-    art, auth, characters, gm_api, google_sheets, import_char, names, pages, rolls,
+    art, auth, characters, discord, gm_api, google_sheets, import_char, names,
+    pages, rolls,
 )
 from app.game_data import RING_NAMES, SCHOOL_RING_KNACK_IDS
 from app.services.auth import is_admin
@@ -332,6 +333,7 @@ app.include_router(art.router)
 app.include_router(names.router)
 app.include_router(rolls.router)
 app.include_router(gm_api.router)
+app.include_router(discord.router)
 
 
 # Global backup status (read by routes for admin banner)
