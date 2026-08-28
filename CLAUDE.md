@@ -400,9 +400,13 @@ that one character, so a poll would cost one authenticated call per PC per tick.
   client. The dice formula sums trait + skill, so the rank is unrecoverable afterwards, and
   reading it off the character later would report today's rank. `update_roll` carries the
   create-time value forward across a `PATCH`, since the client rebuilds the payload without it.
-  `null` means the roll has no single governing rank (rings, wound checks, initiative, bless,
-  freeform) or predates the stamp. **This is the only part of the feature that touches the write
-  path.**
+  It covers `skill:<id>`, `knack:<id>` and its variants, the bare combat keys, and the knack rolls
+  the sheet records WITHOUT a `knack:` prefix (`iaijutsu:contested`, `athletics:Water`) - but
+  deliberately not `initiative:athletics`, which is an initiative roll. `null` means the roll has
+  no single governing rank (rings, damage, wound checks, initiative, bless, freeform, void spends)
+  or predates the stamp; for rows that predate it, historical `skill:` rolls can be recovered from
+  the `formula` string's `(<skill> skill: N)` parenthetical. **This is the only part of the
+  feature that touches the write path.**
 - **Response shape is flattened, not the raw payload:** `kept` / `dropped` are plain ints, one per
   die, each the sum of an exploded chain (a 10 rerolled into a 7 is `17`); `bonuses` rows are
   `{label, value}` (stored as `amount`); `alternatives` pass through as stored, caps included.

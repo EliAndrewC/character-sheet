@@ -95,11 +95,17 @@ def skill_rank_for_roll(
     does not reveal it - trait and skill are already summed in the dice
     count - which is why players type ``38 Etiquette @3`` by hand today.
 
+    Handles every key shape the sheet actually records: ``skill:<id>``,
+    ``knack:<id>`` (including variants like
+    ``knack:pontificate:as:etiquette``), the bare combat keys, and the
+    knack rolls that are recorded WITHOUT the ``knack:`` prefix
+    (``iaijutsu:contested``, ``athletics:Water``).
+
     Returns ``None`` for rolls that have no single governing rank (rings,
-    wound checks, initiative, bless, freeform) and for any key naming an
-    id that is not in the catalog. A known skill / knack the character has
-    never bought returns ``0`` - "unskilled" is a real answer, not a
-    missing one.
+    damage, wound checks, initiative, bless, freeform, void spends) and
+    for any key naming an id that is not in the catalog. A known skill /
+    knack the character has never bought returns ``0`` - "unskilled" is a
+    real answer, not a missing one.
     """
     if not roll_key:
         return None
@@ -107,22 +113,41 @@ def skill_rank_for_roll(
         return int(character.attack or 0)
     if roll_key == "parry":
         return int(character.parry or 0)
+
     parts = roll_key.split(":")
-    if len(parts) < 2:
-        return None
-    category, ident = parts[0], parts[1]
-    if category == "skill":
-        if ident not in SKILLS:
-            return None
-        return int((character.skills or {}).get(ident, 0))
-    if category == "knack":
-        if ident not in SCHOOL_KNACKS:
-            return None
-        knacks = character.knacks or {}
-        if ident in knacks:
-            return int(knacks[ident])
-        return int((character.foreign_knacks or {}).get(ident, 0))
+    head = parts[0]
+    ident = parts[1] if len(parts) > 1 else ""
+    if head == "skill":
+        return _rank(SKILLS, ident, character.skills)
+    if head == "knack":
+        # "knack:iaijutsu", and variant keys like
+        # "knack:pontificate:as:etiquette" whose knack id is still parts[1].
+        return _knack_rank(ident, character)
+    if head in SCHOOL_KNACKS:
+        # Knack rolls the sheet records WITHOUT the "knack:" prefix:
+        # "iaijutsu:contested", "iaijutsu:strike", "athletics:Water",
+        # "athletics:attack". Note this deliberately does not catch
+        # "initiative:athletics" - that is an initiative roll that happens
+        # to produce an athletics-only action die, not an athletics roll.
+        return _knack_rank(head, character)
     return None
+
+
+def _rank(catalog, ident: str, owned) -> Optional[int]:
+    """Rank of ``ident`` in ``owned``, or None if it is not in ``catalog``."""
+    if ident not in catalog:
+        return None
+    return int((owned or {}).get(ident, 0))
+
+
+def _knack_rank(ident: str, character: Character) -> Optional[int]:
+    """Knack rank, checking school knacks then knacks bought elsewhere."""
+    if ident not in SCHOOL_KNACKS:
+        return None
+    knacks = character.knacks or {}
+    if ident in knacks:
+        return int(knacks[ident])
+    return int((character.foreign_knacks or {}).get(ident, 0))
 
 
 def coerce_payload(raw: Any) -> Dict[str, Any]:
