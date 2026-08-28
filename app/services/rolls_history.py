@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Optional, Tuple
 
+from app.game_data import SCHOOL_KNACKS, SKILLS
 from app.models import Character
 from app.services.auth import (
     get_admin_ids,
@@ -73,6 +74,55 @@ def should_record_roll(
     if user_discord_id in all_editors:
         return True, False
     return False, False
+
+
+# Roll keys that are rolled off the ``attack`` combat skill. ``parry`` is
+# the only key that maps to the parry skill, so it needs no set.
+_ATTACK_ROLL_KEYS = frozenset({
+    "attack", "double_attack", "counterattack", "lunge",
+})
+
+
+def skill_rank_for_roll(
+    roll_key: Optional[str], character: Character,
+) -> Optional[int]:
+    """The character's rank in the skill / knack a ``roll_key`` names.
+
+    Recorded into the roll payload at create time (see
+    ``app.routes.rolls.create_roll``) so the GM API can report the rank the
+    character HAD when the roll was made rather than the rank they have now.
+    Contested rolls are scored partly on skill rank, and a ``7k3`` formula
+    does not reveal it - trait and skill are already summed in the dice
+    count - which is why players type ``38 Etiquette @3`` by hand today.
+
+    Returns ``None`` for rolls that have no single governing rank (rings,
+    wound checks, initiative, bless, freeform) and for any key naming an
+    id that is not in the catalog. A known skill / knack the character has
+    never bought returns ``0`` - "unskilled" is a real answer, not a
+    missing one.
+    """
+    if not roll_key:
+        return None
+    if roll_key in _ATTACK_ROLL_KEYS:
+        return int(character.attack or 0)
+    if roll_key == "parry":
+        return int(character.parry or 0)
+    parts = roll_key.split(":")
+    if len(parts) < 2:
+        return None
+    category, ident = parts[0], parts[1]
+    if category == "skill":
+        if ident not in SKILLS:
+            return None
+        return int((character.skills or {}).get(ident, 0))
+    if category == "knack":
+        if ident not in SCHOOL_KNACKS:
+            return None
+        knacks = character.knacks or {}
+        if ident in knacks:
+            return int(knacks[ident])
+        return int((character.foreign_knacks or {}).get(ident, 0))
+    return None
 
 
 def coerce_payload(raw: Any) -> Dict[str, Any]:
