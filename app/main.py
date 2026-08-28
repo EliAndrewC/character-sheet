@@ -25,7 +25,7 @@ from app.routes import (
     pages, rolls,
 )
 from app.game_data import RING_NAMES, SCHOOL_RING_KNACK_IDS
-from app.services.auth import is_admin
+from app.services.auth import get_extended_keepalive_ids, is_admin
 from app.services.import_rate_limit import import_enabled
 
 log = logging.getLogger(__name__)
@@ -87,6 +87,27 @@ def dark_mode_enabled(request) -> bool:
 
 
 templates.env.globals["dark_mode_enabled"] = dark_mode_enabled
+
+
+def extended_keepalive_enabled(request) -> bool:
+    """Whether this viewer's open tab may keep the Fly machine warm.
+
+    Renders as ``data-extended-keepalive="1"`` on ``<html>``, which
+    ``keepalive.js`` reads to turn on its activity window (pings for an hour
+    after the last interaction, on top of the Mon/Tue session window that
+    applies to everyone). Membership comes from
+    ``EXTENDED_KEEPALIVE_DISCORD_IDS``; anonymous visitors never qualify.
+    Read at request time, so changing the Fly secret takes effect without a
+    deploy - and so revoking it is immediate.
+    """
+    user = getattr(request.state, "user", None)
+    discord_id = user.get("discord_id") if isinstance(user, dict) else None
+    if not discord_id:
+        return False
+    return discord_id in get_extended_keepalive_ids()
+
+
+templates.env.globals["extended_keepalive_enabled"] = extended_keepalive_enabled
 
 # Static files
 # Ensure correct font MIME types - Python's mimetypes doesn't know woff2 by

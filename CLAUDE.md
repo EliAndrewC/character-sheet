@@ -65,6 +65,7 @@ A `.env` file (gitignored) holds credentials for deployment and external service
 - `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` - the slash-command application's snowflake and its Ed25519 `verify_key`. The public key is not a secret. Either one unset means `POST /discord/interactions` returns 503 - that is the bot's off switch.
 - `DISCORD_TEST_GUILD_ID` - guild to register slash commands into while developing ("Robot Role Call")
 - `DISCORD_ROLL_CHARACTER_OVERRIDES` - optional `discord_id:character_id` pins for slash-command rolls, same format as `MAGIC_LOGIN_TOKENS`
+- `EXTENDED_KEEPALIVE_DISCORD_IDS` - comma-separated discord ids whose open tabs keep the Fly machine warm for an hour after their last interaction (see "Fly Keep-alive Pinger"). Empty by default.
 
 Values with spaces or special characters must be quoted (e.g. `KEY="value with spaces"`). Load before deploying: `set -a && source .env && set +a`
 
@@ -76,6 +77,7 @@ The following are stored as **Fly secrets** (not in `.env`):
 - `MAGIC_LOGIN_TOKENS` - also set as a Fly secret (same value as in `.env`)
 - `ROLL_QUERY_TOKEN` - also set as a Fly secret (same value as in `.env`)
 - `DISCORD_BOT_TOKEN` / `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` / `DISCORD_ROLL_CHARACTER_OVERRIDES` - also set as Fly secrets (same values as in `.env`)
+- `EXTENDED_KEEPALIVE_DISCORD_IDS` - also set as a Fly secret (same value as in `.env`)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - also set as Fly secrets (same values as in `.env`)
 - `S3_BACKUP_BUCKET` - S3 bucket name for database backups (e.g. `l7r-character-sheet-backups`)
 - `S3_BACKUP_REGION` - AWS region (default: `us-east-1`)
@@ -587,7 +589,16 @@ Requires a persistent volume named `l7r_data` mounted at `/data`. The `DATABASE_
 
 ## Fly Keep-alive Pinger
 
-Fly's `auto_stop_machines` reclaims the machine after a quiet spell, so the first request of a session pays a cold-boot delay. To avoid that during actual play without keeping the machine (and bill) running all week, every page loads `app/static/js/keepalive.js` (included from `base.html`), which once a minute checks the wall clock in **America/New_York** and, only on **Mon/Tue between 7:00pm and 11:00pm** (the campaign's session window), sends `GET /keepalive` - a public no-op endpoint in `app/routes/pages.py` that returns `ok` with `Cache-Control: no-store`. The window/timezone live in `DEFAULTS` at the top of `keepalive.js`; change them there if the session schedule changes. The pure decision logic (`shouldKeepAlive`, DST handling) is unit-tested in `tests/js/keepalive.test.js`; the browser wiring is covered by `tests/e2e/test_keepalive.py` (mark `keepalive`). Fly does not document the exact idle timeout, but it is on the order of minutes, so a 60s ping is comfortably inside it.
+Fly's `auto_stop_machines` reclaims the machine after a quiet spell, so the first request of a session pays a cold-boot delay. To avoid that during actual play without keeping the machine (and bill) running all week, every page loads `app/static/js/keepalive.js` (included from `base.html`), which once a minute decides whether to send `GET /keepalive` - a public no-op endpoint in `app/routes/pages.py` that returns `ok` with `Cache-Control: no-store`. Fly does not document the exact idle timeout, but it is on the order of minutes, so a 60s ping is comfortably inside it.
+
+There are **two independent windows**, and a ping goes out if either is open:
+
+1. **The session window, for everyone.** The wall clock in **America/New_York** falls on **Mon/Tue between 7:00pm and 11:00pm** (the campaign's session window). Lives in `DEFAULTS` at the top of `keepalive.js`; change it there if the schedule changes.
+2. **The activity window, per account.** For discord ids listed in **`EXTENDED_KEEPALIVE_DISCORD_IDS`**, pings continue for **an hour after that viewer's last interaction with the page**. Loading a page counts as an interaction, so following a link restarts the hour; a tab left open and forgotten goes quiet an hour after it was last touched instead of pinging forever, and touching it again starts the hour over. Interactions are `click` / `keydown` / `submit`, listened for in the capture phase (so a modal that stops propagation can't hide one) and passively. Deliberately narrow: mouse movement or tab focus would let a forgotten tab renew itself indefinitely, which is the whole point of the limit.
+
+The opt-in is server-rendered as `data-extended-keepalive="1"` on `<html>` by `extended_keepalive_enabled()` (a Jinja global in `app/main.py`), read at request time so changing the Fly secret takes effect - and revoking it takes effect - without a deploy. Anonymous visitors never qualify. The list is **separate from `ADMIN_DISCORD_IDS` on purpose**: "may keep the machine warm" is about who is doing hands-on work right now, not who has GM privileges, and the two should be able to diverge.
+
+Pure decision logic (`shouldKeepAlive` and the `inSessionWindow` / `inActivityWindow` predicates, DST handling) is unit-tested in `tests/js/keepalive.test.js` and takes everything it needs as arguments; the mutable activity state lives in the impure layer and reaches the predicates through `currentOptions()`. The server half is covered by `tests/test_keepalive.py` and the browser wiring by `tests/e2e/test_keepalive.py` (mark `keepalive`).
 
 ## Database Backups
 

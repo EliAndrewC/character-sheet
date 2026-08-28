@@ -70,6 +70,124 @@ test("tick swallows fetch failures (rejected promise and thrown error)", () => {
   assert.equal(K.tick(d, () => { throw new Error("no fetch"); }), true);
 });
 
+// ---------------------------------------------------------------------------
+// The activity window: an opted-in viewer's open tab, for an hour after their
+// last interaction.
+// ---------------------------------------------------------------------------
+
+const HOUR = 60 * 60 * 1000;
+
+test("inActivityWindow needs both the opt-in and an interaction", () => {
+  const now = nyAug2026(2, 12, 0); // Wed noon - far outside the session window
+  const t = now.getTime();
+  assert.equal(K.inActivityWindow(now, { extended: false, lastInteraction: t, extendedWindowMs: HOUR }), false);
+  assert.equal(K.inActivityWindow(now, { extended: true, lastInteraction: null, extendedWindowMs: HOUR }), false);
+  assert.equal(K.inActivityWindow(now, { extended: true, lastInteraction: t, extendedWindowMs: HOUR }), true);
+});
+
+test("the activity window lasts an hour and then closes", () => {
+  const now = nyAug2026(2, 12, 0);
+  const at = (agoMs) => K.inActivityWindow(now, {
+    extended: true, lastInteraction: now.getTime() - agoMs, extendedWindowMs: HOUR,
+  });
+  assert.equal(at(0), true); // just interacted
+  assert.equal(at(59 * 60 * 1000), true); // 59 minutes ago
+  assert.equal(at(HOUR - 1), true); // one millisecond short of the hour
+  assert.equal(at(HOUR), false); // exactly an hour - closed
+  assert.equal(at(HOUR + 1), false);
+  assert.equal(at(5 * HOUR), false); // a tab forgotten overnight
+});
+
+test("a backwards clock jump closes the activity window rather than trusting it", () => {
+  const now = nyAug2026(2, 12, 0);
+  assert.equal(K.inActivityWindow(now, {
+    extended: true, lastInteraction: now.getTime() + 1000, extendedWindowMs: HOUR,
+  }), false);
+});
+
+test("shouldKeepAlive is true outside the session window during activity", () => {
+  const now = nyAug2026(2, 12, 0); // Wed noon
+  assert.equal(K.shouldKeepAlive(now), false);
+  assert.equal(K.shouldKeepAlive(now, { extended: true, lastInteraction: now.getTime() }), true);
+  assert.equal(
+    K.shouldKeepAlive(now, { extended: true, lastInteraction: now.getTime() - 2 * HOUR }),
+    false
+  );
+});
+
+test("the session window applies with or without the opt-in", () => {
+  const monEvening = nyAug2026(0, 20, 0);
+  // Stale interaction, but it is a game night - everyone pings.
+  assert.equal(
+    K.shouldKeepAlive(monEvening, { extended: true, lastInteraction: monEvening.getTime() - 5 * HOUR }),
+    true
+  );
+  assert.equal(K.shouldKeepAlive(monEvening, { extended: false }), true);
+});
+
+test("tick pings outside the session window for an active opted-in viewer", () => {
+  const calls = [];
+  const fetchFn = (url, init) => { calls.push({ url, init }); return Promise.resolve({}); };
+  const now = nyAug2026(2, 12, 0);
+  assert.equal(K.tick(now, fetchFn, { extended: true, lastInteraction: now.getTime() }), true);
+  assert.equal(calls.length, 1);
+  assert.equal(
+    K.tick(now, fetchFn, { extended: true, lastInteraction: now.getTime() - 2 * HOUR }),
+    false
+  );
+  assert.equal(calls.length, 1);
+});
+
+test("noteInteraction and enableExtended drive currentOptions", () => {
+  const before = K.currentOptions();
+  try {
+    assert.equal(K.enableExtended(true), true);
+    const stamp = K.noteInteraction(new Date(Date.UTC(2026, 7, 26, 16, 0)));
+    assert.equal(stamp, Date.UTC(2026, 7, 26, 16, 0));
+    assert.deepEqual(K.currentOptions(), { extended: true, lastInteraction: stamp });
+    assert.equal(K.enableExtended(false), false);
+    assert.equal(K.currentOptions().extended, false);
+    // Defaulting to "now" is what the event listeners rely on.
+    const t0 = Date.now();
+    const noted = K.noteInteraction();
+    assert.ok(noted >= t0);
+  } finally {
+    K.enableExtended(before.extended);
+  }
+});
+
+test("extendedFromDocument reads the server's flag off <html>", () => {
+  const docWith = { documentElement: { getAttribute: (n) => (n === K.FLAG_ATTRIBUTE ? "1" : null) } };
+  const docWithout = { documentElement: { getAttribute: () => null } };
+  const docOther = { documentElement: { getAttribute: () => "0" } };
+  assert.equal(K.extendedFromDocument(docWith), true);
+  assert.equal(K.extendedFromDocument(docWithout), false);
+  assert.equal(K.extendedFromDocument(docOther), false);
+  assert.equal(K.extendedFromDocument(null), false);
+  assert.equal(K.extendedFromDocument({}), false);
+});
+
+test("watchInteractions subscribes to every interaction event, capturing and passive", () => {
+  const added = [];
+  const target = { addEventListener: (name, fn, opts) => added.push({ name, fn, opts }) };
+  assert.equal(K.watchInteractions(target), true);
+  assert.deepEqual(added.map((a) => a.name), K.INTERACTION_EVENTS);
+  assert.deepEqual(added[0].opts, { capture: true, passive: true });
+
+  // Firing one records an interaction.
+  K.enableExtended(true);
+  try {
+    K.noteInteraction(new Date(Date.UTC(2020, 0, 1)));
+    added[0].fn();
+    assert.ok(K.currentOptions().lastInteraction > Date.UTC(2020, 0, 1));
+  } finally {
+    K.enableExtended(false);
+  }
+
+  assert.equal(K.watchInteractions(null), false);
+  assert.equal(K.watchInteractions({}), false);
+});
+
 test("start schedules a 60s interval and returns the handle", () => {
   const origSetInterval = globalThis.setInterval;
   const origFetch = globalThis.fetch;
