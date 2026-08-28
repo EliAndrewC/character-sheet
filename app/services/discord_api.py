@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -46,6 +47,22 @@ USER_AGENT = (
 #: Outbound calls answer a user who is staring at a "thinking..." spinner,
 #: so fail fast rather than hanging the background task.
 TIMEOUT_SEC = 15
+
+#: Backoff before re-attempting a follow-up edit, in seconds.
+#:
+#: Editing a deferred response races Discord: we start the follow-up as soon
+#: as uvicorn has written the acknowledgement to the socket, but those bytes
+#: still have to cross Fly's proxy and be processed on Discord's side before
+#: the message we want to edit exists. Losing that race returns 404
+#: "Unknown Webhook" (10015) even though the interaction token is perfectly
+#: valid - which strands the invoker on "thinking..." forever, since the
+#: placeholder message is only ever replaced by this call. Retrying costs a
+#: few seconds against a 15-minute window.
+FOLLOWUP_RETRY_DELAYS = (0.25, 0.5, 1.0, 2.0, 4.0)
+
+#: Statuses worth another attempt: the 404 above, Discord rate limiting, and
+#: transient server errors. A 400/401/403 is our bug and will not improve.
+RETRYABLE_STATUSES = frozenset({404, 429, 500, 502, 503, 504})
 
 
 def bot_token() -> str:
@@ -126,22 +143,49 @@ def edit_original_response(
     call needs no bot token.
 
     A PNG is attached via multipart, the same way the sheet's "Copy roll
-    image" card reaches Discord today. Returns True on success; a failure
-    is logged and swallowed, because the roll has already been recorded
-    and there is nothing useful to raise at.
+    image" card reaches Discord today.
+
+    Retries on the statuses in ``RETRYABLE_STATUSES`` (see
+    ``FOLLOWUP_RETRY_DELAYS`` for why a fresh deferral reliably 404s once)
+    and on transport errors. Returns True on success; a final failure is
+    logged and swallowed, because the roll has already been recorded and
+    there is nothing useful to raise at.
     """
     url = (
         f"{API_BASE}/webhooks/{application_id()}/{interaction_token}"
         f"/messages/@original"
     )
     body: Dict[str, Any] = {"content": content}
+    if png:
+        # An attachment has to go as multipart, with the JSON body in a
+        # ``payload_json`` part and each file keyed by the id it is
+        # referenced under in ``attachments``.
+        body["attachments"] = [{"id": 0, "filename": filename}]
+
+    last = ""
+    for attempt, delay in enumerate((0.0,) + FOLLOWUP_RETRY_DELAYS):
+        if delay:
+            time.sleep(delay)
+        succeeded, retryable, last = _attempt_edit(url, body, png, filename)
+        if succeeded:
+            if attempt:
+                log.info(
+                    "discord: follow-up edit succeeded on attempt %s", attempt + 1,
+                )
+            return True
+        if not retryable:
+            break
+    log.warning("discord: editing the original response failed: %s", last)
+    return False
+
+
+def _attempt_edit(
+    url: str, body: Dict[str, Any], png: Optional[bytes], filename: str,
+) -> "tuple[bool, bool, str]":
+    """One PATCH. Returns ``(succeeded, worth_retrying, description)``."""
     try:
         with httpx.Client(timeout=TIMEOUT_SEC) as http:
             if png:
-                # An attachment has to go as multipart, with the JSON body
-                # in a ``payload_json`` part and each file keyed by the id
-                # it is referenced under in ``attachments``.
-                body["attachments"] = [{"id": 0, "filename": filename}]
                 response = http.patch(
                     url,
                     data={"payload_json": json.dumps(body)},
@@ -152,16 +196,15 @@ def edit_original_response(
                 response = http.patch(
                     url, json=body, headers={"User-Agent": USER_AGENT},
                 )
-        if response.status_code >= 400:
-            log.warning(
-                "discord: editing the original response failed (%s): %s",
-                response.status_code, response.text[:500],
-            )
-            return False
-        return True
     except httpx.HTTPError as exc:
-        log.warning("discord: editing the original response failed: %s", exc)
-        return False
+        return False, True, f"transport error: {exc}"
+    if response.status_code < 400:
+        return True, False, ""
+    return (
+        False,
+        response.status_code in RETRYABLE_STATUSES,
+        f"HTTP {response.status_code}: {response.text[:300]}",
+    )
 
 
 def put_guild_commands(guild_id: str, commands: List[dict]) -> List[dict]:

@@ -474,6 +474,14 @@ always-on process**. Discord delivers commands as signed HTTPS POSTs.
    rasterizes the dice card and edits it into the original response (Discord allows 15 minutes).
    If the render fails, the text line - which carries the total - is posted alone rather than
    leaving the invoker on "thinking...".
+4. **Retry the follow-up.** The background task starts the moment uvicorn writes the
+   acknowledgement to the socket, but those bytes still have to cross Fly's proxy and be
+   processed by Discord before the placeholder message exists to be edited. Losing that race
+   returns `404 Unknown Webhook` (10015) on a perfectly valid token - and since that placeholder
+   is only ever replaced by this call, one lost race strands the invoker on "thinking..."
+   permanently. `edit_original_response` therefore backs off and retries (404 / 429 / 5xx and
+   transport errors; a 400 / 401 / 403 is our own bug and is not retried). This is the single
+   most fragile point in the flow; **do not "simplify" the retry away.**
 
 #### Which character rolls
 
