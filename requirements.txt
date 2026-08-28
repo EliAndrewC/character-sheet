@@ -29,3 +29,6 @@ opencv-python-headless==4.13.0.92
 
 # Roll-result image card (clipboard copy from the dice roller)
 cairosvg==2.9.0
+
+# Discord slash commands: Ed25519 verification of interaction signatures
+PyNaCl==1.6.2

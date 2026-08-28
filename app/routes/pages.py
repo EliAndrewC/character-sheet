@@ -42,6 +42,11 @@ from app.services.dark_secret import (
 )
 from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
+from app.services.party import (
+    party_member_dan,
+    party_member_data,
+    visible_party_members,
+)
 from app.services.rolls import compute_skill_roll
 from app.services.status import (
     compute_effective_status,
@@ -531,58 +536,15 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     knack_ranks = [char_knacks[k]["rank"] for k in char_knacks] if char_knacks else [0]
     dan = min(knack_ranks) if knack_ranks else 0
 
-    # Load party members in the same gaming group, if any.
-    party_members_data: list = []
+    # Load party members in the same gaming group, if any. The lookup and
+    # the hidden-member visibility rule live in app/services/party.py so the
+    # Discord roll commands compute the same party effects this page does.
     daidoji_counterattack_party: list = []  # party members with Daidoji 3rd Dan counterattack raises
+    party_chars = visible_party_members(db, character, user_id)
+    party_members_data: list = party_member_data(party_chars)
     if character.gaming_group_id:
-        party_chars = (
-            db.query(Character)
-            .filter(
-                Character.gaming_group_id == character.gaming_group_id,
-                Character.id != char_id,
-            )
-            .all()
-        )
-        # Hidden party members must not surface to viewers without edit
-        # access to them - their existence would otherwise leak through
-        # the priest/Daidoji ally lists below.
-        if any(p.is_hidden for p in party_chars):
-            party_owner_ids = {p.owner_discord_id for p in party_chars
-                               if p.is_hidden and p.owner_discord_id}
-            party_owners = (
-                db.query(UserModel)
-                .filter(UserModel.discord_id.in_(party_owner_ids))
-                .all()
-            ) if party_owner_ids else []
-            party_grants = {u.discord_id: (u.granted_account_ids or [])
-                            for u in party_owners}
-            admin_ids = get_admin_ids()
-            party_chars = [
-                p for p in party_chars
-                if not p.is_hidden
-                or can_view_drafts(
-                    user_id, p.owner_discord_id,
-                    party_grants.get(p.owner_discord_id, []), admin_ids,
-                )
-            ]
         for p in party_chars:
-            # Compute party member's Dan (lowest school knack rank).
-            p_dan = 0
-            p_school_obj = SCHOOLS.get(p.school)
-            if p_school_obj:
-                p_knack_ranks = [
-                    (p.knacks or {}).get(k, 1) for k in p_school_obj.school_knacks
-                ]
-                p_dan = min(p_knack_ranks) if p_knack_ranks else 0
-            party_members_data.append({
-                "name": p.name,
-                "school": p.school,
-                "dan": p_dan,
-                "advantages": p.advantages or [],
-                "disadvantages": p.disadvantages or [],
-                "campaign_advantages": p.campaign_advantages or [],
-                "campaign_disadvantages": p.campaign_disadvantages or [],
-            })
+            p_dan = party_member_dan(p)
             # Check if this party member is a Daidoji with 3rd Dan counterattack raises
             if p.school == "daidoji_yojimbo" and p_dan >= 3:
                 p_attack = (p.skills or {}).get("attack", 1)

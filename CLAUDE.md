@@ -61,7 +61,10 @@ A `.env` file (gitignored) holds credentials for deployment and external service
 - `GOOGLE_CLIENT_SECRET` - Google OAuth 2.0 client secret
 - `GITHUB_TOKEN` - fine-grained GitHub PAT (contents: read/write, this repo only) that Claude Code uses to push (see "Git Workflow")
 - `ROLL_QUERY_TOKEN` - shared secret for the GM read-only API (`/api/rolls`, `/api/characters`); see "GM read-only API and Discord integration". Also a Fly secret. Unset means those endpoints 503.
-- `DISCORD_BOT_TOKEN` - bot token for the "L7R Character Sheet" Discord application. Nothing reads it yet; reserved for the planned roll slash commands.
+- `DISCORD_BOT_TOKEN` - bot token for the "L7R Character Sheet" Discord application (registering slash commands; the interactions endpoint itself does not need it)
+- `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` - the slash-command application's snowflake and its Ed25519 `verify_key`. The public key is not a secret. Either one unset means `POST /discord/interactions` returns 503 - that is the bot's off switch.
+- `DISCORD_TEST_GUILD_ID` - guild to register slash commands into while developing ("Robot Role Call")
+- `DISCORD_ROLL_CHARACTER_OVERRIDES` - optional `discord_id:character_id` pins for slash-command rolls, same format as `MAGIC_LOGIN_TOKENS`
 
 Values with spaces or special characters must be quoted (e.g. `KEY="value with spaces"`). Load before deploying: `set -a && source .env && set +a`
 
@@ -72,6 +75,7 @@ The following are stored as **Fly secrets** (not in `.env`):
 - `ADMIN_DISCORD_IDS` - comma-separated Discord IDs with GM/admin privileges
 - `MAGIC_LOGIN_TOKENS` - also set as a Fly secret (same value as in `.env`)
 - `ROLL_QUERY_TOKEN` - also set as a Fly secret (same value as in `.env`)
+- `DISCORD_BOT_TOKEN` / `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` / `DISCORD_ROLL_CHARACTER_OVERRIDES` - also set as Fly secrets (same values as in `.env`)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - also set as Fly secrets (same values as in `.env`)
 - `S3_BACKUP_BUCKET` - S3 bucket name for database backups (e.g. `l7r-character-sheet-backups`)
 - `S3_BACKUP_REGION` - AWS region (default: `us-east-1`)
@@ -208,6 +212,9 @@ app/
   routes/characters.py - Character CRUD + HTMX partial endpoints
   routes/google_sheets.py - Google OAuth2 flow + Sheets export
   routes/gm_api.py     - token-authed read-only JSON API for the GM's tooling
+  routes/discord.py    - Discord interactions endpoint (slash commands)
+  services/roll_engine.py - server-side dice + result payload (the bot's roller)
+  services/party.py    - gaming-group party lookup shared by sheet and bot
   templates/           - Jinja2 templates
 tests/                 - Unit test suite (pytest)
 tests/e2e/             - E2E clicktests (Playwright)
@@ -428,7 +435,7 @@ curl -H "Authorization: Bearer $T" \
   'https://l7r-character-sheet.fly.dev/api/rolls?since=2026-08-01T00:00:00Z&limit=5'
 ```
 
-### Where the Discord integration is going
+### Roll slash commands (`/etiquette`)
 
 Two separate Discord applications, split on the principle that **code goes where the WRITE
 happens** - reads cross a repo boundary cheaply over HTTP, writes need the domain's invariants
@@ -443,32 +450,96 @@ A single Discord application has one interactions URL and effectively one gatewa
 two services cannot share one; two applications can each register slash commands in the same
 channel with no conflict (Discord groups the picker by app).
 
-**This app is expected to grow slash commands that roll dice** (`/etiquette`, ~40 of them, one
-per skill, registered from a table and dispatched into one shared handler). That belongs here
-because the dice math lives here (`build_all_roll_formulas`, the caps and bonuses, `RollHistory`,
-`dice_card.py` - **never reimplement the roll formulas outside this repo**), the authorization
-model lives here (`owner_discord_id`, `editor_discord_ids`, `get_admin_ids`), and a roll made
-through a slash command is born STRUCTURED - it writes its own `roll_history` row, so the
-image-matching problem this API exists to solve never arises for it.
+Rolling belongs here because the dice math is here (`build_all_roll_formulas`, the caps and
+bonuses, `RollHistory`, `dice_card.py` - **never reimplement the roll formulas outside this
+repo**), the authorization model is here (`owner_discord_id`, `editor_discord_ids`,
+`get_admin_ids`), and **a roll made through a slash command is born STRUCTURED**: it writes its
+own `roll_history` row, so the image-matching problem `/api/rolls` exists to solve never arises
+for it.
 
-Slash commands need no gateway and no always-on process: Discord delivers them as signed HTTPS
-POSTs to an "Interactions Endpoint URL" registered in the developer portal (e.g.
-`/discord/interactions` on this app), with an Ed25519 signature to verify on every request. Mind
-the 3-second acknowledgement deadline - defer the ack and edit in the real response (up to 15
-minutes) if rolling and rendering the card takes longer. Register commands **guild-scoped** while
-developing (instant; global commands take up to an hour). Command names must be lowercase with no
-spaces, so knacks become `/discern-honor`; autocomplete on the OPTIONS can be personalized per
-invoker, the command NAME row cannot.
+#### How a command flows
 
-The bot token lives in `DISCORD_BOT_TOKEN` (`.env`; a Fly secret when something finally reads it)
-- a different credential from the `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` pair used for
-website login. It does **not** need the Message Content privileged intent: slash commands arrive
-as structured payloads, and not needing that toggle keeps this app out of Discord's verification
-process. Invite it with scopes `bot` AND `applications.commands` (the second is what makes the
+`POST /discord/interactions` (`app/routes/discord.py`) is the whole bot - **no gateway, no
+always-on process**. Discord delivers commands as signed HTTPS POSTs.
+
+1. **Verify or 401.** Every request carries `X-Signature-Ed25519` / `X-Signature-Timestamp` over
+   `timestamp + body`, checked with PyNaCl against `DISCORD_PUBLIC_KEY`. Discord will not even
+   save an interactions URL that fails to reject a bad signature, so the 401 path is part of
+   registration, not just security. A `type: 1` PING gets a `type: 1` PONG.
+2. **Resolve, roll and record inline.** These are DB queries and arithmetic, well inside the
+   3-second acknowledgement deadline. Doing them in the request means an error answers
+   immediately and *ephemerally* (only the invoker sees it), and the roll is recorded even if
+   Discord is unreachable afterwards.
+3. **Defer the slow half.** The route answers `type: 5` (deferred) and a background task
+   rasterizes the dice card and edits it into the original response (Discord allows 15 minutes).
+   If the render fails, the text line - which carries the total - is posted alone rather than
+   leaving the invoker on "thinking...".
+
+#### Which character rolls
+
+`resolve_character()` in `app/services/discord_commands.py`, in order:
+
+1. **`DISCORD_ROLL_CHARACTER_OVERRIDES`** - `discord_id:character_id` pins. The GM is why it
+   exists: they own many NPCs and no single "their PC", so their rolls are pinned (currently to
+   "Roll Tester", character 22). An env var rather than a code constant, so changing a pin is a
+   Fly secret update, not a deploy.
+2. Otherwise **the character they OWN that is assigned to a gaming group** - the one they are
+   actually playing. Ties go to the most recently updated.
+3. Otherwise an ephemeral message explaining what to fix. Never a guess.
+
+#### Other decisions
+
+- **Command name -> roll key** is `SKILLS`: `/etiquette` rolls `skill:etiquette`. Only commands
+  actually registered with Discord are reachable. Per-skill commands (rather than one `/roll
+  <skill>`) because Discord fuzzy-matches names, so `/eti` finds it; 18 skills is far under the
+  100-per-scope cap. Knacks would become `/discern-honor` - names must be lowercase, no spaces.
+- **The roll is the unconditional one.** No void spends, no Lucky reroll, no post-roll
+  discretionary bonuses - those are interactive choices the modal exists to ask about, and a
+  slash command has nobody to ask. Everything the formula layer applies automatically (school
+  techniques, advantages, Impaired suppressing the 10s reroll) is already in the formula and so
+  is already in the roll. Buttons on the response are the natural next step, mapping onto the
+  existing post-roll `PATCH`.
+- **`app/services/roll_engine.py` is the Python mirror of the browser's roller.** It reuses
+  `build_all_roll_formulas` for every rules decision and only turns a formula into dice and then
+  into the existing payload shape. What it *does* duplicate is the small display layer in
+  `roll_math.js` (the total cap, the "alternative totals" filtering) - a handful of `min()` calls
+  Python cannot call across. **Keep the two in step**; `tests/test_roll_engine.py` asserts the
+  same cases as `tests/js/roll_math.test.js`.
+- **`app/services/party.py` is shared with the sheet.** Party-wide mechanics (Priest 2nd Dan's
+  free raise, Daidoji 3rd Dan) feed `build_all_roll_formulas` through a party list whose
+  hidden-member visibility rule is easy to get subtly wrong. `pages.py` and the bot both call it,
+  so the same roll cannot come out differently depending on where it was made.
+- **Recording follows the sheet's rules exactly**, via `should_record_roll` - including the
+  blanket admin exclusion. A GM rolling on a character they do not own still gets their roll and
+  their card, it just leaves no `roll_history` row. That rule is about the character, not the
+  interface.
+- **Errors are ephemeral**, so a mistyped command or an unlinked account never clutters the
+  channel the group is playing in.
+
+#### Operating it
+
+`scripts/register_discord_commands.py` does both registration jobs (`set -a && source .env && set
++a` first):
+
+```bash
+# Bulk-overwrite the test guild's command set (instant; global takes ~1 hour)
+python3 scripts/register_discord_commands.py --commands --guild "$DISCORD_TEST_GUILD_ID"
+# Point Discord at this app. The app must already be DEPLOYED - Discord
+# validates the URL by PINGing it and requiring a signed PONG.
+python3 scripts/register_discord_commands.py --endpoint \
+    --url https://l7r-character-sheet.fly.dev/discord/interactions
+```
+
+`--skills all` registers one command per skill; the default is just `/etiquette`. Bulk overwrite
+means the guild ends up with exactly what is listed, so anything omitted is removed.
+
+The bot is invited with scopes `bot` AND `applications.commands` (the second is what makes the
 commands visible) and `permissions=52224` (View Channel, Send Messages, Embed Links, Attach
-Files). Test against the GM's "Robot Role Call" server (guild `1543009570157236274`) before
-anything reaches the live channels, `case-of-the-mondays` (`832075590726844436`) and `a-team`
-(`832075722516201492`) in guild `745421621829042297`.
+Files). It does **not** need the Message Content privileged intent - slash commands arrive as
+structured payloads - and not needing that toggle keeps this app out of Discord's verification
+process. Test server: "Robot Role Call", guild `1543009570157236274`. The live game channels are
+`case-of-the-mondays` (`832075590726844436`) and `a-team` (`832075722516201492`) in guild
+`745421621829042297`.
 
 ## Style & Design Preferences
 
