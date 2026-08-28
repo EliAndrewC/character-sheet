@@ -540,97 +540,154 @@ def test_card_render_failure_still_posts_the_total(
 # ---------------------------------------------------------------------------
 
 
-def test_edit_original_response_sends_multipart(monkeypatch, signing_key):
+class _FakeResponse:
+    def __init__(self, status_code=200, text=""):
+        self.status_code = status_code
+        self.text = text
+
+
+class _FakeClient:
+    """An httpx.Client stand-in that replays a scripted list of results.
+
+    Each entry is either a ``_FakeResponse`` or an exception to raise. The
+    last entry repeats once the script runs out, so a test that wants "404
+    forever" only has to say it once.
+    """
+
+    def __init__(self, script, captured):
+        # The list is SHARED across instances on purpose: edit_original_response
+        # opens a new client per attempt, so a per-instance copy would replay
+        # the first scripted result forever and no retry could ever succeed.
+        self._script = script
+        self._captured = captured
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def patch(self, url, **kwargs):
+        self._captured.append({"url": url, **kwargs})
+        result = (
+            self._script.pop(0) if len(self._script) > 1 else self._script[0]
+        )
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+
+@pytest.fixture()
+def discord_http(monkeypatch):
+    """Script discord_api's outbound PATCHes and capture what was sent."""
+    captured = []
+
+    def _install(*script):
+        remaining = list(script)
+        monkeypatch.setattr(
+            discord_api.httpx, "Client",
+            lambda *a, **kw: _FakeClient(remaining, captured),
+        )
+        return captured
+
+    return _install
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_sleeps(monkeypatch):
+    """Keep the retry backoff's shape but not its wall-clock cost."""
+    monkeypatch.setattr(
+        discord_api, "FOLLOWUP_RETRY_DELAYS",
+        tuple(0 for _ in discord_api.FOLLOWUP_RETRY_DELAYS),
+    )
+
+
+def test_edit_original_response_sends_multipart(discord_http, signing_key):
     """The PNG goes as files[0] with the JSON body in payload_json."""
-    captured = {}
-
-    class _Response:
-        status_code = 200
-        text = ""
-
-    class _Client:
-        def __init__(self, *a, **kw):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def patch(self, url, **kwargs):
-            captured.update({"url": url, **kwargs})
-            return _Response()
-
-    monkeypatch.setattr(discord_api.httpx, "Client", _Client)
+    captured = discord_http(_FakeResponse())
     assert discord_api.edit_original_response("tok", "hi", b"PNGDATA") is True
-    assert captured["url"].endswith(f"/webhooks/{APP_ID}/tok/messages/@original")
-    body = json.loads(captured["data"]["payload_json"])
+
+    assert len(captured) == 1
+    sent = captured[0]
+    assert sent["url"].endswith(f"/webhooks/{APP_ID}/tok/messages/@original")
+    body = json.loads(sent["data"]["payload_json"])
     assert body["content"] == "hi"
     assert body["attachments"] == [{"id": 0, "filename": "l7r-roll.png"}]
-    assert captured["files"]["files[0]"][1] == b"PNGDATA"
+    assert sent["files"]["files[0]"][1] == b"PNGDATA"
 
 
 def test_edit_original_response_without_a_file_sends_json(
-    monkeypatch, signing_key,
+    discord_http, signing_key,
 ):
-    captured = {}
-
-    class _Response:
-        status_code = 200
-        text = ""
-
-    class _Client:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def patch(self, url, **kwargs):
-            captured.update(kwargs)
-            return _Response()
-
-    monkeypatch.setattr(discord_api.httpx, "Client", lambda *a, **kw: _Client())
+    captured = discord_http(_FakeResponse())
     assert discord_api.edit_original_response("tok", "hi") is True
-    assert captured["json"] == {"content": "hi"}
+    assert captured[0]["json"] == {"content": "hi"}
 
 
-def test_edit_original_response_reports_an_http_error(monkeypatch, signing_key):
-    class _Response:
-        status_code = 404
-        text = "Unknown Webhook"
+def test_edit_original_response_retries_the_deferral_race(
+    discord_http, signing_key,
+):
+    """The 404 a fresh deferral reliably returns must not strand the invoker.
 
-    class _Client:
-        def __enter__(self):
-            return self
+    Discord has not finished creating the placeholder message when the
+    follow-up leaves, so the first attempt gets "Unknown Webhook" even
+    though the token is valid.
+    """
+    captured = discord_http(
+        _FakeResponse(404, '{"message": "Unknown Webhook", "code": 10015}'),
+        _FakeResponse(404, '{"message": "Unknown Webhook", "code": 10015}'),
+        _FakeResponse(200),
+    )
+    assert discord_api.edit_original_response("tok", "hi", b"PNG") is True
+    assert len(captured) == 3
 
-        def __exit__(self, *a):
-            return False
 
-        def patch(self, *a, **kw):
-            return _Response()
-
-    monkeypatch.setattr(discord_api.httpx, "Client", lambda *a, **kw: _Client())
+def test_edit_original_response_gives_up_eventually(discord_http, signing_key):
+    captured = discord_http(_FakeResponse(404, "Unknown Webhook"))
     assert discord_api.edit_original_response("tok", "hi") is False
+    assert len(captured) == 1 + len(discord_api.FOLLOWUP_RETRY_DELAYS)
 
 
-def test_edit_original_response_survives_a_transport_error(
-    monkeypatch, signing_key,
+def test_edit_original_response_backs_off_between_attempts(
+    discord_http, signing_key, monkeypatch,
+):
+    """Retries wait, so a slow deferral gets a real chance to land."""
+    slept = []
+    monkeypatch.setattr(discord_api, "FOLLOWUP_RETRY_DELAYS", (0.25, 0.5))
+    monkeypatch.setattr(discord_api.time, "sleep", slept.append)
+
+    discord_http(_FakeResponse(404, "Unknown Webhook"), _FakeResponse(200))
+    assert discord_api.edit_original_response("tok", "hi") is True
+    assert slept == [0.25]
+
+
+def test_edit_original_response_does_not_retry_our_own_bugs(
+    discord_http, signing_key,
+):
+    """A 403 will not improve on the second attempt."""
+    captured = discord_http(_FakeResponse(403, "Missing Access"))
+    assert discord_api.edit_original_response("tok", "hi") is False
+    assert len(captured) == 1
+
+
+def test_edit_original_response_retries_a_transport_error(
+    discord_http, signing_key,
 ):
     import httpx
 
-    class _Client:
-        def __enter__(self):
-            return self
+    captured = discord_http(
+        httpx.ConnectError("no route to host"), _FakeResponse(200),
+    )
+    assert discord_api.edit_original_response("tok", "hi") is True
+    assert len(captured) == 2
 
-        def __exit__(self, *a):
-            return False
 
-        def patch(self, *a, **kw):
-            raise httpx.ConnectError("no route to host")
+def test_edit_original_response_survives_a_transport_error(
+    discord_http, signing_key,
+):
+    import httpx
 
-    monkeypatch.setattr(discord_api.httpx, "Client", lambda *a, **kw: _Client())
+    discord_http(httpx.ConnectError("no route to host"))
     assert discord_api.edit_original_response("tok", "hi") is False
 
 
