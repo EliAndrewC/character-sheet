@@ -117,15 +117,25 @@ Unit tests use an in-memory SQLite database and FastAPI's TestClient (via httpx)
 ### E2E clicktests (slower, run selectively by feature area)
 
 ```bash
-python3 -m pytest tests/e2e/ -v --browser chromium                    # run ALL clicktests (~46 min)
-python3 -m pytest tests/e2e/ -v --browser chromium -m tracking        # run by feature mark (~15 sec)
-python3 -m pytest tests/e2e/ -v --browser chromium -m advantages      # another mark example
-python3 -m pytest tests/e2e/ -v --browser chromium -m "skills or rings"  # combine marks
+python3 -m pytest tests/e2e/ --browser chromium -k "impaired or exported_card"   # PREFER THIS
+python3 -m pytest tests/e2e/ --browser chromium -m keepalive                     # a small mark
+python3 -m pytest tests/e2e/ --browser chromium                                  # ALL of them (~46 min)
 ```
 
-Clicktests start a live uvicorn server on a random port with a temp database, then drive headless Chromium via Playwright. Tests are tagged with `pytest.mark` by feature area. **When developing a feature, run only the relevant mark(s)** - not the full suite.
+Clicktests start a live uvicorn server on a random port with a temp database, then drive headless Chromium via Playwright. Tests are tagged with `pytest.mark` by feature area, documented in `tests/e2e/COVERAGE.md` ("Pytest Marks") and defined in `pytest.ini`.
 
-Available marks, which features they cover, and which test files they map to are all documented in `tests/e2e/COVERAGE.md` (the "Pytest Marks" section). Marks are defined in `pytest.ini`.
+**Gate on a `-k` filter naming the tests that cover your change, not on a whole mark.** A mark is only a reasonable gate when it is genuinely small. The marks are wildly uneven, and the big ones are not "targeted" in any useful sense - `rolls` alone is **782 of the suite's 1379 tests, 57% of everything**:
+
+| mark | tests | | mark | tests |
+|---|---:|---|---|---:|
+| `rolls` | 782 | | `skills` | 67 |
+| `school_abilities` | 135 | | `roll_history` | 45 |
+| `tracking` | 97 | | `character_art` | 32 |
+| `advantages` | 67 | | `readonly_rolls` | 29 |
+
+**Never OR several marks together.** `-m "rolls or tracking or pcp or readonly_rolls or roll_history"` is 938 tests and takes ~57 minutes - longer than the full suite, while still skipping a third of it. If you find yourself reaching for a second `or`, you want `-k` instead.
+
+A good gate is seconds to a couple of minutes. For scale: the Impaired-reroll change was fully covered by `test_rolls.py -k "impaired or mid_fight or heal_back or exported_card"` (10 tests, 43s) plus `test_school_abilities.py -k "hida or dragon"` (18 tests, 62s) - 28 tests in under two minutes, versus the 47 minutes `-m "school_abilities or rolls"` cost for no extra signal. Name the test file too when you know it; it skips collecting the rest.
 
 ### JS unit tests (pure roll-math helpers)
 
@@ -172,13 +182,13 @@ New features follow this cycle:
 3. **Iterate until unit tests pass (TDD green).** Check coverage to ensure all new branches are covered.
 4. **Update the clicktest coverage checklist.** Before writing code, add new lines to `tests/e2e/COVERAGE.md` for each interactive behavior the feature introduces (buttons, fields, toggles, conditional visibility, AJAX calls). Mark them `[ ]`. This makes missing coverage visible.
 5. **Write clicktests for frontend changes (REQUIRED).** Any feature that touches templates, client-side JS, HTMX interactions, or user-facing workflows MUST have corresponding e2e tests in `tests/e2e/`. Clicktests validate that the full user flow works end-to-end in a real browser - things like AJAX handlers returning JSON instead of rendering a page, redirects landing on the right URL, and interactive UI state (overlays, disabled buttons, tooltips) behaving correctly. These catch bugs that unit tests cannot. Tag new tests with the appropriate `pytest.mark` for the feature area. After writing tests, mark the corresponding lines in `COVERAGE.md` as `[x]` with the test reference.
-6. **Run relevant clicktests by mark.** Use `pytest -m <mark>` to run only the tests for the feature area you changed - not the full suite. Example: `pytest tests/e2e/ -m advantages --browser chromium`. Iterate until they pass.
+6. **Run the clicktests that cover your change - and only those.** Prefer a `-k` filter naming them, scoped to the test file when you know it: `pytest tests/e2e/test_rolls.py -k "impaired or exported_card" --browser chromium`. Fall back to `-m <mark>` only when the mark is small (see the table above; `rolls` is 57% of the suite, so it is not a gate). Never OR marks together. Iterate until they pass.
 
 The key distinction: unit tests use TDD (tests first), clicktests are written after the feature works. Clicktests are run selectively, not as part of every iteration loop. **Do not skip clicktests** - if a feature changes frontend behavior, it needs a clicktest. The coverage checklist in `tests/e2e/COVERAGE.md` is the source of truth for what's tested. **After writing clicktests, always update `tests/e2e/COVERAGE.md`** with entries for every new test function. This is required, not optional - every test must appear in COVERAGE.md.
 
 7. **Deploy after UI changes.** Any change that touches the frontend (templates, CSS, client-side JS) should be deployed to Fly.io after tests pass so the live site stays current. **Before every deploy, `node --test tests/js/` MUST pass** (the pure roll-math layer, ~0.2s) - alongside the unit suite and the relevant clicktests.
 
-**Do NOT auto-run the full e2e suite.** The full suite takes ~46 minutes on the dev container and is not part of the per-feature loop. Targeted clicktests by `pytest.mark` (step 6) are the only e2e gate before declaring a feature done. Only run the full suite when the user explicitly asks for it.
+**Do NOT auto-run the full e2e suite**, and do not approximate it by OR-ing large marks. The full suite takes ~46 minutes on the dev container and is not part of the per-feature loop. The targeted `-k` selection in step 6 is the only e2e gate before declaring a feature done. Only run the full suite when the user explicitly asks for it.
 
 ## Git Workflow (Claude commits and pushes)
 
