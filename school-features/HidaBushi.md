@@ -3,7 +3,7 @@
 **School ID:** `hida_bushi`
 **Category:** Bushi
 **School Ring:** Water - Confirmed correct.
-**School Knacks:** counterattack, iaijutsu, lunge - All present and rollable.
+**School Knacks:** counterattack, double_attack, iaijutsu - All present and rollable. (Knack history: `game_data.py` read counterattack/iaijutsu/**lunge** until 2026-08-29, which did not match rules/04-schools.md. Corrected to **double_attack** with the GM, who confirmed no character had taken the school, so no existing build was affected.)
 
 ---
 

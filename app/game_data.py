@@ -1182,7 +1182,11 @@ _SCHOOLS_LIST: List[School] = [
         special_ability=(
             "You may counterattack as an interrupt action by spending only one action die, but if you do so then the attacker gets a free raise on their attack roll."
         ),
-        school_knacks=["counterattack", "iaijutsu", "lunge"],
+        # rules/04-schools.md: counterattack, double attack, iaijutsu. This
+        # read "lunge" instead of "double_attack" until 2026-08-29; corrected
+        # against the rules with the GM, who confirmed no character had taken
+        # the school yet, so no build was affected.
+        school_knacks=["counterattack", "double_attack", "iaijutsu"],
         techniques={
             1: "Roll one extra die on attack, counterattack, and wound checks.",
             2: "You get a free raise on counterattack rolls.",

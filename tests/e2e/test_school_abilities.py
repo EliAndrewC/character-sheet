@@ -560,7 +560,7 @@ def test_courtier_5th_dan_sometimes_skill_checkbox(page, live_server_url):
 def test_hida_3rd_dan_reroll_appears(page, live_server_url):
     """Hida at 3rd Dan sees dice reroll selection after attack roll."""
     _create_char(page, live_server_url, "HidaReroll", "hida_bushi",
-                 knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
@@ -576,7 +576,7 @@ def test_hida_3rd_dan_reroll_appears(page, live_server_url):
 def test_hida_4th_dan_trade_sw_button(page, live_server_url):
     """Hida 4th Dan: button trades 2 SW for light wound reset."""
     _create_char(page, live_server_url, "Hida4SW", "hida_bushi",
-                 knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
+                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
     sa = _get_school_abilities(page)
     assert sa.get("hida_trade_sw") is True
     assert page.locator('button:has-text("Take 2 SW to reset LW to 0")').is_visible()
@@ -1584,7 +1584,7 @@ def test_feint_temp_vp_button_for_bayushi(page, live_server_url):
 def test_hida_reroll_selection_appears(page, live_server_url):
     """Hida at 3rd Dan sees ALL dice (kept and unkept) for reroll selection."""
     _create_char(page, live_server_url, "HidaReroll2", "hida_bushi",
-                 knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
     page.locator('[data-roll-key="attack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
@@ -1613,7 +1613,7 @@ def test_hida_3rd_dan_keeps_rerolling_tens_while_impaired(page, live_server_url)
     despite being impaired". The attack rolls keep their explosions; parry and
     skills do not, and the extra-dice allowance is still halved."""
     _create_char(page, live_server_url, "HidaImpaired", "hida_bushi",
-                 knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
     # Earth is 2 by default -> impaired at 2 serious wounds.
     page.evaluate("""() => {
         const t = window._trackingBridge;
@@ -1652,7 +1652,7 @@ def test_hida_3rd_dan_allowance_is_still_halved_while_impaired(page, live_server
     from ``!formula.reroll_tens``, which the 10s exemption above inverts - so
     it now reads the character's actual impaired state instead."""
     _create_char(page, live_server_url, "HidaImpairedHalve", "hida_bushi",
-                 knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
     page.evaluate("""() => {
         const t = window._trackingBridge;
         t.seriousWounds = 2;
@@ -1683,7 +1683,7 @@ def test_hida_3rd_dan_healthy_shows_no_impaired_note(page, live_server_url):
     """The note used to fire on any counterattack, impaired or not, because
     it compared the (doubled) allowance against X."""
     _create_char(page, live_server_url, "HidaHealthyNote", "hida_bushi",
-                 knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
     page.locator('[data-roll-key="knack:counterattack"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
     modal = page.locator('[data-modal="attack"]')
@@ -2012,7 +2012,7 @@ def test_shosuro_3rd_dan_sincerity_raises(page, live_server_url):
 def test_hida_trade_sw_button_works(page, live_server_url):
     """Hida 4th Dan: Take 2 SW to reset LW - adds 2 SW and sets LW to 0."""
     _create_char(page, live_server_url, "HidaTrade", "hida_bushi",
-                 knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
+                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
     trade_btn = page.locator('button:has-text("Take 2 SW to reset LW to 0")')
     # Button should be disabled with 0 LW
     assert trade_btn.is_disabled(), "Button should be disabled when LW is 0"
@@ -2688,7 +2688,7 @@ def test_daidoji_2nd_dan_behavioral(page, live_server_url):
 def test_hida_2nd_dan_behavioral(page, live_server_url):
     """Hida 2nd Dan: counterattack shows +5 from 2nd Dan."""
     _create_char(page, live_server_url, "Hida2B", "hida_bushi",
-                 knack_overrides={"counterattack": 2, "iaijutsu": 2, "lunge": 2})
+                 knack_overrides={"counterattack": 2, "double_attack": 2, "iaijutsu": 2})
     _open_attack_modal_and_roll(page, "knack:counterattack")
     assert "2nd Dan" in _get_attack_result_text(page)
 
@@ -5840,7 +5840,7 @@ def test_shinjo_below_3rd_dan_no_parry_decrement(page, live_server_url):
 def test_hida_4th_dan_trade_sw_behavioral(page, live_server_url):
     """Hida 4th Dan: Take 2 SW button is disabled when LW=0, enabled when LW>0, adds 2 SW and resets LW."""
     _create_char(page, live_server_url, "Hida4TB", "hida_bushi",
-                 knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
+                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
     trade_btn = page.locator('button:has-text("Take 2 SW to reset LW to 0")')
     # Button should be disabled with 0 LW
     assert trade_btn.is_disabled(), "Button should be disabled with 0 LW"
@@ -5867,7 +5867,7 @@ def test_hida_4th_dan_trade_sw_behavioral(page, live_server_url):
 def test_hida_trade_sw_can_be_used_multiple_times(page, live_server_url):
     """Hida 4th Dan: Take 2 SW button can be used again after more LW are added."""
     _create_char(page, live_server_url, "HidaWCTrade", "hida_bushi",
-                 knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
+                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
     trade_btn = page.locator('button:has-text("Take 2 SW to reset LW to 0")')
     # Add LW and use the button
     page.locator('[data-action="lw-plus"]').click()
@@ -6715,7 +6715,7 @@ def test_bayushi_2nd_dan_double_attack_modal_pre_roll(page, live_server_url):
 def test_hida_2nd_dan_counterattack_modal_pre_roll(page, live_server_url):
     """Hida 2nd Dan: counterattack modal pre-roll calls out the +5 free raise."""
     _create_char(page, live_server_url, "Hida2PR", "hida_bushi",
-                 knack_overrides={"counterattack": 2, "iaijutsu": 2, "lunge": 2})
+                 knack_overrides={"counterattack": 2, "double_attack": 2, "iaijutsu": 2})
     _open_attack_modal(page, "knack:counterattack")
     text = _attack_modal_bonus_text(page)
     assert "2nd Dan" in text
@@ -7712,7 +7712,7 @@ def test_shinjo_5th_dan_bank_excess_resets_between_parry_rolls(page, live_server
 def test_hida_5th_dan_counterattack_wc_bonus(page, live_server_url):
     """Hida 5th Dan: successful counterattack banks excess, applied to wound check."""
     _create_char(page, live_server_url, "Hida5CWC", "hida_bushi",
-                 knack_overrides={"counterattack": 5, "iaijutsu": 5, "lunge": 5})
+                 knack_overrides={"counterattack": 5, "double_attack": 5, "iaijutsu": 5})
     sa = _get_school_abilities(page)
     assert sa.get("hida_counterattack_wc_bonus") is True
 
@@ -7784,7 +7784,7 @@ def test_hida_5th_dan_counterattack_wc_bonus(page, live_server_url):
 def test_hida_below_5th_dan_no_counterattack_wc_bonus(page, live_server_url):
     """Below 5th Dan, Hida does NOT bank counterattack excess for wound check."""
     _create_char(page, live_server_url, "Hida4NoCWC", "hida_bushi",
-                 knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
+                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
     sa = _get_school_abilities(page)
     assert sa.get("hida_counterattack_wc_bonus") is not True
 
@@ -11837,7 +11837,7 @@ def test_akodo_4th_dan_parry_post_roll_vp_free_raise(page, live_server_url):
 def test_non_akodo_4th_dan_has_no_combat_vp_block(page, live_server_url):
     """A non-Akodo 4th Dan attacker does not get the post-roll VP block."""
     _create_char(page, live_server_url, "Hida4", "hida_bushi",
-                 knack_overrides={"counterattack": 4, "iaijutsu": 4, "lunge": 4})
+                 knack_overrides={"counterattack": 4, "double_attack": 4, "iaijutsu": 4})
     _wait_alpine(page)
     _open_attack_modal_and_roll(page, "attack")
     assert page.locator('[data-testid="akodo-attack-vp-block"]').is_visible() is False
