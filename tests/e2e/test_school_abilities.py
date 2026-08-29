@@ -1608,6 +1608,99 @@ def test_hida_reroll_selection_appears(page, live_server_url):
     assert reroll_buttons.count() == dice_count, f"Expected {dice_count} dice buttons, got {reroll_buttons.count()}"
 
 
+def test_hida_3rd_dan_keeps_rerolling_tens_while_impaired(page, live_server_url):
+    """rules/04-schools.md, Hida Bushi 3rd Dan: "you reroll 10s on these rolls
+    despite being impaired". The attack rolls keep their explosions; parry and
+    skills do not, and the extra-dice allowance is still halved."""
+    _create_char(page, live_server_url, "HidaImpaired", "hida_bushi",
+                 knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
+    # Earth is 2 by default -> impaired at 2 serious wounds.
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.seriousWounds = 2;
+        t.save();
+        window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: 2 } }));
+    }""")
+    page.wait_for_timeout(300)
+
+    flags = page.evaluate("""() => {
+        const f = window._diceRoller.formulas;
+        const pick = (k) => f[k] && {
+            reroll: f[k].reroll_tens, reason: f[k].no_reroll_reason,
+        };
+        return {
+            attack: pick('attack'),
+            counterattack: pick('knack:counterattack'),
+            parry: pick('parry'),
+        };
+    }""")
+    assert flags["attack"] == {"reroll": True, "reason": ""}
+    assert flags["counterattack"] == {"reroll": True, "reason": ""}
+    assert flags["parry"]["reroll"] is False
+    assert flags["parry"]["reason"] == "impaired"
+
+    # And on reload, the server agrees with the live update.
+    page.reload()
+    page.wait_for_selector('[data-roll-key="attack"]')
+    assert page.evaluate(
+        "window._diceRoller.formulas['attack'].reroll_tens"
+    ) is True
+
+
+def test_hida_3rd_dan_allowance_is_still_halved_while_impaired(page, live_server_url):
+    """The other half of the same clause. The allowance used to be derived
+    from ``!formula.reroll_tens``, which the 10s exemption above inverts - so
+    it now reads the character's actual impaired state instead."""
+    _create_char(page, live_server_url, "HidaImpairedHalve", "hida_bushi",
+                 knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.seriousWounds = 2;
+        t.save();
+        window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: 2 } }));
+    }""")
+    page.wait_for_timeout(300)
+
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select:visible').select_option("5")
+    modal.locator('[data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+
+    state = page.evaluate("""() => ({
+        max: window._diceRoller.hidaRerollMax,
+        x: window._diceRoller.schoolAbilities.hida_reroll_x,
+        impaired: window._diceRoller.hidaRerollImpaired,
+    })""")
+    assert state["impaired"] is True
+    # A plain attack allows X dice, halved and rounded up when impaired.
+    assert state["max"] == -(-state["x"] // 2)
+    assert page.locator('text="(impaired: halved but 10s rerolled)"').is_visible()
+
+
+def test_hida_3rd_dan_healthy_shows_no_impaired_note(page, live_server_url):
+    """The note used to fire on any counterattack, impaired or not, because
+    it compared the (doubled) allowance against X."""
+    _create_char(page, live_server_url, "HidaHealthyNote", "hida_bushi",
+                 knack_overrides={"counterattack": 3, "iaijutsu": 3, "lunge": 3})
+    page.locator('[data-roll-key="knack:counterattack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=10000)
+    modal = page.locator('[data-modal="attack"]')
+    modal.locator('select:visible').select_option("5")
+    modal.locator('[data-action="roll-attack"]').click()
+    _wait_attack_result(page)
+
+    state = page.evaluate("""() => ({
+        max: window._diceRoller.hidaRerollMax,
+        x: window._diceRoller.schoolAbilities.hida_reroll_x,
+        impaired: window._diceRoller.hidaRerollImpaired,
+    })""")
+    assert state["impaired"] is False
+    assert state["max"] == 2 * state["x"]  # counterattack: 2X, not halved
+    assert not page.locator('text="(impaired: halved but 10s rerolled)"').is_visible()
+
+
 # --- Merchant Special: post-roll VP spending ---
 
 def test_merchant_post_roll_vp_buttons(page, live_server_url):

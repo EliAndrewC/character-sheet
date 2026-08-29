@@ -777,6 +777,9 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Courtier 5th Dan: attack modal pre-roll shows +Air (both special and 5th Dan) -> `test_school_abilities.py::test_courtier_5th_dan_attack_modal_pre_roll_shows_air_bonus`
 - [x] Shosuro Special: attack modal pre-roll shows +acting rolled dice -> `test_school_abilities.py::test_shosuro_acting_dice_attack_modal_pre_roll`
 - [x] Dragon Tattoo knack rolls (2X)k1 damage (not ring-based) -> `test_school_abilities.py::test_togashi_dragon_tattoo_rolls_2x_k1_damage`
+- [x] Hida 3rd Dan keeps rerolling 10s on attack + counterattack while impaired; parry does not, and a reload agrees -> `test_school_abilities.py::test_hida_3rd_dan_keeps_rerolling_tens_while_impaired`
+- [x] Hida 3rd Dan extra-dice allowance is still halved (round up) while impaired, with the note shown -> `test_school_abilities.py::test_hida_3rd_dan_allowance_is_still_halved_while_impaired`
+- [x] A healthy Hida counterattack gets 2X dice and NO "impaired" note -> `test_school_abilities.py::test_hida_3rd_dan_healthy_shows_no_impaired_note`
 - [x] Dragon Tattoo STILL rerolls 10s when impaired (it is a damage roll, which the combat rules exempt) -> `test_school_abilities.py::test_togashi_dragon_tattoo_still_rerolls_10s_when_impaired`
 - [x] Initiative box shows both variants ("3k2 plus 1 athletics" and "6k5 athletics") and dropdown opens on click -> `test_school_abilities.py::test_togashi_initiative_dropdown_shows_both_variants`
 - [x] Normal initiative variant rolls correct total dice count (base+1 athletics) -> `test_school_abilities.py::test_togashi_initiative_normal_variant_rolls_correct_dice`

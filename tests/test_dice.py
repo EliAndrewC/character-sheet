@@ -1803,6 +1803,78 @@ class TestBuildAllRollFormulas:
         assert "knack:dragon_tattoo" in non_skills_seen
         assert any(k.startswith("athletics:") for k in non_skills_seen)
 
+    def test_hida_3rd_dan_rerolls_tens_on_attacks_while_impaired(self):
+        """rules/04-schools.md, Hida Bushi 3rd Dan: "you reroll 10s on these
+        rolls despite being impaired", where "these rolls" are counterattacks
+        and any other type of attack roll. Everything else the character
+        rolls is still suppressed normally."""
+        char = make_character_data(
+            school="hida_bushi", attack=3, parry=2,
+            skills={"bragging": 2},
+            knacks={"counterattack": 3, "iaijutsu": 3, "lunge": 3},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        char["current_serious_wounds"] = 3  # >= Earth(2)
+        formulas = build_all_roll_formulas(char)
+
+        attack_types = [k for k, f in formulas.items() if f.get("is_attack_type")]
+        assert "attack" in attack_types
+        assert "knack:counterattack" in attack_types
+        for key in attack_types:
+            assert formulas[key]["reroll_tens"] is True, key
+            assert formulas[key]["no_reroll_reason"] == "", key
+
+        # The exemption is scoped to attack rolls only.
+        assert formulas["parry"]["reroll_tens"] is False
+        assert formulas["parry"]["no_reroll_reason"] == "impaired"
+        assert formulas["skill:bragging"]["reroll_tens"] is False
+
+    def test_hida_below_3rd_dan_still_loses_the_reroll(self):
+        char = make_character_data(
+            school="hida_bushi", attack=3,
+            knacks={"counterattack": 2, "iaijutsu": 2, "lunge": 2},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        char["current_serious_wounds"] = 3
+        formulas = build_all_roll_formulas(char)
+        assert formulas["attack"]["reroll_tens"] is False
+        assert formulas["attack"]["no_reroll_reason"] == "impaired"
+
+    def test_another_school_at_3rd_dan_does_not_get_the_hida_exemption(self):
+        char = make_character_data(
+            school="akodo_bushi", attack=3,
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        char["current_serious_wounds"] = 3
+        formulas = build_all_roll_formulas(char)
+        assert formulas["attack"]["reroll_tens"] is False
+
+    def test_hida_3rd_dan_healthy_is_unchanged(self):
+        char = make_character_data(
+            school="hida_bushi", attack=3,
+            knacks={"counterattack": 3, "iaijutsu": 3, "lunge": 3},
+            rings={"Air": 2, "Fire": 2, "Earth": 5, "Water": 2, "Void": 2},
+        )
+        char["current_serious_wounds"] = 0
+        formulas = build_all_roll_formulas(char)
+        assert formulas["attack"]["reroll_tens"] is True
+        assert formulas["attack"]["no_reroll_reason"] == ""
+
+    def test_hida_exemption_does_not_resurrect_another_no_reroll_reason(self):
+        """An unskilled attack stays unskilled - the exemption only lifts a
+        suppression whose reason was ``impaired``."""
+        char = make_character_data(
+            school="hida_bushi", attack=3,
+            knacks={"counterattack": 3, "iaijutsu": 3, "lunge": 3},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+        )
+        char["current_serious_wounds"] = 3
+        formulas = build_all_roll_formulas(char)
+        strike = formulas.get("knack:iaijutsu:strike")
+        if strike is not None:
+            assert strike["reroll_tens"] is False
+            assert strike["no_reroll_reason"] == "iaijutsu_strike"
+
     def test_healthy_character_rerolls_everything_it_can(self):
         char = make_character_data(
             skills={"bragging": 2},

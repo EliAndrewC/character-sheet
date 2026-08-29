@@ -43,12 +43,14 @@
 > You may re-roll 2X dice on each counterattack roll or X dice on any other type of attack roll, where X is your attack skill.  When impaired, your number of extra dice on these rolls is divided in half (rounded up), but you reroll 10s on these rolls despite being impaired.
 
 **Status:** Fully implemented.
-- Server: `app/routes/pages.py` passes `hida_reroll: true` and `hida_reroll_x: attack_skill`. Client: after attack rolls, shows dice selection UI pre-selecting lowest dice <=7. User can toggle selections before confirming reroll. For counterattack: 2X dice. For other attacks: X dice. When impaired: count halved (round up) but 10s rerolled on these dice.
+- Server: `app/routes/pages.py` passes `hida_reroll: true` and `hida_reroll_x: attack_skill`. Client: after attack rolls, shows dice selection UI pre-selecting lowest dice <=7. User can toggle selections before confirming reroll. For counterattack: 2X dice. For other attacks: X dice. When impaired: count halved (round up), tracked as `hidaRerollImpaired`.
+- **The 10s exemption covers the WHOLE attack roll** (2026-08-29). `build_all_roll_formulas` clears the `impaired` no-reroll reason on every `is_attack_type` formula for a Hida at Dan >= 3, and the client's `wound-changed` listener does the same via `L7RRollMath.impairedSuppressesReroll(key, formula, {hidaReroll})` so it also holds when the character becomes impaired mid-fight. Parry, skills and everything else stay suppressed. Iaijutsu is deliberately not an attack type here, so a duel's strike keeps its own no-reroll rule.
 
 **Questions (ANSWERED):**
 - X is the attack skill rank (as with all bushi 3rd Dan techniques).
 - "Re-roll dice" means rerolling that many dice and taking the better result.
-- "When impaired, divided in half (round up), but reroll 10s despite being impaired" - the impaired state halves the reroll count but restores 10-rerolling on these specific rolls.
+- **"you reroll 10s on THESE ROLLS despite being impaired" means the attack rolls themselves, not merely the X dice the ability rerolls.** The same phrase appears twice in one sentence - "your number of extra dice on *these rolls* is divided in half ... but you reroll 10s on *these rolls*" - and in its first use it can only mean the attack/counterattack rolls, so the second use means the same. This inventory previously recorded the narrower reading (only the rerolled dice exploded), which is what the code did until 2026-08-29. **Flagged to the GM; revert if the narrow reading was intended.**
+- Note the trap this creates: the allowance's "am I impaired?" check must read the character's state, NOT `!formula.reroll_tens`, because this very clause makes `reroll_tens` true on an impaired Hida attack. It reads `_impairedNow()`.
 
 ---
 

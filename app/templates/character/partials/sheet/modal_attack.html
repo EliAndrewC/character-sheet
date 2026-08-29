@@ -592,7 +592,7 @@
                          class="bg-amber-50 border border-amber-300 rounded p-3 text-sm">
                         <div class="font-medium text-amber-800 mb-2">
                             Hida 3rd Dan: select up to <span x-text="hidaRerollMax"></span> dice to reroll
-                            <span x-show="hidaRerollMax !== schoolAbilities.hida_reroll_x" class="text-xs">(impaired: halved but 10s rerolled)</span>
+                            <span x-show="hidaRerollImpaired" class="text-xs">(impaired: halved but 10s rerolled)</span>
                         </div>
                         <div class="flex flex-wrap gap-2 mb-2">
                             <template x-for="(d, i) in finalDice" :key="'hr'+i">
