@@ -633,6 +633,19 @@
 
                     {# HIT #}
                     <div x-show="atkHit" x-cloak class="bg-success/5 border border-success/40 rounded p-3">
+                        {# W1 (Wave Man). The raise gets you to the TN and no
+                           further, so this hit yields no extra damage dice -
+                           and the defender's parry against it automatically
+                           succeeds, though they still roll it. #}
+                        <div x-show="atkWaveManRaises > 0" x-cloak
+                             data-testid="wave-man-raise-note"
+                             class="text-sm bg-info/10 rounded p-2 mb-2">
+                            <span class="font-semibold">Wave Man:</span>
+                            missed by <span x-text="Math.abs(atkExcess - 5 * atkWaveManRaises)"></span>,
+                            raised by <span x-text="5 * atkWaveManRaises"></span> - hits.
+                            No extra damage dice from the raise, and any parry against
+                            this attack automatically succeeds (they still roll it).
+                        </div>
                         <div class="font-bold text-success mb-2">
                             <template x-if="atkNearMiss">
                                 <span>HIT (4th Dan) - missed TN by <span x-text="Math.abs(atkExcess)"></span>, Matsu 4th Dan turns near-miss into a hit (no extra damage)</span>
@@ -644,6 +657,23 @@
                             <template x-if="!atkNearMiss && !atkIsDoubleAttack()">
                                 <span>HIT - exceeded TN by <span x-text="atkExcess"></span>
                                 (<span x-text="atkExtraDice"></span> extra damage dice)</span>
+                            </template>
+                        </div>
+
+                        {# W2 / W10 are reference text: they change what the
+                           OPPONENT rolls, which this sheet does not model.
+                           Name the numbers so the player can tell the GM. #}
+                        <div x-show="atkFormula?.wave_man_parry_tn || atkFormula?.wave_man_wound_check_tn"
+                             x-cloak data-testid="wave-man-opponent-note"
+                             class="text-xs text-ink/60 mb-2">
+                            <span class="font-semibold">Tell your GM:</span>
+                            <template x-if="atkFormula?.wave_man_parry_tn">
+                                <span>their parry TN is +<span x-text="5 * atkFormula.wave_man_parry_tn"></span>.</span>
+                            </template>
+                            <template x-if="atkFormula?.wave_man_wound_check_tn">
+                                <span> Their wound check TN from this damage is
+                                +<span x-text="5 * atkFormula.wave_man_wound_check_tn"></span>
+                                (if they fail, they take serious wounds as if it had not been raised).</span>
                             </template>
                         </div>
 
@@ -669,6 +699,16 @@
                             <input type="number" x-model.number="atkParrySkill" min="1" max="5"
                                    class="w-16 border rounded px-2 py-1 text-sm text-center">
                         </div>
+                        {# W9 (Wave Man): "you may roll 2 of the extra damage
+                           dice that you would have rolled had they not
+                           attempted to parry", per copy. A "may", so it gets
+                           a toggle - though it only ever adds dice. #}
+                        <label x-show="atkFailedParry && atkFormula?.wave_man_failed_parry_dice"
+                               x-cloak class="flex items-center gap-2 text-sm mt-1 ml-6 cursor-pointer">
+                            <input type="checkbox" x-model="atkWaveManRecover"
+                                   data-action="wave-man-recover-dice" class="rounded text-accent">
+                            <span x-text="'Wave Man: take back up to ' + (2 * (atkFormula?.wave_man_failed_parry_dice || 0)) + ' of those dice'"></span>
+                        </label>
 
                         {# Discretionary bonuses (3rd Dan) #}
                         <div x-show="atkFormula?.adventure_raises_max_per_roll > 0" x-cloak class="mt-2 pt-2 border-t border-success/30">
@@ -1093,6 +1133,14 @@
                         <div class="flex items-center justify-between gap-3">
                             <div class="font-bold text-2xl text-accent" x-text="atkDamageTotal + ' damage'"></div>
                             {% include 'character/partials/copy_roll_image_button.html' %}
+                        </div>
+                        {# W4 (Wave Man): show the raw roll as well as the
+                           rounded figure, so the rounding is visible rather
+                           than looking like a mis-added total. #}
+                        <div x-show="atkDamageWaveManRaw !== null" x-cloak
+                             data-testid="wave-man-rounding" class="text-xs text-ink/70 mt-1">
+                            &bull; rolled <span x-text="atkDamageWaveManRaw"></span>,
+                            rounded up to <span x-text="atkDamageTotal"></span> by Wave Man
                         </div>
                         <template x-if="atkDamageParts.length > 0 && (atkDamageFlat > 0 || atkDamageShosuroBonus > 0 || convictionSpentThisRoll > 0)">
                             <div class="mt-1">

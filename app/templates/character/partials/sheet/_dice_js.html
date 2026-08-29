@@ -627,6 +627,41 @@
                     this._patchRollHistoryNow();
                 });
             },
+            // W5 (Wave Man): "You may reroll 10s on a single die when
+            // impaired", one die per copy of the ability. Unlike the PCP
+            // version above this is free and the die is picked
+            // automatically - every 10 is interchangeable at reroll time, so
+            // there is nothing to choose - which is why there is no picker
+            // UI and no confirm step. The freed die still chains: a rerolled
+            // 10 rerolls again, which is why the rule frees a *die* rather
+            // than a *ten*.
+            //
+            // ``wave_man_freed_dice`` is only stamped on formulas whose 10s
+            // Impaired actually suppressed, so this never resurrects a
+            // reroll blocked for some other reason (an unskilled roll, the
+            // duel strike, initiative).
+            async _applyWaveManFreedTens(formula, trayId) {
+                const budget = window.L7RRollMath.waveManFreedDice(
+                    formula?.wave_man_freed_dice || 0
+                );
+                if (!budget || !this._impairedNow()) return 0;
+                const tens = (this.finalDice || []).filter(d => d.value === 10).length;
+                if (!tens) return 0;
+                const before = this.keptSum;
+                const rerolls = await this._rerollDice(
+                    Math.min(tens, budget), true, trayId || 'dice-animation'
+                );
+                const res = window.L7RRollMath.waveManExplodeTens(
+                    this.finalDice, rerolls, formula.kept, budget,
+                );
+                this.finalDice = res.dice;
+                this.keptDice = res.dice.filter(d => d.kept);
+                this.unkeptDice = res.dice.filter(d => !d.kept);
+                this.keptSum = res.keptSum;
+                this.waveManTensExploded = Math.min(tens, budget);
+                return res.keptSum - before;
+            },
+
             // Reroll-10s gate for the combat panels (attack / duel contested):
             // those rolls always reroll 10s when unimpaired, so the only extra
             // condition beyond "impaired + a 10 was rolled" is that we haven't
@@ -1038,6 +1073,15 @@
             atkConvictionSpent: 0,
             atkFailedParry: false,
             atkParrySkill: 3,
+            // Wave Man W9 is a "you may", so it gets a toggle rather than
+            // firing automatically. Defaults on: it only ever adds dice.
+            atkWaveManRecover: true,
+            // How many W1 raises the last attack roll consumed, and the
+            // pre-rounding damage total for W4. Both display-only.
+            atkWaveManRaises: 0,
+            atkDamageWaveManRaw: null,
+            // How many 10s W5 let explode on the last roll.
+            waveManTensExploded: 0,
             // Damage state
             atkDamageRolled: 0,
             atkDamageShosuroBonus: 0,
@@ -2615,6 +2659,18 @@
                 // nothing to overlap). Idempotent on the same dice.
                 if (!this._earlyRendered) {
                     this._computeResultState(dice, kept, flat);
+                }
+
+                // W5 (Wave Man): let the allotted number of 10s explode
+                // before anything downstream reads the total.
+                if (this.formula?.wave_man_freed_dice) {
+                    const gain = await this._applyWaveManFreedTens(this.formula);
+                    if (gain) {
+                        this.baseTotal += gain;
+                        if (!opts.skipImageRender && !isInit) {
+                            this._prerenderRollImage(this._buildRollImagePayload());
+                        }
+                    }
                 }
 
                 // Initiative: compute action dice with school effects
@@ -5441,7 +5497,15 @@
             atkComputeDamage(extraDice, isLunge, failedParry, parrySkill, isDoubleAttack, tradeDice = 0) {
                 const f = this.atkFormula;
                 if (!f) return { rolled: 0, kept: 0, flat: 0, avg: 0, parts: [] };
-                let wR = this.atkWeaponRolled;
+                // W3 (Wave Man): a weapon rolling fewer than 4 damage dice
+                // gains one rolled die per copy of the ability, capped at 4.
+                // Shown as an explicit line in ``parts`` rather than
+                // silently editing the player's weapon input.
+                const wmWeaponCopies = f.wave_man_weapon_dice || 0;
+                const wmWeaponBase = this.atkWeaponRolled;
+                let wR = window.L7RRollMath.waveManWeaponFloor(
+                    wmWeaponBase, wmWeaponCopies);
+                const wmWeaponGain = wR - wmWeaponBase;
                 let wK = this.atkWeaponKept;
                 const ringVal = f.damage_ring_val || 2;
                 const ringName = f.damage_ring_name || 'Fire';
@@ -5477,6 +5541,14 @@
                         totalExtra = Math.max(0, totalExtra - parrySkill);
                     }
                 }
+                // W9 (Wave Man): give back 2 of the dice the failed parry
+                // took away, per copy - never more than it actually removed.
+                let wmRecovered = 0;
+                if (failedParry && this.atkWaveManRecover) {
+                    wmRecovered = window.L7RRollMath.waveManFailedParryDice(
+                        parrySkill, f.wave_man_failed_parry_dice || 0);
+                    totalExtra += wmRecovered;
+                }
                 // Otaku 4th Dan: lunge extra die always applies even if unsuccessfully parried
                 if (isLunge && failedParry && this.schoolAbilities.otaku_lunge_extra_die) {
                     totalExtra += 1;
@@ -5497,6 +5569,12 @@
                     parts.push(`-${Math.floor(parrySkill / 2)}k0 from failed parry (halved by 4th Dan)`);
                 } else if (failedParry) {
                     parts.push(`-${parrySkill}k0 from failed parry`);
+                }
+                if (wmWeaponGain > 0) {
+                    parts.push(`+${wmWeaponGain}k0 weapon dice from Wave Man`);
+                }
+                if (wmRecovered > 0) {
+                    parts.push(`+${wmRecovered}k0 recovered from Wave Man`);
                 }
                 let residualFlat = flat;
                 if (f.hiruma_parry_bonus) {
@@ -5843,6 +5921,10 @@
                 this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
                 this.unkeptDice = sorted.filter((_, i) => i < sorted.length - keptCount);
                 this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
+
+                // W5 (Wave Man): explode the allotted 10s an Impaired
+                // character could not, before the total is computed.
+                await this._applyWaveManFreedTens(formula, 'dice-animation-atk');
                 this.baseTotal = this.keptSum + formula.flat;
 
                 // Shosuro Actor 5th Dan: add sum of lowest 3 dice (post-roll)
@@ -5877,11 +5959,38 @@
                     this.atkHit = true;
                     this.atkNearMiss = true;
                 }
-                this.atkExcess = excess;
+
+                // W1 (Wave Man): "When you make an attack roll that would
+                // miss, raise it by 5", one raise per copy of the ability.
+                // Raises stop the moment the roll lands, so a spare copy
+                // goes unused rather than overshooting.
+                //
+                // Damage is computed from the UNRAISED total: the raise gets
+                // you to the TN and no further, so an attack that only hit
+                // because of it yields no extra damage dice. ``rawTotal``
+                // below is what the dice actually said.
+                this.atkWaveManRaises = 0;
+                const rawTotal = this.atkRollTotal;
+                const wmRaises = formula.wave_man_miss_raise || 0;
+                if (wmRaises && !this.atkHit) {
+                    const r = window.L7RRollMath.waveManMissRaise(
+                        this.atkRollTotal, effectiveTN, wmRaises,
+                    );
+                    if (r.raisesUsed > 0) {
+                        this.baseTotal += 5 * r.raisesUsed;
+                        this.atkRollTotal = r.total;
+                        this.atkWaveManRaises = r.raisesUsed;
+                        this.atkHit = r.hit;
+                    }
+                }
+                this.atkExcess = this.atkRollTotal - effectiveTN;
                 // For double attack, extra damage dice based on excess over BASE TN
                 const excessForDamage = this.atkIsDoubleAttack()
-                    ? this.atkRollTotal - this.atkTN : excess;
-                this.atkExtraDice = this.atkHit && !this.atkNearMiss ? window.L7RRollMath.excessToExtraDice(excessForDamage) : 0;
+                    ? rawTotal - this.atkTN
+                    : window.L7RRollMath.waveManExcessForDamage(
+                          rawTotal, effectiveTN, wmRaises);
+                this.atkExtraDice = (this.atkHit && !this.atkNearMiss && excessForDamage >= 0)
+                    ? window.L7RRollMath.excessToExtraDice(excessForDamage) : 0;
 
                 // Hida 5th Dan: bank counterattack excess for wound check bonus
                 if (this.schoolAbilities.hida_counterattack_wc_bonus
@@ -6049,6 +6158,22 @@
                     this.atkDamageShosuroBonus = lowest3.reduce((s, v) => s + v, 0);
                 }
                 this.atkDamageTotal = this.keptSum + flat + this.atkDamageShosuroBonus + this.convictionSpentThisRoll + this.totalPriestAllySpentThisRoll();
+                // W4 (Wave Man): round the damage up to the next multiple of
+                // 5, or +3 if it is already one - once per copy, chained
+                // (14 -> 15 -> 18). Applied LAST, after every other bonus:
+                // rounding an intermediate value gives a different, higher
+                // answer. The pre-rounding total is kept so the result panel
+                // can show both.
+                this.atkDamageWaveManRaw = null;
+                const wmRound = f.wave_man_round_damage || 0;
+                if (wmRound) {
+                    const rounded = window.L7RRollMath.waveManRoundDamage(
+                        this.atkDamageTotal, wmRound);
+                    if (rounded !== this.atkDamageTotal) {
+                        this.atkDamageWaveManRaw = this.atkDamageTotal;
+                        this.atkDamageTotal = rounded;
+                    }
+                }
                 this.atkDamageRolled = rolled;
                 this.atkDamageKept = kept;
                 this.atkDamageFlat = flat;

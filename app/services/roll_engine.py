@@ -61,6 +61,7 @@ def roll_one_die(reroll_tens: bool, rng: random.Random) -> Dict[str, Any]:
 def roll_dice(
     rolled: int, kept: int, reroll_tens: bool,
     rng: Optional[random.Random] = None,
+    freed_tens: int = 0,
 ) -> Dict[str, Any]:
     """Roll ``rolled`` dice and keep the highest ``kept``.
 
@@ -73,6 +74,23 @@ def roll_dice(
     rng = rng or random.SystemRandom()
     count = max(0, min(int(rolled), MAX_DICE))
     dice = [roll_one_die(reroll_tens, rng) for _ in range(count)]
+    # Wave Man W5: "You may reroll 10s on a single die when impaired", one
+    # die per copy. The die is selected automatically, so there is no
+    # interactive choice for a slash command to skip - and this has to run
+    # BEFORE the sort, since exploding a 10 can change which dice are kept.
+    # Mirrors L7RRollMath.waveManExplodeTens, which takes the first
+    # ``freed_tens`` dice showing a 10 in roll order.
+    if freed_tens and not reroll_tens:
+        budget = int(freed_tens)
+        for die in dice:
+            if budget <= 0:
+                break
+            if die["value"] != 10:
+                continue
+            budget -= 1
+            while die["parts"][-1] == 10 and len(die["parts"]) < MAX_CHAIN:
+                die["parts"].append(rng.randint(1, 10))
+            die["value"] = sum(die["parts"])
     dice.sort(key=lambda d: d["value"])
     keep_count = max(0, min(int(kept), len(dice)))
     split = len(dice) - keep_count
@@ -254,6 +272,13 @@ def execute_roll(
     ask. Everything the formula layer applies automatically - school
     techniques, advantages, Impaired suppressing the 10s reroll - is
     already baked into the formula and therefore into this roll.
+
+    The Wave Man's W5 ("reroll 10s on a single die when impaired") reads
+    like one of those interactive choices, but the freed die is selected
+    automatically - every 10 is interchangeable at reroll time - so there
+    is nothing to ask about, and it IS applied here. Skipping it would
+    make the same roll come out differently depending on whether it was
+    made on the sheet or through a slash command.
     """
     formulas = build_all_roll_formulas(character_data, party_members=party_members)
     formula = formulas.get(roll_key)
@@ -265,6 +290,7 @@ def execute_roll(
         formula.get("kept") or 0,
         bool(formula.get("reroll_tens")),
         rng,
+        freed_tens=formula.get("wave_man_freed_dice") or 0,
     )
     # The payload's ``total`` is the CAPPED figure (matching the sheet's
     # ``cappedTotal()``), but the alternative rows are measured against the

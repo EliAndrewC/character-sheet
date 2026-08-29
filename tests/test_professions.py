@@ -919,3 +919,231 @@ def test_google_sheet_export_names_the_profession(client):
     assert "Wave Man (profession)" in flat
     assert "Wave Man Abilities" in flat
     assert "Round damage up x2" in flat
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 - the Discord bot's roller
+# ---------------------------------------------------------------------------
+
+import random  # noqa: E402
+
+
+def _impaired_wave_man(**over):
+    data = _wave_man_data(starting_xp=600, skills={"etiquette": 3}, **over)
+    data["current_serious_wounds"] = 9
+    data["rings"]["Earth"] = 2
+    return data
+
+
+def test_bot_gets_the_extra_wound_check_dice(client):
+    from app.services.roll_engine import execute_roll
+    plain = execute_roll(_wave_man_data(), "wound_check", rng=random.Random(1))
+    boosted = execute_roll(
+        _wave_man_data(starting_xp=400,
+                       profession_abilities={"wave_man_wound_check_dice": 2}),
+        "wound_check", rng=random.Random(1))
+    assert len(boosted["kept"]) + len(boosted["dropped"]) == \
+        len(plain["kept"]) + len(plain["dropped"]) + 4
+
+
+def test_bot_applies_w5_so_the_same_roll_matches_the_sheet():
+    # W5's die is selected automatically, so there is no interactive choice
+    # for the bot to skip - and a roll that came out differently depending
+    # on where it was made would be a bug.
+    from app.services.roll_engine import execute_roll
+    data = _impaired_wave_man(
+        profession_abilities={"wave_man_impaired_reroll": 2})
+
+    class _TenThenSeven(random.Random):
+        def __init__(self):
+            super().__init__()
+            self.queue = [10, 10, 4, 3, 2, 7, 7, 7, 7, 7, 7]
+
+        def randint(self, a, b):
+            return self.queue.pop(0) if self.queue else 5
+
+    payload = execute_roll(data, "skill:etiquette", rng=_TenThenSeven())
+    chains = [c["parts"] for c in payload["kept"] + payload["dropped"]]
+    exploded = [c for c in chains if len(c) > 1]
+    assert len(exploded) == 2, chains
+
+
+def test_bot_respects_the_copy_count_for_w5():
+    from app.services.roll_engine import execute_roll
+    data = _impaired_wave_man(
+        profession_abilities={"wave_man_impaired_reroll": 1})
+
+    class _AllTens(random.Random):
+        def __init__(self):
+            super().__init__()
+            self.n = 0
+
+        def randint(self, a, b):
+            self.n += 1
+            return 10 if self.n <= 3 else 4
+
+    payload = execute_roll(data, "skill:etiquette", rng=_AllTens())
+    chains = [c["parts"] for c in payload["kept"] + payload["dropped"]]
+    assert len([c for c in chains if len(c) > 1]) == 1, chains
+
+
+def test_bot_does_not_explode_tens_without_the_ability():
+    from app.services.roll_engine import execute_roll
+    data = _impaired_wave_man()
+
+    class _AllTens(random.Random):
+        def randint(self, a, b):
+            return 10
+
+    payload = execute_roll(data, "skill:etiquette", rng=_AllTens())
+    chains = [c["parts"] for c in payload["kept"] + payload["dropped"]]
+    assert all(len(c) == 1 for c in chains), chains
+
+
+def test_roll_dice_freed_tens_mirrors_the_js_helper():
+    from app.services.roll_engine import roll_dice
+
+    class _Seq(random.Random):
+        def __init__(self, vals):
+            super().__init__()
+            self.vals = list(vals)
+
+        def randint(self, a, b):
+            return self.vals.pop(0) if self.vals else 1
+
+    # Two 10s and a 4; one freed die -> only the first 10 chains.
+    out = roll_dice(3, 2, False, rng=_Seq([10, 10, 4, 7]), freed_tens=1)
+    chains = sorted(([d["parts"] for d in out["kept"] + out["dropped"]]), key=len)
+    assert chains[-1] == [10, 7]
+    assert out["kept_sum"] == 27
+
+
+def test_roll_dice_freed_tens_is_ignored_when_tens_already_reroll():
+    from app.services.roll_engine import roll_dice
+
+    class _Seq(random.Random):
+        def __init__(self, vals):
+            super().__init__()
+            self.vals = list(vals)
+
+        def randint(self, a, b):
+            return self.vals.pop(0) if self.vals else 1
+
+    out = roll_dice(1, 1, True, rng=_Seq([10, 3]), freed_tens=2)
+    assert out["kept"][0]["parts"] == [10, 3]
+
+
+# ---------------------------------------------------------------------------
+# Edge and error paths
+# ---------------------------------------------------------------------------
+
+def test_ability_count_of_nothing_is_zero():
+    from app.services.professions import ability_count
+    assert ability_count(None, "wave_man_round_damage") == 0
+
+
+def test_form_post_ignores_malformed_ability_json(client):
+    # The form path carries the map as a JSON string; a crafted body that
+    # isn't JSON must leave the character with no abilities, not a 500.
+    cid = _seed(client)
+    resp = client.post(f"/characters/{cid}", data={
+        "name": "Ronin", "school": "profession:wave_man",
+        "profession_abilities": "{not json at all",
+        "school_ring_choice": "", "honor": "1.0", "rank": "1.0",
+        "recognition": "1.0", "starting_xp": "150", "earned_xp": "0",
+        "attack": "1", "parry": "1",
+    }, follow_redirects=False)
+    assert resp.status_code in (200, 302, 303)
+    c = _reload(client, cid)
+    assert c.profession == "wave_man"
+    assert c.profession_abilities == {}
+
+
+def test_form_post_accepts_ability_json(client):
+    cid = _seed(client)
+    client.post(f"/characters/{cid}", data={
+        "name": "Ronin", "school": "profession:wave_man",
+        "profession_abilities": '{"wave_man_round_damage": 2}',
+        "school_ring_choice": "", "honor": "1.0", "rank": "1.0",
+        "recognition": "1.0", "starting_xp": "300", "earned_xp": "0",
+        "attack": "1", "parry": "1",
+    }, follow_redirects=False)
+    assert _reload(client, cid).profession_abilities == {"wave_man_round_damage": 2}
+
+
+def test_w5_skips_non_ten_dice_while_the_budget_lasts():
+    from app.services.roll_engine import roll_dice
+
+    class _Seq(random.Random):
+        def __init__(self, vals):
+            super().__init__()
+            self.vals = list(vals)
+
+        def randint(self, a, b):
+            return self.vals.pop(0) if self.vals else 1
+
+    # A 4 sits between the two 10s: the loop must step over it rather
+    # than spending the budget on it.
+    out = roll_dice(3, 3, False, rng=_Seq([4, 10, 10, 6, 2]), freed_tens=2)
+    chains = sorted([d["parts"] for d in out["kept"]], key=len)
+    assert chains[0] == [4]
+    assert [10, 6] in chains and [10, 2] in chains
+
+
+def test_google_sheet_export_says_no_school_when_there_is_neither(client):
+    from app.services.sheets import _build_overview_rows
+    from app.services.status import compute_effective_status
+    cid = _seed(client, school="", profession="", knacks={},
+                school_ring_choice="")
+    character = client._test_session_factory().get(Character, cid)
+    char_dict = character.to_dict()
+    rows = _build_overview_rows(
+        character, char_dict, None, {}, 0,
+        compute_effective_status(char_dict), {},
+    )
+    assert "No school" in str(rows)
+
+
+def test_diff_summary_falls_back_to_a_label_for_an_unknown_ability():
+    from app.services.versions import compute_diff_summary
+    old = {"profession": "wave_man", "profession_abilities": {}}
+    new = {"profession": "wave_man", "profession_abilities": {"legacy_thing": 1}}
+    assert "Legacy Thing taken" in compute_diff_summary(old, new)
+
+
+def test_breakdown_next_at_xp_is_the_base_before_any_pick_is_earned():
+    b = calculate_xp_breakdown(_wave_man_data(starting_xp=100, earned_xp=0))
+    assert b["professions"]["allowance"] == 0
+    assert b["professions"]["next_at_xp"] == 150
+
+
+def test_error_when_abilities_are_set_without_a_profession():
+    errs = validate_character(_wave_man_data(
+        profession="", school="akodo_bushi", school_ring_choice="Water",
+        knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+        profession_abilities={"wave_man_round_damage": 1},
+    ))
+    assert any("no profession is selected" in e for e in errs)
+
+
+def test_validation_treats_a_non_integer_count_as_zero():
+    errs = validate_character(_wave_man_data(
+        starting_xp=150,
+        profession_abilities={"wave_man_round_damage": "two"},
+    ))
+    # Counts as 0 picks used, so the soft unclaimed warning fires and no
+    # over-allowance error does.
+    assert any("unclaimed" in e for e in errs)
+    assert not any("only allows" in e for e in errs)
+
+
+def test_diff_summary_skips_abilities_that_did_not_change():
+    from app.services.versions import compute_diff_summary
+    old = {"profession": "wave_man",
+           "profession_abilities": {"wave_man_round_damage": 2,
+                                    "wave_man_initiative_die": 1}}
+    new = {"profession": "wave_man",
+           "profession_abilities": {"wave_man_round_damage": 2,
+                                    "wave_man_initiative_die": 2}}
+    diffs = compute_diff_summary(old, new)
+    assert diffs == ["Extra initiative die changed from x1 to x2"]
