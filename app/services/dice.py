@@ -20,6 +20,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from app.game_data import (
+    PROFESSION_ABILITY_BONUSES,
     SCHOOL_KNACKS,
     SCHOOL_TECHNIQUE_BONUSES,
     SCHOOLS,
@@ -40,6 +41,7 @@ from app.services.rolls import (
     compute_dan,
 )
 from app.game_data import ADVANTAGES, CAMPAIGN_ADVANTAGES
+from app.services.professions import ability_count
 
 
 # TN/contested skill groupings for 5th Dan court bonuses (Courtier, Doji Artisan)
@@ -422,6 +424,102 @@ def _apply_school_technique_bonus(
         mantis_2nd = technique_choices.get("mantis_2nd_dan_free_raise")
         if mantis_2nd and skill_or_knack_id == mantis_2nd:
             _add_flat_bonus(formula, "2nd Dan technique", FREE_RAISE_VALUE)
+
+
+# The Wave Man's W1/W2 reach every attack roll INCLUDING the iaijutsu
+# strike (design doc D9). That is deliberately wider than
+# ``ATTACK_TYPE_KEYS`` in ``build_all_roll_formulas``, which excludes
+# iaijutsu so a duel's strike keeps its own rules for every school. Widening
+# that set instead would change behaviour for every school, so the Wave Man
+# gets its own predicate.
+WAVE_MAN_EXTRA_ATTACK_KEYS = frozenset({"iaijutsu"})
+
+
+def is_wave_man_attack_key(key: str, formula_dict: dict) -> bool:
+    """Is *key* an "attack roll" for Wave Man W1/W2 purposes?
+
+    Any roll the sheet already treats as an attack type, plus iaijutsu -
+    which a Wave Man can reach because they buy iaijutsu as a foreign
+    knack like any other (D8). ``initiative:athletics`` and the like are
+    excluded: an initiative roll is not an attack.
+    """
+    if formula_dict.get("is_attack_type"):
+        return True
+    bare = key.split(":", 1)[-1] if ":" in key else key
+    if key.startswith("initiative"):
+        return False
+    return bare in WAVE_MAN_EXTRA_ATTACK_KEYS
+
+
+# Wave Man abilities the client needs a copy count for, and the formula key
+# each one is stamped under. Split by where it applies: attack-type rolls
+# only, versus every roll whose 10s Impaired suppressed.
+_WAVE_MAN_ATTACK_ANNOTATIONS = (
+    "wave_man_miss_raise",        # W1  - raise a missing attack
+    "wave_man_parry_tn",          # W2  - reference text
+    "wave_man_weapon_dice",       # W3  - damage dice floor
+    "wave_man_round_damage",      # W4  - round the damage total up
+    "wave_man_failed_parry_dice", # W9  - recover dice a failed parry took
+    "wave_man_wound_check_tn",    # W10 - reference text
+)
+
+
+def _annotate_wave_man(character_data: dict, out: Dict[str, dict]) -> None:
+    """Stamp Wave Man copy counts onto the formulas that need them.
+
+    Everything here is a per-copy count rather than a boolean, because an
+    ability may be taken twice (D4). The client turns the counts into math
+    via ``L7RRollMath.waveMan*``; the two reference-text abilities (W2,
+    W10) are stamped only so the result panel can name the right number in
+    its reminder line.
+    """
+    if (character_data.get("profession") or "") != "wave_man":
+        return
+
+    attack_counts = {
+        name: ability_count(character_data, name)
+        for name in _WAVE_MAN_ATTACK_ANNOTATIONS
+    }
+    # W5 frees one die per copy, and only where being Impaired is what
+    # stopped the 10s rerolling. Initiative and the iaijutsu strike never
+    # reroll 10s for anyone, so they carry a different no_reroll_reason and
+    # are left alone - the same exclusions the PCP rule names (D12). Note
+    # this does NOT clear the suppression: unlike Hida 3rd Dan, the roll's
+    # other 10s stay put.
+    freed = ability_count(character_data, "wave_man_impaired_reroll")
+    impaired_now = freed and is_impaired(character_data)
+
+    for key, fdict in out.items():
+        if impaired_now and fdict.get("no_reroll_reason") == "impaired":
+            fdict["wave_man_freed_dice"] = freed
+        if is_wave_man_attack_key(key, fdict):
+            for name, count in attack_counts.items():
+                if count:
+                    fdict[name] = count
+
+
+def profession_extra_rolled_dice(character_data: dict, roll_key: str) -> int:
+    """Extra ROLLED (never kept) dice a profession ability grants *roll_key*.
+
+    Reads the declarative per-copy hooks in ``PROFESSION_ABILITY_BONUSES``
+    and multiplies by how many copies the character has taken, since a
+    second copy applies the effect a second time (design doc D4/D5).
+    Returns 0 for every character without the relevant ability, which is
+    everyone who has not taken that profession.
+    """
+    total = 0
+    for ability_id, bonus in PROFESSION_ABILITY_BONUSES.items():
+        per_copy = (bonus.get("extra_rolled_die") or {}).get(roll_key, 0)
+        if not per_copy:
+            continue
+        total += per_copy * ability_count(character_data, ability_id)
+    return total
+
+
+def profession_bonus_label(count: int, profession_name: str = "Wave Man") -> str:
+    """"+N rolled dice from Wave Man", singular-aware."""
+    die_word = "die" if count == 1 else "dice"
+    return f"+{count} rolled {die_word} from {profession_name}"
 
 
 def build_unskilled_formula(
@@ -1195,6 +1293,12 @@ def build_wound_check_formula(
 
     bonus_sources: list = []
 
+    # W7: two extra unkept dice on wound checks per copy of the ability.
+    wave_man_wc = profession_extra_rolled_dice(character_data, "wound_check")
+    if wave_man_wc:
+        rolled += wave_man_wc
+        bonus_sources.append(profession_bonus_label(wave_man_wc))
+
     # 1st Dan: extra rolled die on wound_check
     if dan >= 1 and bonuses.get("first_dan_extra_die"):
         if "wound_check" in (bonuses["first_dan_extra_die"] or []):
@@ -1362,6 +1466,13 @@ def build_initiative_formula(character_data: dict) -> Optional[dict]:
         if "initiative" in chosen_1st:
             base_rolled += 1
 
+    # W6: one extra unkept die on initiative per copy of the ability.
+    initiative_bonus_sources: list = []
+    wave_man_initiative = profession_extra_rolled_dice(character_data, "initiative")
+    if wave_man_initiative:
+        base_rolled += wave_man_initiative
+        initiative_bonus_sources.append(profession_bonus_label(wave_man_initiative))
+
     # Kakita Duelist: 10s on initiative are Phase 0
     kakita_phase_zero = school_id == "kakita_duelist"
 
@@ -1408,6 +1519,7 @@ def build_initiative_formula(character_data: dict) -> Optional[dict]:
         "mantis_4th_dan_athletics_die": mantis_4th_dan_athletics_die,
         "alternatives": [],
         "bonuses": [],
+        "bonus_sources": initiative_bonus_sources,
         "adventure_raises_max_per_roll": 0,
     }
 
@@ -1915,6 +2027,10 @@ def build_all_roll_formulas(
                     and fdict.get("no_reroll_reason") == "impaired"):
                 fdict["reroll_tens"] = True
                 fdict["no_reroll_reason"] = ""
+
+    # Wave Man profession abilities. Runs last so it sees the final
+    # no_reroll_reason on every formula.
+    _annotate_wave_man(character_data, out)
 
     return out
 

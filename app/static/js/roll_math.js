@@ -371,6 +371,143 @@
       return { dice: out, keptSum: keptSum };
     },
 
+
+    /**
+     * ---- Wave Man profession abilities (profession-design/design.md) ----
+     *
+     * Every helper below takes a COPY COUNT rather than a boolean: an
+     * ability may be taken twice, and a second copy applies its effect a
+     * second time (D4/D5).
+     */
+
+    /**
+     * W3: "When using a weapon that rolls fewer than 4 damage dice, add an
+     * extra rolled damage die to the weapon's base damage, to a maximum of
+     * 4 rolled damage dice."
+     *
+     * Keyed on dice ROLLED only - the rules were reworded upstream on
+     * 2026-08-29 away from "less than 4k2", so dice kept never enter into
+     * it. A weapon already at or above 4 dice gains nothing, and is never
+     * reduced.
+     */
+    waveManWeaponFloor: function (rolled, copies) {
+      var r = Math.max(0, Math.floor(Number(rolled) || 0));
+      var n = Math.max(0, Math.floor(Number(copies) || 0));
+      if (r >= 4 || n === 0) return r;
+      return Math.min(4, r + n);
+    },
+
+    /**
+     * W4: "Round your damage rolls up to the nearest multiple of 5.  If the
+     * roll is already a multiple of 5, then raise it by 3."
+     *
+     * Applied once per copy, chained: 14 -> 15 -> 18 with two copies, and
+     * 15 -> 18 -> 20. Apply this LAST, after every other damage bonus
+     * (D5) - rounding an intermediate value gives a different, higher
+     * answer.
+     */
+    waveManRoundDamage: function (total, copies) {
+      var v = Math.max(0, Math.floor(Number(total) || 0));
+      var n = Math.max(0, Math.floor(Number(copies) || 0));
+      for (var i = 0; i < n; i++) {
+        v = (v % 5 === 0) ? v + 3 : Math.ceil(v / 5) * 5;
+      }
+      return v;
+    },
+
+    /**
+     * W1: "When you make an attack roll that would miss, raise it by 5."
+     *
+     * Raises are applied one at a time and stop the moment the roll lands
+     * (D10), so a spare copy goes unused rather than overshooting. Returns
+     * the adjusted total, how many raises were consumed, and whether the
+     * attack now hits.
+     */
+    waveManMissRaise: function (total, tn, copies) {
+      var v = Number(total) || 0;
+      var target = Number(tn) || 0;
+      var n = Math.max(0, Math.floor(Number(copies) || 0));
+      var used = 0;
+      while (v < target && used < n) {
+        v += 5;
+        used++;
+      }
+      return { total: v, raisesUsed: used, hit: v >= target };
+    },
+
+    /**
+     * W1's damage side (D11): the raise gets you to the TN and no further,
+     * so extra damage dice for exceeding the TN are computed from the
+     * UNRAISED total. A roll that only hit because of a raise therefore
+     * yields zero excess, while a roll that hit on its own is unaffected.
+     */
+    waveManExcessForDamage: function (rawTotal, tn, copies) {
+      var v = Number(rawTotal) || 0;
+      var target = Number(tn) || 0;
+      if (v < target) return 0;
+      return Math.max(0, v - target);
+    },
+
+    /**
+     * W9: "When someone unsuccessfully tries to parry an attack, you may
+     * roll 2 of the extra damage dice that you would have rolled had they
+     * not attempted to parry."
+     *
+     * A failed parry removes ``parrySkill`` extra damage dice
+     * (rules/03-combat.md); this gives back 2 per copy, and never more
+     * than the parry actually removed.
+     */
+    waveManFailedParryDice: function (parrySkill, copies) {
+      var removed = Math.max(0, Math.floor(Number(parrySkill) || 0));
+      var n = Math.max(0, Math.floor(Number(copies) || 0));
+      return Math.min(2 * n, removed);
+    },
+
+    /**
+     * W5: "You may reroll 10s on a single die when impaired." One die per
+     * copy. The die is selected automatically (D13) - every 10 is
+     * interchangeable at reroll time, so there is nothing to choose.
+     */
+    waveManFreedDice: function (copies) {
+      return Math.max(0, Math.floor(Number(copies) || 0));
+    },
+
+    /**
+     * W5's roll surgery: like ``pcpExplodeTens``, but only the first
+     * ``maxDice`` dice showing a 10 explode. The freed die chains
+     * normally, which is why the rule frees a *die* rather than a *ten*
+     * (D13) - a chain arrives as one reroll whose ``parts`` hold every
+     * link.
+     */
+    waveManExplodeTens: function (dice, rerolls, keptCount, maxDice) {
+      var budget = Math.max(0, Math.floor(Number(maxDice) || 0));
+      var out = [], ri = 0;
+      for (var i = 0; i < dice.length; i++) {
+        var d = dice[i];
+        if (d.value === 10 && budget > 0) {
+          budget--;
+          var rr = rerolls[ri++] || { value: 0, parts: [] };
+          var chain = (rr.parts && rr.parts.length) ? rr.parts : [rr.value];
+          out.push({ value: 10 + rr.value, parts: [10].concat(chain), kept: false });
+        } else {
+          out.push({
+            value: d.value,
+            parts: (d.parts && d.parts.length) ? d.parts.slice() : [d.value],
+            kept: false,
+          });
+        }
+      }
+      var keptSum = this.keepHighestSum(out.map(function (d) { return d.value; }), keptCount);
+      var order = out
+        .map(function (d, i) { return { i: i, v: d.value }; })
+        .sort(function (a, b) { return a.v - b.v; });
+      var keep = Math.max(0, Math.min(keptCount, out.length));
+      for (var k = order.length - keep; k < order.length; k++) {
+        out[order[k].i].kept = true;
+      }
+      return { dice: out, keptSum: keptSum };
+    },
+
     /**
      * Player Character Point cost math. The Nth PCP a character spends costs
      * N XP, so ``count`` spends total to the Nth triangular number.

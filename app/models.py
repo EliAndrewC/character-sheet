@@ -182,6 +182,18 @@ class Character(Base):
     is_hidden: Mapped[bool] = mapped_column(default=False)
     school: Mapped[str] = mapped_column(String, default="")
     school_ring_choice: Mapped[str] = mapped_column(String, default="")
+    # Profession taken INSTEAD of a school (see profession-design/design.md).
+    # Mutually exclusive with `school`: setting one clears the other. A
+    # profession character has no School Ring, no school knacks and no Dan,
+    # but may still buy foreign school knacks.
+    profession: Mapped[str] = mapped_column(String, default="")
+    # Profession abilities as an id -> count map, NOT a list of ids: an
+    # ability may be taken more than once (twice for every profession
+    # except Priest, whose rituals are once-only) and a second copy applies
+    # the effect a second time. Same shape as `knacks` / `skills`.
+    profession_abilities: Mapped[Optional[Dict[str, int]]] = mapped_column(
+        JSON, default=dict
+    )
 
     # Rings stored as individual columns for easy querying
     ring_air: Mapped[int] = mapped_column(default=2)
@@ -479,6 +491,8 @@ class Character(Base):
             "editor_discord_ids": self.editor_discord_ids or [],
             "school": self.school,
             "school_ring_choice": self.school_ring_choice,
+            "profession": self.profession or "",
+            "profession_abilities": self.profession_abilities or {},
             "rings": self.rings,
             "attack": self.attack,
             "parry": self.parry,
