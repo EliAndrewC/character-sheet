@@ -300,32 +300,38 @@ def _finalize_caps(formula: "RollFormula") -> None:
 # ---------------------------------------------------------------------------
 
 
-def _reroll_fields(character_data: dict, is_skill_roll: bool = True) -> dict:
+def _reroll_fields(
+    character_data: dict, impaired_exempt: bool = False,
+) -> dict:
     """Return ``reroll_tens`` and ``no_reroll_reason`` for a formula.
 
-    rules/03-combat.md: "While impaired, you no longer reroll 10s **for any
-    skill**, but you still reroll 10s on **non-skill rolls such as wound
-    checks and damage rolls**." The suppression is therefore scoped to skill
-    rolls; a builder producing a non-skill roll passes
-    ``is_skill_roll=False`` and keeps its rerolls.
+    rules/03-combat.md: "While impaired, you no longer reroll 10s for any
+    skill, but you still reroll 10s on **non-skill rolls such as wound checks
+    and damage rolls**."
 
-    Non-skills, and why:
+    **GM ruling, 2026-08-29.** The written exceptions are wound checks and
+    damage rolls, and those are the ONLY exceptions: bare ring rolls and
+    athletics rolls lose their 10s rerolls while impaired along with
+    everything else, even though neither is a "skill" in the strict sense.
+    Asked directly, the GM ruled to suppress both. So a builder opts OUT with
+    ``impaired_exempt=True``, and only the damage builder does:
 
-    - **Wound checks and damage rolls** - named by the rule itself. (Wound
-      checks never route through here; damage does, via Dragon Tattoo.)
-    - **Athletics** - rules/05-school_knacks.md defines it as "physical
-      actions which are **not covered by skills**", and it has its own
-      2-ring-keep-ring base. Its ``knack:`` prefix is an implementation
-      detail, not a claim that it is a skill.
-    - **Bare ring rolls** - raw attribute checks, not skills.
+    - **Wound checks** never route through here - ``build_wound_check_formula``
+      simply never suppresses.
+    - **Damage rolls** reach here via Dragon Tattoo, and pass the flag.
 
-    Skills are ``skill:*``, attack / parry (and their variants), and the
-    school knacks. That is the same set the GM ruled on for Discordant
-    (2026-07-18) - see ``_discordant_blocks_void``, which draws the
-    skill/non-skill line in exactly the same place. If the two rules ever
-    need to diverge, split them then; today they agree.
+    **This deliberately does NOT match ``_discordant_blocks_void``.** That
+    rule's "skills" (the GM's 2026-07-18 ruling) exclude athletics and bare
+    ring rolls, so a Discordant character may still spend void on them - while
+    an impaired character still loses their 10s rerolls on the same rolls. Two
+    rules, two rulings, two different lines; do not refactor them into one
+    shared predicate.
+
+    The other exemption is a school technique rather than a roll type: Hida
+    Bushi 3rd Dan restores the reroll on attack rolls, applied as a post-pass
+    in ``build_all_roll_formulas``.
     """
-    if is_skill_roll and is_impaired(character_data):
+    if not impaired_exempt and is_impaired(character_data):
         return {"reroll_tens": False, "no_reroll_reason": "impaired"}
     return {"reroll_tens": True, "no_reroll_reason": ""}
 
@@ -796,7 +802,7 @@ def build_knack_formula(
             kept=1,
             flat=0,
             is_damage_roll=True,
-            **_reroll_fields(character_data, is_skill_roll=False),
+            **_reroll_fields(character_data, impaired_exempt=True),
         )
 
     rings = character_data.get("rings", {})
@@ -846,9 +852,7 @@ def build_knack_formula(
         flat=0,
         # Commune costs a void point to activate (rules 05-school_knacks).
         requires_void_point=(knack_id == "commune"),
-        # Athletics is explicitly "not covered by skills", so Impaired leaves
-        # its rerolls alone; every other school knack counts as a skill.
-        **_reroll_fields(character_data, is_skill_roll=(knack_id != "athletics")),
+        **_reroll_fields(character_data),
     )
     if swapped_from_ring:
         formula.kitsune_swap_from_ring = swapped_from_ring
@@ -1013,9 +1017,7 @@ def build_ring_formula(
         rolled=2 * ring_val,
         kept=ring_val,
         flat=0,
-        # A bare ring roll is a raw attribute check, not a skill, so
-        # Impaired never stops its 10s rerolling (rules/03-combat.md).
-        **_reroll_fields(character_data, is_skill_roll=False),
+        **_reroll_fields(character_data),
     )
     _finalize_caps(formula)
     return formula
@@ -1042,9 +1044,7 @@ def build_athletics_formula(
         rolled=2 * ring_val + athletics_rank,
         kept=ring_val,
         flat=0,
-        # Athletics is "not covered by skills" (rules/05-school_knacks.md),
-        # so Impaired leaves its rerolls alone.
-        **_reroll_fields(character_data, is_skill_roll=False),
+        **_reroll_fields(character_data),
     )
 
     school_id = character_data.get("school", "")
@@ -1095,9 +1095,7 @@ def build_athletics_combat_formula(
         rolled=ring_val + athletics_rank,
         kept=ring_val,
         flat=0,
-        # Athletics standing in for attack / parry is still athletics, not
-        # the attack or parry skill - so Impaired does not touch it.
-        **_reroll_fields(character_data, is_skill_roll=False),
+        **_reroll_fields(character_data),
     )
 
     school_id = character_data.get("school", "")

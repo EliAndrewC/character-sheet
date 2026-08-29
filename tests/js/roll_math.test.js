@@ -608,7 +608,7 @@ test("allocateVoidSpend is additive: reserving 1 then N == allocating N+1", () =
 // TestBuildAllRollFormulas::test_impaired_suppresses_the_reroll_on_skills_only.
 // ---------------------------------------------------------------------------
 
-test("impairedSuppressesReroll: skills lose their rerolls", () => {
+test("impairedSuppressesReroll: nearly everything loses its rerolls", () => {
   for (const key of ["skill:bragging", "skill:etiquette", "attack", "parry",
                      "double_attack", "counterattack", "lunge",
                      "knack:oppose_social", "knack:iaijutsu"]) {
@@ -628,23 +628,20 @@ test("impairedSuppressesReroll: damage rolls keep rerolling", () => {
   );
 });
 
-test("impairedSuppressesReroll: athletics is not a skill", () => {
-  assert.equal(M.impairedSuppressesReroll("knack:athletics", {}), false);
+test("impairedSuppressesReroll: athletics and ring rolls ARE suppressed", () => {
+  // GM ruling 2026-08-29: the rule's two written exceptions are the only
+  // ones, so these lose their rerolls despite not being "skills".
+  assert.equal(M.impairedSuppressesReroll("knack:athletics", {}), true);
   for (const key of ["athletics:Air", "athletics:Fire", "athletics:attack",
-                     "athletics:parry"]) {
-    assert.equal(M.impairedSuppressesReroll(key, {}), false, key);
-  }
-});
-
-test("impairedSuppressesReroll: bare ring rolls are not skills", () => {
-  for (const key of ["ring:Air", "ring:Fire", "ring:Earth", "ring:Water", "ring:Void"]) {
-    assert.equal(M.impairedSuppressesReroll(key, {}), false, key);
+                     "athletics:parry", "ring:Air", "ring:Fire", "ring:Earth",
+                     "ring:Water", "ring:Void"]) {
+    assert.equal(M.impairedSuppressesReroll(key, {}), true, key);
   }
 });
 
 test("impairedSuppressesReroll: tolerates a missing formula or key", () => {
   assert.equal(M.impairedSuppressesReroll("skill:bragging"), true);
-  assert.equal(M.impairedSuppressesReroll("ring:Air", null), false);
+  assert.equal(M.impairedSuppressesReroll("ring:Air", null), true);
   assert.equal(M.impairedSuppressesReroll(undefined, {}), true);
 });
 

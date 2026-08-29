@@ -287,28 +287,26 @@
     /**
      * Whether being Impaired stops 10s rerolling on this particular roll.
      *
-     * rules/03-combat.md: "While impaired, you no longer reroll 10s for any
-     * SKILL, but you still reroll 10s on NON-SKILL rolls such as wound checks
-     * and damage rolls." Skills are `skill:*`, attack / parry, and the school
-     * knacks. Not skills, and so untouched by Impaired:
+     * rules/03-combat.md: "you no longer reroll 10s for any skill, but you
+     * still reroll 10s on NON-SKILL ROLLS such as wound checks and damage
+     * rolls." Per the GM's 2026-08-29 ruling those two written exceptions are
+     * the ONLY ones - bare ring rolls and athletics rolls lose their rerolls
+     * along with everything else, despite not being "skills" in the strict
+     * sense. So this returns true for nearly everything:
      *
-     *   - wound checks and damage rolls - named by the rule itself
-     *   - athletics ("physical actions which are not covered by skills",
-     *     rules/05-school_knacks.md), under either its `knack:athletics`
-     *     entry point or its `athletics:*` variants
-     *   - bare ring rolls, which are raw attribute checks
+     *   - wound checks and damage rolls - exempt, named by the rule
+     *   - Hida Bushi 3rd Dan (`opts.hidaReroll`) - exempt on attack-type
+     *     rolls: "you reroll 10s on these rolls despite being impaired"
+     *   - everything else, ring rolls and athletics included - suppressed
      *
-     * This mirrors `_reroll_fields` in app/services/dice.py, which decides the
+     * Note this is NOT the same line `_discordant_blocks_void` draws: a
+     * Discordant character may still spend void on athletics and ring rolls,
+     * while an impaired one still loses their rerolls on them. Two rules, two
+     * rulings; keep them separate.
+     *
+     * Mirrors `_reroll_fields` in app/services/dice.py, which decides the
      * same thing for the server-rendered formulas; this copy exists for the
-     * live update when a character becomes Impaired mid-session. Keep the two
-     * in step - `tests/js/roll_math.test.js` and
-     * `TestBuildAllRollFormulas::test_impaired_suppresses_the_reroll_on_skills_only`
-     * assert the same partition.
-     *
-     * `opts.hidaReroll` is the Hida Bushi 3rd Dan ability being active
-     * ("you reroll 10s on these rolls despite being impaired", where "these
-     * rolls" are counterattacks and any other attack roll), which exempts
-     * this character's attack-type rolls on top of the general rule.
+     * live update when a character becomes Impaired mid-session.
      *
      * Says nothing about rolls that never reroll 10s for their own reasons
      * (initiative, unskilled, the iaijutsu strike); callers skip those first.
@@ -317,9 +315,7 @@
       var f = formula || {};
       if (f.is_damage_roll) return false;
       if ((opts || {}).hidaReroll && f.is_attack_type) return false;
-      if (typeof key !== "string") return true;
-      if (key === "wound_check" || key === "knack:athletics") return false;
-      if (key.indexOf("athletics:") === 0 || key.indexOf("ring:") === 0) return false;
+      if (key === "wound_check") return false;
       return true;
     },
 

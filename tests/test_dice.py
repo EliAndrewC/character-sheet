@@ -1239,9 +1239,10 @@ class TestKnackFormula:
         assert f.reroll_tens is True
         assert f.no_reroll_reason == ""
 
-    def test_athletics_knack_still_rerolls_tens_when_impaired(self):
-        """Athletics is "not covered by skills" (rules/05-school_knacks.md),
-        so the skills-only Impaired suppression does not reach it."""
+    def test_athletics_knack_stops_rerolling_when_impaired(self):
+        """GM ruling 2026-08-29: athletics is suppressed like everything
+        else. Only the rule's two written exceptions - wound checks and
+        damage rolls - keep their rerolls."""
         char = make_character_data(
             school="togashi_ise_zumi",
             knacks={"athletics": 2, "conviction": 1, "dragon_tattoo": 1},
@@ -1249,12 +1250,11 @@ class TestKnackFormula:
             current_serious_wounds=2,
         )
         f = build_knack_formula("athletics", char)
-        assert f.reroll_tens is True
-        assert f.no_reroll_reason == ""
+        assert f.reroll_tens is False
+        assert f.no_reroll_reason == "impaired"
 
     def test_other_school_knacks_stop_rerolling_when_impaired(self):
-        """The rest of the school knacks count as skills, matching the line
-        the GM drew for Discordant."""
+        """The rest of the school knacks are suppressed too."""
         char = make_character_data(
             school="togashi_ise_zumi",
             knacks={"athletics": 1, "conviction": 2, "dragon_tattoo": 1},
@@ -1741,23 +1741,23 @@ class TestBuildAllRollFormulas:
         char = make_character_data(school="", knacks={}, attack=0)
         assert build_combat_formula("attack", char) is None
 
-    def test_impaired_suppresses_the_reroll_on_skills_only(self):
+    def test_impaired_suppresses_the_reroll_everywhere_but_the_exceptions(self):
         """rules/03-combat.md: "While impaired, you no longer reroll 10s for
         any skill, but you still reroll 10s on non-skill rolls such as wound
         checks and damage rolls."
 
-        Skills are ``skill:*``, attack / parry, and the school knacks;
-        athletics and bare ring rolls are not (see _reroll_fields). This
-        pins the whole partition so a future builder cannot quietly pick
-        the wrong side.
+        Per the GM's 2026-08-29 ruling the two written exceptions are the
+        ONLY ones: bare ring rolls and athletics rolls are suppressed too,
+        despite not being "skills" in the strict sense. This pins the whole
+        partition so a future builder cannot quietly pick the wrong side.
         """
         char = make_character_data(
             school="togashi_ise_zumi",
             skills={"bragging": 2},
             knacks={"athletics": 2, "conviction": 2, "dragon_tattoo": 2},
-            # A rollable knack from another school, so the "school knacks are
-            # skills" half of the partition has a representative (Togashi's
-            # own rollable knacks are exactly the two exempt ones).
+            # A rollable knack from another school, so the ordinary school
+            # knacks are represented too (Togashi's own rollable knacks are
+            # athletics and the exempt damage roll).
             foreign_knacks={"oppose_social": 2},
             attack=2,
             parry=2,
@@ -1766,21 +1766,17 @@ class TestBuildAllRollFormulas:
         char["current_serious_wounds"] = 3  # >= Earth(2)
         formulas = build_all_roll_formulas(char)
 
-        def keeps_rerolling(key: str) -> bool:
-            return (
-                key == "wound_check"
-                or key in ("knack:athletics", "knack:dragon_tattoo")
-                or key.startswith(("ring:", "athletics:"))
-            )
+        # The only rolls that keep their 10s rerolls.
+        EXEMPT = {"wound_check", "knack:dragon_tattoo"}
 
-        skills_seen, non_skills_seen = [], []
+        suppressed, exempt_seen = [], []
         for key, formula in formulas.items():
             if "reroll_tens" not in formula:
                 continue
-            if keeps_rerolling(key):
+            if key in EXEMPT:
                 assert formula["reroll_tens"] is True, key
                 assert formula.get("no_reroll_reason", "") == "", key
-                non_skills_seen.append(key)
+                exempt_seen.append(key)
             elif formula.get("no_reroll_reason") in ("unskilled", "iaijutsu_strike"):
                 # Never reroll for their own reasons, impaired or not.
                 assert formula["reroll_tens"] is False, key
@@ -1790,18 +1786,18 @@ class TestBuildAllRollFormulas:
             else:
                 assert formula["reroll_tens"] is False, key
                 assert formula.get("no_reroll_reason") == "impaired", key
-                skills_seen.append(key)
+                suppressed.append(key)
 
         # Both sides of the partition are actually populated, so the test
         # cannot pass by finding nothing.
-        assert "skill:bragging" in skills_seen
-        assert "attack" in skills_seen and "parry" in skills_seen
-        assert "knack:oppose_social" in skills_seen
-        assert "wound_check" in non_skills_seen
-        assert "ring:Fire" in non_skills_seen
-        assert "knack:athletics" in non_skills_seen
-        assert "knack:dragon_tattoo" in non_skills_seen
-        assert any(k.startswith("athletics:") for k in non_skills_seen)
+        assert "skill:bragging" in suppressed
+        assert "attack" in suppressed and "parry" in suppressed
+        assert "knack:oppose_social" in suppressed
+        # The GM ruling: these are suppressed despite not being skills.
+        assert "ring:Fire" in suppressed
+        assert "knack:athletics" in suppressed
+        assert any(k.startswith("athletics:") for k in suppressed)
+        assert sorted(exempt_seen) == ["knack:dragon_tattoo", "wound_check"]
 
     def test_hida_3rd_dan_rerolls_tens_on_attacks_while_impaired(self):
         """rules/04-schools.md, Hida Bushi 3rd Dan: "you reroll 10s on these
