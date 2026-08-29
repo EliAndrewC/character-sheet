@@ -613,15 +613,12 @@
                     </optgroup>
                     {% endfor %}
                     {# A profession is taken INSTEAD of a school, so it lives in
-                       the same dropdown. The `profession:` prefix keeps the two
-                       id spaces apart; the server splits it in
-                       services/professions.split_school_or_profession. #}
-                    <optgroup label="Professions (no school)">
-                        {% for pid, p in professions.items() %}
-                        <option value="{{ profession_select_prefix }}{{ pid }}"
-                                {{ 'selected' if pid == character.profession else '' }}
-                                {% if not p.selectable %}disabled{% endif %}>{{ p.name }}{% if not p.selectable %} (not yet implemented){% endif %}</option>
-                        {% endfor %}
+                       the same dropdown. There is ONE profession character type;
+                       which professions' abilities they draw on is chosen below,
+                       and they may mix them freely. #}
+                    <optgroup label="No school">
+                        <option value="{{ profession_select_value }}"
+                                {{ 'selected' if character.profession else '' }}>Profession</option>
                     </optgroup>
                 </select>
                 {% if not is_first_version %}
@@ -660,56 +657,84 @@
             </div>
 
             {# Profession abilities. Free, but rationed by total XP: one pick
-               at 150 XP and one more every 15 after, and each ability may be
-               taken up to twice. Steppers rather than checkboxes because of
-               that second copy. The whole block is always in the markup so
-               Alpine can show it the moment a profession is picked, without a
-               round-trip. #}
+               at 150 XP and one more every 15 after. Grouped by source
+               profession because a profession character mixes them freely.
+               Steppers rather than checkboxes because most abilities may be
+               taken twice - Priest rituals being the exception, since a
+               ritual is something you were taught rather than a knack you
+               deepen. The whole block ships in the markup so Alpine can show
+               it the moment "Profession" is picked, with no round-trip. #}
             <div x-show="isProfession()" x-cloak class="mt-4"
                  data-testid="profession-abilities">
                 <div class="flex items-baseline justify-between flex-wrap gap-2 mb-2">
-                    <h3 class="font-semibold" x-text="professionName() + ' Abilities'"></h3>
+                    <h3 class="font-semibold">Profession Abilities</h3>
                     <span class="text-sm" data-testid="profession-allowance"
                           :class="professionPicksUsed() > professionAllowance() ? 'text-red-700 font-semibold' : 'text-ink/60'"
                           x-text="professionAllowanceLabel()"></span>
                 </div>
-                <div class="grid gap-2">
-                    <template x-for="row in professionAbilityRows()" :key="row.id">
-                        <div class="border border-ink/10 rounded p-3 bg-white flex gap-3 items-start"
-                             :data-ability="row.id"
-                             :class="(professionAbilityCount(row.id) > 0) ? '' : 'opacity-70'">
+                {% for group in profession_ability_groups %}
+                <div class="mb-4" data-profession-group="{{ group.profession_id }}">
+                    <div class="flex items-baseline gap-2 flex-wrap mb-1">
+                        <h4 class="font-medium text-sm">{{ group.name }}</h4>
+                        {% if not group.is_available %}
+                        <span class="text-xs bg-ink/10 text-ink/60 rounded-full px-2 py-0.5"
+                              data-testid="profession-preview-{{ group.profession_id }}">not yet available</span>
+                        {% elif group.max_per_ability == 1 %}
+                        <span class="text-xs bg-info/10 text-info rounded-full px-2 py-0.5"
+                              data-testid="profession-once-only-{{ group.profession_id }}"
+                              title="A ritual is something you have been taught, not a knack you deepen.">each may be taken once</span>
+                        {% endif %}
+                        <a class="text-xs text-accent underline"
+                           href="https://github.com/EliAndrewC/l7r/blob/master/rules/09-professions.md{{ group.rules_anchor }}"
+                           target="_blank" rel="noopener">rules</a>
+                    </div>
+                    <div class="grid gap-2">
+                        {% for row in group.rows %}
+                        <div class="border border-ink/10 rounded p-3 bg-white flex gap-3 items-start{% if not group.is_available %} opacity-50{% endif %}"
+                             data-ability="{{ row.id }}"
+                             {% if group.is_available %}:class="professionAbilityCount('{{ row.id }}') > 0 ? '' : 'opacity-70'"{% endif %}>
                             <div class="flex items-center gap-1 shrink-0">
                                 <button type="button" class="btn-pip"
-                                        :data-action="'profession-minus-' + row.id"
-                                        :disabled="professionAbilityCount(row.id) <= 0"
-                                        :title="professionAbilityCount(row.id) <= 0 ? 'Not taken' : 'Give back this pick'"
-                                        @click="professionAbilityDown(row.id)">-</button>
+                                        data-action="profession-minus-{{ row.id }}"
+                                        {% if not group.is_available %}disabled{% else %}
+                                        :disabled="professionAbilityCount('{{ row.id }}') <= 0"
+                                        :title="professionAbilityCount('{{ row.id }}') <= 0 ? 'Not taken' : 'Give back this pick'"
+                                        @click="professionAbilityDown('{{ row.id }}')"{% endif %}>-</button>
                                 <span class="w-6 text-center font-bold"
-                                      :data-count="row.id"
-                                      x-text="professionAbilityCount(row.id)"></span>
+                                      data-count="{{ row.id }}"
+                                      {% if group.is_available %}x-text="professionAbilityCount('{{ row.id }}')"{% endif %}>0</span>
                                 <button type="button" class="btn-pip"
-                                        :data-action="'profession-plus-' + row.id"
-                                        :disabled="!professionCanTake(row.id)"
-                                        :title="professionAbilityCount(row.id) >= row.max
-                                                ? ('Already taken the maximum of ' + row.max)
+                                        data-action="profession-plus-{{ row.id }}"
+                                        {% if not group.is_available %}disabled{% else %}
+                                        :disabled="!professionCanTake('{{ row.id }}', {{ row.max }})"
+                                        :title="professionAbilityCount('{{ row.id }}') >= {{ row.max }}
+                                                ? ({{ row.max }} === 1 ? 'This one may only be taken once' : 'Already taken the maximum of {{ row.max }}')
                                                 : (professionPicksUsed() >= professionAllowance()
                                                    ? 'No picks left - earn more XP'
                                                    : 'Take this ability')"
-                                        @click="professionAbilityUp(row.id)">+</button>
+                                        @click="professionAbilityUp('{{ row.id }}', {{ row.max }})"{% endif %}>+</button>
                             </div>
                             <div class="min-w-0">
                                 <div class="flex items-baseline gap-2 flex-wrap">
-                                    <span class="font-medium text-sm" x-text="row.name"></span>
-                                    <template x-if="row.reference_only">
-                                        <span class="text-xs bg-info/10 text-info rounded-full px-2 py-0.5"
-                                              title="This one changes what your OPPONENT rolls, so the sheet cannot apply it for you - tell your GM.">reference only</span>
-                                    </template>
+                                    <span class="font-medium text-sm">{{ row.name }}</span>
+                                    {% if row.reference_only %}
+                                    <span class="text-xs bg-info/10 text-info rounded-full px-2 py-0.5"
+                                          title="This one changes what your OPPONENT rolls, so the sheet cannot apply it for you - tell your GM.">reference only</span>
+                                    {% elif group.is_available and not row.implemented %}
+                                    <span class="text-xs bg-ink/10 text-ink/60 rounded-full px-2 py-0.5"
+                                          title="You can take this, but the sheet has nothing to compute for it - tell your GM when it applies.">narrative</span>
+                                    {% endif %}
+                                    {% if row.ritual_time %}
+                                    <span class="text-xs text-ink/50">{{ row.ritual_time }}</span>
+                                    {% endif %}
                                 </div>
-                                <p class="text-sm text-ink/70 whitespace-pre-line mt-1" x-text="row.text"></p>
+                                <p class="text-sm text-ink/70 whitespace-pre-line mt-1">{{ row.text }}</p>
                             </div>
                         </div>
-                    </template>
+                        {% endfor %}
+                    </div>
                 </div>
+                {% endfor %}
             </div>
 
             <!-- Mantis Wave-Treader 2nd Dan flexible free raise picker. -->
@@ -1961,31 +1986,10 @@ const SCHOOLS_DATA = {
     {% endfor %}
 };
 
-// Professions data for the abilities steppers. `abilities` is in rules
-// order, whether or not the character has taken each one, so the list
-// renders in full with untaken entries dimmed.
-const PROFESSION_SELECT_PREFIX = {{ profession_select_prefix | tojson }};
-const PROFESSIONS_DATA = {
-    {% for pid, p in professions.items() %}
-    '{{ pid }}': {
-        name: {{ p.name | tojson }},
-        selectable: {{ 'true' if p.selectable else 'false' }},
-        abilities: [
-            {% for a in p.abilities %}
-            {
-                id: {{ a.id | tojson }},
-                ordinal: {{ a.ordinal }},
-                name: {{ a.name | tojson }},
-                text: {{ a.text | tojson }},
-                implemented: {{ 'true' if a.implemented else 'false' }},
-                reference_only: {{ 'true' if a.reference_only else 'false' }},
-                max: {{ p.max_per_ability }},
-            },
-            {% endfor %}
-        ],
-    },
-    {% endfor %}
-};
+// There is one profession character type; the ability groups are
+// server-rendered above, so the client only needs the dropdown's value.
+const PROFESSION_SELECT_VALUE = {{ profession_select_value | tojson }};
+const LEGACY_PROFESSION_SELECT_PREFIX = 'profession:';
 
 // Knack display names
 const KNACK_NAMES = {
@@ -2715,23 +2719,8 @@ function characterForm() {
         // ---- Professions (taken instead of a school) ----
 
         isProfession() {
-            return (this.school || '').startsWith(PROFESSION_SELECT_PREFIX);
-        },
-
-        professionId() {
-            return this.isProfession()
-                ? this.school.slice(PROFESSION_SELECT_PREFIX.length)
-                : '';
-        },
-
-        professionName() {
-            const p = PROFESSIONS_DATA[this.professionId()];
-            return p ? p.name : '';
-        },
-
-        professionAbilityRows() {
-            const p = PROFESSIONS_DATA[this.professionId()];
-            return p ? p.abilities : [];
+            return (this.school || '') === PROFESSION_SELECT_VALUE
+                || (this.school || '').startsWith(LEGACY_PROFESSION_SELECT_PREFIX);
         },
 
         professionAbilityCount(id) {
@@ -2745,15 +2734,16 @@ function characterForm() {
 
         // The allowance is computed server-side (app/services/xp.py) and
         // arrives on the debounced XP payload, so the editor never
-        // re-derives the unlock rule.
+        // re-derives the unlock rule. It is pooled across every available
+        // profession, not per profession.
         professionAllowance() {
             return this.xp?.professions?.allowance || 0;
         },
 
-        professionCanTake(id) {
-            const row = this.professionAbilityRows().find(r => r.id === id);
-            if (!row) return false;
-            if (this.professionAbilityCount(id) >= row.max) return false;
+        // ``max`` is the ability's OWN profession's limit, rendered into
+        // the call site: 2 for most, 1 for a Priest ritual.
+        professionCanTake(id, max) {
+            if (this.professionAbilityCount(id) >= max) return false;
             return this.professionPicksUsed() < this.professionAllowance();
         },
 
@@ -2766,8 +2756,8 @@ function characterForm() {
             return label;
         },
 
-        professionAbilityUp(id) {
-            if (!this.professionCanTake(id)) return;
+        professionAbilityUp(id, max) {
+            if (!this.professionCanTake(id, max)) return;
             this.professionAbilities = Object.assign({}, this.professionAbilities,
                 { [id]: this.professionAbilityCount(id) + 1 });
             this.markDirty();
@@ -2787,7 +2777,7 @@ function characterForm() {
         // with a school - the school ring (including its free raise), the
         // school knacks and the technique picks. Foreign knacks stay: a
         // profession character buys them like anyone else.
-        onProfessionChange(professionId) {
+        onProfessionChange() {
             const oldRing = this.schoolRingChoice;
             const oldDan = this.currentDan();
             if (oldRing && Object.prototype.hasOwnProperty.call(this.rings, oldRing)) {
@@ -2799,15 +2789,15 @@ function characterForm() {
             this.knacks = {};
             this.techniqueChoices = {};
             this.professionAbilities = {};
-            htmx.ajax('GET', '/characters/api/profession-info/' + professionId,
-                      '#school-details');
+            htmx.ajax('GET', '/characters/api/profession-info', '#school-details');
             this.$nextTick(() => { this._suppressSchoolRingDrop = false; });
         },
 
         onSchoolChange(event) {
             const schoolId = event.target.value;
-            if (schoolId.startsWith(PROFESSION_SELECT_PREFIX)) {
-                this.onProfessionChange(schoolId.slice(PROFESSION_SELECT_PREFIX.length));
+            if (schoolId === PROFESSION_SELECT_VALUE
+                    || schoolId.startsWith(LEGACY_PROFESSION_SELECT_PREFIX)) {
+                this.onProfessionChange();
                 return;
             }
             // Leaving a profession for a real school: drop its abilities.

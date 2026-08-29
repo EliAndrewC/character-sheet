@@ -1,22 +1,26 @@
 {# Profession details panel, rendered into #school-details in the editor in
-   place of school_info.html. A profession is taken instead of a school, so
-   there is no School Ring, no school knacks and no Dan to show - just the
-   ability list, which the stepper section below the panel lets the player
-   pick from. #}
+   place of school_info.html. There is one profession character type; the
+   per-profession detail is in the ability groups below this panel. #}
 <div class="bg-parchment rounded p-4 border border-ink/10" data-testid="profession-info">
     <div class="flex items-baseline gap-3 flex-wrap">
-        <h3 class="font-bold text-lg">{{ profession.name }}</h3>
+        <h3 class="font-bold text-lg">Profession</h3>
         <span class="text-xs text-ink/60">No School Ring, no school knacks, no Dan</span>
     </div>
     <p class="text-sm mt-2 text-ink/70">
         Abilities cost no XP. You get your first at 150 XP and one more every
-        15 XP after that, and you may take any one of them up to
-        {{ profession.max_per_ability }} times.
+        15 XP after that, and you may mix them freely across professions - a
+        wave man who settles in a city picks up a worker's habits, and one who
+        prays often enough is taught a ritual.
         You can still buy school knacks from other schools below.
     </p>
+    <p class="text-sm mt-2 text-ink/70">
+        Most abilities may be taken twice. Priest rituals may be taken only
+        once - a ritual is something you have been taught, not a knack you
+        deepen.
+    </p>
     <p class="text-xs mt-2">
-        <a class="text-accent underline"
-           href="https://github.com/EliAndrewC/l7r/blob/master/rules/09-professions.md{{ profession.rules_anchor }}"
-           target="_blank" rel="noopener">Full rules for {{ profession.name }} abilities</a>
+        {% for p in professions %}{% if not loop.first %} &bull; {% endif %}<a class="text-accent underline"
+           href="https://github.com/EliAndrewC/l7r/blob/master/rules/09-professions.md{{ p.rules_anchor }}"
+           target="_blank" rel="noopener">{{ p.name }} rules</a>{% endfor %}
     </p>
 </div>

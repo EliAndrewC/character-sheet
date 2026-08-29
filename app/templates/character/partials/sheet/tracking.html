@@ -356,10 +356,14 @@
                 </div>
             </div>
             {% endif %}
-            {% if school_abilities.get('priest_bless_rituals') %}
+            {# Two separate rituals, so two flags: a profession character who
+               learned only one gets only that button. A Priest school
+               character has all ten and gets both. #}
+            {% if school_abilities.get('priest_bless_topic') or school_abilities.get('priest_bless_research') %}
             <div class="mt-2 pt-2 border-t border-ink/10">
                 <div class="text-sm text-ink/60 mb-1">Priest Rituals</div>
                 <div class="flex flex-col gap-2">
+                    {% if school_abilities.get('priest_bless_research') %}
                     <div class="tooltip-trigger relative inline-block self-start" data-bless-research>
                         <button type="button"
                                 @click="window._diceRoller?.rollBless('Bless research')"
@@ -371,6 +375,8 @@
                             When a target makes a roll to perform research, roll 2k1 and add it to their roll. Time: 5 minutes.
                         </span>
                     </div>
+                    {% endif %}
+                    {% if school_abilities.get('priest_bless_topic') %}
                     <div class="tooltip-trigger relative inline-block self-start" data-bless-conversation>
                         <button type="button"
                                 @click="window._diceRoller?.rollBless('Bless conversation topic')"
@@ -382,6 +388,7 @@
                             Before a conversation, bless a target and pick a topic of conversation. When the target makes their first contested roll on that topic, roll 2k1 and add it to their roll. Each blessing replaces the previous one. Time: 5 minutes.
                         </span>
                     </div>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}

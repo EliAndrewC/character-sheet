@@ -1,118 +1,189 @@
 """Profession selection, ability sanitizing and display helpers.
 
-A profession is taken INSTEAD of a school (profession-design/design.md D1),
-so both live behind the editor's single school ``<select>``. Profession
-options carry a ``profession:`` prefix on their value; ``split_school_or_
-profession`` is the one place that prefix is understood, and it is also the
-allow-list: an unknown id, or a profession that is not yet selectable,
-resolves to "no school and no profession" rather than being written through.
+A profession is taken INSTEAD of a school (design doc D1), so both live
+behind the editor's single school ``<select>``. There is exactly one
+profession character type - "Profession" (part 2, P1) - and a profession
+character draws abilities from every *available* profession and mixes them
+freely: a wave man who settles in a city and picks up work, or who prays at
+a temple often enough that the monks teach him a ritual.
+
+``split_school_or_profession`` is the one place the dropdown's encoding is
+understood, and it doubles as the allow-list.
 
 Abilities are stored as an id -> count map because an ability may be taken
 more than once (D4); ``sanitize_profession_abilities`` is the server-side
-clamp that a crafted POST cannot get past.
+clamp that a crafted POST cannot get past. Each ability is clamped to ITS
+OWN profession's ``max_per_ability``, so a Wave Man ability caps at 2 and a
+Priest ritual at 1 in the same character (P7).
 """
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-from app.game_data import PROFESSION_BY_ABILITY, PROFESSIONS, SCHOOLS
+from app.game_data import (
+    PROFESSION_ABILITIES,
+    PROFESSION_BY_ABILITY,
+    PROFESSION_CHARACTER_TYPE,
+    PROFESSIONS,
+    SCHOOLS,
+)
 
-# Prefix distinguishing a profession from a school in the editor's single
-# school dropdown. Asserted in tests to not collide with any school id.
-PROFESSION_SELECT_PREFIX = "profession:"
+# The dropdown value for "Profession". Asserted in tests to not collide with
+# any school id.
+PROFESSION_SELECT_VALUE = PROFESSION_CHARACTER_TYPE
+
+# Legacy per-profession dropdown values (``profession:wave_man``). Kept for
+# one release: an editor tab left open across the deploy will POST the old
+# form, and resolving it to "no profession" would silently wipe that
+# character's abilities. Which profession it named no longer matters - the
+# character type is the same either way.
+LEGACY_PROFESSION_SELECT_PREFIX = "profession:"
 
 
 def split_school_or_profession(value: str) -> Tuple[str, str]:
-    """Resolve a school-dropdown value into ``(school_id, profession_id)``.
+    """Resolve a school-dropdown value into ``(school_id, profession_type)``.
 
-    Exactly one of the two is non-empty, or both are empty. Unknown ids and
-    professions that are not yet selectable resolve to ``("", "")`` - the
-    caller then clears both, which is the correct outcome for a crafted
-    payload naming a school or profession that does not exist.
+    Exactly one of the two is non-empty, or both are empty. An unknown
+    school id resolves to ``("", "")`` - the caller then clears both, which
+    is the correct outcome for a crafted payload naming something that does
+    not exist.
     """
     value = (value or "").strip()
     if not value:
         return "", ""
-    if value.startswith(PROFESSION_SELECT_PREFIX):
-        pid = value[len(PROFESSION_SELECT_PREFIX):]
-        prof = PROFESSIONS.get(pid)
-        if prof is not None and prof.selectable:
-            return "", pid
-        return "", ""
+    if value == PROFESSION_SELECT_VALUE:
+        return "", PROFESSION_CHARACTER_TYPE
+    if value.startswith(LEGACY_PROFESSION_SELECT_PREFIX):
+        # Any profession id, known or not: the type is what is being set.
+        return "", PROFESSION_CHARACTER_TYPE
     if value in SCHOOLS:
         return value, ""
     return "", ""
 
 
-def select_value_for(school_id: str, profession_id: str) -> str:
+def select_value_for(school_id: str, profession: str) -> str:
     """Inverse of :func:`split_school_or_profession`, for rendering."""
-    if profession_id:
-        return f"{PROFESSION_SELECT_PREFIX}{profession_id}"
+    if profession:
+        return PROFESSION_SELECT_VALUE
     return school_id or ""
 
 
-def sanitize_profession_abilities(profession_id: str, raw: Any) -> Dict[str, int]:
+def is_profession_character(character_data: Any) -> bool:
+    """Whether this character took a profession rather than a school."""
+    if character_data is None:
+        return False
+    if isinstance(character_data, dict):
+        return bool(character_data.get("profession"))
+    return bool(getattr(character_data, "profession", ""))  # pragma: no cover
+
+
+def max_for_ability(ability_id: str) -> int:
+    """How many times *ability_id* may be taken, or 0 if it is unavailable.
+
+    Reads the limit off the ability's OWN profession, which is what lets one
+    character hold a twice-taken Wave Man ability beside a once-only Priest
+    ritual.
+    """
+    profession_id = PROFESSION_BY_ABILITY.get(ability_id)
+    prof = PROFESSIONS.get(profession_id or "")
+    if prof is None or not prof.is_available:
+        return 0
+    return prof.max_per_ability
+
+
+def sanitize_profession_abilities(raw: Any) -> Dict[str, int]:
     """Clamp an incoming ability map to what the rules actually allow.
 
-    Drops ids that don't exist, ids belonging to a different profession, and
-    non-positive or non-integer counts; clamps each remaining count to the
-    profession's ``max_per_ability`` (2 everywhere except Priest rituals,
-    which are once-only). Does NOT enforce the XP allowance - that is a
-    validation warning rather than a silent truncation, so the player can
-    see they have overcommitted instead of having picks vanish.
+    Drops ids that don't exist, ids from professions that are not available
+    (preview or hidden), and non-positive or non-integer counts; clamps each
+    remaining count to that ability's own per-ability limit.
+
+    Does NOT enforce the XP allowance - going over is a validation error
+    rather than a silent truncation, so a player can see they have
+    overcommitted instead of having picks vanish.
     """
-    prof = PROFESSIONS.get(profession_id or "")
-    if prof is None or not isinstance(raw, dict):
+    if not isinstance(raw, dict):
         return {}
     cleaned: Dict[str, int] = {}
-    for aid, count in raw.items():
-        if PROFESSION_BY_ABILITY.get(aid) != prof.id:
+    for ability_id, count in raw.items():
+        limit = max_for_ability(ability_id)
+        if not limit:
             continue
         # bool is an int subclass; a JSON `true` is not a count.
         if isinstance(count, bool) or not isinstance(count, int):
             continue
         if count < 1:
             continue
-        cleaned[aid] = min(count, prof.max_per_ability)
+        cleaned[ability_id] = min(count, limit)
     return cleaned
 
 
 def ability_counts_for_display(
-    profession_id: str, abilities: Any
+    abilities: Any, *, include_untaken: bool
 ) -> List[Dict[str, Any]]:
-    """Rows for the editor and the view sheet, in rules order.
+    """Grouped rows for the editor and the View Sheet.
 
-    One row per ability the profession has, whether or not it is taken, so
-    both surfaces can render the full list with the untaken ones dimmed.
+    One group per profession, in rules order. ``include_untaken`` is the
+    difference between the two surfaces (P10): the editor passes True and
+    gets every ability of every *visible* profession, so a player can see
+    what is on offer; the View Sheet passes False and gets only what the
+    character actually took, which keeps the panel to a handful of lines
+    rather than thirty rows at 40% opacity.
+
+    Hidden professions never appear either way.
     """
-    prof = PROFESSIONS.get(profession_id or "")
-    if prof is None:
-        return []
     counts = abilities if isinstance(abilities, dict) else {}
-    return [
-        {
-            "id": a.id,
-            "ordinal": a.ordinal,
-            "name": a.name,
-            "text": a.text,
-            "implemented": a.implemented,
-            "reference_only": a.reference_only,
-            "money_bonus": a.money_bonus,
-            "ritual_time": a.ritual_time,
-            "count": max(0, min(int(counts.get(a.id, 0) or 0), prof.max_per_ability)),
-            "max": prof.max_per_ability,
-        }
-        for a in prof.abilities
-    ]
+    groups: List[Dict[str, Any]] = []
+    # Available professions first, then previews - a player should not have
+    # to scroll past what they cannot take to reach what they can. Order
+    # within each band follows the rules file.
+    visible = sorted(
+        (p for p in PROFESSIONS.values() if p.is_visible),
+        key=lambda p: (not p.is_available, list(PROFESSIONS).index(p.id)),
+    )
+    for prof in visible:
+        rows = []
+        for ability in prof.abilities:
+            raw = counts.get(ability.id, 0) if prof.is_available else 0
+            try:
+                count = max(0, min(int(raw or 0), prof.max_per_ability))
+            except (TypeError, ValueError):  # pragma: no cover - sanitized on write
+                count = 0
+            if not count and not include_untaken:
+                continue
+            rows.append({
+                "id": ability.id,
+                "ordinal": ability.ordinal,
+                "name": ability.name,
+                "text": ability.text,
+                "implemented": ability.implemented,
+                "reference_only": ability.reference_only,
+                "money_bonus": ability.money_bonus,
+                "ritual_time": ability.ritual_time,
+                "count": count,
+                "max": prof.max_per_ability,
+            })
+        if not rows:
+            continue
+        groups.append({
+            "profession_id": prof.id,
+            "name": prof.name,
+            "rules_anchor": prof.rules_anchor,
+            "availability": prof.availability,
+            "is_available": prof.is_available,
+            "max_per_ability": prof.max_per_ability,
+            "rows": rows,
+        })
+    return groups
 
 
 def ability_count(character_data: Any, ability_id: str) -> int:
-    """How many copies of *ability_id* this character has (0, 1 or 2).
+    """How many copies of *ability_id* this character has.
 
     Accepts either a ``character_data`` dict or anything with a
     ``profession_abilities`` attribute, so formula builders and route code
-    can share one accessor. Returns 0 when the character has no profession,
-    which is every character until they pick one.
+    can share one accessor. Returns 0 for a character with a school, and for
+    any ability whose profession is not available.
     """
     if character_data is None:
         return 0
@@ -122,11 +193,22 @@ def ability_count(character_data: Any, ability_id: str) -> int:
     else:  # pragma: no cover - attribute form is used by route code only
         profession = getattr(character_data, "profession", "") or ""
         abilities = getattr(character_data, "profession_abilities", {}) or {}
-    if not profession or PROFESSION_BY_ABILITY.get(ability_id) != profession:
+    if not profession:
         return 0
-    prof = PROFESSIONS[profession]
+    limit = max_for_ability(ability_id)
+    if not limit:
+        return 0
     try:
         raw = int(abilities.get(ability_id, 0) or 0)
     except (TypeError, ValueError):  # pragma: no cover - sanitized on write
         return 0
-    return max(0, min(raw, prof.max_per_ability))
+    return max(0, min(raw, limit))
+
+
+def holds_ability(character_data: Any, ability_id: str) -> bool:
+    """Whether the character has taken *ability_id* at all.
+
+    The readable form of ``ability_count(...) > 0`` for the many gates that
+    only care whether a ritual was learned, not how deeply.
+    """
+    return ability_count(character_data, ability_id) > 0

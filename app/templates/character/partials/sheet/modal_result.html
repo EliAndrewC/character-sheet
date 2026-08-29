@@ -555,10 +555,15 @@
                                         @click="rerollImpairedTens(priest)"
                                         :data-action="'priest-bless-reroll-10-' + priest.priest_id"
                                         class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
-                                    <span x-text="priest.name"></span> priest blessed for 10 rerolls
+                                    <template x-if="priest.is_self">
+                                        <span>You blessed yourself for 10 rerolls</span>
+                                    </template>
+                                    <template x-if="!priest.is_self">
+                                        <span><span x-text="priest.name"></span> priest blessed for 10 rerolls</span>
+                                    </template>
                                 </button>
                                 <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">
-                                    Only click this button if <span x-text="priest.name"></span> specifically blessed you in advance with the following ritual:
+                                    Only click this button if <span x-text="priest.is_self ? 'you' : priest.name"></span> specifically performed this ritual in advance:
                                     <br><br>
                                     <em>If the target was already suffering penalties from being sick or impaired at the time this ritual was performed, they ignore those penalties in the next conversation or fight.</em>
                                     <br><em>Time: 5 minutes</em>

@@ -12,8 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.game_data import (
     ADVANTAGES, CAMPAIGN_ADVANTAGES, CAMPAIGN_DISADVANTAGES,
-    DISADVANTAGES, PROFESSION_ABILITIES, PROFESSIONS, SCHOOLS, SKILLS,
-    SCHOOL_KNACKS,
+    DISADVANTAGES, PROFESSION_ABILITIES, SCHOOLS, SKILLS, SCHOOL_KNACKS,
 )
 from app.models import (
     Character,
@@ -69,13 +68,7 @@ def compute_diff_summary(old_state: Dict[str, Any], new_state: Dict[str, Any]) -
     old_prof = old_state.get("profession", "")
     new_prof = new_state.get("profession", "")
     if old_prof != new_prof:
-        if new_prof:
-            prof_def = PROFESSIONS.get(new_prof)
-            diffs.append(
-                f"Profession changed to {prof_def.name if prof_def else _label(new_prof)}"
-            )
-        else:
-            diffs.append("Profession removed")
+        diffs.append("Profession selected" if new_prof else "Profession removed")
     old_abils = old_state.get("profession_abilities", {}) or {}
     new_abils = new_state.get("profession_abilities", {}) or {}
     for aid in sorted(set(old_abils) | set(new_abils)):

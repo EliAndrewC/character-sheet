@@ -41,6 +41,7 @@ def init_db():
     # both ADD COLUMN and DROP COLUMN.
     _migrate_add_columns()
     _migrate_legacy_specializations(SessionLocal())
+    _migrate_legacy_profession_types(SessionLocal())
 
 
 def _migrate_legacy_specializations(session) -> int:
@@ -72,6 +73,37 @@ def _migrate_legacy_specializations(session) -> int:
         details.pop("specialization", None)
         char.advantage_details = details
         char.specializations = existing_specs
+        updated += 1
+    if updated:
+        session.commit()
+    session.close()
+    return updated
+
+
+def _migrate_legacy_profession_types(session) -> int:
+    """Collapse per-profession character types into the single one.
+
+    The first profession release stored the chosen profession's id in
+    ``Character.profession`` ("wave_man"). A character's type is now just
+    "Profession" - they draw abilities from every available profession and
+    mix them freely - so any row holding a profession id becomes the
+    sentinel. Idempotent, and it leaves ``profession_abilities`` alone:
+    ability ids are globally unique and already carry their own provenance.
+
+    Returns the number of rows updated so the caller can log it and tests
+    can assert on it.
+    """
+    from app.game_data import PROFESSION_CHARACTER_TYPE, PROFESSIONS
+    from app.models import Character
+
+    updated = 0
+    for char in session.query(Character).all():
+        current = char.profession or ""
+        if not current or current == PROFESSION_CHARACTER_TYPE:
+            continue
+        # Anything else in this column was a profession id (or junk from a
+        # crafted write); either way the character is a profession character.
+        char.profession = PROFESSION_CHARACTER_TYPE
         updated += 1
     if updated:
         session.commit()

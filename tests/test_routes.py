@@ -1918,9 +1918,11 @@ class TestKakitaPhaseZeroFlag:
 
 
 class TestPriestBlessRituals:
-    """The ``priest_bless_rituals`` flag gates the Bless conversation topic and
-    Bless research buttons on the sheet. The rituals come with the Priest
-    school at any Dan, so any priest gets the flag; non-priests never do.
+    """The ``priest_bless_topic`` / ``priest_bless_research`` flags gate the
+    Bless conversation topic and Bless research buttons on the sheet. The
+    rituals come with the Priest school at any Dan, so any priest gets both;
+    a non-priest gets one only by learning that ritual as a profession
+    ability (covered in tests/test_professions.py).
     """
 
     def _school_abilities(self, client, cid):
@@ -1941,7 +1943,8 @@ class TestPriestBlessRituals:
             knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1},
         )
         flags = self._school_abilities(client, cid)
-        assert flags.get("priest_bless_rituals") is True
+        assert flags.get("priest_bless_topic") is True
+        assert flags.get("priest_bless_research") is True
 
     def test_priest_5th_dan_has_bless_rituals(self, client):
         cid = _seed_character(
@@ -1950,7 +1953,8 @@ class TestPriestBlessRituals:
             knacks={"conviction": 5, "otherworldliness": 5, "pontificate": 5},
         )
         flags = self._school_abilities(client, cid)
-        assert flags.get("priest_bless_rituals") is True
+        assert flags.get("priest_bless_topic") is True
+        assert flags.get("priest_bless_research") is True
 
     def test_non_priest_does_not_have_bless_rituals(self, client):
         cid = _seed_character(
@@ -1958,7 +1962,8 @@ class TestPriestBlessRituals:
             knacks={"double_attack": 3, "feint": 3, "iaijutsu": 3},
         )
         flags = self._school_abilities(client, cid)
-        assert flags.get("priest_bless_rituals") is False
+        assert flags.get("priest_bless_topic") is False
+        assert flags.get("priest_bless_research") is False
 
     def test_bless_buttons_render_on_priest_sheet(self, client):
         cid = _seed_character(
@@ -2451,7 +2456,9 @@ class TestPartyPriestsContext:
             gaming_group_id=group.id, is_published=True,
         )
         priests = self._party_priests(client, cid)
-        assert priests == [{"priest_id": pid, "name": "Isawa Priest"}]
+        assert priests == [
+            {"priest_id": pid, "name": "Isawa Priest", "is_self": False}
+        ]
 
     def test_multiple_priests_all_appear(self, client):
         from app.models import GamingGroup
@@ -2479,8 +2486,19 @@ class TestPartyPriestsContext:
         ids = sorted(p["priest_id"] for p in priests)
         assert ids == sorted([p1, p2])
 
-    def test_priest_does_not_appear_in_their_own_party_priests(self, client):
-        """A priest cannot rely on themselves — party_priests excludes self."""
+    def test_priest_appears_in_their_own_party_priests(self, client):
+        """A priest may perform the sick-or-impaired ritual on themselves.
+
+        This inverts the rule this test used to assert. Until 2026-08-29 the
+        blesser list was built purely from ``visible_party_members``, which
+        excludes the viewing character, so a priest could bless every ally
+        and never themselves. Ruling P9 in
+        profession-design/priest-and-pooling.md settled that the ritual
+        targets the priest or an ally, for school and profession characters
+        alike; the self entry is now added alongside the party list rather
+        than by relaxing ``visible_party_members``, which several other
+        party mechanics depend on excluding self.
+        """
         from app.models import GamingGroup
         session = client._test_session_factory()
         group = GamingGroup(name="Lonely Priest")
@@ -2491,7 +2509,9 @@ class TestPartyPriestsContext:
             knacks={"conviction": 2, "otherworldliness": 2, "pontificate": 2},
             gaming_group_id=group.id, is_published=True,
         )
-        assert self._party_priests(client, pid) == []
+        entries = self._party_priests(client, pid)
+        assert [e["priest_id"] for e in entries] == [pid]
+        assert entries[0]["is_self"] is True
 
 
 class TestEditCharacter:

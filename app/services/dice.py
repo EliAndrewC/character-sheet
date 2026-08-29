@@ -41,7 +41,7 @@ from app.services.rolls import (
     compute_dan,
 )
 from app.game_data import ADVANTAGES, CAMPAIGN_ADVANTAGES
-from app.services.professions import ability_count
+from app.services.professions import ability_count, is_profession_character
 
 
 # TN/contested skill groupings for 5th Dan court bonuses (Courtier, Doji Artisan)
@@ -473,7 +473,7 @@ def _annotate_wave_man(character_data: dict, out: Dict[str, dict]) -> None:
     W10) are stamped only so the result panel can name the right number in
     its reminder line.
     """
-    if (character_data.get("profession") or "") != "wave_man":
+    if not is_profession_character(character_data):
         return
 
     attack_counts = {
