@@ -313,6 +313,55 @@ class School:
 
 
 @dataclass(frozen=True)
+class ProfessionAbility:
+    """One line item from a profession's list in rules/09-professions.md.
+
+    ``ordinal`` is the ability's 1-based position in that list, and is the
+    stable handle used in design docs, code comments and test names (the
+    Wave Man abilities are referred to as W1-W10 throughout).
+
+    ``implemented`` says the sheet applies this ability's math.
+    ``reference_only`` says it is rendered as rules text for the player to
+    relay to the GM, because it modifies what an *opponent* rolls and this
+    app models one character's own rolls. The two are not opposites: W1 is
+    both implemented (its first clause raises your attack) and carries a
+    reference-text second clause about the defender's parry.
+    """
+
+    id: str
+    ordinal: int
+    name: str
+    text: str
+    implemented: bool = False
+    reference_only: bool = False
+    money_bonus: Optional[str] = None
+    ritual_time: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class Profession:
+    """A profession, taken *instead of* a school (see design doc D1).
+
+    A profession character has no School Ring, no school knacks and no Dan
+    (D7); they may still buy foreign school knacks like anyone else (D8).
+    Abilities cost no XP - they unlock on total XP (D2/D3) and each may be
+    taken up to ``max_per_ability`` times (D4).
+    """
+
+    id: str
+    name: str
+    abilities: List[ProfessionAbility]
+    rules_anchor: str
+    selectable: bool = False
+    max_per_ability: int = 2
+
+    @property
+    def max_total_picks(self) -> int:
+        return self.max_per_ability * len(self.abilities)
+
+
+
+@dataclass(frozen=True)
 class Advantage:
     id: str
     name: str
@@ -2981,6 +3030,514 @@ SCHOOLS_BUSHI_NONBUSHI = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# PROFESSIONS
+# ---------------------------------------------------------------------------
+#
+# A profession is taken INSTEAD of a school (design doc D1). Only the Wave
+# Man is selectable today; the other four lists are carried as data so the
+# editor can show them greyed out and so a second profession is a data
+# change plus its mechanics, not a refactor (D17).
+#
+# Abilities cost nothing. A character unlocks their first at
+# PROFESSION_ABILITY_UNLOCK_BASE total XP and one more every
+# PROFESSION_ABILITY_UNLOCK_STEP XP beyond that (D2), counting total XP
+# held rather than XP spent (D3). Each ability may be taken up to
+# ``max_per_ability`` times, and a second copy applies the effect a second
+# time (D4/D5).
+#
+# Ability text is verbatim from rules/09-professions.md. NOTE: the Wave
+# Man's third ability was reworded upstream on 2026-08-29 to key on the
+# number of damage dice rolled rather than on "4k2"; the text below is the
+# revised wording.
+
+PROFESSION_ABILITY_UNLOCK_BASE = 150
+PROFESSION_ABILITY_UNLOCK_STEP = 15
+
+
+_WAVE_MAN_ABILITIES: List[ProfessionAbility] = [
+    ProfessionAbility(
+        id="wave_man_miss_raise",
+        ordinal=1,
+        name="Raise a missing attack",
+        text=(
+            "When you make an attack roll that would miss, raise it by 5.  "
+            "Any parry attempt against an attack that receives a free raise "
+            "in this manner automatically succeeds."
+        ),
+        implemented=True,
+    ),
+    ProfessionAbility(
+        id="wave_man_parry_tn",
+        ordinal=2,
+        name="Harder to parry",
+        text="Raise the TN of someone trying to parry one of your attacks by 5.",
+        reference_only=True,
+    ),
+    ProfessionAbility(
+        id="wave_man_weapon_dice",
+        ordinal=3,
+        name="Extra weapon damage die",
+        text=(
+            "When using a weapon that rolls fewer than 4 damage dice, add an "
+            "extra rolled damage die to the weapon's base damage, to a maximum "
+            "of 4 rolled damage dice.  Also, subtract 2 from your armor damage "
+            "reduction penalty."
+        ),
+        implemented=True,
+    ),
+    ProfessionAbility(
+        id="wave_man_round_damage",
+        ordinal=4,
+        name="Round damage up",
+        text=(
+            "Round your damage rolls up to the nearest multiple of 5.  If the "
+            "roll is already a multiple of 5, then raise it by 3."
+        ),
+        implemented=True,
+    ),
+    ProfessionAbility(
+        id="wave_man_impaired_reroll",
+        ordinal=5,
+        name="Impaired reroll",
+        text="You may reroll 10s on a single die when impaired.",
+        implemented=True,
+    ),
+    ProfessionAbility(
+        id="wave_man_initiative_die",
+        ordinal=6,
+        name="Extra initiative die",
+        text="Roll one extra unkept die on initiative.",
+        implemented=True,
+    ),
+    ProfessionAbility(
+        id="wave_man_wound_check_dice",
+        ordinal=7,
+        name="Extra wound check dice",
+        text="Roll two extra unkept dice on wound checks.",
+        implemented=True,
+    ),
+    ProfessionAbility(
+        id="wave_man_damage_reduction",
+        ordinal=8,
+        name="Shrug off extra damage",
+        text=(
+            "When someone is keeping at least one extra die of damage from "
+            "exceeding their attack roll TN, subtract 5 from the damage."
+        ),
+        reference_only=True,
+    ),
+    ProfessionAbility(
+        id="wave_man_failed_parry_dice",
+        ordinal=9,
+        name="Punish a failed parry",
+        text=(
+            "When someone unsuccessfully tries to parry an attack, you may "
+            "roll 2 of the extra damage dice that you would have rolled had "
+            "they not attempted to parry."
+        ),
+        implemented=True,
+    ),
+    ProfessionAbility(
+        id="wave_man_wound_check_tn",
+        ordinal=10,
+        name="Harder wound checks",
+        text=(
+            "Raise the TN of someone making a wound check from damage you "
+            "dealt to them by 5.  If they fail they take serious wounds as if "
+            "the TN had not been raised."
+        ),
+        reference_only=True,
+    ),
+]
+
+
+_WORKER_ABILITIES: List[ProfessionAbility] = [
+    ProfessionAbility(
+        id="worker_less_sleep", ordinal=1, name="Rest less",
+        text="You regain a VP with 4 fewer hours of sleep at night.",
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="worker_sickness_halved", ordinal=2, name="Shrug off sickness",
+        text=(
+            "All penalties from sickness are cut in half.  Taking this twice "
+            "cuts it to a fourth."
+        ),
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="worker_ignore_fatigue", ordinal=3, name="Ignore fatigue",
+        text="Ignore one day's worth of fatigue penalties.",
+        money_bonus="20%",
+    ),
+    ProfessionAbility(
+        id="worker_etiquette_higher_class", ordinal=4,
+        name="Etiquette with your betters",
+        text=(
+            "You receive 3 free raises on etiquette when speaking to anyone "
+            "from a higher social class."
+        ),
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="worker_advanced_as_basic", ordinal=5, name="Advanced skills as basic",
+        text=(
+            "You may buy and raise any advanced skill which is normally basic "
+            "as if it were basic.  (Depending on the background and campaign, "
+            "some normally-basic skills might be advanced, such as making Law "
+            "an advanced skill for peasant farmers.)"
+        ),
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="worker_commerce_purchases", ordinal=6, name="Shrewd purchases",
+        text="You get three free raises on commerce rolls when making purchases.",
+        money_bonus="20%",
+    ),
+    ProfessionAbility(
+        id="worker_ethics_bragging", ordinal=7, name="Speak of your ethics",
+        text=(
+            "You get 4 free raises on bragging and precepts rolls when "
+            "speaking about your own sense of ethics."
+        ),
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="worker_strength", ordinal=8, name="Strong back",
+        text="You get 2 free raises on strength rolls.",
+        money_bonus="20%",
+    ),
+    ProfessionAbility(
+        id="worker_endurance", ordinal=9, name="Tireless",
+        text="You get 2 free raises on all endurance rolls.",
+        money_bonus="20%",
+    ),
+    ProfessionAbility(
+        id="worker_authority_trouble", ordinal=10, name="Stay out of trouble",
+        text=(
+            "You get 5 free raises on open sincerity and open tact rolls when "
+            "trying to avoid being in trouble with an authority figure."
+        ),
+        money_bonus="none",
+    ),
+]
+
+
+_MERCHANT_ABILITIES: List[ProfessionAbility] = [
+    ProfessionAbility(
+        id="merchant_sincerity", ordinal=1, name="Sincere in business",
+        text="You get 2 free raises to sincerity rolls relating to your business.",
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="merchant_interrogation", ordinal=2, name="Question a customer",
+        text=(
+            "You get 2 free raises to interrogation rolls relating to your "
+            "business."
+        ),
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="merchant_investigation", ordinal=3, name="Investigate a deal",
+        text=(
+            "You get 4 free raises to investigation rolls relating to your "
+            "business."
+        ),
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="merchant_bragging_precepts", ordinal=4, name="Boast of experience",
+        text=(
+            "You get 3 free raises when making bragging and precepts rolls "
+            "relating to your business experience, and an extra free raise if "
+            "the roll is contested."
+        ),
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="merchant_contested_commerce", ordinal=5, name="Out-haggle a rival",
+        text=(
+            "You get 2 free raises to contested commerce rolls when your "
+            "commerce rank is at least as high as your opponent's."
+        ),
+        money_bonus="20%",
+    ),
+    ProfessionAbility(
+        id="merchant_culture_gifts", ordinal=6, name="Choose a gift",
+        text="You get 4 free raises to culture rolls to purchase gifts.",
+        money_bonus="20%",
+    ),
+    ProfessionAbility(
+        id="merchant_heraldry", ordinal=7, name="Know your customers",
+        text=(
+            "You get 5 free raises on heraldry rolls for the purpose of "
+            "knowing your customers and their family backgrounds and "
+            "relationships."
+        ),
+        money_bonus="20%",
+    ),
+    ProfessionAbility(
+        id="merchant_law", ordinal=8, name="Know the law",
+        text="You get 3 free raises on law rolls relating to your business.",
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="merchant_void_reroll", ordinal=9, name="Spend void to reroll",
+        text=(
+            "You may choose to spend one void point to reroll any roll "
+            "relating to your business."
+        ),
+        money_bonus="10%",
+    ),
+    ProfessionAbility(
+        id="merchant_open_commerce", ordinal=10, name="Open commerce dice",
+        text=(
+            "Roll 4 extra dice on open commerce rolls relating to your "
+            "business."
+        ),
+        money_bonus="20%",
+    ),
+]
+
+
+_PRIEST_ABILITIES: List[ProfessionAbility] = [
+    ProfessionAbility(
+        id="priest_vp_zero", ordinal=1, name="Restore the exhausted",
+        text=(
+            "Regain an extra void point on a night where the target starts "
+            "with 0 void points."
+        ),
+        ritual_time="5 minutes",
+    ),
+    ProfessionAbility(
+        id="priest_extra_sw_healing", ordinal=2, name="Heal a serious wound",
+        text="Heal an extra serious wound on an off-night.",
+        ritual_time="20 minutes",
+    ),
+    ProfessionAbility(
+        id="priest_combat_rounding", ordinal=3, name="Bless a combat phase",
+        text=(
+            "Once per phase of combat: at the beginning of the phase, pick one "
+            "of {attack, parry, damage, wound checks}: you and all allies round "
+            "up all rolls of that type to the nearest multiple of 5 that phase."
+        ),
+    ),
+    ProfessionAbility(
+        id="priest_conversation_rounding", ordinal=4, name="Bless a conversation",
+        text=(
+            "Once per conversation, pick a skill.  Everyone on your side rounds "
+            "up all rolls on that skill to the nearest increment of 5.  You may "
+            "decide which skill to round up after you have seen the results of "
+            "your own or an ally's roll."
+        ),
+    ),
+    ProfessionAbility(
+        id="priest_commune", ordinal=5, name="Commune",
+        text=(
+            "Spend a void point to roll precepts to perform a commune roll "
+            "which is only able to detect supernatural influences which are "
+            "currently present or nearby.  You may learn the type of influence "
+            "(elemental, shadowlands, etc) and its strength and proximity."
+        ),
+    ),
+    ProfessionAbility(
+        id="priest_disease_resistance", ordinal=6, name="Ward against disease",
+        text=(
+            "Give the target human, animal, or 1-family plot of land two free "
+            "raises to resist disease."
+        ),
+        ritual_time="20 minutes",
+        money_bonus="20%",
+    ),
+    ProfessionAbility(
+        id="priest_conversation_blessing", ordinal=7, name="Bless a topic",
+        text=(
+            "Before a conversation, bless a target and pick a topic of "
+            "conversation.  When the target makes their first contested roll on "
+            "that topic, roll 2k1 and add it to their roll.  Each blessing "
+            "replaces the previous one."
+        ),
+        ritual_time="5 minutes",
+    ),
+    ProfessionAbility(
+        id="priest_research_blessing", ordinal=8, name="Bless research",
+        text=(
+            "When a target makes a roll to perform research, roll 2k1 and add "
+            "it to their roll."
+        ),
+        ritual_time="5 minutes",
+    ),
+    ProfessionAbility(
+        id="priest_ignore_penalties", ordinal=9, name="Lift sickness or impairment",
+        text=(
+            "If the target was already suffering penalties from being sick or "
+            "impaired at the time this ritual was performed, they ignore those "
+            "penalties in the next conversation or fight."
+        ),
+        ritual_time="5 minutes",
+    ),
+    ProfessionAbility(
+        id="priest_consecrate", ordinal=10, name="Consecrate",
+        text=(
+            "Consecrate an object or structure against a specific supernatural "
+            "influence for a free raise against that influence until the next "
+            "sunrise.  (Certain specific combinations of talisman and influence "
+            "are permanent, most famously jade amulets vs the Shadowlands "
+            "taint.)"
+        ),
+        ritual_time="20 minutes",
+    ),
+]
+
+
+_NINJA_ABILITIES: List[ProfessionAbility] = [
+    ProfessionAbility(
+        id="ninja_tn_to_hit", ordinal=1, name="Hard to hit",
+        text=(
+            "Raise the TN to hit you by 5; if you are hit, then your attacker "
+            "rolls an extra die of damage if their attack yields extra damage "
+            "for exceeding its TN."
+        ),
+    ),
+    ProfessionAbility(
+        id="ninja_fewer_damage_rerolls", ordinal=2, name="Blunt the blow",
+        text=(
+            "If your attacker has rolled more than one 10 on their damage roll, "
+            "they reroll one fewer 10, to a minimum of one 10 being rerolled."
+        ),
+    ),
+    ProfessionAbility(
+        id="ninja_fewer_attack_dice", ordinal=3, name="Elusive",
+        text=(
+            "Your attacker rolls 1 fewer die on all types of attack rolls "
+            "against you, to a minimum of their Fire."
+        ),
+    ),
+    ProfessionAbility(
+        id="ninja_lower_action_dice", ordinal=4, name="Strike early",
+        text="After you roll initiative, lower all of your action dice by 2.",
+    ),
+    ProfessionAbility(
+        id="ninja_keep_lowest_damage", ordinal=5, name="Keep the lowest dice",
+        text=(
+            "You may keep 2 extra dice on your damage rolls, however they must "
+            "be your two lowest dice not already being kept."
+        ),
+    ),
+    ProfessionAbility(
+        id="ninja_fire_to_attack", ordinal=6, name="Add Fire to attacks",
+        text="Add your Fire to your attack rolls.",
+    ),
+    ProfessionAbility(
+        id="ninja_wound_check_low_dice", ordinal=7, name="Endure",
+        text=(
+            "All dice that roll less than 5 on your wound checks get a bonus of "
+            "(5-X) where X is the value of the die."
+        ),
+    ),
+    ProfessionAbility(
+        id="ninja_sincerity_profession", ordinal=8, name="Lie about your work",
+        text="You get 4 free raises to sincerity rolls involving your profession.",
+    ),
+    ProfessionAbility(
+        id="ninja_sneaking_unseen", ordinal=9, name="Unseen",
+        text="You get 4 free raises to sneaking rolls when trying to not be seen.",
+    ),
+    ProfessionAbility(
+        id="ninja_sneaking_unmemorable", ordinal=10, name="Unmemorable",
+        text=(
+            "You get 4 free raises to sneaking rolls when trying to not be "
+            "noticeable/memorable."
+        ),
+    ),
+]
+
+
+PROFESSIONS: Dict[str, Profession] = {
+    "wave_man": Profession(
+        id="wave_man",
+        name="Wave Man",
+        abilities=_WAVE_MAN_ABILITIES,
+        rules_anchor="#wave-man-abilities",
+        selectable=True,
+    ),
+    "worker": Profession(
+        id="worker",
+        name="Worker",
+        abilities=_WORKER_ABILITIES,
+        rules_anchor="#worker-abilities",
+    ),
+    "merchant": Profession(
+        id="merchant",
+        name="Merchant",
+        abilities=_MERCHANT_ABILITIES,
+        rules_anchor="#merchant-abilities",
+    ),
+    "priest": Profession(
+        id="priest",
+        name="Priest",
+        abilities=_PRIEST_ABILITIES,
+        rules_anchor="#priest-rituals",
+        # Rituals are once-only, unlike every other profession's list (D4).
+        max_per_ability=1,
+    ),
+    "ninja": Profession(
+        id="ninja",
+        name="Ninja",
+        abilities=_NINJA_ABILITIES,
+        rules_anchor="#ninja-abilities",
+    ),
+}
+
+
+# Flat lookup from ability id to the ability, across every profession.
+PROFESSION_ABILITIES: Dict[str, ProfessionAbility] = {
+    a.id: a for p in PROFESSIONS.values() for a in p.abilities
+}
+
+# Which profession owns each ability id.
+PROFESSION_BY_ABILITY: Dict[str, str] = {
+    a.id: p.id for p in PROFESSIONS.values() for a in p.abilities
+}
+
+
+# The profession analogue of SCHOOL_TECHNIQUE_BONUSES: declarative,
+# PER-COPY hooks for abilities the formula layer can apply on its own.
+# Everything else (post-roll math, modal interactions) lives in
+# services/dice.py and static/js/roll_math.js keyed on the ability id.
+#
+# ``extra_rolled_die`` maps a roll key to the number of extra ROLLED (not
+# kept) dice granted by ONE copy of the ability; two copies double it.
+PROFESSION_ABILITY_BONUSES: Dict[str, dict] = {
+    # W6: one extra unkept die on initiative, per copy.
+    "wave_man_initiative_die": {"extra_rolled_die": {"initiative": 1}},
+    # W7: two extra unkept dice on wound checks, per copy.
+    "wave_man_wound_check_dice": {"extra_rolled_die": {"wound_check": 2}},
+}
+
+
+# Import-time guard against a typo in the static data above. Fires only at
+# dev time if someone mistypes an id; a live app either imports cleanly or
+# does not start at all.
+_seen_ability_ids: List[str] = [
+    a.id for p in PROFESSIONS.values() for a in p.abilities
+]
+if len(_seen_ability_ids) != len(set(_seen_ability_ids)):  # pragma: no cover
+    raise ValueError("duplicate profession ability id in PROFESSIONS")
+for _aid in PROFESSION_ABILITY_BONUSES:  # pragma: no cover
+    if _aid not in PROFESSION_ABILITIES:
+        raise ValueError(f"PROFESSION_ABILITY_BONUSES references unknown ability {_aid}")
+for _p in PROFESSIONS.values():  # pragma: no cover
+    if [a.ordinal for a in _p.abilities] != list(range(1, len(_p.abilities) + 1)):
+        raise ValueError(f"profession {_p.id} has non-sequential ability ordinals")
+
+
+PROFESSIONS_FOR_PICKER = [
+    (p.name, p) for p in PROFESSIONS.values()
+]
+
+
 ALL_DATA = {
     "rings": RING_NAMES,
     "skills": SKILLS,
@@ -2992,6 +3549,7 @@ ALL_DATA = {
     "spells_by_element": SPELLS_BY_ELEMENT,
     "schools_by_category": SCHOOLS_BY_CATEGORY,
     "combat_reference": COMBAT_REFERENCE,
+    "professions": PROFESSIONS,
 }
 
 

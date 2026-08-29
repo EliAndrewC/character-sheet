@@ -23,6 +23,10 @@ from app.services.dark_secret import (
     dark_secret_view,
     merge_dark_secret,
 )
+from app.services.professions import (
+    sanitize_profession_abilities,
+    split_school_or_profession,
+)
 from app.services.rolls import compute_dan
 from app.services.sanitize import sanitize_sections
 from app.services.versions import (
@@ -138,6 +142,30 @@ def _sanitize_specializations(raw) -> list:
     return cleaned
 
 
+def _apply_school_or_profession(character: Character, raw_value: str) -> None:
+    """Set the character's school OR profession from one dropdown value.
+
+    The two are mutually exclusive (design doc D1), so whichever is not
+    chosen is cleared along with the state that only makes sense for it:
+    a profession character loses their school ring, school knacks and
+    technique choices, and a school character loses their profession and
+    its abilities. Foreign knacks survive both directions - they are not
+    school state, and a Wave Man is expressly allowed to buy them (D8).
+    """
+    school_id, profession_id = split_school_or_profession(raw_value)
+    character.school = school_id
+    character.profession = profession_id
+    if profession_id:
+        character.school_ring_choice = ""
+        character.knacks = {}
+        character.technique_choices = {}
+        character.profession_abilities = sanitize_profession_abilities(
+            profession_id, character.profession_abilities,
+        )
+    else:
+        character.profession_abilities = {}
+
+
 def _parse_form_to_dict(form_data: dict) -> dict:
     """Parse flat form data into the nested structure for Character.from_dict."""
     data = {
@@ -147,6 +175,7 @@ def _parse_form_to_dict(form_data: dict) -> dict:
         "lineage": (form_data.get("lineage") or "").strip(),
         "school": form_data.get("school", ""),
         "school_ring_choice": form_data.get("school_ring_choice", ""),
+        "profession_abilities": form_data.get("profession_abilities", ""),
         "rings": {},
         "skills": {},
         "knacks": {},
@@ -165,6 +194,22 @@ def _parse_form_to_dict(form_data: dict) -> dict:
         "parry": int(form_data.get("parry", 1)),
     }
 
+    # A profession is taken instead of a school, and both come through the
+    # editor's single dropdown. Resolve here so everything downstream -
+    # knack parsing, ring clamping, the XP engine - sees an empty school.
+    data["school"], data["profession"] = split_school_or_profession(data["school"])
+    if data["profession"]:
+        data["school_ring_choice"] = ""
+    raw_abilities = data.pop("profession_abilities", "")
+    if isinstance(raw_abilities, str):
+        try:
+            raw_abilities = json.loads(raw_abilities) if raw_abilities else {}
+        except ValueError:
+            raw_abilities = {}
+    data["profession_abilities"] = sanitize_profession_abilities(
+        data["profession"], raw_abilities,
+    )
+
     # Rings
     for ring in Ring:
         key = f"ring_{ring.value.lower()}"
@@ -177,7 +222,8 @@ def _parse_form_to_dict(form_data: dict) -> dict:
         if val > 0:
             data["skills"][skill_id] = val
 
-    # Knacks
+    # Knacks. ``data["school"]`` was resolved above and is empty for a
+    # profession character, so a Wave Man ends up with no school knacks.
     school = SCHOOLS.get(data["school"])
     if school:
         for knack_id in school.school_knacks:
@@ -285,6 +331,13 @@ async def update_character(
                 character.owner_discord_id = new_owner.discord_id
                 character.player_name = new_owner.display_name or new_owner.discord_name
     character.school = data["school"]
+    character.profession = data.get("profession", "")
+    character.profession_abilities = data.get("profession_abilities", {})
+    if character.profession:
+        # A profession character has no school knacks and no technique
+        # choices; foreign knacks are deliberately preserved (D8).
+        character.knacks = {}
+        character.technique_choices = {}
     # Reconcile the school-ring choice against the publish-lock and
     # auto-drop the old school ring (for unpublished characters) if
     # it's actually changing. See ``_apply_school_ring_change`` for
@@ -601,7 +654,11 @@ async def autosave_character(
                 character.owner_discord_id = new_owner.discord_id
                 character.player_name = new_owner.display_name or new_owner.discord_name
     if "school" in body:
-        character.school = body["school"]
+        _apply_school_or_profession(character, body["school"])
+    if "profession_abilities" in body:
+        character.profession_abilities = sanitize_profession_abilities(
+            character.profession, body["profession_abilities"],
+        )
     if "school_ring_choice" in body:
         # Reconcile against the publish-lock + auto-drop the old
         # school ring (for unpublished characters) if changing.

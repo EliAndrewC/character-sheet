@@ -35,6 +35,11 @@ from app.game_data import (
     RING_MAX_SCHOOL,
     RING_NAMES,
     RING_SCHOOL_DEFAULT,
+    PROFESSION_ABILITIES,
+    PROFESSION_ABILITY_UNLOCK_BASE,
+    PROFESSION_ABILITY_UNLOCK_STEP,
+    PROFESSION_BY_ABILITY,
+    PROFESSIONS,
     SCHOOL_KNACKS,
     SCHOOLS,
     SKILL_MAX,
@@ -694,6 +699,9 @@ def calculate_xp_breakdown(character_data: dict) -> dict:
             "rows": pcp_breakdown_rows(character_data.get("pcp_count", 0)),
             "count": max(0, int(character_data.get("pcp_count", 0) or 0)),
         },
+        # Profession abilities are free (design doc D2); this row is
+        # informational only and contributes nothing to grand_total.
+        "professions": profession_xp_summary(character_data),
         "grand_total": grand_total,
     }
 
@@ -1078,6 +1086,11 @@ def editor_xp_view(character_data: dict) -> dict:
         "pcp_count": pcp_count,
         "pcp_cost": pcp_cost,
         "pcp_next_cost": pcp_next_cost(pcp_count),
+        # Profession-ability picks earned vs used. None for a character
+        # with a school. Computed here so the editor's counter rides the
+        # same debounced round-trip as every other XP figure rather than
+        # being recomputed in Alpine.
+        "professions": profession_xp_summary(character_data),
     }
 
 
@@ -1174,6 +1187,168 @@ def technique_choice_summary(character_data: dict) -> Dict[int, dict]:
     return summary
 
 
+def profession_ability_allowance(total_xp, profession_id: str) -> int:
+    """How many profession-ability picks a character has earned.
+
+    Abilities cost no XP; they unlock on the TOTAL XP the character holds -
+    ``starting_xp + earned_xp``, whether or not it has been spent (design
+    doc D2/D3). The first arrives at ``PROFESSION_ABILITY_UNLOCK_BASE`` and
+    one more every ``PROFESSION_ABILITY_UNLOCK_STEP`` beyond it.
+
+    The result is capped at the profession's own ceiling: every ability
+    taken the maximum number of times (D4). For the Wave Man that is 10
+    abilities x 2 copies = 20 picks, reached at 435 XP; for the Priest,
+    whose rituals are once-only, it is 10.
+    """
+    prof = PROFESSIONS.get(profession_id or "")
+    if prof is None:
+        return 0
+    try:
+        total = int(total_xp or 0)
+    except (TypeError, ValueError):  # pragma: no cover - callers pass ints
+        return 0
+    if total < PROFESSION_ABILITY_UNLOCK_BASE:
+        return 0
+    earned = 1 + (total - PROFESSION_ABILITY_UNLOCK_BASE) // PROFESSION_ABILITY_UNLOCK_STEP
+    return min(prof.max_total_picks, earned)
+
+
+def profession_xp_summary(character_data: dict) -> Optional[dict]:
+    """The informational XP-breakdown row for a profession character.
+
+    Returns ``None`` for a character with a school, which is everyone who
+    has not taken a profession. ``total`` is always 0 - the row exists to
+    show picks used against picks earned, not a cost.
+    """
+    profession_id = character_data.get("profession", "") or ""
+    prof = PROFESSIONS.get(profession_id)
+    if prof is None:
+        return None
+    total_xp = (
+        int(character_data.get("starting_xp", 150) or 0)
+        + int(character_data.get("earned_xp", 0) or 0)
+    )
+    allowance = profession_ability_allowance(total_xp, profession_id)
+    abilities = character_data.get("profession_abilities", {}) or {}
+    used = sum(int(v or 0) for v in abilities.values())
+    if allowance >= prof.max_total_picks:
+        next_at = None
+    elif allowance == 0:
+        next_at = PROFESSION_ABILITY_UNLOCK_BASE
+    else:
+        next_at = (
+            PROFESSION_ABILITY_UNLOCK_BASE
+            + allowance * PROFESSION_ABILITY_UNLOCK_STEP
+        )
+    return {
+        "label": f"{prof.name} abilities",
+        "name": prof.name,
+        "profession": prof.id,
+        "total": 0,
+        "used": used,
+        "allowance": allowance,
+        "max_picks": prof.max_total_picks,
+        "next_at_xp": next_at,
+        "rows": [
+            {
+                "label": PROFESSION_ABILITIES[aid].name
+                + (f" x{count}" if count > 1 else ""),
+                "xp": 0,
+            }
+            for aid, count in sorted(
+                abilities.items(),
+                key=lambda kv: PROFESSION_ABILITIES[kv[0]].ordinal
+                if kv[0] in PROFESSION_ABILITIES else 99,
+            )
+            if aid in PROFESSION_ABILITIES
+        ],
+    }
+
+
+def _validate_profession(character_data: dict) -> List[str]:
+    """Validate a profession character's profession and ability picks.
+
+    Returns an empty list for a character with no profession, which is
+    every character who took a school instead. The over-allowance case is
+    an error rather than a silent truncation on write, so a player who
+    loses XP can see why their build stopped validating instead of finding
+    picks quietly deleted.
+    """
+    errors: List[str] = []
+    profession_id = character_data.get("profession", "") or ""
+    abilities = character_data.get("profession_abilities", {}) or {}
+    if not profession_id:
+        # Abilities without a profession are dropped on write; if a stored
+        # row still carries them, say so rather than ignoring it.
+        if abilities:
+            errors.append(
+                "Profession abilities are set but no profession is selected."
+            )
+        return errors
+
+    prof = PROFESSIONS.get(profession_id)
+    if prof is None:
+        errors.append(f"Unknown profession '{profession_id}'.")
+        return errors
+    if not prof.selectable:
+        errors.append(
+            f"The {prof.name} profession is not yet available for characters."
+        )
+
+    if character_data.get("school"):
+        errors.append(
+            "A character cannot have both a school and a profession; "
+            f"remove one (currently {prof.name} plus a school)."
+        )
+    if character_data.get("school_ring_choice"):
+        errors.append(
+            f"A {prof.name} has no School Ring, but one is set "
+            f"({character_data['school_ring_choice']})."
+        )
+    if character_data.get("knacks"):
+        errors.append(
+            f"A {prof.name} has no school knacks. Knacks bought from other "
+            "schools belong under foreign school knacks."
+        )
+
+    used = 0
+    for aid, count in abilities.items():
+        try:
+            count = int(count or 0)
+        except (TypeError, ValueError):
+            count = 0
+        if PROFESSION_BY_ABILITY.get(aid) != prof.id:
+            errors.append(f"'{aid}' is not a {prof.name} ability.")
+            continue
+        if count > prof.max_per_ability:
+            name = PROFESSION_ABILITIES[aid].name
+            errors.append(
+                f"{name} is taken {count} times, but no {prof.name} ability "
+                f"may be taken more than {prof.max_per_ability} times."
+            )
+        used += max(0, count)
+
+    total_xp = (
+        int(character_data.get("starting_xp", 150) or 0)
+        + int(character_data.get("earned_xp", 0) or 0)
+    )
+    allowance = profession_ability_allowance(total_xp, profession_id)
+    if used > allowance:
+        errors.append(
+            f"{used} {prof.name} picks are taken, but {total_xp} XP only "
+            f"allows {allowance}."
+        )
+    elif used < allowance:
+        # Soft warning, in the same spirit as the Dark Secret notices: it
+        # never blocks saving or publishing, it just makes free picks visible.
+        short = allowance - used
+        errors.append(
+            f"You have {short} unclaimed {prof.name} "
+            f"{'pick' if short == 1 else 'picks'}."
+        )
+    return errors
+
+
 def validate_character(character_data: dict) -> List[str]:
     """Return a list of validation error strings.  Empty list means valid."""
     errors: List[str] = []
@@ -1193,6 +1368,9 @@ def validate_character(character_data: dict) -> List[str]:
     school_id = character_data.get("school", "")
     school = SCHOOLS.get(school_id)
     school_ring = character_data.get("school_ring_choice", "")
+
+    # -- Profession (taken instead of a school; design doc D1) --
+    errors.extend(_validate_profession(character_data))
 
     # -- Combat skills (Attack / Parry) --
     attack_val = character_data.get("attack", COMBAT_SKILL_START)

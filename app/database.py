@@ -139,6 +139,11 @@ def _migrate_add_columns():
         # Player Character Points spent so far (escalating XP cost). Defaults
         # to 0 so pre-feature characters start with no PCP spends.
         ("pcp_count", "INTEGER", "0"),
+        # Profession taken instead of a school, and its abilities as an
+        # id -> count map. Empty string / empty dict means "has a school
+        # (or nothing) as before", so pre-feature characters are unaffected.
+        ("profession", "TEXT", "''"),
+        ("profession_abilities", "TEXT", "'{}'"),
     ]
 
     # Migration bodies below are defensive first-run-on-old-schema branches.
