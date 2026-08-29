@@ -935,6 +935,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "priest_round_conviction_refresh": character.school == "priest" and dan >= 5,
         # Priest Special: the 10 rituals include "Bless conversation topic" and
         # "Bless research", each a 2k1 roll added to someone else's roll.
+        # Merchant: spend a void point to reroll any roll relating to your
+        # business. The one Merchant ability that names no skill, so unlike
+        # its free raises the flag is roll-type agnostic.
+        "merchant_business_reroll": holds_ability(character, "merchant_void_reroll"),
         # Two separate rituals, so two flags: a profession character who
         # learned only one gets only that button. A Priest school character
         # has all ten rituals and so gets both, as before.

@@ -690,22 +690,22 @@
                     </div>
                     <div class="grid gap-2">
                         {% for row in group.rows %}
-                        <div class="border border-ink/10 rounded p-3 bg-white flex gap-3 items-start{% if not group.is_available %} opacity-50{% endif %}"
+                        <div class="border border-ink/10 rounded p-3 bg-white flex gap-3 items-start{% if not (group.is_available and row.available) %} opacity-50{% endif %}"
                              data-ability="{{ row.id }}"
-                             {% if group.is_available %}:class="professionAbilityCount('{{ row.id }}') > 0 ? '' : 'opacity-70'"{% endif %}>
+                             {% if group.is_available and row.available %}:class="professionAbilityCount('{{ row.id }}') > 0 ? '' : 'opacity-70'"{% endif %}>
                             <div class="flex items-center gap-1 shrink-0">
                                 <button type="button" class="btn-pip"
                                         data-action="profession-minus-{{ row.id }}"
-                                        {% if not group.is_available %}disabled{% else %}
+                                        {% if not (group.is_available and row.available) %}disabled{% else %}
                                         :disabled="professionAbilityCount('{{ row.id }}') <= 0"
                                         :title="professionAbilityCount('{{ row.id }}') <= 0 ? 'Not taken' : 'Give back this pick'"
                                         @click="professionAbilityDown('{{ row.id }}')"{% endif %}>-</button>
                                 <span class="w-6 text-center font-bold"
                                       data-count="{{ row.id }}"
-                                      {% if group.is_available %}x-text="professionAbilityCount('{{ row.id }}')"{% endif %}>0</span>
+                                      {% if group.is_available and row.available %}x-text="professionAbilityCount('{{ row.id }}')"{% endif %}>0</span>
                                 <button type="button" class="btn-pip"
                                         data-action="profession-plus-{{ row.id }}"
-                                        {% if not group.is_available %}disabled{% else %}
+                                        {% if not (group.is_available and row.available) %}disabled{% else %}
                                         :disabled="!professionCanTake('{{ row.id }}', {{ row.max }})"
                                         :title="professionAbilityCount('{{ row.id }}') >= {{ row.max }}
                                                 ? ({{ row.max }} === 1 ? 'This one may only be taken once' : 'Already taken the maximum of {{ row.max }}')
@@ -717,10 +717,20 @@
                             <div class="min-w-0">
                                 <div class="flex items-baseline gap-2 flex-wrap">
                                     <span class="font-medium text-sm">{{ row.name }}</span>
+                                    {% if group.is_available and not row.available %}
+                                    <span class="text-xs bg-ink/10 text-ink/60 rounded-full px-2 py-0.5"
+                                          data-testid="ability-unavailable-{{ row.id }}"
+                                          title="Campaign-specific, as the ability's own note says - not available for characters in this campaign.">not available in this campaign</span>
+                                    {% endif %}
+                                    {% if row.money_bonus and row.money_bonus != 'none' %}
+                                    <span class="text-xs text-success"
+                                          data-testid="ability-money-{{ row.id }}"
+                                          title="Money bonuses accumulate into one percentage that multiplies your stipend.">money +{{ row.money_bonus }}</span>
+                                    {% endif %}
                                     {% if row.reference_only %}
                                     <span class="text-xs bg-info/10 text-info rounded-full px-2 py-0.5"
                                           title="This one changes what your OPPONENT rolls, so the sheet cannot apply it for you - tell your GM.">reference only</span>
-                                    {% elif group.is_available and not row.implemented %}
+                                    {% elif group.is_available and row.available and not row.implemented %}
                                     <span class="text-xs bg-ink/10 text-ink/60 rounded-full px-2 py-0.5"
                                           title="You can take this, but the sheet has nothing to compute for it - tell your GM when it applies.">narrative</span>
                                     {% endif %}

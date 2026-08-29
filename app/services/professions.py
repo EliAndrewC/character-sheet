@@ -160,7 +160,8 @@ def ability_counts_for_display(
     for prof in visible:
         rows = []
         for ability in prof.abilities:
-            raw = counts.get(ability.id, 0) if prof.is_available else 0
+            takeable = prof.is_available and ability.available
+            raw = counts.get(ability.id, 0) if takeable else 0
             try:
                 count = max(0, min(int(raw or 0), prof.max_per_ability))
             except (TypeError, ValueError):  # pragma: no cover - sanitized on write
@@ -169,6 +170,7 @@ def ability_counts_for_display(
                 continue
             rows.append({
                 "id": ability.id,
+                "available": ability.available,
                 "ordinal": ability.ordinal,
                 "name": ability.name,
                 "text": ability.text,
@@ -219,6 +221,27 @@ def ability_count(character_data: Any, ability_id: str) -> int:
     except (TypeError, ValueError):  # pragma: no cover - sanitized on write
         return 0
     return max(0, min(raw, limit))
+
+
+def profession_money_bonus(character_data: Any) -> int:
+    """The character's accumulated money bonus, as a whole percentage.
+
+    Several Worker and Merchant abilities carry one; the rules head the
+    Worker list with "Money bonuses may or may not apply depending on the
+    campaign", and in this campaign they do - the total multiplies the
+    stipend (part 3, R9). Bonuses are additive into one figure and double
+    with a second copy of an ability, like every other bonus.
+
+    Abilities whose money bonus is the literal word "none", and abilities
+    the character cannot take, contribute nothing.
+    """
+    total = 0
+    for ability_id, ability in PROFESSION_ABILITIES.items():
+        raw = (ability.money_bonus or "").strip().rstrip("%")
+        if not raw.isdigit():
+            continue
+        total += int(raw) * ability_count(character_data, ability_id)
+    return total
 
 
 def holds_ability(character_data: Any, ability_id: str) -> bool:

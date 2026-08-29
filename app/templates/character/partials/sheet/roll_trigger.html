@@ -3,6 +3,41 @@
              data-roll-menu="root"
              class="fixed z-50 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[240px]"
              :style="'top:' + rollMenuPos.top + 'px; left:' + rollMenuPos.left + 'px' + (rollMenuPos.flipped ? '; transform: translateY(-100%)' : '')">
+            {# Profession roll variants: the plain roll and each variant as
+               its own row, each with a hover void submenu. Same shape as the
+               athletics picker below, and for the same reason - the choice is
+               made before the dice are rolled. #}
+            <template x-if="rollMenuHasVariantPicker">
+                <div data-variant-picker-menu>
+                    <template x-for="variant in rollMenuVariants" :key="'var-' + variant.key">
+                        <div class="relative"
+                             @mouseenter="variantHoverRow = variant.key"
+                             @mouseleave="variantHoverRow = null">
+                            <button type="button"
+                                    :data-roll-variant="variant.key"
+                                    @click="executeRoll(variant.key, 0, null)"
+                                    class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors font-medium flex items-center justify-between gap-2">
+                                <span><span x-text="variant.name"></span>
+                                    <span class="text-xs text-ink/50" x-text="'(' + (formulas[variant.key]?.rolled || 0) + 'k' + (formulas[variant.key]?.kept || 0) + ')'"></span>
+                                </span>
+                                <span x-show="rollMenuOptions.length > 0" class="text-xs text-accent" title="Spend void">&#9656;</span>
+                            </button>
+                            <div x-show="variantHoverRow === variant.key && rollMenuOptions.length > 0"
+                                 x-cloak
+                                 :data-variant-void-submenu="variant.key"
+                                 class="absolute left-full top-0 ml-1 bg-white rounded-lg shadow-xl border border-ink/20 py-1 min-w-[260px] z-50">
+                                <template x-for="opt in rollMenuOptions" :key="'var'+variant.key+opt.count">
+                                    <button type="button"
+                                            @click="executeRoll(variant.key, opt.count, opt)"
+                                            class="w-full text-left px-4 py-2 text-sm hover:bg-parchment transition-colors text-accent">
+                                        <span x-text="opt.label"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
             <template x-if="rollMenuHasAthleticsPicker">
                 <div data-athletics-picker-menu>
                     <template x-for="ring in ['Air', 'Fire', 'Water', 'Earth']" :key="ring">
@@ -223,7 +258,7 @@
                 costs <span x-text="rollMenuVoidCost"></span> void point<span x-show="rollMenuVoidCost > 1">s</span> to activate.
             </div>
             <div class="relative"
-                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasRingPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack && !rollMenuHasMobileParry && !rollMenuHasPontificate && !rollMenuVoidShort"
+                 x-show="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker && !rollMenuHasVariantPicker && !rollMenuHasRingPicker && !rollMenuHasParry && !rollMenuHasAttackChoice && !rollMenuHasMobileAttack && !rollMenuHasMobileParry && !rollMenuHasPontificate && !rollMenuVoidShort"
                  @mouseenter="owHoverRow = 'roll'"
                  @mouseleave="owHoverRow = null">
                 <button type="button"
@@ -245,7 +280,7 @@
                     </template>
                 </div>
             </div>
-            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasRingPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack || rollMenuHasMobileParry || rollMenuHasPontificate || rollMenuVoidShort ? [] : rollMenuOptions)" :key="'r'+opt.count">
+            <template x-for="opt in (rollMenuHasAthleticsPicker || rollMenuHasVariantPicker || rollMenuHasRingPicker || rollMenuHasParry || rollMenuHasAttackChoice || rollMenuHasMobileAttack || rollMenuHasMobileParry || rollMenuHasPontificate || rollMenuVoidShort ? [] : rollMenuOptions)" :key="'r'+opt.count">
                 <div class="relative"
                      @mouseenter="owHoverRow = 'r' + opt.count"
                      @mouseleave="owHoverRow = null">
@@ -275,7 +310,7 @@
                ring's, the skill is in scope, and is not iaijutsu). The
                entries mirror the main Roll button + each VP option, but
                with the school ring substituted for the natural one. #}
-            <template x-if="!rollMenuHasTogashiInit && !rollMenuHasAthleticsPicker
+            <template x-if="!rollMenuHasTogashiInit && !rollMenuHasVariantPicker && !rollMenuHasAthleticsPicker
                             && !rollMenuHasRingPicker
                             && !rollMenuHasParry && !rollMenuHasAttackChoice
                             && !rollMenuHasMobileAttack && !rollMenuHasMobileParry

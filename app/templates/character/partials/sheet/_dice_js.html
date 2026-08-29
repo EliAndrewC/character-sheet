@@ -257,6 +257,8 @@
             courtier5thApplied: false,
             // Lucky reroll
             luckyUsedThisRoll: false,
+            // Merchant business reroll, once per roll like Lucky's.
+            merchantRerollUsedThisRoll: false,
             // Player Character Point per-roll state (rules/10). A PCP reroll
             // shares the one-reroll-per-roll lock with Lucky; the free raise
             // is once per roll; the reroll-10s-while-impaired is once per roll.
@@ -326,6 +328,7 @@
             canUseLucky() {
                 const t = window._trackingBridge;
                 if (!t || this.luckyUsedThisRoll) return false;
+                if (this.merchantRerollUsedThisRoll) return false;
                 // Check if Lucky ability exists and is unused
                 const hasLucky = (t.perAdventure || []).some(a => a.id === 'lucky_used');
                 if (!hasLucky) return false;
@@ -488,12 +491,50 @@
                 });
             },
 
+            // ---- Merchant: reroll a business roll for a void point -------
+            // Shares the one-reroll lock with Lucky and the PCP reroll, and
+            // resolves the same way they do (the higher of the two stands).
+            // The condition - "relating to your business" - is the player's
+            // to judge, like every other conditional bonus on the sheet.
+            canUseBusinessReroll() {
+                if (!this.schoolAbilities.merchant_business_reroll) return false;
+                if (this.luckyUsedThisRoll || this.pcpRerollUsedThisRoll) return false;
+                if (this.merchantRerollUsedThisRoll) return false;
+                if (this.formula?.is_initiative) return false;
+                return this.businessRerollVoidOption() !== null;
+            },
+
+            // One void point, drawn from the same pools in the same order as
+            // any other spend. Null when the character cannot afford it.
+            businessRerollVoidOption() {
+                const t = window._trackingBridge;
+                if (!t) return null;
+                const opt = window.L7RRollMath.allocateVoidSpend(
+                    1, t.tempVoidPoints || 0, t.voidPoints || 0,
+                    Math.max(0, (t.getCapacity ? t.getCapacity('worldliness') : 0)),
+                );
+                return opt.short ? null : opt;
+            },
+
+            useBusinessReroll() {
+                if (!this.canUseBusinessReroll()) return;
+                const opt = this.businessRerollVoidOption();
+                if (!opt) return;
+                // deductVoidPoints already early-returns for a non-editor, so
+                // a viewer sees the reroll without paying for it.
+                this.deductVoidPoints(opt);
+                this.merchantRerollUsedThisRoll = true;
+                this._rerollSource = 'merchant';
+                this._performGenericReroll();
+            },
+
             // ---- Player Character Point roll options (generic panel) ------
             // All three route through the confirmation modal first (rare rule).
             // The reroll shares the one-reroll lock with Lucky; the free raise
             // and reroll-10s are each once per roll.
             canUsePcpReroll() {
-                return !this.luckyUsedThisRoll && !this.pcpRerollUsedThisRoll;
+                return !this.luckyUsedThisRoll && !this.pcpRerollUsedThisRoll
+                    && !this.merchantRerollUsedThisRoll;
             },
             canSpendPcpRaise() {
                 return this.pcpRaisesSpentThisRoll < 1;
@@ -1210,6 +1251,12 @@
             rollMenuHasParry: false,
             rollMenuHasTogashiInit: false,
             rollMenuHasAthleticsPicker: false,
+            // Profession roll variants (the Merchant's open-commerce-relating-
+            // to-your-business roll). Each is a separate roll picked BEFORE
+            // rolling, so there is no conditionality left once chosen.
+            rollMenuHasVariantPicker: false,
+            rollMenuVariants: [],
+            variantHoverRow: null,
             rollMenuHasRingPicker: false,
             ringPickerRing: '',
             ringPickerHover: null,
@@ -1585,6 +1632,7 @@
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = false;
                     this.rollMenuHasAthleticsPicker = true;
+                    this.rollMenuHasVariantPicker = false;
                     this.rollMenuHasRingPicker = false;
                     this.rollMenuHasAttackChoice = false;
                     this.rollMenuOwCapacity = 0;
@@ -1613,6 +1661,7 @@
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = false;
                     this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuHasVariantPicker = false;
                     this.rollMenuHasRingPicker = true;
                     this.ringPickerRing = ring;
                     this.ringPickerHover = null;
@@ -1620,6 +1669,37 @@
                     this.rollMenuOwCapacity = 0;
                     this.owHoverRow = null;
                     this.athHoverRow = null;
+                    this.parryHoverRow = null;
+                    this.rollMenuOpen = true;
+                    return;
+                }
+
+                // A roll with profession variants (currently only the
+                // Merchant's open commerce): offer the plain roll and each
+                // variant as separate rows, each with its own void submenu,
+                // the way a Ring tile offers "Roll Air" and "Roll Air
+                // athletics". Chosen before rolling, so nothing is left
+                // conditional afterwards.
+                if ((f.roll_variants || []).length > 0) {
+                    const pos = this._computeRollMenuPos(el);
+                    this.rollMenuKey = key;
+                    this.rollMenuTitle = f.label;
+                    this.rollMenuPos = pos;
+                    this.rollMenuOptions = this.schoolAbilities.merchant_post_roll_vp
+                        ? [] : this.voidOptionsFor(f);
+                    this.rollMenuVariants = [{ key: key, name: f.label }]
+                        .concat(f.roll_variants);
+                    this.rollMenuHasStrike = false;
+                    this.rollMenuHasParry = false;
+                    this.rollMenuHasTogashiInit = false;
+                    this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuHasVariantPicker = true;
+                    this.rollMenuHasRingPicker = false;
+                    this.rollMenuHasAttackChoice = false;
+                    this.rollMenuOwCapacity = 0;
+                    this.owHoverRow = null;
+                    this.athHoverRow = null;
+                    this.variantHoverRow = null;
                     this.parryHoverRow = null;
                     this.rollMenuOpen = true;
                     return;
@@ -1642,6 +1722,7 @@
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = false;
                     this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuHasVariantPicker = false;
                     this.rollMenuHasRingPicker = false;
                     this.rollMenuHasAttackChoice = false;
                     this.rollMenuHasPontificate = true;
@@ -1667,6 +1748,7 @@
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = true;
                     this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuHasVariantPicker = false;
                     this.rollMenuHasRingPicker = false;
                     this.rollMenuHasAttackChoice = false;
                     this.rollMenuOwCapacity = 0;
@@ -1702,6 +1784,7 @@
                     this.rollMenuHasParry = false;
                     this.rollMenuHasTogashiInit = false;
                     this.rollMenuHasAthleticsPicker = false;
+                    this.rollMenuHasVariantPicker = false;
                     this.rollMenuHasRingPicker = false;
                     this.rollMenuHasAttackChoice = true;
                     this.rollMenuOwCapacity = 0;
@@ -4663,6 +4746,7 @@
                 // this freshly-opened attack (the other roll flows reset these
                 // at roll start; the attack modal does it on open).
                 this.luckyUsedThisRoll = false;
+                this.merchantRerollUsedThisRoll = false;
                 this.pcpRerollUsedThisRoll = false;
                 this.pcpRaisesSpentThisRoll = 0;
                 this.pcpTensRerolledThisRoll = false;
@@ -6125,6 +6209,7 @@
                 // so its banner doesn't carry into the damage result and the
                 // damage roll can be (separately) rerolled once.
                 this.luckyUsedThisRoll = false;
+                this.merchantRerollUsedThisRoll = false;
                 this.pcpRerollUsedThisRoll = false;
                 this.pcpRaisesSpentThisRoll = 0;
                 this.pcpTensRerolledThisRoll = false;

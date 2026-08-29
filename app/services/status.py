@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from app.game_data import CAMPAIGN_STIPEND_RANK, GROUP_EFFECTS
+from app.services.professions import profession_money_bonus
 from app.services.rolls import compute_dan
 
 
@@ -50,6 +51,8 @@ class EffectiveStatus:
     recognition: float = 1.0
     honor: float = 1.0
     stipend: int = 0
+    # Accumulated percentage from profession abilities, 0 when none apply.
+    profession_money_bonus: int = 0
     rank_modifiers: List[dict] = field(default_factory=list)
     recognition_modifiers: List[dict] = field(default_factory=list)
     honor_modifiers: List[dict] = field(default_factory=list)
@@ -112,6 +115,18 @@ def compute_effective_status(
         })
 
     status.stipend = int(stipend_rank) ** 2
+
+    # Profession money bonuses multiply the finished stipend, so this comes
+    # after every modifier that moves the rank (part 3, R9). Applying it
+    # earlier would multiply the wrong base.
+    money_bonus = profession_money_bonus(character_data)
+    if money_bonus:
+        status.stipend = int(status.stipend * (100 + money_bonus) / 100)
+        status.profession_money_bonus = money_bonus
+        status.stipend_modifiers.append({
+            "source": "Profession abilities",
+            "detail": f"+{money_bonus}% (rounded down)",
+        })
 
     # --- GM-awarded reputations (from rank_recognition_awards) ---
     awards = character_data.get("rank_recognition_awards") or []

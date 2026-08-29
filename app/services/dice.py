@@ -517,6 +517,64 @@ def profession_extra_rolled_dice(character_data: dict, roll_key: str) -> int:
     return total
 
 
+# Profession abilities that grant extra DICE on a conditional roll. Unlike
+# the free raises above these cannot be an "Alternative totals" row: an
+# alternative is arithmetic on a roll that already happened, and dice have to
+# be in the cup before it is shaken. So each becomes a separate roll the
+# player picks from the tile's menu BEFORE rolling - the way a Ring tile
+# offers "Roll Air" and "Roll Air athletics" - and once chosen there is no
+# conditionality left to resolve.
+#
+# ability id -> (base roll key, variant key, extra rolled dice per copy,
+#                menu name, label suffix)
+PROFESSION_ROLL_VARIANTS = {
+    "merchant_open_commerce": (
+        "skill:commerce",
+        "skill:commerce:business",
+        4,
+        "Open commerce relating to your business",
+        "relating to your business",
+    ),
+}
+
+
+def build_profession_variant_formulas(
+    character_data: dict, out: Dict[str, dict]
+) -> None:
+    """Add each profession roll variant the character has earned.
+
+    Mutates *out*, adding the variant's own formula and advertising it on
+    the base roll's ``roll_variants`` list so the tile's menu can offer it.
+    """
+    for ability_id, spec in PROFESSION_ROLL_VARIANTS.items():
+        base_key, variant_key, per_copy, menu_name, suffix = spec
+        copies = ability_count(character_data, ability_id)
+        base = out.get(base_key)
+        if not copies or base is None:
+            continue
+        variant = dict(base)
+        variant["label"] = f"{base['label']} ({suffix})"
+        rolled, kept, overflow = apply_dice_caps(
+            base["rolled"] + per_copy * copies, base["kept"]
+        )
+        variant["rolled"] = rolled
+        variant["kept"] = kept
+        if overflow:
+            variant["flat"] = (variant.get("flat") or 0) + overflow
+            variant["bonuses"] = list(variant.get("bonuses") or []) + [
+                {"label": "extra dice above 10k10", "amount": overflow}
+            ]
+        # Copy the mutable containers so editing one roll cannot reach the
+        # other; ``dict(base)`` only shallow-copies.
+        variant["alternatives"] = list(base.get("alternatives") or [])
+        variant["bonuses"] = list(variant.get("bonuses") or [])
+        variant["roll_variants"] = []
+        out[variant_key] = variant
+        base.setdefault("roll_variants", []).append({
+            "key": variant_key, "name": menu_name,
+        })
+
+
 def has_profession_athletics_bonus(character_data: dict) -> bool:
     """Does a profession ability attach a bonus to any athletics roll?
 
@@ -1808,6 +1866,10 @@ def build_all_roll_formulas(
         if skills.get(skill_id, 0) <= 0:
             d["is_unskilled"] = True
         out[f"skill:{skill_id}"] = d
+
+    # Profession abilities that grant extra dice under a condition become
+    # their own roll, picked from the tile's menu before rolling.
+    build_profession_variant_formulas(character_data, out)
 
     # School knacks (look up from the character's school). School knacks
     # start at rank 1 for free (given by the school), so treat a missing
