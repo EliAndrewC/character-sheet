@@ -647,3 +647,22 @@ test("impairedSuppressesReroll: tolerates a missing formula or key", () => {
   assert.equal(M.impairedSuppressesReroll("ring:Air", null), false);
   assert.equal(M.impairedSuppressesReroll(undefined, {}), true);
 });
+
+test("impairedSuppressesReroll: Hida 3rd Dan keeps its rerolls on attack rolls", () => {
+  const attack = { is_attack_type: true };
+  const opts = { hidaReroll: true };
+  assert.equal(M.impairedSuppressesReroll("attack", attack, opts), false);
+  assert.equal(M.impairedSuppressesReroll("knack:counterattack", attack, opts), false);
+  // Only attack rolls, and only for a character who has the ability.
+  assert.equal(M.impairedSuppressesReroll("parry", {}, opts), true);
+  assert.equal(M.impairedSuppressesReroll("skill:bragging", {}, opts), true);
+  assert.equal(M.impairedSuppressesReroll("attack", attack, {}), true);
+  assert.equal(M.impairedSuppressesReroll("attack", attack), true);
+});
+
+test("hidaRerollMax halves and rounds up when impaired", () => {
+  assert.equal(M.hidaRerollMax(3, false, false), 3);
+  assert.equal(M.hidaRerollMax(3, true, false), 6);   // counterattack: 2X
+  assert.equal(M.hidaRerollMax(3, false, true), 2);   // ceil(3/2)
+  assert.equal(M.hidaRerollMax(3, true, true), 3);    // ceil(6/2)
+});

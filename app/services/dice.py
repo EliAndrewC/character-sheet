@@ -1894,6 +1894,30 @@ def build_all_roll_formulas(
     for key, fdict in out.items():
         fdict["void_blocked"] = discordant and _discordant_blocks_void(key)
 
+    # Hida Bushi 3rd Dan (rules/04-schools.md): "You may re-roll 2X dice on
+    # each counterattack roll or X dice on any other type of attack roll ...
+    # When impaired, your number of extra dice on these rolls is divided in
+    # half (rounded up), BUT YOU REROLL 10s ON THESE ROLLS DESPITE BEING
+    # IMPAIRED."
+    #
+    # "These rolls" is the attack rolls themselves, not merely the X dice the
+    # ability rerolls - the same phrase governs the halving in the clause
+    # before it - so the exemption covers the whole roll and follows
+    # ``is_attack_type``. Iaijutsu is deliberately not an attack type here
+    # (see _annotate_attack_type), so a duel's strike keeps its own no-reroll
+    # rule. The halving of the extra dice is applied client-side, in
+    # L7RRollMath.hidaRerollMax.
+    #
+    # Applied after the builders, and only over an ``impaired`` reason, so it
+    # cannot resurrect a reroll that was suppressed for a different reason
+    # (an unskilled attack, the iaijutsu strike).
+    if school_id == "hida_bushi" and dan >= 3 and is_impaired(character_data):
+        for fdict in out.values():
+            if (fdict.get("is_attack_type")
+                    and fdict.get("no_reroll_reason") == "impaired"):
+                fdict["reroll_tens"] = True
+                fdict["no_reroll_reason"] = ""
+
     return out
 
 

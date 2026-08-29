@@ -1292,6 +1292,11 @@
             hidaRerollPhase: '',  // '' | 'selecting' | 'done'
             hidaRerollSelections: [],
             hidaRerollMax: 0,
+            // Whether the Hida 3rd Dan allowance above was halved for being
+            // impaired. Tracked explicitly because the roll's own
+            // ``reroll_tens`` no longer betrays the impaired state - the same
+            // clause exempts these rolls from the 10s suppression.
+            hidaRerollImpaired: false,
             mirumotoPointsSpentThisRoll: 0,
             _actionDieSpentIndex: -1,
 
@@ -1411,6 +1416,12 @@
                 window.addEventListener('wound-changed', (e) => {
                     const sw = e.detail?.serious ?? 0;
                     const nowImpaired = window.L7RRollMath.isImpaired(sw, this._earthRing);
+                    // Hida Bushi 3rd Dan keeps its rerolls on attack rolls
+                    // while impaired; the server applies the same exemption
+                    // on page load.
+                    const rerollOpts = {
+                        hidaReroll: !!(this.schoolAbilities || {}).hida_reroll,
+                    };
                     for (const key of Object.keys(this.formulas)) {
                         const f = this.formulas[key];
                         // Rolls that never reroll 10s for their own reasons -
@@ -1425,7 +1436,8 @@
                         // (app/services/dice.py), which decides the same
                         // thing for the server-rendered formulas.
                         const suppress = nowImpaired
-                            && window.L7RRollMath.impairedSuppressesReroll(key, f);
+                            && window.L7RRollMath.impairedSuppressesReroll(
+                                key, f, rerollOpts);
                         f.reroll_tens = !suppress;
                         f.no_reroll_reason = suppress ? 'impaired' : '';
                     }
@@ -5883,7 +5895,13 @@
                 this.hidaRerollPhase = '';
                 if (this.schoolAbilities.hida_reroll) {
                     const isCounter = formula.attack_variant === 'counterattack';
-                    const isImpaired = !formula.reroll_tens;
+                    // Read the character's actual state, NOT `!reroll_tens`:
+                    // the same 3rd Dan clause that halves these extra dice
+                    // also keeps the roll's 10s exploding, so on an impaired
+                    // Hida attack `reroll_tens` is true and inferring from it
+                    // would silently stop halving exactly when it should.
+                    const isImpaired = this._impairedNow();
+                    this.hidaRerollImpaired = isImpaired;
                     this.hidaRerollMax = window.L7RRollMath.hidaRerollMax(this.schoolAbilities.hida_reroll_x, isCounter, isImpaired);
                     // Pre-select lowest dice (any, not just kept) with value <= 7
                     const allDiceIdx = this.finalDice.map((d, i) => ({ ...d, idx: i }));

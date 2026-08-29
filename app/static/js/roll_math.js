@@ -305,11 +305,18 @@
      * `TestBuildAllRollFormulas::test_impaired_suppresses_the_reroll_on_skills_only`
      * assert the same partition.
      *
+     * `opts.hidaReroll` is the Hida Bushi 3rd Dan ability being active
+     * ("you reroll 10s on these rolls despite being impaired", where "these
+     * rolls" are counterattacks and any other attack roll), which exempts
+     * this character's attack-type rolls on top of the general rule.
+     *
      * Says nothing about rolls that never reroll 10s for their own reasons
      * (initiative, unskilled, the iaijutsu strike); callers skip those first.
      */
-    impairedSuppressesReroll: function (key, formula) {
-      if ((formula || {}).is_damage_roll) return false;
+    impairedSuppressesReroll: function (key, formula, opts) {
+      var f = formula || {};
+      if (f.is_damage_roll) return false;
+      if ((opts || {}).hidaReroll && f.is_attack_type) return false;
       if (typeof key !== "string") return true;
       if (key === "wound_check" || key === "knack:athletics") return false;
       if (key.indexOf("athletics:") === 0 || key.indexOf("ring:") === 0) return false;
