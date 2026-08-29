@@ -1,6 +1,11 @@
 # School feature docs - what these are (and aren't)
 
-One file per school. They capture the **design and rules intent** of each school's
+One file per school - and, since 2026-08, one per **profession** as well
+(`WaveMan.md`). A profession is taken instead of a school, so it is
+school-shaped enough to belong here: the same "why is it like this" material,
+for a thing the rules file describes in ten one-line bullets and nothing else.
+
+They capture the **design and rules intent** of each school's or profession's
 abilities - the things that are *not* derivable from the code or the tests:
 
 - the rules text for each ability (Special + 1st-5th Dan),

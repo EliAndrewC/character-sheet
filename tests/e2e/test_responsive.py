@@ -6,7 +6,7 @@ and label truncation producing zero-width elements.
 """
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
+from tests.e2e.helpers import select_profession, select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = pytest.mark.responsive
 
@@ -692,3 +692,57 @@ def test_edit_chevron_hidden_on_desktop(page, live_server_url):
     assert states["skill_display"] == "none", (
         f"skill chevron should be hidden on desktop, got {states['skill_display']!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Wave Man profession abilities (ten stepper rows with long rules text)
+# ---------------------------------------------------------------------------
+
+
+def _wave_man_editor_then_phone(page, live_server_url, name):
+    """Build a Wave Man at desktop width, then shrink to a phone.
+
+    The nav collapses to a hamburger below the breakpoint, so "New
+    Character" is not directly clickable at 375px - every responsive test
+    here sets up wide and then narrows.
+    """
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', name)
+    select_profession(page, "wave_man")
+    page.wait_for_selector('[data-testid="profession-abilities"]')
+    page.set_viewport_size(PHONE)
+    page.wait_for_timeout(200)
+
+
+def test_profession_abilities_fit_a_phone(page, live_server_url):
+    """The ten-ability stepper list is the widest new block in the editor:
+    a +/-/count cluster beside a paragraph of rules text, ten times over."""
+    _wave_man_editor_then_phone(page, live_server_url, "Narrow Ronin")
+    _assert_no_horizontal_overflow(page)
+
+
+def test_profession_ability_rows_are_not_zero_width(page, live_server_url):
+    _wave_man_editor_then_phone(page, live_server_url, "Narrow Ronin 2")
+    widths = page.evaluate("""() => {
+        const out = [];
+        document.querySelectorAll('[data-testid="profession-abilities"] [data-ability]')
+            .forEach(el => out.push(Math.round(el.getBoundingClientRect().width)));
+        return out;
+    }""")
+    assert len(widths) == 10
+    assert all(w > 100 for w in widths), widths
+
+
+def test_profession_panel_fits_a_phone_on_the_sheet(page, live_server_url):
+    page.goto(live_server_url)
+    start_new_character(page)
+    page.wait_for_selector('input[name="name"]')
+    page.fill('input[name="name"]', "Narrow Sheet")
+    select_profession(page, "wave_man")
+    page.wait_for_selector('text="Saved"', timeout=8000)
+    apply_changes(page, "narrow")
+    page.set_viewport_size(PHONE)
+    page.wait_for_timeout(200)
+    _assert_no_horizontal_overflow(page)

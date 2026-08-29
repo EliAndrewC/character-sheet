@@ -31,6 +31,39 @@ def select_school(page, school_id):
     page.wait_for_selector("#school-details :text('Special Ability')", timeout=10000)
 
 
+def select_profession(page, profession_id):
+    """Select a profession from the school dropdown and wait for its panel.
+
+    A profession is taken instead of a school, so it lives in the same
+    ``select[name="school"]`` behind a ``profession:`` prefix. Unlike
+    ``select_school`` there is no "Special Ability" heading to wait on -
+    a profession has an ability list instead.
+    """
+    page.evaluate(f"""() => {{
+        const sel = document.querySelector('select[name="school"]');
+        sel.value = 'profession:{profession_id}';
+        sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
+    }}""")
+    page.wait_for_selector('[data-testid="profession-info"]', timeout=10000)
+    page.wait_for_selector('[data-testid="profession-abilities"]', timeout=10000)
+
+
+def take_profession_ability(page, ability_id, times=1):
+    """Click an ability's + stepper ``times`` times, waiting for each bump."""
+    counter = page.locator(f'[data-count="{ability_id}"]')
+    for _ in range(times):
+        before = counter.text_content().strip()
+        page.locator(f'[data-action="profession-plus-{ability_id}"]').click()
+        page.wait_for_function(
+            """([sel, prev]) => {
+                const el = document.querySelector(sel);
+                return el && el.textContent.trim() !== prev;
+            }""",
+            arg=[f'[data-count="{ability_id}"]', before],
+            timeout=5000,
+        )
+
+
 def _click_pm(page, name, sign, times):
     """Shared +/- click helper that verifies the backing input's value
     actually changed after each click. Rapid clicks during Alpine
