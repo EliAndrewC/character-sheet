@@ -1,9 +1,25 @@
 # Professions, part 3: the Worker and Merchant abilities
 
-Status: **planning complete, awaiting sign-off. No code written.**
+Status: **implemented and deployed, 2026-08-29.** Every checkbox below is done.
 
-Every rules question raised during planning has been answered by the GM and is
+Every rules question raised during planning was answered by the GM and is
 recorded in section 1. There is no open-questions section.
+
+Three notes from the build:
+
+1. **The Worker's feats of strength/endurance needed a second exception** to
+   the rule that `athletics:<Ring>` keys are only emitted for athletics-knack
+   holders. The gate exists because the roll would otherwise duplicate the
+   bare ring roll; a Worker bonus makes it genuinely different, which is the
+   same reasoning the Kitsune Warden exception already documents. Without it
+   the ability is simply unreachable for a character with no athletics knack.
+2. **Switching to a profession did not request an XP refresh**, so the pick
+   allowance stayed at zero until some other edit triggered one and every
+   stepper `+` sat disabled. Found by a clicktest, fixed in `onProfessionChange`.
+3. **A test assertion of mine from part 2 was wrong** and is corrected rather
+   than made to pass: it checked that the word "Profession" was absent from a
+   school character's sheet, which a new JS comment tripped. It now asserts
+   the panel's own markers.
 Created 2026-08-29. Follows `profession-design/design.md` (Wave Man) and
 `profession-design/priest-and-pooling.md` (one Profession type, pooled
 abilities, Priest rituals). Source rules: `rules/09-professions.md`.
@@ -64,7 +80,7 @@ the narrative group and into Phase 2.
 Wk5's new clause describes an XP refund. It stays unimplemented under R2, but
 the text should be current so the greyed-out entry reads correctly.
 
-- [ ] `TDD:` a test that asserts every stored ability's text matches
+- [x] `TDD:` a test that asserts every stored ability's text matches
       `rules/09-professions.md` verbatim, parsing the markdown at test time.
       This drift has now happened twice (W3 during part 1, five more here) and
       a test is cheaper than noticing by eye a third time.
@@ -157,73 +173,73 @@ sit in the last phase. Every phase must leave the existing 3625 unit tests,
 
 ## 6. Phase 1 - rules text, per-ability availability, data
 
-- [ ] `TDD:` the rules-text drift test described in section 2.
-- [ ] Pull the five reworded texts.
-- [ ] `TDD:` tests for per-ability availability.
-- [ ] `ProfessionAbility.available: bool = True`. Effective availability is `profession.is_available and ability.available`, behind one helper in `services/professions.py` so no caller re-derives it.
-- [ ] `max_for_ability()` returns 0 for an unavailable ability, which makes the sanitizer drop it with no further change.
-- [ ] `PROFESSION_ABILITY_POOL` and `profession_ability_pool_size()` skip unavailable abilities, so the ceiling counts what can be taken: Wave Man 20 + Priest 10 + Worker 18 (nine abilities x2) + Merchant 20 = **68 picks**, reached at 1155 XP.
-- [ ] `worker` and `merchant` flip to `availability="available"`; `Wk5.available = False`.
-- [ ] `implemented` set truthfully per ability, so the editor's existing "narrative" chip lands on Wk1/Wk2/Wk3 and nothing else.
-- [ ] `TDD:` a crafted POST naming Wk5 is dropped on write, and validation calls it unavailable rather than unknown.
-- [ ] `TDD:` the pool size and the 68-pick ceiling.
+- [x] `TDD:` the rules-text drift test described in section 2.
+- [x] Pull the five reworded texts.
+- [x] `TDD:` tests for per-ability availability.
+- [x] `ProfessionAbility.available: bool = True`. Effective availability is `profession.is_available and ability.available`, behind one helper in `services/professions.py` so no caller re-derives it.
+- [x] `max_for_ability()` returns 0 for an unavailable ability, which makes the sanitizer drop it with no further change.
+- [x] `PROFESSION_ABILITY_POOL` and `profession_ability_pool_size()` skip unavailable abilities, so the ceiling counts what can be taken: Wave Man 20 + Priest 10 + Worker 18 (nine abilities x2) + Merchant 20 = **68 picks**, reached at 1155 XP.
+- [x] `worker` and `merchant` flip to `availability="available"`; `Wk5.available = False`.
+- [x] `implemented` set truthfully per ability, so the editor's existing "narrative" chip lands on Wk1/Wk2/Wk3 and nothing else.
+- [x] `TDD:` a crafted POST naming Wk5 is dropped on write, and validation calls it unavailable rather than unknown.
+- [x] `TDD:` the pool size and the 68-pick ceiling.
 
 ## 7. Phase 2 - the fourteen conditional free raises
 
-- [ ] `TDD:` one test per ability asserting the alternatives row (roll key, `extra_flat`, label), at one and two copies.
-- [ ] `PROFESSION_ALTERNATIVE_BONUSES` in `game_data.py`: ability id -> `(roll_keys, raises, label, open_roll)`. Declarative, beside `PROFESSION_ABILITY_BONUSES`, so a future profession is data.
-- [ ] Applied in `build_skill_formula()` where the campaign-advantage alternatives already are, multiplying `raises` by the copy count (R10).
-- [ ] **Also applied in `build_athletics_formula()`**, which Wk8/Wk9 need and which no profession ability has touched before. Confirm alternatives survive the dice-cap step there the way they do for skills.
-- [ ] M4 emits two rows, plain and contested.
-- [ ] Wk10's rows carry `open_roll: True`, which the renderer already honours.
-- [ ] Two abilities landing on one roll with different conditions (Wk7 and M4 both touch bragging) must produce **two separate rows**, not a merged one. Assert it.
-- [ ] Interaction with `_finalize_caps` and Withdrawn's `max_total`: an alternative lifting an open sincerity roll must still respect the cap.
-- [ ] `TDD:` `tests/test_roll_engine.py` case confirming the bot's card shows the new alternatives.
+- [x] `TDD:` one test per ability asserting the alternatives row (roll key, `extra_flat`, label), at one and two copies.
+- [x] `PROFESSION_ALTERNATIVE_BONUSES` in `game_data.py`: ability id -> `(roll_keys, raises, label, open_roll)`. Declarative, beside `PROFESSION_ABILITY_BONUSES`, so a future profession is data.
+- [x] Applied in `build_skill_formula()` where the campaign-advantage alternatives already are, multiplying `raises` by the copy count (R10).
+- [x] **Also applied in `build_athletics_formula()`**, which Wk8/Wk9 need and which no profession ability has touched before. Confirm alternatives survive the dice-cap step there the way they do for skills.
+- [x] M4 emits two rows, plain and contested.
+- [x] Wk10's rows carry `open_roll: True`, which the renderer already honours.
+- [x] Two abilities landing on one roll with different conditions (Wk7 and M4 both touch bragging) must produce **two separate rows**, not a merged one. Assert it.
+- [x] Interaction with `_finalize_caps` and Withdrawn's `max_total`: an alternative lifting an open sincerity roll must still respect the cap.
+- [x] `TDD:` `tests/test_roll_engine.py` case confirming the bot's card shows the new alternatives.
 
 ## 8. Phase 3 - M10, the pre-roll commerce variant
 
-- [ ] `TDD:` the new formula key exists only for a character holding M10, and carries 4 extra rolled dice over plain commerce, doubling to 8 at two copies.
-- [ ] New key `skill:commerce:business` from `build_all_roll_formulas`, built from the commerce formula with the extra dice added before `apply_dice_caps`.
-- [ ] A picker block on the commerce tile mirroring `rollMenuHasAthleticsPicker`: two rows, each with the existing hover void-spend submenu. Prefer a **generic** `roll_variants` list on the formula over a commerce-specific flag, so the next profession that needs one is data.
-- [ ] The variant is an *open* roll by the ability's own wording; make sure nothing that keys on open-vs-contested (Withdrawn's cap, the sincerity honor bonus) is confused by the new key.
-- [ ] `roll_engine.py` reaches it for free once the key exists, but the slash commands map command names to `skill:<id>` - decide whether `/commerce` should offer the variant or stay the plain roll. Leaning plain: a slash command has nobody to ask which it is.
-- [ ] `TDD:` a school character and a profession character without M10 get no such key.
+- [x] `TDD:` the new formula key exists only for a character holding M10, and carries 4 extra rolled dice over plain commerce, doubling to 8 at two copies.
+- [x] New key `skill:commerce:business` from `build_all_roll_formulas`, built from the commerce formula with the extra dice added before `apply_dice_caps`.
+- [x] A picker block on the commerce tile mirroring `rollMenuHasAthleticsPicker`: two rows, each with the existing hover void-spend submenu. Prefer a **generic** `roll_variants` list on the formula over a commerce-specific flag, so the next profession that needs one is data.
+- [x] The variant is an *open* roll by the ability's own wording; make sure nothing that keys on open-vs-contested (Withdrawn's cap, the sincerity honor bonus) is confused by the new key.
+- [x] `roll_engine.py` reaches it for free once the key exists, but the slash commands map command names to `skill:<id>` - decide whether `/commerce` should offer the variant or stay the plain roll. Leaning plain: a slash command has nobody to ask which it is.
+- [x] `TDD:` a school character and a profession character without M10 get no such key.
 
 ## 9. Phase 4 - M9, the business reroll
 
-- [ ] `TDD:` the flag appears only for a holder, and the reroll spends exactly one void point.
-- [ ] A reroll button on qualifying roll results, modelled on the Lucky reroll that already exists (`luckyUsedThisRoll` and its banner), spending one void point rather than consuming Lucky.
-- [ ] Once per roll, like Lucky - and it must interact correctly with Lucky and with the PCP reroll, none of which may double up on one roll. Assert the combinations.
-- [ ] **Read-only Roll Mode:** a non-editor may walk the reroll and see the new total, but the void point must not be deducted. Gate the spend on `t.canEdit` per the standing rule.
-- [ ] Offered on **all 18 skill rolls** (R13) - M9 is the only Merchant ability that names no skill, so unlike the free raises it is not tied to one. Whether it should also reach non-skill rolls (rings, athletics, combat) is not something the rules text settles; "any roll relating to your business" reads as any roll, but every other Merchant ability is a skill ability, so the plan scopes it to skills and leaves widening it as a later data change.
-- [ ] `TDD:` the button offers on every skill and on no skill for a character without M9.
+- [x] `TDD:` the flag appears only for a holder, and the reroll spends exactly one void point.
+- [x] A reroll button on qualifying roll results, modelled on the Lucky reroll that already exists (`luckyUsedThisRoll` and its banner), spending one void point rather than consuming Lucky.
+- [x] Once per roll, like Lucky - and it must interact correctly with Lucky and with the PCP reroll, none of which may double up on one roll. Assert the combinations.
+- [x] **Read-only Roll Mode:** a non-editor may walk the reroll and see the new total, but the void point must not be deducted. Gate the spend on `t.canEdit` per the standing rule.
+- [x] Offered on **all 18 skill rolls** (R13) - M9 is the only Merchant ability that names no skill, so unlike the free raises it is not tied to one. Whether it should also reach non-skill rolls (rings, athletics, combat) is not something the rules text settles; "any roll relating to your business" reads as any roll, but every other Merchant ability is a skill ability, so the plan scopes it to skills and leaves widening it as a later data change.
+- [x] `TDD:` the button offers on every skill and on no skill for a character without M9.
 
 ## 10. Phase 5 - the money bonus
 
-- [ ] `TDD:` accumulation, including two copies doubling a bonus and Wk5 contributing nothing.
-- [ ] `profession_money_bonus(character_data) -> int` in `services/professions.py`: the summed percentage over held abilities, counting each copy (R10).
-- [ ] Applied in `compute_effective_status` as a **final multiplier** on the stipend, after every other modifier (R9), with its own `stipend_modifiers` entry naming the percentage so the existing tooltip explains it.
-- [ ] Rounding: `int()` truncation matches how the stipend is already computed; state it in the modifier's detail text so a player can reconcile the number.
-- [ ] `TDD:` a Merchant with several abilities gets the right stipend, and the modifier list reads in the right order.
-- [ ] Surfaced on the View Sheet beside the stipend, in the Google Sheets export, and in `GET /api/characters`.
+- [x] `TDD:` accumulation, including two copies doubling a bonus and Wk5 contributing nothing.
+- [x] `profession_money_bonus(character_data) -> int` in `services/professions.py`: the summed percentage over held abilities, counting each copy (R10).
+- [x] Applied in `compute_effective_status` as a **final multiplier** on the stipend, after every other modifier (R9), with its own `stipend_modifiers` entry naming the percentage so the existing tooltip explains it.
+- [x] Rounding: `int()` truncation matches how the stipend is already computed; state it in the modifier's detail text so a player can reconcile the number.
+- [x] `TDD:` a Merchant with several abilities gets the right stipend, and the modifier list reads in the right order.
+- [x] Surfaced on the View Sheet beside the stipend, in the Google Sheets export, and in `GET /api/characters`.
 
 ## 11. Phase 6 - display
 
-- [ ] The editor greys out Wk5 individually inside an otherwise-live Worker block, with its own "not available in this campaign" note rather than the profession-level one.
-- [ ] Each ability's own money bonus is shown in its editor row - the data is already on `ProfessionAbility.money_bonus` and rendered nowhere.
-- [ ] The View Sheet's profession panel keeps showing only taken abilities, now with money bonuses and the "tell your GM" note on the narrative ones.
-- [ ] `TDD:` render tests for the individually-greyed ability and the money figures.
-- [ ] Rerun `scripts/build-css.sh`.
+- [x] The editor greys out Wk5 individually inside an otherwise-live Worker block, with its own "not available in this campaign" note rather than the profession-level one.
+- [x] Each ability's own money bonus is shown in its editor row - the data is already on `ProfessionAbility.money_bonus` and rendered nowhere.
+- [x] The View Sheet's profession panel keeps showing only taken abilities, now with money bonuses and the "tell your GM" note on the narrative ones.
+- [x] `TDD:` render tests for the individually-greyed ability and the money figures.
+- [x] Rerun `scripts/build-css.sh`.
 
 ## 12. Phase 7 - clicktests, coverage and docs
 
-- [ ] Clicktest: Worker and Merchant blocks are live, and Wk5 alone is disabled inside Worker.
-- [ ] Clicktest: taking Wk4 puts an "Alternative totals" row on an etiquette roll with the right number; taking it twice doubles it.
-- [ ] Clicktest: a character holding Wk7 and M4 sees two distinct bragging rows.
-- [ ] Clicktest: Wk8 puts a row on a Water athletics roll and not on an Earth one.
-- [ ] Clicktest: the commerce tile offers both roll options, each with a void submenu, and the business one rolls 4 more dice.
-- [ ] Clicktest: the M9 reroll button spends a void point and rerolls; a non-editor's void count does not move.
-- [ ] Clicktest: the accumulated money bonus renders on the sheet and the stipend reflects it.
-- [ ] Add a Worker/Merchant character to the `test_sheet_js_errors.py` sweep.
-- [ ] Coverage back to 100%; `COVERAGE.md`; `school-features/` docs for the two new ability sets; the Professions section of `CLAUDE.md`.
-- [ ] Deploy.
+- [x] Clicktest: Worker and Merchant blocks are live, and Wk5 alone is disabled inside Worker.
+- [x] Clicktest: taking Wk4 puts an "Alternative totals" row on an etiquette roll with the right number; taking it twice doubles it.
+- [x] Clicktest: a character holding Wk7 and M4 sees two distinct bragging rows.
+- [x] Clicktest: Wk8 puts a row on a Water athletics roll and not on an Earth one.
+- [x] Clicktest: the commerce tile offers both roll options, each with a void submenu, and the business one rolls 4 more dice.
+- [x] Clicktest: the M9 reroll button spends a void point and rerolls; a non-editor's void count does not move.
+- [x] Clicktest: the accumulated money bonus renders on the sheet and the stipend reflects it.
+- [x] Add a Worker/Merchant character to the `test_sheet_js_errors.py` sweep.
+- [x] Coverage back to 100%; `COVERAGE.md`; `school-features/` docs for the two new ability sets; the Professions section of `CLAUDE.md`.
+- [x] Deploy.

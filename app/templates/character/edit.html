@@ -2800,6 +2800,12 @@ function characterForm() {
             this.techniqueChoices = {};
             this.professionAbilities = {};
             htmx.ajax('GET', '/characters/api/profession-info', '#school-details');
+            // The pick allowance is computed server-side and arrives on the
+            // XP round-trip. Ask for one now: until it lands the editor
+            // thinks the character has earned no picks, and every + stays
+            // disabled.
+            this.markDirty();
+            this.refreshXp();
             this.$nextTick(() => { this._suppressSchoolRingDrop = false; });
         },
 

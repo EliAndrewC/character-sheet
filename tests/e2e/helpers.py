@@ -46,6 +46,16 @@ def select_profession(page):
     }""")
     page.wait_for_selector('[data-testid="profession-info"]', timeout=10000)
     page.wait_for_selector('[data-testid="profession-abilities"]', timeout=10000)
+    # The pick allowance is server-computed and arrives on the debounced XP
+    # round-trip; until it does, every stepper + is disabled. Wait for it,
+    # or tests race the request rather than the UI.
+    page.wait_for_function(
+        """() => {
+            const el = document.querySelector('[data-testid="profession-allowance"]');
+            return el && !/^0 of 0/.test(el.textContent.trim());
+        }""",
+        timeout=10000,
+    )
 
 
 def take_profession_ability(page, ability_id, times=1):
