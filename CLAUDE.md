@@ -137,6 +137,17 @@ Clicktests start a live uvicorn server on a random port with a temp database, th
 
 A good gate is seconds to a couple of minutes. For scale: the Impaired-reroll change was fully covered by `test_rolls.py -k "impaired or mid_fight or heal_back or exported_card"` (10 tests, 43s) plus `test_school_abilities.py -k "hida or dragon"` (18 tests, 62s) - 28 tests in under two minutes, versus the 47 minutes `-m "school_abilities or rolls"` cost for no extra signal. Name the test file too when you know it; it skips collecting the rest.
 
+**This is enforced, not just advised.** Selecting more than **100** clicktests fails the run immediately - in ~2 seconds, before the live server or the browser starts - unless you say why:
+
+```bash
+E2E_REASON="Reworked base.html, so every page's chrome needs a pass" pytest tests/e2e/ --browser chromium
+pytest tests/e2e/ --browser chromium --e2e-reason="..."     # same thing as a flag
+```
+
+The reason must be at least 30 characters, is echoed in a banner so it lands in the log, and exists to make you stop and reconsider rather than to keep anyone out. `--collect-only` is exempt, so measuring a mark's size is always free. The limit is `E2E_MAX_TESTS`; the logic is `tests/e2e/selection_guard.py`, wired up in `tests/e2e/conftest.py` and unit-tested in `tests/test_e2e_selection_guard.py`.
+
+The threshold is an absolute count, not a percentage, on purpose: the cost being guarded is wall clock (~3.6s per test), which tracks the count and not the fraction - and a percentage would misfire on `pytest tests/e2e/test_keepalive.py`, which selects 10 of the 10 tests it collected (100%) and is a perfectly good targeted run.
+
 ### JS unit tests (pure roll-math helpers)
 
 Pure roll/engine math extracted from the sheet's Alpine layer lives in

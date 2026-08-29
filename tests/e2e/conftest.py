@@ -8,6 +8,65 @@ import time
 
 import pytest
 
+from tests.e2e import selection_guard
+
+
+# ---------------------------------------------------------------------------
+# Large-selection guardrail. See tests/e2e/selection_guard.py for the why.
+# ---------------------------------------------------------------------------
+
+#: Accumulated by the pytest_deselected hook so the failure message can say
+#: what fraction of the collected tests the run picked.
+_deselected_count = 0
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--e2e-reason",
+        action="store",
+        default="",
+        help=(
+            "Why this run needs to select more than "
+            f"{selection_guard.DEFAULT_MAX_TESTS} clicktests. Required past "
+            f"that; also settable as {selection_guard.REASON_ENV}."
+        ),
+    )
+
+
+def pytest_deselected(items):
+    global _deselected_count
+    _deselected_count += len(items)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_collection_modifyitems(config, items):
+    """Refuse an oversized selection unless a reason was given.
+
+    ``trylast`` so it sees the final selection, after ``-m`` / ``-k`` have
+    deselected. Raising here stops the run before the live server or the
+    browser starts, so an accidental full-suite invocation costs a second
+    rather than three quarters of an hour.
+    """
+    if config.getoption("--collect-only"):
+        # Measuring what a mark costs is exactly what we want to encourage.
+        return
+    e2e_items = [i for i in items if "tests/e2e/" in str(i.fspath).replace(os.sep, "/")]
+    if not e2e_items:
+        return
+
+    reason = (
+        config.getoption("--e2e-reason")
+        or os.environ.get(selection_guard.REASON_ENV, "")
+    )
+    limit = selection_guard.max_tests()
+    message = selection_guard.check_selection(
+        len(e2e_items), len(e2e_items) + _deselected_count, reason, limit,
+    )
+    if message:
+        raise pytest.UsageError(message)
+    if len(e2e_items) > limit:
+        print(selection_guard.acknowledgement(len(e2e_items), reason, limit))
+
 
 def _find_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
