@@ -14,7 +14,6 @@ from app.game_data import (
     DISADVANTAGES,
     SCHOOL_KNACKS,
     SCHOOLS,
-    PROFESSIONS,
     SKILLS,
 )
 from app.services.professions import ability_counts_for_display
@@ -131,11 +130,11 @@ def _build_overview_rows(
     rows.append([_str_cell(character.name, **_title_fmt())])
 
     # Identity
-    profession = PROFESSIONS.get(getattr(character, "profession", "") or "")
+    is_profession = bool(getattr(character, "profession", "") or "")
     if school:
         school_name = school.name
-    elif profession:
-        school_name = f"{profession.name} (profession)"
+    elif is_profession:
+        school_name = "Profession (no school)"
     else:
         school_name = "No school"
     dan_suffix = {1: "st", 2: "nd", 3: "rd"}.get(dan, "th")
@@ -148,9 +147,9 @@ def _build_overview_rows(
     rows.append([
         _str_cell("Dan", **_bold()),
         # A profession character has no Dan and no School Ring (D7).
-        _str_cell("-" if profession else f"{dan}{dan_suffix}"),
+        _str_cell("-" if is_profession else f"{dan}{dan_suffix}"),
         _str_cell("School Ring", **_bold()),
-        _str_cell("-" if profession else (character.school_ring_choice or "")),
+        _str_cell("-" if is_profession else (character.school_ring_choice or "")),
     ])
 
     # Blank separator
@@ -158,17 +157,22 @@ def _build_overview_rows(
 
     # Profession abilities, in place of the school's Special Ability and
     # techniques. Only the ones actually taken, with a count when doubled.
-    if profession:
-        rows.append([_str_cell(f"{profession.name} Abilities", **_header_fmt())])
-        taken = ability_counts_for_display(
-            profession.id, getattr(character, "profession_abilities", None) or {},
+    if is_profession:
+        # Grouped by source profession, since a profession character mixes
+        # them freely; only the abilities actually taken are listed (P10).
+        groups = ability_counts_for_display(
+            getattr(character, "profession_abilities", None) or {},
+            include_untaken=False,
         )
-        for row in taken:
-            if not row["count"]:
-                continue
-            label = row["name"] + (f" x{row['count']}" if row["count"] > 1 else "")
-            rows.append([_str_cell(label, **_bold()), _str_cell(row["text"])])
-        rows.append([])
+        for group in groups:
+            rows.append([
+                _str_cell(f"{group['name']} Abilities", **_header_fmt())
+            ])
+            for row in group["rows"]:
+                label = row["name"] + (
+                    f" x{row['count']}" if row["count"] > 1 else "")
+                rows.append([_str_cell(label, **_bold()), _str_cell(row["text"])])
+            rows.append([])
 
     # Special Ability
     if school and school.special_ability:

@@ -49,8 +49,9 @@ from app.services.party import (
     visible_party_members,
 )
 from app.services.professions import (
-    PROFESSION_SELECT_PREFIX,
+    PROFESSION_SELECT_VALUE,
     ability_counts_for_display,
+    holds_ability,
     select_value_for,
 )
 from app.services.rolls import compute_skill_roll
@@ -565,11 +566,31 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     # character whose 10s would not have rerolled can click a "<priest> priest
     # blessed for 10 rerolls" button if a priest performed the sick-or-impaired
     # ritual on them beforehand.
+    # Who can have performed the sick-or-impaired ritual on this character.
+    # A Priest school character has all ten rituals; a profession character
+    # has it if they took it. The ritual may be performed on the priest
+    # THEMSELVES as well as on an ally (design doc part 2, P5/P9), so the
+    # viewer appears first in their own list when they qualify.
+    #
+    # The self entry is built here rather than by relaxing
+    # ``visible_party_members``, which excludes self by design and is shared
+    # with Priest 5th Dan conviction, Priest 3rd Dan precepts sharing and the
+    # party-effect layer generally - a self entry leaking into those would be
+    # a subtle and hard-to-spot bug.
+    def _performs_impaired_ritual(c) -> bool:
+        return c.school == "priest" or holds_ability(c, "priest_ignore_penalties")
+
     party_priests = []
+    if _performs_impaired_ritual(character):
+        party_priests.append({
+            "priest_id": character.id, "name": character.name, "is_self": True,
+        })
     if character.gaming_group_id:
         for p in party_chars:
-            if p.school == "priest":
-                party_priests.append({"priest_id": p.id, "name": p.name})
+            if _performs_impaired_ritual(p):
+                party_priests.append({
+                    "priest_id": p.id, "name": p.name, "is_self": False,
+                })
 
     # Party-priest 5th Dan conviction: each Priest ally at dan >= 5 with a
     # conviction knack lets this character spend from the priest's pool.
@@ -914,7 +935,17 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "priest_round_conviction_refresh": character.school == "priest" and dan >= 5,
         # Priest Special: the 10 rituals include "Bless conversation topic" and
         # "Bless research", each a 2k1 roll added to someone else's roll.
-        "priest_bless_rituals": character.school == "priest",
+        # Two separate rituals, so two flags: a profession character who
+        # learned only one gets only that button. A Priest school character
+        # has all ten rituals and so gets both, as before.
+        "priest_bless_topic": (
+            character.school == "priest"
+            or holds_ability(character, "priest_conversation_blessing")
+        ),
+        "priest_bless_research": (
+            character.school == "priest"
+            or holds_ability(character, "priest_research_blessing")
+        ),
         # Priest 3rd Dan: precepts dice pool (X dice, X = precepts skill rank)
         # rolled at the start of combat; any pool die can swap into any rolled
         # die on attack/parry/damage/wound_check rolls. Persists across combat
@@ -1272,9 +1303,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "character": character,
             "char_dict": char_dict,
             "school": school,
-            "profession": PROFESSIONS.get(character.profession or ""),
-            "profession_ability_rows": ability_counts_for_display(
-                character.profession or "", character.profession_abilities or {},
+            "is_profession": bool(character.profession),
+            # P10: the View Sheet lists only what the character actually took.
+            "profession_ability_groups": ability_counts_for_display(
+                character.profession_abilities or {}, include_untaken=False,
             ),
             "xp_breakdown": xp_breakdown,
             "errors": errors,
@@ -1515,12 +1547,13 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "character": character,
             "char_dict": char_dict,
             "school": school,
-            "profession": PROFESSIONS.get(character.profession or ""),
-            "profession_ability_rows": ability_counts_for_display(
-                character.profession or "", character.profession_abilities or {},
+            "is_profession": bool(character.profession),
+            # P10: the editor shows the whole offer, taken or not.
+            "profession_ability_groups": ability_counts_for_display(
+                character.profession_abilities or {}, include_untaken=True,
             ),
             "professions": PROFESSIONS,
-            "profession_select_prefix": PROFESSION_SELECT_PREFIX,
+            "profession_select_value": PROFESSION_SELECT_VALUE,
             "school_select_value": select_value_for(
                 character.school or "", character.profession or "",
             ),

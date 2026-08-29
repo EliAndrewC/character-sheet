@@ -40,6 +40,7 @@ from app.game_data import (
     PROFESSION_ABILITY_UNLOCK_STEP,
     PROFESSION_BY_ABILITY,
     PROFESSIONS,
+    PROFESSION_CHARACTER_TYPE,
     SCHOOL_KNACKS,
     SCHOOLS,
     SKILL_MAX,
@@ -1187,7 +1188,18 @@ def technique_choice_summary(character_data: dict) -> Dict[int, dict]:
     return summary
 
 
-def profession_ability_allowance(total_xp, profession_id: str) -> int:
+def profession_ability_pool_size() -> int:
+    """Total picks the available professions can supply between them.
+
+    Wave Man's ten abilities take two copies each and the Priest's ten
+    rituals one, so today this is 30. Professions in "preview" or "hidden"
+    contribute nothing - a player cannot be nagged about picks they have no
+    way to spend.
+    """
+    return sum(p.max_total_picks for p in PROFESSIONS.values() if p.is_available)
+
+
+def profession_ability_allowance(total_xp) -> int:
     """How many profession-ability picks a character has earned.
 
     Abilities cost no XP; they unlock on the TOTAL XP the character holds -
@@ -1195,14 +1207,11 @@ def profession_ability_allowance(total_xp, profession_id: str) -> int:
     doc D2/D3). The first arrives at ``PROFESSION_ABILITY_UNLOCK_BASE`` and
     one more every ``PROFESSION_ABILITY_UNLOCK_STEP`` beyond it.
 
-    The result is capped at the profession's own ceiling: every ability
-    taken the maximum number of times (D4). For the Wave Man that is 10
-    abilities x 2 copies = 20 picks, reached at 435 XP; for the Priest,
-    whose rituals are once-only, it is 10.
+    Capped at what the pool can actually supply. Note that a single
+    profession runs out first: Wave Man's twenty picks are exhausted at 435
+    XP, so a character who reaches 450 has a pick they can only spend by
+    branching into another profession (P7).
     """
-    prof = PROFESSIONS.get(profession_id or "")
-    if prof is None:
-        return 0
     try:
         total = int(total_xp or 0)
     except (TypeError, ValueError):  # pragma: no cover - callers pass ints
@@ -1210,7 +1219,7 @@ def profession_ability_allowance(total_xp, profession_id: str) -> int:
     if total < PROFESSION_ABILITY_UNLOCK_BASE:
         return 0
     earned = 1 + (total - PROFESSION_ABILITY_UNLOCK_BASE) // PROFESSION_ABILITY_UNLOCK_STEP
-    return min(prof.max_total_picks, earned)
+    return min(profession_ability_pool_size(), earned)
 
 
 def profession_xp_summary(character_data: dict) -> Optional[dict]:
@@ -1220,18 +1229,26 @@ def profession_xp_summary(character_data: dict) -> Optional[dict]:
     has not taken a profession. ``total`` is always 0 - the row exists to
     show picks used against picks earned, not a cost.
     """
-    profession_id = character_data.get("profession", "") or ""
-    prof = PROFESSIONS.get(profession_id)
-    if prof is None:
+    if not (character_data.get("profession") or ""):
         return None
     total_xp = (
         int(character_data.get("starting_xp", 150) or 0)
         + int(character_data.get("earned_xp", 0) or 0)
     )
-    allowance = profession_ability_allowance(total_xp, profession_id)
+    allowance = profession_ability_allowance(total_xp)
+    pool_size = profession_ability_pool_size()
     abilities = character_data.get("profession_abilities", {}) or {}
-    used = sum(int(v or 0) for v in abilities.values())
-    if allowance >= prof.max_total_picks:
+    # Coerce once, up front: a stored row from an older release (or a
+    # crafted write that predates the sanitizer) can carry a non-integer,
+    # and both the total and the per-row labels below need a real number.
+    counts: Dict[str, int] = {}
+    for aid, count in abilities.items():
+        try:
+            counts[aid] = max(0, int(count or 0))
+        except (TypeError, ValueError):
+            continue
+    used = sum(counts.values())
+    if allowance >= pool_size:
         next_at = None
     elif allowance == 0:
         next_at = PROFESSION_ABILITY_UNLOCK_BASE
@@ -1241,24 +1258,28 @@ def profession_xp_summary(character_data: dict) -> Optional[dict]:
             + allowance * PROFESSION_ABILITY_UNLOCK_STEP
         )
     return {
-        "label": f"{prof.name} abilities",
-        "name": prof.name,
-        "profession": prof.id,
+        "label": "Profession abilities",
+        "name": "Profession",
+        "profession": PROFESSION_CHARACTER_TYPE,
         "total": 0,
         "used": used,
         "allowance": allowance,
-        "max_picks": prof.max_total_picks,
+        "max_picks": pool_size,
         "next_at_xp": next_at,
         "rows": [
             {
                 "label": PROFESSION_ABILITIES[aid].name
                 + (f" x{count}" if count > 1 else ""),
+                "profession": PROFESSIONS[PROFESSION_BY_ABILITY[aid]].name,
                 "xp": 0,
             }
             for aid, count in sorted(
-                abilities.items(),
-                key=lambda kv: PROFESSION_ABILITIES[kv[0]].ordinal
-                if kv[0] in PROFESSION_ABILITIES else 99,
+                counts.items(),
+                key=lambda kv: (
+                    PROFESSION_BY_ABILITY.get(kv[0], "") != "wave_man",
+                    PROFESSION_ABILITIES[kv[0]].ordinal
+                    if kv[0] in PROFESSION_ABILITIES else 99,
+                ),
             )
             if aid in PROFESSION_ABILITIES
         ],
@@ -1266,7 +1287,7 @@ def profession_xp_summary(character_data: dict) -> Optional[dict]:
 
 
 def _validate_profession(character_data: dict) -> List[str]:
-    """Validate a profession character's profession and ability picks.
+    """Validate a profession character's ability picks.
 
     Returns an empty list for a character with no profession, which is
     every character who took a school instead. The over-allowance case is
@@ -1275,9 +1296,9 @@ def _validate_profession(character_data: dict) -> List[str]:
     picks quietly deleted.
     """
     errors: List[str] = []
-    profession_id = character_data.get("profession", "") or ""
+    profession = character_data.get("profession", "") or ""
     abilities = character_data.get("profession_abilities", {}) or {}
-    if not profession_id:
+    if not profession:
         # Abilities without a profession are dropped on write; if a stored
         # row still carries them, say so rather than ignoring it.
         if abilities:
@@ -1286,29 +1307,24 @@ def _validate_profession(character_data: dict) -> List[str]:
             )
         return errors
 
-    prof = PROFESSIONS.get(profession_id)
-    if prof is None:
-        errors.append(f"Unknown profession '{profession_id}'.")
+    if profession != PROFESSION_CHARACTER_TYPE:
+        errors.append(f"Unknown character type '{profession}'.")
         return errors
-    if not prof.selectable:
-        errors.append(
-            f"The {prof.name} profession is not yet available for characters."
-        )
 
     if character_data.get("school"):
         errors.append(
             "A character cannot have both a school and a profession; "
-            f"remove one (currently {prof.name} plus a school)."
+            "remove one."
         )
     if character_data.get("school_ring_choice"):
         errors.append(
-            f"A {prof.name} has no School Ring, but one is set "
+            "A profession character has no School Ring, but one is set "
             f"({character_data['school_ring_choice']})."
         )
     if character_data.get("knacks"):
         errors.append(
-            f"A {prof.name} has no school knacks. Knacks bought from other "
-            "schools belong under foreign school knacks."
+            "A profession character has no school knacks. Knacks bought "
+            "from other schools belong under foreign school knacks."
         )
 
     used = 0
@@ -1317,14 +1333,26 @@ def _validate_profession(character_data: dict) -> List[str]:
             count = int(count or 0)
         except (TypeError, ValueError):
             count = 0
-        if PROFESSION_BY_ABILITY.get(aid) != prof.id:
-            errors.append(f"'{aid}' is not a {prof.name} ability.")
+        owner_id = PROFESSION_BY_ABILITY.get(aid)
+        owner = PROFESSIONS.get(owner_id or "")
+        if owner is None:
+            errors.append(f"'{aid}' is not an ability of any profession.")
             continue
-        if count > prof.max_per_ability:
-            name = PROFESSION_ABILITIES[aid].name
+        if not owner.is_available:
             errors.append(
-                f"{name} is taken {count} times, but no {prof.name} ability "
-                f"may be taken more than {prof.max_per_ability} times."
+                f"{PROFESSION_ABILITIES[aid].name} is a {owner.name} ability, "
+                "which is not yet available for characters."
+            )
+            continue
+        if count > owner.max_per_ability:
+            name = PROFESSION_ABILITIES[aid].name
+            times = "once" if owner.max_per_ability == 1 else (
+                f"more than {owner.max_per_ability} times"
+            )
+            errors.append(
+                f"{name} is taken {count} times, but a {owner.name} ability "
+                + ("may only be taken once." if owner.max_per_ability == 1
+                   else f"may not be taken {times}.")
             )
         used += max(0, count)
 
@@ -1332,10 +1360,10 @@ def _validate_profession(character_data: dict) -> List[str]:
         int(character_data.get("starting_xp", 150) or 0)
         + int(character_data.get("earned_xp", 0) or 0)
     )
-    allowance = profession_ability_allowance(total_xp, profession_id)
+    allowance = profession_ability_allowance(total_xp)
     if used > allowance:
         errors.append(
-            f"{used} {prof.name} picks are taken, but {total_xp} XP only "
+            f"{used} profession picks are taken, but {total_xp} XP only "
             f"allows {allowance}."
         )
     elif used < allowance:
@@ -1343,7 +1371,7 @@ def _validate_profession(character_data: dict) -> List[str]:
         # never blocks saving or publishing, it just makes free picks visible.
         short = allowance - used
         errors.append(
-            f"You have {short} unclaimed {prof.name} "
+            f"You have {short} unclaimed profession "
             f"{'pick' if short == 1 else 'picks'}."
         )
     return errors

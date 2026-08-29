@@ -153,15 +153,15 @@ def _apply_school_or_profession(character: Character, raw_value: str) -> None:
     its abilities. Foreign knacks survive both directions - they are not
     school state, and a Wave Man is expressly allowed to buy them (D8).
     """
-    school_id, profession_id = split_school_or_profession(raw_value)
+    school_id, profession = split_school_or_profession(raw_value)
     character.school = school_id
-    character.profession = profession_id
-    if profession_id:
+    character.profession = profession
+    if profession:
         character.school_ring_choice = ""
         character.knacks = {}
         character.technique_choices = {}
         character.profession_abilities = sanitize_profession_abilities(
-            profession_id, character.profession_abilities,
+            character.profession_abilities,
         )
     else:
         character.profession_abilities = {}
@@ -207,9 +207,7 @@ def _parse_form_to_dict(form_data: dict) -> dict:
             raw_abilities = json.loads(raw_abilities) if raw_abilities else {}
         except ValueError:
             raw_abilities = {}
-    data["profession_abilities"] = sanitize_profession_abilities(
-        data["profession"], raw_abilities,
-    )
+    data["profession_abilities"] = sanitize_profession_abilities(raw_abilities)
 
     # Rings
     for ring in Ring:
@@ -658,7 +656,7 @@ async def autosave_character(
         _apply_school_or_profession(character, body["school"])
     if "profession_abilities" in body:
         character.profession_abilities = sanitize_profession_abilities(
-            character.profession, body["profession_abilities"],
+            body["profession_abilities"],
         )
     if "school_ring_choice" in body:
         # Reconcile against the publish-lock + auto-drop the old
@@ -852,18 +850,17 @@ def _editor_char_dict(body: dict, character: Character) -> dict:
     # persisted row.
     raw_school = body.get("school")
     if raw_school is None:
-        school_id, profession_id = character.school, character.profession
+        school_id, profession = character.school, character.profession
     else:
-        school_id, profession_id = split_school_or_profession(raw_school)
+        school_id, profession = split_school_or_profession(raw_school)
     return {
         "school": school_id,
-        "profession": profession_id,
+        "profession": profession,
         "profession_abilities": sanitize_profession_abilities(
-            profession_id,
             body.get("profession_abilities", character.profession_abilities),
         ),
         "school_ring_choice": (
-            "" if profession_id
+            "" if profession
             else body.get("school_ring_choice", character.school_ring_choice)
         ),
         "rings": body.get("rings", character.rings),
@@ -2172,20 +2169,21 @@ def _sanitize_precepts_pool(raw: Any) -> list:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/api/profession-info/{profession_id}", response_class=HTMLResponse)
-def profession_info_partial(request: Request, profession_id: str):
-    """Return profession details when the school dropdown picks a profession.
+@router.get("/api/profession-info", response_class=HTMLResponse)
+def profession_info_partial(request: Request):
+    """Return the Profession details panel for the school dropdown.
 
     Rendered into the same ``#school-details`` slot as school_info.html, so
-    the editor swaps one panel for the other rather than juggling two.
+    the editor swaps one panel for the other. There is one profession
+    character type, so this takes no id - the per-profession detail lives in
+    the ability groups below the panel.
     """
-    profession = PROFESSIONS.get(profession_id)
-    if profession is None or not profession.selectable:
-        return HTMLResponse("")
     return _templates().TemplateResponse(
         request=request,
         name="character/partials/profession_info.html",
-        context={"profession": profession},
+        context={
+            "professions": [p for p in PROFESSIONS.values() if p.is_visible],
+        },
     )
 
 

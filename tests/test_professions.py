@@ -44,11 +44,13 @@ def test_priest_rituals_may_be_taken_once_everything_else_twice():
         assert PROFESSIONS[pid].max_per_ability == 2
 
 
-def test_only_wave_man_is_selectable():
-    # D17: the other four are data-only until each is implemented.
-    assert PROFESSIONS["wave_man"].selectable is True
-    for pid in ("worker", "merchant", "priest", "ninja"):
-        assert PROFESSIONS[pid].selectable is False
+def test_wave_man_and_priest_are_the_available_professions():
+    # Part 2 P3/P6: Priest joins Wave Man; Worker and Merchant are shown
+    # but not takeable; Ninja is hidden entirely.
+    assert PROFESSIONS["wave_man"].is_available is True
+    assert PROFESSIONS["priest"].is_available is True
+    for pid in ("worker", "merchant", "ninja"):
+        assert PROFESSIONS[pid].is_available is False
 
 
 def test_every_profession_has_a_rules_anchor():
@@ -97,10 +99,12 @@ def test_priest_rituals_carry_times():
 # Phase 1 - school / profession mutual exclusion and ability sanitizing
 # ---------------------------------------------------------------------------
 
+from app.game_data import PROFESSION_CHARACTER_TYPE as PTYPE  # noqa: E402
 from app.services.professions import (  # noqa: E402
-    PROFESSION_SELECT_PREFIX,
+    PROFESSION_SELECT_VALUE,
     ability_counts_for_display,
     sanitize_profession_abilities,
+    select_value_for,
     split_school_or_profession,
 )
 
@@ -110,81 +114,70 @@ def test_split_plain_school_value():
 
 
 def test_split_profession_value():
-    assert split_school_or_profession("profession:wave_man") == ("", "wave_man")
+    assert split_school_or_profession("profession:wave_man") == ("", PTYPE)
 
 
 def test_split_empty_value():
     assert split_school_or_profession("") == ("", "")
 
 
-def test_split_rejects_unknown_profession():
-    assert split_school_or_profession("profession:nope") == ("", "")
-
-
-def test_split_rejects_unselectable_profession():
-    # D17: only Wave Man is pickable today.
-    assert split_school_or_profession("profession:ninja") == ("", "")
-
-
 def test_split_rejects_unknown_school():
     assert split_school_or_profession("not_a_school") == ("", "")
 
 
-def test_select_prefix_cannot_collide_with_a_school_id():
+def test_select_value_cannot_collide_with_a_school_id():
     from app.game_data import SCHOOLS
-    assert not any(s.startswith(PROFESSION_SELECT_PREFIX) for s in SCHOOLS)
+    assert PROFESSION_SELECT_VALUE not in SCHOOLS
 
 
 def test_sanitize_drops_unknown_ability_ids():
-    out = sanitize_profession_abilities("wave_man", {"nope": 1, "wave_man_initiative_die": 1})
+    out = sanitize_profession_abilities({"nope": 1, "wave_man_initiative_die": 1})
     assert out == {"wave_man_initiative_die": 1}
 
 
-def test_sanitize_drops_abilities_from_another_profession():
-    out = sanitize_profession_abilities("wave_man", {"ninja_fire_to_attack": 1})
+def test_sanitize_drops_abilities_from_an_unavailable_profession():
+    out = sanitize_profession_abilities({"ninja_fire_to_attack": 1})
     assert out == {}
 
 
 def test_sanitize_clamps_to_max_per_ability():
     # D4: at most two copies of any Wave Man ability.
-    out = sanitize_profession_abilities("wave_man", {"wave_man_initiative_die": 9})
+    out = sanitize_profession_abilities({"wave_man_initiative_die": 9})
     assert out == {"wave_man_initiative_die": 2}
 
 
 def test_sanitize_clamps_priest_rituals_to_one():
-    out = sanitize_profession_abilities("priest", {"priest_commune": 2})
+    out = sanitize_profession_abilities({"priest_commune": 2})
     assert out == {"priest_commune": 1}
 
 
 def test_sanitize_drops_zero_and_negative_counts():
-    out = sanitize_profession_abilities(
-        "wave_man", {"wave_man_initiative_die": 0, "wave_man_round_damage": -3}
+    out = sanitize_profession_abilities({"wave_man_initiative_die": 0, "wave_man_round_damage": -3}
     )
     assert out == {}
 
 
 def test_sanitize_ignores_non_integer_counts():
-    out = sanitize_profession_abilities("wave_man", {"wave_man_initiative_die": "two"})
+    out = sanitize_profession_abilities({"wave_man_initiative_die": "two"})
     assert out == {}
 
 
-def test_sanitize_with_no_profession_returns_empty():
-    assert sanitize_profession_abilities("", {"wave_man_initiative_die": 1}) == {}
+def test_sanitize_accepts_a_wave_man_ability_on_its_own():
+    assert sanitize_profession_abilities(
+        {"wave_man_initiative_die": 1}) == {"wave_man_initiative_die": 1}
 
 
 def test_sanitize_handles_none():
-    assert sanitize_profession_abilities("wave_man", None) == {}
+    assert sanitize_profession_abilities(None) == {}
 
 
 def test_ability_counts_for_display_orders_by_ordinal():
-    rows = ability_counts_for_display("wave_man", {"wave_man_round_damage": 2})
+    groups = ability_counts_for_display(
+        {"wave_man_round_damage": 2}, include_untaken=True)
+    rows = next(g for g in groups if g["profession_id"] == "wave_man")["rows"]
     assert [r["ordinal"] for r in rows] == list(range(1, 11))
     assert rows[3]["count"] == 2
     assert rows[0]["count"] == 0
-
-
-def test_ability_counts_for_display_empty_profession():
-    assert ability_counts_for_display("", {}) == []
 
 
 # ---------------------------------------------------------------------------
@@ -217,10 +210,10 @@ def _reload(client, cid):
 def test_autosave_switching_to_a_profession_clears_school_state(client):
     cid = _seed(client, technique_choices={"second_dan_choice": "parry"})
     resp = client.post(f"/characters/{cid}/autosave",
-                       json={"school": "profession:wave_man"})
+                       json={"school": "profession"})
     assert resp.status_code == 200
     c = _reload(client, cid)
-    assert c.profession == "wave_man"
+    assert c.profession == PTYPE
     assert c.school == ""
     assert c.school_ring_choice == ""
     assert c.knacks == {}
@@ -230,12 +223,12 @@ def test_autosave_switching_to_a_profession_clears_school_state(client):
 def test_autosave_switching_to_a_profession_keeps_foreign_knacks(client):
     # D8: a Wave Man still buys knacks from other schools.
     cid = _seed(client, foreign_knacks={"counterattack": 2})
-    client.post(f"/characters/{cid}/autosave", json={"school": "profession:wave_man"})
+    client.post(f"/characters/{cid}/autosave", json={"school": "profession"})
     assert _reload(client, cid).foreign_knacks == {"counterattack": 2}
 
 
 def test_autosave_switching_back_to_a_school_clears_the_profession(client):
-    cid = _seed(client, school="", profession="wave_man", knacks={},
+    cid = _seed(client, school="", profession=PTYPE, knacks={},
                 profession_abilities={"wave_man_initiative_die": 2})
     client.post(f"/characters/{cid}/autosave", json={"school": "hida_bushi"})
     c = _reload(client, cid)
@@ -248,14 +241,14 @@ def test_autosave_rejects_a_payload_sending_both(client):
     # A crafted POST naming both must not leave the character with both.
     cid = _seed(client)
     client.post(f"/characters/{cid}/autosave",
-                json={"school": "profession:wave_man", "profession": "wave_man"})
+                json={"school": "profession", "profession": "nonsense"})
     c = _reload(client, cid)
-    assert c.profession == "wave_man"
+    assert c.profession == PTYPE
     assert c.school == ""
 
 
 def test_autosave_stores_profession_abilities(client):
-    cid = _seed(client, school="", profession="wave_man", knacks={})
+    cid = _seed(client, school="", profession=PTYPE, knacks={})
     client.post(f"/characters/{cid}/autosave", json={
         "profession_abilities": {"wave_man_initiative_die": 2,
                                  "wave_man_round_damage": 1},
@@ -266,68 +259,76 @@ def test_autosave_stores_profession_abilities(client):
 
 
 def test_autosave_clamps_ability_counts_from_a_crafted_payload(client):
-    cid = _seed(client, school="", profession="wave_man", knacks={})
+    cid = _seed(client, school="", profession=PTYPE, knacks={})
     client.post(f"/characters/{cid}/autosave", json={
         "profession_abilities": {"wave_man_initiative_die": 99, "bogus": 1},
     })
     assert _reload(client, cid).profession_abilities == {"wave_man_initiative_die": 2}
 
 
-def test_autosave_ignores_abilities_when_there_is_no_profession(client):
+def test_a_school_character_gets_no_benefit_from_stored_abilities(client):
+    # The sanitizer no longer needs the character's own profession to
+    # validate an ability id, so a stored map can survive on a school
+    # character; ability_count is the gate that matters, and it reads 0.
+    from app.services.professions import ability_count
     cid = _seed(client)
     client.post(f"/characters/{cid}/autosave", json={
         "profession_abilities": {"wave_man_initiative_die": 1},
     })
-    assert _reload(client, cid).profession_abilities == {}
-
-
-def test_autosave_unselectable_profession_is_refused(client):
-    # D17: Ninja is data-only for now.
-    cid = _seed(client)
-    client.post(f"/characters/{cid}/autosave", json={"school": "profession:ninja"})
     c = _reload(client, cid)
     assert c.profession == ""
+    assert ability_count(c.to_dict(), "wave_man_initiative_die") == 0
+
+
+def test_autosave_legacy_prefixed_value_still_makes_a_profession_character(client):
+    # An editor tab open across the deploy still POSTs profession:<id>;
+    # resolving that to "no profession" would wipe their abilities.
+    cid = _seed(client)
+    client.post(f"/characters/{cid}/autosave",
+                json={"school": "profession:ninja"})
+    c = _reload(client, cid)
+    assert c.profession == PTYPE
     assert c.school == ""
 
 
 def test_form_post_can_select_a_profession(client):
     cid = _seed(client)
     resp = client.post(f"/characters/{cid}", data={
-        "name": "Ronin", "school": "profession:wave_man",
+        "name": "Ronin", "school": "profession",
         "school_ring_choice": "", "honor": "1.0", "rank": "1.0",
         "recognition": "1.0", "starting_xp": "150", "earned_xp": "0",
         "attack": "1", "parry": "1",
     }, follow_redirects=False)
     assert resp.status_code in (200, 302, 303)
     c = _reload(client, cid)
-    assert c.profession == "wave_man"
+    assert c.profession == PTYPE
     assert c.school == ""
 
 
 def test_snapshot_round_trip_preserves_profession(client):
-    cid = _seed(client, school="", profession="wave_man", knacks={},
+    cid = _seed(client, school="", profession=PTYPE, knacks={},
                 profession_abilities={"wave_man_round_damage": 2})
     from app.services.versions import _snapshot_state
     state = _snapshot_state(_reload(client, cid))
-    assert state["profession"] == "wave_man"
+    assert state["profession"] == PTYPE
     assert state["profession_abilities"] == {"wave_man_round_damage": 2}
 
 
 def test_changing_ability_count_shows_in_the_diff_summary():
     from app.services.versions import compute_diff_summary
-    old = {"profession": "wave_man", "profession_abilities": {"wave_man_round_damage": 1}}
-    new = {"profession": "wave_man", "profession_abilities": {"wave_man_round_damage": 2}}
+    old = {"profession": PTYPE, "profession_abilities": {"wave_man_round_damage": 1}}
+    new = {"profession": PTYPE, "profession_abilities": {"wave_man_round_damage": 2}}
     assert compute_diff_summary(old, new) == ["Round damage up changed from x1 to x2"]
 
 
 def test_taking_and_dropping_abilities_show_in_the_diff_summary():
     from app.services.versions import compute_diff_summary
     old = {"profession": "", "profession_abilities": {}}
-    new = {"profession": "wave_man",
+    new = {"profession": PTYPE,
            "profession_abilities": {"wave_man_round_damage": 2,
                                     "wave_man_initiative_die": 1}}
     diffs = compute_diff_summary(old, new)
-    assert "Profession changed to Wave Man" in diffs
+    assert "Profession selected" in diffs
     assert "Round damage up taken x2" in diffs
     assert "Extra initiative die taken" in diffs
     back = compute_diff_summary(new, old)
@@ -351,30 +352,21 @@ from app.services.xp import (  # noqa: E402
     (150, 1), (151, 1), (164, 1),    # first pick at exactly 150
     (165, 2), (179, 2), (180, 3),    # then one every 15
     (285, 10), (420, 19),
-    (435, 20), (1000, 20),           # D4 ceiling: 10 abilities x 2 copies
+    (435, 20),                       # Wave Man alone is exhausted here
+    (585, 30), (1000, 30),           # pooled ceiling: Wave Man 20 + Priest 10
 ])
 def test_allowance_boundaries(total_xp, expected):
-    assert profession_ability_allowance(total_xp, "wave_man") == expected
-
-
-def test_allowance_caps_lower_for_priest_rituals():
-    # Rituals are once-only, so the ceiling is 10 picks, not 20.
-    assert profession_ability_allowance(10_000, "priest") == 10
-
-
-def test_allowance_is_zero_without_a_profession():
-    assert profession_ability_allowance(500, "") == 0
-    assert profession_ability_allowance(500, "not_a_profession") == 0
+    assert profession_ability_allowance(total_xp) == expected
 
 
 def test_allowance_guards_against_junk_xp():
-    assert profession_ability_allowance(-50, "wave_man") == 0
-    assert profession_ability_allowance(None, "wave_man") == 0
+    assert profession_ability_allowance(-50) == 0
+    assert profession_ability_allowance(None) == 0
 
 
 def _wave_man_data(**over):
     data = {
-        "school": "", "profession": "wave_man", "profession_abilities": {},
+        "school": "", "profession": PTYPE, "profession_abilities": {},
         "school_ring_choice": "", "knacks": {}, "foreign_knacks": {},
         "rings": {"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
         "skills": {}, "attack": 1, "parry": 1,
@@ -403,7 +395,7 @@ def test_xp_breakdown_reports_the_profession_row():
         starting_xp=180,
         profession_abilities={"wave_man_initiative_die": 2},
     ))
-    assert b["professions"]["name"] == "Wave Man"
+    assert b["professions"]["name"] == "Profession"
     assert b["professions"]["used"] == 2
     assert b["professions"]["allowance"] == 3
     assert b["professions"]["total"] == 0
@@ -421,8 +413,8 @@ def test_xp_breakdown_profession_row_absent_for_a_school_character():
 
 
 def test_breakdown_next_at_xp_is_none_at_the_ceiling():
-    b = calculate_xp_breakdown(_wave_man_data(starting_xp=435, earned_xp=100))
-    assert b["professions"]["allowance"] == 20
+    b = calculate_xp_breakdown(_wave_man_data(starting_xp=585, earned_xp=100))
+    assert b["professions"]["allowance"] == 30
     assert b["professions"]["next_at_xp"] is None
 
 
@@ -443,7 +435,7 @@ def test_error_when_picks_exceed_the_allowance():
         starting_xp=150,  # allowance 1
         profession_abilities={"wave_man_initiative_die": 2},
     ))
-    assert any("2 Wave Man picks" in e and "allows 1" in e for e in errs)
+    assert any("2 profession picks" in e and "allows 1" in e for e in errs)
 
 
 def test_error_when_one_ability_is_taken_too_many_times():
@@ -451,19 +443,19 @@ def test_error_when_one_ability_is_taken_too_many_times():
         starting_xp=400,
         profession_abilities={"wave_man_initiative_die": 3},
     ))
-    assert any("more than 2" in e for e in errs)
+    assert any("may not be taken more than 2 times" in e for e in errs)
 
 
-def test_error_on_an_ability_from_another_profession():
+def test_error_on_an_ability_from_an_unavailable_profession():
     errs = validate_character(_wave_man_data(
         profession_abilities={"ninja_fire_to_attack": 1},
     ))
-    assert any("not a Wave Man ability" in e for e in errs)
+    assert any("not yet available" in e for e in errs)
 
 
 def test_error_on_an_unknown_ability_id():
     errs = validate_character(_wave_man_data(profession_abilities={"bogus": 1}))
-    assert any("not a Wave Man ability" in e for e in errs)
+    assert any("not an ability of any profession" in e for e in errs)
 
 
 def test_error_when_school_and_profession_are_both_set():
@@ -471,21 +463,21 @@ def test_error_when_school_and_profession_are_both_set():
     assert any("both a school and a profession" in e for e in errs)
 
 
-def test_error_on_an_unknown_profession():
+def test_error_on_an_unknown_character_type():
     errs = validate_character(_wave_man_data(profession="nope"))
-    assert any("Unknown profession" in e for e in errs)
+    assert any("Unknown character type" in e for e in errs)
 
 
-def test_error_on_a_profession_that_is_not_selectable_yet():
+def test_error_when_a_priest_ritual_is_taken_twice():
+    # P7: rituals are once-only, unlike every other profession's abilities.
     errs = validate_character(_wave_man_data(
-        profession="ninja", profession_abilities={},
-    ))
-    assert any("not yet available" in e for e in errs)
+        starting_xp=400, profession_abilities={"priest_commune": 2}))
+    assert any("may only be taken once" in e for e in errs)
 
 
 def test_error_when_a_profession_character_has_school_knacks():
     errs = validate_character(_wave_man_data(knacks={"iaijutsu": 2}))
-    assert any("school knacks" in e for e in errs)
+    assert any("no school knacks" in e for e in errs)
 
 
 def test_error_when_a_profession_character_has_a_school_ring():
@@ -506,7 +498,7 @@ def test_foreign_knacks_are_fine_for_a_profession_character():
 
 def test_warning_for_unclaimed_picks():
     errs = validate_character(_wave_man_data(starting_xp=180))
-    assert any("3 unclaimed Wave Man picks" in e for e in errs)
+    assert any("3 unclaimed profession picks" in e for e in errs)
 
 
 def test_no_unclaimed_warning_when_all_picks_are_used():
@@ -744,66 +736,80 @@ def test_w5_does_not_resurrect_a_reroll_suppressed_for_another_reason():
 # Phase 3 - editor rendering
 # ---------------------------------------------------------------------------
 
-def test_editor_offers_wave_man_in_the_school_dropdown(client):
+def test_editor_offers_one_profession_option_in_the_school_dropdown(client):
+    # P1: one character type, not one per profession.
     cid = _seed(client)
     html = client.get(f"/characters/{cid}/edit").text
-    assert 'value="profession:wave_man"' in html
-    assert "Professions (no school)" in html
+    assert 'value="profession"' in html
+    assert '<optgroup label="No school">' in html
+    assert 'value="profession:wave_man"' not in html
 
 
-def test_editor_greys_out_the_unimplemented_professions(client):
+def test_editor_greys_out_the_preview_professions(client):
+    # P6: Worker and Merchant are shown but not takeable; Ninja is absent.
     cid = _seed(client)
     html = client.get(f"/characters/{cid}/edit").text
-    for pid in ("worker", "merchant", "priest", "ninja"):
-        assert f'value="profession:{pid}"' in html
-    assert html.count("(not yet implemented)") >= 4
+    assert 'data-testid="profession-preview-worker"' in html
+    assert 'data-testid="profession-preview-merchant"' in html
+    assert 'data-profession-group="ninja"' not in html
+    assert "ninja_fire_to_attack" not in html
 
 
-def test_editor_renders_all_ten_abilities_for_a_wave_man(client):
-    cid = _seed(client, school="", profession="wave_man", knacks={})
+def test_editor_marks_priest_rituals_as_once_only(client):
+    cid = _seed(client)
+    html = client.get(f"/characters/{cid}/edit").text
+    assert 'data-testid="profession-once-only-priest"' in html
+    assert 'data-testid="profession-once-only-wave_man"' not in html
+
+
+def test_editor_shows_available_professions_before_previews(client):
+    cid = _seed(client)
+    html = client.get(f"/characters/{cid}/edit").text
+    order = [html.index(f'data-profession-group="{p}"')
+             for p in ("wave_man", "priest", "worker", "merchant")]
+    assert order == sorted(order)
+
+
+def test_editor_renders_every_available_ability(client):
+    cid = _seed(client, school="", profession=PTYPE, knacks={})
     html = client.get(f"/characters/{cid}/edit").text
     assert 'data-testid="profession-abilities"' in html
-    for aid in (a.id for a in PROFESSIONS["wave_man"].abilities):
-        assert aid in html
+    for pid in ("wave_man", "priest"):
+        for aid in (a.id for a in PROFESSIONS[pid].abilities):
+            assert aid in html, aid
 
 
 def test_editor_seeds_the_profession_select_value(client):
-    cid = _seed(client, school="", profession="wave_man", knacks={})
+    cid = _seed(client, school="", profession=PTYPE, knacks={})
     html = client.get(f"/characters/{cid}/edit").text
-    assert '"profession:wave_man"' in html
+    assert '"profession"' in html
 
 
 def test_editor_seeds_the_allowance_from_the_server(client):
-    cid = _seed(client, school="", profession="wave_man", knacks={},
+    cid = _seed(client, school="", profession=PTYPE, knacks={},
                 starting_xp=180, school_ring_choice="")
     html = client.get(f"/characters/{cid}/edit").text
     assert '"allowance": 3' in html or '"allowance":3' in html
 
 
 def test_profession_info_partial_renders(client):
-    html = client.get("/characters/api/profession-info/wave_man").text
+    html = client.get("/characters/api/profession-info").text
     assert 'data-testid="profession-info"' in html
-    assert "Wave Man" in html
     assert "09-professions.md#wave-man-abilities" in html
+    assert "09-professions.md#priest-rituals" in html
+    # Ninja is hidden entirely (P6).
+    assert "#ninja-abilities" not in html
 
 
-def test_profession_info_partial_refuses_an_unselectable_profession(client):
-    assert client.get("/characters/api/profession-info/ninja").text == ""
-
-
-def test_profession_info_partial_refuses_an_unknown_profession(client):
-    assert client.get("/characters/api/profession-info/nope").text == ""
-
-
-def test_xp_endpoint_splits_the_prefixed_dropdown_value(client):
+def test_xp_endpoint_reads_the_profession_dropdown_value(client):
     cid = _seed(client)
     resp = client.post(f"/characters/{cid}/xp", json={
-        "school": "profession:wave_man",
+        "school": "profession",
         "profession_abilities": {"wave_man_round_damage": 1},
         "starting_xp": 150, "earned_xp": 0,
     })
     body = resp.json()
-    assert body["professions"]["name"] == "Wave Man"
+    assert body["professions"]["name"] == "Profession"
     assert body["professions"]["used"] == 1
     assert body["professions"]["allowance"] == 1
 
@@ -814,7 +820,7 @@ def test_xp_endpoint_splits_the_prefixed_dropdown_value(client):
 
 def _seed_wave_man(client, **over):
     defaults = dict(
-        school="", school_ring_choice="", profession="wave_man", knacks={},
+        school="", school_ring_choice="", profession=PTYPE, knacks={},
         ring_water=2, is_published=True,
         published_state={"name": "Ronin"},
         profession_abilities={"wave_man_initiative_die": 1},
@@ -831,11 +837,25 @@ def test_sheet_shows_the_profession_panel(client):
     assert "No School Ring or Dan" in html
 
 
-def test_sheet_lists_every_ability_with_the_taken_ones_emphasised(client):
+def test_sheet_lists_only_the_abilities_actually_taken(client):
+    # P10: the View Sheet is not the editor's catalogue.
     cid = _seed_wave_man(client)
     html = client.get(f"/characters/{cid}").text
+    assert 'data-ability="wave_man_initiative_die"' in html
     for a in PROFESSIONS["wave_man"].abilities:
-        assert f'data-ability="{a.id}"' in html
+        if a.id != "wave_man_initiative_die":
+            assert f'data-ability="{a.id}"' not in html
+
+
+def test_sheet_groups_a_mixed_build_by_profession(client):
+    cid = _seed_wave_man(client, starting_xp=200, profession_abilities={
+        "wave_man_round_damage": 2, "priest_commune": 1,
+    })
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-profession-group="wave_man"' in html
+    assert 'data-profession-group="priest"' in html
+    assert html.index('data-profession-group="wave_man"') < html.index(
+        'data-profession-group="priest"')
 
 
 def test_sheet_marks_an_ability_taken_twice(client):
@@ -885,7 +905,7 @@ def test_gm_api_reports_profession_and_abilities(client, monkeypatch):
     resp = client.get("/api/characters", headers={"Authorization": "Bearer tok"})
     assert resp.status_code == 200
     row = next(c for c in resp.json()["characters"] if c["id"] == cid)
-    assert row["profession"] == "wave_man"
+    assert row["profession"] == PTYPE
     assert row["profession_abilities"] == {"wave_man_round_damage": 2}
 
 
@@ -894,7 +914,7 @@ def test_sheet_xp_summary_shows_picks_used_not_xp(client):
                          profession_abilities={"wave_man_round_damage": 2})
     html = client.get(f"/characters/{cid}").text
     assert 'data-xp-card="professions"' in html
-    assert "Wave Man abilities" in html
+    assert "Profession abilities" in html
     assert "2 / 3" in html
 
 
@@ -916,7 +936,7 @@ def test_google_sheet_export_names_the_profession(client):
         compute_effective_status(char_dict), {},
     )
     flat = str(rows)
-    assert "Wave Man (profession)" in flat
+    assert "Profession (no school)" in flat
     assert "Wave Man Abilities" in flat
     assert "Round damage up x2" in flat
 
@@ -1047,7 +1067,7 @@ def test_form_post_ignores_malformed_ability_json(client):
     # isn't JSON must leave the character with no abilities, not a 500.
     cid = _seed(client)
     resp = client.post(f"/characters/{cid}", data={
-        "name": "Ronin", "school": "profession:wave_man",
+        "name": "Ronin", "school": "profession",
         "profession_abilities": "{not json at all",
         "school_ring_choice": "", "honor": "1.0", "rank": "1.0",
         "recognition": "1.0", "starting_xp": "150", "earned_xp": "0",
@@ -1055,14 +1075,14 @@ def test_form_post_ignores_malformed_ability_json(client):
     }, follow_redirects=False)
     assert resp.status_code in (200, 302, 303)
     c = _reload(client, cid)
-    assert c.profession == "wave_man"
+    assert c.profession == PTYPE
     assert c.profession_abilities == {}
 
 
 def test_form_post_accepts_ability_json(client):
     cid = _seed(client)
     client.post(f"/characters/{cid}", data={
-        "name": "Ronin", "school": "profession:wave_man",
+        "name": "Ronin", "school": "profession",
         "profession_abilities": '{"wave_man_round_damage": 2}',
         "school_ring_choice": "", "honor": "1.0", "rank": "1.0",
         "recognition": "1.0", "starting_xp": "300", "earned_xp": "0",
@@ -1106,8 +1126,8 @@ def test_google_sheet_export_says_no_school_when_there_is_neither(client):
 
 def test_diff_summary_falls_back_to_a_label_for_an_unknown_ability():
     from app.services.versions import compute_diff_summary
-    old = {"profession": "wave_man", "profession_abilities": {}}
-    new = {"profession": "wave_man", "profession_abilities": {"legacy_thing": 1}}
+    old = {"profession": PTYPE, "profession_abilities": {}}
+    new = {"profession": PTYPE, "profession_abilities": {"legacy_thing": 1}}
     assert "Legacy Thing taken" in compute_diff_summary(old, new)
 
 
@@ -1139,11 +1159,416 @@ def test_validation_treats_a_non_integer_count_as_zero():
 
 def test_diff_summary_skips_abilities_that_did_not_change():
     from app.services.versions import compute_diff_summary
-    old = {"profession": "wave_man",
+    old = {"profession": PTYPE,
            "profession_abilities": {"wave_man_round_damage": 2,
                                     "wave_man_initiative_die": 1}}
-    new = {"profession": "wave_man",
+    new = {"profession": PTYPE,
            "profession_abilities": {"wave_man_round_damage": 2,
                                     "wave_man_initiative_die": 2}}
     diffs = compute_diff_summary(old, new)
     assert diffs == ["Extra initiative die changed from x1 to x2"]
+
+
+# ===========================================================================
+# Part 2 - one Profession character type, abilities pooled across professions
+# (profession-design/priest-and-pooling.md)
+# ===========================================================================
+
+from app.game_data import (  # noqa: E402
+    PROFESSION_ABILITY_POOL,
+    PROFESSION_CHARACTER_TYPE,
+)
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 - availability, the pool, and the character-type sentinel
+# ---------------------------------------------------------------------------
+
+def test_availability_is_three_state():
+    # P6 needs three states, which a boolean cannot express.
+    assert PROFESSIONS["wave_man"].availability == "available"
+    assert PROFESSIONS["priest"].availability == "available"
+    assert PROFESSIONS["worker"].availability == "preview"
+    assert PROFESSIONS["merchant"].availability == "preview"
+    assert PROFESSIONS["ninja"].availability == "hidden"
+
+
+def test_available_and_visible_helpers():
+    assert PROFESSIONS["wave_man"].is_available is True
+    assert PROFESSIONS["worker"].is_available is False
+    # Preview professions are shown but not takeable; Ninja is neither.
+    assert PROFESSIONS["worker"].is_visible is True
+    assert PROFESSIONS["ninja"].is_visible is False
+
+
+def test_the_pool_holds_every_available_ability_only():
+    ids = [a.id for a in PROFESSION_ABILITY_POOL]
+    assert len(ids) == 20                       # Wave Man 10 + Priest 10
+    assert "wave_man_miss_raise" in ids
+    assert "priest_commune" in ids
+    assert not any(i.startswith("worker_") for i in ids)
+    assert not any(i.startswith("ninja_") for i in ids)
+
+
+def test_the_pool_is_ordered_by_profession_then_ordinal():
+    from app.game_data import PROFESSION_BY_ABILITY
+    got = [(PROFESSION_BY_ABILITY[a.id], a.ordinal) for a in PROFESSION_ABILITY_POOL]
+    assert got == sorted(got, key=lambda x: (x[0] != "wave_man", x[1]))
+
+
+def test_character_type_sentinel_is_not_a_school_or_profession_id():
+    from app.game_data import SCHOOLS
+    assert PROFESSION_CHARACTER_TYPE not in SCHOOLS
+    assert PROFESSION_CHARACTER_TYPE not in PROFESSIONS
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 - the dropdown value
+# ---------------------------------------------------------------------------
+
+def test_split_accepts_the_bare_profession_value():
+    assert split_school_or_profession("profession") == ("", PROFESSION_CHARACTER_TYPE)
+
+
+def test_split_still_accepts_the_legacy_prefixed_value():
+    # A stale editor tab open across the deploy will send the old form;
+    # resolving it to "no profession" would wipe the character's abilities.
+    assert split_school_or_profession("profession:wave_man") == (
+        "", PROFESSION_CHARACTER_TYPE)
+    assert split_school_or_profession("profession:priest") == (
+        "", PROFESSION_CHARACTER_TYPE)
+
+
+def test_split_legacy_value_naming_an_unknown_profession_is_still_a_profession():
+    # The type is what matters now, not which profession was named.
+    assert split_school_or_profession("profession:nope") == (
+        "", PROFESSION_CHARACTER_TYPE)
+
+
+def test_select_value_for_a_profession_character():
+    assert select_value_for("", PROFESSION_CHARACTER_TYPE) == "profession"
+    assert select_value_for("hida_bushi", "") == "hida_bushi"
+    assert select_value_for("", "") == ""
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 - sanitizing pools across professions
+# ---------------------------------------------------------------------------
+
+def test_sanitize_accepts_abilities_from_any_available_profession():
+    out = sanitize_profession_abilities({
+        "wave_man_round_damage": 2, "priest_commune": 1,
+    })
+    assert out == {"wave_man_round_damage": 2, "priest_commune": 1}
+
+
+def test_sanitize_applies_each_abilitys_own_per_ability_limit():
+    # P7: a Wave Man ability caps at 2 and a Priest ritual at 1, in the
+    # SAME character.
+    out = sanitize_profession_abilities({
+        "wave_man_round_damage": 5, "priest_commune": 5,
+    })
+    assert out == {"wave_man_round_damage": 2, "priest_commune": 1}
+
+
+def test_sanitize_drops_preview_and_hidden_profession_abilities():
+    out = sanitize_profession_abilities({
+        "worker_strength": 1, "ninja_fire_to_attack": 1,
+        "wave_man_round_damage": 1,
+    })
+    assert out == {"wave_man_round_damage": 1}
+
+
+def test_sanitize_still_drops_junk():
+    assert sanitize_profession_abilities({"nope": 1}) == {}
+    assert sanitize_profession_abilities({"wave_man_round_damage": 0}) == {}
+    assert sanitize_profession_abilities({"wave_man_round_damage": "two"}) == {}
+    assert sanitize_profession_abilities({"wave_man_round_damage": True}) == {}
+    assert sanitize_profession_abilities(None) == {}
+    assert sanitize_profession_abilities("nonsense") == {}
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 - ability_count no longer keys on the character's profession
+# ---------------------------------------------------------------------------
+
+def _mixed(**over):
+    data = {
+        "profession": PROFESSION_CHARACTER_TYPE,
+        "profession_abilities": {"wave_man_round_damage": 2, "priest_commune": 1},
+    }
+    data.update(over)
+    return data
+
+
+def test_ability_count_reads_across_professions():
+    from app.services.professions import ability_count
+    assert ability_count(_mixed(), "wave_man_round_damage") == 2
+    assert ability_count(_mixed(), "priest_commune") == 1
+    assert ability_count(_mixed(), "wave_man_miss_raise") == 0
+
+
+def test_ability_count_is_zero_for_a_school_character():
+    from app.services.professions import ability_count
+    assert ability_count(_mixed(profession=""), "wave_man_round_damage") == 0
+
+
+def test_ability_count_is_zero_for_an_unavailable_profession():
+    from app.services.professions import ability_count
+    data = _mixed(profession_abilities={"worker_strength": 2})
+    assert ability_count(data, "worker_strength") == 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 - grouped display rows
+# ---------------------------------------------------------------------------
+
+def test_display_groups_by_profession_and_hides_ninja():
+    groups = ability_counts_for_display(
+        {"wave_man_round_damage": 2}, include_untaken=True)
+    ids = [g["profession_id"] for g in groups]
+    assert ids == ["wave_man", "priest", "worker", "merchant"]
+    assert all(len(g["rows"]) == 10 for g in groups)
+    wave = next(g for g in groups if g["profession_id"] == "wave_man")
+    assert next(r for r in wave["rows"] if r["id"] == "wave_man_round_damage")["count"] == 2
+
+
+def test_display_carries_availability_and_the_rules_anchor():
+    groups = ability_counts_for_display({}, include_untaken=True)
+    by_id = {g["profession_id"]: g for g in groups}
+    assert by_id["wave_man"]["availability"] == "available"
+    assert by_id["worker"]["availability"] == "preview"
+    assert by_id["priest"]["rules_anchor"] == "#priest-rituals"
+    # Priest rituals are once-only, and the editor has to say so.
+    assert by_id["priest"]["rows"][0]["max"] == 1
+    assert by_id["wave_man"]["rows"][0]["max"] == 2
+
+
+def test_display_for_the_sheet_shows_only_what_was_taken():
+    # P10: the View Sheet lists taken abilities only, grouped.
+    groups = ability_counts_for_display(
+        {"wave_man_round_damage": 2, "priest_commune": 1}, include_untaken=False)
+    assert [g["profession_id"] for g in groups] == ["wave_man", "priest"]
+    assert [r["id"] for r in groups[0]["rows"]] == ["wave_man_round_damage"]
+    assert [r["id"] for r in groups[1]["rows"]] == ["priest_commune"]
+
+
+def test_display_for_the_sheet_of_a_character_with_nothing_taken():
+    assert ability_counts_for_display({}, include_untaken=False) == []
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 - the legacy-profession-type data migration
+# ---------------------------------------------------------------------------
+
+def test_migration_collapses_a_legacy_profession_id_to_the_type(db):
+    # Unlike the ALTER branches in _migrate_add_columns, this one is
+    # reachable on a fresh DB, so it gets a real test rather than a pragma.
+    from app.database import _migrate_legacy_profession_types
+    old = Character(name="Old Wave Man", school="", profession="wave_man",
+                    profession_abilities={"wave_man_round_damage": 2})
+    db.add(old)
+    db.commit()
+    cid = old.id
+    assert _migrate_legacy_profession_types(db) == 1
+    # The migration closes the session it was handed (it owns its own
+    # lifecycle in production); re-query rather than refreshing a detached
+    # instance.
+    migrated = db.query(Character).filter(Character.id == cid).one()
+    assert migrated.profession == PTYPE
+    # Abilities are untouched: ids are globally unique and carry their own
+    # provenance, so nothing about them needed rewriting.
+    assert migrated.profession_abilities == {"wave_man_round_damage": 2}
+
+
+def test_migration_leaves_school_and_already_migrated_characters_alone(db):
+    from app.database import _migrate_legacy_profession_types
+    db.add(Character(name="Schooled", school="akodo_bushi", profession=""))
+    db.add(Character(name="Already", school="", profession=PTYPE))
+    db.commit()
+    assert _migrate_legacy_profession_types(db) == 0
+
+
+def test_migration_normalizes_junk_in_the_profession_column(db):
+    # A crafted write could have left anything here; whatever it says, the
+    # character is a profession character.
+    from app.database import _migrate_legacy_profession_types
+    c = Character(name="Junk", school="", profession="nonsense")
+    db.add(c)
+    db.commit()
+    cid = c.id
+    assert _migrate_legacy_profession_types(db) == 1
+    assert db.query(Character).filter(Character.id == cid).one().profession == PTYPE
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 - Priest rituals for profession characters
+# ---------------------------------------------------------------------------
+
+def _abilities_for(client, cid):
+    """The school_abilities flag dict the sheet renders from."""
+    html = client.get(f"/characters/{cid}").text
+    import json as _json
+    import re as _re
+    m = _re.search(r'id="school-abilities"[^>]*>(.*?)</script>', html, _re.S)
+    return _json.loads(m.group(1)) if m else {}
+
+
+def _party_priests(client, cid):
+    html = client.get(f"/characters/{cid}").text
+    import json as _json
+    import re as _re
+    m = _re.search(r'id="party-priests"[^>]*>(.*?)</script>', html, _re.S)
+    return _json.loads(m.group(1)) if m else []
+
+
+def test_bless_topic_and_research_are_separate_flags(client):
+    # P4: two abilities, so taking one grants only its button.
+    cid = _seed_wave_man(client, starting_xp=200, profession_abilities={
+        "priest_conversation_blessing": 1})
+    flags = _abilities_for(client, cid)
+    assert flags.get("priest_bless_topic") is True
+    assert not flags.get("priest_bless_research")
+
+    cid2 = _seed_wave_man(client, name="Researcher", starting_xp=200,
+                          profession_abilities={"priest_research_blessing": 1})
+    flags2 = _abilities_for(client, cid2)
+    assert flags2.get("priest_bless_research") is True
+    assert not flags2.get("priest_bless_topic")
+
+
+def test_a_profession_character_without_the_rituals_gets_neither(client):
+    cid = _seed_wave_man(client, profession_abilities={"wave_man_round_damage": 1})
+    flags = _abilities_for(client, cid)
+    assert not flags.get("priest_bless_topic")
+    assert not flags.get("priest_bless_research")
+
+
+def test_a_priest_school_character_still_gets_both(client):
+    cid = _seed(client, school="priest", school_ring_choice="Water",
+                ring_water=3,
+                knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1},
+                is_published=True, published_state={"name": "Priest"})
+    flags = _abilities_for(client, cid)
+    assert flags.get("priest_bless_topic") is True
+    assert flags.get("priest_bless_research") is True
+
+
+def _group_with(client, *characters):
+    """Seed a gaming group holding the given (kwargs) characters."""
+    from app.models import GamingGroup
+    session = client._test_session_factory()
+    group = GamingGroup(name=f"Group {id(characters)}")
+    session.add(group)
+    session.commit()
+    ids = []
+    for kwargs in characters:
+        kwargs.setdefault("is_published", True)
+        kwargs.setdefault("published_state", {"name": kwargs.get("name", "x")})
+        ids.append(_seed(client, gaming_group_id=group.id, **kwargs))
+    return ids
+
+
+def test_a_profession_character_with_the_ritual_can_bless_an_ally(client):
+    blesser, ally = _group_with(
+        client,
+        dict(name="Ritual Ronin", school="", profession=PTYPE, knacks={},
+             starting_xp=200,
+             profession_abilities={"priest_ignore_penalties": 1}),
+        dict(name="Ally"),
+    )
+    names = [p["name"] for p in _party_priests(client, ally)]
+    assert "Ritual Ronin" in names
+
+
+def test_a_profession_character_without_the_ritual_cannot(client):
+    blesser, ally = _group_with(
+        client,
+        dict(name="Plain Ronin", school="", profession=PTYPE, knacks={},
+             profession_abilities={"wave_man_round_damage": 1}),
+        dict(name="Ally2"),
+    )
+    assert _party_priests(client, ally) == []
+
+
+def test_a_priest_school_ally_still_appears(client):
+    priest, ally = _group_with(
+        client,
+        dict(name="School Priest", school="priest", school_ring_choice="Water",
+             ring_water=3,
+             knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1}),
+        dict(name="Ally3"),
+    )
+    assert [p["name"] for p in _party_priests(client, ally)] == ["School Priest"]
+
+
+def test_a_priest_school_character_can_bless_themselves(client):
+    # P9: supersedes the old rule, which excluded self.
+    (priest,) = _group_with(
+        client,
+        dict(name="Lone Priest", school="priest", school_ring_choice="Water",
+             ring_water=3,
+             knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1}),
+    )
+    entries = _party_priests(client, priest)
+    assert len(entries) == 1
+    assert entries[0]["priest_id"] == priest
+    assert entries[0].get("is_self") is True
+
+
+def test_a_profession_character_with_the_ritual_can_bless_themselves(client):
+    (ronin,) = _group_with(
+        client,
+        dict(name="Lone Ronin", school="", profession=PTYPE, knacks={},
+             starting_xp=200,
+             profession_abilities={"priest_ignore_penalties": 1}),
+    )
+    entries = _party_priests(client, ronin)
+    assert [e["priest_id"] for e in entries] == [ronin]
+    assert entries[0]["is_self"] is True
+
+
+def test_self_blessing_needs_no_gaming_group(client):
+    # The ritual is performed on yourself; there is no party to consult.
+    cid = _seed_wave_man(client, starting_xp=200,
+                         profession_abilities={"priest_ignore_penalties": 1})
+    entries = _party_priests(client, cid)
+    assert [e["is_self"] for e in entries] == [True]
+
+
+def test_a_character_without_the_ritual_does_not_bless_themselves(client):
+    cid = _seed_wave_man(client, profession_abilities={"wave_man_round_damage": 1})
+    assert _party_priests(client, cid) == []
+
+
+def test_self_and_ally_blessers_both_appear(client):
+    ronin, priest = _group_with(
+        client,
+        dict(name="Both Ronin", school="", profession=PTYPE, knacks={},
+             starting_xp=200,
+             profession_abilities={"priest_ignore_penalties": 1}),
+        dict(name="Other Priest", school="priest", school_ring_choice="Water",
+             ring_water=3,
+             knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1}),
+    )
+    entries = _party_priests(client, ronin)
+    assert [e["name"] for e in entries] == ["Both Ronin", "Other Priest"]
+    assert [e["is_self"] for e in entries] == [True, False]
+
+
+def test_is_profession_character_handles_nothing():
+    from app.services.professions import is_profession_character
+    assert is_profession_character(None) is False
+    assert is_profession_character({}) is False
+    assert is_profession_character({"profession": PTYPE}) is True
+
+
+def test_xp_summary_ignores_a_non_integer_count():
+    # The sanitizer drops these on write; a stored row from an older
+    # release could still carry one, and the summary must not blow up.
+    summary = calculate_xp_breakdown(_wave_man_data(
+        starting_xp=200,
+        profession_abilities={"wave_man_round_damage": "two",
+                              "priest_commune": 1},
+    ))["professions"]
+    assert summary["used"] == 1

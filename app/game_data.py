@@ -352,8 +352,25 @@ class Profession:
     name: str
     abilities: List[ProfessionAbility]
     rules_anchor: str
-    selectable: bool = False
+    # Three states, because the campaign needs three (design doc part 2, P6):
+    #   "available" - abilities are in the pool and can be taken
+    #   "preview"   - shown greyed out so players can see what is coming,
+    #                 but not takeable
+    #   "hidden"    - absent from the UI entirely. Ninja abilities are
+    #                 special and have to be unlocked; that is a separate
+    #                 feature, so they are not surfaced at all yet.
+    availability: str = "preview"
     max_per_ability: int = 2
+
+    @property
+    def is_available(self) -> bool:
+        """Can a character take these abilities?"""
+        return self.availability == "available"
+
+    @property
+    def is_visible(self) -> bool:
+        """Should the editor render this profession's block at all?"""
+        return self.availability in ("available", "preview")
 
     @property
     def max_total_picks(self) -> int:
@@ -3034,10 +3051,12 @@ SCHOOLS_BUSHI_NONBUSHI = [
 # PROFESSIONS
 # ---------------------------------------------------------------------------
 #
-# A profession is taken INSTEAD of a school (design doc D1). Only the Wave
-# Man is selectable today; the other four lists are carried as data so the
-# editor can show them greyed out and so a second profession is a data
-# change plus its mechanics, not a refactor (D17).
+# A profession is taken INSTEAD of a school (design doc D1), and there is one
+# profession character TYPE - "Profession" - whose abilities pool across every
+# available profession and may be mixed freely (part 2, P1/P2). Wave Man and
+# Priest are available; Worker and Merchant are carried as data and shown
+# greyed out so players can see what is coming; Ninja abilities are hidden
+# until the separate unlock feature exists.
 #
 # Abilities cost nothing. A character unlocks their first at
 # PROFESSION_ABILITY_UNLOCK_BASE total XP and one more every
@@ -3460,7 +3479,7 @@ PROFESSIONS: Dict[str, Profession] = {
         name="Wave Man",
         abilities=_WAVE_MAN_ABILITIES,
         rules_anchor="#wave-man-abilities",
-        selectable=True,
+        availability="available",
     ),
     "worker": Profession(
         id="worker",
@@ -3479,7 +3498,9 @@ PROFESSIONS: Dict[str, Profession] = {
         name="Priest",
         abilities=_PRIEST_ABILITIES,
         rules_anchor="#priest-rituals",
-        # Rituals are once-only, unlike every other profession's list (D4).
+        availability="available",
+        # Rituals are once-only, unlike every other profession's list (D4):
+        # a ritual is a thing you have been taught, not a knack you deepen.
         max_per_ability=1,
     ),
     "ninja": Profession(
@@ -3487,6 +3508,8 @@ PROFESSIONS: Dict[str, Profession] = {
         name="Ninja",
         abilities=_NINJA_ABILITIES,
         rules_anchor="#ninja-abilities",
+        # Ninja abilities are unlocked separately; not part of this feature.
+        availability="hidden",
     ),
 }
 
@@ -3500,6 +3523,25 @@ PROFESSION_ABILITIES: Dict[str, ProfessionAbility] = {
 PROFESSION_BY_ABILITY: Dict[str, str] = {
     a.id: p.id for p in PROFESSIONS.values() for a in p.abilities
 }
+
+
+# A character who takes a profession instead of a school is simply a
+# "Profession" character (design doc part 2, P1) - NOT a "Wave Man" or a
+# "Priest". They then draw abilities from every available profession and mix
+# them freely, which is how a wave man who settles in a city picks up work,
+# or learns a ritual from the monks he prays with. This sentinel is what
+# ``Character.profession`` stores.
+PROFESSION_CHARACTER_TYPE = "profession"
+
+
+# Every ability a profession character may actually take, in profession order
+# then rules order. Professions in "preview" or "hidden" contribute nothing.
+PROFESSION_ABILITY_POOL: List[ProfessionAbility] = [
+    a
+    for p in PROFESSIONS.values()
+    if p.is_available
+    for a in p.abilities
+]
 
 
 # The profession analogue of SCHOOL_TECHNIQUE_BONUSES: declarative,
@@ -3531,6 +3573,13 @@ for _aid in PROFESSION_ABILITY_BONUSES:  # pragma: no cover
 for _p in PROFESSIONS.values():  # pragma: no cover
     if [a.ordinal for a in _p.abilities] != list(range(1, len(_p.abilities) + 1)):
         raise ValueError(f"profession {_p.id} has non-sequential ability ordinals")
+if PROFESSION_CHARACTER_TYPE in PROFESSIONS or PROFESSION_CHARACTER_TYPE in SCHOOLS:  # pragma: no cover
+    raise ValueError(
+        "PROFESSION_CHARACTER_TYPE collides with a school or profession id"
+    )
+for _p in PROFESSIONS.values():  # pragma: no cover
+    if _p.availability not in ("available", "preview", "hidden"):
+        raise ValueError(f"profession {_p.id} has an unknown availability")
 
 
 PROFESSIONS_FOR_PICKER = [
