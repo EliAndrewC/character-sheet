@@ -1,6 +1,10 @@
 # Professions, part 2: one Profession type, and the Priest rituals
 
-Status: **planning, awaiting sign-off. No code written.**
+Status: **planning complete, awaiting sign-off. No code written** beyond the
+commune docs correction in section 2, which was a standalone request.
+
+Every rules question raised during planning has been answered by the GM and is
+recorded in section 1. There is no open-questions section.
 Created 2026-08-29. Follows `profession-design/design.md` (the Wave Man build,
 now shipped). Source rules: `rules/09-professions.md`.
 
@@ -30,6 +34,8 @@ unless contradicted here.
 | P6 | **Worker and Merchant abilities are shown greyed out**, as existing but not yet available. **Ninja abilities are not shown at all** - they are special, need to be unlocked, and are out of scope for this effort. |
 | P7 | The per-ability limit is unchanged: twice for most professions, **once for Priest rituals**, because a ritual is a thing you have learned. So one profession supplies at most 20 picks; a character who reaches 450 total XP has 21 picks and must branch out into a second profession. |
 | P8 | Unlock cadence unchanged: one pick at 150 total XP, one more every 15 after (D2/D3). |
+| P9 | **R9's self-targeting applies to Priest *school* characters too**, not only to profession characters. It is one ritual; a 5th Dan priest explicitly "has all 10". This supersedes shipped behaviour - see section 2. |
+| P10 | **The editor shows every ability; the View Sheet shows only the ones taken**, grouped by profession. |
 
 ---
 
@@ -59,7 +65,7 @@ Ritual numbering follows `rules/09-professions.md`.
 Two things about the three that exist:
 
 - **They are gated on being a Priest *school* character, not on holding the ritual.** `priest_bless_rituals` in `app/routes/pages.py` is `character.school == "priest"`, and it is **one flag that turns on both** the R7 and R8 buttons. `party_priests` - which puts the R9 button on a sheet - filters `p.school == "priest"`.
-- **`visible_party_members` excludes the character themselves** (`Character.id != character.id` in `app/services/party.py`), so today's R9 button appears only on an *ally's* sheet. P5 says the ritual may target the priest themselves, which is new behaviour - see Q8.
+- **`visible_party_members` excludes the character themselves** (`Character.id != character.id` in `app/services/party.py`), so today's R9 button appears only on an *ally's* sheet. Under P5 and P9 the ritual may target the priest themselves, for school and profession characters alike. This is the one place the plan **supersedes working, tested behaviour** rather than adding to it; the tests that pin the old rule are named in Phase 5.
 
 **R5's "commune" is not a coincidence of naming.** It is deliberately the same
 name as the `commune` school knack because it is the weaker version of it:
@@ -95,7 +101,7 @@ not just its own.
 - [ ] `split_school_or_profession()` accepts the bare value `"profession"`. Keep accepting the old `profession:<id>` form for one release and map it to the sentinel: a stale editor tab open across the deploy will send it, and silently resolving to "no profession" would wipe a character's abilities.
 - [ ] `sanitize_profession_abilities()` loses its `profession_id` argument. It accepts any ability whose profession is `available`, and clamps each to **that ability's own profession's** `max_per_ability` - so a Wave Man ability caps at 2 and a Priest ritual at 1 **in the same character**. Abilities from `preview` and `hidden` professions are dropped.
 - [ ] `ability_count()` drops its "belongs to this character's profession" check: it becomes "this is a profession character, and this ability's profession is available".
-- [ ] `ability_counts_for_display()` returns grouped rows - `[{profession_id, name, rules_anchor, availability, rows: [...]}, ...]` - and takes a flag for whether to include untaken abilities, since the editor wants all of them and the sheet wants only the taken ones (P6, Q4).
+- [ ] `ability_counts_for_display()` returns grouped rows - `[{profession_id, name, rules_anchor, availability, rows: [...]}, ...]` - and takes a flag for whether to include untaken abilities, since the editor wants all of them and the sheet wants only the taken ones (P10).
 - [ ] `TDD:` a character holding both a Wave Man ability and a Priest ritual round-trips through save, snapshot, revert and the diff summary.
 - [ ] `TDD:` a crafted POST naming a Ninja or Worker ability is dropped on write.
 
@@ -122,7 +128,7 @@ not just its own.
 
 ## 7. Phase 4 - sheet and other surfaces
 
-- [ ] The sheet's profession panel headers as "Profession" and shows **only the abilities the character has actually taken**, grouped by source profession (Q4). A character with three Wave Man abilities and one ritual sees four entries under two headings, not thirty rows at 40% opacity.
+- [ ] The sheet's profession panel headers as "Profession" and shows **only the abilities the character has actually taken**, grouped by source profession (P10). A character with three Wave Man abilities and one ritual sees four entries under two headings, not thirty rows at 40% opacity.
 - [ ] Keep the x2 chip and the reference-only "tell your GM" note. The seven narrative rituals get that same note, since taking one is a real choice the GM needs to know about even though the sheet does nothing with it.
 - [ ] Google Sheets export, group summary and `GET /api/characters` relabel; the API keeps sending the ability map unchanged, which already carries provenance.
 - [ ] `TDD:` render tests for a mixed character on each surface, including that untaken abilities do **not** appear on the sheet.
@@ -132,7 +138,10 @@ not just its own.
 - [ ] Mark `priest` as `available`, putting all ten rituals in the pool.
 - [ ] **Split `priest_bless_rituals` into two flags**, one for R7 and one for R8 (P4). Each becomes `character.school == "priest" or holds(that ritual)`. A priest-school character keeps both, as today.
 - [ ] Widen `party_priests` in `pages.py` to include profession characters holding **R9**, so the "blessed for 10 rerolls" button appears on an ally's sheet for them too.
-- [ ] **Self-targeting for R9** (P5): the blesser list must be able to include the viewing character. `visible_party_members` excludes self by design and is shared with several other party mechanics, so **do not change it** - build the self entry alongside the party list in the `party_priests` block instead, where the change cannot leak into Priest 5th Dan conviction or 3rd Dan precepts sharing. See Q8 for whether this also applies to Priest school characters.
+- [ ] **Self-targeting for R9** (P5, P9), for school and profession characters alike: the blesser list must be able to include the viewing character.
+- [ ] **Do not change `visible_party_members` to do it.** It excludes self by design and is shared with Priest 5th Dan conviction, Priest 3rd Dan precepts sharing, Daidoji 3rd Dan and the party-effect layer generally; a self entry leaking into those would be a subtle, hard-to-spot bug. Build the self entry alongside the party list inside the `party_priests` block in `pages.py`, where the blast radius is one feature.
+- [ ] The self entry needs its own label - the existing button reads "<priest name> priest blessed for 10 rerolls", which is wrong when the priest is you.
+- [ ] `TDD:` **invert `tests/test_routes.py::TestPartyPriests::test_priest_does_not_appear_in_their_own_party_priests`.** It asserts today's rule in its name and its docstring, so rename it rather than editing the assertion in place, and say in the docstring that P9 changed the rule. This is the clearest signal in the diff that shipped behaviour moved on purpose.
 - [ ] Priest *school* characters are otherwise unaffected: 5th Dan still grants all ten, and a school character cannot take profession abilities at all, so there is no double-dipping path to guard.
 - [ ] The seven narrative rituals need **no mechanics** (P3) - they are list entries with reference text.
 - [ ] `TDD:` the R7 button appears for a profession character holding R7 and not for one holding only R8, and vice versa; a priest-school character still gets both; a profession character holding R9 appears in an ally's `party_priests`; a character holding R9 can bless themselves.
@@ -147,29 +156,9 @@ Nothing here is a unit test; those are done by now, phase by phase.
 - [ ] New clicktest: the per-ability ceiling differs within one character - a Wave Man ability reaches 2, a Priest ritual stops at 1.
 - [ ] New clicktest: Worker and Merchant blocks render greyed out with disabled steppers; no Ninja block appears anywhere.
 - [ ] New clicktest: a profession character with R7 gets that bless button and not R8's.
+- [ ] New clicktest: a lone priest in a group can bless themselves - the counterpart to the inverted unit test, and the case that had no coverage at all before because it could not happen. The existing ally-blessing clicktest around `tests/e2e/test_school_abilities.py:8132` should keep passing untouched.
 - [ ] New clicktest: the sheet lists only taken abilities.
 - [ ] Update the `profession:wave_man` case in `test_sheet_js_errors.py` to the new value, and add a mixed-profession character to the sweep.
 - [ ] Coverage back to 100%.
 - [ ] Docs: `COVERAGE.md`; `school-features/WaveMan.md` (its acquisition section describes per-profession character types and is now wrong); the Priest ritual story in `school-features/Priest.md`; and the Professions section of `CLAUDE.md`.
 - [ ] Deploy.
-
----
-
-## 10. Open question
-
-One, and it exists because P5 changes shipped behaviour rather than only adding
-new behaviour.
-
-**Q8 - does R9 self-targeting apply to Priest *school* characters too?**
-
-P5 says the sick-or-impaired ritual may target the priest themselves or an
-ally. Today it cannot: the button is built from `visible_party_members`, which
-excludes the viewing character, so a Priest school character can bless every
-ally and never themselves.
-
-- **Yes, both** is the consistent reading - it is one ritual, and a priest school character at 5th Dan explicitly "has all 10 rituals". It changes behaviour that is already live and tested, so the existing priest clicktests would need updating alongside.
-- **Profession characters only** would leave the same ritual behaving differently depending on where the character got it, which seems wrong but is worth naming as the alternative.
-
-I have assumed **yes, both** in Phase 5 and will implement it that way unless
-you say otherwise. Flagging it because it is a change to working code that your
-answer did not explicitly ask for, not because the rules reading is unclear.
