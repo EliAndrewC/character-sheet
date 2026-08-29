@@ -1,0 +1,175 @@
+# Professions, part 2: one Profession type, and the Priest rituals
+
+Status: **planning, awaiting sign-off. No code written.**
+Created 2026-08-29. Follows `profession-design/design.md` (the Wave Man build,
+now shipped). Source rules: `rules/09-professions.md`.
+
+Two changes:
+
+1. **Restructure.** A character's type becomes plain **Profession**, not "Wave
+   Man" or "Worker". A profession character may then take abilities from any
+   available profession and mix them freely - a wave man who moves to a city
+   and picks up work, or who prays at a temple often enough that the monks
+   teach him a ritual.
+2. **Turn on the Priest rituals** as the first test of that mixing.
+
+---
+
+## 1. Rulings
+
+Everything in the Wave Man build (`design.md` D1-D22) carries over unchanged
+unless contradicted here.
+
+| # | Ruling |
+|---|---|
+| P1 | **One character type: "Profession"**, not one type per profession. Abilities are grouped under "Wave Man", "Priest" etc. headings. |
+| P2 | **Abilities pool across every available profession** and may be mixed freely. No cap on how many come from one profession beyond that profession's own supply. |
+| P3 | **All ten Priest rituals are takeable.** Only the three with existing mechanics (R7, R8, R9) get sheet features; the other seven are narrative - they show as taken and nothing else happens. |
+| P4 | **R7 and R8 are separately takeable.** They are two abilities, so taking one grants only its button. |
+| P5 | **The sick-or-impaired ritual (R9) may target the priest themselves or an ally.** |
+| P6 | **Worker and Merchant abilities are shown greyed out**, as existing but not yet available. **Ninja abilities are not shown at all** - they are special, need to be unlocked, and are out of scope for this effort. |
+| P7 | The per-ability limit is unchanged: twice for most professions, **once for Priest rituals**, because a ritual is a thing you have learned. So one profession supplies at most 20 picks; a character who reaches 450 total XP has 21 picks and must branch out into a second profession. |
+| P8 | Unlock cadence unchanged: one pick at 150 total XP, one more every 15 after (D2/D3). |
+
+---
+
+## 2. Where the Priest rituals actually stand
+
+The Priest school's Special Ability is "You have all 10 rituals listed under
+the Priest profession", but **only three of the ten have machinery**;
+`school-features/Priest.md` has recorded this since the school was built. Under
+P3 that is fine - the other seven become takeable narrative entries - but it
+means "the Priest school already implements these" is only a third true, and
+the three that exist need rewiring rather than reuse.
+
+Ritual numbering follows `rules/09-professions.md`.
+
+| # | ritual | today | under this plan |
+|---|---|---|---|
+| R1 | Extra void point on a night the target starts with 0 VP | narrative | narrative |
+| R2 | Heal an extra serious wound on an off-night | narrative | narrative |
+| R3 | Once per combat phase, pick attack/parry/damage/wound checks: you and all allies round those rolls up to the nearest 5 | narrative | narrative |
+| R4 | Once per conversation, pick a skill; your side rounds it up, chosen after seeing a result | narrative | narrative |
+| R5 | Spend a void point to roll **precepts** as a commune for nearby supernatural influence | narrative | narrative |
+| R6 | Two free raises to resist disease | narrative | narrative |
+| R7 | Bless a conversation topic: target rolls 2k1 extra on their first contested roll on it | **implemented** | rewired, split from R8 |
+| R8 | Bless research: target rolls 2k1 extra | **implemented** | rewired, split from R7 |
+| R9 | Target ignores sickness/impaired penalties in the next conversation or fight | **implemented** | rewired, plus self-targeting |
+
+Two things about the three that exist:
+
+- **They are gated on being a Priest *school* character, not on holding the ritual.** `priest_bless_rituals` in `app/routes/pages.py` is `character.school == "priest"`, and it is **one flag that turns on both** the R7 and R8 buttons. `party_priests` - which puts the R9 button on a sheet - filters `p.school == "priest"`.
+- **`visible_party_members` excludes the character themselves** (`Character.id != character.id` in `app/services/party.py`), so today's R9 button appears only on an *ally's* sheet. P5 says the ritual may target the priest themselves, which is new behaviour - see Q8.
+
+**R5's "commune" is not a coincidence of naming.** It is deliberately the same
+name as the `commune` school knack because it is the weaker version of it:
+rolled with **precepts** rather than with the knack, same void-point cost, and
+limited to detecting supernatural influence that is currently present or nearby
+(type, strength, proximity) where the knack questions the kami about events
+they witnessed. It stays narrative here, but the relationship is now recorded
+in `school-features/Priest.md` and beside the knack's void-point cost in
+`app/services/dice.py`, so nobody later "fixes" one into the other.
+
+---
+
+## 3. Working method
+
+Same as the Wave Man build, for the same reasons: **unit tests are TDD and live
+in the phase that owns the code**, tagged `TDD:` below and written failing
+before the implementation bullets in their group. Clicktests are the deliberate
+exception and all sit in the last phase.
+
+The restructure touches shipped, tested code, so **every phase must leave the
+existing 3592 unit tests, 150 JS tests and 29 profession clicktests green**,
+not just its own.
+
+---
+
+## 4. Phase 1 - the data model becomes a pool
+
+- [ ] `TDD:` tests for the pooled accessors, the three-state availability, and the migrated character type.
+- [ ] `Profession.selectable` becomes **`availability`** with three states, because P6 needs three: `"available"` (abilities are takeable - Wave Man, Priest), `"preview"` (shown greyed out, not takeable - Worker, Merchant), `"hidden"` (absent from the UI entirely - Ninja). A boolean cannot express this.
+- [ ] `PROFESSION_CHARACTER_TYPE = "profession"` sentinel; `Character.profession` stores that rather than a profession id. Column and migration entry are unchanged.
+- [ ] **Data migration** for existing rows: any `profession` holding a profession id becomes the sentinel. `profession_abilities` needs no change - ability ids are globally unique and carry their own provenance via `PROFESSION_BY_ABILITY`. Goes beside `_migrate_legacy_specializations` in `database.py` as a data migration, not an `ALTER TABLE`, and gets a **real test** rather than a pragma: unlike the ALTER branches it is reachable on a fresh DB.
+- [ ] `PROFESSION_ABILITY_POOL` - every ability from every `available` profession, in profession order then ordinal.
+- [ ] `split_school_or_profession()` accepts the bare value `"profession"`. Keep accepting the old `profession:<id>` form for one release and map it to the sentinel: a stale editor tab open across the deploy will send it, and silently resolving to "no profession" would wipe a character's abilities.
+- [ ] `sanitize_profession_abilities()` loses its `profession_id` argument. It accepts any ability whose profession is `available`, and clamps each to **that ability's own profession's** `max_per_ability` - so a Wave Man ability caps at 2 and a Priest ritual at 1 **in the same character**. Abilities from `preview` and `hidden` professions are dropped.
+- [ ] `ability_count()` drops its "belongs to this character's profession" check: it becomes "this is a profession character, and this ability's profession is available".
+- [ ] `ability_counts_for_display()` returns grouped rows - `[{profession_id, name, rules_anchor, availability, rows: [...]}, ...]` - and takes a flag for whether to include untaken abilities, since the editor wants all of them and the sheet wants only the taken ones (P6, Q4).
+- [ ] `TDD:` a character holding both a Wave Man ability and a Priest ritual round-trips through save, snapshot, revert and the diff summary.
+- [ ] `TDD:` a crafted POST naming a Ninja or Worker ability is dropped on write.
+
+## 5. Phase 2 - allowance and validation
+
+- [ ] `TDD:` boundary tests for the pooled ceiling and the mixed per-ability limits.
+- [ ] `profession_ability_allowance()` loses its `profession_id` argument; the ceiling becomes the **sum of `max_total_picks` over `available` professions** - 20 (Wave Man) + 10 (Priest rituals) = **30 picks, reached at 585 XP**. `preview` professions do not count. The unlock cadence is untouched.
+- [ ] The ceiling clamp matters for more than tidiness: it is what stops a 600-XP character being nagged forever by the soft "unclaimed picks" warning about picks the pool cannot supply.
+- [ ] Pin P7's worked example as a test: **at 450 total XP a character has 21 picks and Wave Man alone supplies 20**, so the 21st must come from another profession.
+- [ ] `_validate_profession()` updates: "not a Wave Man ability" becomes "not an ability of any available profession"; the per-ability limit reads the owning profession's max; the unimplemented-profession error now fires on an ability from a `preview`/`hidden` profession rather than on the character's type.
+- [ ] XP breakdown and `editor_xp_view` rows relabel to "Profession abilities" and group their `rows` by profession.
+- [ ] `TDD:` one test per changed error path, plus a mixed-profession character that validates clean.
+
+## 6. Phase 3 - editor
+
+- [ ] The dropdown's "Professions (no school)" optgroup collapses to **one option, "Profession"**. The individual professions stop being character types.
+- [ ] The abilities section renders **one block per profession**, each with a heading and a link to that profession's rules anchor. Wave Man and Priest are interactive; **Worker and Merchant render greyed out with their steppers disabled** and a short "not yet available" note; **Ninja is absent** (P6).
+- [ ] The allowance counter is pool-wide; each ability's + still disables at its own profession's max, so a Priest ritual stops at 1 beside a Wave Man ability that goes to 2.
+- [ ] Priest rituals need a visible marker that they are **once-only**, since every other ability on the page goes to 2 and an unexplained disabled + reads as a bug.
+- [ ] `GET /characters/api/profession-info/{id}` becomes `/api/profession-info` with no id, describing the character type rather than one profession.
+- [ ] Alpine: `isProfession()` compares against the sentinel; `PROFESSIONS_DATA` carries `availability` and the grouping; `professionName()` becomes the type label.
+- [ ] `TDD:` editor route tests for the single option, all four visible groups, Ninja's absence, the disabled preview steppers, and the pooled counter.
+- [ ] Rerun `scripts/build-css.sh`.
+
+## 7. Phase 4 - sheet and other surfaces
+
+- [ ] The sheet's profession panel headers as "Profession" and shows **only the abilities the character has actually taken**, grouped by source profession (Q4). A character with three Wave Man abilities and one ritual sees four entries under two headings, not thirty rows at 40% opacity.
+- [ ] Keep the x2 chip and the reference-only "tell your GM" note. The seven narrative rituals get that same note, since taking one is a real choice the GM needs to know about even though the sheet does nothing with it.
+- [ ] Google Sheets export, group summary and `GET /api/characters` relabel; the API keeps sending the ability map unchanged, which already carries provenance.
+- [ ] `TDD:` render tests for a mixed character on each surface, including that untaken abilities do **not** appear on the sheet.
+
+## 8. Phase 5 - the Priest rituals
+
+- [ ] Mark `priest` as `available`, putting all ten rituals in the pool.
+- [ ] **Split `priest_bless_rituals` into two flags**, one for R7 and one for R8 (P4). Each becomes `character.school == "priest" or holds(that ritual)`. A priest-school character keeps both, as today.
+- [ ] Widen `party_priests` in `pages.py` to include profession characters holding **R9**, so the "blessed for 10 rerolls" button appears on an ally's sheet for them too.
+- [ ] **Self-targeting for R9** (P5): the blesser list must be able to include the viewing character. `visible_party_members` excludes self by design and is shared with several other party mechanics, so **do not change it** - build the self entry alongside the party list in the `party_priests` block instead, where the change cannot leak into Priest 5th Dan conviction or 3rd Dan precepts sharing. See Q8 for whether this also applies to Priest school characters.
+- [ ] Priest *school* characters are otherwise unaffected: 5th Dan still grants all ten, and a school character cannot take profession abilities at all, so there is no double-dipping path to guard.
+- [ ] The seven narrative rituals need **no mechanics** (P3) - they are list entries with reference text.
+- [ ] `TDD:` the R7 button appears for a profession character holding R7 and not for one holding only R8, and vice versa; a priest-school character still gets both; a profession character holding R9 appears in an ally's `party_priests`; a character holding R9 can bless themselves.
+
+## 9. Phase 6 - clicktests, coverage and docs
+
+Nothing here is a unit test; those are done by now, phase by phase.
+
+- [ ] Update the existing 29 `test_professions.py` clicktests for the new dropdown value and grouped ability list. Most need only the helper changed.
+- [ ] `select_profession()` in `tests/e2e/helpers.py` loses its argument.
+- [ ] New clicktest: a character takes Wave Man abilities **and** a Priest ritual, publishes, and both render under their own headings on the sheet.
+- [ ] New clicktest: the per-ability ceiling differs within one character - a Wave Man ability reaches 2, a Priest ritual stops at 1.
+- [ ] New clicktest: Worker and Merchant blocks render greyed out with disabled steppers; no Ninja block appears anywhere.
+- [ ] New clicktest: a profession character with R7 gets that bless button and not R8's.
+- [ ] New clicktest: the sheet lists only taken abilities.
+- [ ] Update the `profession:wave_man` case in `test_sheet_js_errors.py` to the new value, and add a mixed-profession character to the sweep.
+- [ ] Coverage back to 100%.
+- [ ] Docs: `COVERAGE.md`; `school-features/WaveMan.md` (its acquisition section describes per-profession character types and is now wrong); the Priest ritual story in `school-features/Priest.md`; and the Professions section of `CLAUDE.md`.
+- [ ] Deploy.
+
+---
+
+## 10. Open question
+
+One, and it exists because P5 changes shipped behaviour rather than only adding
+new behaviour.
+
+**Q8 - does R9 self-targeting apply to Priest *school* characters too?**
+
+P5 says the sick-or-impaired ritual may target the priest themselves or an
+ally. Today it cannot: the button is built from `visible_party_members`, which
+excludes the viewing character, so a Priest school character can bless every
+ally and never themselves.
+
+- **Yes, both** is the consistent reading - it is one ritual, and a priest school character at 5th Dan explicitly "has all 10 rituals". It changes behaviour that is already live and tested, so the existing priest clicktests would need updating alongside.
+- **Profession characters only** would leave the same ritual behaving differently depending on where the character got it, which seems wrong but is worth naming as the alternative.
+
+I have assumed **yes, both** in Phase 5 and will implement it that way unless
+you say otherwise. Flagging it because it is a change to working code that your
+answer did not explicitly ask for, not because the rules reading is unclear.
