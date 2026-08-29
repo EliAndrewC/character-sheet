@@ -44,13 +44,12 @@ def test_priest_rituals_may_be_taken_once_everything_else_twice():
         assert PROFESSIONS[pid].max_per_ability == 2
 
 
-def test_wave_man_and_priest_are_the_available_professions():
-    # Part 2 P3/P6: Priest joins Wave Man; Worker and Merchant are shown
-    # but not takeable; Ninja is hidden entirely.
-    assert PROFESSIONS["wave_man"].is_available is True
-    assert PROFESSIONS["priest"].is_available is True
-    for pid in ("worker", "merchant", "ninja"):
-        assert PROFESSIONS[pid].is_available is False
+def test_everything_but_ninja_is_available():
+    # Part 2 brought Priest in beside Wave Man; part 3 brought Worker and
+    # Merchant. Ninja abilities are unlocked separately.
+    for pid in ("wave_man", "priest", "worker", "merchant"):
+        assert PROFESSIONS[pid].is_available is True, pid
+    assert PROFESSIONS["ninja"].is_available is False
 
 
 def test_every_profession_has_a_rules_anchor():
@@ -353,7 +352,8 @@ from app.services.xp import (  # noqa: E402
     (165, 2), (179, 2), (180, 3),    # then one every 15
     (285, 10), (420, 19),
     (435, 20),                       # Wave Man alone is exhausted here
-    (585, 30), (1000, 30),           # pooled ceiling: Wave Man 20 + Priest 10
+    (585, 30),                       # Wave Man 20 + Priest 10 alone
+    (150 + 67 * 15, 68), (10_000, 68),  # pooled ceiling across all four
 ])
 def test_allowance_boundaries(total_xp, expected):
     assert profession_ability_allowance(total_xp) == expected
@@ -413,8 +413,8 @@ def test_xp_breakdown_profession_row_absent_for_a_school_character():
 
 
 def test_breakdown_next_at_xp_is_none_at_the_ceiling():
-    b = calculate_xp_breakdown(_wave_man_data(starting_xp=585, earned_xp=100))
-    assert b["professions"]["allowance"] == 30
+    b = calculate_xp_breakdown(_wave_man_data(starting_xp=2000, earned_xp=0))
+    assert b["professions"]["allowance"] == 68
     assert b["professions"]["next_at_xp"] is None
 
 
@@ -745,14 +745,19 @@ def test_editor_offers_one_profession_option_in_the_school_dropdown(client):
     assert 'value="profession:wave_man"' not in html
 
 
-def test_editor_greys_out_the_preview_professions(client):
-    # P6: Worker and Merchant are shown but not takeable; Ninja is absent.
+def test_editor_hides_the_ninja_abilities(client):
+    # P6/R1: Ninja abilities are unlocked separately and never shown.
     cid = _seed(client)
     html = client.get(f"/characters/{cid}/edit").text
-    assert 'data-testid="profession-preview-worker"' in html
-    assert 'data-testid="profession-preview-merchant"' in html
     assert 'data-profession-group="ninja"' not in html
     assert "ninja_fire_to_attack" not in html
+
+
+def test_editor_shows_all_four_available_professions(client):
+    cid = _seed(client)
+    html = client.get(f"/characters/{cid}/edit").text
+    for pid in ("wave_man", "worker", "merchant", "priest"):
+        assert f'data-profession-group="{pid}"' in html, pid
 
 
 def test_editor_marks_priest_rituals_as_once_only(client):
@@ -762,11 +767,13 @@ def test_editor_marks_priest_rituals_as_once_only(client):
     assert 'data-testid="profession-once-only-wave_man"' not in html
 
 
-def test_editor_shows_available_professions_before_previews(client):
+def test_editor_lists_professions_in_rules_order(client):
+    # With everything but Ninja available, the available-first sort is a
+    # no-op and the rules file's own order stands.
     cid = _seed(client)
     html = client.get(f"/characters/{cid}/edit").text
     order = [html.index(f'data-profession-group="{p}"')
-             for p in ("wave_man", "priest", "worker", "merchant")]
+             for p in ("wave_man", "worker", "merchant", "priest")]
     assert order == sorted(order)
 
 
@@ -1185,35 +1192,39 @@ from app.game_data import (  # noqa: E402
 # ---------------------------------------------------------------------------
 
 def test_availability_is_three_state():
-    # P6 needs three states, which a boolean cannot express.
-    assert PROFESSIONS["wave_man"].availability == "available"
-    assert PROFESSIONS["priest"].availability == "available"
-    assert PROFESSIONS["worker"].availability == "preview"
-    assert PROFESSIONS["merchant"].availability == "preview"
+    # P6 needs three states, which a boolean cannot express. Worker and
+    # Merchant were previews until part 3 turned them on; Ninja abilities
+    # are unlocked separately and stay hidden.
+    for pid in ("wave_man", "priest", "worker", "merchant"):
+        assert PROFESSIONS[pid].availability == "available", pid
     assert PROFESSIONS["ninja"].availability == "hidden"
 
 
 def test_available_and_visible_helpers():
     assert PROFESSIONS["wave_man"].is_available is True
-    assert PROFESSIONS["worker"].is_available is False
-    # Preview professions are shown but not takeable; Ninja is neither.
-    assert PROFESSIONS["worker"].is_visible is True
+    assert PROFESSIONS["worker"].is_available is True
+    # Ninja is neither available nor visible.
+    assert PROFESSIONS["ninja"].is_available is False
     assert PROFESSIONS["ninja"].is_visible is False
 
 
 def test_the_pool_holds_every_available_ability_only():
     ids = [a.id for a in PROFESSION_ABILITY_POOL]
-    assert len(ids) == 20                       # Wave Man 10 + Priest 10
+    # Wave Man 10 + Priest 10 + Worker 9 (one held back) + Merchant 10.
+    assert len(ids) == 39
     assert "wave_man_miss_raise" in ids
     assert "priest_commune" in ids
-    assert not any(i.startswith("worker_") for i in ids)
+    assert "worker_strength" in ids
+    assert "merchant_law" in ids
+    assert "worker_advanced_as_basic" not in ids
     assert not any(i.startswith("ninja_") for i in ids)
 
 
 def test_the_pool_is_ordered_by_profession_then_ordinal():
-    from app.game_data import PROFESSION_BY_ABILITY
+    from app.game_data import PROFESSION_BY_ABILITY, PROFESSIONS as _P
+    order = list(_P)
     got = [(PROFESSION_BY_ABILITY[a.id], a.ordinal) for a in PROFESSION_ABILITY_POOL]
-    assert got == sorted(got, key=lambda x: (x[0] != "wave_man", x[1]))
+    assert got == sorted(got, key=lambda x: (order.index(x[0]), x[1]))
 
 
 def test_character_type_sentinel_is_not_a_school_or_profession_id():
@@ -1271,10 +1282,9 @@ def test_sanitize_applies_each_abilitys_own_per_ability_limit():
     assert out == {"wave_man_round_damage": 2, "priest_commune": 1}
 
 
-def test_sanitize_drops_preview_and_hidden_profession_abilities():
+def test_sanitize_drops_hidden_profession_abilities():
     out = sanitize_profession_abilities({
-        "worker_strength": 1, "ninja_fire_to_attack": 1,
-        "wave_man_round_damage": 1,
+        "ninja_fire_to_attack": 1, "wave_man_round_damage": 1,
     })
     assert out == {"wave_man_round_damage": 1}
 
@@ -1315,8 +1325,8 @@ def test_ability_count_is_zero_for_a_school_character():
 
 def test_ability_count_is_zero_for_an_unavailable_profession():
     from app.services.professions import ability_count
-    data = _mixed(profession_abilities={"worker_strength": 2})
-    assert ability_count(data, "worker_strength") == 0
+    data = _mixed(profession_abilities={"ninja_fire_to_attack": 2})
+    assert ability_count(data, "ninja_fire_to_attack") == 0
 
 
 # ---------------------------------------------------------------------------
@@ -1327,7 +1337,7 @@ def test_display_groups_by_profession_and_hides_ninja():
     groups = ability_counts_for_display(
         {"wave_man_round_damage": 2}, include_untaken=True)
     ids = [g["profession_id"] for g in groups]
-    assert ids == ["wave_man", "priest", "worker", "merchant"]
+    assert ids == ["wave_man", "worker", "merchant", "priest"]
     assert all(len(g["rows"]) == 10 for g in groups)
     wave = next(g for g in groups if g["profession_id"] == "wave_man")
     assert next(r for r in wave["rows"] if r["id"] == "wave_man_round_damage")["count"] == 2
@@ -1337,7 +1347,7 @@ def test_display_carries_availability_and_the_rules_anchor():
     groups = ability_counts_for_display({}, include_untaken=True)
     by_id = {g["profession_id"]: g for g in groups}
     assert by_id["wave_man"]["availability"] == "available"
-    assert by_id["worker"]["availability"] == "preview"
+    assert by_id["worker"]["availability"] == "available"
     assert by_id["priest"]["rules_anchor"] == "#priest-rituals"
     # Priest rituals are once-only, and the editor has to say so.
     assert by_id["priest"]["rows"][0]["max"] == 1
@@ -1572,3 +1582,305 @@ def test_xp_summary_ignores_a_non_integer_count():
                               "priest_commune": 1},
     ))["professions"]
     assert summary["used"] == 1
+
+
+# ===========================================================================
+# Part 3 - Worker and Merchant abilities
+# (profession-design/worker-and-merchant.md)
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Phase 1 - the stored ability text must match the rules file verbatim
+# ---------------------------------------------------------------------------
+
+RULES_PROFESSIONS = "/host-l7r-repo/rules/09-professions.md"
+
+_RULES_SECTION_TO_PROFESSION = {
+    "Wave Man": "wave_man", "Worker": "worker", "Merchant": "merchant",
+    "Priest": "priest", "Ninja": "ninja",
+}
+
+
+def _parse_rules_abilities():
+    """Ability text straight out of rules/09-professions.md, by profession.
+
+    Top-level list items only: the indented sub-items are money bonuses and
+    ritual times, which are separate fields on ProfessionAbility.
+    """
+    import os
+    import re
+    if not os.path.exists(RULES_PROFESSIONS):
+        pytest.skip("the l7r rules repo is not mounted at /host-l7r-repo")
+    raw = open(RULES_PROFESSIONS).read()
+    out = {}
+    for m in re.finditer(r"^## (.+?) (?:Abilities|Rituals)\s*$", raw, re.M):
+        start = m.end()
+        nxt = raw.find("\n## ", start)
+        body = raw[start: nxt if nxt != -1 else len(raw)]
+        out[_RULES_SECTION_TO_PROFESSION[m.group(1).strip()]] = [
+            line[2:].strip() for line in body.split("\n")
+            if line.startswith("- ") and not line.startswith("  - ")
+        ]
+    return out
+
+
+def _normalize(text):
+    import re
+    return re.sub(r"\s+", " ", text).strip()
+
+
+@pytest.mark.parametrize("pid", ["wave_man", "worker", "merchant", "priest", "ninja"])
+def test_stored_ability_text_matches_the_rules_file(pid):
+    """The rules are the source of truth; this catches upstream rewording.
+
+    It has already happened twice - the Wave Man's third ability was
+    reworded during the first build, and five Worker/Merchant abilities
+    before the third - so a test is cheaper than noticing by eye.
+    """
+    upstream = _parse_rules_abilities()[pid]
+    stored = PROFESSIONS[pid].abilities
+    assert len(upstream) == len(stored)
+    for want, ability in zip(upstream, stored):
+        assert _normalize(ability.text) == _normalize(want), ability.id
+
+
+def test_the_rules_file_parse_finds_all_five_professions():
+    # A parse that silently found nothing would make the test above vacuous.
+    parsed = _parse_rules_abilities()
+    assert set(parsed) == set(PROFESSIONS)
+    assert all(len(v) == 10 for v in parsed.values())
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 - per-ability availability
+# ---------------------------------------------------------------------------
+
+def test_worker_and_merchant_are_now_available():
+    for pid in ("wave_man", "priest", "worker", "merchant"):
+        assert PROFESSIONS[pid].is_available is True, pid
+    assert PROFESSIONS["ninja"].is_available is False
+
+
+def test_the_campaign_specific_worker_ability_is_not_selectable():
+    # R2: Wk5, advanced-skills-as-basic, is campaign-specific.
+    by_id = {a.id: a for a in PROFESSIONS["worker"].abilities}
+    assert by_id["worker_advanced_as_basic"].available is False
+    assert all(a.available for a in PROFESSIONS["worker"].abilities
+               if a.id != "worker_advanced_as_basic")
+
+
+def test_every_other_profession_ability_is_available():
+    for pid in ("wave_man", "priest", "merchant"):
+        assert all(a.available for a in PROFESSIONS[pid].abilities), pid
+
+
+def test_ability_availability_needs_both_the_profession_and_the_ability():
+    from app.services.professions import ability_is_available
+    assert ability_is_available("worker_strength") is True
+    assert ability_is_available("worker_advanced_as_basic") is False   # ability
+    assert ability_is_available("ninja_fire_to_attack") is False        # profession
+    assert ability_is_available("nope") is False
+
+
+def test_the_unselectable_ability_is_out_of_the_pool():
+    ids = [a.id for a in PROFESSION_ABILITY_POOL]
+    assert "worker_advanced_as_basic" not in ids
+    assert "worker_strength" in ids
+    assert "merchant_open_commerce" in ids
+
+
+def test_the_pooled_ceiling_counts_only_takeable_abilities():
+    from app.services.xp import profession_ability_allowance, profession_ability_pool_size
+    # Wave Man 10x2 + Priest 10x1 + Worker 9x2 + Merchant 10x2 = 68.
+    assert profession_ability_pool_size() == 68
+    assert profession_ability_allowance(10_000) == 68
+    # 68 picks needs 150 + 67*15 XP.
+    assert profession_ability_allowance(150 + 67 * 15) == 68
+    assert profession_ability_allowance(150 + 66 * 15) == 67
+
+
+def test_sanitize_drops_the_unselectable_ability():
+    out = sanitize_profession_abilities({
+        "worker_advanced_as_basic": 1, "worker_strength": 2,
+    })
+    assert out == {"worker_strength": 2}
+
+
+def test_ability_count_is_zero_for_the_unselectable_ability():
+    from app.services.professions import ability_count
+    data = {"profession": PTYPE,
+            "profession_abilities": {"worker_advanced_as_basic": 2}}
+    assert ability_count(data, "worker_advanced_as_basic") == 0
+
+
+def test_validation_names_the_unselectable_ability(client):
+    errs = validate_character(_wave_man_data(
+        starting_xp=200,
+        profession_abilities={"worker_advanced_as_basic": 1}))
+    assert any("not yet available" in e or "not available" in e for e in errs)
+    assert not any("not an ability of any profession" in e for e in errs)
+
+
+def test_the_editor_still_shows_the_unselectable_ability(client):
+    # R2 is "greyed out", not "hidden": a player should see it exists.
+    cid = _seed(client, school="", profession=PTYPE, knacks={})
+    html = client.get(f"/characters/{cid}/edit").text
+    assert "worker_advanced_as_basic" in html
+    assert 'data-profession-group="worker"' in html
+
+
+def test_worker_and_merchant_abilities_are_takeable_end_to_end(client):
+    cid = _seed(client, school="", profession=PTYPE, knacks={}, starting_xp=400)
+    client.post(f"/characters/{cid}/autosave", json={
+        "profession_abilities": {"worker_strength": 2, "merchant_law": 1},
+    })
+    assert _reload(client, cid).profession_abilities == {
+        "worker_strength": 2, "merchant_law": 1}
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 - conditional free raises as "Alternative totals" rows
+# ---------------------------------------------------------------------------
+
+def _prof(abilities, **over):
+    data = _wave_man_data(starting_xp=1000, **over)
+    data["profession_abilities"] = abilities
+    return data
+
+
+def _alts(character_data, key):
+    formulas = build_all_roll_formulas(character_data)
+    return formulas[key].get("alternatives") or []
+
+
+def _alt_labels(character_data, key):
+    return [a["label"] for a in _alts(character_data, key)]
+
+
+@pytest.mark.parametrize("ability,key,raises,fragment", [
+    ("worker_etiquette_higher_class", "skill:etiquette", 3, "higher social class"),
+    ("worker_commerce_purchases", "skill:commerce", 3, "making purchases"),
+    ("worker_ethics_bragging", "skill:bragging", 4, "own ethics"),
+    ("worker_ethics_bragging", "skill:precepts", 4, "own ethics"),
+    ("worker_strength", "athletics:Water", 2, "feats of strength"),
+    ("worker_endurance", "athletics:Earth", 2, "feats of endurance"),
+    ("worker_authority_trouble", "skill:sincerity", 5, "authority figure"),
+    ("worker_authority_trouble", "skill:tact", 5, "authority figure"),
+    ("merchant_sincerity", "skill:sincerity", 2, "your business"),
+    ("merchant_interrogation", "skill:interrogation", 2, "your business"),
+    ("merchant_investigation", "skill:investigation", 4, "your business"),
+    ("merchant_contested_commerce", "skill:commerce", 2, "contested"),
+    ("merchant_culture_gifts", "skill:culture", 4, "gifts"),
+    ("merchant_heraldry", "skill:heraldry", 5, "customers"),
+    ("merchant_law", "skill:law", 3, "your business"),
+])
+def test_each_conditional_ability_adds_its_row(ability, key, raises, fragment):
+    rows = [a for a in _alts(_prof({ability: 1}), key) if fragment in a["label"]]
+    assert len(rows) == 1, _alt_labels(_prof({ability: 1}), key)
+    assert rows[0]["extra_flat"] == raises * 5
+
+
+@pytest.mark.parametrize("ability,key,raises,fragment", [
+    ("worker_etiquette_higher_class", "skill:etiquette", 3, "higher social class"),
+    ("worker_strength", "athletics:Water", 2, "feats of strength"),
+    ("merchant_heraldry", "skill:heraldry", 5, "customers"),
+])
+def test_two_copies_double_the_free_raises(ability, key, raises, fragment):
+    # R10: all bonuses double when an ability is taken twice.
+    rows = [a for a in _alts(_prof({ability: 2}), key) if fragment in a["label"]]
+    assert rows[0]["extra_flat"] == raises * 5 * 2
+
+
+def test_no_rows_without_the_ability():
+    assert _alts(_prof({}), "skill:etiquette") == []
+
+
+def test_a_school_character_gets_no_profession_rows():
+    data = _wave_man_data(profession="", school="akodo_bushi",
+                          school_ring_choice="Water",
+                          knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+                          profession_abilities={"merchant_law": 2})
+    data["rings"]["Water"] = 3
+    assert _alts(data, "skill:law") == []
+
+
+def test_worker_strength_does_not_touch_the_other_rings():
+    data = _prof({"worker_strength": 2})
+    assert _alt_labels(data, "athletics:Water")
+    for ring in ("Air", "Fire", "Earth"):
+        assert not any("strength" in l for l in _alt_labels(data, f"athletics:{ring}"))
+
+
+def test_endurance_and_strength_land_on_different_rings():
+    data = _prof({"worker_strength": 1, "worker_endurance": 1})
+    assert any("strength" in l for l in _alt_labels(data, "athletics:Water"))
+    assert any("endurance" in l for l in _alt_labels(data, "athletics:Earth"))
+    assert not any("endurance" in l for l in _alt_labels(data, "athletics:Water"))
+
+
+def test_merchant_business_experience_emits_a_plain_and_a_contested_row():
+    # M4: "3 free raises ... and an extra free raise if the roll is contested"
+    # cannot be one row, because a row states a single number.
+    rows = _alts(_prof({"merchant_bragging_precepts": 1}), "skill:bragging")
+    amounts = sorted(r["extra_flat"] for r in rows)
+    assert amounts == [15, 20]
+    assert any("contested" in r["label"] for r in rows)
+
+
+def test_the_contested_row_doubles_too():
+    rows = _alts(_prof({"merchant_bragging_precepts": 2}), "skill:bragging")
+    assert sorted(r["extra_flat"] for r in rows) == [30, 40]
+
+
+def test_two_abilities_on_one_skill_stay_separate_rows():
+    # Wk7 (ethics) and M4 (business experience) both touch bragging with
+    # different conditions; merging them would claim a bonus that does not
+    # exist for either condition alone.
+    data = _prof({"worker_ethics_bragging": 1, "merchant_bragging_precepts": 1})
+    rows = _alts(data, "skill:bragging")
+    assert len(rows) == 3          # ethics, business, business-contested
+    assert len({r["label"] for r in rows}) == 3
+
+
+def test_the_authority_rows_are_open_roll_only():
+    # Wk10 names OPEN sincerity and tact rolls.
+    for key in ("skill:sincerity", "skill:tact"):
+        rows = [a for a in _alts(_prof({"worker_authority_trouble": 1}), key)
+                if "authority" in a["label"]]
+        assert rows[0].get("open_roll") is True, key
+
+
+def test_business_rows_are_not_open_roll_gated():
+    rows = [a for a in _alts(_prof({"merchant_law": 1}), "skill:law")
+            if "business" in a["label"]]
+    assert not rows[0].get("open_roll")
+
+
+def test_a_profession_row_does_not_disturb_withdrawns_cap():
+    """Withdrawn caps OPEN sincerity at 15, and carries that cap on its own
+    open-roll alternative row rather than on the base formula (a contested
+    sincerity roll is uncapped). A profession free raise is a separate row
+    with its own condition, so it must neither inherit the cap nor lift it.
+
+    The two rows not combining is the existing modelling of conditional
+    bonuses generally - Streetwise and Withdrawn behave the same way - not
+    something these abilities introduce.
+    """
+    data = _prof({"merchant_sincerity": 2}, disadvantages=["withdrawn"])
+    rows = _alts(data, "skill:sincerity")
+    withdrawn = [r for r in rows if r.get("max_total")]
+    business = [r for r in rows if "business" in r["label"]]
+    assert len(withdrawn) == 1
+    assert withdrawn[0]["max_total"] == 15
+    assert withdrawn[0].get("open_roll") is True
+    assert len(business) == 1
+    assert not business[0].get("max_total")
+    assert business[0]["extra_flat"] == 20
+
+
+def test_the_bot_card_carries_the_new_alternatives():
+    from app.services.roll_engine import execute_roll
+    import random
+    payload = execute_roll(_prof({"merchant_law": 1}), "skill:law",
+                           rng=random.Random(7))
+    assert any("business" in a["label"] for a in payload["alternatives"])
