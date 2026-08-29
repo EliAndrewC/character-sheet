@@ -1,15 +1,18 @@
 # Professions, part 3: the Worker and Merchant abilities
 
-Status: **planning, awaiting sign-off. No code written.**
+Status: **planning complete, awaiting sign-off. No code written.**
+
+Every rules question raised during planning has been answered by the GM and is
+recorded in section 1. There is no open-questions section.
 Created 2026-08-29. Follows `profession-design/design.md` (Wave Man) and
 `profession-design/priest-and-pooling.md` (one Profession type, pooled
 abilities, Priest rituals). Source rules: `rules/09-professions.md`.
 
 Turns Worker and Merchant from `preview` to `available`, with one ability held
-back. Sixteen of the twenty are **conditional free raises**, which the sheet
+back. Fourteen of the twenty are **conditional free raises**, which the sheet
 already models as "Alternative totals" rows - so the bulk of this is data plus
-one new per-ability gate. Two abilities need new interaction (a pre-roll menu
-variant and a reroll button), and five have no mechanics at all.
+one new per-ability gate. Two need new interaction (a pre-roll menu variant and
+a reroll button), three have no mechanics at all, and one is not selectable.
 
 Ability numbering is **Wk1-Wk10** (Worker) and **M1-M10** (Merchant), matching
 the order in `rules/09-professions.md`, and used in code comments and test
@@ -35,6 +38,7 @@ Everything from parts 1 and 2 carries over unless contradicted here.
 | R10 | **All bonuses double when an ability is taken twice**, free raises included. |
 | R11 | **M9 is implemented as a reroll button.** |
 | R12 | **"Relating to your business" is label text**, judged by the player, exactly like the Streetwise advantage's condition. The sheet does not try to decide it. |
+| R13 | **M9's reroll is offered on all 18 skill rolls**, being the one Merchant ability that names no skill ("reroll *any* roll relating to your business"). The free-raise abilities stay on the skills they each name. |
 
 ---
 
@@ -73,8 +77,9 @@ the text should be current so the greyed-out entry reads correctly.
 `alternatives` list is `{label, extra_flat}`, optionally with `open_roll` and
 its own `max_total`. It renders as an "Alternative totals" row in the roll
 modal, as a tooltip note on the View Sheet's skill panel, and on the Discord
-bot's card via `_alternatives_for_payload`. Sixteen of the twenty abilities
-are exactly this shape once R7 moves Wk8/Wk9 in.
+bot's card via `_alternatives_for_payload`. Fourteen of the twenty abilities
+are exactly this shape once R7 moves Wk8/Wk9 in - six Worker and eight
+Merchant.
 
 **The roll menu already does pre-roll variants.** `roll_trigger.html` renders
 a picker block whose every row carries a hover void-spend submenu, gated by
@@ -98,7 +103,7 @@ sanitizer, the validator and the editor's stepper gate.
 ## 4. The twenty abilities
 
 **Conditional free raises**, a `{label, extra_flat}` row on the named roll.
-Sixteen abilities, and the whole of Phase 2. Raise counts double at two copies
+Fourteen abilities, and the whole of Phase 2. Raise counts double at two copies
 (R10).
 
 | id | roll(s) | raises | condition (the row's label) |
@@ -163,7 +168,7 @@ sit in the last phase. Every phase must leave the existing 3625 unit tests,
 - [ ] `TDD:` a crafted POST naming Wk5 is dropped on write, and validation calls it unavailable rather than unknown.
 - [ ] `TDD:` the pool size and the 68-pick ceiling.
 
-## 7. Phase 2 - the sixteen conditional free raises
+## 7. Phase 2 - the fourteen conditional free raises
 
 - [ ] `TDD:` one test per ability asserting the alternatives row (roll key, `extra_flat`, label), at one and two copies.
 - [ ] `PROFESSION_ALTERNATIVE_BONUSES` in `game_data.py`: ability id -> `(roll_keys, raises, label, open_roll)`. Declarative, beside `PROFESSION_ABILITY_BONUSES`, so a future profession is data.
@@ -190,7 +195,8 @@ sit in the last phase. Every phase must leave the existing 3625 unit tests,
 - [ ] A reroll button on qualifying roll results, modelled on the Lucky reroll that already exists (`luckyUsedThisRoll` and its banner), spending one void point rather than consuming Lucky.
 - [ ] Once per roll, like Lucky - and it must interact correctly with Lucky and with the PCP reroll, none of which may double up on one roll. Assert the combinations.
 - [ ] **Read-only Roll Mode:** a non-editor may walk the reroll and see the new total, but the void point must not be deducted. Gate the spend on `t.canEdit` per the standing rule.
-- [ ] Which rolls it offers on is **Q7**.
+- [ ] Offered on **all 18 skill rolls** (R13) - M9 is the only Merchant ability that names no skill, so unlike the free raises it is not tied to one. Whether it should also reach non-skill rolls (rings, athletics, combat) is not something the rules text settles; "any roll relating to your business" reads as any roll, but every other Merchant ability is a skill ability, so the plan scopes it to skills and leaves widening it as a later data change.
+- [ ] `TDD:` the button offers on every skill and on no skill for a character without M9.
 
 ## 10. Phase 5 - the money bonus
 
@@ -221,25 +227,3 @@ sit in the last phase. Every phase must leave the existing 3625 unit tests,
 - [ ] Add a Worker/Merchant character to the `test_sheet_js_errors.py` sweep.
 - [ ] Coverage back to 100%; `COVERAGE.md`; `school-features/` docs for the two new ability sets; the Professions section of `CLAUDE.md`.
 - [ ] Deploy.
-
----
-
-## 13. Open question
-
-One, from a phrase in the Q6 answer I would rather not guess at.
-
-**Q7 - "all 18 skills": which abilities reach every skill?**
-
-The answer to Q6 said the business-related free raises "will create an
-alternative total which can apply to literally all 18 skills (all 6 basic
-social skills and all 3 advanced social skills, plus all 6 basic knowledge
-skills and all 3 advanced knowledge skills)". The app has exactly 18 skills in
-that shape, so the enumeration is unambiguous - but the abilities themselves
-each name a single skill (M1 sincerity, M2 interrogation, M3 investigation, M8
-law), so I cannot tell which of two readings is meant.
-
-- **(a) The reroll, not the free raises.** M9 is the one Merchant ability with no skill named - "reroll **any** roll relating to your business" - so it is the one that genuinely reaches all 18. Under this reading the free-raise rows stay on the skills their abilities name, and Q7 is really about Phase 4's scope. **This is my reading, and what the phases above assume.**
-- **(b) The free raises too.** If a merchant's business can plausibly involve any skill, then M1's "sincerity rolls relating to your business" is a narrower case of a general permission, and you want business rows offered more widely than the named skill. That is a materially bigger Phase 2 and a much busier skill panel, so I do not want to infer it.
-
-If (a), nothing above changes and Phase 4 offers the reroll on all 18 skill
-rolls. If (b), tell me which abilities generalise and to which skills.
