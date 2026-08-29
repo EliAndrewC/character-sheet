@@ -28,6 +28,7 @@ from app.game_data import (
     WASP_LINEAGES,
     Ring,
     effective_knack_ring,
+    PROFESSIONS,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
 from app.services.auth import can_edit_character, can_view_drafts, format_editor_list_text, get_admin_ids, get_all_editors, is_admin
@@ -46,6 +47,11 @@ from app.services.party import (
     party_member_dan,
     party_member_data,
     visible_party_members,
+)
+from app.services.professions import (
+    PROFESSION_SELECT_PREFIX,
+    ability_counts_for_display,
+    select_value_for,
 )
 from app.services.rolls import compute_skill_roll
 from app.services.status import (
@@ -301,6 +307,7 @@ def group_summary(request: Request, group_id: int, db: Session = Depends(get_db)
                 )
             },
             "schools": SCHOOLS,
+            "professions": PROFESSIONS,
             "wasp_lineages": WASP_LINEAGES,
             "social_chip_labels": SOCIAL_CHIP_LABELS,
             "player_names": player_names,
@@ -1265,6 +1272,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "character": character,
             "char_dict": char_dict,
             "school": school,
+            "profession": PROFESSIONS.get(character.profession or ""),
+            "profession_ability_rows": ability_counts_for_display(
+                character.profession or "", character.profession_abilities or {},
+            ),
             "xp_breakdown": xp_breakdown,
             "errors": errors,
             "technique_choices_summary": technique_choices_summary,
@@ -1504,6 +1515,15 @@ def edit_character(request: Request, char_id: int, db: Session = Depends(get_db)
             "character": character,
             "char_dict": char_dict,
             "school": school,
+            "profession": PROFESSIONS.get(character.profession or ""),
+            "profession_ability_rows": ability_counts_for_display(
+                character.profession or "", character.profession_abilities or {},
+            ),
+            "professions": PROFESSIONS,
+            "profession_select_prefix": PROFESSION_SELECT_PREFIX,
+            "school_select_value": select_value_for(
+                character.school or "", character.profession or "",
+            ),
             "xp_initial": xp_initial,
             "schools": SCHOOLS,
             "schools_by_category": SCHOOLS_BUSHI_NONBUSHI,

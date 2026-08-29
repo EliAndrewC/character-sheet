@@ -88,6 +88,18 @@
                     <span class="font-mono font-bold">{{ fk_section.total }}</span>
                 </div>
             {% endif %}
+            {% if xp_breakdown.professions %}
+                {# Informational only: profession abilities are free, so this
+                   card shows picks used against picks earned rather than XP,
+                   and contributes nothing to Total Spent. #}
+                {% set prof = xp_breakdown.professions %}
+                <div data-xp-card="professions"
+                     class="flex justify-between px-3 py-2 bg-parchment rounded select-none"
+                     title="Profession abilities cost no XP.">
+                    <span>{{ prof.label }}</span>
+                    <span class="font-mono font-bold">{{ prof.used }} / {{ prof.allowance }}</span>
+                </div>
+            {% endif %}
         </div>
 
         {# Bottom row: Total Spent + Disadvantages, sharing the same grid as

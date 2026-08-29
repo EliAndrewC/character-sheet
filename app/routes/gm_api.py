@@ -388,6 +388,11 @@ async def list_characters(request: Request, db: Session = Depends(get_db)):
             "gaming_group_name": group_names.get(c.gaming_group_id),
             "skills": skills,
             "knacks": knacks,
+            # A profession is taken instead of a school; the REPL scores
+            # contested rolls partly on what the other side can do, so it
+            # needs the abilities as well as the profession name.
+            "profession": c.profession or "",
+            "profession_abilities": dict(c.profession_abilities or {}),
         })
 
     return JSONResponse({

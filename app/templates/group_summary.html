@@ -179,10 +179,10 @@
                 {% set _unconv_detail = (advantage_details.get('unconventional') or {}).get('text') %}
                 {% set has_virtue = 'virtue' in (c.advantages or []) %}
                 {% set has_unconv = 'unconventional' in (c.disadvantages or []) %}
-                {% if school_obj or c.lineage or c.honor is not none %}
+                {% if school_obj or c.profession or c.lineage or c.honor is not none %}
                 <p class="text-xs text-ink/60 leading-snug mt-0.5 mb-1.5">
                     {% set ns = namespace(need_sep=false) %}
-                    {% if school_obj %}{{ school_obj.name }}{% set ns.need_sep = true %}{% endif %}
+                    {% if school_obj %}{{ school_obj.name }}{% set ns.need_sep = true %}{% elif c.profession and professions.get(c.profession) %}{{ professions[c.profession].name }}{% set ns.need_sep = true %}{% endif %}
                     {% if c.lineage %}
                     {%- if ns.need_sep %} &middot; {% endif -%}
                     {%- set _lineage_desc = wasp_lineages.get(c.lineage) -%}

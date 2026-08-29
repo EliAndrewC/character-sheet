@@ -11,7 +11,8 @@ import json
 from app.database import get_db
 from app.game_data import (
     ADVANTAGES, CAMPAIGN_ADVANTAGES, CAMPAIGN_DISADVANTAGES,
-    COMBAT_SKILLS, DISADVANTAGES, SCHOOLS, SKILLS, SCHOOL_KNACKS, Ring,
+    COMBAT_SKILLS, DISADVANTAGES, PROFESSIONS, SCHOOLS, SKILLS, SCHOOL_KNACKS,
+    Ring,
     ring_max,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User
@@ -846,9 +847,25 @@ async def autosave_character(
 def _editor_char_dict(body: dict, character: Character) -> dict:
     """Shape an editor autosave-style JSON body into the dict ``xp.py`` expects,
     falling back to the persisted character for anything the body omits."""
+    # The editor sends school and profession through one dropdown value;
+    # split it here so the XP engine sees the same shape it gets from a
+    # persisted row.
+    raw_school = body.get("school")
+    if raw_school is None:
+        school_id, profession_id = character.school, character.profession
+    else:
+        school_id, profession_id = split_school_or_profession(raw_school)
     return {
-        "school": body.get("school", character.school),
-        "school_ring_choice": body.get("school_ring_choice", character.school_ring_choice),
+        "school": school_id,
+        "profession": profession_id,
+        "profession_abilities": sanitize_profession_abilities(
+            profession_id,
+            body.get("profession_abilities", character.profession_abilities),
+        ),
+        "school_ring_choice": (
+            "" if profession_id
+            else body.get("school_ring_choice", character.school_ring_choice)
+        ),
         "rings": body.get("rings", character.rings),
         "attack": body.get("attack", character.attack),
         "parry": body.get("parry", character.parry),
@@ -2153,6 +2170,23 @@ def _sanitize_precepts_pool(raw: Any) -> list:
 # ---------------------------------------------------------------------------
 # HTMX partial endpoints
 # ---------------------------------------------------------------------------
+
+
+@router.get("/api/profession-info/{profession_id}", response_class=HTMLResponse)
+def profession_info_partial(request: Request, profession_id: str):
+    """Return profession details when the school dropdown picks a profession.
+
+    Rendered into the same ``#school-details`` slot as school_info.html, so
+    the editor swaps one panel for the other rather than juggling two.
+    """
+    profession = PROFESSIONS.get(profession_id)
+    if profession is None or not profession.selectable:
+        return HTMLResponse("")
+    return _templates().TemplateResponse(
+        request=request,
+        name="character/partials/profession_info.html",
+        context={"profession": profession},
+    )
 
 
 @router.get("/api/school-info/{school_id}", response_class=HTMLResponse)
