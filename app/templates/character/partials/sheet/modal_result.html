@@ -897,6 +897,24 @@
                        higher rule. Initiative uses its own panel (next
                        block). #}
                     {% set context_hint = None %}
+                    {# Merchant: spend a void point to reroll a roll relating
+                       to your business. Shares the one-reroll lock with Lucky
+                       and the PCP reroll; the condition is the player's to
+                       judge, as every conditional bonus here is. #}
+                    <div x-show="phase === 'done' && canUseBusinessReroll()" x-cloak
+                         class="mt-2">
+                        <div class="tooltip-trigger relative inline-block self-start">
+                            <button type="button"
+                                    data-action="business-reroll"
+                                    @click="useBusinessReroll()"
+                                    class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
+                                Spend a void point to reroll (business)
+                            </button>
+                            <span class="tooltip-content absolute left-0 top-full z-10 mt-1 p-2 bg-ink text-parchment text-xs rounded shadow-lg max-w-xs whitespace-normal">
+                                Merchant: you may choose to spend one void point to reroll any roll relating to your business. The higher of the two rolls stands.
+                            </span>
+                        </div>
+                    </div>
                     {% include "character/partials/sheet/_lucky_pair_banner.html" %}
 
                     {# Lucky reroll: initiative - always show original action dice #}

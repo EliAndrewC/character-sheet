@@ -45,6 +45,16 @@
         {# A profession has no special ability and no Dan techniques. Only the
            abilities actually taken are listed (design doc part 2, P10) -
            thirty greyed-out rows would bury the handful that matter. #}
+        {% if effective.profession_money_bonus %}
+        {# Several Worker and Merchant abilities carry a money bonus; they
+           accumulate into one figure that multiplies the stipend. The
+           stipend calculation under Money shows it as a modifier too. #}
+        <p class="text-sm mb-3" data-testid="profession-money-bonus">
+            <span class="font-medium">Money bonus:</span>
+            <span class="text-accent font-semibold">+{{ effective.profession_money_bonus }}%</span>
+            <span class="text-ink/60">to your stipend</span>
+        </p>
+        {% endif %}
         <div data-testid="profession-abilities-taken">
             {% for group in profession_ability_groups %}
             <div class="mb-3" data-profession-group="{{ group.profession_id }}">

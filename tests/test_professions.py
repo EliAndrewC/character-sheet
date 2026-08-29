@@ -899,10 +899,16 @@ def test_sheet_links_the_profession_rules(client):
     assert "09-professions.md#wave-man-abilities" in html
 
 
-def test_sheet_for_a_school_character_is_unchanged(client):
+def test_sheet_for_a_school_character_has_no_profession_panel(client):
+    # Assert on the panel's own markers rather than on the word
+    # "Profession" appearing anywhere in the page - it turns up in JS
+    # comments, which made the original form of this test a false positive
+    # waiting to happen.
     cid = _seed(client)
     html = client.get(f"/characters/{cid}").text
-    assert "Profession" not in html or "Wave Man" not in html
+    assert 'data-testid="profession-abilities-taken"' not in html
+    assert 'data-profession-group=' not in html
+    assert "Akodo Bushi" in html
 
 
 def test_gm_api_reports_profession_and_abilities(client, monkeypatch):
@@ -1884,3 +1890,265 @@ def test_the_bot_card_carries_the_new_alternatives():
     payload = execute_roll(_prof({"merchant_law": 1}), "skill:law",
                            rng=random.Random(7))
     assert any("business" in a["label"] for a in payload["alternatives"])
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 - M10, the pre-roll commerce variant
+# ---------------------------------------------------------------------------
+
+BUSINESS_COMMERCE = "skill:commerce:business"
+
+
+def test_the_business_commerce_key_exists_only_for_a_holder():
+    assert BUSINESS_COMMERCE not in build_all_roll_formulas(_prof({}))
+    assert BUSINESS_COMMERCE in build_all_roll_formulas(
+        _prof({"merchant_open_commerce": 1}))
+
+
+def test_the_business_commerce_variant_rolls_four_extra_dice():
+    base = build_all_roll_formulas(_prof({}))["skill:commerce"]
+    got = build_all_roll_formulas(
+        _prof({"merchant_open_commerce": 1}))[BUSINESS_COMMERCE]
+    assert got["rolled"] == base["rolled"] + 4
+    assert got["kept"] == base["kept"]
+
+
+def test_two_copies_roll_eight_extra_dice():
+    base = build_all_roll_formulas(_prof({}))["skill:commerce"]
+    got = build_all_roll_formulas(
+        _prof({"merchant_open_commerce": 2}))[BUSINESS_COMMERCE]
+    assert got["rolled"] == base["rolled"] + 8
+
+
+def test_the_plain_commerce_roll_is_untouched():
+    plain = build_all_roll_formulas(
+        _prof({"merchant_open_commerce": 2}))["skill:commerce"]
+    base = build_all_roll_formulas(_prof({}))["skill:commerce"]
+    assert plain["rolled"] == base["rolled"]
+
+
+def test_the_variant_is_labelled_for_the_menu():
+    f = build_all_roll_formulas(
+        _prof({"merchant_open_commerce": 1}))[BUSINESS_COMMERCE]
+    assert "business" in f["label"].lower()
+
+
+def test_the_commerce_tile_advertises_the_variant():
+    # The roll menu renders one row per entry in roll_variants, so the
+    # base formula has to carry the list.
+    f = build_all_roll_formulas(
+        _prof({"merchant_open_commerce": 1}))["skill:commerce"]
+    variants = f.get("roll_variants") or []
+    assert [v["key"] for v in variants] == [BUSINESS_COMMERCE]
+    assert variants[0]["name"]
+
+
+def test_no_roll_variants_without_the_ability():
+    f = build_all_roll_formulas(_prof({}))["skill:commerce"]
+    assert not f.get("roll_variants")
+
+
+def test_the_variant_still_carries_the_other_commerce_alternatives():
+    # A merchant who also took the purchases and contested abilities keeps
+    # those rows on the business variant - they are separate conditions.
+    data = _prof({"merchant_open_commerce": 1, "worker_commerce_purchases": 1})
+    rows = build_all_roll_formulas(data)[BUSINESS_COMMERCE]["alternatives"]
+    assert any("making purchases" in r["label"] for r in rows)
+
+
+def test_a_school_character_never_gets_the_variant():
+    data = _wave_man_data(profession="", school="akodo_bushi",
+                          school_ring_choice="Water",
+                          knacks={"double_attack": 1, "feint": 1, "iaijutsu": 1},
+                          profession_abilities={"merchant_open_commerce": 2})
+    data["rings"]["Water"] = 3
+    assert BUSINESS_COMMERCE not in build_all_roll_formulas(data)
+
+
+def test_the_bot_can_roll_the_business_variant():
+    from app.services.roll_engine import execute_roll
+    import random
+    payload = execute_roll(_prof({"merchant_open_commerce": 1}),
+                           BUSINESS_COMMERCE, rng=random.Random(3))
+    assert payload is not None
+    assert "business" in payload["title"].lower()
+
+
+def test_the_variant_respects_the_dice_cap():
+    data = _prof({"merchant_open_commerce": 2}, skills={"commerce": 5})
+    data["rings"]["Water"] = 5
+    f = build_all_roll_formulas(data)[BUSINESS_COMMERCE]
+    assert f["rolled"] <= 10
+    assert f["kept"] <= 10
+
+
+def test_the_slash_command_rolls_plain_commerce_not_the_variant():
+    """A slash command has nobody to ask which roll this is.
+
+    The variant is a pre-roll choice; ``/commerce`` maps to ``skill:commerce``
+    and stays the plain roll. A merchant who wants the business dice makes
+    the roll on their sheet, where the menu can ask.
+    """
+    from app.services.discord_commands import SKILLS as COMMAND_SKILLS
+    assert all(not k.endswith(":business") for k in COMMAND_SKILLS)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 - M9, the business reroll
+# ---------------------------------------------------------------------------
+
+def test_the_business_reroll_flag_needs_the_ability(client):
+    cid = _seed_wave_man(client, starting_xp=400,
+                         profession_abilities={"merchant_void_reroll": 1})
+    assert _abilities_for(client, cid).get("merchant_business_reroll") is True
+
+
+def test_no_business_reroll_flag_without_the_ability(client):
+    cid = _seed_wave_man(client, profession_abilities={"wave_man_round_damage": 1})
+    assert not _abilities_for(client, cid).get("merchant_business_reroll")
+
+
+def test_a_school_character_never_gets_the_business_reroll(client):
+    cid = _seed(client)
+    assert not _abilities_for(client, cid).get("merchant_business_reroll")
+
+
+def test_the_business_reroll_is_offered_on_every_skill(client):
+    """R13: M9 is the one Merchant ability naming no skill - "reroll ANY
+    roll relating to your business" - so unlike the free raises it is not
+    tied to one. The flag is roll-type agnostic; the client offers the
+    button on skill rolls."""
+    from app.game_data import SKILLS
+    cid = _seed_wave_man(client, starting_xp=400,
+                         profession_abilities={"merchant_void_reroll": 1})
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-action="business-reroll"' in html
+    # Not gated to a subset of skills anywhere in the payload.
+    assert len(SKILLS) == 18
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 - the accumulated money bonus
+# ---------------------------------------------------------------------------
+
+def test_money_bonus_sums_over_held_abilities():
+    from app.services.professions import profession_money_bonus
+    # Wk3 is 20%, Wk4 is 10%.
+    assert profession_money_bonus(_prof({
+        "worker_ignore_fatigue": 1, "worker_etiquette_higher_class": 1,
+    })) == 30
+
+
+def test_money_bonus_doubles_with_a_second_copy():
+    from app.services.professions import profession_money_bonus
+    assert profession_money_bonus(_prof({"worker_ignore_fatigue": 2})) == 40
+
+
+def test_money_bonus_ignores_the_none_entry():
+    # Wk10's money bonus is the literal word "none".
+    from app.services.professions import profession_money_bonus
+    assert profession_money_bonus(_prof({"worker_authority_trouble": 2})) == 0
+
+
+def test_money_bonus_ignores_abilities_without_one():
+    from app.services.professions import profession_money_bonus
+    assert profession_money_bonus(_prof({"wave_man_round_damage": 2})) == 0
+
+
+def test_money_bonus_is_zero_for_a_school_character():
+    from app.services.professions import profession_money_bonus
+    data = _wave_man_data(profession="", school="akodo_bushi",
+                          profession_abilities={"worker_ignore_fatigue": 2})
+    assert profession_money_bonus(data) == 0
+
+
+def test_money_bonus_excludes_the_unselectable_ability():
+    from app.services.professions import profession_money_bonus
+    assert profession_money_bonus(
+        _prof({"worker_advanced_as_basic": 2})) == 0
+
+
+def test_the_money_bonus_multiplies_the_stipend():
+    from app.services.status import compute_effective_status
+    plain = compute_effective_status(_prof({})).stipend
+    boosted = compute_effective_status(
+        _prof({"worker_ignore_fatigue": 1})).stipend   # +20%
+    assert boosted == int(plain * 1.2)
+
+
+def test_the_money_bonus_is_applied_after_every_other_stipend_modifier():
+    """R9: it is a multiplier on the finished stipend, so it must come last.
+
+    Applying it before Household Wealth would multiply the wrong base.
+    """
+    from app.services.status import compute_effective_status
+    data = _prof({"worker_ignore_fatigue": 1},
+                 campaign_advantages=["household_wealth"])
+    status = compute_effective_status(data)
+    assert status.stipend == int(10 ** 2 * 1.2)
+    assert status.stipend_modifiers[-1]["source"].startswith("Profession")
+
+
+def test_the_stipend_modifier_names_the_percentage():
+    from app.services.status import compute_effective_status
+    mods = compute_effective_status(_prof({"worker_ignore_fatigue": 2})).stipend_modifiers
+    assert any("40%" in m["detail"] for m in mods)
+
+
+def test_no_stipend_modifier_without_a_bonus():
+    from app.services.status import compute_effective_status
+    mods = compute_effective_status(_prof({})).stipend_modifiers
+    assert not any("Profession" in m["source"] for m in mods)
+
+
+def test_the_sheet_shows_the_accumulated_money_bonus(client):
+    cid = _seed_wave_man(client, starting_xp=400, profession_abilities={
+        "worker_ignore_fatigue": 1, "worker_etiquette_higher_class": 1})
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-testid="profession-money-bonus"' in html
+    assert "30%" in html
+
+
+def test_no_money_bonus_line_when_there_is_none(client):
+    cid = _seed_wave_man(client, profession_abilities={"wave_man_round_damage": 1})
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-testid="profession-money-bonus"' not in html
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 - display
+# ---------------------------------------------------------------------------
+
+def test_the_editor_marks_the_unselectable_ability_individually(client):
+    cid = _seed(client, school="", profession=PTYPE, knacks={})
+    html = client.get(f"/characters/{cid}/edit").text
+    assert 'data-testid="ability-unavailable-worker_advanced_as_basic"' in html
+    # Its neighbours in the same live Worker block stay takeable.
+    assert 'data-testid="ability-unavailable-worker_strength"' not in html
+
+
+def test_the_editor_shows_each_abilitys_money_bonus(client):
+    cid = _seed(client, school="", profession=PTYPE, knacks={})
+    html = client.get(f"/characters/{cid}/edit").text
+    assert 'data-testid="ability-money-worker_ignore_fatigue"' in html
+    # Wk10's bonus is the literal word "none" and must not render.
+    assert 'data-testid="ability-money-worker_authority_trouble"' not in html
+    # Wave Man abilities carry no money bonus at all.
+    assert 'data-testid="ability-money-wave_man_round_damage"' not in html
+
+
+def test_display_rows_carry_per_ability_availability():
+    groups = ability_counts_for_display({}, include_untaken=True)
+    worker = next(g for g in groups if g["profession_id"] == "worker")
+    by_id = {r["id"]: r for r in worker["rows"]}
+    assert by_id["worker_advanced_as_basic"]["available"] is False
+    assert by_id["worker_strength"]["available"] is True
+
+
+def test_the_sheet_never_shows_the_unselectable_ability_as_taken(client):
+    # Even if a stored row somehow carries it, the sheet shows only what
+    # counts, and it counts as zero.
+    cid = _seed_wave_man(client, starting_xp=400,
+                         profession_abilities={"worker_advanced_as_basic": 2})
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-ability="worker_advanced_as_basic"' not in html
