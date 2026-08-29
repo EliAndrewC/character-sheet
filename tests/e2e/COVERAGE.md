@@ -777,7 +777,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Courtier 5th Dan: attack modal pre-roll shows +Air (both special and 5th Dan) -> `test_school_abilities.py::test_courtier_5th_dan_attack_modal_pre_roll_shows_air_bonus`
 - [x] Shosuro Special: attack modal pre-roll shows +acting rolled dice -> `test_school_abilities.py::test_shosuro_acting_dice_attack_modal_pre_roll`
 - [x] Dragon Tattoo knack rolls (2X)k1 damage (not ring-based) -> `test_school_abilities.py::test_togashi_dragon_tattoo_rolls_2x_k1_damage`
-- [x] Dragon Tattoo does not reroll 10s when impaired -> `test_school_abilities.py::test_togashi_dragon_tattoo_impaired_disables_reroll_10s`
+- [x] Dragon Tattoo STILL rerolls 10s when impaired (it is a damage roll, which the combat rules exempt) -> `test_school_abilities.py::test_togashi_dragon_tattoo_still_rerolls_10s_when_impaired`
 - [x] Initiative box shows both variants ("3k2 plus 1 athletics" and "6k5 athletics") and dropdown opens on click -> `test_school_abilities.py::test_togashi_initiative_dropdown_shows_both_variants`
 - [x] Normal initiative variant rolls correct total dice count (base+1 athletics) -> `test_school_abilities.py::test_togashi_initiative_normal_variant_rolls_correct_dice`
 - [x] Athletics initiative variant rolls correct total dice count (base+3) -> `test_school_abilities.py::test_togashi_initiative_athletics_variant_rolls_correct_dice`
@@ -896,6 +896,9 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Exported "Copy as image" card explains a stranded 10 (Impaired) in its DETAILS block → `test_rolls.py::test_exported_card_explains_an_impaired_ten`
 - [x] Exported card stays quiet when no 10 was stranded → `test_rolls.py::test_exported_card_stays_quiet_when_no_ten_was_stranded`
 - [x] Exported card explains an unskilled roll's stranded 10, naming the skill → `test_rolls.py::test_exported_card_explains_an_unskilled_ten`
+- [x] Impaired suppresses the 10s reroll on SKILLS only - skill/attack/parry lose it, wound checks and bare ring rolls keep it → `test_rolls.py::test_impaired_suppresses_rerolls_on_skills_only`
+- [x] Becoming impaired mid-fight (serious wounds cross Earth with no reload) re-scopes the rerolls the same way → `test_rolls.py::test_becoming_impaired_mid_fight_updates_the_formulas`
+- [x] Healing back out of impaired restores the rerolls, also without a reload → `test_rolls.py::test_healing_out_of_impaired_restores_the_rerolls`
 - [x] Disabling animation in profile shows result panel immediately → `test_rolls.py::test_disable_animation_preference`
 - [x] Die top angle is approximately 70 degrees → `test_rolls.py::test_die_top_angle_is_about_70_degrees`
 - [x] Initiative roll shows action dice → `test_rolls.py::test_initiative_roll_shows_action_dice`

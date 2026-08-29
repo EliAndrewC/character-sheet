@@ -600,3 +600,50 @@ test("allocateVoidSpend is additive: reserving 1 then N == allocating N+1", () =
     assert.equal(reserve.fromWorldliness + extra.fromWorldliness, combined.fromWorldliness);
   }
 });
+
+// ---------------------------------------------------------------------------
+// impairedSuppressesReroll - rules/03-combat.md scopes the Impaired reroll
+// suppression to SKILLS. Must stay in step with _reroll_fields in
+// app/services/dice.py; the Python side asserts the same partition in
+// TestBuildAllRollFormulas::test_impaired_suppresses_the_reroll_on_skills_only.
+// ---------------------------------------------------------------------------
+
+test("impairedSuppressesReroll: skills lose their rerolls", () => {
+  for (const key of ["skill:bragging", "skill:etiquette", "attack", "parry",
+                     "double_attack", "counterattack", "lunge",
+                     "knack:oppose_social", "knack:iaijutsu"]) {
+    assert.equal(M.impairedSuppressesReroll(key, {}), true, key);
+  }
+});
+
+test("impairedSuppressesReroll: wound checks keep rerolling", () => {
+  assert.equal(M.impairedSuppressesReroll("wound_check", {}), false);
+});
+
+test("impairedSuppressesReroll: damage rolls keep rerolling", () => {
+  // Named by the rule. Dragon Tattoo is the one that reaches here by key.
+  assert.equal(
+    M.impairedSuppressesReroll("knack:dragon_tattoo", { is_damage_roll: true }),
+    false
+  );
+});
+
+test("impairedSuppressesReroll: athletics is not a skill", () => {
+  assert.equal(M.impairedSuppressesReroll("knack:athletics", {}), false);
+  for (const key of ["athletics:Air", "athletics:Fire", "athletics:attack",
+                     "athletics:parry"]) {
+    assert.equal(M.impairedSuppressesReroll(key, {}), false, key);
+  }
+});
+
+test("impairedSuppressesReroll: bare ring rolls are not skills", () => {
+  for (const key of ["ring:Air", "ring:Fire", "ring:Earth", "ring:Water", "ring:Void"]) {
+    assert.equal(M.impairedSuppressesReroll(key, {}), false, key);
+  }
+});
+
+test("impairedSuppressesReroll: tolerates a missing formula or key", () => {
+  assert.equal(M.impairedSuppressesReroll("skill:bragging"), true);
+  assert.equal(M.impairedSuppressesReroll("ring:Air", null), false);
+  assert.equal(M.impairedSuppressesReroll(undefined, {}), true);
+});

@@ -1403,26 +1403,31 @@
                     }
                 });
 
-                // Update reroll_tens on all formulas when impaired state changes
+                // Re-evaluate reroll_tens on every formula when the impaired
+                // state changes mid-session. The server stamps these on page
+                // load; this keeps them right when serious wounds cross the
+                // Earth ring without a reload, which is how it actually
+                // happens - in the middle of a fight.
                 window.addEventListener('wound-changed', (e) => {
                     const sw = e.detail?.serious ?? 0;
                     const nowImpaired = window.L7RRollMath.isImpaired(sw, this._earthRing);
                     for (const key of Object.keys(this.formulas)) {
                         const f = this.formulas[key];
-                        if (key === 'wound_check') {
-                            // Wound checks always reroll 10s regardless of impaired
-                            f.reroll_tens = true;
-                            f.no_reroll_reason = '';
-                        } else if (key === 'initiative') {
-                            // Initiative never rerolls 10s
-                        } else if (f.is_unskilled) {
-                            // Unskilled rolls never reroll 10s
-                        } else if (key === 'knack:iaijutsu:strike') {
-                            // Iaijutsu strike never rerolls 10s
-                        } else {
-                            f.reroll_tens = !nowImpaired;
-                            f.no_reroll_reason = nowImpaired ? 'impaired' : '';
-                        }
+                        // Rolls that never reroll 10s for their own reasons -
+                        // initiative, unskilled rolls, the iaijutsu strike.
+                        // Impaired has nothing to add, so leave their reason
+                        // intact rather than overwriting it.
+                        if (key.startsWith('initiative') || f.is_unskilled
+                            || key === 'knack:iaijutsu:strike') continue;
+                        // Impaired only suppresses SKILL rolls; wound checks,
+                        // damage, athletics and bare ring rolls keep their
+                        // rerolls. The rule is cited in _reroll_fields
+                        // (app/services/dice.py), which decides the same
+                        // thing for the server-rendered formulas.
+                        const suppress = nowImpaired
+                            && window.L7RRollMath.impairedSuppressesReroll(key, f);
+                        f.reroll_tens = !suppress;
+                        f.no_reroll_reason = suppress ? 'impaired' : '';
                     }
                 });
 
