@@ -28,6 +28,9 @@ SCHOOLS_TO_TEST = [
     # A mixed build: a Wave Man ability beside a Priest ritual, which is
     # the shape the grouped ability rendering exists for.
     "profession:mixed",
+    # Worker and Merchant abilities: conditional alternative rows across
+    # many skills, a pre-roll commerce variant, and a money bonus.
+    "profession:trade",
 ]
 
 
@@ -41,10 +44,17 @@ def _create_and_view(page, live_server_url, school, name):
         page.fill('input[name="earned_xp"]', "600")
         page.locator('input[name="earned_xp"]').dispatch_event("input")
         select_profession(page)
-        if school == "profession:mixed":
-            for ability in ("wave_man_round_damage", "priest_commune"):
-                page.locator(f'[data-action="profession-plus-{ability}"]').click()
-                page.wait_for_timeout(150)
+        picks = {
+            "profession:mixed": ("wave_man_round_damage", "priest_commune"),
+            "profession:trade": (
+                "worker_etiquette_higher_class", "worker_strength",
+                "merchant_open_commerce", "merchant_void_reroll",
+                "worker_ignore_fatigue",
+            ),
+        }.get(school, ())
+        for ability in picks:
+            page.locator(f'[data-action="profession-plus-{ability}"]').click()
+            page.wait_for_timeout(150)
     else:
         select_school(page, school)
     # For multi-ring schools, pick a ring if needed

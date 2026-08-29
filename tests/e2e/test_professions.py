@@ -73,16 +73,21 @@ def test_the_dropdown_offers_one_profession_option(page, live_server_url):
         'select[name="school"] option[value^="profession:"]').count() == 0
 
 
-def test_preview_professions_render_greyed_out_and_ninja_is_absent(page, live_server_url):
-    # P6: Worker and Merchant are visible but not takeable; Ninja is hidden.
+def test_ninja_abilities_are_absent_entirely(page, live_server_url):
+    """P6/R1: Ninja abilities are unlocked separately and never shown.
+
+    This test used to assert Worker and Merchant were greyed-out previews;
+    part 3 made them available, so what remains of the original rule is
+    Ninja's absence. The per-ability greying that replaced it is covered by
+    test_only_the_campaign_specific_worker_ability_is_disabled.
+    """
     _editor(page, live_server_url)
     select_profession(page)
     for pid in ("wave_man", "priest", "worker", "merchant"):
         assert page.locator(f'[data-profession-group="{pid}"]').count() == 1, pid
     assert page.locator('[data-profession-group="ninja"]').count() == 0
-    assert page.locator('[data-testid="profession-preview-worker"]').is_visible()
     assert page.locator(
-        '[data-action="profession-plus-worker_strength"]').is_disabled()
+        '[data-action="profession-plus-ninja_fire_to_attack"]').count() == 0
 
 
 def test_priest_rituals_are_marked_once_only(page, live_server_url):
@@ -790,3 +795,188 @@ def test_a_character_without_the_ritual_has_no_blessing_button(page, live_server
     entries = page.evaluate("""() => JSON.parse(
         document.getElementById('party-priests').textContent || '[]')""")
     assert entries == []
+
+
+# ---------------------------------------------------------------------------
+# Worker and Merchant abilities
+# ---------------------------------------------------------------------------
+
+def test_worker_and_merchant_blocks_are_live(page, live_server_url):
+    _editor(page, live_server_url, "LiveBlocks")
+    select_profession(page)
+    for pid in ("wave_man", "worker", "merchant", "priest"):
+        assert page.locator(f'[data-profession-group="{pid}"]').count() == 1, pid
+    # They were previews until part 3; now their steppers work.
+    assert not page.locator(
+        '[data-action="profession-plus-worker_strength"]').is_disabled()
+    assert not page.locator(
+        '[data-action="profession-plus-merchant_law"]').is_disabled()
+
+
+def test_only_the_campaign_specific_worker_ability_is_disabled(page, live_server_url):
+    _editor(page, live_server_url, "OneDisabled")
+    page.fill('input[name="earned_xp"]', "600")
+    page.locator('input[name="earned_xp"]').dispatch_event("input")
+    select_profession(page)
+    assert page.locator(
+        '[data-testid="ability-unavailable-worker_advanced_as_basic"]').is_visible()
+    assert page.locator(
+        '[data-action="profession-plus-worker_advanced_as_basic"]').is_disabled()
+    assert not page.locator(
+        '[data-action="profession-plus-worker_ignore_fatigue"]').is_disabled()
+
+
+def test_the_editor_shows_per_ability_money_bonuses(page, live_server_url):
+    _editor(page, live_server_url, "MoneyRows")
+    select_profession(page)
+    assert page.locator(
+        '[data-testid="ability-money-worker_ignore_fatigue"]').is_visible()
+    assert page.locator(
+        '[data-testid="ability-money-worker_authority_trouble"]').count() == 0
+
+
+def _alt_rows(page, roll_key):
+    return page.evaluate(f"""() => {{
+        const el = document.getElementById('roll-formulas');
+        const f = JSON.parse(el.textContent || '{{}}')['{roll_key}'];
+        return (f?.alternatives || []).map(a => a.label + ' +' + a.extra_flat);
+    }}""")
+
+
+def test_a_conditional_free_raise_becomes_an_alternative_row(page, live_server_url):
+    _make_wave_man(page, live_server_url, "AltRow", xp=600,
+                   abilities=[("worker_etiquette_higher_class", 1)])
+    rows = _alt_rows(page, "skill:etiquette")
+    assert any("higher social class" in r and "+15" in r for r in rows), rows
+
+
+def test_taking_it_twice_doubles_the_alternative(page, live_server_url):
+    _make_wave_man(page, live_server_url, "AltDouble", xp=600,
+                   abilities=[("worker_etiquette_higher_class", 2)])
+    rows = _alt_rows(page, "skill:etiquette")
+    assert any("higher social class" in r and "+30" in r for r in rows), rows
+
+
+def test_two_abilities_on_one_skill_render_as_separate_rows(page, live_server_url):
+    _make_wave_man(page, live_server_url, "TwoRows", xp=600, abilities=[
+        ("worker_ethics_bragging", 1), ("merchant_bragging_precepts", 1)])
+    rows = _alt_rows(page, "skill:bragging")
+    assert len([r for r in rows if "ethics" in r]) == 1
+    assert len([r for r in rows if "business experience" in r]) == 2   # + contested
+    assert len(set(rows)) == len(rows)
+
+
+def test_feats_of_strength_land_on_water_athletics_only(page, live_server_url):
+    _make_wave_man(page, live_server_url, "Strength", xp=600,
+                   abilities=[("worker_strength", 1)])
+    assert any("feats of strength" in r for r in _alt_rows(page, "athletics:Water"))
+    assert not any("feats of strength" in r for r in _alt_rows(page, "athletics:Earth"))
+
+
+def test_the_commerce_tile_offers_both_roll_options(page, live_server_url):
+    _make_wave_man(page, live_server_url, "Commerce", xp=600,
+                   abilities=[("merchant_open_commerce", 1)])
+    page.locator('[data-roll-key="skill:commerce"]').click()
+    page.wait_for_selector('[data-variant-picker-menu]', timeout=8000)
+    rows = page.locator('[data-roll-variant]')
+    assert rows.count() == 2
+    keys = [rows.nth(i).get_attribute("data-roll-variant") for i in range(2)]
+    assert keys == ["skill:commerce", "skill:commerce:business"]
+
+
+def test_the_business_commerce_roll_uses_four_more_dice(page, live_server_url):
+    _make_wave_man(page, live_server_url, "CommerceDice", xp=600,
+                   abilities=[("merchant_open_commerce", 1)])
+    pools = page.evaluate("""() => {
+        const d = JSON.parse(document.getElementById('roll-formulas').textContent);
+        return [d['skill:commerce'].rolled, d['skill:commerce:business'].rolled];
+    }""")
+    assert pools[1] == pools[0] + 4
+
+
+def test_no_variant_picker_without_the_ability(page, live_server_url):
+    _make_wave_man(page, live_server_url, "NoVariant", xp=600,
+                   abilities=[("merchant_law", 1)])
+    page.locator('[data-roll-key="skill:commerce"]').click()
+    page.wait_for_timeout(400)
+    assert page.locator('[data-variant-picker-menu]').count() == 0
+
+
+def test_the_money_bonus_renders_and_moves_the_stipend(page, live_server_url):
+    _make_wave_man(page, live_server_url, "MoneyBonus", xp=600, abilities=[
+        ("worker_ignore_fatigue", 1), ("worker_etiquette_higher_class", 1)])
+    chip = page.locator('[data-testid="profession-money-bonus"]')
+    assert chip.is_visible()
+    assert "+30%" in chip.text_content()
+    body = page.text_content("body")
+    assert "Profession abilities" in body
+
+
+def test_no_money_bonus_chip_without_one(page, live_server_url):
+    _make_wave_man(page, live_server_url, "NoMoney", xp=600,
+                   abilities=[("wave_man_round_damage", 1)])
+    assert page.locator('[data-testid="profession-money-bonus"]').count() == 0
+
+
+def _build_merchant_with_skill(page, live_server_url, name, abilities):
+    """A profession character with bragging at 1, so its rolls are neither
+    unskilled nor void-less, and the reroll button has something to act on."""
+    _editor(page, live_server_url, name)
+    page.fill('input[name="earned_xp"]', "600")
+    page.locator('input[name="earned_xp"]').dispatch_event("input")
+    select_profession(page)
+    for ability, count in abilities:
+        take_profession_ability(page, ability, count)
+    click_plus(page, "skill_bragging", 1)
+    page.wait_for_selector('text="Saved"', timeout=8000)
+    apply_changes(page, name)
+
+
+def test_the_business_reroll_button_appears_for_a_holder(page, live_server_url):
+    _build_merchant_with_skill(page, live_server_url, "Rerollr",
+                               [("merchant_void_reroll", 1)])
+    _roll_skill(page, "skill:bragging")
+    page.wait_for_selector('[data-action="business-reroll"]',
+                           state="visible", timeout=8000)
+
+
+def test_no_business_reroll_button_without_the_ability(page, live_server_url):
+    _build_merchant_with_skill(page, live_server_url, "NoReroll",
+                               [("merchant_law", 1)])
+    _roll_skill(page, "skill:bragging")
+    assert not page.locator('[data-action="business-reroll"]').is_visible()
+
+
+def test_the_business_reroll_spends_a_void_point_and_rerolls(page, live_server_url):
+    _build_merchant_with_skill(page, live_server_url, "RerollSpend",
+                               [("merchant_void_reroll", 1)])
+    before = page.evaluate("() => window._trackingBridge.voidPoints")
+    assert before >= 1
+    _roll_skill(page, "skill:bragging")
+    page.locator('[data-action="business-reroll"]').click()
+    page.wait_for_function(
+        "() => window._diceRoller?.luckyRollPair?.source === 'merchant'",
+        timeout=10000)
+    assert page.evaluate("() => window._trackingBridge.voidPoints") == before - 1
+    # Once per roll, and it locks out Lucky and the PCP reroll too.
+    assert not page.locator('[data-action="business-reroll"]').is_visible()
+
+
+@pytest.mark.readonly_rolls
+def test_a_non_editor_rerolls_without_paying(page, page_nonadmin, live_server_url):
+    _build_merchant_with_skill(page, live_server_url, "RerollRO",
+                               [("merchant_void_reroll", 1)])
+    sheet_url = page.url
+    page_nonadmin.goto(sheet_url)
+    page_nonadmin.wait_for_selector("h1")
+    before = page_nonadmin.evaluate("() => window._trackingBridge.voidPoints")
+    _roll_skill(page_nonadmin, "skill:bragging")
+    page_nonadmin.locator('[data-action="business-reroll"]').click()
+    page_nonadmin.wait_for_function(
+        "() => window._diceRoller?.luckyRollPair?.source === 'merchant'",
+        timeout=10000)
+    # The reroll happened; the void point did not move.
+    assert page_nonadmin.evaluate("() => window._trackingBridge.voidPoints") == before
+    page_nonadmin.reload()
+    page_nonadmin.wait_for_selector("h1")
+    assert page_nonadmin.evaluate("() => window._trackingBridge.voidPoints") == before

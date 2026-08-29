@@ -2048,7 +2048,7 @@ A profession is taken INSTEAD of a school, so these cover a character shape noth
 
 - [x] One "Profession" option in the school dropdown, and no per-profession ones - `test_professions.py::test_the_dropdown_offers_one_profession_option`
 - [x] Picking it loads the Profession details panel - `test_professions.py::test_profession_is_selectable_and_shows_its_panel`
-- [x] Worker and Merchant render greyed out with disabled steppers; Ninja has no block at all - `test_professions.py::test_preview_professions_render_greyed_out_and_ninja_is_absent`
+- [x] Ninja abilities are absent entirely - `test_professions.py::test_ninja_abilities_are_absent_entirely`
 - [x] Priest groups carry the "each may be taken once" chip and Wave Man does not - `test_professions.py::test_priest_rituals_are_marked_once_only`
 - [x] Every visible ability renders with a stepper (40 across four professions) - `test_professions.py::test_every_visible_ability_renders_with_a_stepper`
 - [x] Picking a profession hides the School Ring picker and the school-knack controls - `test_professions.py::test_picking_a_profession_hides_the_school_ring_and_knacks`
@@ -2096,8 +2096,28 @@ A profession is taken INSTEAD of a school, so these cover a character shape noth
 - [x] The self-blessing button reads "You blessed yourself", not "<name> priest blessed" - `test_professions.py::test_the_self_blessing_button_says_you_blessed_yourself`
 - [x] A character without the ritual has no blesser entry - `test_professions.py::test_a_character_without_the_ritual_has_no_blessing_button`
 
+### Worker and Merchant abilities
+
+Almost all of these are conditional free raises, which render as "Alternative totals" rows; the condition is label text the player judges. Two do not fit that shape and have their own coverage: the Merchant's extra commerce dice (a pre-roll variant, because an alternative cannot add dice to a roll that already happened) and its business reroll.
+
+- [x] Worker and Merchant blocks are live, not the greyed previews they were - `test_professions.py::test_worker_and_merchant_blocks_are_live`
+- [x] Only the campaign-specific Worker ability is disabled, inside an otherwise-live block - `test_professions.py::test_only_the_campaign_specific_worker_ability_is_disabled`
+- [x] Each ability's own money bonus renders in its editor row, and the "none" one does not - `test_professions.py::test_the_editor_shows_per_ability_money_bonuses`
+- [x] A conditional free raise becomes an alternative row with the right number - `test_professions.py::test_a_conditional_free_raise_becomes_an_alternative_row`
+- [x] Taking it twice doubles the row - `test_professions.py::test_taking_it_twice_doubles_the_alternative`
+- [x] Two abilities on one skill stay separate rows - `test_professions.py::test_two_abilities_on_one_skill_render_as_separate_rows`
+- [x] Feats of strength land on Water athletics and not Earth - `test_professions.py::test_feats_of_strength_land_on_water_athletics_only`
+- [x] The commerce tile offers both roll options in order - `test_professions.py::test_the_commerce_tile_offers_both_roll_options`
+- [x] The business commerce roll uses four more dice - `test_professions.py::test_the_business_commerce_roll_uses_four_more_dice`
+- [x] No variant picker without the ability - `test_professions.py::test_no_variant_picker_without_the_ability`
+- [x] The business reroll button appears for a holder and not otherwise - `test_professions.py::test_the_business_reroll_button_appears_for_a_holder`, `::test_no_business_reroll_button_without_the_ability`
+- [x] The reroll spends a void point, rerolls, and locks itself out afterwards - `test_professions.py::test_the_business_reroll_spends_a_void_point_and_rerolls`
+- [x] The accumulated money bonus renders and reaches the stipend calculation - `test_professions.py::test_the_money_bonus_renders_and_moves_the_stipend`, `::test_no_money_bonus_chip_without_one`
+- [x] No JavaScript errors for a Worker/Merchant character - `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors[profession:trade]`
+
 ### Read-only Roll Mode
 
+- [x] A non-editor walks the Merchant business reroll and their void points do not move - `test_professions.py::test_a_non_editor_rerolls_without_paying`
 - [x] A non-editor walks the whole Wave Man attack + damage flow and no persisted counter moves - `test_professions.py::test_non_editor_can_walk_a_wave_man_attack_without_moving_the_sheet`
 - [x] A non-editor gets no ability steppers on the sheet or the edit URL - `test_professions.py::test_non_editor_cannot_change_profession_abilities`
 
@@ -2105,7 +2125,7 @@ A profession is taken INSTEAD of a school, so these cover a character shape noth
 
 ## Coverage Summary
 
-**Covered:** ~340 test functions across 35 test files
+**Covered:** ~357 test functions across 35 test files
 **Uncovered:** 0
 
 All interactive UI features are covered by at least one e2e clicktest.
