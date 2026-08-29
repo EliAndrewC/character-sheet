@@ -77,6 +77,24 @@ def is_profession_character(character_data: Any) -> bool:
     return bool(getattr(character_data, "profession", ""))  # pragma: no cover
 
 
+def ability_is_available(ability_id: str) -> bool:
+    """Can *ability_id* be taken?
+
+    Two gates, and both must pass: the profession has to be available, and
+    the ability itself has to be. The second exists for abilities held back
+    inside a live profession - the Worker's advanced-skills-as-basic is
+    campaign-specific, so it is shown greyed out rather than hidden.
+
+    The one place this is decided; every other caller comes through here or
+    through :func:`max_for_ability`.
+    """
+    ability = PROFESSION_ABILITIES.get(ability_id)
+    if ability is None or not ability.available:
+        return False
+    prof = PROFESSIONS.get(PROFESSION_BY_ABILITY.get(ability_id) or "")
+    return prof is not None and prof.is_available
+
+
 def max_for_ability(ability_id: str) -> int:
     """How many times *ability_id* may be taken, or 0 if it is unavailable.
 
@@ -84,11 +102,9 @@ def max_for_ability(ability_id: str) -> int:
     character hold a twice-taken Wave Man ability beside a once-only Priest
     ritual.
     """
-    profession_id = PROFESSION_BY_ABILITY.get(ability_id)
-    prof = PROFESSIONS.get(profession_id or "")
-    if prof is None or not prof.is_available:
+    if not ability_is_available(ability_id):
         return 0
-    return prof.max_per_ability
+    return PROFESSIONS[PROFESSION_BY_ABILITY[ability_id]].max_per_ability
 
 
 def sanitize_profession_abilities(raw: Any) -> Dict[str, int]:

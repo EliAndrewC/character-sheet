@@ -1344,6 +1344,15 @@ def _validate_profession(character_data: dict) -> List[str]:
                 "which is not yet available for characters."
             )
             continue
+        if not PROFESSION_ABILITIES[aid].available:
+            # An ability held back inside an otherwise-live profession -
+            # currently only the Worker's advanced-skills-as-basic, which
+            # is campaign-specific.
+            errors.append(
+                f"{PROFESSION_ABILITIES[aid].name} is not available in this "
+                "campaign."
+            )
+            continue
         if count > owner.max_per_ability:
             name = PROFESSION_ABILITIES[aid].name
             times = "once" if owner.max_per_ability == 1 else (

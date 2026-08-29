@@ -332,6 +332,12 @@ class ProfessionAbility:
     ordinal: int
     name: str
     text: str
+    # Whether this ability can be taken at all. Profession-level
+    # availability is the usual gate, but one ability can be held back
+    # inside an otherwise-live profession: the Worker's
+    # advanced-skills-as-basic is campaign-specific, as its own
+    # parenthetical says, so it renders greyed out rather than vanishing.
+    available: bool = True
     implemented: bool = False
     reference_only: bool = False
     money_bonus: Optional[str] = None
@@ -373,8 +379,13 @@ class Profession:
         return self.availability in ("available", "preview")
 
     @property
+    def takeable_abilities(self) -> List["ProfessionAbility"]:
+        """Abilities a character may actually pick from this profession."""
+        return [a for a in self.abilities if a.available]
+
+    @property
     def max_total_picks(self) -> int:
-        return self.max_per_ability * len(self.abilities)
+        return self.max_per_ability * len(self.takeable_abilities)
 
 
 
@@ -3201,11 +3212,14 @@ _WORKER_ABILITIES: List[ProfessionAbility] = [
     ),
     ProfessionAbility(
         id="worker_advanced_as_basic", ordinal=5, name="Advanced skills as basic",
+        available=False,
         text=(
             "You may buy and raise any advanced skill which is normally basic "
             "as if it were basic.  (Depending on the background and campaign, "
             "some normally-basic skills might be advanced, such as making Law "
-            "an advanced skill for peasant farmers.)"
+            "an advanced skill for peasant farmers.  If you take this ability "
+            "after having already spent XP on an advanced skill, you get back "
+            "the extra XPs which were previously spent.)"
         ),
         money_bonus="10%",
     ),
@@ -3223,13 +3237,21 @@ _WORKER_ABILITIES: List[ProfessionAbility] = [
         money_bonus="10%",
     ),
     ProfessionAbility(
-        id="worker_strength", ordinal=8, name="Strong back",
-        text="You get 2 free raises on strength rolls.",
+        id="worker_strength", ordinal=8, name="Feats of strength",
+        text=(
+            "You get 2 free raises when making Water athletics rolls for "
+            "feats of strength."
+        ),
+        implemented=True,
         money_bonus="20%",
     ),
     ProfessionAbility(
-        id="worker_endurance", ordinal=9, name="Tireless",
-        text="You get 2 free raises on all endurance rolls.",
+        id="worker_endurance", ordinal=9, name="Feats of endurance",
+        text=(
+            "You get 2 free raises when making Earth athletics rolls for "
+            "feats of endurance."
+        ),
+        implemented=True,
         money_bonus="20%",
     ),
     ProfessionAbility(
@@ -3278,13 +3300,16 @@ _MERCHANT_ABILITIES: List[ProfessionAbility] = [
         id="merchant_contested_commerce", ordinal=5, name="Out-haggle a rival",
         text=(
             "You get 2 free raises to contested commerce rolls when your "
-            "commerce rank is at least as high as your opponent's."
+            "commerce skill is at least as high as your opponent's."
         ),
         money_bonus="20%",
     ),
     ProfessionAbility(
         id="merchant_culture_gifts", ordinal=6, name="Choose a gift",
-        text="You get 4 free raises to culture rolls to purchase gifts.",
+        text=(
+            "You get 4 free raises to culture rolls for the purpose of "
+            "purchasing gifts."
+        ),
         money_bonus="20%",
     ),
     ProfessionAbility(
@@ -3486,12 +3511,14 @@ PROFESSIONS: Dict[str, Profession] = {
         name="Worker",
         abilities=_WORKER_ABILITIES,
         rules_anchor="#worker-abilities",
+        availability="available",
     ),
     "merchant": Profession(
         id="merchant",
         name="Merchant",
         abilities=_MERCHANT_ABILITIES,
         rules_anchor="#merchant-abilities",
+        availability="available",
     ),
     "priest": Profession(
         id="priest",
@@ -3540,7 +3567,7 @@ PROFESSION_ABILITY_POOL: List[ProfessionAbility] = [
     a
     for p in PROFESSIONS.values()
     if p.is_available
-    for a in p.abilities
+    for a in p.takeable_abilities
 ]
 
 
@@ -3559,6 +3586,111 @@ PROFESSION_ABILITY_BONUSES: Dict[str, dict] = {
 }
 
 
+# Conditional free raises, which the sheet renders as "Alternative totals"
+# rows rather than baking into the unconditional flat bonus. Every one of
+# these carries a condition only the player can judge ("relating to your
+# business", "for feats of strength"), exactly as the Streetwise advantage's
+# condition already works, so the label is the whole of the gate.
+#
+# ability id -> list of rows, each:
+#   roll_keys  - the formula keys this row attaches to. "skill:<id>" for a
+#                skill, "athletics:<Ring>" for an athletics roll.
+#   raises     - free raises granted by ONE copy; a second copy doubles it.
+#   label      - rendered straight after the alternative total, so it must
+#                read naturally there.
+#   open_roll  - the row applies only to open rolls.
+#
+# Two rows for one ability is the shape for "N raises, and one more if
+# contested": a row states a single number, so the plain and contested cases
+# cannot share one.
+PROFESSION_ALTERNATIVE_BONUSES: Dict[str, List[dict]] = {
+    # ---- Worker ----
+    "worker_etiquette_higher_class": [{
+        "roll_keys": ["skill:etiquette"],
+        "raises": 3,
+        "label": "when speaking to someone of higher social class",
+    }],
+    "worker_commerce_purchases": [{
+        "roll_keys": ["skill:commerce"],
+        "raises": 3,
+        "label": "when making purchases",
+    }],
+    "worker_ethics_bragging": [{
+        "roll_keys": ["skill:bragging", "skill:precepts"],
+        "raises": 4,
+        "label": "when speaking about your own ethics",
+    }],
+    # Reworded upstream on 2026-08-29 from "strength rolls" / "endurance
+    # rolls", which named a roll type this app does not have, to the
+    # athletics rolls it does.
+    "worker_strength": [{
+        "roll_keys": ["athletics:Water"],
+        "raises": 2,
+        "label": "for feats of strength",
+    }],
+    "worker_endurance": [{
+        "roll_keys": ["athletics:Earth"],
+        "raises": 2,
+        "label": "for feats of endurance",
+    }],
+    "worker_authority_trouble": [{
+        "roll_keys": ["skill:sincerity", "skill:tact"],
+        "raises": 5,
+        "label": "when avoiding trouble with an authority figure",
+        "open_roll": True,
+    }],
+
+    # ---- Merchant ----
+    "merchant_sincerity": [{
+        "roll_keys": ["skill:sincerity"],
+        "raises": 2,
+        "label": "relating to your business",
+    }],
+    "merchant_interrogation": [{
+        "roll_keys": ["skill:interrogation"],
+        "raises": 2,
+        "label": "relating to your business",
+    }],
+    "merchant_investigation": [{
+        "roll_keys": ["skill:investigation"],
+        "raises": 4,
+        "label": "relating to your business",
+    }],
+    "merchant_bragging_precepts": [
+        {
+            "roll_keys": ["skill:bragging", "skill:precepts"],
+            "raises": 3,
+            "label": "relating to your business experience",
+        },
+        {
+            "roll_keys": ["skill:bragging", "skill:precepts"],
+            "raises": 4,
+            "label": "relating to your business experience, contested",
+        },
+    ],
+    "merchant_contested_commerce": [{
+        "roll_keys": ["skill:commerce"],
+        "raises": 2,
+        "label": "contested, when your commerce skill is at least your opponent's",
+    }],
+    "merchant_culture_gifts": [{
+        "roll_keys": ["skill:culture"],
+        "raises": 4,
+        "label": "for the purpose of purchasing gifts",
+    }],
+    "merchant_heraldry": [{
+        "roll_keys": ["skill:heraldry"],
+        "raises": 5,
+        "label": "for knowing your customers and their families",
+    }],
+    "merchant_law": [{
+        "roll_keys": ["skill:law"],
+        "raises": 3,
+        "label": "relating to your business",
+    }],
+}
+
+
 # Import-time guard against a typo in the static data above. Fires only at
 # dev time if someone mistypes an id; a live app either imports cleanly or
 # does not start at all.
@@ -3570,6 +3702,11 @@ if len(_seen_ability_ids) != len(set(_seen_ability_ids)):  # pragma: no cover
 for _aid in PROFESSION_ABILITY_BONUSES:  # pragma: no cover
     if _aid not in PROFESSION_ABILITIES:
         raise ValueError(f"PROFESSION_ABILITY_BONUSES references unknown ability {_aid}")
+for _aid in PROFESSION_ALTERNATIVE_BONUSES:  # pragma: no cover
+    if _aid not in PROFESSION_ABILITIES:
+        raise ValueError(
+            f"PROFESSION_ALTERNATIVE_BONUSES references unknown ability {_aid}"
+        )
 for _p in PROFESSIONS.values():  # pragma: no cover
     if [a.ordinal for a in _p.abilities] != list(range(1, len(_p.abilities) + 1)):
         raise ValueError(f"profession {_p.id} has non-sequential ability ordinals")

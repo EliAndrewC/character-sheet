@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 
 from app.game_data import (
     PROFESSION_ABILITY_BONUSES,
+    PROFESSION_ALTERNATIVE_BONUSES,
     SCHOOL_KNACKS,
     SCHOOL_TECHNIQUE_BONUSES,
     SCHOOLS,
@@ -516,6 +517,55 @@ def profession_extra_rolled_dice(character_data: dict, roll_key: str) -> int:
     return total
 
 
+def has_profession_athletics_bonus(character_data: dict) -> bool:
+    """Does a profession ability attach a bonus to any athletics roll?
+
+    The Worker's feats of strength (Water) and endurance (Earth) do. Like
+    the Kitsune Warden's 4th Dan, this makes an ``athletics:<Ring>`` roll
+    genuinely different from the bare ``ring:<Ring>`` roll it would
+    otherwise duplicate, so the key has to be emitted even for a character
+    with no athletics knack - otherwise the ability would be unreachable.
+    """
+    for ability_id, rows in PROFESSION_ALTERNATIVE_BONUSES.items():
+        if not any(k.startswith("athletics:") for row in rows
+                   for k in row["roll_keys"]):
+            continue
+        if ability_count(character_data, ability_id):
+            return True
+    return False
+
+
+def apply_profession_alternatives(
+    formula: "RollFormula", character_data: dict, roll_key: str
+) -> None:
+    """Attach a profession ability's conditional free raises to *formula*.
+
+    These are the Worker and Merchant abilities whose bonus depends on a
+    condition only the player can judge - "relating to your business", "for
+    feats of strength" - so they become "Alternative totals" rows rather
+    than touching the unconditional flat bonus, exactly as the Streetwise
+    advantage's condition already does.
+
+    Raises are per copy and double at two (part 3, R10). Two abilities that
+    reach the same roll under different conditions produce two rows: merging
+    them would claim a total that neither condition alone earns.
+    """
+    for ability_id, rows in PROFESSION_ALTERNATIVE_BONUSES.items():
+        copies = ability_count(character_data, ability_id)
+        if not copies:
+            continue
+        for row in rows:
+            if roll_key not in row["roll_keys"]:
+                continue
+            entry = {
+                "label": row["label"],
+                "extra_flat": row["raises"] * FREE_RAISE_VALUE * copies,
+            }
+            if row.get("open_roll"):
+                entry["open_roll"] = True
+            formula.alternatives.append(entry)
+
+
 def profession_bonus_label(count: int, profession_name: str = "Wave Man") -> str:
     """"+N rolled dice from Wave Man", singular-aware."""
     die_word = "die" if count == 1 else "dice"
@@ -822,6 +872,10 @@ def build_skill_formula(
                 "label": f"if related to Specialization ({sp_text})",
                 "extra_flat": 2 * FREE_RAISE_VALUE,
             })
+
+    # Worker / Merchant conditional free raises. Applied before Withdrawn
+    # so its cap still governs any row it lifts.
+    apply_profession_alternatives(formula, character_data, f"skill:{skill_id}")
 
     _apply_withdrawn(formula, skill_id, disadvantages)
 
@@ -1164,6 +1218,13 @@ def build_athletics_formula(
     dan = compute_dan(native_knacks) if native_knacks else 0
     if school_id == "kitsune_warden" and dan >= 4 and formula.rolled < 10:
         formula.rolled = 10
+
+    # Worker's feats of strength (Water) and endurance (Earth). The first
+    # profession abilities to reach the athletics builder rather than the
+    # skill one.
+    apply_profession_alternatives(
+        formula, character_data, f"athletics:{ring_name}"
+    )
 
     _finalize_caps(formula)
     return formula
@@ -1944,8 +2005,13 @@ def build_all_roll_formulas(
     # there the athletics:<Ring> roll is no longer redundant with ring:<Ring>,
     # so it must stay reachable. We emit it at every Dan for the Kitsune (so the
     # option is consistently present and simply gains the floor at Dan 4).
+    # A Worker's feats of strength / endurance are the same exception as the
+    # Kitsune's: they modify bare athletics rolls, so the athletics:<Ring>
+    # option stops being redundant and has to stay reachable.
     _ath_rank = merged_knacks(character_data).get("athletics", 0)
-    if _ath_rank >= 1 or character_data.get("school") == "kitsune_warden":
+    if (_ath_rank >= 1
+            or character_data.get("school") == "kitsune_warden"
+            or has_profession_athletics_bonus(character_data)):
         for ring_name in (r.value for r in Ring):
             formula = build_athletics_formula(ring_name, character_data)
             if formula is not None:
