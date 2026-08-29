@@ -1950,8 +1950,11 @@ def test_togashi_dragon_tattoo_rolls_2x_k1_damage(page, live_server_url):
     assert "Damage" in f["label"]
 
 
-def test_togashi_dragon_tattoo_impaired_disables_reroll_10s(page, live_server_url):
-    """When impaired, Dragon Tattoo damage does not reroll 10s."""
+def test_togashi_dragon_tattoo_still_rerolls_10s_when_impaired(page, live_server_url):
+    """Dragon Tattoo is a (2X)k1 DAMAGE roll, and the combat rules exempt
+    damage rolls from the Impaired reroll suppression by name - "you still
+    reroll 10s on non-skill rolls such as wound checks and damage rolls".
+    Athletics, the school's other rollable knack, is exempt too."""
     _create_char(page, live_server_url, "TogashiDragonImpaired", "togashi_ise_zumi",
                  knack_overrides={"athletics": 2, "conviction": 2, "dragon_tattoo": 2})
     # Earth is 2 by default -> impaired at 2 SW. Bump via the tracking bridge.
@@ -1974,8 +1977,8 @@ def test_togashi_dragon_tattoo_impaired_disables_reroll_10s(page, live_server_ur
         return null;
     }""")
     assert f is not None
-    assert f["reroll_tens"] is False
-    assert f["no_reroll_reason"] == "impaired"
+    assert f["reroll_tens"] is True
+    assert f["no_reroll_reason"] == ""
 
 
 def test_togashi_heal_sw_button_works(page, live_server_url):

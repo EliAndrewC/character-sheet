@@ -285,6 +285,38 @@
     },
 
     /**
+     * Whether being Impaired stops 10s rerolling on this particular roll.
+     *
+     * rules/03-combat.md: "While impaired, you no longer reroll 10s for any
+     * SKILL, but you still reroll 10s on NON-SKILL rolls such as wound checks
+     * and damage rolls." Skills are `skill:*`, attack / parry, and the school
+     * knacks. Not skills, and so untouched by Impaired:
+     *
+     *   - wound checks and damage rolls - named by the rule itself
+     *   - athletics ("physical actions which are not covered by skills",
+     *     rules/05-school_knacks.md), under either its `knack:athletics`
+     *     entry point or its `athletics:*` variants
+     *   - bare ring rolls, which are raw attribute checks
+     *
+     * This mirrors `_reroll_fields` in app/services/dice.py, which decides the
+     * same thing for the server-rendered formulas; this copy exists for the
+     * live update when a character becomes Impaired mid-session. Keep the two
+     * in step - `tests/js/roll_math.test.js` and
+     * `TestBuildAllRollFormulas::test_impaired_suppresses_the_reroll_on_skills_only`
+     * assert the same partition.
+     *
+     * Says nothing about rolls that never reroll 10s for their own reasons
+     * (initiative, unskilled, the iaijutsu strike); callers skip those first.
+     */
+    impairedSuppressesReroll: function (key, formula) {
+      if ((formula || {}).is_damage_roll) return false;
+      if (typeof key !== "string") return true;
+      if (key === "wound_check" || key === "knack:athletics") return false;
+      if (key.indexOf("athletics:") === 0 || key.indexOf("ring:") === 0) return false;
+      return true;
+    },
+
+    /**
      * Sum of the highest ``k`` values in ``values`` (a kept-dice pool). Used
      * when recomputing a roll after a PCP "reroll 10s while impaired" explodes
      * some dice and may change which dice are kept. ``k`` is clamped to the

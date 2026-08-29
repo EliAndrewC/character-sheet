@@ -1223,8 +1223,11 @@ class TestKnackFormula:
         f = build_knack_formula("athletics", char)
         assert f.is_damage_roll is False
 
-    def test_dragon_tattoo_impaired_disables_reroll_tens(self):
-        """Dragon Tattoo damage should stop rerolling 10s when impaired."""
+    def test_dragon_tattoo_still_rerolls_tens_when_impaired(self):
+        """Dragon Tattoo is a (2X)k1 DAMAGE roll, and rules/03-combat.md
+        exempts damage rolls from the Impaired reroll suppression by name:
+        "you still reroll 10s on non-skill rolls such as wound checks and
+        damage rolls"."""
         char = make_character_data(
             school="togashi_ise_zumi",
             knacks={"athletics": 1, "conviction": 1, "dragon_tattoo": 2},
@@ -1232,6 +1235,33 @@ class TestKnackFormula:
             current_serious_wounds=2,
         )
         f = build_knack_formula("dragon_tattoo", char)
+        assert f.is_damage_roll is True
+        assert f.reroll_tens is True
+        assert f.no_reroll_reason == ""
+
+    def test_athletics_knack_still_rerolls_tens_when_impaired(self):
+        """Athletics is "not covered by skills" (rules/05-school_knacks.md),
+        so the skills-only Impaired suppression does not reach it."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 2, "conviction": 1, "dragon_tattoo": 1},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+            current_serious_wounds=2,
+        )
+        f = build_knack_formula("athletics", char)
+        assert f.reroll_tens is True
+        assert f.no_reroll_reason == ""
+
+    def test_other_school_knacks_stop_rerolling_when_impaired(self):
+        """The rest of the school knacks count as skills, matching the line
+        the GM drew for Discordant."""
+        char = make_character_data(
+            school="togashi_ise_zumi",
+            knacks={"athletics": 1, "conviction": 2, "dragon_tattoo": 1},
+            rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
+            current_serious_wounds=2,
+        )
+        f = build_knack_formula("conviction", char)
         assert f.reroll_tens is False
         assert f.no_reroll_reason == "impaired"
 
@@ -1711,20 +1741,78 @@ class TestBuildAllRollFormulas:
         char = make_character_data(school="", knacks={}, attack=0)
         assert build_combat_formula("attack", char) is None
 
-    def test_impaired_character_all_formulas_no_reroll(self):
+    def test_impaired_suppresses_the_reroll_on_skills_only(self):
+        """rules/03-combat.md: "While impaired, you no longer reroll 10s for
+        any skill, but you still reroll 10s on non-skill rolls such as wound
+        checks and damage rolls."
+
+        Skills are ``skill:*``, attack / parry, and the school knacks;
+        athletics and bare ring rolls are not (see _reroll_fields). This
+        pins the whole partition so a future builder cannot quietly pick
+        the wrong side.
+        """
         char = make_character_data(
+            school="togashi_ise_zumi",
             skills={"bragging": 2},
+            knacks={"athletics": 2, "conviction": 2, "dragon_tattoo": 2},
+            # A rollable knack from another school, so the "school knacks are
+            # skills" half of the partition has a representative (Togashi's
+            # own rollable knacks are exactly the two exempt ones).
+            foreign_knacks={"oppose_social": 2},
             attack=2,
+            parry=2,
             rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
         )
         char["current_serious_wounds"] = 3  # >= Earth(2)
         formulas = build_all_roll_formulas(char)
+
+        def keeps_rerolling(key: str) -> bool:
+            return (
+                key == "wound_check"
+                or key in ("knack:athletics", "knack:dragon_tattoo")
+                or key.startswith(("ring:", "athletics:"))
+            )
+
+        skills_seen, non_skills_seen = [], []
         for key, formula in formulas.items():
-            if key == "wound_check":
-                # Wound checks ALWAYS reroll 10s even when Impaired
-                assert formula["reroll_tens"] is True
+            if "reroll_tens" not in formula:
+                continue
+            if keeps_rerolling(key):
+                assert formula["reroll_tens"] is True, key
+                assert formula.get("no_reroll_reason", "") == "", key
+                non_skills_seen.append(key)
+            elif formula.get("no_reroll_reason") in ("unskilled", "iaijutsu_strike"):
+                # Never reroll for their own reasons, impaired or not.
+                assert formula["reroll_tens"] is False, key
+            elif key.startswith("initiative"):
+                # Initiative never rerolls 10s for anyone (rules/10).
+                assert formula["reroll_tens"] is False, key
             else:
-                assert formula["reroll_tens"] is False
+                assert formula["reroll_tens"] is False, key
+                assert formula.get("no_reroll_reason") == "impaired", key
+                skills_seen.append(key)
+
+        # Both sides of the partition are actually populated, so the test
+        # cannot pass by finding nothing.
+        assert "skill:bragging" in skills_seen
+        assert "attack" in skills_seen and "parry" in skills_seen
+        assert "knack:oppose_social" in skills_seen
+        assert "wound_check" in non_skills_seen
+        assert "ring:Fire" in non_skills_seen
+        assert "knack:athletics" in non_skills_seen
+        assert "knack:dragon_tattoo" in non_skills_seen
+        assert any(k.startswith("athletics:") for k in non_skills_seen)
+
+    def test_healthy_character_rerolls_everything_it_can(self):
+        char = make_character_data(
+            skills={"bragging": 2},
+            attack=2,
+            rings={"Air": 2, "Fire": 2, "Earth": 5, "Water": 2, "Void": 2},
+        )
+        char["current_serious_wounds"] = 0
+        formulas = build_all_roll_formulas(char)
+        for key, formula in formulas.items():
+            assert formula.get("no_reroll_reason") != "impaired", key
 
 
 class TestDiscordantVoidBlock:

@@ -590,6 +590,79 @@ def _impair(page, times=2):
     page.wait_for_timeout(200)
 
 
+def _reroll_flags(page, keys):
+    return page.evaluate(
+        "(keys) => Object.fromEntries(keys.map(k => "
+        "[k, (window._diceRoller.formulas[k] || {}).reroll_tens]))",
+        keys,
+    )
+
+
+def test_impaired_suppresses_rerolls_on_skills_only(page, live_server_url):
+    """rules/03-combat.md: Impaired stops 10s rerolling for SKILLS, but wound
+    checks, damage, athletics and bare ring rolls keep theirs."""
+    _create_roller(page, live_server_url, "ImpairedScopeChar")
+    _impair(page)
+    page.reload()
+    page.wait_for_selector('[data-roll-key="skill:bragging"]')
+    assert "IMPAIRED" in page.text_content("body")
+
+    flags = _reroll_flags(page, [
+        "skill:bragging", "attack", "parry",
+        "wound_check", "ring:Fire", "ring:Earth",
+    ])
+    # Skills lose the reroll...
+    assert flags["skill:bragging"] is False
+    assert flags["attack"] is False
+    assert flags["parry"] is False
+    # ...everything else keeps it.
+    assert flags["wound_check"] is True
+    assert flags["ring:Fire"] is True
+    assert flags["ring:Earth"] is True
+
+
+def test_becoming_impaired_mid_fight_updates_the_formulas(page, live_server_url):
+    """The case that only shows up in combat: serious wounds cross the Earth
+    ring with no page reload, so the live wound-changed path has to re-scope
+    the rerolls - and re-scope them the same way the server would."""
+    _create_roller(page, live_server_url, "MidFightImpairChar")
+    page.wait_for_selector('[data-roll-key="skill:bragging"]')
+    before = _reroll_flags(page, ["skill:bragging", "ring:Fire", "wound_check"])
+    assert before == {
+        "skill:bragging": True, "ring:Fire": True, "wound_check": True,
+    }
+
+    _impair(page)  # no reload - exactly what happens mid-fight
+
+    after = _reroll_flags(page, ["skill:bragging", "ring:Fire", "wound_check"])
+    assert after["skill:bragging"] is False
+    assert after["ring:Fire"] is True
+    assert after["wound_check"] is True
+    assert page.evaluate(
+        "window._diceRoller.formulas['skill:bragging'].no_reroll_reason"
+    ) == "impaired"
+    assert page.evaluate(
+        "window._diceRoller.formulas['ring:Fire'].no_reroll_reason"
+    ) == ""
+
+
+def test_healing_out_of_impaired_restores_the_rerolls(page, live_server_url):
+    """And back again, without a reload."""
+    _create_roller(page, live_server_url, "HealBackChar")
+    page.wait_for_selector('[data-roll-key="skill:bragging"]')
+    _impair(page)
+    assert _reroll_flags(page, ["skill:bragging"])["skill:bragging"] is False
+
+    sw_section = page.locator('text="Serious Wounds"').locator('..')
+    sw_section.locator('button', has_text="-").first.click()
+    page.wait_for_timeout(300)
+
+    assert _reroll_flags(page, ["skill:bragging"])["skill:bragging"] is True
+    assert page.evaluate(
+        "window._diceRoller.formulas['skill:bragging'].no_reroll_reason"
+    ) == ""
+
+
 def test_exported_card_explains_an_impaired_ten(page, live_server_url):
     """The reported bug: the on-screen modal said "10s not rerolled due to
     being Impaired", but the Copy-as-image card dropped it, so a pasted
