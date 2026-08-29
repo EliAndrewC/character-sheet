@@ -893,6 +893,9 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Unskilled roll modal names the zero-ranked skill in the no-reroll note → `test_rolls.py::test_unskilled_character_modal_names_skill_in_no_reroll_note`
 - [x] Impaired indicator visible on the sheet when wounds ≥ Earth → `test_rolls.py::test_impaired_indicator_visible_on_sheet`
 - [x] Impaired indicator absent when healthy → `test_rolls.py::test_impaired_indicator_absent_when_healthy`
+- [x] Exported "Copy as image" card explains a stranded 10 (Impaired) in its DETAILS block → `test_rolls.py::test_exported_card_explains_an_impaired_ten`
+- [x] Exported card stays quiet when no 10 was stranded → `test_rolls.py::test_exported_card_stays_quiet_when_no_ten_was_stranded`
+- [x] Exported card explains an unskilled roll's stranded 10, naming the skill → `test_rolls.py::test_exported_card_explains_an_unskilled_ten`
 - [x] Disabling animation in profile shows result panel immediately → `test_rolls.py::test_disable_animation_preference`
 - [x] Die top angle is approximately 70 degrees → `test_rolls.py::test_die_top_angle_is_about_70_degrees`
 - [x] Initiative roll shows action dice → `test_rolls.py::test_initiative_roll_shows_action_dice`

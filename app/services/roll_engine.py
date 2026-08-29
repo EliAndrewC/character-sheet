@@ -197,6 +197,30 @@ def _formula_text(formula: Dict[str, Any]) -> str:
     return text
 
 
+def _no_reroll_note(formula: Dict[str, Any], cells: List[Dict[str, Any]]) -> str:
+    """The "10s not rerolled because ..." line for the card, or "".
+
+    Mirrors ``_noRerollNote`` in the sheet's Alpine layer, wording included,
+    so a card produced by a slash command reads identically to one copied off
+    the sheet. Only worth saying when a 10 is actually sitting in the pool: a
+    10 that DID reroll is a chain of two or more parts, so a single-part cell
+    of 10 is precisely "a 10 that stayed a 10".
+    """
+    if formula.get("reroll_tens") or not formula.get("no_reroll_reason"):
+        return ""
+    if not any(c["parts"] == [10] for c in cells):
+        return ""
+    reason = formula["no_reroll_reason"]
+    if reason == "iaijutsu_strike":
+        return "10s not rerolled for the strike in an iaijutsu duel"
+    if reason == "impaired":
+        return "10s not rerolled due to being Impaired"
+    if reason == "unskilled":
+        name = formula.get("unskilled_skill_name") or "that skill"
+        return f"10s not rerolled due to {name} being 0"
+    return ""
+
+
 def _bonuses_for_payload(formula: Dict[str, Any]) -> List[Dict[str, Any]]:
     """The formula's labeled flat-bonus breakdown, zero rows dropped."""
     return [
@@ -248,13 +272,18 @@ def execute_roll(
     # something once a ceiling is in play.
     base_total = dice["kept_sum"] + (formula.get("flat") or 0)
 
+    # The card's DETAILS block. A slash-command roll has no interactive
+    # spends to report, but it can still be a roll whose 10s did not
+    # explode, and the card has to say so.
+    note = _no_reroll_note(formula, dice["kept"] + dice["dropped"])
+
     return {
         "title": formula.get("label") or roll_key,
         "formula": _formula_text(formula),
         "kept": [{"parts": d["parts"]} for d in dice["kept"]],
         "dropped": [{"parts": d["parts"]} for d in dice["dropped"]],
         "bonuses": _bonuses_for_payload(formula),
-        "extras": [],
+        "extras": [note] if note else [],
         "kept_sum": dice["kept_sum"],
         "total": apply_total_cap(base_total, formula.get("max_total")),
         "alternatives": _alternatives_for_payload(formula, base_total),

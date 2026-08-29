@@ -344,3 +344,67 @@ def test_alternatives_drop_a_zero_row_that_opts_out_of_the_formula_cap():
         ],
     }
     assert _alts(formula, 20) == []
+
+
+# ---------------------------------------------------------------------------
+# The "10s not rerolled" note on the card
+# ---------------------------------------------------------------------------
+
+
+def test_no_reroll_note_explains_an_impaired_ten():
+    formula = {"reroll_tens": False, "no_reroll_reason": "impaired"}
+    cells = [{"parts": [10]}, {"parts": [4]}]
+    assert roll_engine._no_reroll_note(formula, cells) == (
+        "10s not rerolled due to being Impaired"
+    )
+
+
+def test_no_reroll_note_is_silent_without_a_ten():
+    """Nothing was suppressed that the reader can see, so say nothing."""
+    formula = {"reroll_tens": False, "no_reroll_reason": "impaired"}
+    assert roll_engine._no_reroll_note(formula, [{"parts": [9]}]) == ""
+
+
+def test_no_reroll_note_ignores_a_ten_that_did_reroll():
+    """A 10 that exploded is a multi-part chain, not a stranded 10."""
+    formula = {"reroll_tens": True, "no_reroll_reason": ""}
+    assert roll_engine._no_reroll_note(formula, [{"parts": [10, 7]}]) == ""
+
+
+@pytest.mark.parametrize("reason,expected", [
+    ("impaired", "10s not rerolled due to being Impaired"),
+    ("iaijutsu_strike", "10s not rerolled for the strike in an iaijutsu duel"),
+    ("unskilled", "10s not rerolled due to Intimidation being 0"),
+    ("something_new", ""),
+])
+def test_no_reroll_note_wording_per_reason(reason, expected):
+    formula = {
+        "reroll_tens": False, "no_reroll_reason": reason,
+        "unskilled_skill_name": "Intimidation",
+    }
+    assert roll_engine._no_reroll_note(formula, [{"parts": [10]}]) == expected
+
+
+def test_no_reroll_note_unskilled_without_a_name():
+    formula = {"reroll_tens": False, "no_reroll_reason": "unskilled"}
+    assert roll_engine._no_reroll_note(formula, [{"parts": [10]}]) == (
+        "10s not rerolled due to that skill being 0"
+    )
+
+
+def test_execute_roll_puts_the_note_on_an_impaired_card():
+    data = _character(skills={"etiquette": 2}, current_serious_wounds=99)
+    payload = execute_roll(
+        data, "skill:etiquette", rng=_ScriptedRandom([10, 3, 4, 5, 6]),
+    )
+    assert payload["extras"] == ["10s not rerolled due to being Impaired"]
+    # The stranded 10 is on the card, unexploded, next to the explanation.
+    assert {"parts": [10]} in payload["kept"] + payload["dropped"]
+
+
+def test_execute_roll_leaves_extras_empty_for_a_healthy_roll():
+    data = _character(skills={"etiquette": 2})
+    payload = execute_roll(
+        data, "skill:etiquette", rng=_ScriptedRandom([10, 2, 3, 4, 5, 6]),
+    )
+    assert payload["extras"] == []

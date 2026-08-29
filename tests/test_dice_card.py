@@ -361,6 +361,19 @@ class TestParsePayload:
         ]))
         assert png[:8] == b"\x89PNG\r\n\x1a\n"
 
+    def test_no_reroll_note_reaches_the_rendered_card(self):
+        """The bug this closes: the on-screen modal explained an Impaired
+        roll's stranded 10, but the pasted PNG did not, so a reader could
+        not tell it from an unlucky roll. It travels as an extras bullet
+        and must survive all the way into the SVG's DETAILS block."""
+        note = "10s not rerolled due to being Impaired"
+        card = parse_payload(_basic_payload(extras=[note]))
+        assert card.extras == (note,)
+        svg = dice_card.build_svg(card)
+        assert "DETAILS" in svg
+        assert note in svg
+        assert render_png(_basic_payload(extras=[note]))[:8] == b"\x89PNG\r\n\x1a\n"
+
     def test_extras_non_list_collapses_to_empty(self):
         card = parse_payload(_basic_payload(extras="not a list"))
         assert card.extras == ()
