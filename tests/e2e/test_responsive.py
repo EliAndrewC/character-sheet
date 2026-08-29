@@ -710,15 +710,16 @@ def _wave_man_editor_then_phone(page, live_server_url, name):
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
-    select_profession(page, "wave_man")
+    select_profession(page)
     page.wait_for_selector('[data-testid="profession-abilities"]')
     page.set_viewport_size(PHONE)
     page.wait_for_timeout(200)
 
 
 def test_profession_abilities_fit_a_phone(page, live_server_url):
-    """The ten-ability stepper list is the widest new block in the editor:
-    a +/-/count cluster beside a paragraph of rules text, ten times over."""
+    """The ability stepper list is the widest block in the editor: a
+    +/-/count cluster beside a paragraph of rules text, forty times over
+    across four profession groups."""
     _wave_man_editor_then_phone(page, live_server_url, "Narrow Ronin")
     _assert_no_horizontal_overflow(page)
 
@@ -731,7 +732,8 @@ def test_profession_ability_rows_are_not_zero_width(page, live_server_url):
             .forEach(el => out.push(Math.round(el.getBoundingClientRect().width)));
         return out;
     }""")
-    assert len(widths) == 10
+    # Four visible professions (Ninja is hidden), ten abilities each.
+    assert len(widths) == 40
     assert all(w > 100 for w in widths), widths
 
 
@@ -740,7 +742,7 @@ def test_profession_panel_fits_a_phone_on_the_sheet(page, live_server_url):
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', "Narrow Sheet")
-    select_profession(page, "wave_man")
+    select_profession(page)
     page.wait_for_selector('text="Saved"', timeout=8000)
     apply_changes(page, "narrow")
     page.set_viewport_size(PHONE)

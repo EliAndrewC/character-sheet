@@ -2040,31 +2040,36 @@ Per-account opt-in: while a listed viewer has a page open, pings continue for an
 - [x] Clicking restarts the hour, and pings resume - `test_keepalive.py::test_clicking_restarts_the_activity_window`
 - [x] An ordinary viewer's off-night tab is still silent (the opt-in changes nothing for them) - `test_keepalive.py::test_off_night_is_still_silent_for_an_ordinary_viewer`
 
-## Wave Man Profession (mark: `professions`)
+## Professions (mark: `professions`)
 
-A profession is taken INSTEAD of a school, so these cover a character shape nothing else in the suite has: no school, no School Ring, no school knacks, Dan 0. Abilities are free but rationed by total XP, and each may be taken twice. Design and the GM's rulings live in `profession-design/design.md`; ability numbering (W1-W10) follows `rules/09-professions.md`. Pure roll math is pinned in `tests/js/wave_man.test.js`.
+A profession is taken INSTEAD of a school, so these cover a character shape nothing else in the suite has: no school, no School Ring, no school knacks, Dan 0. There is one character type, "Profession", whose abilities pool across every available profession and mix freely. Abilities are free but rationed by total XP; most may be taken twice, Priest rituals once. Design and the GM's rulings live in `profession-design/design.md` and `profession-design/priest-and-pooling.md`; Wave Man ability numbering (W1-W10) follows `rules/09-professions.md`. Pure roll math is pinned in `tests/js/wave_man.test.js`.
 
 ### Editor
 
-- [x] Wave Man is selectable in the school dropdown and loads its own details panel - `test_professions.py::test_wave_man_is_selectable_and_shows_its_panel`
-- [x] Worker / Merchant / Priest / Ninja render but are disabled - `test_professions.py::test_unimplemented_professions_are_disabled`
+- [x] One "Profession" option in the school dropdown, and no per-profession ones - `test_professions.py::test_the_dropdown_offers_one_profession_option`
+- [x] Picking it loads the Profession details panel - `test_professions.py::test_profession_is_selectable_and_shows_its_panel`
+- [x] Worker and Merchant render greyed out with disabled steppers; Ninja has no block at all - `test_professions.py::test_preview_professions_render_greyed_out_and_ninja_is_absent`
+- [x] Priest groups carry the "each may be taken once" chip and Wave Man does not - `test_professions.py::test_priest_rituals_are_marked_once_only`
+- [x] Every visible ability renders with a stepper (40 across four professions) - `test_professions.py::test_every_visible_ability_renders_with_a_stepper`
 - [x] Picking a profession hides the School Ring picker and the school-knack controls - `test_professions.py::test_picking_a_profession_hides_the_school_ring_and_knacks`
-- [x] All ten abilities render with 0/1/2 steppers - `test_professions.py::test_all_ten_abilities_render_with_steppers`
 - [x] An ability can be taken twice, and its + then disables at the per-ability ceiling - `test_professions.py::test_taking_an_ability_twice`
+- [x] A Priest ritual stops at 1 while a Wave Man ability reaches 2, in one character - `test_professions.py::test_a_priest_ritual_stops_at_one_while_a_wave_man_ability_reaches_two`
 - [x] Spending the last pick disables every other + - `test_professions.py::test_the_allowance_ceiling_disables_every_plus`
 - [x] The allowance grows with earned XP (150 -> 1 pick, 180 -> 3) - `test_professions.py::test_the_allowance_grows_with_xp`
 - [x] Stepping an ability back down, and - disabling at 0 - `test_professions.py::test_stepping_an_ability_back_down`
 - [x] Switching from a profession to a school clears the abilities - `test_professions.py::test_switching_from_a_profession_to_a_school_clears_abilities`
-- [x] A Wave Man can still buy foreign school knacks - `test_professions.py::test_a_wave_man_can_buy_foreign_knacks`
+- [x] A profession character can still buy foreign school knacks - `test_professions.py::test_a_wave_man_can_buy_foreign_knacks`
 
 ### View sheet
 
 - [x] The profession panel replaces the school panel, with an x2 chip on a doubled ability - `test_professions.py::test_sheet_shows_the_profession_panel`
+- [x] A mixed build publishes and renders grouped by source profession - `test_professions.py::test_a_mixed_build_publishes_and_renders_grouped`
+- [x] The sheet lists only the abilities taken, not the whole catalogue - `test_professions.py::test_the_sheet_lists_only_the_abilities_taken`
 - [x] A reference-only ability the character took carries its "tell your GM" note - `test_professions.py::test_sheet_flags_a_reference_only_ability`
 - [x] The XP summary card counts picks, not XP - `test_professions.py::test_sheet_xp_card_counts_picks_not_xp`
-- [x] No JavaScript errors on the sheet for a school-less profession character - `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors[profession:wave_man]`
+- [x] No JavaScript errors on the sheet for a bare or a mixed profession character - `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors[profession]` and `[profession:mixed]`
 
-### Rolls
+### Wave Man ability rolls
 
 - [x] W1 raises a missing attack into a hit, and yields no extra damage dice - `test_professions.py::test_w1_raises_a_missing_attack_into_a_hit`
 - [x] W1 spends only the raises it needs - `test_professions.py::test_w1_uses_only_the_raises_it_needs`
@@ -2081,6 +2086,16 @@ A profession is taken INSTEAD of a school, so these cover a character shape noth
 - [x] W9's toggle appears only once a failed parry is declared - `test_professions.py::test_w9_toggle_appears_only_with_a_failed_parry`
 - [x] W9 recovers dice the failed parry removed, capped by the parry skill - `test_professions.py::test_w9_recovers_damage_dice_the_failed_parry_removed`
 
+### Priest rituals taken as profession abilities
+
+- [x] Taking only "bless research" gives only that button - `test_professions.py::test_taking_only_bless_research_gives_only_that_button`
+- [x] Taking only "bless conversation topic" gives only that button - `test_professions.py::test_taking_only_bless_topic_gives_only_that_button`
+- [x] A profession character with neither gets no buttons - `test_professions.py::test_a_profession_character_without_the_rituals_gets_no_buttons`
+- [x] The bless button opens a 2k1 roll - `test_professions.py::test_the_bless_button_rolls_2k1`
+- [x] A character with the sick-or-impaired ritual appears in their own blesser list - `test_professions.py::test_a_character_with_the_ritual_can_bless_themselves`
+- [x] The self-blessing button reads "You blessed yourself", not "<name> priest blessed" - `test_professions.py::test_the_self_blessing_button_says_you_blessed_yourself`
+- [x] A character without the ritual has no blesser entry - `test_professions.py::test_a_character_without_the_ritual_has_no_blessing_button`
+
 ### Read-only Roll Mode
 
 - [x] A non-editor walks the whole Wave Man attack + damage flow and no persisted counter moves - `test_professions.py::test_non_editor_can_walk_a_wave_man_attack_without_moving_the_sheet`
@@ -2088,11 +2103,9 @@ A profession is taken INSTEAD of a school, so these cover a character shape noth
 
 ---
 
----
-
 ## Coverage Summary
 
-**Covered:** ~326 test functions across 35 test files
+**Covered:** ~340 test functions across 35 test files
 **Uncovered:** 0
 
 All interactive UI features are covered by at least one e2e clicktest.

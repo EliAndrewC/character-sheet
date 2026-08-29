@@ -31,19 +31,19 @@ def select_school(page, school_id):
     page.wait_for_selector("#school-details :text('Special Ability')", timeout=10000)
 
 
-def select_profession(page, profession_id):
-    """Select a profession from the school dropdown and wait for its panel.
+def select_profession(page):
+    """Select the Profession character type and wait for its panel.
 
     A profession is taken instead of a school, so it lives in the same
-    ``select[name="school"]`` behind a ``profession:`` prefix. Unlike
-    ``select_school`` there is no "Special Ability" heading to wait on -
-    a profession has an ability list instead.
+    ``select[name="school"]``. There is one profession character type;
+    which professions' abilities the character draws on is chosen from the
+    grouped ability list below the panel.
     """
-    page.evaluate(f"""() => {{
+    page.evaluate("""() => {
         const sel = document.querySelector('select[name="school"]');
-        sel.value = 'profession:{profession_id}';
-        sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
-    }}""")
+        sel.value = 'profession';
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }""")
     page.wait_for_selector('[data-testid="profession-info"]', timeout=10000)
     page.wait_for_selector('[data-testid="profession-abilities"]', timeout=10000)
 

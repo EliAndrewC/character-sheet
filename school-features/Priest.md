@@ -14,6 +14,22 @@
 **Status:** Mostly narrative; three of the rituals are exposed mechanically.
 The remaining 7 stay narrative.
 
+**Since 2026-08-29 the ten rituals are also takeable individually by
+Profession characters** (see `profession-design/priest-and-pooling.md`). That
+changed two things about the three implemented ones:
+
+1. They are gated on **holding the ritual**, not on being a Priest school
+   character. `priest_bless_topic` and `priest_bless_research` are now
+   separate flags - a profession character who learned only one gets only
+   that button - and each reads `school == "priest" or holds(ritual)`. A
+   Priest school character still gets both, as before.
+2. The sick-or-impaired ritual **may target the priest themselves** as well
+   as an ally, for school and profession characters alike. Until then the
+   blesser list came purely from `visible_party_members`, which excludes the
+   viewing character, so self-blessing was impossible. The self entry is
+   built alongside the party list in `pages.py` rather than by relaxing that
+   function, which several other party mechanics rely on excluding self.
+
 **The fifth ritual is a commune roll, and shares its name with the `commune`
 school knack on purpose:** it is the weaker version of it. The ritual is rolled
 with **precepts** rather than with the knack, costs the same void point, and
