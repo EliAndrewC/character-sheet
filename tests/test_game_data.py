@@ -216,6 +216,23 @@ class TestMantisWaveTreader:
         for kid in school.school_knacks:
             assert kid in SCHOOL_KNACKS
 
+    def test_hida_bushi_school_knacks_match_the_rules(self):
+        """rules/04-schools.md lists counterattack, double attack, iaijutsu.
+
+        This read ``lunge`` in place of ``double_attack`` until 2026-08-29.
+        Pinned because the divergence is invisible in play until someone
+        takes the school - a school knack list drives Dan, XP validation and
+        the "school knacks must match the school" check, so it is worth
+        being loud about.
+        """
+        school = SCHOOLS["hida_bushi"]
+        assert school.school_knacks == [
+            "counterattack", "double_attack", "iaijutsu",
+        ]
+        assert "lunge" not in school.school_knacks
+        for kid in school.school_knacks:
+            assert kid in SCHOOL_KNACKS
+
 
 class TestKitsuneWarden:
     def test_school_registered(self):

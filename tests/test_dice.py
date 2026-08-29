@@ -1811,7 +1811,7 @@ class TestBuildAllRollFormulas:
         char = make_character_data(
             school="hida_bushi", attack=3, parry=2,
             skills={"bragging": 2},
-            knacks={"counterattack": 3, "iaijutsu": 3, "lunge": 3},
+            knacks={"counterattack": 3, "double_attack": 3, "iaijutsu": 3},
             rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
         )
         char["current_serious_wounds"] = 3  # >= Earth(2)
@@ -1832,7 +1832,7 @@ class TestBuildAllRollFormulas:
     def test_hida_below_3rd_dan_still_loses_the_reroll(self):
         char = make_character_data(
             school="hida_bushi", attack=3,
-            knacks={"counterattack": 2, "iaijutsu": 2, "lunge": 2},
+            knacks={"counterattack": 2, "double_attack": 2, "iaijutsu": 2},
             rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
         )
         char["current_serious_wounds"] = 3
@@ -1852,7 +1852,7 @@ class TestBuildAllRollFormulas:
     def test_hida_3rd_dan_healthy_is_unchanged(self):
         char = make_character_data(
             school="hida_bushi", attack=3,
-            knacks={"counterattack": 3, "iaijutsu": 3, "lunge": 3},
+            knacks={"counterattack": 3, "double_attack": 3, "iaijutsu": 3},
             rings={"Air": 2, "Fire": 2, "Earth": 5, "Water": 2, "Void": 2},
         )
         char["current_serious_wounds"] = 0
@@ -1865,7 +1865,7 @@ class TestBuildAllRollFormulas:
         suppression whose reason was ``impaired``."""
         char = make_character_data(
             school="hida_bushi", attack=3,
-            knacks={"counterattack": 3, "iaijutsu": 3, "lunge": 3},
+            knacks={"counterattack": 3, "double_attack": 3, "iaijutsu": 3},
             rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 2, "Void": 2},
         )
         char["current_serious_wounds"] = 3
@@ -3230,7 +3230,7 @@ class TestSecondDanFreeRaise:
         assert any("2nd Dan" in b["label"] for b in f.bonuses)
 
     def test_hida_2nd_dan_counterattack(self):
-        char = self._make("hida_bushi", ["counterattack", "iaijutsu", "lunge"])
+        char = self._make("hida_bushi", ["counterattack", "double_attack", "iaijutsu"])
         f = build_knack_formula("counterattack", char)
         assert f.flat == 5
 
@@ -3422,7 +3422,7 @@ class TestInitiativeAndFlags:
             ("shinjo_bushi", ["double_attack", "iaijutsu", "lunge"]),
             ("togashi_ise_zumi", ["athletics", "conviction", "dragon_tattoo"]),
             ("mantis_wave_treader", ["athletics", "iaijutsu", "worldliness"]),
-            ("hida_bushi", ["counterattack", "iaijutsu", "lunge"]),
+            ("hida_bushi", ["counterattack", "double_attack", "iaijutsu"]),
             ("bayushi_bushi", ["double_attack", "feint", "iaijutsu"]),
         ]:
             char = make_character_data(
@@ -3606,7 +3606,7 @@ class TestSchoolMechanics:
         """Hida 4th Dan trade is a client-side button; verify ring raise works."""
         char = make_character_data(
             school="hida_bushi",
-            knacks={"counterattack": 4, "iaijutsu": 4, "lunge": 4},
+            knacks={"counterattack": 4, "double_attack": 4, "iaijutsu": 4},
             rings={"Air": 2, "Fire": 2, "Earth": 2, "Water": 3, "Void": 2},
         )
         # Water should be raised by 1 at 4th Dan (server handles this in xp calc)
