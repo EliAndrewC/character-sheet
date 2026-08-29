@@ -949,6 +949,14 @@ def build_knack_formula(
         kept=ring_val,
         flat=0,
         # Commune costs a void point to activate (rules 05-school_knacks).
+        # Commune costs a void point to attempt (rules/05-school_knacks.md).
+        # Note the Priest profession's fifth ritual is ALSO called a commune
+        # roll, and shares the void-point cost - it is deliberately the same
+        # name because it is the lesser version of this knack: rolled with
+        # precepts rather than the knack, and limited to detecting
+        # supernatural influence that is present or nearby, where this knack
+        # questions the kami about events they witnessed. The ritual does not
+        # route through here.
         requires_void_point=(knack_id == "commune"),
         **_reroll_fields(character_data),
     )

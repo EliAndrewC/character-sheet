@@ -14,6 +14,14 @@
 **Status:** Mostly narrative; three of the rituals are exposed mechanically.
 The remaining 7 stay narrative.
 
+**The fifth ritual is a commune roll, and shares its name with the `commune`
+school knack on purpose:** it is the weaker version of it. The ritual is rolled
+with **precepts** rather than with the knack, costs the same void point, and
+only detects supernatural influence that is *currently present or nearby* -
+type, strength and proximity - where the knack questions the elemental kami
+about events they have witnessed. A character with the ritual is not using any
+of the `commune` knack machinery in `dice.py`; they are making a precepts roll.
+
 Mechanical rituals:
 
 1. **Bless conversation topic** (2k1) — button on the Priest's own sheet
