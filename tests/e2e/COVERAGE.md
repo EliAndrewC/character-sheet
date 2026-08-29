@@ -1579,6 +1579,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `rolls` | Click-to-roll dice, attack modal, wound check, iaijutsu, school abilities | `test_rolls.py`, `test_attack_modal.py`, `test_wound_check.py`, `test_iaijutsu_duel.py`, `test_sheet_js_errors.py`, `test_void_spending.py`, `test_school_abilities.py` |
 | `sections` | Rich-text freeform sections | `test_sections.py` |
 | `roll_history` | Roll persistence, Roll History page, readonly modal, hide/unhide, annotation autosave | `test_roll_history_clicktest.py` |
+| `professions` | Wave Man profession selection, ability steppers, and its roll effects | `test_professions.py` |
 
 Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pytestmark` at module level and add it to this table.
 
@@ -1588,6 +1589,9 @@ Marks are defined in `pytest.ini`. When adding a new test file, tag it with `pyt
 - [x] Edit page no horizontal overflow at phone width → `test_responsive.py::test_edit_no_horizontal_overflow`
 - [x] Edit page Basics section visually contains its inputs/selects/buttons at 320-375 px → `test_responsive.py::test_edit_basics_section_contains_its_controls`
 - [x] Edit page advantage row chevron expands rules text on phone → `test_responsive.py::test_edit_advantage_chevron_expands_rules_text_on_phone`
+- [x] Wave Man ability steppers (ten rows of control + rules text) fit a phone with no overflow → `test_responsive.py::test_profession_abilities_fit_a_phone`
+- [x] No ability row collapses to zero width at phone size → `test_responsive.py::test_profession_ability_rows_are_not_zero_width`
+- [x] The sheet's profession panel fits a phone with no overflow → `test_responsive.py::test_profession_panel_fits_a_phone_on_the_sheet`
 - [x] Edit page advantage chevron does not toggle the checkbox → `test_responsive.py::test_edit_advantage_chevron_does_not_toggle_checkbox`
 - [x] Edit page disadvantage row chevron expands rules text on phone → `test_responsive.py::test_edit_disadvantage_chevron_expands_rules_text_on_phone`
 - [x] Edit page campaign-advantage row chevron expands rules text on phone → `test_responsive.py::test_edit_campaign_advantage_chevron_expands_rules_text_on_phone`
@@ -2036,11 +2040,59 @@ Per-account opt-in: while a listed viewer has a page open, pings continue for an
 - [x] Clicking restarts the hour, and pings resume - `test_keepalive.py::test_clicking_restarts_the_activity_window`
 - [x] An ordinary viewer's off-night tab is still silent (the opt-in changes nothing for them) - `test_keepalive.py::test_off_night_is_still_silent_for_an_ordinary_viewer`
 
+## Wave Man Profession (mark: `professions`)
+
+A profession is taken INSTEAD of a school, so these cover a character shape nothing else in the suite has: no school, no School Ring, no school knacks, Dan 0. Abilities are free but rationed by total XP, and each may be taken twice. Design and the GM's rulings live in `profession-design/design.md`; ability numbering (W1-W10) follows `rules/09-professions.md`. Pure roll math is pinned in `tests/js/wave_man.test.js`.
+
+### Editor
+
+- [x] Wave Man is selectable in the school dropdown and loads its own details panel - `test_professions.py::test_wave_man_is_selectable_and_shows_its_panel`
+- [x] Worker / Merchant / Priest / Ninja render but are disabled - `test_professions.py::test_unimplemented_professions_are_disabled`
+- [x] Picking a profession hides the School Ring picker and the school-knack controls - `test_professions.py::test_picking_a_profession_hides_the_school_ring_and_knacks`
+- [x] All ten abilities render with 0/1/2 steppers - `test_professions.py::test_all_ten_abilities_render_with_steppers`
+- [x] An ability can be taken twice, and its + then disables at the per-ability ceiling - `test_professions.py::test_taking_an_ability_twice`
+- [x] Spending the last pick disables every other + - `test_professions.py::test_the_allowance_ceiling_disables_every_plus`
+- [x] The allowance grows with earned XP (150 -> 1 pick, 180 -> 3) - `test_professions.py::test_the_allowance_grows_with_xp`
+- [x] Stepping an ability back down, and - disabling at 0 - `test_professions.py::test_stepping_an_ability_back_down`
+- [x] Switching from a profession to a school clears the abilities - `test_professions.py::test_switching_from_a_profession_to_a_school_clears_abilities`
+- [x] A Wave Man can still buy foreign school knacks - `test_professions.py::test_a_wave_man_can_buy_foreign_knacks`
+
+### View sheet
+
+- [x] The profession panel replaces the school panel, with an x2 chip on a doubled ability - `test_professions.py::test_sheet_shows_the_profession_panel`
+- [x] A reference-only ability the character took carries its "tell your GM" note - `test_professions.py::test_sheet_flags_a_reference_only_ability`
+- [x] The XP summary card counts picks, not XP - `test_professions.py::test_sheet_xp_card_counts_picks_not_xp`
+- [x] No JavaScript errors on the sheet for a school-less profession character - `test_sheet_js_errors.py::test_sheet_has_no_javascript_errors[profession:wave_man]`
+
+### Rolls
+
+- [x] W1 raises a missing attack into a hit, and yields no extra damage dice - `test_professions.py::test_w1_raises_a_missing_attack_into_a_hit`
+- [x] W1 spends only the raises it needs - `test_professions.py::test_w1_uses_only_the_raises_it_needs`
+- [x] W1 does not fire on an attack that already hit, which keeps its excess dice - `test_professions.py::test_w1_does_not_fire_on_an_attack_that_already_hits`
+- [x] Without W1 the same roll still misses - `test_professions.py::test_a_character_without_w1_still_misses`
+- [x] W1 reaches the iaijutsu strike (wider than `ATTACK_TYPE_KEYS`) but not parry or initiative - `test_professions.py::test_w1_reaches_the_iaijutsu_strike`
+- [x] W2 / W10 render a "tell your GM" line with the numbers for the copy count - `test_professions.py::test_w2_and_w10_show_a_tell_your_gm_line`
+- [x] W3 adds weapon damage dice below four, shown as its own breakdown line - `test_professions.py::test_w3_adds_weapon_dice_below_four`
+- [x] W4 rounds the damage total up and shows the raw roll beside it - `test_professions.py::test_w4_rounds_the_damage_total_up`
+- [x] W5 frees a die while Impaired without clearing the suppression - `test_professions.py::test_w5_explodes_a_ten_while_impaired`
+- [x] W5 is absent when the character is not Impaired - `test_professions.py::test_w5_is_absent_when_not_impaired`
+- [x] W6 adds an unkept initiative die per copy - `test_professions.py::test_w6_adds_an_unkept_initiative_die`
+- [x] W7 adds two unkept wound-check dice per copy - `test_professions.py::test_w7_adds_four_unkept_wound_check_dice`
+- [x] W9's toggle appears only once a failed parry is declared - `test_professions.py::test_w9_toggle_appears_only_with_a_failed_parry`
+- [x] W9 recovers dice the failed parry removed, capped by the parry skill - `test_professions.py::test_w9_recovers_damage_dice_the_failed_parry_removed`
+
+### Read-only Roll Mode
+
+- [x] A non-editor walks the whole Wave Man attack + damage flow and no persisted counter moves - `test_professions.py::test_non_editor_can_walk_a_wave_man_attack_without_moving_the_sheet`
+- [x] A non-editor gets no ability steppers on the sheet or the edit URL - `test_professions.py::test_non_editor_cannot_change_profession_abilities`
+
+---
+
 ---
 
 ## Coverage Summary
 
-**Covered:** ~294 test functions across 34 test files
+**Covered:** ~326 test functions across 35 test files
 **Uncovered:** 0
 
 All interactive UI features are covered by at least one e2e clicktest.

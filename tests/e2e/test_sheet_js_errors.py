@@ -7,7 +7,7 @@ can trigger template/Alpine errors.
 """
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, apply_changes, start_new_character
+from tests.e2e.helpers import select_profession, select_school, click_plus, apply_changes, start_new_character
 
 pytestmark = [pytest.mark.rolls, pytest.mark.status_display]
 
@@ -20,6 +20,11 @@ SCHOOLS_TO_TEST = [
     "kakita_duelist",        # duelist, initiative Phase 0 ability
     "mantis_wave_treader",   # bushi, "Any" ring (all five), worldliness knack
     "suzume_overseer",       # court, Water-locked 4th Dan ring raise, shares Doji+Merchant flags
+    # A profession, not a school: no school object, no School Ring, no
+    # knacks and Dan 0. This is the one character shape where every
+    # school-derived Alpine expression has nothing to read, so it is
+    # exactly what an unguarded property access trips over.
+    "profession:wave_man",
 ]
 
 
@@ -29,7 +34,10 @@ def _create_and_view(page, live_server_url, school, name):
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
-    select_school(page, school)
+    if school.startswith("profession:"):
+        select_profession(page, school.split(":", 1)[1])
+    else:
+        select_school(page, school)
     # For multi-ring schools, pick a ring if needed
     page.wait_for_timeout(300)
     ring_dropdown = page.locator('select[x-model="schoolRingChoice"]')
