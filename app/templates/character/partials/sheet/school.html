@@ -6,6 +6,10 @@
                 {{ dan }}{{ 'st' if dan == 1 else ('nd' if dan == 2 else ('rd' if dan == 3 else 'th')) }} Dan
             </span>
             <span class="text-sm text-ink/60">School Ring: {{ character.school_ring_choice }}</span>
+            {% elif profession %}
+            {{ section_header(profession.name) }}
+            <span class="text-sm bg-info/10 text-info rounded-full px-3 py-0.5 font-medium text-center">Profession</span>
+            <span class="text-sm text-ink/60">No School Ring or Dan</span>
             {% else %}
             <h2 class="text-xl font-bold text-ink/40">No school selected yet</h2>
             {% endif %}
@@ -35,6 +39,42 @@
                 {% endif %}
             </div>
             {% endfor %}
+        </div>
+
+        {% elif profession %}
+        {# A profession has no special ability and no Dan techniques - just
+           its ability list, with the ones this character took emphasised. #}
+        <div>
+            <p class="text-sm font-medium mb-1">Abilities:</p>
+            {% for row in profession_ability_rows %}
+            <div class="text-sm mb-2 {{ 'font-semibold' if row.count else 'opacity-40' }}"
+                 data-ability="{{ row.id }}">
+                <span class="font-medium {{ 'text-accent' if row.count else '' }}">{{ row.ordinal }}.</span>
+                <span class="whitespace-pre-line">{{ row.text }}</span>
+                {% if row.count > 1 %}
+                <span class="text-xs bg-accent/10 text-accent rounded-full px-2 py-0.5 ml-1"
+                      data-testid="ability-x2-{{ row.id }}">taken twice</span>
+                {% endif %}
+                {% if row.count and row.reference_only %}
+                <span class="block mt-1 text-xs text-ink/60" data-testid="reference-only-{{ row.id }}">
+                    Tell your GM - this one changes what your opponent rolls, so the sheet cannot apply it for you.
+                </span>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% set raise_ability = profession_ability_rows | selectattr('id', 'equalto', 'wave_man_miss_raise') | first %}
+            {% if raise_ability and raise_ability.count %}
+            <p class="text-xs text-ink/60 mt-2" data-testid="w1-parry-note">
+                When a raise turns one of your attacks into a hit, any parry against it
+                automatically succeeds - but it is still rolled, so a defender whose own
+                ability keys off the size of their parry roll still gets to make it.
+            </p>
+            {% endif %}
+            <p class="text-xs mt-3">
+                <a class="text-accent underline"
+                   href="https://github.com/EliAndrewC/l7r/blob/master/rules/09-professions.md{{ profession.rules_anchor }}"
+                   target="_blank" rel="noopener">Full {{ profession.name }} rules</a>
+            </p>
         </div>
         {% endif %}
     </section>

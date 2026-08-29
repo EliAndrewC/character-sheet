@@ -738,3 +738,184 @@ def test_w5_does_not_resurrect_a_reroll_suppressed_for_another_reason():
     out = build_all_roll_formulas(data)
     assert out["skill:etiquette"]["no_reroll_reason"] == "unskilled"
     assert not out["skill:etiquette"].get("wave_man_freed_dice")
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 - editor rendering
+# ---------------------------------------------------------------------------
+
+def test_editor_offers_wave_man_in_the_school_dropdown(client):
+    cid = _seed(client)
+    html = client.get(f"/characters/{cid}/edit").text
+    assert 'value="profession:wave_man"' in html
+    assert "Professions (no school)" in html
+
+
+def test_editor_greys_out_the_unimplemented_professions(client):
+    cid = _seed(client)
+    html = client.get(f"/characters/{cid}/edit").text
+    for pid in ("worker", "merchant", "priest", "ninja"):
+        assert f'value="profession:{pid}"' in html
+    assert html.count("(not yet implemented)") >= 4
+
+
+def test_editor_renders_all_ten_abilities_for_a_wave_man(client):
+    cid = _seed(client, school="", profession="wave_man", knacks={})
+    html = client.get(f"/characters/{cid}/edit").text
+    assert 'data-testid="profession-abilities"' in html
+    for aid in (a.id for a in PROFESSIONS["wave_man"].abilities):
+        assert aid in html
+
+
+def test_editor_seeds_the_profession_select_value(client):
+    cid = _seed(client, school="", profession="wave_man", knacks={})
+    html = client.get(f"/characters/{cid}/edit").text
+    assert '"profession:wave_man"' in html
+
+
+def test_editor_seeds_the_allowance_from_the_server(client):
+    cid = _seed(client, school="", profession="wave_man", knacks={},
+                starting_xp=180, school_ring_choice="")
+    html = client.get(f"/characters/{cid}/edit").text
+    assert '"allowance": 3' in html or '"allowance":3' in html
+
+
+def test_profession_info_partial_renders(client):
+    html = client.get("/characters/api/profession-info/wave_man").text
+    assert 'data-testid="profession-info"' in html
+    assert "Wave Man" in html
+    assert "09-professions.md#wave-man-abilities" in html
+
+
+def test_profession_info_partial_refuses_an_unselectable_profession(client):
+    assert client.get("/characters/api/profession-info/ninja").text == ""
+
+
+def test_profession_info_partial_refuses_an_unknown_profession(client):
+    assert client.get("/characters/api/profession-info/nope").text == ""
+
+
+def test_xp_endpoint_splits_the_prefixed_dropdown_value(client):
+    cid = _seed(client)
+    resp = client.post(f"/characters/{cid}/xp", json={
+        "school": "profession:wave_man",
+        "profession_abilities": {"wave_man_round_damage": 1},
+        "starting_xp": 150, "earned_xp": 0,
+    })
+    body = resp.json()
+    assert body["professions"]["name"] == "Wave Man"
+    assert body["professions"]["used"] == 1
+    assert body["professions"]["allowance"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 - view sheet and other render surfaces
+# ---------------------------------------------------------------------------
+
+def _seed_wave_man(client, **over):
+    defaults = dict(
+        school="", school_ring_choice="", profession="wave_man", knacks={},
+        ring_water=2, is_published=True,
+        published_state={"name": "Ronin"},
+        profession_abilities={"wave_man_initiative_die": 1},
+    )
+    defaults.update(over)
+    return _seed(client, **defaults)
+
+
+def test_sheet_shows_the_profession_panel(client):
+    cid = _seed_wave_man(client)
+    html = client.get(f"/characters/{cid}").text
+    assert "Wave Man" in html
+    assert "No school selected yet" not in html
+    assert "No School Ring or Dan" in html
+
+
+def test_sheet_lists_every_ability_with_the_taken_ones_emphasised(client):
+    cid = _seed_wave_man(client)
+    html = client.get(f"/characters/{cid}").text
+    for a in PROFESSIONS["wave_man"].abilities:
+        assert f'data-ability="{a.id}"' in html
+
+
+def test_sheet_marks_an_ability_taken_twice(client):
+    cid = _seed_wave_man(client, starting_xp=200,
+                         profession_abilities={"wave_man_round_damage": 2})
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-testid="ability-x2-wave_man_round_damage"' in html
+
+
+def test_sheet_flags_reference_only_abilities_the_character_took(client):
+    cid = _seed_wave_man(client, profession_abilities={"wave_man_parry_tn": 1})
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-testid="reference-only-wave_man_parry_tn"' in html
+    assert "changes what your opponent rolls" in html
+
+
+def test_sheet_does_not_flag_reference_only_abilities_not_taken(client):
+    cid = _seed_wave_man(client, profession_abilities={"wave_man_round_damage": 1})
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-testid="reference-only-wave_man_parry_tn"' not in html
+
+
+def test_sheet_explains_w1s_auto_succeeding_parry_when_taken(client):
+    cid = _seed_wave_man(client, profession_abilities={"wave_man_miss_raise": 1})
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-testid="w1-parry-note"' in html
+    # D-answer to Q4: the parry auto-succeeds but is STILL ROLLED.
+    assert "still rolled" in html
+
+
+def test_sheet_links_the_profession_rules(client):
+    cid = _seed_wave_man(client)
+    html = client.get(f"/characters/{cid}").text
+    assert "09-professions.md#wave-man-abilities" in html
+
+
+def test_sheet_for_a_school_character_is_unchanged(client):
+    cid = _seed(client)
+    html = client.get(f"/characters/{cid}").text
+    assert "Profession" not in html or "Wave Man" not in html
+
+
+def test_gm_api_reports_profession_and_abilities(client, monkeypatch):
+    monkeypatch.setenv("ROLL_QUERY_TOKEN", "tok")
+    cid = _seed_wave_man(client, profession_abilities={"wave_man_round_damage": 2},
+                         starting_xp=200)
+    resp = client.get("/api/characters", headers={"Authorization": "Bearer tok"})
+    assert resp.status_code == 200
+    row = next(c for c in resp.json()["characters"] if c["id"] == cid)
+    assert row["profession"] == "wave_man"
+    assert row["profession_abilities"] == {"wave_man_round_damage": 2}
+
+
+def test_sheet_xp_summary_shows_picks_used_not_xp(client):
+    cid = _seed_wave_man(client, starting_xp=180,
+                         profession_abilities={"wave_man_round_damage": 2})
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-xp-card="professions"' in html
+    assert "Wave Man abilities" in html
+    assert "2 / 3" in html
+
+
+def test_sheet_xp_summary_has_no_profession_card_for_a_school_character(client):
+    cid = _seed(client)
+    html = client.get(f"/characters/{cid}").text
+    assert 'data-xp-card="professions"' not in html
+
+
+def test_google_sheet_export_names_the_profession(client):
+    from app.services.sheets import _build_overview_rows
+    cid = _seed_wave_man(client, starting_xp=200,
+                         profession_abilities={"wave_man_round_damage": 2})
+    character = client._test_session_factory().get(Character, cid)
+    from app.services.status import compute_effective_status
+    char_dict = character.to_dict()
+    rows = _build_overview_rows(
+        character, char_dict, None, {}, 0,
+        compute_effective_status(char_dict), {},
+    )
+    flat = str(rows)
+    assert "Wave Man (profession)" in flat
+    assert "Wave Man Abilities" in flat
+    assert "Round damage up x2" in flat
