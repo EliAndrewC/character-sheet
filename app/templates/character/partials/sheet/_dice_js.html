@@ -2770,8 +2770,11 @@
             // damage builder - the attack's VP would otherwise leak into
             // the damage row's breakdown.
             //
-            // The dice-card SVG renderer ignores this field; only the
-            // readonly Roll History modal reads it.
+            // These reach the exported dice card too: the payload builders
+            // put them in ``extras``, which dice_card.py renders as the
+            // card's DETAILS block. So a bullet added here shows up in the
+            // on-screen modal, the readonly Roll History modal, AND the PNG
+            // people paste into Discord.
             _extraBonusBullets(formula) {
                 const f = formula || this.formula || {};
                 const extras = [];
@@ -2856,6 +2859,13 @@
                 if (this.pcpTensRerolledThisRoll) {
                     extras.push('Rerolled 10s while impaired by spending a Player Character Point');
                 }
+                // Why the 10s on this roll didn't explode. Without this the
+                // exported card shows a bare 10 sitting in the pool with no
+                // explanation, and whoever it was pasted to cannot tell the
+                // roll was made Impaired (or unskilled, or as an iaijutsu
+                // strike) from a roll that simply got unlucky.
+                const noReroll = this._noRerollNote(f);
+                if (noReroll) extras.push(noReroll);
                 // Result ceiling (Withdrawn). Listed last so it reads as the
                 // final word on a total the bullets above just built up.
                 if (window.L7RRollMath.totalCapApplies(this.baseTotal, f.max_total)) {
@@ -2866,6 +2876,28 @@
                     );
                 }
                 return extras;
+            },
+
+            // The "10s not rerolled because ..." line, or '' when it does not
+            // apply. Mirrors the red note in the result modal, including its
+            // condition: only worth saying when a 10 is actually sitting in
+            // the pool. A 10 that DID reroll has a summed value above 10, so
+            // ``value === 10`` means precisely "a 10 that stayed a 10".
+            _noRerollNote(formula) {
+                const f = formula || this.formula || {};
+                if (f.reroll_tens || !f.no_reroll_reason) return '';
+                if (!(this.finalDice || []).some(d => d.value === 10)) return '';
+                if (f.no_reroll_reason === 'iaijutsu_strike') {
+                    return '10s not rerolled for the strike in an iaijutsu duel';
+                }
+                if (f.no_reroll_reason === 'impaired') {
+                    return '10s not rerolled due to being Impaired';
+                }
+                if (f.no_reroll_reason === 'unskilled') {
+                    return '10s not rerolled due to '
+                        + (f.unskilled_skill_name || 'that skill') + ' being 0';
+                }
+                return '';
             },
 
             // The result as it should be *displayed*: baseTotal, clamped to

@@ -580,6 +580,69 @@ def test_unskilled_character_modal_names_skill_in_no_reroll_note(page, live_serv
     assert "10s not rerolled due to Intimidation being 0" in body
 
 
+def _impair(page, times=2):
+    """Push serious wounds up to the default Earth ring of 2."""
+    sw_section = page.locator('text="Serious Wounds"').locator('..')
+    plus_btn = sw_section.locator('button', has_text="+").first
+    for _ in range(times):
+        plus_btn.click()
+        page.wait_for_timeout(150)
+    page.wait_for_timeout(200)
+
+
+def test_exported_card_explains_an_impaired_ten(page, live_server_url):
+    """The reported bug: the on-screen modal said "10s not rerolled due to
+    being Impaired", but the Copy-as-image card dropped it, so a pasted
+    roll showed a bare 10 with no way to tell an Impaired roll from an
+    unlucky one. The note has to reach the card's DETAILS block."""
+    _create_roller(page, live_server_url, "ImpairedCardChar")
+    _impair(page)
+    page.reload()
+    page.wait_for_selector('[data-roll-key="skill:bragging"]')
+
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_for_roll_result(page)
+
+    # Force a stranded 10 into the pool rather than rolling until one turns
+    # up, then rebuild the payload the Copy-as-image button sends.
+    extras = page.evaluate("""() => {
+        const r = window._diceRoller;
+        r.finalDice = [{value: 10, kept: true}, {value: 4, kept: false}];
+        return r._buildRollImagePayload().extras;
+    }""")
+    assert "10s not rerolled due to being Impaired" in extras
+
+
+def test_exported_card_stays_quiet_when_no_ten_was_stranded(page, live_server_url):
+    """No visible 10 means nothing was suppressed that the reader can see."""
+    _create_roller(page, live_server_url, "ImpairedCardQuietChar")
+    _impair(page)
+    page.reload()
+    page.wait_for_selector('[data-roll-key="skill:bragging"]')
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    _wait_for_roll_result(page)
+
+    extras = page.evaluate("""() => {
+        const r = window._diceRoller;
+        r.finalDice = [{value: 9, kept: true}, {value: 4, kept: false}];
+        return r._buildRollImagePayload().extras;
+    }""")
+    assert not any("not rerolled" in e for e in extras)
+
+
+def test_exported_card_explains_an_unskilled_ten(page, live_server_url):
+    """Same gap, other reason: an unskilled roll's stranded 10."""
+    _create_roller(page, live_server_url, "UnskilledCardChar")
+    page.locator('[data-roll-key="skill:intimidation"]').click()
+    _wait_for_roll_result(page)
+    extras = page.evaluate("""() => {
+        const r = window._diceRoller;
+        r.finalDice = [{value: 10, kept: true}];
+        return r._buildRollImagePayload().extras;
+    }""")
+    assert "10s not rerolled due to Intimidation being 0" in extras
+
+
 def test_impaired_indicator_visible_on_sheet(page, live_server_url):
     _create_roller(page, live_server_url, "ImpairedBadgeChar")
     sw_section = page.locator('text="Serious Wounds"').locator('..')
