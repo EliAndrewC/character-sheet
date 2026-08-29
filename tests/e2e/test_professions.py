@@ -10,6 +10,7 @@ import pytest
 
 from tests.e2e.helpers import (
     apply_changes,
+    click_plus,
     select_profession,
     select_school,
     start_new_character,
@@ -43,7 +44,7 @@ def _make_wave_man(page, live_server_url, name="Ronin", xp=600, abilities=()):
     _editor(page, live_server_url, name)
     page.fill('input[name="earned_xp"]', str(xp))
     page.locator('input[name="earned_xp"]').dispatch_event("input")
-    select_profession(page, "wave_man")
+    select_profession(page)
     for ability_id, count in abilities:
         take_profession_ability(page, ability_id, count)
     page.wait_for_selector('text="Saved"', timeout=8000)
@@ -55,56 +56,112 @@ def _make_wave_man(page, live_server_url, name="Ronin", xp=600, abilities=()):
 # Editor
 # ---------------------------------------------------------------------------
 
-def test_wave_man_is_selectable_and_shows_its_panel(page, live_server_url):
+def test_profession_is_selectable_and_shows_its_panel(page, live_server_url):
     _editor(page, live_server_url)
-    select_profession(page, "wave_man")
+    select_profession(page)
     details = page.text_content("#school-details")
-    assert "Wave Man" in details
+    assert "Profession" in details
     assert "No School Ring" in details
 
 
-def test_unimplemented_professions_are_disabled(page, live_server_url):
+def test_the_dropdown_offers_one_profession_option(page, live_server_url):
+    # P1: one character type, not one per profession.
     _editor(page, live_server_url)
-    for pid in ("worker", "merchant", "priest", "ninja"):
-        assert page.locator(
-            f'select[name="school"] option[value="profession:{pid}"]'
-        ).is_disabled()
-    assert not page.locator(
-        'select[name="school"] option[value="profession:wave_man"]'
-    ).is_disabled()
+    assert page.locator(
+        'select[name="school"] option[value="profession"]').count() == 1
+    assert page.locator(
+        'select[name="school"] option[value^="profession:"]').count() == 0
+
+
+def test_preview_professions_render_greyed_out_and_ninja_is_absent(page, live_server_url):
+    # P6: Worker and Merchant are visible but not takeable; Ninja is hidden.
+    _editor(page, live_server_url)
+    select_profession(page)
+    for pid in ("wave_man", "priest", "worker", "merchant"):
+        assert page.locator(f'[data-profession-group="{pid}"]').count() == 1, pid
+    assert page.locator('[data-profession-group="ninja"]').count() == 0
+    assert page.locator('[data-testid="profession-preview-worker"]').is_visible()
+    assert page.locator(
+        '[data-action="profession-plus-worker_strength"]').is_disabled()
+
+
+def test_priest_rituals_are_marked_once_only(page, live_server_url):
+    _editor(page, live_server_url)
+    select_profession(page)
+    assert page.locator('[data-testid="profession-once-only-priest"]').is_visible()
+    assert page.locator(
+        '[data-testid="profession-once-only-wave_man"]').count() == 0
 
 
 def test_picking_a_profession_hides_the_school_ring_and_knacks(page, live_server_url):
     _editor(page, live_server_url)
     select_school(page, "kitsune_warden")   # a variable-ring school
     assert page.locator('[data-testid="school-ring-choice"]').is_visible()
-    select_profession(page, "wave_man")
+    select_profession(page)
     assert not page.locator('[data-testid="school-ring-choice"]').is_visible()
     assert page.locator('input[name="knack_hunting"]').count() == 0
 
 
-def test_all_ten_abilities_render_with_steppers(page, live_server_url):
+def test_every_visible_ability_renders_with_a_stepper(page, live_server_url):
     _editor(page, live_server_url)
-    select_profession(page, "wave_man")
+    select_profession(page)
     section = page.locator('[data-testid="profession-abilities"]')
-    assert section.locator("[data-ability]").count() == 10
+    # Wave Man, Priest, Worker, Merchant - ten each; Ninja hidden.
+    assert section.locator("[data-ability]").count() == 40
 
 
 def test_taking_an_ability_twice(page, live_server_url):
     _editor(page, live_server_url, "Twice")
     page.fill('input[name="earned_xp"]', "600")
     page.locator('input[name="earned_xp"]').dispatch_event("input")
-    select_profession(page, "wave_man")
+    select_profession(page)
     take_profession_ability(page, "wave_man_round_damage", 2)
     assert page.locator('[data-count="wave_man_round_damage"]').text_content().strip() == "2"
     # The per-ability ceiling is 2, so + is now disabled for this one.
     assert page.locator('[data-action="profession-plus-wave_man_round_damage"]').is_disabled()
 
 
+def test_a_priest_ritual_stops_at_one_while_a_wave_man_ability_reaches_two(
+        page, live_server_url):
+    """P7: the per-ability limit follows the ability's own profession, so
+    both limits are in force inside one character."""
+    _editor(page, live_server_url, "MixedLimits")
+    page.fill('input[name="earned_xp"]', "600")
+    page.locator('input[name="earned_xp"]').dispatch_event("input")
+    select_profession(page)
+    take_profession_ability(page, "wave_man_round_damage", 2)
+    take_profession_ability(page, "priest_commune", 1)
+    assert page.locator(
+        '[data-count="wave_man_round_damage"]').text_content().strip() == "2"
+    assert page.locator(
+        '[data-count="priest_commune"]').text_content().strip() == "1"
+    assert page.locator(
+        '[data-action="profession-plus-priest_commune"]').is_disabled()
+
+
+def test_a_mixed_build_publishes_and_renders_grouped(page, live_server_url):
+    _make_wave_man(page, live_server_url, "MixedBuild", xp=600, abilities=[
+        ("wave_man_round_damage", 2), ("priest_commune", 1)])
+    assert page.locator('[data-profession-group="wave_man"]').count() == 1
+    assert page.locator('[data-profession-group="priest"]').count() == 1
+    body = page.text_content("body")
+    assert "Round damage up" in body
+    assert "Commune" in body
+
+
+def test_the_sheet_lists_only_the_abilities_taken(page, live_server_url):
+    # P10: the sheet is not the editor's catalogue.
+    _make_wave_man(page, live_server_url, "SheetTaken", xp=600,
+                   abilities=[("wave_man_round_damage", 1)])
+    assert page.locator('[data-ability="wave_man_round_damage"]').count() == 1
+    assert page.locator('[data-ability="wave_man_miss_raise"]').count() == 0
+    assert page.locator('[data-profession-group="worker"]').count() == 0
+
+
 def test_the_allowance_ceiling_disables_every_plus(page, live_server_url):
     # A fresh character has 150 XP: exactly one pick.
     _editor(page, live_server_url, "OnePick")
-    select_profession(page, "wave_man")
+    select_profession(page)
     page.wait_for_selector('[data-testid="profession-allowance"]')
     take_profession_ability(page, "wave_man_initiative_die", 1)
     page.wait_for_function(
@@ -118,7 +175,7 @@ def test_the_allowance_ceiling_disables_every_plus(page, live_server_url):
 
 def test_the_allowance_grows_with_xp(page, live_server_url):
     _editor(page, live_server_url, "MoreXp")
-    select_profession(page, "wave_man")
+    select_profession(page)
     page.fill('input[name="earned_xp"]', "30")     # 180 total -> 3 picks
     page.locator('input[name="earned_xp"]').dispatch_event("input")
     page.wait_for_function(
@@ -130,7 +187,7 @@ def test_the_allowance_grows_with_xp(page, live_server_url):
 
 def test_stepping_an_ability_back_down(page, live_server_url):
     _editor(page, live_server_url, "StepDown")
-    select_profession(page, "wave_man")
+    select_profession(page)
     take_profession_ability(page, "wave_man_initiative_die", 1)
     page.locator('[data-action="profession-minus-wave_man_initiative_die"]').click()
     page.wait_for_function(
@@ -144,7 +201,7 @@ def test_stepping_an_ability_back_down(page, live_server_url):
 
 def test_switching_from_a_profession_to_a_school_clears_abilities(page, live_server_url):
     _editor(page, live_server_url, "BackToSchool")
-    select_profession(page, "wave_man")
+    select_profession(page)
     take_profession_ability(page, "wave_man_initiative_die", 1)
     select_school(page, "hida_bushi")
     assert not page.locator('[data-testid="profession-abilities"]').is_visible()
@@ -447,7 +504,7 @@ def test_a_wave_man_can_buy_foreign_knacks(page, live_server_url):
     _editor(page, live_server_url, "ForeignKnacks")
     page.fill('input[name="earned_xp"]', "600")
     page.locator('input[name="earned_xp"]').dispatch_event("input")
-    select_profession(page, "wave_man")
+    select_profession(page)
     _add_foreign_knack(page, "iaijutsu")
     assert page.locator('[data-testid="foreign-knack-row-iaijutsu"]').count() == 1
 
@@ -463,7 +520,7 @@ def test_w1_reaches_the_iaijutsu_strike(page, live_server_url):
     _editor(page, live_server_url, "W1Iaijutsu")
     page.fill('input[name="earned_xp"]', "600")
     page.locator('input[name="earned_xp"]').dispatch_event("input")
-    select_profession(page, "wave_man")
+    select_profession(page)
     _add_foreign_knack(page, "iaijutsu")
     take_profession_ability(page, "wave_man_miss_raise", 2)
     page.wait_for_selector('text="Saved"', timeout=8000)
@@ -610,3 +667,126 @@ def test_non_editor_cannot_change_profession_abilities(page, page_nonadmin,
     page_nonadmin.goto(sheet_url + "/edit")
     assert page_nonadmin.locator(
         '[data-action="profession-plus-wave_man_round_damage"]').count() == 0
+
+
+# ---------------------------------------------------------------------------
+# Priest rituals taken as profession abilities
+# ---------------------------------------------------------------------------
+
+def test_taking_only_bless_research_gives_only_that_button(page, live_server_url):
+    # P4: two rituals, two abilities, two buttons.
+    _make_wave_man(page, live_server_url, "Researcher", xp=600,
+                   abilities=[("priest_research_blessing", 1)])
+    assert page.locator('[data-action="bless-research"]').count() == 1
+    assert page.locator('[data-action="bless-conversation"]').count() == 0
+
+
+def test_taking_only_bless_topic_gives_only_that_button(page, live_server_url):
+    _make_wave_man(page, live_server_url, "Topicist", xp=600,
+                   abilities=[("priest_conversation_blessing", 1)])
+    assert page.locator('[data-action="bless-conversation"]').count() == 1
+    assert page.locator('[data-action="bless-research"]').count() == 0
+
+
+def test_a_profession_character_without_the_rituals_gets_no_buttons(page, live_server_url):
+    _make_wave_man(page, live_server_url, "NoRituals", xp=600,
+                   abilities=[("wave_man_round_damage", 1)])
+    assert page.locator('[data-action="bless-research"]').count() == 0
+    assert page.locator('[data-action="bless-conversation"]').count() == 0
+
+
+def test_the_bless_button_rolls_2k1(page, live_server_url):
+    _make_wave_man(page, live_server_url, "Blesser", xp=600,
+                   abilities=[("priest_research_blessing", 1)])
+    page.locator('[data-action="bless-research"]').click()
+    page.wait_for_function(
+        """() => window._diceRoller?.formula?.rolled === 2
+                && window._diceRoller?.formula?.kept === 1""",
+        timeout=8000)
+
+
+def test_a_character_with_the_ritual_can_bless_themselves(page, live_server_url):
+    """P9: the sick-or-impaired ritual may target the priest themselves.
+
+    Until this change the blesser list came purely from the party, which
+    excludes the viewing character, so this case could not happen at all.
+    """
+    _make_wave_man(page, live_server_url, "SelfBlesser", xp=600,
+                   abilities=[("priest_ignore_penalties", 1)])
+    entries = page.evaluate("""() => JSON.parse(
+        document.getElementById('party-priests').textContent || '[]')""")
+    assert len(entries) == 1
+    assert entries[0]["is_self"] is True
+    assert entries[0]["name"] == "SelfBlesser"
+
+
+def _roll_skill(page, roll_key):
+    """Click a skill's roll trigger, stepping through the void-spend menu
+    if it opens (it does when the character has void points to spend)."""
+    page.locator(f'[data-roll-key="{roll_key}"]').click()
+    page.wait_for_timeout(300)
+    done = page.evaluate("""() => {
+        for (const el of document.querySelectorAll('[x-data]')) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""")
+    if not done:
+        menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl.border')
+        if menu.count() and menu.is_visible():
+            buttons = menu.locator('button.font-medium:visible')
+            for i in range(buttons.count()):
+                if buttons.nth(i).text_content().strip().startswith("Roll "):
+                    buttons.nth(i).click()
+                    break
+            else:
+                buttons.first.click()
+    page.wait_for_function("""() => {
+        for (const el of document.querySelectorAll('[x-data]')) {
+            const d = window.Alpine && window.Alpine.$data(el);
+            if (d && d.phase === 'done') return true;
+        }
+        return false;
+    }""", timeout=10000)
+
+
+def test_the_self_blessing_button_says_you_blessed_yourself(page, live_server_url):
+    """The blessing button lives in the generic roll-result modal, so this
+    drives a skill roll rather than an attack. Bragging is raised to 1
+    first: at rank 0 the 10s are suppressed as *unskilled* rather than as
+    *impaired*, and the button keys on the impaired reason."""
+    _editor(page, live_server_url, "SelfLabel")
+    page.fill('input[name="earned_xp"]', "600")
+    page.locator('input[name="earned_xp"]').dispatch_event("input")
+    select_profession(page)
+    take_profession_ability(page, "priest_ignore_penalties", 1)
+    click_plus(page, "skill_bragging", 1)
+    page.wait_for_selector('text="Saved"', timeout=8000)
+    apply_changes(page, "self bless")
+
+    # Impaired: Earth 2, two serious wounds.
+    page.evaluate("""() => {
+        const t = window._trackingBridge;
+        t.seriousWounds = 2;
+        return t.save();
+    }""")
+    page.wait_for_timeout(800)
+    page.reload()
+    page.wait_for_selector("h1")
+
+    _mock_dice(page, 10)
+    _roll_skill(page, "skill:bragging")
+    _restore_dice(page)
+
+    btn = page.locator('[data-priest-bless-reroll]').first
+    btn.wait_for(state="visible", timeout=8000)
+    assert "You blessed yourself" in btn.text_content()
+
+
+def test_a_character_without_the_ritual_has_no_blessing_button(page, live_server_url):
+    _make_wave_man(page, live_server_url, "NoBless", xp=600,
+                   abilities=[("wave_man_round_damage", 1)])
+    entries = page.evaluate("""() => JSON.parse(
+        document.getElementById('party-priests').textContent || '[]')""")
+    assert entries == []

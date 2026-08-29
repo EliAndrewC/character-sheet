@@ -24,7 +24,10 @@ SCHOOLS_TO_TEST = [
     # knacks and Dan 0. This is the one character shape where every
     # school-derived Alpine expression has nothing to read, so it is
     # exactly what an unguarded property access trips over.
-    "profession:wave_man",
+    "profession",
+    # A mixed build: a Wave Man ability beside a Priest ritual, which is
+    # the shape the grouped ability rendering exists for.
+    "profession:mixed",
 ]
 
 
@@ -34,8 +37,14 @@ def _create_and_view(page, live_server_url, school, name):
     start_new_character(page)
     page.wait_for_selector('input[name="name"]')
     page.fill('input[name="name"]', name)
-    if school.startswith("profession:"):
-        select_profession(page, school.split(":", 1)[1])
+    if school.startswith("profession"):
+        page.fill('input[name="earned_xp"]', "600")
+        page.locator('input[name="earned_xp"]').dispatch_event("input")
+        select_profession(page)
+        if school == "profession:mixed":
+            for ability in ("wave_man_round_damage", "priest_commune"):
+                page.locator(f'[data-action="profession-plus-{ability}"]').click()
+                page.wait_for_timeout(150)
     else:
         select_school(page, school)
     # For multi-ring schools, pick a ring if needed

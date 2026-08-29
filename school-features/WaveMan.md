@@ -1,39 +1,48 @@
-# Wave Man (profession)
+# Wave Man abilities
 
 **Profession ID:** `wave_man`
 **Rules:** `rules/09-professions.md#wave-man-abilities`
-**Design + implementation checklist:** `profession-design/design.md`
+**Design + implementation checklists:** `profession-design/design.md` (the
+original build), then `profession-design/priest-and-pooling.md` (which made
+"Profession" the character type and pooled the abilities).
 
-Not a school. A Wave Man is a ronin: they take a **profession** *instead of*
-a school, which makes them the first character shape in this app with no
-school at all - no School Ring, no school knacks, and Dan 0. Everything below
-that is not in the upstream rules file is a GM ruling recorded during design;
-the rules text itself says only what the ten abilities do.
+Not a school. A **Profession** character is a ronin who takes a profession
+*instead of* a school, which makes them the only character shape in this app
+with no school at all - no School Ring, no school knacks, and Dan 0. They draw
+abilities from every available profession and mix them freely, so "Wave Man"
+below names a *group of abilities*, not a kind of character.
 
-The other four professions (Worker, Merchant, Priest, Ninja) are present in
-`game_data.py` as data and appear greyed out in the editor. Only the Wave Man
-has mechanics.
+Wave Man and Priest abilities are available. Worker and Merchant are carried
+as data and shown greyed out so players can see what is coming; Ninja
+abilities are hidden entirely until the separate unlock feature exists.
+
+Everything here that is not in the upstream rules file is a GM ruling recorded
+during design; the rules text itself says only what the ten abilities do.
 
 ---
 
 ## How a Wave Man is built
 
-**Selection.** Professions live in the editor's school `<select>` behind a
-`profession:` prefix, split by `split_school_or_profession` in
-`app/services/professions.py`. That function is also the allow-list: an
-unknown id, or a profession that is not yet selectable, resolves to "neither",
-so a crafted POST cannot write one through.
+**Selection.** A character's type is plain **Profession** - not "Wave Man".
+Since 2026-08-29 a profession character draws abilities from *every available
+profession* and mixes them freely (see `profession-design/priest-and-pooling.md`),
+so "Wave Man" now names a group of abilities rather than a kind of character.
+The dropdown value is `profession`, split by `split_school_or_profession` in
+`app/services/professions.py`, which is also the allow-list.
 
 **Abilities cost nothing.** They unlock on the **total XP the character
 holds** - `starting_xp + earned_xp`, whether or not it has been spent. The
-first arrives at 150 XP and one more every 15 XP after that. A Wave Man's
-ceiling is 20 picks (ten abilities, each takeable twice), reached at 435 XP.
+first arrives at 150 XP and one more every 15 XP after that. The allowance is
+pooled across every available profession; the Wave Man list alone supplies 20
+picks (ten abilities, each takeable twice) and runs out at 435 XP, so a
+character who reaches 450 has a pick they can only spend by branching out.
 
-**Each ability may be taken twice**, and a second copy applies its effect a
-second time. This is why `Character.profession_abilities` is an id-to-count
-map rather than a list of ids, and why the editor uses steppers rather than
-checkboxes. Priest rituals are the exception at once-only, which is data
-(`Profession.max_per_ability`) rather than a special case.
+**Each Wave Man ability may be taken twice**, and a second copy applies its
+effect a second time. This is why `Character.profession_abilities` is an
+id-to-count map rather than a list of ids, and why the editor uses steppers
+rather than checkboxes. The limit follows the ability's *own* profession, so a
+twice-taken Wave Man ability can sit beside a once-only Priest ritual in the
+same character.
 
 **No School Ring, no school knacks, no Dan.** All five rings start at 2 and
 cap at 5. **Foreign school knacks stay available**, though: with no school of
