@@ -598,9 +598,10 @@ def _reroll_flags(page, keys):
     )
 
 
-def test_impaired_suppresses_rerolls_on_skills_only(page, live_server_url):
-    """rules/03-combat.md: Impaired stops 10s rerolling for SKILLS, but wound
-    checks, damage, athletics and bare ring rolls keep theirs."""
+def test_impaired_suppresses_rerolls_except_wound_checks(page, live_server_url):
+    """rules/03-combat.md exempts wound checks and damage rolls; per the GM's
+    2026-08-29 ruling those are the only exceptions, so ring rolls are
+    suppressed too despite not being "skills"."""
     _create_roller(page, live_server_url, "ImpairedScopeChar")
     _impair(page)
     page.reload()
@@ -611,14 +612,13 @@ def test_impaired_suppresses_rerolls_on_skills_only(page, live_server_url):
         "skill:bragging", "attack", "parry",
         "wound_check", "ring:Fire", "ring:Earth",
     ])
-    # Skills lose the reroll...
     assert flags["skill:bragging"] is False
     assert flags["attack"] is False
     assert flags["parry"] is False
-    # ...everything else keeps it.
+    assert flags["ring:Fire"] is False
+    assert flags["ring:Earth"] is False
+    # The one exception this character has.
     assert flags["wound_check"] is True
-    assert flags["ring:Fire"] is True
-    assert flags["ring:Earth"] is True
 
 
 def test_becoming_impaired_mid_fight_updates_the_formulas(page, live_server_url):
@@ -636,13 +636,14 @@ def test_becoming_impaired_mid_fight_updates_the_formulas(page, live_server_url)
 
     after = _reroll_flags(page, ["skill:bragging", "ring:Fire", "wound_check"])
     assert after["skill:bragging"] is False
-    assert after["ring:Fire"] is True
+    assert after["ring:Fire"] is False
     assert after["wound_check"] is True
+    for key in ("skill:bragging", "ring:Fire"):
+        assert page.evaluate(
+            f"window._diceRoller.formulas['{key}'].no_reroll_reason"
+        ) == "impaired", key
     assert page.evaluate(
-        "window._diceRoller.formulas['skill:bragging'].no_reroll_reason"
-    ) == "impaired"
-    assert page.evaluate(
-        "window._diceRoller.formulas['ring:Fire'].no_reroll_reason"
+        "window._diceRoller.formulas['wound_check'].no_reroll_reason"
     ) == ""
 
 

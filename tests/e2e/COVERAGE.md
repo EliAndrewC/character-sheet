@@ -899,7 +899,7 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Exported "Copy as image" card explains a stranded 10 (Impaired) in its DETAILS block → `test_rolls.py::test_exported_card_explains_an_impaired_ten`
 - [x] Exported card stays quiet when no 10 was stranded → `test_rolls.py::test_exported_card_stays_quiet_when_no_ten_was_stranded`
 - [x] Exported card explains an unskilled roll's stranded 10, naming the skill → `test_rolls.py::test_exported_card_explains_an_unskilled_ten`
-- [x] Impaired suppresses the 10s reroll on SKILLS only - skill/attack/parry lose it, wound checks and bare ring rolls keep it → `test_rolls.py::test_impaired_suppresses_rerolls_on_skills_only`
+- [x] Impaired suppresses the 10s reroll on everything but wound checks and damage - ring rolls included, per the GM's 2026-08-29 ruling → `test_rolls.py::test_impaired_suppresses_rerolls_except_wound_checks`
 - [x] Becoming impaired mid-fight (serious wounds cross Earth with no reload) re-scopes the rerolls the same way → `test_rolls.py::test_becoming_impaired_mid_fight_updates_the_formulas`
 - [x] Healing back out of impaired restores the rerolls, also without a reload → `test_rolls.py::test_healing_out_of_impaired_restores_the_rerolls`
 - [x] Disabling animation in profile shows result panel immediately → `test_rolls.py::test_disable_animation_preference`
