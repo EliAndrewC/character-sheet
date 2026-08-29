@@ -5,15 +5,15 @@ Created 2026-08-29. Follows `profession-design/design.md` (Wave Man) and
 `profession-design/priest-and-pooling.md` (one Profession type, pooled
 abilities, Priest rituals). Source rules: `rules/09-professions.md`.
 
-Turns Worker and Merchant from `preview` to `available`, with one ability
-held back. Most of the twenty are **conditional free raises**, which the sheet
+Turns Worker and Merchant from `preview` to `available`, with one ability held
+back. Sixteen of the twenty are **conditional free raises**, which the sheet
 already models as "Alternative totals" rows - so the bulk of this is data plus
-one new per-ability gate, not new machinery. Three abilities do not fit that
-mould and are the subject of the open questions.
+one new per-ability gate. Two abilities need new interaction (a pre-roll menu
+variant and a reroll button), and five have no mechanics at all.
 
-Ability numbering below is **Wk1-Wk10** (Worker) and **M1-M10** (Merchant),
-matching the order in `rules/09-professions.md`, and used in code comments and
-test names as W1-W10 already are for the Wave Man.
+Ability numbering is **Wk1-Wk10** (Worker) and **M1-M10** (Merchant), matching
+the order in `rules/09-professions.md`, and used in code comments and test
+names as W1-W10 already are for the Wave Man.
 
 ---
 
@@ -24,99 +24,124 @@ Everything from parts 1 and 2 carries over unless contradicted here.
 | # | Ruling |
 |---|---|
 | R1 | **Worker and Merchant become available**, joining Wave Man and Priest in the pool. Ninja stays hidden. |
-| R2 | **Wk5 ("buy and raise any advanced skill which is normally basic as if it were basic") is greyed out and not selectable**, being campaign-specific - as its own parenthetical footnote says. |
+| R2 | **Wk5 ("buy and raise any advanced skill which is normally basic as if it were basic") is greyed out and not selectable**, being campaign-specific - as its own parenthetical says. |
 | R3 | Every other Worker and Merchant ability is selectable. |
-| R4 | **Most Worker abilities will have no mechanical implementation.** There are no sickness or fatigue mechanics in this app, so those abilities are displayed and nothing more. |
-| R5 | **Money bonuses accumulate into a single percentage figure** which the sheet keeps track of. |
-| R6 | **Almost all of these abilities surface as conditional bonuses** - the existing "Alternative totals" system. A character who takes many of them should expect a lot of alternative rows on their rolls; that is the intended shape of the feature, not a symptom. |
+| R4 | **Several Worker abilities have no mechanical implementation.** There are no sickness or fatigue mechanics in this app, so those abilities are displayed and nothing more. |
+| R5 | **Money bonuses accumulate into a single percentage figure** the sheet keeps track of. |
+| R6 | **Almost all of these abilities surface as conditional bonuses** - the existing "Alternative totals" system. A character who takes many of them should expect a lot of alternative rows; that is the intended shape, not a symptom. |
+| R7 | **Wk8 and Wk9 are athletics rolls**, Water for feats of strength and Earth for feats of endurance. The rules were reworded upstream to say so, along with three other tweaks - see section 2. |
+| R8 | **M10 is chosen before the roll, not after.** The commerce tile offers "roll commerce" and "roll open commerce relating to your business" as separate options, each with its own void-spend submenu, exactly as a Ring tile offers "Roll Air" and "Roll Air athletics". Once chosen there is no conditionality left. |
+| R9 | **The money bonus multiplies the stipend**, applied after every other stipend modifier. |
+| R10 | **All bonuses double when an ability is taken twice**, free raises included. |
+| R11 | **M9 is implemented as a reroll button.** |
+| R12 | **"Relating to your business" is label text**, judged by the player, exactly like the Streetwise advantage's condition. The sheet does not try to decide it. |
 
 ---
 
-## 2. What this rides on, and what it does not
+## 2. Pull the reworded rules text first
 
-**The conditional-bonus system is a direct fit, with one limit.** An entry in
-a formula's `alternatives` list is `{label, extra_flat}`, optionally with
-`open_roll` and its own `max_total`. It renders as an "Alternative totals" row
-in the roll modal and as a tooltip note on the View Sheet's skill panel, and
-`roll_engine.py` mirrors it for the Discord bot. Fourteen of the twenty
-abilities are exactly this shape.
+The GM reworded five abilities upstream. Diffing the stored text against
+`rules/09-professions.md` finds **exactly these five, all in Worker and
+Merchant**; Wave Man, Priest and Ninja are clean.
 
-**But `alternatives` carries flat bonuses only.** There is no `extra_flat`
-counterpart for dice: `alt_total()` in `roll_engine.py` and
-`applyTotalCap`/`altTotal` in `roll_math.js` both read `extra_flat` and
-nothing else. That is a real constraint rather than an oversight - an
-alternative total is computed from a roll that already happened, and you
-cannot retroactively add dice to it. **M10 is the one ability this blocks**
-(see Q2).
+| id | change |
+|---|---|
+| Wk5 | Parenthetical gains: "If you take this ability after having already spent XP on an advanced skill, you get back the extra XPs which were previously spent." |
+| Wk8 | "2 free raises on strength rolls" becomes **"2 free raises when making Water athletics rolls for feats of strength"** |
+| Wk9 | "2 free raises on all endurance rolls" becomes **"2 free raises when making Earth athletics rolls for feats of endurance"** |
+| M5 | "when your commerce **rank**" becomes "when your commerce **skill**" |
+| M6 | "to culture rolls **to purchase gifts**" becomes "for the purpose of purchasing gifts" |
+
+Wk8 and Wk9 are the substantive ones: they turn two abilities that named a
+roll type this app does not have into two that ride `build_athletics_formula`,
+which already builds `athletics:Water` and `athletics:Earth`. They move out of
+the narrative group and into Phase 2.
+
+Wk5's new clause describes an XP refund. It stays unimplemented under R2, but
+the text should be current so the greyed-out entry reads correctly.
+
+- [ ] `TDD:` a test that asserts every stored ability's text matches
+      `rules/09-professions.md` verbatim, parsing the markdown at test time.
+      This drift has now happened twice (W3 during part 1, five more here) and
+      a test is cheaper than noticing by eye a third time.
+
+---
+
+## 3. What this rides on
+
+**The conditional-bonus system is a direct fit.** An entry in a formula's
+`alternatives` list is `{label, extra_flat}`, optionally with `open_roll` and
+its own `max_total`. It renders as an "Alternative totals" row in the roll
+modal, as a tooltip note on the View Sheet's skill panel, and on the Discord
+bot's card via `_alternatives_for_payload`. Sixteen of the twenty abilities
+are exactly this shape once R7 moves Wk8/Wk9 in.
+
+**The roll menu already does pre-roll variants.** `roll_trigger.html` renders
+a picker block whose every row carries a hover void-spend submenu, gated by
+`rollMenuHasAthleticsPicker`, and `executeRoll('athletics:' + ring, count, opt)`
+runs the chosen one. R8 is that pattern with a different key, so M10 is a new
+formula key plus a menu row - not new machinery.
 
 **The stipend already has a modifier list.** `EffectiveStatus.stipend_modifiers`
-in `app/services/status.py` is a list of `{source, detail}` entries beside a
-`stipend` computed as `stipend_rank ** 2`; Household Wealth and the Merchant
-school's 4th Dan already push into it. A money-bonus percentage has an obvious
-home there (see Q3 for whether it should actually move the number).
+is a list of `{source, detail}` beside a `stipend` of `stipend_rank ** 2`;
+Household Wealth and the Merchant school's 4th Dan already push into it. R9
+lands as a final multiplier with its own entry, so its provenance shows in the
+existing tooltip.
 
 **Per-ability availability is new.** `Profession.availability` is per
-profession; R2 needs one ability inside an otherwise-available profession to
-be greyed out. That is a small addition - `ProfessionAbility.available: bool`,
-with the effective answer being `profession.is_available and ability.available`
-- but it touches the sanitizer, the validator, and the editor's stepper gate,
-so it is Phase 1 rather than a footnote.
+profession; R2 needs one ability inside an otherwise-available profession
+greyed out. Small - `ProfessionAbility.available: bool` - but it touches the
+sanitizer, the validator and the editor's stepper gate.
 
 ---
 
-## 3. The twenty abilities
+## 4. The twenty abilities
 
-**Conditional free raises** - a `{label, extra_flat}` alternatives row on the
-named skill. Fourteen of the twenty, and the whole of Phase 2.
+**Conditional free raises**, a `{label, extra_flat}` row on the named roll.
+Sixteen abilities, and the whole of Phase 2. Raise counts double at two copies
+(R10).
 
-| id | skill(s) | raises | condition (the row's label) |
+| id | roll(s) | raises | condition (the row's label) |
 |---|---|---|---|
 | Wk4 | etiquette | 3 | when speaking to someone of higher social class |
 | Wk6 | commerce | 3 | when making purchases |
 | Wk7 | bragging, precepts | 4 | when speaking about your own ethics |
+| Wk8 | **athletics:Water** | 2 | for feats of strength |
+| Wk9 | **athletics:Earth** | 2 | for feats of endurance |
 | Wk10 | sincerity, tact | 5 | when avoiding trouble with an authority figure (**open rolls only**) |
 | M1 | sincerity | 2 | relating to your business |
 | M2 | interrogation | 2 | relating to your business |
 | M3 | investigation | 4 | relating to your business |
-| M4 | bragging, precepts | 3 (+1 more if contested) | relating to your business experience |
-| M5 | commerce | 2 | contested, and your commerce rank is at least your opponent's |
-| M6 | culture | 4 | to purchase gifts |
+| M4 | bragging, precepts | 3, or 4 if contested | relating to your business experience |
+| M5 | commerce | 2 | contested, and your commerce skill is at least your opponent's |
+| M6 | culture | 4 | for the purpose of purchasing gifts |
 | M7 | heraldry | 5 | for knowing your customers and their families |
 | M8 | law | 3 | relating to your business |
 
-All twelve skills exist in `SKILLS`. M4 needs **two rows** (plain and
-contested) rather than one, since the sheet cannot know which a given roll is.
-M5's condition is unverifiable by the sheet - it names the opponent's rank -
-so it is a label, exactly as Streetwise's "when invoking bounty hunter
-authority" already is.
+M4 needs **two rows**, plain and contested, since one row cannot say "unless
+contested, in which case more". M5's condition names the opponent's commerce
+skill, which the sheet cannot know, so it is label text - exactly as
+Streetwise's condition already is (R12).
 
-**No implementation, displayed only** (R4). Five abilities:
+**New interaction**, two abilities:
 
-| id | ability | why |
-|---|---|---|
-| Wk1 | Regain a VP with 4 fewer hours of sleep | The app has a Night's Rest but does not model hours slept |
-| Wk2 | Sickness penalties halved (a fourth if taken twice) | No sickness mechanics |
-| Wk3 | Ignore one day's worth of fatigue penalties | No fatigue mechanics |
-| Wk8 | 2 free raises on strength rolls | **See Q1** - there is no "strength roll" in this app or the rules |
-| Wk9 | 2 free raises on all endurance rolls | **See Q1** - likewise |
+| id | shape |
+|---|---|
+| M10 | A second roll option on the commerce tile - "open commerce relating to your business", 4 extra rolled dice - with its own void-spend submenu (R8) |
+| M9 | A reroll button, spending a void point, on rolls relating to your business (R11) |
 
-Wk2 is worth noting for a different reason: "Taking this twice cuts it to a
-fourth" is the rules explicitly describing a **non-linear** second copy. It is
-the only ability in any profession that does, which is good evidence that the
-plain doubling assumed everywhere else is the intended default - see Q4.
+**No implementation, displayed only** (R4): **Wk1** (VP on less sleep - the
+app has a Night's Rest but does not model hours slept), **Wk2** (sickness),
+**Wk3** (fatigue). Wk2 is worth noting for a different reason: "Taking this
+twice cuts it to a fourth" is the rules explicitly describing a **non-linear**
+second copy, and the only ability in any profession that does - which is why
+R10's plain doubling everywhere else is safe to assume.
 
-**Not selectable** (R2): **Wk5**, advanced-skills-as-basic.
-
-**Neither, and the reason for the open questions:**
-
-| id | ability | problem |
-|---|---|---|
-| M9 | Spend a void point to reroll any roll relating to your business | A reroll, not a bonus. Shaped like Lucky, which already exists. See Q5 |
-| M10 | Roll 4 extra dice on open commerce rolls relating to your business | Extra **dice**, which `alternatives` cannot express. See Q2 |
+**Not selectable** (R2): **Wk5**.
 
 ---
 
-## 4. Working method
+## 5. Working method
 
 Unchanged: **unit tests are TDD and live in the phase that owns the code**,
 tagged `TDD:` and written failing first; clicktests are the exception and all
@@ -125,117 +150,96 @@ sit in the last phase. Every phase must leave the existing 3625 unit tests,
 
 ---
 
-## 5. Phase 1 - per-ability availability and the data
+## 6. Phase 1 - rules text, per-ability availability, data
 
-- [ ] `TDD:` tests for per-ability availability and the new data.
-- [ ] `ProfessionAbility.available: bool = True`. Effective availability is `profession.is_available and ability.available`; a single helper in `services/professions.py` so no caller re-derives it.
+- [ ] `TDD:` the rules-text drift test described in section 2.
+- [ ] Pull the five reworded texts.
+- [ ] `TDD:` tests for per-ability availability.
+- [ ] `ProfessionAbility.available: bool = True`. Effective availability is `profession.is_available and ability.available`, behind one helper in `services/professions.py` so no caller re-derives it.
 - [ ] `max_for_ability()` returns 0 for an unavailable ability, which makes the sanitizer drop it with no further change.
-- [ ] `PROFESSION_ABILITY_POOL` and `profession_ability_pool_size()` skip unavailable abilities, so the pooled ceiling counts what can actually be taken: Wave Man 20 + Priest 10 + Worker 18 (nine abilities x2) + Merchant 20 = **68 picks**, reached at 1155 XP.
-- [ ] `Profession.availability` flips to `"available"` for `worker` and `merchant`; `Wk5.available = False`.
-- [ ] `implemented` is set truthfully per ability, so the editor's existing "narrative" chip lands on the five R4 abilities and Wk8/Wk9.
-- [ ] `TDD:` a crafted POST naming Wk5 is dropped on write; validation names it as unavailable rather than as unknown.
+- [ ] `PROFESSION_ABILITY_POOL` and `profession_ability_pool_size()` skip unavailable abilities, so the ceiling counts what can be taken: Wave Man 20 + Priest 10 + Worker 18 (nine abilities x2) + Merchant 20 = **68 picks**, reached at 1155 XP.
+- [ ] `worker` and `merchant` flip to `availability="available"`; `Wk5.available = False`.
+- [ ] `implemented` set truthfully per ability, so the editor's existing "narrative" chip lands on Wk1/Wk2/Wk3 and nothing else.
+- [ ] `TDD:` a crafted POST naming Wk5 is dropped on write, and validation calls it unavailable rather than unknown.
 - [ ] `TDD:` the pool size and the 68-pick ceiling.
 
-## 6. Phase 2 - the fourteen conditional free raises
+## 7. Phase 2 - the sixteen conditional free raises
 
-- [ ] `TDD:` one test per ability asserting the alternatives row (skill, `extra_flat`, label), at one and two copies.
-- [ ] `PROFESSION_ALTERNATIVE_SKILL_BONUSES` in `game_data.py`: ability id -> `(skill_ids, raises, label, open_roll)`. Declarative, beside `PROFESSION_ABILITY_BONUSES`, so adding the rest of a profession later is data.
-- [ ] Applied in `build_skill_formula()` where the campaign-advantage alternatives already are, multiplying `raises` by the copy count (D5).
-- [ ] M4 emits **two** rows - the plain one and a larger contested one - since a single row cannot say "unless contested, in which case more".
-- [ ] Wk10's rows carry `open_roll: True`, which the existing renderer already honours.
-- [ ] Two abilities can land on one skill with different conditions (Wk7 and M4 both touch bragging); they must produce **two separate rows**, not a merged one. Assert it.
-- [ ] `TDD:` `tests/test_roll_engine.py` case confirming the bot's card shows the new alternatives, since `_alternatives_for_payload` picks them up for free.
-- [ ] Check the interaction with `_finalize_caps` and Withdrawn's `max_total`: an alternative that lifts an open sincerity roll must still respect the cap.
+- [ ] `TDD:` one test per ability asserting the alternatives row (roll key, `extra_flat`, label), at one and two copies.
+- [ ] `PROFESSION_ALTERNATIVE_BONUSES` in `game_data.py`: ability id -> `(roll_keys, raises, label, open_roll)`. Declarative, beside `PROFESSION_ABILITY_BONUSES`, so a future profession is data.
+- [ ] Applied in `build_skill_formula()` where the campaign-advantage alternatives already are, multiplying `raises` by the copy count (R10).
+- [ ] **Also applied in `build_athletics_formula()`**, which Wk8/Wk9 need and which no profession ability has touched before. Confirm alternatives survive the dice-cap step there the way they do for skills.
+- [ ] M4 emits two rows, plain and contested.
+- [ ] Wk10's rows carry `open_roll: True`, which the renderer already honours.
+- [ ] Two abilities landing on one roll with different conditions (Wk7 and M4 both touch bragging) must produce **two separate rows**, not a merged one. Assert it.
+- [ ] Interaction with `_finalize_caps` and Withdrawn's `max_total`: an alternative lifting an open sincerity roll must still respect the cap.
+- [ ] `TDD:` `tests/test_roll_engine.py` case confirming the bot's card shows the new alternatives.
 
-## 7. Phase 3 - the money bonus
+## 8. Phase 3 - M10, the pre-roll commerce variant
 
-- [ ] `TDD:` accumulation tests, including two copies of an ability doubling its bonus and Wk5 (unavailable) contributing nothing.
-- [ ] `profession_money_bonus(character_data) -> int` in `services/professions.py`: the summed percentage over held abilities, counting each copy.
-- [ ] Surfaced as a single figure on the View Sheet, next to the stipend where the other money information already lives.
-- [ ] Whether it actually multiplies the stipend, or is displayed for the GM to apply, is **Q3**. If it multiplies, it becomes a `stipend_modifiers` entry so its provenance shows in the existing tooltip.
-- [ ] Include it in the Google Sheets export and `GET /api/characters` if it moves the number; skip both if it is display-only.
+- [ ] `TDD:` the new formula key exists only for a character holding M10, and carries 4 extra rolled dice over plain commerce, doubling to 8 at two copies.
+- [ ] New key `skill:commerce:business` from `build_all_roll_formulas`, built from the commerce formula with the extra dice added before `apply_dice_caps`.
+- [ ] A picker block on the commerce tile mirroring `rollMenuHasAthleticsPicker`: two rows, each with the existing hover void-spend submenu. Prefer a **generic** `roll_variants` list on the formula over a commerce-specific flag, so the next profession that needs one is data.
+- [ ] The variant is an *open* roll by the ability's own wording; make sure nothing that keys on open-vs-contested (Withdrawn's cap, the sincerity honor bonus) is confused by the new key.
+- [ ] `roll_engine.py` reaches it for free once the key exists, but the slash commands map command names to `skill:<id>` - decide whether `/commerce` should offer the variant or stay the plain roll. Leaning plain: a slash command has nobody to ask which it is.
+- [ ] `TDD:` a school character and a profession character without M10 get no such key.
 
-## 8. Phase 4 - M9 and M10
+## 9. Phase 4 - M9, the business reroll
 
-Contents depend on Q2 and Q5. Placeholder items for the likely shapes:
+- [ ] `TDD:` the flag appears only for a holder, and the reroll spends exactly one void point.
+- [ ] A reroll button on qualifying roll results, modelled on the Lucky reroll that already exists (`luckyUsedThisRoll` and its banner), spending one void point rather than consuming Lucky.
+- [ ] Once per roll, like Lucky - and it must interact correctly with Lucky and with the PCP reroll, none of which may double up on one roll. Assert the combinations.
+- [ ] **Read-only Roll Mode:** a non-editor may walk the reroll and see the new total, but the void point must not be deducted. Gate the spend on `t.canEdit` per the standing rule.
+- [ ] Which rolls it offers on is **Q7**.
 
-- [ ] M10: whichever of a pre-roll "relates to my business" toggle, an extension to `alternatives`, or reference text Q2 settles on.
-- [ ] M9: whichever of a void-spend reroll button (mirroring Lucky's) or reference text Q5 settles on.
-- [ ] If either lands as reference text, it still needs its "tell your GM" note, and `implemented` stays false so the editor's narrative chip is accurate.
+## 10. Phase 5 - the money bonus
 
-## 9. Phase 5 - display
+- [ ] `TDD:` accumulation, including two copies doubling a bonus and Wk5 contributing nothing.
+- [ ] `profession_money_bonus(character_data) -> int` in `services/professions.py`: the summed percentage over held abilities, counting each copy (R10).
+- [ ] Applied in `compute_effective_status` as a **final multiplier** on the stipend, after every other modifier (R9), with its own `stipend_modifiers` entry naming the percentage so the existing tooltip explains it.
+- [ ] Rounding: `int()` truncation matches how the stipend is already computed; state it in the modifier's detail text so a player can reconcile the number.
+- [ ] `TDD:` a Merchant with several abilities gets the right stipend, and the modifier list reads in the right order.
+- [ ] Surfaced on the View Sheet beside the stipend, in the Google Sheets export, and in `GET /api/characters`.
+
+## 11. Phase 6 - display
 
 - [ ] The editor greys out Wk5 individually inside an otherwise-live Worker block, with its own "not available in this campaign" note rather than the profession-level one.
-- [ ] Money bonuses are already carried on `ProfessionAbility.money_bonus` and are shown nowhere; surface each ability's own figure in the editor row so a player can see what they are buying.
+- [ ] Each ability's own money bonus is shown in its editor row - the data is already on `ProfessionAbility.money_bonus` and rendered nowhere.
 - [ ] The View Sheet's profession panel keeps showing only taken abilities, now with money bonuses and the "tell your GM" note on the narrative ones.
 - [ ] `TDD:` render tests for the individually-greyed ability and the money figures.
 - [ ] Rerun `scripts/build-css.sh`.
 
-## 10. Phase 6 - clicktests, coverage and docs
+## 12. Phase 7 - clicktests, coverage and docs
 
-- [ ] Clicktest: Worker and Merchant blocks are live (not the greyed preview they were), and Wk5 alone is disabled inside Worker.
-- [ ] Clicktest: taking Wk4 puts an "Alternative totals" row on an etiquette roll with the right number, and taking it twice doubles it.
+- [ ] Clicktest: Worker and Merchant blocks are live, and Wk5 alone is disabled inside Worker.
+- [ ] Clicktest: taking Wk4 puts an "Alternative totals" row on an etiquette roll with the right number; taking it twice doubles it.
 - [ ] Clicktest: a character holding Wk7 and M4 sees two distinct bragging rows.
-- [ ] Clicktest: the accumulated money bonus renders on the sheet.
-- [ ] Clicktest for whatever Q2 and Q5 produce.
+- [ ] Clicktest: Wk8 puts a row on a Water athletics roll and not on an Earth one.
+- [ ] Clicktest: the commerce tile offers both roll options, each with a void submenu, and the business one rolls 4 more dice.
+- [ ] Clicktest: the M9 reroll button spends a void point and rerolls; a non-editor's void count does not move.
+- [ ] Clicktest: the accumulated money bonus renders on the sheet and the stipend reflects it.
 - [ ] Add a Worker/Merchant character to the `test_sheet_js_errors.py` sweep.
 - [ ] Coverage back to 100%; `COVERAGE.md`; `school-features/` docs for the two new ability sets; the Professions section of `CLAUDE.md`.
 - [ ] Deploy.
 
 ---
 
-## 11. Open questions
+## 13. Open question
 
-**Q1 - what is a "strength roll" and an "endurance roll"?** (Wk8, Wk9.)
-Neither exists as a skill in this app, and grepping `rules/` finds no such
-roll type either - the only hits for "strength" are about the strength of
-one's convictions. Candidates: athletics rolls with a particular Ring (the
-sheet rolls athletics per Ring), raw Ring rolls (Earth for endurance seems
-natural), or something the GM adjudicates with no fixed formula. If they are
-Ring or athletics rolls I can implement both as conditional bonuses in Phase
-2; if they are GM-adjudicated they join the narrative group. **This is the
-only question that changes the phase-2 scope.**
+One, from a phrase in the Q6 answer I would rather not guess at.
 
-**Q2 - M10 rolls 4 extra dice, which the alternatives system cannot express.**
-An alternative total is derived from dice already rolled, so extra dice cannot
-be offered after the fact. Three options:
+**Q7 - "all 18 skills": which abilities reach every skill?**
 
-  (a) **A pre-roll toggle** in the roll menu - "this commerce roll relates to
-      my business" - that adds the dice before rolling, the way the attack
-      modal's Doji "untouched target" checkbox already works. Correct
-      behaviour, and a new control on the generic roll menu, which currently
-      only offers void spending.
-  (b) **Extend `alternatives` to carry dice.** I would rather not: every
-      consumer (`roll_math.js`, `roll_engine.py`, the modal, the dice card)
-      assumes an alternative is arithmetic on a finished total, and a row that
-      cannot state its number would be a worse lie than no row.
-  (c) **Reference text**, like the Wave Man's opponent-facing abilities.
+The answer to Q6 said the business-related free raises "will create an
+alternative total which can apply to literally all 18 skills (all 6 basic
+social skills and all 3 advanced social skills, plus all 6 basic knowledge
+skills and all 3 advanced knowledge skills)". The app has exactly 18 skills in
+that shape, so the enumeration is unambiguous - but the abilities themselves
+each name a single skill (M1 sincerity, M2 interrogation, M3 investigation, M8
+law), so I cannot tell which of two readings is meant.
 
-**Q3 - does the accumulated money bonus change the stipend, or only display?**
-The stipend is `rank ** 2` with a modifier list that Household Wealth and the
-Merchant school already push into, so multiplying it is easy and would show
-its provenance in the existing tooltip. But the rules head the Worker list
-with "Money bonuses may or may not apply depending on the campaign", so
-whether it should touch the number at all is yours. Display-only is also fine
-and is the smaller change.
+- **(a) The reroll, not the free raises.** M9 is the one Merchant ability with no skill named - "reroll **any** roll relating to your business" - so it is the one that genuinely reaches all 18. Under this reading the free-raise rows stay on the skills their abilities name, and Q7 is really about Phase 4's scope. **This is my reading, and what the phases above assume.**
+- **(b) The free raises too.** If a merchant's business can plausibly involve any skill, then M1's "sincerity rolls relating to your business" is a narrower case of a general permission, and you want business rows offered more widely than the named skill. That is a materially bigger Phase 2 and a much busier skill panel, so I do not want to infer it.
 
-**Q4 - do free raises double when an ability is taken twice?** The standing
-rule (part 1, D5) is that N copies apply the effect N times, which for these
-means Wk10 at two copies giving **ten** free raises, or +50 on a roll.
-Confirming because these numbers get large, and because Wk2's "taking this
-twice cuts it to a fourth" is the rules bothering to specify a non-linear
-second copy - which reads as evidence that linear is the default everywhere
-else, but is worth saying out loud before I bake +50 into a roll.
-
-**Q5 - is M9 worth implementing?** "Spend one void point to reroll any roll
-relating to your business" is shaped exactly like the Lucky advantage's
-reroll, which already exists, so the button is cheap. The condition is
-GM-adjudicated, and it spends a void point the sheet does track. Implement it
-as a reroll button on qualifying rolls, or leave it as reference text?
-
-**Q6 - which rolls count as "relating to your business"?** Seven Merchant
-abilities carry that condition and I am treating it purely as label text the
-player reads before deciding whether the alternative applies - the same way
-Streetwise's condition works today. Flagging only to confirm you do not want
-the sheet trying to decide it (for instance by having the player record a
-business on their sheet).
+If (a), nothing above changes and Phase 4 offers the reroll on all 18 skill
+rolls. If (b), tell me which abilities generalise and to which skills.
