@@ -2,6 +2,15 @@
     <section class="bg-white rounded-lg shadow p-6 border border-ink/10"
              x-data="trackingData()"
              x-init="window._trackingBridge = $data">
+        {# Shown after a save was refused because the tracking state had
+           changed elsewhere (another tab, a Discord roll command). The tab
+           has already adopted the current values by the time this paints. #}
+        <div x-show="staleNotice" x-cloak x-transition.opacity
+             data-testid="tracking-stale-notice" role="status"
+             class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-2rem)] bg-ink text-parchment dark-surface text-sm rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
+            <span>This sheet was changed somewhere else, so it has been brought up to date. Your last change here was not applied - check the numbers and make it again if you still want it.</span>
+            <button type="button" @click="staleNotice = false" class="text-parchment/70 hover:text-parchment font-bold" aria-label="Dismiss">&times;</button>
+        </div>
         <div class="flex flex-col md:flex-row gap-10">
         <!-- Wounds & Void (left column) -->
         <div class="flex-1 min-w-0 space-y-3">

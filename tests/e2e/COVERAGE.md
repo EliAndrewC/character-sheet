@@ -1373,6 +1373,14 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] Quick Healer heals 2 SW on the first night after becoming injured → `test_tracking_advanced.py::test_nights_rest_quick_healer_heals_2_on_first_night`
 - [x] Slow Healer heals 0 SW on the first night after becoming injured (suppression) → `test_tracking_advanced.py::test_nights_rest_slow_healer_heals_0_on_first_night`
 
+### Concurrent writers (tracking revision; `_tracking_js.html` save / adoptServerState, tracking.html notice)
+
+- [x] A save from a tab that has not seen another tab's change is refused (409) instead of overwriting it; the tab adopts the server's values (the other tab's void spend is NOT refunded), its own change is not applied, the "changed somewhere else" notice appears, and none of it reloads the page → `test_tracking_concurrency.py::test_stale_save_is_refused_and_the_tab_recovers_without_reload`
+- [x] After recovering, the tab's next save lands, and both tabs' changes survive a reload → `test_tracking_concurrency.py::test_after_recovering_the_tab_can_save_again`
+- [x] The stale notice has a working dismiss button → `test_tracking_concurrency.py::test_stale_notice_can_be_dismissed`
+- [x] Clicks made while a save is in flight are queued, not dropped: three rapid SW + clicks against a slowed /track all persist, with no stale notice → `test_tracking_concurrency.py::test_rapid_clicks_all_persist`
+- [x] The stale notice stays inside a 375px viewport with no horizontal overflow → `test_tracking_concurrency.py::test_stale_notice_fits_a_phone_screen`
+
 ## Character Sheet — Skill Roll Display
 
 - [x] Skills with rank show roll → `test_sheet_display.py::test_skill_with_rank_shows_roll`
@@ -1571,7 +1579,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `keepalive` | Fly Keep-alive Pinger | `test_keepalive.py` |
 | `pcp` | Player Character Points (confirm modal, reroll/free-raise/reroll-10s, void refresh, XP category, undo, read-only) | `test_pcp.py` |
 | `status_display` | Status section on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
-| `tracking` | Wounds, void points, per-adventure | `test_tracking.py`, `test_tracking_advanced.py`, `test_light_wounds.py`, `test_sheet_advanced.py` |
+| `tracking` | Wounds, void points, per-adventure, concurrent writers | `test_tracking.py`, `test_tracking_advanced.py`, `test_tracking_concurrency.py`, `test_light_wounds.py`, `test_sheet_advanced.py` |
 | `skill_rolls` | Skill roll display with bonuses | `test_sheet_display.py`, `test_skill_rolls_display.py` |
 | `xp_summary` | XP breakdown on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
 | `version_history` | Version list, revert, inline edit | `test_publish_revert.py`, `test_sheet_display.py`, `test_sheet_advanced.py` |

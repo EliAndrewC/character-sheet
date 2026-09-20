@@ -33,6 +33,7 @@ from app.game_data import (
     void_regen_per_night_shugenja,
 )
 from app.services.rolls import compute_dan
+from app.services.tracking import PER_ROUND_STATE_KEYS
 
 
 # Adventure-state keys representing combat-in-progress bonuses that
@@ -47,11 +48,9 @@ _COMBAT_IN_PROGRESS_KEYS = (
     "matsu_banked_wc_bonuses",
     "ide_banked_tn_reduce",
     "hida_banked_wc_bonus",
-    "mantis_posture_phase",
-    "mantis_posture_history",
-    "mantis_offensive_3rd_dan_accum",
-    "mantis_defensive_3rd_dan_accum",
-    "kakita_5th_dan_used",
+    # Whatever belongs to one combat round - the same tuple the server-side
+    # round start clears, so the two cannot list different keys.
+    *PER_ROUND_STATE_KEYS,
 )
 
 

@@ -36,6 +36,7 @@ from app.database import get_db
 from app.models import Character, GamingGroup, RollHistory
 from app.routes.rolls import _iso_utc
 from app.services.roll_descriptions import label_for_roll
+from app.services.void_spend import void_limits, void_pools
 
 
 router = APIRouter(prefix="/api", tags=["gm-api"])
@@ -337,6 +338,29 @@ async def list_rolls(
 # ---------------------------------------------------------------------------
 
 
+def _current_state(character: Character) -> dict:
+    """A character's live tracking state, for ``GET /api/characters``.
+
+    ``void_spend_cap`` is the most void one roll may take and comes from the
+    same ``void_limits`` call the sheet and the Discord commands use.
+    ``tracking_rev`` moves whenever any of this changes, so a poller can
+    tell "nothing happened" from a cheap integer compare.
+    """
+    limits = void_limits(character.to_dict())
+    pools = void_pools(character, limits)
+    return {
+        "void_points": pools["regular"],
+        "temp_void_points": pools["temp"],
+        "worldliness_void_remaining": pools["worldliness"],
+        "void_max": limits["void_max"],
+        "void_spend_cap": limits["cap"],
+        "light_wounds": character.current_light_wounds or 0,
+        "serious_wounds": character.current_serious_wounds or 0,
+        "action_dice": list(character.action_dice or []),
+        "tracking_rev": character.tracking_rev or 0,
+    }
+
+
 @router.get("/characters")
 async def list_characters(request: Request, db: Session = Depends(get_db)):
     """Every character, with owner / editor ids, group, and current ranks.
@@ -393,6 +417,9 @@ async def list_characters(request: Request, db: Session = Depends(get_db)):
             # needs the abilities as well as the profession name.
             "profession": c.profession or "",
             "profession_abilities": dict(c.profession_abilities or {}),
+            # Live state, as opposed to the build above. Read-only like the
+            # rest of this API: every write happens inside this app.
+            "current": _current_state(c),
         })
 
     return JSONResponse({

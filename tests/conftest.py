@@ -38,6 +38,43 @@ def db(engine):
         session.close()
 
 
+def _track_like_a_fresh_tab(test_client, session_factory):
+    """Make ``client.post(".../track", json={...})`` behave like a sheet tab
+    that has just loaded: if the body names no ``rev``, fill in the
+    character's current tracking revision.
+
+    POST /track refuses a write that does not say which revision it was
+    built on (optimistic concurrency, see app/services/tracking.py). The
+    hundred-odd tests that exercise what /track DOES with a field are not
+    about that handshake, and a real tab always has a current revision to
+    send, so they get one here. Tests about the handshake itself pass
+    ``rev`` explicitly, or use ``client.request("POST", ...)``, which this
+    does not touch.
+    """
+    import re
+
+    from app.models import Character
+
+    real_post = test_client.post
+
+    def post(url, *args, **kwargs):
+        body = kwargs.get("json")
+        match = re.fullmatch(r"/characters/(\d+)/track", str(url))
+        if match and isinstance(body, dict) and "rev" not in body:
+            session = session_factory()
+            try:
+                row = session.query(Character).filter(
+                    Character.id == int(match.group(1))
+                ).first()
+                rev = (row.tracking_rev or 0) if row else 0
+            finally:
+                session.close()
+            kwargs["json"] = {**body, "rev": rev}
+        return real_post(url, *args, **kwargs)
+
+    test_client.post = post
+
+
 @pytest.fixture()
 def client(engine):
     """Yield a FastAPI TestClient wired to the in-memory test database.
@@ -64,6 +101,7 @@ def client(engine):
     with TestClient(app, headers={"X-Test-User": "183026066498125825:testplayer"}) as c:
         # Attach a helper to query the same connection
         c._test_session_factory = TestSession
+        _track_like_a_fresh_tab(c, TestSession)
         yield c
 
     transaction.rollback()

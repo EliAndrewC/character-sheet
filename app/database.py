@@ -1,5 +1,6 @@
 import os
 
+from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -28,6 +29,34 @@ def get_db():  # pragma: no cover
         yield db
     finally:
         db.close()
+
+
+async def prefetch_body(request: Request) -> None:
+    """Read the request body BEFORE the route handler starts.
+
+    Why this exists: almost every write route here is an ``async def`` that
+    loads a row, then does ``await request.json()``, then modifies the row
+    and commits. That ``await`` is a real suspension point sitting in the
+    middle of a read-modify-write, so a second request could load, change
+    and commit the same row inside the gap - and the first would then write
+    back over it from its stale copy (or pass a revision check against a
+    revision that had already moved).
+
+    Starlette caches the body once read, and awaiting something already
+    cached never yields to the event loop. So with the body prefetched,
+    everything from a handler's first query to its commit runs without
+    interruption, and - this app being one uvicorn worker on one machine,
+    which the SQLite-on-a-volume deployment already requires - that makes
+    each handler's read-modify-write atomic. Attached once per router
+    instead of reordering two dozen handlers, so a new route is covered by
+    being on the router.
+
+    It does NOT cover a handler that awaits something else between its load
+    and its commit (an outbound HTTP call), or a sync ``def`` route, which
+    runs on the threadpool. Neither exists today on a tracking write path;
+    see audits/frontend-rules-and-concurrency.md.
+    """
+    await request.body()
 
 
 def init_db():
@@ -160,6 +189,7 @@ def _migrate_add_columns():
         ("age", "INTEGER", "NULL"),
         ("lineage", "TEXT", "''"),
         ("money_ledger", "TEXT", "'[]'"),
+        ("tracking_rev", "INTEGER", "0"),
         # Night's Rest SW-healing cadence flags. Defaulting all to 0 means
         # pre-feature characters with existing SW will be treated as "no new
         # injuries since last rest", entering the alternating cadence from

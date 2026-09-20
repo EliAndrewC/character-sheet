@@ -2657,7 +2657,7 @@
                 // die for keep-lowest purposes - otherwise the keep-lowest
                 // slice discards it and the player loses their Phase-0 die.
                 const kakitaInit = !!(this.formula.is_initiative && this.formula.kakita_phase_zero);
-                const sortValue = (v) => (kakitaInit && v === 10) ? 0 : v;
+                const sortValue = (v) => window.L7RRollMath.initiativeSortValue(v, kakitaInit);
                 const sortedAsc = [...indexed].sort(
                     (a, b) => sortValue(a.value) - sortValue(b.value) || a.idx - b.idx
                 );
@@ -2759,20 +2759,14 @@
                 // Initiative: compute action dice with school effects
                 this.actionDice = [];
                 if (isInit) {
-                    let actions = this.keptDice.map(d => d.value).sort((a, b) => a - b);
-                    // Hiruma 4th Dan: lower all action dice by 2 (min 1)
-                    if (this.formula.hiruma_4th_dan) {
-                        actions = actions.map(v => Math.max(1, v - 2));
-                    }
-                    // Shinjo 4th Dan: highest action die set to 1
-                    if (this.formula.shinjo_4th_dan && actions.length > 0) {
-                        actions[actions.length - 1] = 1;
-                    }
-                    // Kakita: 10s become Phase 0
-                    if (this.formula.kakita_phase_zero) {
-                        actions = actions.map(v => v === 10 ? 0 : v);
-                    }
-                    actions.sort((a, b) => a - b);
+                    // Hiruma 4th Dan (-2, min 1), Shinjo 4th Dan (highest
+                    // := 1) and Kakita (10 -> Phase 0), in that order. The
+                    // arithmetic lives in roll_math.js because the server
+                    // rolls initiative too (the Discord /initiative command)
+                    // and the two are pinned to one table of cases.
+                    const actions = window.L7RRollMath.initiativeActionValues(
+                        this.keptDice.map(d => d.value), this.formula
+                    );
                     // Togashi Ise Zumi all-athletics variant: every action die
                     // is restricted to athletics actions, so flag each one so
                     // it renders in blue and its per-die menu offers only the
@@ -2865,8 +2859,10 @@
                         t.tempVoidPoints += 1;
                         t.save();
                     }
-                    // Bayushi 4th Dan: auto-bank +5 for a future attack after feint
-                    if (this.schoolAbilities.bayushi_post_feint_raise && t?.canEdit) {
+                    // Bayushi 4th Dan: auto-bank +5 for a future attack after feint.
+                    // The ``key`` guard matters: without it this banked a free
+                    // raise after EVERY roll - a Sincerity check included.
+                    if (key === 'knack:feint' && this.schoolAbilities.bayushi_post_feint_raise && t?.canEdit) {
                         this.bayushiBankedFeintRaise += 5;
                         if (t) t.bayushiBankedFeintRaise = this.bayushiBankedFeintRaise;
                         t?.saveBankedBonuses();

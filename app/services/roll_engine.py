@@ -10,7 +10,9 @@ only turns a formula into dice and then into the payload shape that
 ``app/services/dice_card.py`` and ``RollHistory.payload`` already expect.
 
 What IS duplicated here is the small display layer the browser keeps in
-``roll_math.js``: the total cap and the "alternative totals" filtering.
+``roll_math.js``: the total cap, the "alternative totals" filtering, the
+10k10 dice cap, and the initiative arithmetic (which dice are kept, and what
+a school then does to them).
 Those are a handful of ``min()`` calls with no rules content, and Python
 cannot call the JS. Keep the two in step if either changes; the shared
 contract is asserted by ``tests/test_roll_engine.py`` against the same
@@ -26,6 +28,7 @@ import random
 from typing import Any, Dict, List, Optional, Sequence
 
 from app.services.dice import build_all_roll_formulas, is_impaired
+from app.services.void_spend import school_dan
 
 
 #: Guard against a pathological formula (or a crafted character row)
@@ -248,6 +251,53 @@ def _bonuses_for_payload(formula: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
+def apply_dice_cap(rolled: int, kept: int, flat: int) -> Dict[str, int]:
+    """The 10k10 ceiling. Mirror of ``L7RRollMath.applyDiceCap``: rolled dice
+    past 10 become kept dice, kept dice past 10 become +2 each."""
+    overflow_flat = 0
+    if rolled > 10:
+        kept += rolled - 10
+        rolled = 10
+    if kept > 10:
+        overflow_flat = 2 * (kept - 10)
+        flat += overflow_flat
+        kept = 10
+    return {"rolled": rolled, "kept": kept, "flat": flat, "overflow_flat": overflow_flat}
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}{'s' if n > 1 else ''}"
+
+
+def _spend_bullets(
+    label: str, activation: int, void_spent: int, overflow: int,
+) -> List[str]:
+    """The DETAILS bullets a void spend earns, worded exactly as the sheet's
+    ``_extraBonusBullets`` words them, so the card and the Roll History row
+    read the same wherever the roll was made."""
+    out: List[str] = []
+    if activation > 0:
+        out.append(f"{_plural(activation, 'void point')} spent to activate {label}")
+    if void_spent > 0:
+        out.append(
+            f"Rolled +{void_spent}k{void_spent} from {void_spent} spent "
+            f"void point{'s' if void_spent > 1 else ''}"
+        )
+    if overflow > 0:
+        out.append(
+            f"+{overflow} from rolling above 10k10 (+2 per extra die above 10)"
+        )
+    return out
+
+
+def _adds_lowest_three(character_data: Dict[str, Any]) -> bool:
+    """Shosuro Actor 5th Dan: the lowest 3 dice are added to the result."""
+    return (
+        character_data.get("school") == "shosuro_actor"
+        and school_dan(character_data) >= 5
+    )
+
+
 # ---------------------------------------------------------------------------
 # The whole roll
 # ---------------------------------------------------------------------------
@@ -258,6 +308,8 @@ def execute_roll(
     roll_key: str,
     party_members: Optional[List[dict]] = None,
     rng: Optional[random.Random] = None,
+    void_spent: int = 0,
+    formula: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Roll ``roll_key`` for a character and build the result payload.
 
@@ -266,10 +318,17 @@ def execute_roll(
     the browser posts - or ``None`` when the character has no such roll
     (an unknown key, or a knack they do not have).
 
-    Only the unconditional roll is performed: no void spends, no Lucky
-    reroll, no post-roll discretionary bonuses. Those are interactive
-    choices that belong to the modal, and a slash command has nobody to
-    ask. Everything the formula layer applies automatically - school
+    ``void_spent`` is the pre-roll +1k1-per-point spend. This function only
+    ROLLS it - checking that the character can afford it and deducting the
+    points is ``app/services/void_spend.py``'s job, and the caller does both
+    in one transaction. ``formula`` lets a caller that already built the
+    character's formula (to read its activation cost) pass it in rather than
+    build the whole table twice.
+
+    No Lucky reroll and no post-roll discretionary bonuses: those are
+    choices made after seeing the dice, the player marks them on the sheet
+    afterwards, and a slash command has nobody to ask.
+    Everything the formula layer applies automatically - school
     techniques, advantages, Impaired suppressing the 10s reroll - is
     already baked into the formula and therefore into this roll.
 
@@ -280,10 +339,29 @@ def execute_roll(
     make the same roll come out differently depending on whether it was
     made on the sheet or through a slash command.
     """
-    formulas = build_all_roll_formulas(character_data, party_members=party_members)
-    formula = formulas.get(roll_key)
+    if formula is None:
+        formula = build_all_roll_formulas(
+            character_data, party_members=party_members,
+        ).get(roll_key)
     if not formula:
         return None
+
+    # A void point is +1k1. Same order as the sheet's executeRoll: add the
+    # dice, then apply the 10k10 ceiling (whose overflow becomes flat).
+    formula = dict(formula)
+    void_spent = max(0, int(void_spent or 0))
+    activation = 1 if formula.get("requires_void_point") else 0
+    overflow = 0
+    if void_spent:
+        capped = apply_dice_cap(
+            (formula.get("rolled") or 0) + void_spent,
+            (formula.get("kept") or 0) + void_spent,
+            formula.get("flat") or 0,
+        )
+        formula.update(
+            rolled=capped["rolled"], kept=capped["kept"], flat=capped["flat"],
+        )
+        overflow = capped["overflow_flat"]
 
     dice = roll_dice(
         formula.get("rolled") or 0,
@@ -298,22 +376,128 @@ def execute_roll(
     # something once a ceiling is in play.
     base_total = dice["kept_sum"] + (formula.get("flat") or 0)
 
-    # The card's DETAILS block. A slash-command roll has no interactive
-    # spends to report, but it can still be a roll whose 10s did not
-    # explode, and the card has to say so.
-    note = _no_reroll_note(formula, dice["kept"] + dice["dropped"])
+    label = formula.get("label") or roll_key
+    extras = _spend_bullets(label, activation, void_spent, overflow)
+    all_cells = dice["kept"] + dice["dropped"]
+    if _adds_lowest_three(character_data):
+        lowest = sum(sorted(c["value"] for c in all_cells)[:3])
+        if lowest > 0:
+            base_total += lowest
+            extras.append(f"+{lowest} from 5th Dan (lowest 3 dice added to result)")
+    # A roll whose 10s did not explode has to say so on the card.
+    note = _no_reroll_note(formula, all_cells)
+    if note:
+        extras.append(note)
+    max_total = formula.get("max_total")
+    total = apply_total_cap(base_total, max_total)
+    if total != base_total:
+        source = formula.get("max_total_source") or "a disadvantage"
+        extras.append(f"Capped at {max_total} by {source} (rolled {base_total})")
 
-    return {
-        "title": formula.get("label") or roll_key,
+    payload: Dict[str, Any] = {
+        "title": label,
         "formula": _formula_text(formula),
         "kept": [{"parts": d["parts"]} for d in dice["kept"]],
         "dropped": [{"parts": d["parts"]} for d in dice["dropped"]],
         "bonuses": _bonuses_for_payload(formula),
-        "extras": [note] if note else [],
+        "extras": extras,
         "kept_sum": dice["kept_sum"],
-        "total": apply_total_cap(base_total, formula.get("max_total")),
+        "total": total,
         "alternatives": _alternatives_for_payload(formula, base_total),
     }
+    return payload
+
+
+# ---------------------------------------------------------------------------
+# Initiative
+# ---------------------------------------------------------------------------
+
+
+def initiative_sort_value(value: int, kakita_phase_zero: bool) -> int:
+    """Mirror of ``L7RRollMath.initiativeSortValue``: a Kakita's 10 is Phase
+    0, so it sorts FIRST when choosing the lowest dice to keep."""
+    return 0 if (kakita_phase_zero and value == 10) else value
+
+
+def initiative_action_values(
+    kept_values: Sequence[int], flags: Dict[str, Any],
+) -> List[int]:
+    """Kept initiative dice -> the phases the character acts in, ascending.
+
+    Mirror of ``L7RRollMath.initiativeActionValues``; both run
+    ``tests/shared/initiative_cases.json``. The order is part of the rule:
+    Hiruma 4th Dan lowers every die by 2 (min 1), THEN Shinjo 4th Dan sets
+    the highest to 1, THEN a Kakita 10 becomes Phase 0.
+    """
+    actions = sorted(kept_values or [])
+    if flags.get("hiruma_4th_dan"):
+        actions = [max(1, v - 2) for v in actions]
+    if flags.get("shinjo_4th_dan") and actions:
+        actions[-1] = 1
+    if flags.get("kakita_phase_zero"):
+        actions = [0 if v == 10 else v for v in actions]
+    return sorted(actions)
+
+
+def execute_initiative(
+    character_data: Dict[str, Any],
+    rng: Optional[random.Random] = None,
+    party_members: Optional[List[dict]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Roll initiative. Returns ``{"payload", "action_dice"}``.
+
+    ``payload`` is the dice-card / ``RollHistory`` shape the sheet builds in
+    ``_buildInitiativeImagePayload`` (KEPT row = the final action dice,
+    ``show_total: false``); ``action_dice`` is what to hand
+    ``tracking.start_combat_round``.
+
+    Always the default variant - for a Togashi Ise Zumi that is the normal
+    roll plus one separate athletics-only die, not the all-athletics
+    ``initiative:athletics`` roll. A slash command has nobody to ask.
+    """
+    rng = rng or random.SystemRandom()
+    formula = build_all_roll_formulas(
+        character_data, party_members=party_members,
+    ).get("initiative")
+    if not formula:  # pragma: no cover - every character has an initiative formula
+        return None
+
+    kakita = bool(formula.get("kakita_phase_zero"))
+    count = max(0, min(int(formula.get("rolled") or 0), MAX_DICE))
+    # Initiative never rerolls 10s (rules/03-combat.md).
+    cells = [roll_one_die(False, rng) for _ in range(count)]
+    # Stable sort, so ties fall to roll order exactly as the sheet's
+    # ``a.idx - b.idx`` tiebreak has them.
+    cells.sort(key=lambda c: initiative_sort_value(c["value"], kakita))
+    keep = max(0, min(int(formula.get("kept") or 0), len(cells)))
+    kept, dropped = cells[:keep], cells[keep:]
+    dropped.sort(key=lambda c: c["value"])
+
+    action_dice: List[Dict[str, Any]] = [
+        {"value": value}
+        for value in initiative_action_values([c["value"] for c in kept], formula)
+    ]
+    if formula.get("togashi_athletics_extra_die"):
+        action_dice.append({
+            "value": roll_one_die(False, rng)["value"], "athletics_only": True,
+        })
+    if formula.get("mantis_4th_dan_athletics_die"):
+        # Never rolled - always 1.
+        action_dice.append(
+            {"value": 1, "athletics_only": True, "mantis_4th_dan": True}
+        )
+
+    payload = {
+        "title": formula.get("label") or "Initiative",
+        "formula": _formula_text(formula),
+        "kept": [{"parts": [d["value"]]} for d in action_dice],
+        "dropped": [{"parts": c["parts"]} for c in dropped],
+        "bonuses": [],
+        "total": 0,
+        "footer": "Action dice",
+        "show_total": False,
+    }
+    return {"payload": payload, "action_dice": action_dice}
 
 
 def impaired_now(character_data: Dict[str, Any]) -> bool:

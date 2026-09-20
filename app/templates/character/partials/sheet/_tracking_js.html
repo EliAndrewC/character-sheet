@@ -174,6 +174,15 @@
                 kakita5thDanUsed: !!({{ (adventure_state or {})|tojson }}).kakita_5th_dan_used,
                 _charId: {{ character.id }},
                 _saving: false,
+                _savePending: false,
+                _pcpSpending: false,
+                // Optimistic-concurrency token: the tracking revision this
+                // tab's state was loaded at (or last successfully saved as).
+                _rev: {{ character.tracking_rev or 0 }},
+                // True for a few seconds after a refused save, to tell the
+                // player their sheet was brought up to date under them.
+                staleNotice: false,
+                _staleNoticeTimer: null,
                 showResetModal: false,
                 // Night's Rest state. Populated by openNightsRestModal()
                 // from the server's /nights-rest/preview response so the
@@ -230,26 +239,115 @@
                         }));
                         return;
                     }
-                    if (this._saving) return;
+                    // A save requested while one is in flight must not be
+                    // dropped: save() sends a whole snapshot, so dropping the
+                    // LAST one of a burst (three quick clicks on VP -) left
+                    // the server behind the screen until some unrelated save
+                    // happened to follow. Queue exactly one follow-up instead.
+                    if (this._saving) { this._savePending = true; return; }
                     this._saving = true;
                     // Notify the Impaired indicator so it updates reactively
                     window.dispatchEvent(new CustomEvent('wound-changed', {
                         detail: { serious: this.seriousWounds }
                     }));
-                    await fetch('/characters/' + this._charId + '/track', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({
-                            current_light_wounds: this.lightWounds,
-                            current_serious_wounds: this.seriousWounds,
-                            current_void_points: this.voidPoints,
-                            current_temp_void_points: this.tempVoidPoints,
-                            adventure_state: this.adventureState,
-                            action_dice: this.actionDice,
-                            precepts_pool: this.preceptsPool,
-                        }),
-                    });
+                    try {
+                        const resp = await fetch('/characters/' + this._charId + '/track', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            // keepalive: a save made just before navigating
+                            // away still lands.
+                            keepalive: true,
+                            body: JSON.stringify({
+                                // The revision this snapshot was built on. The
+                                // server refuses the write (409) if the state
+                                // has moved since - see services/tracking.py.
+                                rev: this._rev,
+                                current_light_wounds: this.lightWounds,
+                                current_serious_wounds: this.seriousWounds,
+                                current_void_points: this.voidPoints,
+                                current_temp_void_points: this.tempVoidPoints,
+                                adventure_state: this.adventureState,
+                                action_dice: this.actionDice,
+                                precepts_pool: this.preceptsPool,
+                            }),
+                        });
+                        if (resp.status === 409) {
+                            const data = await resp.json().catch(() => null);
+                            if (data && data.tracking) {
+                                // Whatever was queued was built on the same
+                                // stale state; it goes with it.
+                                this._savePending = false;
+                                this.adoptServerState(data.tracking, true);
+                            }
+                        } else if (resp.ok) {
+                            const data = await resp.json().catch(() => null);
+                            if (data && typeof data.rev === 'number') this._rev = data.rev;
+                        }
+                    } catch (e) { /* offline: the next save carries the state */ }
                     this._saving = false;
+                    if (this._savePending) {
+                        this._savePending = false;
+                        this.save();
+                    }
+                },
+
+                // Take the server's tracking state as our own. Called when a
+                // save was refused because this tab had not seen the current
+                // state - another tab saved, a Discord command spent a void
+                // point or rolled initiative, a party member drew on this
+                // priest's pool. The player never has to reload: every counter
+                // and every value derived from adventure_state is rebuilt
+                // here, the same way trackingData() builds them at page load.
+                adoptServerState(snap, notify) {
+                    this._rev = snap.rev || 0;
+                    this.lightWounds = snap.current_light_wounds || 0;
+                    this.seriousWounds = snap.current_serious_wounds || 0;
+                    this.voidPoints = snap.current_void_points || 0;
+                    this.tempVoidPoints = snap.current_temp_void_points || 0;
+                    const as = snap.adventure_state || {};
+                    this.adventureState = as;
+                    this.actionDice = snap.action_dice || [];
+                    this.actionMenuOpen = null;
+                    this.preceptsPool = snap.precepts_pool || [];
+                    const banked = (v) => Array.isArray(v)
+                        ? v.map(a => ({amount: a, spent: false}))
+                        : ((typeof v === 'number' && v > 0) ? [{amount: v, spent: false}] : []);
+                    this.akodoBankedBonuses = banked(as.akodo_banked_bonuses);
+                    this.matsuBankedWcBonuses = banked(
+                        as.matsu_banked_wc_bonuses !== undefined
+                            ? as.matsu_banked_wc_bonuses : as.matsu_banked_wc_bonus);
+                    this.bankedWcExcess = banked(as.banked_wc_excess);
+                    this.bayushiBankedFeintRaise = as.bayushi_banked_feint_raise || 0;
+                    this.hirumaBankedAttackBonus = as.hiruma_banked_attack_bonus || 0;
+                    this.hidaBankedWcBonus = as.hida_banked_wc_bonus || 0;
+                    this.posturePhase = as.mantis_posture_phase || 1;
+                    this.postureHistory = as.mantis_posture_history || [];
+                    this.offensive3rdDanAccum = as.mantis_offensive_3rd_dan_accum || 0;
+                    this.defensive3rdDanAccum = as.mantis_defensive_3rd_dan_accum || 0;
+                    this.kakita5thDanUsed = !!as.kakita_5th_dan_used;
+                    // The dice roller keeps its own copies of the banked
+                    // bonuses (and shares three arrays by reference).
+                    const dr = window._diceRoller;
+                    if (dr) {
+                        dr.akodoBankedBonuses = this.akodoBankedBonuses;
+                        dr.bankedWcExcess = this.bankedWcExcess;
+                        dr.matsuBankedWcBonuses = this.matsuBankedWcBonuses;
+                        dr.hirumaBankedAttackBonus = this.hirumaBankedAttackBonus;
+                        dr.bayushiBankedFeintRaise = this.bayushiBankedFeintRaise;
+                        dr.ideBankedTnReduce = as.ide_banked_tn_reduce || 0;
+                        dr.hidaBankedWcBonus = this.hidaBankedWcBonus;
+                    }
+                    window.dispatchEvent(new CustomEvent('wound-changed', {
+                        detail: { serious: this.seriousWounds }
+                    }));
+                    window.dispatchEvent(new CustomEvent('tracking-state-adopted'));
+                    this._dispatchMantisPostureChanged(this.currentPosture());
+                    if (notify) {
+                        this.staleNotice = true;
+                        clearTimeout(this._staleNoticeTimer);
+                        this._staleNoticeTimer = setTimeout(
+                            () => { this.staleNotice = false; }, 12000);
+                    }
                 },
 
                 // --- Player Character Points (rules/10) -------------------
@@ -274,6 +372,14 @@
                 // when the effect may proceed, false on a server error.
                 async spendPcp(use) {
                     if (!this.canEdit) return true;
+                    // One spend at a time: a double-click on a slow request
+                    // must not buy two.
+                    if (this._pcpSpending) return false;
+                    this._pcpSpending = true;
+                    try { return await this._spendPcpOnce(use); }
+                    finally { this._pcpSpending = false; }
+                },
+                async _spendPcpOnce(use) {
                     const prevCost = window.L7RRollMath
                         ? window.L7RRollMath.pcpTotalCost(this.pcpCount) : 0;
                     try {
@@ -290,6 +396,9 @@
                         if (use === 'void_refresh') {
                             this.voidPoints = data.current_void_points;
                         }
+                        // The refresh moved the tracking revision server-side;
+                        // this tab made the change, so it has seen it.
+                        if (typeof data.tracking_rev === 'number') this._rev = data.tracking_rev;
                         window.dispatchEvent(new CustomEvent('pcp-spent', { detail: data }));
                         return true;
                     } catch (e) { return false; }

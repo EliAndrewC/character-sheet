@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import JSON, Float, ForeignKey, Index, String, func
+from sqlalchemy import JSON, Float, ForeignKey, Index, String, event, func, inspect
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -258,11 +258,14 @@ class Character(Base):
     # services/xp.pcp_total_cost. See rules/10-player_character_points.md.
     pcp_count: Mapped[int] = mapped_column(default=0)
 
-    # Combat tracking (mutable session state)
-    current_light_wounds: Mapped[int] = mapped_column(default=0)
-    current_serious_wounds: Mapped[int] = mapped_column(default=0)
-    current_void_points: Mapped[int] = mapped_column(default=0)
-    current_temp_void_points: Mapped[int] = mapped_column(default=0)
+    # Combat tracking (mutable session state). ``active_history`` on every
+    # column in TRACKING_COLUMNS makes SQLAlchemy load the old value when a
+    # new one is assigned, so ``_bump_tracking_rev`` can tell a real change
+    # from a whole-state save that re-sent what was already there.
+    current_light_wounds: Mapped[int] = mapped_column(default=0, active_history=True)
+    current_serious_wounds: Mapped[int] = mapped_column(default=0, active_history=True)
+    current_void_points: Mapped[int] = mapped_column(default=0, active_history=True)
+    current_temp_void_points: Mapped[int] = mapped_column(default=0, active_history=True)
     # Night's Rest healing-cadence flags. Updated by the /track endpoint
     # whenever SW changes, and by the Night's Rest endpoint. Excluded from
     # the version diff (live session state, not part of the character build).
@@ -276,15 +279,21 @@ class Character(Base):
     sw_healing_last_rest_was_healing_night: Mapped[bool] = mapped_column(default=False)
     # Per-adventure state: {"lucky_used": false, "unlucky_used": false,
     #   "adventure_raises_used": 0, "conviction_used": 0, ...}
-    adventure_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
+    adventure_state: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON, default=dict, active_history=True
+    )
     # Current combat round action dice. Populated when the player rolls
     # initiative and cleared by the Clear button. Each entry is
     # {"value": int (0-10), "spent": bool}.
-    action_dice: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list)
+    action_dice: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
+        JSON, default=list, active_history=True
+    )
     # Priest 3rd Dan precepts dice pool. Persists across combat rounds (so
     # it is NOT cleared by action-dice Clear or by rolling initiative) but
     # IS cleared by the per-adventure reset. Each entry is {"value": int (1-10)}.
-    precepts_pool: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list)
+    precepts_pool: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
+        JSON, default=list, active_history=True
+    )
     # Money ledger: user-added income / expense entries the player keeps
     # for tracking koku across the campaign. The initial Spring equinox
     # disbursal (25% of stipend, ceiling) is NOT stored here - it's
@@ -294,6 +303,12 @@ class Character(Base):
     # "amount": int}``. Lives outside the version system - editing the
     # ledger never flips the character into Draft state.
     money_ledger: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list)
+    # Optimistic-concurrency token for the live tracking state above (see
+    # ``TRACKING_COLUMNS``). Bumped automatically whenever any of those
+    # columns changes, by ``_bump_tracking_rev`` below - never by hand - so a
+    # writer that loaded the sheet at revision N and saves after someone else
+    # moved it to N+1 is refused instead of silently overwriting them.
+    tracking_rev: Mapped[int] = mapped_column(default=0)
 
     # Metadata
     notes: Mapped[str] = mapped_column(String, default="")
@@ -599,6 +614,44 @@ class Character(Base):
             notes=data.get("notes", ""),
             technique_choices=data.get("technique_choices", {}),
         )
+
+
+#: The live session state a sheet tab holds a whole copy of and writes back.
+#: A change to ANY of these moves ``Character.tracking_rev``.
+TRACKING_COLUMNS = (
+    "current_light_wounds",
+    "current_serious_wounds",
+    "current_void_points",
+    "current_temp_void_points",
+    "adventure_state",
+    "action_dice",
+    "precepts_pool",
+)
+# ``money_ledger`` is deliberately NOT here. No tab ever posts the ledger
+# whole: its routes add / edit / delete ONE entry by id, server-side, so two
+# writers compose instead of overwriting each other. Putting it under the
+# revision would only make every koku entry turn the player's next wound or
+# void save into a false "changed somewhere else".
+
+
+@event.listens_for(Character, "before_update")
+def _bump_tracking_rev(mapper, connection, character) -> None:
+    """Move the tracking revision whenever tracking state is written.
+
+    Hooked at the ORM layer rather than called from each route ON PURPOSE:
+    the writers are many (POST /track, Night's Rest, the PCP void refresh,
+    a party member spending a priest's conviction, the Discord roll
+    commands, whatever comes next) and a bump somebody has to remember is a
+    bump somebody forgets. Here, a new writer participates by existing.
+    Only fires when a value actually changed, so a no-op save does not make
+    every other open tab stale.
+    """
+    state = inspect(character)
+    for name in TRACKING_COLUMNS:
+        history = state.attrs[name].history
+        if history.added and list(history.added) != list(history.deleted):
+            character.tracking_rev = (character.tracking_rev or 0) + 1
+            return
 
 
 class RollHistory(Base):

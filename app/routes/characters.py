@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 import json
 
-from app.database import get_db
+from app.database import get_db, prefetch_body
 from app.game_data import (
     ADVANTAGES, CAMPAIGN_ADVANTAGES, CAMPAIGN_DISADVANTAGES,
     COMBAT_SKILLS, DISADVANTAGES, PROFESSIONS, SCHOOLS, SKILLS, SCHOOL_KNACKS,
@@ -30,6 +30,7 @@ from app.services.professions import (
 )
 from app.services.rolls import compute_dan
 from app.services.sanitize import sanitize_sections
+from app.services.tracking import claimed_rev_from, is_stale, tracking_snapshot
 from app.services.versions import (
     compute_diff_summary,
     compute_version_diff,
@@ -41,7 +42,7 @@ from app.services.versions import (
 from app.services.xp import editor_xp_view, pcp_next_cost, pcp_total_cost
 from app.services.nights_rest import _void_max
 
-router = APIRouter(prefix="/characters")
+router = APIRouter(prefix="/characters", dependencies=[Depends(prefetch_body)])
 
 
 def _templates():
@@ -1684,6 +1685,9 @@ async def spend_pcp_route(
         "version_number": version.version_number,
         "current_void_points": character.current_void_points,
         "void_max": void_max,
+        # A void refresh moves the tracking revision; the tab that asked for
+        # it adopts the new one so its next save is not refused as stale.
+        "tracking_rev": character.tracking_rev or 0,
     })
 
 
@@ -1993,6 +1997,19 @@ async def track_state(
 
     body = await request.json()
 
+    # Optimistic concurrency: this is a WHOLE-STATE write, so it may only
+    # land on the state it was computed from. A tab that has not seen the
+    # current revision (another tab saved, a Discord command spent a void
+    # point, a party member drew on this priest's pool) is refused and
+    # handed the current state to adopt. The body was prefetched (see
+    # database.prefetch_body), so nothing from the load above to the commit
+    # below yields - another request cannot slip in between.
+    if is_stale(character, claimed_rev_from(body)):
+        return JSONResponse(
+            {"error": "stale", "tracking": tracking_snapshot(character)},
+            status_code=409,
+        )
+
     if "current_light_wounds" in body:
         character.current_light_wounds = max(0, int(body["current_light_wounds"]))
     if "current_serious_wounds" in body:
@@ -2035,7 +2052,7 @@ async def track_state(
         character.precepts_pool = pool
 
     db.commit()
-    return JSONResponse({"status": "ok"})
+    return JSONResponse({"status": "ok", "rev": character.tracking_rev or 0})
 
 
 # ---------------------------------------------------------------------------

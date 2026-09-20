@@ -923,10 +923,17 @@ _KNACKS_LIST: List[SchoolKnack] = [
     SchoolKnack(
         id="commune",
         name="Commune",
+        # Commune is rolled with the character's SCHOOL RING (GM ruling
+        # 2026-09-20; SCHOOL_RING_KNACK_IDS is what makes the code do that).
+        # "varies" stays as the catalog value because it is only ever the
+        # FALLBACK, for a character whose school ring cannot be resolved.
+        # ``rules_text`` below still carries the older "Ring of the element"
+        # wording on purpose: it quotes rules/05-school_knacks.md, whose
+        # matching edit had not been published when this was written.
         ring="varies",
         description=(
-            "Commune with the elemental kami of a chosen element. "
-            "Rolled with the ring of the element communed with."
+            "Ask the elemental kami what they have witnessed. "
+            "Costs a void point, and is rolled with your School Ring."
         ),
         rules_text=(
             "You may ask the elemental spirits about events which they have recently witnessed.  Spend a void point and roll this knack with the Ring of the element of the spirits you are questioning.  This is an open roll, and the GM weighs it against the time passed since the events in question and how much has happened here since then."
