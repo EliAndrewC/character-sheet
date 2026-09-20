@@ -408,3 +408,212 @@ def test_execute_roll_leaves_extras_empty_for_a_healthy_roll():
         data, "skill:etiquette", rng=_ScriptedRandom([10, 2, 3, 4, 5, 6]),
     )
     assert payload["extras"] == []
+
+
+# ---------------------------------------------------------------------------
+# Void spends on a roll
+# ---------------------------------------------------------------------------
+
+
+def test_a_void_point_is_plus_one_k_one():
+    data = _character(skills={"etiquette": 2})
+    plain = execute_roll(data, "skill:etiquette", rng=_ScriptedRandom([1] * 20))
+    spent = execute_roll(
+        data, "skill:etiquette", rng=_ScriptedRandom([1] * 20), void_spent=2,
+    )
+    assert len(spent["kept"]) == len(plain["kept"]) + 2
+    assert (
+        len(spent["kept"]) + len(spent["dropped"])
+        == len(plain["kept"]) + len(plain["dropped"]) + 2
+    )
+    assert spent["extras"] == ["Rolled +2k2 from 2 spent void points"]
+    # The subtitle shows the pool that was actually rolled, as the sheet does.
+    assert spent["formula"].startswith(f"{len(spent['kept']) + len(spent['dropped'])}k")
+
+
+def test_one_void_point_is_singular_on_the_card():
+    payload = execute_roll(
+        _character(skills={"etiquette": 1}), "skill:etiquette",
+        rng=_ScriptedRandom([1] * 20), void_spent=1,
+    )
+    assert payload["extras"] == ["Rolled +1k1 from 1 spent void point"]
+
+
+def test_void_dice_past_ten_k_ten_become_flat():
+    formula = {"label": "Big", "rolled": 9, "kept": 9, "flat": 1, "reroll_tens": False}
+    payload = execute_roll(
+        {}, "x", rng=_ScriptedRandom([2] * 20), void_spent=3, formula=formula,
+    )
+    # 12k12 -> 10k10 with kept overflow: rolled 12 -> kept 14 -> +8.
+    assert payload["formula"] == "10k10 + 9"
+    assert payload["total"] == 20 + 9
+    assert "+8 from rolling above 10k10 (+2 per extra die above 10)" in payload["extras"]
+
+
+def test_a_passed_in_formula_is_not_mutated():
+    formula = {"label": "F", "rolled": 3, "kept": 2, "flat": 0, "reroll_tens": False}
+    execute_roll({}, "x", rng=_ScriptedRandom([2] * 9), void_spent=1, formula=formula)
+    assert (formula["rolled"], formula["kept"]) == (3, 2)
+
+
+def test_an_activation_cost_is_named_on_the_card():
+    formula = {
+        "label": "Commune (Water)", "rolled": 4, "kept": 2, "flat": 0,
+        "reroll_tens": False, "requires_void_point": True,
+    }
+    payload = execute_roll(
+        {}, "knack:commune", rng=_ScriptedRandom([3] * 9), void_spent=1,
+        formula=formula,
+    )
+    assert payload["extras"] == [
+        "1 void point spent to activate Commune (Water)",
+        "Rolled +1k1 from 1 spent void point",
+    ]
+
+
+def test_a_capped_roll_says_so_on_the_card():
+    """Same closing bullet the sheet adds when Withdrawn bites."""
+    data = _character(skills={"etiquette": 4}, disadvantages=["withdrawn"])
+    payload = execute_roll(data, "skill:etiquette", rng=_ScriptedRandom([9] * 20))
+    assert payload["total"] == 15
+    assert payload["extras"][-1].startswith("Capped at 15 by Withdrawn (rolled ")
+
+
+def test_a_cap_with_no_named_source():
+    formula = {
+        "label": "F", "rolled": 2, "kept": 2, "flat": 0,
+        "reroll_tens": False, "max_total": 5,
+    }
+    payload = execute_roll({}, "x", rng=_ScriptedRandom([9, 9]), formula=formula)
+    assert payload["extras"] == ["Capped at 5 by a disadvantage (rolled 18)"]
+
+
+def test_shosuro_5th_dan_adds_the_lowest_three_dice():
+    """A front-end-only rule until the slash commands needed it: the sheet
+    added these dice, the server's roller did not."""
+    data = _character(
+        school="shosuro_actor",
+        knacks={"athletics": 5, "discern_honor": 5, "pontificate": 5},
+    )
+    formula = {"label": "F", "rolled": 5, "kept": 2, "flat": 0, "reroll_tens": False}
+    payload = execute_roll(
+        data, "x", rng=_ScriptedRandom([9, 1, 8, 2, 3]), formula=formula,
+    )
+    assert payload["kept_sum"] == 17
+    assert payload["total"] == 17 + (1 + 2 + 3)
+    assert payload["extras"] == ["+6 from 5th Dan (lowest 3 dice added to result)"]
+
+
+def test_shosuro_below_5th_dan_adds_nothing():
+    data = _character(
+        school="shosuro_actor",
+        knacks={"athletics": 4, "discern_honor": 5, "pontificate": 5},
+    )
+    formula = {"label": "F", "rolled": 3, "kept": 1, "flat": 0, "reroll_tens": False}
+    payload = execute_roll(data, "x", rng=_ScriptedRandom([9, 1, 8]), formula=formula)
+    assert payload["total"] == 9
+    assert payload["extras"] == []
+
+
+# ---------------------------------------------------------------------------
+# Initiative
+# ---------------------------------------------------------------------------
+
+
+import json as _json                                    # noqa: E402
+from pathlib import Path as _Path                       # noqa: E402
+
+from app.services.roll_engine import (                  # noqa: E402
+    execute_initiative,
+    initiative_action_values,
+    initiative_sort_value,
+)
+
+_INITIATIVE_CASES = _json.loads(
+    (_Path(__file__).parent / "shared" / "initiative_cases.json").read_text()
+)
+
+
+@pytest.mark.parametrize(
+    "case", _INITIATIVE_CASES["sort_value"], ids=lambda c: c["name"])
+def test_initiative_sort_value_matches_the_shared_table(case):
+    assert initiative_sort_value(*case["args"]) == case["want"]
+
+
+@pytest.mark.parametrize(
+    "case", _INITIATIVE_CASES["action_values"], ids=lambda c: c["name"])
+def test_initiative_action_values_match_the_shared_table(case):
+    kept = list(case["kept"])
+    assert initiative_action_values(kept, case["flags"]) == case["want"]
+    assert kept == case["kept"]
+
+
+def _school(school, rank, **overrides):
+    from app.game_data import SCHOOLS
+
+    return _character(
+        school=school,
+        knacks=dict.fromkeys(SCHOOLS[school].school_knacks, rank), **overrides,
+    )
+
+
+def test_initiative_keeps_the_lowest_dice_and_never_rerolls_tens():
+    data = _character()                     # Void 2: roll 3, keep the lowest 2
+    result = execute_initiative(data, rng=_ScriptedRandom([10, 3, 7]))
+    assert result["action_dice"] == [{"value": 3}, {"value": 7}]
+    payload = result["payload"]
+    assert payload["title"] == "Initiative"
+    assert payload["formula"] == "3k2"
+    assert payload["kept"] == [{"parts": [3]}, {"parts": [7]}]
+    assert payload["dropped"] == [{"parts": [10]}]     # a flat 10, not a chain
+    assert payload["show_total"] is False
+    assert payload["footer"] == "Action dice"
+    assert payload["total"] == 0 and payload["bonuses"] == []
+
+
+def test_kakita_keeps_a_ten_because_it_is_phase_zero():
+    data = _school("kakita_duelist", 1)
+    rolled = execute_initiative(data, rng=_ScriptedRandom([1] * 12))
+    count = len(rolled["action_dice"]) + len(rolled["payload"]["dropped"])
+    faces = [10] + [5] * (count - 1)
+    result = execute_initiative(data, rng=_ScriptedRandom(faces))
+    assert result["action_dice"][0] == {"value": 0}
+    assert {"parts": [10]} not in result["payload"]["dropped"]
+
+
+def test_hiruma_4th_dan_lowers_the_action_dice():
+    data = _school("hiruma_scout", 4)
+    result = execute_initiative(data, rng=_ScriptedRandom([2] * 12))
+    assert {d["value"] for d in result["action_dice"]} == {1}
+
+
+def test_shinjo_4th_dan_sets_the_highest_die_to_one():
+    data = _school("shinjo_bushi", 4)
+    result = execute_initiative(data, rng=_ScriptedRandom([6] * 12))
+    values = [d["value"] for d in result["action_dice"]]
+    assert values[0] == 1 and set(values[1:]) == {6}
+
+
+def test_togashi_default_variant_rolls_one_extra_athletics_die():
+    data = _school("togashi_ise_zumi", 1)
+    result = execute_initiative(data, rng=_ScriptedRandom([4] * 12 + [9]))
+    assert result["action_dice"][-1]["athletics_only"] is True
+    assert all("athletics_only" not in d for d in result["action_dice"][:-1])
+    # The extra die is on the card too: the KEPT row is the final action dice.
+    assert len(result["payload"]["kept"]) == len(result["action_dice"])
+
+
+def test_mantis_4th_dan_gets_a_value_one_die_that_is_never_rolled():
+    data = _school("mantis_wave_treader", 4)
+    base = execute_initiative(_school("mantis_wave_treader", 3),
+                              rng=_ScriptedRandom([8] * 12))
+    result = execute_initiative(data, rng=_ScriptedRandom([8] * 12))
+    assert result["action_dice"][-1] == {
+        "value": 1, "athletics_only": True, "mantis_4th_dan": True,
+    }
+    assert len(result["action_dice"]) == len(base["action_dice"]) + 1
+
+
+def test_initiative_uses_a_real_rng_by_default():
+    result = execute_initiative(_character())
+    assert all(1 <= d["value"] <= 10 for d in result["action_dice"])

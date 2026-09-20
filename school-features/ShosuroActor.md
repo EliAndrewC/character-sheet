@@ -85,6 +85,7 @@
 **Status:** Fully implemented across all non-initiative rolls (skill, knack, attack, parry, wound check, damage).
 
 **Server wiring:**
+- `app/services/roll_engine.py:execute_roll` (the Discord slash commands' roller) adds the lowest three dice and the card bullet itself, via `_adds_lowest_three`. Until 2026-09-20 it did not, so `/etiquette` for a 5th Dan Shosuro came out lower than the same roll on the sheet.
 - `app/services/dice.py:build_combat_formula` sets `formula.shosuro_5th_dan = True` for attack and parry.
 - `app/services/dice.py:_annotate_attack_type` stamps the flag on all attack-type formulas (double_attack, counterattack, lunge).
 - `app/services/dice.py:build_wound_check_formula` emits `shosuro_5th_dan` in the return dict.

@@ -124,13 +124,13 @@ python3 -m pytest tests/e2e/ --browser chromium                                 
 
 Clicktests start a live uvicorn server on a random port with a temp database, then drive headless Chromium via Playwright. Tests are tagged with `pytest.mark` by feature area, documented in `tests/e2e/COVERAGE.md` ("Pytest Marks") and defined in `pytest.ini`.
 
-**Gate on a `-k` filter naming the tests that cover your change, not on a whole mark.** A mark is only a reasonable gate when it is genuinely small. The marks are wildly uneven, and the big ones are not "targeted" in any useful sense - `rolls` alone is **782 of the suite's 1379 tests, 57% of everything**:
+**Gate on a `-k` filter naming the tests that cover your change, not on a whole mark.** A mark is only a reasonable gate when it is genuinely small. The marks are wildly uneven, and the big ones are not "targeted" in any useful sense - `rolls` alone is **782 of the suite's 1384 tests, 57% of everything**:
 
 | mark | tests | | mark | tests |
 |---|---:|---|---|---:|
 | `rolls` | 782 | | `skills` | 67 |
 | `school_abilities` | 135 | | `roll_history` | 45 |
-| `tracking` | 97 | | `character_art` | 32 |
+| `tracking` | 102 | | `character_art` | 32 |
 | `advantages` | 67 | | `readonly_rolls` | 29 |
 
 **Never OR several marks together.** `-m "rolls or tracking or pcp or readonly_rolls or roll_history"` is 938 tests and takes ~57 minutes - longer than the full suite, while still skipping a third of it. If you find yourself reaching for a second `or`, you want `-k` instead.
@@ -236,10 +236,14 @@ app/
   routes/google_sheets.py - Google OAuth2 flow + Sheets export
   routes/gm_api.py     - token-authed read-only JSON API for the GM's tooling
   routes/discord.py    - Discord interactions endpoint (slash commands)
-  services/roll_engine.py - server-side dice + result payload (the bot's roller)
+  services/roll_engine.py - server-side dice + result payload (the bot's roller), incl. initiative
+  services/void_spend.py  - void limits, draw order, spend + school consequences (server-side)
+  services/tracking.py    - tracking revision check, tracking snapshot, starting a combat round
   services/party.py    - gaming-group party lookup shared by sheet and bot
   templates/           - Jinja2 templates
 tests/                 - Unit test suite (pytest)
+tests/shared/          - JSON case tables run by BOTH the pytest and the Node suites
+discord-design/        - slash-command requirements (from gm-assistant) + the front-end / concurrency audit
 tests/e2e/             - E2E clicktests (Playwright)
 ```
 
@@ -258,6 +262,9 @@ The canonical rules live in the `rules/` directory of the GM's `l7r` repo. When 
 - **Knacks start at rank 1 for free** (given by the school). XP cost for knacks only applies for ranks above 1.
 - **Dan = minimum school knack rank.** A character's Dan level equals the lowest rank among their three school knacks.
 - **New model columns require a migration entry.** When adding a column to any SQLAlchemy model, you MUST also add it to `_migrate_add_columns()` in `database.py`. The production SQLite database on Fly.io persists across deploys - `create_all` only creates new tables, it does not add columns to existing ones. Tests won't catch this because they use a fresh in-memory database each run.
+- **Tracking state is guarded by a revision (`Character.tracking_rev`), and whole-state writers must name it.** A sheet tab holds a whole copy of the tracking state and posts all of it to `POST /characters/{id}/track`, so two writers used to overwrite each other silently (a void point spent from Discord, or in another tab, came back the next time the player clicked anything). `tracking_rev` is bumped by an ORM `before_update` listener (`models._bump_tracking_rev`) whenever a column in `TRACKING_COLUMNS` actually changes - **at the ORM layer on purpose, so every writer participates by existing**: `/track`, Night's Rest, the PCP void refresh, a party member spending a priest's conviction, the Discord commands, whatever comes next. `/track` requires `rev` in the body; a mismatch, or no `rev` at all, is `409 {"error": "stale", "tracking": {...}}` and nothing is written. The tab then `adoptServerState()`s (in `_tracking_js.html` - it rebuilds every counter and every value derived from `adventure_state`, including the dice roller's copies of the banked bonuses) and shows a notice that its last change was not applied; **the player never has to reload**. It adopts rather than retries because its "change" is a whole snapshot, and replaying that IS the bug. `save()` queues exactly one follow-up when a save is already in flight (it used to DROP it). Rules of thumb: **a new column a sheet tab holds a copy of goes in `TRACKING_COLUMNS` (with `active_history=True`, which is what lets the listener tell a real change from a re-sent value) and in `tracking_snapshot()` and `adoptServerState()`**; `money_ledger` is deliberately NOT in it (its routes are item-level, so a revision would only produce false "changed elsewhere" notices); an endpoint that bumps the revision on behalf of the tab that called it should return `tracking_rev` so that tab is not refused by its own action (`/spend-pcp` does; Night's Rest reloads). Unit tests get a current `rev` filled in by `tests/conftest.py::_track_like_a_fresh_tab`; tests about the handshake itself use `client.request("POST", ...)`. The editor's autosave has the same whole-object shape and is NOT yet guarded - see `discord-design/audit.md` B2 for why (`build_rev`, and a recovery prompt it needs first).
+- **A handler's read-modify-write is atomic because the body is prefetched (`database.prefetch_body`).** Almost every write route is an `async def` that loads a row, then `await request.json()`, then mutates and commits - and that await used to be a suspension point in the middle of the read-modify-write. `prefetch_body` is a router-level dependency on the `characters`, `pages` and `rolls` routers; Starlette caches the body and awaiting a cached body never yields, so with one uvicorn worker (which SQLite-on-a-volume already requires) everything from a handler's first query to its commit runs uninterrupted. **Put new write routes on one of those routers**, and do not add an `await` (an outbound HTTP call) between a load and a commit on a tracking write path. Operations (append to the ledger, `+1` conviction, PCP) rely on this and must never answer a conflict with a 409 - both operations should succeed; only whole-object writes get a revision check.
+- **Rules that must exist in both JS and Python are pinned to ONE table of cases in `tests/shared/*.json`**, read by `tests/js/shared_cases.test.js` and by the pytest suites (void draw order and the 10k10 cap: `void_spend_cases.json`; initiative keep-lowest and the Hiruma / Shinjo / Kakita transforms: `initiative_cases.json`). Add a case there, never to one suite only. Prefer moving a rule to the server outright and having the browser read the result (`void_limits` and `spend_consequences` are rendered into the sheet from the same call the server enforces) - a second copy is justified only where the sheet must act without a round trip.
 - **Character visibility (`Character.is_hidden`).** New characters created via POST /characters start with `is_hidden=True` so the creator can iterate before sharing. Hidden characters are filtered out of the index page list, return 404 from `GET /characters/{id}` for non-editors, and are stripped from party-effect data on other players' sheets - all gated by `can_view_drafts(viewer, owner, owner_grants)`. The flag is **bidirectional**: editors flip it back and forth via the visibility chip in the edit page header (POST `/characters/{id}/show` and `/hide`). Apply Changes does **not** auto-clear the flag; the modal renders an explicit "make visible" checkbox **only while the character is hidden**, and `publish_character(make_visible=True)` clears the flag if checked. The hidden-draft banner above Basics is always shipped in the markup (visibility is bidirectional, so server-side gating would be wrong) but Alpine's `isHidden` flag controls whether it actually paints. The visibility filter is asymmetric: a hidden character does not affect other party members' sheets (party-effect data is stripped for non-editor viewers), but other party members still affect the hidden character's own sheet.
 
 - **Read-only Roll Mode design philosophy (non-editors on someone else's sheet).** Anyone with view access to a published character can interactively walk through every roll on that sheet — initiative, attacks, parries, wound checks, school abilities, posture choices, "spend VP for free raise", "use Lucky for a re-roll", consume conviction / worldliness / otherworldliness, etc. The dice roll, the modals advance through their phases, the result panels render with all the bonuses applied, the read-only banner is visible inside each result. The point is to let players test-drive a character — see what their rolls look like, feel out a school's mechanics — without having to be granted edit access first.
@@ -446,7 +453,10 @@ that one character, so a poll would cost one authenticated call per PC per tick.
   carries `gaming_group_id`.
 - `GET /api/characters` - every character with `id`, `name`, `owner_discord_id`,
   `editor_discord_ids`, `gaming_group_id` / `gaming_group_name`, current `skills` and `knacks`,
-  plus the `gaming_groups` list. Needed because a hand-typed roll never touches `roll_history`, so
+  a `current` block of LIVE state (`void_points`, `temp_void_points`, `worldliness_void_remaining`,
+  `void_max`, `void_spend_cap`, `light_wounds`, `serious_wounds`, `action_dice`, `tracking_rev`),
+  plus the `gaming_groups` list. `tracking_rev` moves whenever any of that changes, so a poller can
+  detect "nothing happened" with an integer compare. Needed because a hand-typed roll never touches `roll_history`, so
   the Discord message author is the only handle on it, and because contested rolls are scored
   partly on the opponent's rank. These are the ranks NOW, not as of a past roll.
 
@@ -500,7 +510,12 @@ curl -H "Authorization: Bearer $T" \
   'https://l7r-character-sheet.fly.dev/api/rolls?since=2026-08-01T00:00:00Z&limit=5'
 ```
 
-### Roll slash commands (`/etiquette`)
+### Roll slash commands (`/roll`, `/etiquette` ..., three knacks, `/initiative`)
+
+The behavior spec is `discord-design/requirements.md` (written by the gm-assistant session; its
+status block at the top records what was built and every deliberate deviation). gm-assistant pins
+the POSTED MESSAGE FORMATS with fixtures, so a change to any line in "What gets posted" below has to
+be announced, not just made.
 
 Two separate Discord applications, split on the principle that **code goes where the WRITE
 happens** - reads cross a repo boundary cheaply over HTTP, writes need the domain's invariants
@@ -521,6 +536,75 @@ repo**), the authorization model is here (`owner_discord_id`, `editor_discord_id
 `get_admin_ids`), and **a roll made through a slash command is born STRUCTURED**: it writes its
 own `roll_history` row, so the image-matching problem `/api/rolls` exists to solve never arises
 for it.
+
+#### The command set (23 commands; Discord's cap is 100 per scope)
+
+**Derived, never hand-maintained** - `discord_commands.command_definitions()` is what the
+registration script sends:
+
+| command | rolls | options |
+|---|---|---|
+| `/roll` | any skill, by autocompletion | `skill` (required, autocomplete), `void` |
+| one per id in `game_data.SKILLS` | `skill:<id>` | `void` |
+| `/oppose-social`, `/oppose-knowledge`, `/commune` | `knack:<id>` (`KNACK_COMMANDS`) | `void` |
+| `/initiative` | `initiative`, and starts the combat round | none |
+
+- `SKILLS` holds exactly the 18 non-combat skills (attack / parry are in `COMBAT_SKILLS`; iaijutsu
+  is a knack), so combat is excluded **by construction**. The knack set is an explicit allow-list of
+  exactly three: the GM held every other school knack and ability back by name. **A guard test**
+  (`test_the_registered_set_is_exactly_skills_plus_three_knacks_plus_two`,
+  `test_no_combat_skill_is_reachable_through_any_command`) turns red if attack moves into `SKILLS`
+  or a fourth knack appears. **Do not add combat skills, other knacks, Otherworldliness, or
+  post-roll bonuses to the commands without the GM asking** - each is a separate feature he will
+  specify.
+- Discord names are lowercase with no spaces, so `/oppose-social` rolls `knack:oppose_social`.
+- **`/roll` autocompletes skills only** (interaction type 4 answered with type 8; cannot be
+  deferred, touches no database, never errors - any failure returns the plain list). Matching is
+  case-insensitive over skill NAMES, prefix matches first, then substring. The submitted value is
+  re-validated when the command runs, because a player can ignore the completions and type.
+
+#### These commands WRITE
+
+- **`void` really spends the character's void points**, through `void_spend.plan_void_spend` /
+  `apply_void_spend` - the same limits the sheet renders and the same school consequences
+  (Ide 5th Dan, Yogo Warden 3rd Dan, Matsu 3rd Dan) the sheet applies. No void rule lives in the
+  command layer.
+- **All-or-nothing by ordering, not by rollback**: every check that can refuse (unknown skill, knack
+  not held, no edit access, Discordant, cannot afford it, over the per-roll cap, cannot pay an
+  activation cost) runs BEFORE any dice are rolled or anything is changed, and each command commits
+  exactly once, at the end - the spend, the round, and the `RollHistory` row together. Refusals are
+  ephemeral, name the number (points held, or the cap), and say nothing was rolled.
+- **The activation point comes first.** `/commune` reserves one point via the formula's
+  `requires_void_point`, and an optional `void:k` is checked against what REMAINS: cap 3 holding 2
+  may put exactly 1 into the roll. It does not lower the cap. Same order as the sheet's
+  `computeVoidOptions(reserve)`; there are comments at both points because this is the kind of
+  ordering a later edit silently inverts.
+- **`/initiative`** calls `roll_engine.execute_initiative` then `tracking.start_combat_round` - the
+  server-side definition of the sheet's `setActionDice`: new dice replace the old, all unspent;
+  `PER_ROUND_STATE_KEYS` are cleared (Mantis round state, `kakita_5th_dan_used`); a Priest at 5th
+  Dan gets conviction back; `precepts_pool`, banked bonuses and per-adventure counters survive. It
+  takes **no void option** (`rules/03-combat.md`: "without spending void points") and always rolls
+  the default variant (a Togashi gets the normal roll plus one athletics-only die).
+- **The invoker must be able to edit the character** (`_require_edit_access`). Resolution only ever
+  returns an owned or GM-pinned character, which already implies it - the explicit check is what
+  stops a later change to resolution from quietly becoming a write hole.
+- A GM rolling on a pinned test character **still spends that character's void** even though the
+  roll leaves no history row: the no-history rule is about the record, not about the dice.
+- Every write moves `tracking_rev`, so an open sheet tab becomes stale instead of overwriting it.
+
+#### What gets posted (gm-assistant pins these)
+
+| roll | line |
+|---|---|
+| plain skill | `**Name**: **31** Sincerity@3` |
+| with void | `**Name**: **38** Sincerity@3 (1 void)` |
+| knack | `**Name**: **24** Oppose Social (Air)` - the formula label, no `@rank` |
+| commune | `**Name**: **24** Commune (Water) (1 void to activate)`, or `(1 void to activate, 2 void)` |
+| initiative | `**Name** rolls initiative - action dice: 2, 5, 7` |
+
+**Any spend annotation stays inside parentheses** - gm-assistant strips `(...)` spans before parsing,
+so a bracketed void note cannot be misread as a second roll - and the initiative line deliberately
+puts no bare number directly before a word. Initiative's card has `show_total: false`.
 
 #### How a command flows
 
@@ -562,22 +646,26 @@ always-on process**. Discord delivers commands as signed HTTPS POSTs.
 
 #### Other decisions
 
-- **Command name -> roll key** is `SKILLS`: `/etiquette` rolls `skill:etiquette`. Only commands
-  actually registered with Discord are reachable. Per-skill commands (rather than one `/roll
-  <skill>`) because Discord fuzzy-matches names, so `/eti` finds it; 18 skills is far under the
-  100-per-scope cap. Knacks would become `/discern-honor` - names must be lowercase, no spaces.
-- **The roll is the unconditional one.** No void spends, no Lucky reroll, no post-roll
-  discretionary bonuses - those are interactive choices the modal exists to ask about, and a
-  slash command has nobody to ask. Everything the formula layer applies automatically (school
-  techniques, advantages, Impaired suppressing the 10s reroll) is already in the formula and so
-  is already in the roll. Buttons on the response are the natural next step, mapping onto the
-  existing post-roll `PATCH`.
+- **Per-skill commands AND `/roll`.** Per-skill because Discord fuzzy-matches names, so `/eti`
+  finds `/etiquette`; `/roll` for players who would rather pick from one list.
+- **Nothing decided AFTER seeing the dice.** No Lucky reroll, no free raises, no Conviction, no
+  Otherworldliness - the GM's instruction is that the player marks those on the sheet afterwards,
+  and the row stays amendable there through the usual `PATCH /characters/{id}/rolls/{roll_id}`.
+  Pre-roll void is the one choice a command takes, because it can be named up front. Everything the
+  formula layer applies automatically (school techniques, advantages, Impaired suppressing the 10s
+  reroll) is already in the formula. Two automatic rules lived ONLY in the browser and were added
+  to `roll_engine` when the commands grew: Shosuro 5th Dan's lowest-three-dice bonus and the
+  "Capped at N by ..." card bullet.
 - **`app/services/roll_engine.py` is the Python mirror of the browser's roller.** It reuses
   `build_all_roll_formulas` for every rules decision and only turns a formula into dice and then
   into the existing payload shape. What it *does* duplicate is the small display layer in
   `roll_math.js` (the total cap, the "alternative totals" filtering) - a handful of `min()` calls
-  Python cannot call across. **Keep the two in step**; `tests/test_roll_engine.py` asserts the
-  same cases as `tests/js/roll_math.test.js`.
+  Python cannot call across - plus the 10k10 dice cap and the initiative arithmetic. **Keep the two
+  in step**: the total-cap cases are asserted in parallel by `tests/test_roll_engine.py` and
+  `tests/js/roll_math.test.js`, and the dice cap, void draw order and initiative arithmetic share
+  literal case tables in `tests/shared/`. **Known gap**: the sheet applies Mirumoto 5th Dan's +10
+  per void point to every roll, non-combat included; the server roller does not (the rule says
+  "combat rolls"). Left for the GM - see `discord-design/audit.md` A1.
 - **`app/services/party.py` is shared with the sheet.** Party-wide mechanics (Priest 2nd Dan's
   free raise, Daidoji 3rd Dan) feed `build_all_roll_formulas` through a party list whose
   hidden-member visibility rule is easy to get subtly wrong. `pages.py` and the bot both call it,
@@ -595,16 +683,20 @@ always-on process**. Discord delivers commands as signed HTTPS POSTs.
 +a` first):
 
 ```bash
-# Bulk-overwrite the test guild's command set (instant; global takes ~1 hour)
+# Bulk-overwrite the test guild's command set (instant). Test guild FIRST.
 python3 scripts/register_discord_commands.py --commands --guild "$DISCORD_TEST_GUILD_ID"
+# Then globally (about an hour to propagate)
+python3 scripts/register_discord_commands.py --commands --global
 # Point Discord at this app. The app must already be DEPLOYED - Discord
 # validates the URL by PINGing it and requiring a signed PONG.
 python3 scripts/register_discord_commands.py --endpoint \
     --url https://l7r-character-sheet.fly.dev/discord/interactions
 ```
 
-`--skills all` registers one command per skill; the default is just `/etiquette`. Bulk overwrite
-means the guild ends up with exactly what is listed, so anything omitted is removed.
+The full derived set is registered by default; `--only etiquette,roll` sends a subset, and `--list`
+prints what would be sent. Bulk overwrite means the scope ends up with exactly what was sent, so
+anything omitted is removed. **Deploy before registering**: a registered command the deployed app
+does not know answers "I do not know how to roll".
 
 The bot is invited with scopes `bot` AND `applications.commands` (the second is what makes the
 commands visible) and `permissions=52224` (View Channel, Send Messages, Embed Links, Attach

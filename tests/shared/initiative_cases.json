@@ -1,0 +1,20 @@
+{
+  "_comment": "ONE table of cases for the initiative arithmetic, run by BOTH tests/test_roll_engine.py (roll_engine.py: initiative_sort_value / initiative_action_values) and tests/js/shared_cases.test.js (roll_math.js: initiativeSortValue / initiativeActionValues). The sheet rolls initiative in the browser and /initiative rolls it on the server; R2.1 of the slash-command requirements is that the same dice give the same action dice either way.",
+  "sort_value": [
+    {"name": "an ordinary die sorts by its value", "args": [7, false], "want": 7},
+    {"name": "an ordinary 10 sorts last", "args": [10, false], "want": 10},
+    {"name": "a Kakita 10 is Phase 0 and sorts first", "args": [10, true], "want": 0},
+    {"name": "a Kakita non-10 is unchanged", "args": [9, true], "want": 9}
+  ],
+  "action_values": [
+    {"name": "no school: just sorted", "kept": [7, 2, 5], "flags": {}, "want": [2, 5, 7]},
+    {"name": "empty", "kept": [], "flags": {"shinjo_4th_dan": true, "hiruma_4th_dan": true}, "want": []},
+    {"name": "Hiruma 4th Dan lowers each by 2, never below 1", "kept": [1, 2, 3, 8], "flags": {"hiruma_4th_dan": true}, "want": [1, 1, 1, 6]},
+    {"name": "Shinjo 4th Dan turns the highest into a 1", "kept": [3, 6, 9], "flags": {"shinjo_4th_dan": true}, "want": [1, 3, 6]},
+    {"name": "Shinjo with a single die", "kept": [8], "flags": {"shinjo_4th_dan": true}, "want": [1]},
+    {"name": "Kakita 10s become Phase 0", "kept": [10, 4, 10], "flags": {"kakita_phase_zero": true}, "want": [0, 0, 4]},
+    {"name": "Kakita without a 10 is unchanged", "kept": [9, 4], "flags": {"kakita_phase_zero": true}, "want": [4, 9]},
+    {"name": "order matters: Hiruma runs before Kakita, so a 10 becomes 8 not 0", "kept": [10, 3], "flags": {"hiruma_4th_dan": true, "kakita_phase_zero": true}, "want": [1, 8]},
+    {"name": "unrelated formula keys are ignored", "kept": [4, 1], "flags": {"rolled": 5, "is_initiative": true, "togashi_athletics_extra_die": true}, "want": [1, 4]}
+  ]
+}

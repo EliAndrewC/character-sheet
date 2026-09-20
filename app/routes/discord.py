@@ -32,8 +32,10 @@ from app.database import get_db
 from app.services import discord_api
 from app.services.discord_commands import (
     CommandError,
+    autocomplete_skills,
+    focused_option_value,
     invoker_discord_id,
-    run_roll_command,
+    run_command,
 )
 
 
@@ -46,9 +48,11 @@ router = APIRouter(prefix="/discord", tags=["discord"])
 # https://discord.com/developers/docs/interactions/receiving-and-responding
 TYPE_PING = 1
 TYPE_APPLICATION_COMMAND = 2
+TYPE_AUTOCOMPLETE = 4
 RESPONSE_PONG = 1
 RESPONSE_MESSAGE = 4
 RESPONSE_DEFERRED_MESSAGE = 5
+RESPONSE_AUTOCOMPLETE_RESULT = 8
 
 #: MessageFlags.EPHEMERAL - only the invoker sees it. Used for every error,
 #: so a mistyped command or an unlinked account does not clutter the
@@ -85,8 +89,8 @@ def deliver_card(interaction_token: str, content: str, payload: dict) -> None:
 async def interactions(request: Request, db: Session = Depends(get_db)):
     """Receive one Discord interaction.
 
-    Answers ``PONG`` to Discord's liveness PING, runs a registered roll
-    command, and rejects anything unsigned. Unknown interaction types are
+    Answers ``PONG`` to Discord's liveness PING, completes ``/roll``'s skill
+    option, runs a registered command, and rejects anything unsigned. Unknown interaction types are
     acknowledged with an ephemeral note rather than an error status, so a
     future Discord feature we have not implemented does not surface as a
     red failure in the client.
@@ -117,6 +121,16 @@ async def interactions(request: Request, db: Session = Depends(get_db)):
     kind = interaction.get("type")
     if kind == TYPE_PING:
         return JSONResponse({"type": RESPONSE_PONG})
+    if kind == TYPE_AUTOCOMPLETE:
+        # /roll's skill option. Cannot be deferred and must answer inside 3
+        # seconds; it is a filter over 18 names, touches no database, and
+        # never errors at the player (autocomplete_skills sees to that).
+        return JSONResponse({
+            "type": RESPONSE_AUTOCOMPLETE_RESULT,
+            "data": {"choices": autocomplete_skills(
+                focused_option_value(interaction.get("data") or {})
+            )},
+        })
     if kind != TYPE_APPLICATION_COMMAND:
         return _ephemeral("That interaction type is not supported yet.")
 
@@ -124,9 +138,10 @@ async def interactions(request: Request, db: Session = Depends(get_db)):
     if not discord_id:
         return _ephemeral("I could not tell who invoked that command.")
 
-    name = (interaction.get("data") or {}).get("name") or ""
     try:
-        content, payload = run_roll_command(db, name, discord_id)
+        content, payload = run_command(
+            db, interaction.get("data") or {}, discord_id,
+        )
     except CommandError as exc:
         return _ephemeral(str(exc))
 

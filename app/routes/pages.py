@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import get_db, prefetch_body
 from app.game_data import (
     ADVANTAGES,
     CAMPAIGN_ADVANTAGES,
@@ -62,7 +62,9 @@ from app.services.status import (
     public_money_state,
     round_to_hundredth,
 )
+from app.services.tracking import conviction_refreshes_each_round
 from app.services.versions import compute_version_diff
+from app.services.void_spend import spend_consequences, void_limits
 from app.services.xp import (
     calculate_xp_breakdown,
     editor_xp_view,
@@ -70,7 +72,7 @@ from app.services.xp import (
     validate_character,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(prefetch_body)])
 
 
 def _templates():
@@ -744,24 +746,13 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
                 "per_day": True,
             })
 
-    # Compute void points max and void-spend config
-    ring_vals = [char_dict["rings"].get(r, 2) for r in ("Air", "Fire", "Earth", "Water", "Void")]
-    if character.school in ("shugenja", "isawa_ishi"):
-        from app.game_data import void_points_max_shugenja
-        school_rank = min(char_knacks[k]["rank"] for k in char_knacks) if char_knacks else 0
-        void_max = void_points_max_shugenja(
-            char_dict["rings"], school_rank
-        )
-        void_spend_cap = min(ring_vals) - 1  # lowest ring - 1
-    else:
-        void_max = min(ring_vals)
-        void_spend_cap = void_max
-    if "worldliness" in char_knacks:
-        worldliness_max = char_knacks["worldliness"]["rank"]
-    elif "worldliness" in char_foreign_knacks:
-        worldliness_max = char_foreign_knacks["worldliness"]["rank"]
-    else:
-        worldliness_max = 0
+    # Void points max and the per-roll spend cap. Computed by the void-spend
+    # service, which is also what a server-side spend (a Discord roll
+    # command) checks against - the page and the server cannot disagree.
+    void_limits_now = void_limits(char_dict)
+    void_max = void_limits_now["void_max"]
+    void_spend_cap = void_limits_now["cap"]
+    worldliness_max = void_limits_now["worldliness_max"]
     # Mirumoto 5th Dan: VP provides +10 on combat rolls (in addition to +1k1)
     mirumoto_5th_dan_bonus = 10 if character.school == "mirumoto_bushi" and dan >= 5 else 0
     # Akodo 4th Dan: VP on wound checks also gives a free raise (+5 each)
@@ -771,7 +762,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
 
     attack_skill = char_dict.get("attack", 1)
     void_spend_config = {
-        "cap": max(0, void_spend_cap),
+        "cap": void_spend_cap,
         "worldliness_max": worldliness_max,
         "combat_vp_flat_bonus": mirumoto_5th_dan_bonus,
         "wc_vp_free_raise": akodo_4th_dan_wc_raise or yogo_4th_dan_wc_raise,
@@ -783,14 +774,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "togashi_heal_sw": character.school == "togashi_ise_zumi" and dan >= 5,
         # Hida 4th Dan: trade 2 SW to reset light wounds to 0
         "hida_trade_sw": character.school == "hida_bushi" and dan >= 4,
-        # Ide 5th Dan: gain temp VP when spending non-technique VP
-        "ide_temp_vp_on_spend": character.school == "ide_diplomat" and dan >= 5,
-        # Yogo Warden 3rd Dan: each VP spent reduces light wounds by 2*attack
-        "yogo_vp_heals_lw": character.school == "yogo_warden" and dan >= 3,
-        "yogo_vp_heal_amount": 2 * attack_skill if character.school == "yogo_warden" and dan >= 3 else 0,
-        # Matsu 3rd Dan: spend VP to bank 3*attack for future wound check bonus
-        "matsu_vp_wc_bonus": character.school == "matsu_bushi" and dan >= 3,
-        "matsu_vp_wc_amount": 3 * attack_skill if character.school == "matsu_bushi" and dan >= 3 else 0,
+        # What spending a void point triggers (Ide 5th Dan temp VP, Yogo
+        # Warden 3rd Dan light-wound heal, Matsu 3rd Dan banked wound-check
+        # bonus). Shared with the server-side spend so both apply one set.
+        **spend_consequences(char_dict),
         # Matsu 5th Dan: defender LW reset to 15 after dealing serious wounds
         "matsu_lw_reset_15": character.school == "matsu_bushi" and dan >= 5,
         # Akodo 5th Dan: spend VP after damage to deal 10 LW per VP back
@@ -932,7 +919,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "mirumoto_round_points_max": 2 * attack_skill if character.school == "mirumoto_bushi" and dan >= 3 else 0,
         # Priest 5th Dan: conviction pool refreshes after each combat round
         # (drives the per-round reset fired by initiative rolls).
-        "priest_round_conviction_refresh": character.school == "priest" and dan >= 5,
+        "priest_round_conviction_refresh": conviction_refreshes_each_round(char_dict),
         # Priest Special: the 10 rituals include "Bless conversation topic" and
         # "Bless research", each a 2k1 roll added to someone else's roll.
         # Merchant: spend a void point to reroll any roll relating to your

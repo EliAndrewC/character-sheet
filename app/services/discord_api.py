@@ -221,6 +221,19 @@ def put_guild_commands(guild_id: str, commands: List[dict]) -> List[dict]:
     return response.json()
 
 
+def put_global_commands(commands: List[dict]) -> List[dict]:
+    """Replace the application's GLOBAL command set (bulk overwrite).
+
+    Global commands reach every server the bot is in, and take about an hour
+    to propagate - register in the test guild first. Raises on failure.
+    """
+    url = f"{API_BASE}/applications/{application_id()}/commands"
+    with httpx.Client(timeout=TIMEOUT_SEC) as http:
+        response = http.put(url, json=commands, headers=_bot_headers())
+    response.raise_for_status()
+    return response.json()
+
+
 def set_interactions_endpoint_url(url: str) -> dict:
     """Point the application's interactions endpoint at ``url``.
 

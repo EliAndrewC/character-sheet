@@ -761,6 +761,45 @@
       return { keepReroll: !originalHigher, originalHigher: originalHigher };
     },
 
+    // ----------------------------------------------------------------- //
+    // Initiative. The server rolls initiative too (the Discord            //
+    // /initiative command, app/services/roll_engine.py), so both of these //
+    // are pinned to tests/shared/initiative_cases.json, which the Python  //
+    // and the Node suites each run.                                       //
+    // ----------------------------------------------------------------- //
+
+    /**
+     * The value an initiative die SORTS by when choosing which dice to keep.
+     * Initiative keeps the lowest dice. For a Kakita Duelist a 10 is Phase 0,
+     * so it must sort ahead of everything - otherwise keep-lowest discards
+     * the very die the ability exists to give them.
+     */
+    initiativeSortValue: function (value, kakitaPhaseZero) {
+      return (kakitaPhaseZero && value === 10) ? 0 : value;
+    },
+
+    /**
+     * Kept initiative dice -> the phases the character acts in, ascending.
+     * flags: {hiruma_4th_dan, shinjo_4th_dan, kakita_phase_zero} as emitted
+     * by build_initiative_formula. Order matters and is part of the rule:
+     * Hiruma lowers every die by 2 (min 1), THEN Shinjo sets the highest
+     * to 1, THEN a Kakita 10 becomes Phase 0.
+     */
+    initiativeActionValues: function (keptValues, flags) {
+      flags = flags || {};
+      var actions = (keptValues || []).slice().sort(function (a, b) { return a - b; });
+      if (flags.hiruma_4th_dan) {
+        actions = actions.map(function (v) { return Math.max(1, v - 2); });
+      }
+      if (flags.shinjo_4th_dan && actions.length > 0) {
+        actions[actions.length - 1] = 1;
+      }
+      if (flags.kakita_phase_zero) {
+        actions = actions.map(function (v) { return v === 10 ? 0 : v; });
+      }
+      return actions.sort(function (a, b) { return a - b; });
+    },
+
     /**
      * Draw ``count`` void points out of the three pools a character can spend
      * from, in the sheet's standing priority order: temporary points first

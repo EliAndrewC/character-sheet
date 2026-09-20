@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import get_db, prefetch_body
 from app.models import Character, RollHistory, User
 from app.services.auth import (
     can_edit_character,
@@ -31,7 +31,9 @@ from app.services.rolls_history import (
 )
 
 
-router = APIRouter(prefix="/characters", tags=["rolls"])
+router = APIRouter(
+    prefix="/characters", tags=["rolls"], dependencies=[Depends(prefetch_body)],
+)
 
 
 def _load_character(db: Session, char_id: int) -> tuple[Character, User]:

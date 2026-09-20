@@ -71,7 +71,7 @@
 
 **Status:** Fully implemented.
 - Ring raise (+1 Fire, cost discount, max increase to 7) is fully implemented via `enforceFourthDanRing()` in the editor and `calculate_ring_xp()` server-side.
-- "Free raise on any future attack after feint" is implemented.
+- "Free raise on any future attack after feint" is implemented. The post-roll hook that banks it is guarded on `key === 'knack:feint'`; until 2026-09-20 it had no guard and banked +5 after EVERY roll (found by the front-end audit, `discord-design/audit.md` A2).
   - Server: `app/routes/pages.py` passes `bayushi_post_feint_raise: true` in school_abilities.
   - Client: `app/templates/character/sheet.html` shows a "Bank free raise for next attack (+5)" button after feint rolls, and applies the +5 in `rollAttack()`.
 
