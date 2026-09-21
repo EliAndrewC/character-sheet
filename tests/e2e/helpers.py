@@ -208,3 +208,33 @@ def wait_xp_changed(page, field, baseline, timeout=6000):
         arg=[field, baseline],
         timeout=timeout,
     )
+
+
+_API_AUTOSAVE_JS = """async ([cid, body]) => {
+    const post = (b) => fetch('/characters/' + cid + '/autosave', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(b),
+    });
+    let resp = await post(body);
+    if (resp.status === 409) {
+        const data = await resp.json();
+        if (data && data.error === 'stale') {
+            resp = await post({...body, build_rev: data.build_rev});
+        }
+    }
+    return resp.status;
+}"""
+
+
+def api_autosave(page, char_id, body):
+    """POST a raw autosave body from the page, as a test-setup shortcut.
+
+    POST /autosave refuses a write that does not name the build revision it
+    was made from (see app/services/tracking.py), so a bare ``fetch`` is
+    refused. This does what an API client that means to overwrite would do:
+    it takes the current revision from the refusal and saves against it.
+    Returns the final HTTP status. The open page is NOT told about the write,
+    so reload it before driving the editor again.
+    """
+    return page.evaluate(_API_AUTOSAVE_JS, [str(char_id), body])

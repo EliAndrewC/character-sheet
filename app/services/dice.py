@@ -2139,6 +2139,8 @@ def build_all_roll_formulas(
     discordant = "discordant" in (character_data.get("disadvantages") or [])
     for key, fdict in out.items():
         fdict["void_blocked"] = discordant and _discordant_blocks_void(key)
+        # Same approach for "is this a combat roll" - see is_combat_roll.
+        fdict["is_combat_roll"] = is_combat_roll(key)
 
     # Hida Bushi 3rd Dan (rules/04-schools.md): "You may re-roll 2X dice on
     # each counterattack roll or X dice on any other type of attack roll ...
@@ -2169,6 +2171,32 @@ def build_all_roll_formulas(
     _annotate_wave_man(character_data, out)
 
     return out
+
+
+#: Knacks whose rolls are combat rolls, in every variant (``knack:iaijutsu``,
+#: ``knack:iaijutsu:strike``, ...).
+_COMBAT_KNACK_IDS = ("counterattack", "double_attack", "lunge", "feint", "iaijutsu")
+
+
+def is_combat_roll(key: str) -> bool:
+    """Whether ``key`` is a combat roll.
+
+    Mirumoto Bushi 5th Dan: "Your void points provide an extra +10 when spent
+    on COMBAT rolls." Attacks of every kind, parries, wound checks, feints and
+    iaijutsu are; skills, bare ring rolls, athletics feats, initiative and
+    every other knack are not. The athletics variants of attack and parry ARE
+    combat - they are an attack and a parry - while ``athletics:<Ring>`` is a
+    feat of athletics and is not.
+
+    Decided here, by roll key, and stamped on every formula so the sheet reads
+    the answer instead of keeping its own list. It used to have no list at
+    all: its generic roller added the +10 to whatever it rolled, a Sincerity
+    roll included.
+    """
+    if key in ("attack", "parry", "wound_check", "athletics:attack", "athletics:parry"):
+        return True
+    kind, _, rest = key.partition(":")
+    return kind == "knack" and rest.split(":")[0] in _COMBAT_KNACK_IDS
 
 
 def _discordant_blocks_void(key: str) -> bool:

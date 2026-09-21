@@ -1,6 +1,6 @@
 """E2E: Editor field controls — min/max, disabled states, recognition halving, rank lock."""
 
-from tests.e2e.helpers import select_school, click_plus, click_minus, start_new_character, apply_changes, wait_xp, wait_xp_changed
+from tests.e2e.helpers import select_school, click_plus, click_minus, start_new_character, apply_changes, wait_xp, wait_xp_changed, api_autosave
 import pytest
 
 pytestmark = [pytest.mark.rings, pytest.mark.knacks, pytest.mark.combat_skills, pytest.mark.skills, pytest.mark.honor_rank_recognition, pytest.mark.advantages]
@@ -716,32 +716,19 @@ def test_corrupt_state_clamps_on_edit_page_load(page, live_server_url):
     Water=6 sticks)."""
     _go_to_editor(page, live_server_url)
     char_id = page.url.rstrip("/").split("/")[-2]
-    page.evaluate(
-        """async (cid) => {
-            // Step 1: persist Dan 4 + Water 6 (legal at Dan 4).
-            await fetch('/characters/' + cid + '/autosave', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    school: 'akodo_bushi',
-                    school_ring_choice: 'Water',
-                    rings: {Air: 2, Fire: 2, Earth: 2, Water: 6, Void: 2},
-                    knacks: {double_attack: 4, feint: 4, iaijutsu: 4},
-                }),
-            });
-            // Step 2: drop Dan to 3 without touching rings - the
-            // server falls back to the stored Water=6, leaving it
-            // in place even though it's now illegal.
-            await fetch('/characters/' + cid + '/autosave', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    knacks: {double_attack: 3, feint: 3, iaijutsu: 3},
-                }),
-            });
-        }""",
-        char_id,
-    )
+    # Step 1: persist Dan 4 + Water 6 (legal at Dan 4).
+    assert api_autosave(page, char_id, {
+        "school": "akodo_bushi",
+        "school_ring_choice": "Water",
+        "rings": {"Air": 2, "Fire": 2, "Earth": 2, "Water": 6, "Void": 2},
+        "knacks": {"double_attack": 4, "feint": 4, "iaijutsu": 4},
+    }) == 200
+    # Step 2: drop Dan to 3 without touching rings - the server falls back
+    # to the stored Water=6, leaving it in place even though it's now
+    # illegal.
+    assert api_autosave(page, char_id, {
+        "knacks": {"double_attack": 3, "feint": 3, "iaijutsu": 3},
+    }) == 200
     page.reload()
     page.wait_for_selector('input[name="name"]')
     page.wait_for_timeout(400)

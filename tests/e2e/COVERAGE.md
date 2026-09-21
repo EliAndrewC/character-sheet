@@ -589,6 +589,7 @@ The three failures were:
 - [x] 2nd Dan behavioral parry bonus -> `test_school_abilities.py::test_mirumoto_2nd_dan_behavioral`
 - [x] Parry roll adds temp VP -> `test_school_abilities.py::test_mirumoto_parry_temp_vp_behavioral`
 - [x] 5th Dan VP spending +10 on combat rolls -> `test_school_abilities.py::test_mirumoto_5th_dan_vp_plus_10`
+- [x] 5th Dan VP spending gives NO +10 on a non-combat roll: a skill roll with 1 void spent keeps its flat bonus, the 5th Dan bullet stays hidden, and the formulas carry `is_combat_roll` (false for the skill, true for parry) -> `test_school_abilities.py::test_mirumoto_5th_dan_vp_no_bonus_on_a_skill_roll`
 - [x] 5th Dan +10/VP reflected in attack and wound check probability charts -> `test_school_abilities.py::test_mirumoto_5th_dan_prob_charts_include_bonus`
 - [x] 4th Dan probability charts do NOT include +10/VP bonus -> `test_school_abilities.py::test_mirumoto_4th_dan_prob_charts_no_bonus`
 - [x] 4th Dan failed parry reduced bonus damage dice -> `test_school_abilities.py::test_mirumoto_4th_dan_parry_reduction_behavioral`
@@ -1228,6 +1229,16 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 - [x] 4xx failures are terminal, no retry → `test_autosave_retry.py::test_4xx_failure_is_terminal_no_retry`
 - [x] beforeunload warns when save failed → `test_autosave_retry.py::test_beforeunload_warns_when_save_failed`
 
+### Concurrent editors (build revision; edit.html conflict modal, _enqueueWrite, discard / apply)
+
+- [x] An autosave from a tab that has not seen another editor's save is refused (409): the "changed somewhere else" modal opens, nothing is overwritten on the server, and this tab's text is left alone → `test_editor_conflict.py::test_stale_autosave_is_refused_and_the_editor_asks`
+- [x] "Decide later" closes the modal; autosave stays paused (no further /autosave requests on edit), the status reads "Not saved - changed elsewhere", and the Resolve button reopens the modal → `test_editor_conflict.py::test_saving_stays_paused_until_the_user_decides`
+- [x] "Load the latest version" reloads to the other editor's version with no beforeunload dialog, and the reloaded tab saves normally → `test_editor_conflict.py::test_load_the_latest_version`
+- [x] "Keep my version" saves this tab's build over the other, hides the modal and the Resolve button, and un-pauses autosave → `test_editor_conflict.py::test_keep_my_version`
+- [x] Apply Changes is refused (409, no redirect, conflict modal) when another editor saved after this tab's last save → `test_editor_conflict.py::test_apply_refuses_a_draft_this_tab_has_not_seen`
+- [x] Discard Changes is refused when another editor saved after the diff list was drawn: nothing is discarded, the stale notice shows, the list refreshes to include their change, and confirming again discards → `test_editor_conflict.py::test_discard_refuses_a_change_that_was_never_listed`
+- [x] The conflict modal's three buttons all fit a 375x700 viewport → `test_editor_conflict.py::test_conflict_modal_fits_a_phone_screen`
+
 ## Character Editor — Apply Changes Modal
 
 - [x] Apply Changes button opens modal → `test_publish_revert.py::test_apply_redirects_to_view_sheet`
@@ -1572,7 +1583,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `advantages` | Advantage/disadvantage checkboxes | `test_live_xp.py`, `test_editor_controls.py` |
 | `exclusive_pairs` | Mutually exclusive pairs | `test_exclusive_pairs.py` |
 | `advantage_details` | Detail fields (text, skills, dropdowns) | `test_advantage_details.py` |
-| `autosave` | Auto-save, save status | `test_edit_character.py` |
+| `autosave` | Auto-save, save status, concurrent editors | `test_edit_character.py`, `test_autosave_retry.py`, `test_editor_conflict.py` |
 | `apply_changes` | Apply Changes modal | `test_create_character.py`, `test_publish_revert.py`, `test_apply_modal.py` |
 | `permissions` | Edit/delete visibility, non-editor | `test_permissions.py` |
 | `banners` | Draft status banners | `test_banners.py` |

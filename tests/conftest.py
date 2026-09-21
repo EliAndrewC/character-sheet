@@ -39,37 +39,41 @@ def db(engine):
 
 
 def _track_like_a_fresh_tab(test_client, session_factory):
-    """Make ``client.post(".../track", json={...})`` behave like a sheet tab
-    that has just loaded: if the body names no ``rev``, fill in the
-    character's current tracking revision.
+    """Make ``client.post(".../track" | ".../autosave", json={...})`` behave
+    like a tab that has just loaded: if the body names no revision, fill in
+    the character's current one (``rev`` for /track, ``build_rev`` for
+    /autosave).
 
-    POST /track refuses a write that does not say which revision it was
-    built on (optimistic concurrency, see app/services/tracking.py). The
-    hundred-odd tests that exercise what /track DOES with a field are not
-    about that handshake, and a real tab always has a current revision to
-    send, so they get one here. Tests about the handshake itself pass
-    ``rev`` explicitly, or use ``client.request("POST", ...)``, which this
-    does not touch.
+    Both endpoints refuse a whole-object write that does not say which
+    revision it was built on (optimistic concurrency, see
+    app/services/tracking.py). The hundreds of tests that exercise what they
+    DO with a field are not about that handshake, and a real tab always has
+    a current revision to send, so they get one here. Tests about the
+    handshake itself pass the revision explicitly, or use
+    ``client.request("POST", ...)``, which this does not touch.
     """
     import re
 
     from app.models import Character
 
     real_post = test_client.post
+    keys = {"track": ("rev", "tracking_rev"), "autosave": ("build_rev", "build_rev")}
 
     def post(url, *args, **kwargs):
         body = kwargs.get("json")
-        match = re.fullmatch(r"/characters/(\d+)/track", str(url))
-        if match and isinstance(body, dict) and "rev" not in body:
-            session = session_factory()
-            try:
-                row = session.query(Character).filter(
-                    Character.id == int(match.group(1))
-                ).first()
-                rev = (row.tracking_rev or 0) if row else 0
-            finally:
-                session.close()
-            kwargs["json"] = {**body, "rev": rev}
+        match = re.fullmatch(r"/characters/(\d+)/(track|autosave)", str(url))
+        if match and isinstance(body, dict):
+            key, column = keys[match.group(2)]
+            if key not in body:
+                session = session_factory()
+                try:
+                    row = session.query(Character).filter(
+                        Character.id == int(match.group(1))
+                    ).first()
+                    rev = (getattr(row, column) or 0) if row else 0
+                finally:
+                    session.close()
+                kwargs["json"] = {**body, key: rev}
         return real_post(url, *args, **kwargs)
 
     test_client.post = post

@@ -64,7 +64,11 @@ from app.services.status import (
 )
 from app.services.tracking import conviction_refreshes_each_round
 from app.services.versions import compute_version_diff
-from app.services.void_spend import spend_consequences, void_limits
+from app.services.void_spend import (
+    combat_vp_flat_bonus,
+    spend_consequences,
+    void_limits,
+)
 from app.services.xp import (
     calculate_xp_breakdown,
     editor_xp_view,
@@ -754,7 +758,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     void_spend_cap = void_limits_now["cap"]
     worldliness_max = void_limits_now["worldliness_max"]
     # Mirumoto 5th Dan: VP provides +10 on combat rolls (in addition to +1k1)
-    mirumoto_5th_dan_bonus = 10 if character.school == "mirumoto_bushi" and dan >= 5 else 0
+    mirumoto_5th_dan_bonus = combat_vp_flat_bonus(char_dict)
     # Akodo 4th Dan: VP on wound checks also gives a free raise (+5 each)
     akodo_4th_dan_wc_raise = character.school == "akodo_bushi" and dan >= 4
     # Yogo Warden 4th Dan: VP on wound checks also gives a free raise (+5 each)

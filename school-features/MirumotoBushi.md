@@ -77,11 +77,14 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `combat_vp_flat_bonus: 10` in void_spend_config when mirumoto_bushi and dan >= 5.
-- Client: `app/templates/character/sheet.html` applies +10 per VP flat bonus on attack, wound check, and duel VP spending paths.
+- Amount: `void_spend.combat_vp_flat_bonus` (one source for `pages.py` and `roll_engine`).
+- Which rolls: `dice.is_combat_roll`, stamped on every formula as `is_combat_roll`. Combat = attack, double attack, counterattack, lunge, parry, wound check, `athletics:attack`, `athletics:parry`, feint, iaijutsu (every variant). NOT combat = skills, bare ring rolls, `athletics:<Ring>` feats, initiative, every other knack.
+- Client: the attack modal, parry modal, wound check and duel flows apply it; the GENERIC roller (`executeRoll`) applies it only when the formula says `is_combat_roll`. **Until 2026-09-21 the generic roller applied it to every roll** - a Sincerity roll with a void point got +10 - which the GM confirmed as a bug.
+- Tests: `tests/test_dice.py::TestCombatRollFlag`, `tests/test_roll_engine.py` (the `mirumoto_5th_dan` cases), clicktests `test_mirumoto_5th_dan_vp_plus_10` (combat) and `test_mirumoto_5th_dan_vp_no_bonus_on_a_skill_roll` (not).
 
 **Questions (ANSWERED):**
 - The +10 is IN ADDITION to the normal +1k1 from void points. So each VP = +1k1 + 10 flat.
-- "Combat rolls" includes wound checks (still need to confirm with user which specific roll types qualify).
+- "Combat rolls" includes wound checks. The full list is above; the GM ruled on 2026-09-21 that non-combat rolls must not get it.
 - Does this apply to temporary void points as well?
 
 No unit test for the pages.py flag (it's a template context variable), but the behavior is tested through the UI.

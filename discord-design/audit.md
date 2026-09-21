@@ -60,15 +60,20 @@ the server to roll. It would remove the duplicate, but it would put a round trip
 animation and would need a no-persist mode for non-editors. The shared case tables are the cheaper
 way to keep two copies honest.
 
-## A1. Known discrepancy left for the GM **[verified]**
+## A1. Mirumoto 5th Dan applied to every roll **[verified, fixed 2026-09-21]**
 
-**Mirumoto 5th Dan "+10 per void point on combat rolls"** is applied by the sheet's `executeRoll`
-(`_dice_js.html`, the `combat_vp_flat_bonus` block) to **every** roll that goes through it - a
-Sincerity roll included. `school-features/MirumotoBushi.md` quotes the rule as "on combat rolls".
-The server-side roller does NOT add it, because every roll a slash command can make is non-combat.
-So for a Mirumoto at 5th Dan, `/sincerity void:1` and the same roll on the sheet differ by 10, and
-the sheet is the one that looks wrong. Not changed here: it is a rules call on a school nobody asked
-about, and "fix" means deciding which roll keys count as combat. Flagged rather than guessed.
+**"Your void points provide an extra +10 when spent on combat rolls"** was applied by the sheet's
+generic roller (`executeRoll`) to **every** roll that went through it - a Sincerity roll included.
+The dedicated combat flows (attack modal, parry modal, wound check, duel) were always right; the
+generic path simply had no notion of "combat". The GM confirmed it as a bug.
+
+Fix: `dice.is_combat_roll(key)` decides it by roll key - attacks of every kind, parry, wound check,
+`athletics:attack` / `athletics:parry`, feint, and iaijutsu in every variant; NOT skills, bare ring
+rolls, `athletics:<Ring>` feats, initiative, or any other knack - and stamps `is_combat_roll` on
+every formula, the same way `void_blocked` is stamped. The sheet reads the flag; it keeps no list of
+its own. The amount comes from `void_spend.combat_vp_flat_bonus`, which `pages.py` and
+`roll_engine.execute_roll` both call, so the day a slash command can make a combat roll it already
+matches the sheet.
 
 ## A2. Bugs found while looking, and fixed
 
@@ -213,30 +218,52 @@ Decisions worth knowing:
 - **The tab that causes a server-side bump adopts the new revision** so it is not refused by its own
   action: `/spend-pcp` returns `tracking_rev`; Night's Rest reloads the page.
 
-## B2. Editor autosave - two editor tabs **[reported; NOT fixed]**
+## B2. Editor autosave - two editor tabs **[fixed 2026-09-21]**
 
 `POST /characters/{id}/autosave` sends effectively the whole build, and every key present is
 assigned. Two editor tabs (or a GM and a player who both have edit access): A raises Fire and
 autosaves; B, still holding Fire = 2, edits Honor and autosaves the whole build; A's raise is gone.
-The client itself is well built - trailing 1500 ms debounce, in-flight coalescing, a dirty flag
-re-armed across the fetch, a 30 s retry, a flush before navigate - so there is no same-tab drop
+The client itself was well built - trailing 1500 ms debounce, in-flight coalescing, a dirty flag
+re-armed across the fetch, a 30 s retry, a flush before navigate - so there was no same-tab drop
 here; `/track` was the outlier.
 
-`tracking_rev` does not cover this (build columns are not tracking columns, on purpose). **The same
-mechanism does**: a second counter, `build_rev`, same listener pattern over the build columns, sent
-with every autosave, 409 on mismatch. It is not done here because the RECOVERY is a different
-problem: a refused editor cannot silently adopt the server's build over text the user is in the
-middle of typing, so it needs a "changed elsewhere - reload / keep mine" prompt and a decision about
-what "keep mine" means. High severity, medium likelihood; the next thing to do in this area.
+**The fix: `Character.build_rev`**, the same mechanism as B1 with a separate counter, bumped by the
+same ORM listener whenever a column in `BUILD_COLUMNS` actually changes. Autosave requires
+`build_rev`; stale or missing is `409 {"error": "stale", "build_rev": N}` and nothing is written. A
+test fails if autosave ever starts writing a column that is not in `BUILD_COLUMNS`.
 
-One overlap with B1 **[reported]**: autosave writes `current_void_points` (it refills void to the
-ring maximum when rings change on an UNPUBLISHED character), so an editor tab and a sheet tab
-genuinely contend for that one column during character creation. That write now bumps
-`tracking_rev` like any other, so the sheet tab is refused rather than clobbering or being clobbered
-silently. The cleaner fix is to move that write out of autosave.
+**The recovery is deliberately NOT the sheet's.** A sheet tab adopts the server's state silently; an
+editor may be holding a sentence the user is halfway through typing. So on a 409 the editor stops
+autosaving (retrying would only be refused again), keeps its text, keeps the unload warning armed,
+and asks:
+- **Load the latest version** - reload; this tab's unsaved edits are lost, and the unload guard does
+  not second-guess the choice.
+- **Keep my version** - an ordinary save naming the revision the refusal reported. An informed
+  overwrite, which is the one thing that was never possible before: the overwrite used to be silent.
+- **Decide later** - closes the prompt; saving stays paused, the status reads "Not saved - changed
+  elsewhere", and a Resolve button reopens the prompt.
+
+Declined alternatives: a field-by-field merge (the payload is a whole build with interdependent
+fields - rings, school ring, knacks and XP - and a silent partial merge is exactly the class of
+surprise this removes); and showing a diff of "theirs vs mine" in the prompt (worth doing later; the
+server does not know what this tab's base was, so it needs the tab to keep its loaded snapshot).
+
+Details that are easy to get wrong:
+- **One tab must not refuse itself.** The award-source endpoint writes a build column from the same
+  tab on a different timer (600 ms vs 1500 ms). Every build-writing request from a tab goes through
+  one queue (`_enqueueWrite`) and adopts the returned `build_rev` before the next starts.
+  `/set-award-source` is an operation by id, so it is never refused; it just reports the revision.
+- **The dark secret does not move `build_rev`.** Autosave can neither read nor write it
+  (`merge_dark_secret` carries the persisted entry forward), so a stale autosave cannot lose it, and
+  the GM setting one must not throw a conflict at the player's editor over a field they cannot see.
+- **A separate counter on purpose**: a wound taken on the sheet cannot conflict with an editor tab.
+  The one genuine overlap is autosave refilling `current_void_points` while rings change on an
+  UNPUBLISHED character; that write moves `tracking_rev` like any other, so an open sheet tab is
+  refused rather than clobbering or being clobbered. Moving that write out of autosave is still the
+  cleaner fix.
 
 The legacy form endpoint `POST /characters/{id}` accepts a whole build with no check and is posted
-to by no template. Whoever adds `build_rev` should cover it or delete it.
+to by no template. **Still unguarded** - it should be deleted rather than taught the handshake.
 
 ## B3. Publish / discard / revert / PCP **[reported; partly fixed]**
 
@@ -247,9 +274,13 @@ to by no template. Whoever adds `build_rev` should cover it or delete it.
   `UniqueConstraint(character_id, version_number)` is the robust fix and was NOT added: creating a
   unique index on the production database fails if duplicates already exist, so it needs a look at
   the live data first.
-- **Discard can destroy more than the diff showed.** The confirm modal lists what will be lost; an
-  autosave from another editor after that list renders is discarded too, unlisted. Covered by
-  `build_rev` (B2): discard / revert / publish would name the revision the diff was computed against.
+- **Discard could destroy more than the diff showed: fixed.** `GET /draft-diff` now names the
+  `build_rev` it describes and `POST /discard` sends it back; if another editor saved in between,
+  nothing is discarded and the modal refreshes its list and asks again. **Publish** likewise names the
+  revision the tab last saved as, so the typed summary cannot describe a build the user never saw.
+  Both check the revision only when one is named - they are operations on server state, not
+  whole-object writes. **Revert is NOT guarded**: it is launched from the version history on the
+  sheet, which holds no copy of the build to be stale about; it restores a named version wholesale.
 
 ## B4. `/ally-conviction` and `/precepts-pool` **[partly fixed]**
 
@@ -305,11 +336,11 @@ A slash command's roll stays amendable on the sheet through that same `PATCH`, a
 
 ## B9. Does one mechanism cover the class? (A3 of the requirements)
 
-**No - three, each for a different shape of write, and picking the wrong one is its own bug:**
+**One mechanism per SHAPE of write - three shapes, and picking the wrong tool is its own bug:**
 
 | shape of write | right tool | where |
 |---|---|---|
-| a client posts a whole object it holds a copy of | a revision the write must name; refuse and hand back the current state | `/track` (done). Editor autosave, discard / revert / publish want the same with a separate `build_rev` (not done) |
+| a client posts a whole object it holds a copy of | a revision the write must name; refuse. What the refused writer does next differs: a sheet tab adopts the server's state, an editor asks the user | `/track` with `tracking_rev`; editor autosave, publish and discard with `build_rev` (both done) |
 | the server applies an operation (append, remove by id, +1) | make the read-modify-write atomic. NEVER a 409 - both operations should succeed | `prefetch_body` (done): the ledger, `/ally-conviction`, PCP, version numbering |
 | per-row records | neither; per-row sequencing if it ever matters | roll history (left) |
 

@@ -7,7 +7,7 @@ whoever saved last won, and a void point spent from Discord came back the
 next time the player clicked anything on a sheet they had open.
 
 ``Character.tracking_rev`` closes that. It moves whenever any tracking column
-changes (``models._bump_tracking_rev``, hooked at the ORM layer so every
+changes (``models._bump_revisions``, hooked at the ORM layer so every
 writer participates without having to remember to). A whole-state write must
 name the revision it was based on; ``is_stale`` says whether it may proceed,
 and a refused writer is handed ``tracking_snapshot`` so it can adopt the
@@ -76,6 +76,23 @@ def conviction_refreshes_each_round(character_data: Dict[str, Any]) -> bool:
         character_data.get("school") == "priest"
         and school_dan(character_data) >= 5
     )
+
+
+def is_build_stale(character: Character, claimed_rev: Any) -> bool:
+    """``is_stale`` for the BUILD revision - the editor's autosave, and the
+    publish / discard actions that must apply to the draft the user was
+    shown. Same rule: a writer that names no revision has seen nothing."""
+    if isinstance(claimed_rev, bool) or not isinstance(claimed_rev, int):
+        return True
+    return claimed_rev != (character.build_rev or 0)
+
+
+def stale_build_response_body(character: Character) -> Dict[str, Any]:
+    """What a refused build write is told. Unlike a sheet tab, an editor is
+    NOT handed the state to adopt: it may be holding text the user is in the
+    middle of typing, so what happens next is the user's decision (reload,
+    or knowingly save over it), not something to do silently."""
+    return {"error": "stale", "build_rev": character.build_rev or 0}
 
 
 def start_combat_round(

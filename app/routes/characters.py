@@ -30,7 +30,13 @@ from app.services.professions import (
 )
 from app.services.rolls import compute_dan
 from app.services.sanitize import sanitize_sections
-from app.services.tracking import claimed_rev_from, is_stale, tracking_snapshot
+from app.services.tracking import (
+    claimed_rev_from,
+    is_build_stale,
+    is_stale,
+    stale_build_response_body,
+    tracking_snapshot,
+)
 from app.services.versions import (
     compute_diff_summary,
     compute_version_diff,
@@ -620,6 +626,14 @@ async def autosave_character(
 
     body = await request.json()
 
+    # Optimistic concurrency: this is a WHOLE-BUILD write from a tab holding
+    # its own copy, so it may only land on the build it was made from. Two
+    # editor tabs (or a GM and a player who both have edit access) used to
+    # overwrite each other silently. Refused writes change nothing; the
+    # editor then asks the user whether to reload or knowingly save over it.
+    if is_build_stale(character, body.get("build_rev")):
+        return JSONResponse(stale_build_response_body(character), status_code=409)
+
     # Update character fields from JSON
     if "name" in body:
         character.name = body["name"]
@@ -840,6 +854,8 @@ async def autosave_character(
     return JSONResponse({
         "status": "saved",
         "has_unpublished_changes": character.has_unpublished_changes,
+        # The revision the editor's copy now corresponds to.
+        "build_rev": character.build_rev or 0,
     })
 
 
@@ -1018,7 +1034,10 @@ async def set_award_source(
 
     character.rank_recognition_awards = new_awards
     db.commit()
-    return JSONResponse({"ok": True})
+    # An operation by id, not a whole-object write, so it is never refused -
+    # but it moves the build revision, and the editor tab that made it adopts
+    # the new one so its next autosave is not refused by its own action.
+    return JSONResponse({"ok": True, "build_rev": character.build_rev or 0})
 
 
 @router.get("/{char_id}/dark-secret")
@@ -1544,6 +1563,14 @@ async def publish_character_route(
     custom_summary = body.get("summary", "")
     make_visible = bool(body.get("make_visible", False))
 
+    # Publish the draft the editor SAW. If another editor's autosave landed
+    # after this tab last saved, the summary the user typed describes a build
+    # that is not the one about to be snapshotted. Checked only when the
+    # caller names a revision: publishing is an operation on server state,
+    # not a whole-object write, so naming none claims nothing.
+    if "build_rev" in body and is_build_stale(character, body["build_rev"]):
+        return JSONResponse(stale_build_response_body(character), status_code=409)
+
     version = publish_character(
         character, db,
         summary=custom_summary,
@@ -1588,6 +1615,18 @@ async def discard_changes_route(
         all_editors,
     ):
         return JSONResponse({"error": "Forbidden"}, status_code=403)
+
+    # Discard the draft the user was SHOWN. The confirm modal lists what will
+    # be lost (GET /draft-diff, which names the revision it describes); an
+    # autosave from another editor after that list rendered would otherwise be
+    # destroyed too, unlisted and unapproved.
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if (isinstance(body, dict) and "build_rev" in body
+            and is_build_stale(character, body["build_rev"])):
+        return JSONResponse(stale_build_response_body(character), status_code=409)
 
     did = discard_draft_changes(character, db)
     if not did:
@@ -1782,7 +1821,7 @@ async def draft_diff_route(
         return JSONResponse({"error": "Forbidden"}, status_code=403)
 
     if not character.is_published:
-        return JSONResponse({"lines": []})
+        return JSONResponse({"lines": [], "build_rev": character.build_rev or 0})
     # Use the comprehensive structured diff (same one that powers the
     # version-history drill-down) so the modal stays in sync with
     # has_unpublished_changes. The older sparse compute_diff_summary
@@ -1792,7 +1831,11 @@ async def draft_diff_route(
     entries = compute_version_diff(
         character.published_state or {}, character.to_dict(),
     )
-    return JSONResponse({"lines": stringify_version_diff_entries(entries)})
+    return JSONResponse({
+        "lines": stringify_version_diff_entries(entries),
+        # The draft this list describes; POST /discard sends it back.
+        "build_rev": character.build_rev or 0,
+    })
 
 
 @router.post("/{char_id}/revert/{version_id}")

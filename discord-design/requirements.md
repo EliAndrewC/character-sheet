@@ -17,10 +17,10 @@
 > 2. **The server's roller was already missing two automatic rules**, independent of void: Shosuro
 >    5th Dan's "lowest 3 dice added to the result", and the "Capped at N by Withdrawn" card bullet.
 >    Both added, so R1.4's "indistinguishable from the sheet" holds for them too.
-> 3. **R1.4 does NOT hold for a Mirumoto at 5th Dan spending void**: the sheet adds +10 per void
->    point to every roll, a Sincerity roll included; the rule says "combat rolls", every roll a command
->    can make is non-combat, and the server adds nothing. The sheet looks like the wrong one. Left for
->    the GM (audit A1).
+> 3. **The sheet had a Mirumoto 5th Dan bug that broke R1.4**: it added +10 per void point to every
+>    roll, a Sincerity roll included, where the rule says "combat rolls". The GM confirmed it as a bug
+>    and it was fixed on 2026-09-21 (`dice.is_combat_roll`, audit A1), so the sheet and the commands
+>    now agree.
 > 4. **R4.1 lists the money ledger; it is NOT under the revision.** No tab posts the ledger whole - its
 >    routes add / edit / delete one entry by id - so a revision would only produce false "changed
 >    somewhere else" notices. Its lost-update hazard was the read-modify-write gap, closed for every
@@ -38,9 +38,10 @@
 >    `void_blocked`), ephemerally. Commune's activation point is still charged to them, as on the
 >    sheet: it is a cost of making the roll, not a spend on it.
 > 9. **`/roll` accepts a typed display name** ("Sincerity", any case) as well as the id.
-> 10. **Editor autosave has the same whole-object hazard as `/track` and is NOT fixed** - it needs a
->     second revision and, first, a recovery prompt (audit B2). That is the honest answer to A3's
->     "does one mechanism cover the rest": the same mechanism, not the same counter.
+> 10. **Editor autosave had the same whole-object hazard as `/track`**; fixed on 2026-09-21 with a
+>     second revision, `build_rev`, and a "changed somewhere else" prompt in the editor (audit B2).
+>     That is the answer to A3's "does one mechanism cover the rest": the same mechanism, a separate
+>     counter, and a different recovery.
 >
 > **Verification notes for Part 6**: item 6's refusal is `409 {"error": "stale", "tracking": {...}}`;
 > the on-screen recovery is `[data-testid="tracking-stale-notice"]`.
