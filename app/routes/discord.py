@@ -36,6 +36,7 @@ from app.services.discord_commands import (
     focused_option_value,
     invoker_discord_id,
     run_command,
+    run_private_command,
 )
 
 
@@ -56,7 +57,7 @@ RESPONSE_AUTOCOMPLETE_RESULT = 8
 
 #: MessageFlags.EPHEMERAL - only the invoker sees it. Used for every error,
 #: so a mistyped command or an unlinked account does not clutter the
-#: channel the group is playing in.
+#: channel the group is playing in, and for every /discern-honor reply.
 FLAG_EPHEMERAL = 1 << 6
 
 
@@ -139,6 +140,13 @@ async def interactions(request: Request, db: Session = Depends(get_db)):
         return _ephemeral("I could not tell who invoked that command.")
 
     try:
+        # /discern-honor: answered inline and privately, success included.
+        # No deferral, no card, nothing posted to the channel.
+        private = run_private_command(
+            db, interaction.get("data") or {}, discord_id,
+        )
+        if private is not None:
+            return _ephemeral(private)
         content, payload = run_command(
             db, interaction.get("data") or {}, discord_id,
         )

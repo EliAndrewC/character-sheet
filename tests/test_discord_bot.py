@@ -860,14 +860,14 @@ def _no_dice(monkeypatch):
 # --- C1: the command set is derived, and guarded ---------------------------
 
 
-def test_the_registered_set_is_exactly_skills_plus_three_knacks_plus_two():
+def test_the_registered_set_is_exactly_skills_plus_three_knacks_plus_three():
     """C1.3. Moving attack into SKILLS, or adding a knack casually, must turn
     this red rather than quietly register a command."""
     assert set(command_names()) == (
         set(SKILLS) | {"oppose-social", "oppose-knowledge", "commune"}
-        | {"roll", "initiative"}
+        | {"roll", "initiative", "discern-honor"}
     )
-    assert len(command_names()) == len(set(command_names())) == 23
+    assert len(command_names()) == len(set(command_names())) == 24
     assert set(KNACK_COMMANDS.values()) == {
         "oppose_social", "oppose_knowledge", "commune",
     }
@@ -905,9 +905,9 @@ def test_every_roll_takes_void_and_initiative_does_not():
     by_name = {d["name"]: d for d in command_definitions()}
     for name, definition in by_name.items():
         option_names = [o["name"] for o in definition["options"]]
-        if name == "initiative":
+        if name in ("initiative", "discern-honor"):
             # rules/03-combat.md: initiative is rolled "without spending
-            # void points".
+            # void points". Discern Honor is not a roll at all.
             assert option_names == []
         elif name == "roll":
             assert option_names == ["skill", "void"]

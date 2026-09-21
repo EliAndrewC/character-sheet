@@ -1,4 +1,4 @@
-"""GM-facing, token-authenticated read-only JSON API.
+"""GM-facing, token-authenticated JSON API: read-only, plus one write surface.
 
 Exists for out-of-band tooling - specifically the GM's ``gm-assistant``
 REPL - rather than for the browser. Players post their rolls into Discord
@@ -15,10 +15,16 @@ one authenticated call per PC per tick. These routes are cross-character
 and authenticate with a single shared secret the REPL keeps in a config
 file.
 
-Everything here is READ-ONLY. The token grants read access to every
-character's rolls including hidden ones, so it is GM-equivalent and is
-accepted only from the ``Authorization`` header - never from a query
-string, which would leak it into logs and browser history.
+Everything under ``ROLL_QUERY_TOKEN`` is READ-ONLY. The token grants read
+access to every character's rolls including hidden ones, so it is
+GM-equivalent and is accepted only from the ``Authorization`` header - never
+from a query string, which would leak it into logs and browser history.
+
+The one thing here that WRITES is ``/api/conversation`` (the conversation
+the GM has open, which ``/discern-honor`` answers from - see
+``app/services/conversations.py``). It authenticates with a SEPARATE secret,
+``GM_WRITE_TOKEN``, so the read token stays exactly as read-only as the
+paragraph above says it is: presenting it to a write route is a 401.
 """
 
 from __future__ import annotations
@@ -35,6 +41,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Character, GamingGroup, RollHistory
 from app.routes.rolls import _iso_utc
+from app.services import conversations
 from app.services.roll_descriptions import label_for_roll
 from app.services.void_spend import void_limits, void_pools
 
@@ -48,6 +55,11 @@ router = APIRouter(prefix="/api", tags=["gm-api"])
 #: silently becoming open to the world.
 TOKEN_ENV_VAR = "ROLL_QUERY_TOKEN"
 
+#: The write secret, for ``/api/conversation``. Deliberately not the read
+#: token: a secret described as read-only must not quietly become a write
+#: credential. Same fail-closed rule - unset means 503.
+WRITE_TOKEN_ENV_VAR = "GM_WRITE_TOKEN"
+
 DEFAULT_LIMIT = 200
 MAX_LIMIT = 1000
 
@@ -57,25 +69,37 @@ MAX_LIMIT = 1000
 # ---------------------------------------------------------------------------
 
 
-def _authorize(request: Request) -> Optional[JSONResponse]:
+def _authorize(
+    request: Request, env_vars: Tuple[str, ...] = (TOKEN_ENV_VAR,),
+) -> Optional[JSONResponse]:
     """Return an error response if the caller may not use the API, else None.
 
-    ``503`` when the token is not configured (fail-closed: an unset env var
-    must never mean "no auth required"), ``401`` for a missing, malformed
-    or wrong ``Authorization: Bearer`` header. The comparison is
-    constant-time so a wrong token leaks nothing about the right one.
+    ``env_vars`` names the secrets this route accepts; a caller presenting
+    any configured one is let in. ``503`` when none of them is configured
+    (fail-closed: an unset env var must never mean "no auth required"),
+    ``401`` for a missing, malformed or wrong ``Authorization: Bearer``
+    header. The comparison is constant-time so a wrong token leaks nothing
+    about the right one.
     """
-    expected = (os.environ.get(TOKEN_ENV_VAR) or "").strip()
-    if not expected:
+    accepted = [
+        value for value in
+        ((os.environ.get(name) or "").strip() for name in env_vars) if value
+    ]
+    if not accepted:
         return JSONResponse(
-            {"error": f"{TOKEN_ENV_VAR} is not configured"}, status_code=503,
+            {"error": f"{' / '.join(env_vars)} is not configured"},
+            status_code=503,
         )
     scheme, _, presented = (
         request.headers.get("Authorization") or ""
     ).partition(" ")
-    if scheme.lower() != "bearer" or not hmac.compare_digest(
-        presented.strip(), expected,
-    ):
+    presented = presented.strip().encode()
+    # Every candidate is compared, with no short-circuit, so timing does not
+    # say which secret (if any) was close.
+    matched = False
+    for expected in accepted:
+        matched = hmac.compare_digest(presented, expected.encode()) or matched
+    if scheme.lower() != "bearer" or not matched:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
     return None
 
@@ -426,3 +450,91 @@ async def list_characters(request: Request, db: Session = Depends(get_db)):
         "characters": out,
         "gaming_groups": [g.to_dict() for g in groups],
     })
+
+
+
+# ---------------------------------------------------------------------------
+# /api/conversation - the one WRITE surface, under its own secret
+# ---------------------------------------------------------------------------
+
+
+@router.put("/conversation")
+async def put_conversation(request: Request, db: Session = Depends(get_db)):
+    """Open, resume or replace a gaming group's conversation.
+
+    Body: ``conversation_id``, ``group`` (a ``gaming_groups.id``, the same
+    value ``/api/rolls`` takes), ``npc_ref`` (opaque, stored and returned,
+    never shown to a player), ``opened_at`` (ISO-8601 with an offset) and
+    ``discern_honor``: ``[{"character_id", "told"}]``.
+
+    Re-sending the id that is already open PRESERVES every existing entry's
+    ``told`` and ``asked_at`` and only adds characters not yet present; a new
+    id replaces the group's conversation outright. Answers with the
+    conversation as ``GET`` would. ``GM_WRITE_TOKEN`` only.
+    """
+    denied = _authorize(request, (WRITE_TOKEN_ENV_VAR,))
+    if denied is not None:
+        return denied
+    # The body is read BEFORE the first query, so nothing awaits between a
+    # load and the commit (see database.prefetch_body for why that matters).
+    try:
+        body = await request.json()
+    except ValueError:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    try:
+        conversation = conversations.put_conversation(db, body)
+    except conversations.ConversationError as exc:
+        # Nothing to undo: put_conversation validates before it touches a row.
+        return JSONResponse({"error": str(exc)}, status_code=exc.status)
+    db.commit()
+    return JSONResponse({"conversation": conversations.serialize(conversation)})
+
+
+@router.get("/conversation")
+async def get_conversation(
+    request: Request, group: Optional[str] = None, db: Session = Depends(get_db),
+):
+    """The group's open conversation, including who has asked.
+
+    ``{"conversation": null}`` when none is open or the open one is more
+    than 12 hours old. Each ``discern_honor`` entry carries ``asked_at``
+    (ISO UTC, or null until that character first runs ``/discern-honor``).
+    Read-only, so either secret is accepted.
+    """
+    denied = _authorize(request, (WRITE_TOKEN_ENV_VAR, TOKEN_ENV_VAR))
+    if denied is not None:
+        return denied
+    group_id, error = _parse_group(group)
+    if error or group_id is None:
+        return JSONResponse(
+            {"error": error or "group is required (a gaming_groups.id)"},
+            status_code=400,
+        )
+    conversation = conversations.open_conversation(db, group_id)
+    return JSONResponse({
+        "conversation": (
+            conversations.serialize(conversation) if conversation else None
+        ),
+    })
+
+
+@router.delete("/conversation/{conversation_id}")
+async def delete_conversation(
+    conversation_id: str, request: Request, db: Session = Depends(get_db),
+):
+    """Close a conversation. ``404`` for an id that is not there - which is
+    also what a retried close gets, and is safe to ignore. ``GM_WRITE_TOKEN``
+    only."""
+    denied = _authorize(request, (WRITE_TOKEN_ENV_VAR,))
+    if denied is not None:
+        return denied
+    conversation = (
+        db.query(conversations.Conversation)
+        .filter(conversations.Conversation.id == conversation_id)
+        .first()
+    )
+    if conversation is None:
+        return JSONResponse({"error": "No such conversation"}, status_code=404)
+    db.delete(conversation)
+    db.commit()
+    return JSONResponse({"closed": conversation_id})
