@@ -190,6 +190,7 @@ def _migrate_add_columns():
         ("lineage", "TEXT", "''"),
         ("money_ledger", "TEXT", "'[]'"),
         ("tracking_rev", "INTEGER", "0"),
+        ("build_rev", "INTEGER", "0"),
         # Night's Rest SW-healing cadence flags. Defaulting all to 0 means
         # pre-feature characters with existing SW will be treated as "no new
         # injuries since last rest", entering the alternating cadence from

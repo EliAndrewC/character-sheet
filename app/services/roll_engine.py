@@ -28,7 +28,7 @@ import random
 from typing import Any, Dict, List, Optional, Sequence
 
 from app.services.dice import build_all_roll_formulas, is_impaired
-from app.services.void_spend import school_dan
+from app.services.void_spend import combat_vp_flat_bonus, school_dan
 
 
 #: Guard against a pathological formula (or a crafted character row)
@@ -271,6 +271,7 @@ def _plural(n: int, word: str) -> str:
 
 def _spend_bullets(
     label: str, activation: int, void_spent: int, overflow: int,
+    combat_vp: int = 0,
 ) -> List[str]:
     """The DETAILS bullets a void spend earns, worded exactly as the sheet's
     ``_extraBonusBullets`` words them, so the card and the Roll History row
@@ -282,6 +283,11 @@ def _spend_bullets(
         out.append(
             f"Rolled +{void_spent}k{void_spent} from {void_spent} spent "
             f"void point{'s' if void_spent > 1 else ''}"
+        )
+    if void_spent > 0 and combat_vp > 0:
+        out.append(
+            f"+{void_spent * combat_vp} from 5th Dan "
+            f"(+{combat_vp} per VP on combat rolls)"
         )
     if overflow > 0:
         out.append(
@@ -352,6 +358,7 @@ def execute_roll(
     void_spent = max(0, int(void_spent or 0))
     activation = 1 if formula.get("requires_void_point") else 0
     overflow = 0
+    combat_vp = 0
     if void_spent:
         capped = apply_dice_cap(
             (formula.get("rolled") or 0) + void_spent,
@@ -362,6 +369,12 @@ def execute_roll(
             rolled=capped["rolled"], kept=capped["kept"], flat=capped["flat"],
         )
         overflow = capped["overflow_flat"]
+        # Mirumoto 5th Dan: +10 per void point, on COMBAT rolls only. No
+        # slash command can make a combat roll today, but the rule lives
+        # here so that the day one can, it matches the sheet.
+        if formula.get("is_combat_roll"):
+            combat_vp = combat_vp_flat_bonus(character_data)
+            formula["flat"] = (formula.get("flat") or 0) + void_spent * combat_vp
 
     dice = roll_dice(
         formula.get("rolled") or 0,
@@ -377,7 +390,7 @@ def execute_roll(
     base_total = dice["kept_sum"] + (formula.get("flat") or 0)
 
     label = formula.get("label") or roll_key
-    extras = _spend_bullets(label, activation, void_spent, overflow)
+    extras = _spend_bullets(label, activation, void_spent, overflow, combat_vp)
     all_cells = dice["kept"] + dice["dropped"]
     if _adds_lowest_three(character_data):
         lowest = sum(sorted(c["value"] for c in all_cells)[:3])

@@ -5326,3 +5326,51 @@ class TestCommuneVoidCost:
         )
         f = build_knack_formula("commune", char)
         assert f.requires_void_point is True
+
+
+class TestCombatRollFlag:
+    """``is_combat_roll`` is what Mirumoto 5th Dan's "+10 per void point on
+    COMBAT rolls" keys on. The sheet used to add the +10 to every roll that
+    went through its generic roller - a Sincerity roll included."""
+
+    COMBAT = {
+        "attack", "parry", "wound_check", "athletics:attack", "athletics:parry",
+        "knack:counterattack", "knack:double_attack", "knack:lunge",
+        "knack:feint", "knack:iaijutsu", "knack:iaijutsu:attack",
+        "knack:iaijutsu:strike", "knack:iaijutsu:evaluate",
+    }
+
+    def _formulas(self):
+        data = make_character_data(
+            school="mirumoto_bushi",
+            knacks={"counterattack": 5, "double_attack": 5, "iaijutsu": 5},
+            foreign_knacks={"feint": 1, "lunge": 1, "athletics": 1,
+                            "oppose_social": 1},
+            skills={"sincerity": 2},
+        )
+        return build_all_roll_formulas(data)
+
+    def test_every_formula_carries_the_flag(self):
+        formulas = self._formulas()
+        assert all(isinstance(f.get("is_combat_roll"), bool) for f in formulas.values())
+
+    def test_exactly_the_combat_keys_are_combat(self):
+        formulas = self._formulas()
+        flagged = {k for k, f in formulas.items() if f["is_combat_roll"]}
+        assert flagged == self.COMBAT & set(formulas)
+        # The fixture reaches a real spread of them, not an empty set.
+        assert {"attack", "parry", "wound_check", "knack:feint",
+                "knack:iaijutsu", "athletics:parry"} <= flagged
+
+    def test_variant_keys_follow_their_knack(self):
+        from app.services.dice import is_combat_roll
+
+        assert is_combat_roll("knack:iaijutsu:attack") is True    # Kakita only
+        assert is_combat_roll("knack:pontificate:as:sincerity") is False
+        assert is_combat_roll("damage") is False
+
+    def test_the_rolls_that_used_to_get_the_bonus_wrongly(self):
+        formulas = self._formulas()
+        for key in ("skill:sincerity", "ring:Air", "athletics:Water",
+                    "knack:athletics", "knack:oppose_social", "initiative"):
+            assert formulas[key]["is_combat_roll"] is False, key

@@ -78,6 +78,39 @@
     .dark .ql-snow.ql-toolbar button.ql-active .ql-fill { fill: rgb(var(--color-accent)); }
 </style>
 <div x-data="characterForm()">
+    <!-- "Changed somewhere else" modal. An autosave was refused because the
+         build moved since this tab loaded (another tab, another editor, a
+         PCP spent on the sheet). Unlike the sheet, the editor does NOT adopt
+         the server's state silently - the user may be mid-sentence - so it
+         stops saving and asks. -->
+    <div x-show="showConflictModal" x-cloak
+         data-modal="build-conflict" role="alertdialog" aria-modal="true"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60">
+        <div class="bg-white rounded-lg shadow-xl px-6 sm:px-8 py-6 max-w-lg w-full mx-4">
+            <h3 class="text-lg font-bold mb-3">This character was changed somewhere else</h3>
+            <p class="text-sm text-ink/70 mb-2">
+                Since this page loaded, the character was edited in another tab or by
+                another editor. Your most recent changes here have <strong>not been saved</strong>,
+                and saving is paused until you choose:
+            </p>
+            <ul class="text-sm text-ink/70 mb-4 list-disc list-inside space-y-1">
+                <li><strong>Load the latest version</strong> - reloads this page. The edits you made here since your last successful save are lost.</li>
+                <li><strong>Keep my version</strong> - saves this page as it is now, replacing whatever was changed elsewhere.</li>
+            </ul>
+            <div class="flex flex-col sm:flex-row sm:justify-end gap-3">
+                <button type="button" @click="showConflictModal = false"
+                        data-action="conflict-later"
+                        class="px-4 py-2 rounded text-sm btn-ghost">Decide later</button>
+                <button type="button" @click="conflictKeepMine()"
+                        data-action="conflict-keep-mine"
+                        class="btn-danger-soft px-4 py-2 rounded text-sm font-medium">Keep my version</button>
+                <button type="button" @click="conflictReload()"
+                        data-action="conflict-reload"
+                        class="btn-primary px-4 py-2 rounded text-sm font-medium">Load the latest version</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Discard Changes modal -->
     <div x-show="showDiscardModal" x-cloak
          data-modal="discard-changes"
@@ -89,6 +122,12 @@
                     <h3 class="text-lg font-bold mb-3">Discard Changes</h3>
                     <p class="text-sm text-ink/70 mb-3">
                         These unapplied changes will be undone:
+                    </p>
+                    <p x-show="discardStaleNotice" x-cloak
+                       data-testid="discard-stale-notice"
+                       class="rounded bg-amber-50 border-l-4 border-amber-400 text-amber-900 text-sm px-3 py-2 mb-3">
+                        The character changed while this list was open, so nothing was
+                        discarded. The list has been refreshed - check it and confirm again.
                     </p>
                     <template x-if="discardLoading">
                         <p class="text-sm text-ink/50 italic mb-3">Loading changes...</p>
@@ -1865,6 +1904,10 @@
                 </div>
                 <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                     <span class="text-xs sm:text-sm text-ink/60" x-text="saveStatus"></span>
+                    <button type="button" x-show="buildConflict" x-cloak
+                            @click="showConflictModal = true"
+                            data-action="conflict-resolve"
+                            class="btn-danger-soft text-xs sm:text-sm px-2 py-1 rounded font-medium">Resolve</button>
                     <button type="button" @click="navigateToSheet()" data-action="view-sheet"
                             class="bg-ink/20 hover:bg-ink/30 text-ink px-3 py-2 sm:px-4 sm:py-3 rounded font-medium transition-colors text-xs sm:text-sm">
                         View Sheet
@@ -2274,6 +2317,11 @@ function characterForm() {
             this._savePromise = null;
             this._saveRetryTimer = null;
             this._charId = {{ character.id }};
+            // Optimistic-concurrency token: the build revision this tab's
+            // copy of the character corresponds to. Sent with every
+            // autosave; the server refuses the save (409) if the build has
+            // moved since. See services/tracking.py.
+            this._buildRev = {{ character.build_rev or 0 }};
 
             // Warn before navigating away with unsaved or failed-to-save
             // changes still buffered. Only the presence of returnValue is
@@ -2472,12 +2520,64 @@ function characterForm() {
             // promise so callers can await it.
             if (this._saving) return this._savePromise || Promise.resolve();
             if (!this._dirty) return Promise.resolve();
+            // A refused save pauses autosave until the user has chosen what
+            // to do about it - retrying would only be refused again.
+            if (this.buildConflict) return Promise.resolve();
             this._saving = true;
             this._dirty = false;
             this._saveTimeout = null;
             this.saveStatus = 'Saving...';
-            this._savePromise = this._runSave();
+            this._savePromise = this._enqueueWrite(() => this._runSave());
             return this._savePromise;
+        },
+
+        // Every request from this tab that writes the build goes through
+        // here, one at a time. Each adopts the revision the server returns
+        // before the next one starts - otherwise an award-source POST landing
+        // between an autosave's send and its arrival would make this tab
+        // refuse ITSELF.
+        _enqueueWrite(fn) {
+            const run = () => fn();
+            this._writeChain = (this._writeChain || Promise.resolve()).then(run, run);
+            return this._writeChain;
+        },
+
+        _adoptBuildRev(rev) {
+            if (typeof rev === 'number') this._buildRev = rev;
+        },
+
+        // --- "Changed somewhere else" ---------------------------------
+        buildConflict: false,
+        showConflictModal: false,
+        _serverBuildRev: null,
+
+        _onBuildConflict(serverRev) {
+            this.buildConflict = true;
+            this._serverBuildRev = (typeof serverRev === 'number') ? serverRev : null;
+            // What is on this page is NOT saved; keep the unload warning on.
+            this._dirty = true;
+            this._clearSaveRetry();
+            if (this._saveTimeout) { clearTimeout(this._saveTimeout); this._saveTimeout = null; }
+            this.saveStatus = 'Not saved - changed elsewhere';
+            this.showConflictModal = true;
+        },
+
+        conflictReload() {
+            // The user has chosen to lose these edits; do not also make the
+            // browser ask them whether they are sure.
+            this._dirty = false;
+            this.saveStatus = '';
+            window.location.reload();
+        },
+
+        conflictKeepMine() {
+            // An informed overwrite is an ordinary save that names the
+            // revision the refusal reported.
+            if (this._serverBuildRev !== null) this._buildRev = this._serverBuildRev;
+            this.buildConflict = false;
+            this.showConflictModal = false;
+            this._dirty = true;
+            return this.doSave();
         },
 
         async _runSave() {
@@ -2487,6 +2587,7 @@ function characterForm() {
             let retryable = false;
             try {
                 const body = {
+                    build_rev: this._buildRev,
                     name: document.querySelector('input[name="name"]')?.value || this.school || 'New Character',
                     name_explanation: this.nameExplanation || '',
                     age: (this.age === '' || this.age === null || isNaN(this.age)) ? null : this.age,
@@ -2534,6 +2635,7 @@ function characterForm() {
                     // / Discard buttons stay hidden in that case.
                     try {
                         const data = await resp.json();
+                        this._adoptBuildRev(data.build_rev);
                         if (typeof data.has_unpublished_changes === 'boolean') {
                             this.hasUnpublishedChanges = data.has_unpublished_changes;
                         } else {
@@ -2543,6 +2645,12 @@ function characterForm() {
                         this.hasUnpublishedChanges = true;
                     }
                     setTimeout(() => { if (this.saveStatus === 'Saved') this.saveStatus = ''; }, 2000);
+                } else if (resp.status === 409) {
+                    // The build moved since this tab loaded. Nothing was
+                    // written. Stop saving and ask the user.
+                    let data = null;
+                    try { data = await resp.json(); } catch (e) {}
+                    this._onBuildConflict(data && data.build_rev);
                 } else if (resp.status >= 400 && resp.status < 500) {
                     // 4xx: validation failure, auth lost, etc. Retrying
                     // the same payload won't help - surface the status
@@ -2568,7 +2676,7 @@ function characterForm() {
             this._savePromise = null;
             if (retryable) {
                 this._scheduleSaveRetry();
-            } else if (this._dirty) {
+            } else if (this._dirty && !this.buildConflict) {
                 // Edits landed during the in-flight save; debounce a
                 // fresh attempt against the latest form state.
                 this.debounceSave();
@@ -2621,6 +2729,10 @@ function characterForm() {
         discardLoading: false,
         discardMessage: '',
         discardLines: [],
+        // The draft revision the discard list describes; sent back with the
+        // discard so it cannot destroy a change that was never listed.
+        discardBuildRev: null,
+        discardStaleNotice: false,
         hasUnpublishedChanges: {{ 'true' if has_unpublished_changes else 'false' }},
         isPublished: {{ 'false' if is_first_version else 'true' }},
 
@@ -2656,6 +2768,11 @@ function characterForm() {
 
         async openDiscardModal() {
             this.showDiscardModal = true;
+            this.discardStaleNotice = false;
+            await this._loadDiscardDiff();
+        },
+
+        async _loadDiscardDiff() {
             this.discardLines = [];
             this.discardLoading = true;
             // Make sure any in-flight autosave lands first so the diff
@@ -2668,6 +2785,8 @@ function characterForm() {
                 if (resp.ok) {
                     const data = await resp.json();
                     this.discardLines = data.lines || [];
+                    this.discardBuildRev = (typeof data.build_rev === 'number')
+                        ? data.build_rev : null;
                 }
             } finally {
                 this.discardLoading = false;
@@ -2680,9 +2799,24 @@ function characterForm() {
             try {
                 const resp = await fetch(
                     '/characters/' + this._charId + '/discard',
-                    { method: 'POST' },
+                    {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(
+                            this.discardBuildRev === null ? {} : {build_rev: this.discardBuildRev}),
+                    },
                 );
-                if (resp.ok) {
+                if (resp.status === 409 && ((await resp.clone().json().catch(() => ({}))).error === 'stale')) {
+                    // Someone saved a change after the list above was drawn.
+                    // Nothing was discarded; show what would be lost NOW.
+                    this.discarding = false;
+                    this.discardStaleNotice = true;
+                    await this._loadDiscardDiff();
+                } else if (resp.ok) {
+                    // Whatever was unsaved here has just been discarded on
+                    // purpose; do not let the unload guard ask about it.
+                    this._dirty = false;
+                    this.saveStatus = '';
                     this.discardMessage = 'Discarded. Reloading...';
                     // Reload so the editor re-hydrates from the freshly
                     // restored published state.
@@ -2700,6 +2834,14 @@ function characterForm() {
         async doApply() {
             if (!this.applySummary.trim()) return;
             await this.flushPendingSave();
+            if (this.buildConflict) {
+                // The flush was refused (or saving was already paused): what
+                // is on this page is not what is on the server, so there is
+                // nothing sensible to apply yet.
+                this.showApplyModal = false;
+                this.showConflictModal = true;
+                return;
+            }
             this.publishing = true;
             this.publishMessage = 'Applying changes...';
             try {
@@ -2710,9 +2852,17 @@ function characterForm() {
                     body: JSON.stringify({
                         summary: this.applySummary.trim(),
                         make_visible: makeVisible,
+                        build_rev: this._buildRev,
                     }),
                 });
-                if (resp.ok) {
+                if (resp.status === 409 && ((await resp.clone().json().catch(() => ({}))).error === 'stale')) {
+                    // Another editor saved between our last save and this
+                    // Apply. Nothing was published.
+                    const data = await resp.json().catch(() => null);
+                    this.publishing = false;
+                    this.showApplyModal = false;
+                    this._onBuildConflict(data && data.build_rev);
+                } else if (resp.ok) {
                     const data = await resp.json();
                     this.publishMessage = 'Applied (v' + data.version_number + '). Redirecting...';
                     window.location.href = '/characters/' + this._charId;
@@ -3121,11 +3271,18 @@ function characterForm() {
                 clearTimeout(this._awardSourceTimers[awardId]);
             }
             this._awardSourceTimers[awardId] = setTimeout(() => {
-                fetch('/characters/' + this._charId + '/set-award-source', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({award_id: awardId, source: newSource.trim()}),
-                }).catch(() => {});
+                // Through the write queue: this moves the build revision, and
+                // the tab has to adopt the new one before its next autosave.
+                this._enqueueWrite(async () => {
+                    try {
+                        const resp = await fetch('/characters/' + this._charId + '/set-award-source', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({award_id: awardId, source: newSource.trim()}),
+                        });
+                        if (resp.ok) this._adoptBuildRev((await resp.json()).build_rev);
+                    } catch (e) { /* best-effort, as before */ }
+                });
                 delete this._awardSourceTimers[awardId];
             }, 600);
         },

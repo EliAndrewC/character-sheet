@@ -139,6 +139,19 @@ def spend_consequences(character_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def combat_vp_flat_bonus(character_data: Dict[str, Any]) -> int:
+    """Mirumoto Bushi 5th Dan: "Your void points provide an extra +10 when
+    spent on combat rolls." The flat bonus PER void point, or 0.
+
+    Which rolls are combat rolls is ``dice.is_combat_roll``, stamped on every
+    formula as ``is_combat_roll``; the sheet and ``roll_engine`` both apply
+    this amount only where that flag is set.
+    """
+    if character_data.get("school") == "mirumoto_bushi" and school_dan(character_data) >= 5:
+        return 10
+    return 0
+
+
 def allocate_void_spend(
     count: Any, temp_avail: Any, regular_avail: Any, worldliness_avail: Any,
 ) -> Dict[str, Any]:

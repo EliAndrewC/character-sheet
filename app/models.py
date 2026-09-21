@@ -220,7 +220,11 @@ class Character(Base):
     campaign_disadvantages: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
     # Extra details for advantages/disadvantages that need text or skill selections
     # Format: {"advantage_id": {"text": "...", "skills": ["skill_id", ...], "player": "discord_id"}}
-    advantage_details: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
+    advantage_details: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        # active_history: the build revision compares old and new with the
+        # dark secret left out, so it needs the old value even when expired.
+        JSON, default=dict, active_history=True
+    )
     # Specializations are the only advantage that can be taken multiple times,
     # so they live in their own list (rather than a duplicate-allowed entry in
     # `advantages`). Each entry: {"text": "<sub-domain>", "skills": ["<skill_id>"]}.
@@ -260,7 +264,7 @@ class Character(Base):
 
     # Combat tracking (mutable session state). ``active_history`` on every
     # column in TRACKING_COLUMNS makes SQLAlchemy load the old value when a
-    # new one is assigned, so ``_bump_tracking_rev`` can tell a real change
+    # new one is assigned, so ``_bump_revisions`` can tell a real change
     # from a whole-state save that re-sent what was already there.
     current_light_wounds: Mapped[int] = mapped_column(default=0, active_history=True)
     current_serious_wounds: Mapped[int] = mapped_column(default=0, active_history=True)
@@ -305,10 +309,15 @@ class Character(Base):
     money_ledger: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list)
     # Optimistic-concurrency token for the live tracking state above (see
     # ``TRACKING_COLUMNS``). Bumped automatically whenever any of those
-    # columns changes, by ``_bump_tracking_rev`` below - never by hand - so a
+    # columns changes, by ``_bump_revisions`` below - never by hand - so a
     # writer that loaded the sheet at revision N and saves after someone else
     # moved it to N+1 is refused instead of silently overwriting them.
     tracking_rev: Mapped[int] = mapped_column(default=0)
+    # The same, for the BUILD (see ``BUILD_COLUMNS``): the editor holds a copy
+    # of the whole build and autosaves all of it. Deliberately a SEPARATE
+    # counter - a wound taken on the sheet cannot conflict with an editor
+    # tab, so it must not make one stale, and vice versa.
+    build_rev: Mapped[int] = mapped_column(default=0)
 
     # Metadata
     notes: Mapped[str] = mapped_column(String, default="")
@@ -634,24 +643,76 @@ TRACKING_COLUMNS = (
 # void save into a false "changed somewhere else".
 
 
+#: The character BUILD: everything an editor tab holds a copy of and
+#: autosaves whole. A change to any of these moves ``Character.build_rev``.
+#: ``tests/test_build_rev.py`` fails if POST /autosave starts writing a
+#: column that is not listed here.
+BUILD_COLUMNS = (
+    "name", "name_explanation", "player_name", "age", "lineage",
+    "owner_discord_id",
+    "school", "school_ring_choice", "profession", "profession_abilities",
+    "ring_air", "ring_fire", "ring_earth", "ring_water", "ring_void",
+    "attack", "parry", "skills", "knacks", "foreign_knacks",
+    "advantages", "disadvantages", "campaign_advantages",
+    "campaign_disadvantages", "advantage_details", "specializations",
+    "technique_choices",
+    "honor", "rank", "rank_locked", "recognition", "recognition_halved",
+    "rank_recognition_awards",
+    "starting_xp", "earned_xp", "pcp_count",
+    "notes", "sections",
+)
+
+
+def _without_dark_secret(details: Any) -> Any:
+    """``advantage_details`` as far as the build revision is concerned.
+
+    The dark secret is written only through POST /dark-secret, and autosave
+    always carries the persisted entry forward (``merge_dark_secret``), so a
+    stale autosave cannot lose it. Leaving it out here means the GM setting a
+    secret does not throw a "changed elsewhere" prompt at the player's open
+    editor - over a field that editor cannot even see.
+    """
+    if not isinstance(details, dict):
+        return details
+    return {k: v for k, v in details.items() if k != "dark_secret"}
+
+
+def _changed(state, name: str) -> bool:
+    """Whether column ``name`` is being written with a DIFFERENT value.
+
+    ``history.deleted`` is empty when the old value was never loaded (an
+    expired attribute); that counts as changed, which is the safe direction.
+    Tracking columns set ``active_history`` so they always have it; build
+    columns are only ever written on a freshly loaded row.
+    """
+    history = state.attrs[name].history
+    if not history.added:
+        return False
+    added, deleted = list(history.added), list(history.deleted)
+    if name == "advantage_details":
+        added = [_without_dark_secret(v) for v in added]
+        deleted = [_without_dark_secret(v) for v in deleted]
+    return added != deleted
+
+
 @event.listens_for(Character, "before_update")
-def _bump_tracking_rev(mapper, connection, character) -> None:
-    """Move the tracking revision whenever tracking state is written.
+def _bump_revisions(mapper, connection, character) -> None:
+    """Move ``tracking_rev`` / ``build_rev`` when their columns are written.
 
     Hooked at the ORM layer rather than called from each route ON PURPOSE:
     the writers are many (POST /track, Night's Rest, the PCP void refresh,
     a party member spending a priest's conviction, the Discord roll
-    commands, whatever comes next) and a bump somebody has to remember is a
+    commands; autosave, discard, revert, a PCP spend, the award-source
+    endpoint, whatever comes next) and a bump somebody has to remember is a
     bump somebody forgets. Here, a new writer participates by existing.
-    Only fires when a value actually changed, so a no-op save does not make
-    every other open tab stale.
+    Only fires when a value actually changed, so a save that re-sends what
+    was already there does not make every other open tab stale.
     """
     state = inspect(character)
-    for name in TRACKING_COLUMNS:
-        history = state.attrs[name].history
-        if history.added and list(history.added) != list(history.deleted):
-            character.tracking_rev = (character.tracking_rev or 0) + 1
-            return
+    if any(_changed(state, name) for name in TRACKING_COLUMNS):
+        character.tracking_rev = (character.tracking_rev or 0) + 1
+    if any(_changed(state, name) for name in BUILD_COLUMNS):
+        character.build_rev = (character.build_rev or 0) + 1
 
 
 class RollHistory(Base):

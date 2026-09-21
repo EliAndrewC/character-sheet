@@ -1,7 +1,7 @@
 """E2E: School-specific ability UI - buttons, banked bonuses, display notes."""
 
 import pytest
-from tests.e2e.helpers import select_school, click_plus, click_minus, apply_changes, start_new_character, dismiss_wc_modal
+from tests.e2e.helpers import select_school, click_plus, click_minus, apply_changes, start_new_character, dismiss_wc_modal, api_autosave
 
 pytestmark = [pytest.mark.rolls]
 
@@ -266,15 +266,7 @@ def _get_void_spend_config(page):
 
 def _set_technique_choices(page, char_id, choices):
     """Set technique_choices on a character via the autosave API."""
-    import json
-    page.evaluate(f"""async () => {{
-        const resp = await fetch('/characters/{char_id}/autosave', {{
-            method: 'POST',
-            headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{ technique_choices: {json.dumps(choices)} }})
-        }});
-        return resp.status;
-    }}""")
+    assert api_autosave(page, char_id, {"technique_choices": choices}) == 200
 
 
 def _extract_char_id(page):
@@ -1020,6 +1012,39 @@ def test_mirumoto_5th_dan_vp_plus_10(page, live_server_url):
     # The +10 bonus should appear in the result breakdown.
     result_text = page.locator('[data-modal="dice-roller"]').text_content()
     assert "5th Dan" in result_text
+def test_mirumoto_5th_dan_vp_no_bonus_on_a_skill_roll(page, live_server_url):
+    """Mirumoto 5th Dan: the +10 per void point is for COMBAT rolls. A skill
+    roll with a void point spent gets the +1k1 and nothing else - the sheet's
+    generic roller used to add the +10 to whatever it rolled."""
+    _create_char(page, live_server_url, "Mirumoto5Skill", "mirumoto_bushi",
+                 knack_overrides={"counterattack": 5, "double_attack": 5, "iaijutsu": 5},
+                 skill_overrides={"bragging": 1})
+    assert _get_void_spend_config(page).get("combat_vp_flat_bonus") == 10
+    flags = page.evaluate("""() => {
+        const f = window._diceRoller.formulas;
+        return {skill: f['skill:bragging'].is_combat_roll,
+                parry: f['parry'].is_combat_roll,
+                flat: f['skill:bragging'].flat};
+    }""")
+    assert flags["skill"] is False and flags["parry"] is True
+
+    page.evaluate("window._trackingBridge.voidPoints = 1")
+    page.wait_for_timeout(200)
+    page.locator('[data-roll-key="skill:bragging"]').click()
+    page.wait_for_timeout(500)
+    menu = page.locator('.fixed.z-50.bg-white.rounded-lg.shadow-xl')
+    menu.locator('text=Spend 1 void point').first.click()
+    _wait_roll_done(page)
+
+    rolled = page.evaluate("""() => ({
+        flat: window._diceRoller.formula.flat,
+        voidSpent: window._diceRoller.formula.void_spent,
+    })""")
+    assert rolled["voidSpent"] == 1
+    assert rolled["flat"] == flags["flat"], "no +10 on a non-combat roll"
+    assert not page.locator('[data-testid="mirumoto-5th-vp-bonus"]').is_visible()
+    assert "per VP on combat rolls" not in (
+        page.locator('[data-modal="dice-roller"]').inner_text())
 def test_mirumoto_5th_dan_prob_charts_include_bonus(page, live_server_url):
     """Mirumoto 5th Dan: attack and wound check probability charts include +10/VP."""
     _create_char(page, live_server_url, "Miru5Prob", "mirumoto_bushi",
@@ -4369,13 +4394,7 @@ def _make_kakita_dan_3(page, live_server_url, name, attack=1):
     )
     if attack and attack > 1:
         cid = _extract_char_id(page)
-        page.evaluate(f"""async () => {{
-            await fetch('/characters/{cid}/autosave', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{attack: {attack}}})
-            }});
-        }}""")
+        assert api_autosave(page, cid, {"attack": attack}) == 200
         page.reload()
         page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
 
@@ -4827,13 +4846,7 @@ def _make_kakita_dan_5(page, live_server_url, name, attack=1, seed_action_dice=T
     )
     if attack and attack > 1:
         cid = _extract_char_id(page)
-        page.evaluate(f"""async () => {{
-            await fetch('/characters/{cid}/autosave', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{attack: {attack}}})
-            }});
-        }}""")
+        assert api_autosave(page, cid, {"attack": attack}) == 200
         page.reload()
         page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
     if seed_action_dice:
@@ -5789,13 +5802,7 @@ def test_shinjo_3rd_dan_parry_decrements_unspent_dice(page, live_server_url):
                  knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
     # Attack skill defaults to 1 in make_character_data; bump to 2.
     cid = _extract_char_id(page)
-    page.evaluate(f"""async () => {{
-        await fetch('/characters/{cid}/autosave', {{
-            method: 'POST',
-            headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{attack: 2}})
-        }});
-    }}""")
+    assert api_autosave(page, cid, {"attack": 2}) == 200
     page.reload()
     page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
     page.evaluate("""() => {
@@ -9145,13 +9152,7 @@ def _make_mantis_dan_3(page, live_server_url, name, attack=1):
     )
     if attack and attack > 1:
         cid = _extract_char_id(page)
-        page.evaluate(f"""async () => {{
-            await fetch('/characters/{cid}/autosave', {{
-                method: 'POST',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{attack: {attack}}})
-            }});
-        }}""")
+        assert api_autosave(page, cid, {"attack": attack}) == 200
         page.reload()
         page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
 

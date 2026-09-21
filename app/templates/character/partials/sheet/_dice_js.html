@@ -2573,8 +2573,13 @@
                     f.kept += voidSpent;
                     f.void_spent = voidSpent;
 
-                    // Mirumoto 5th Dan: +10 per VP on combat rolls (parry and knack combat rolls)
-                    const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
+                    // Mirumoto 5th Dan: +10 per VP on COMBAT rolls only. This
+                    // is the generic roller, so most of what comes through
+                    // here (skills, ring rolls, social knacks) is not one;
+                    // the server stamps ``is_combat_roll`` on each formula
+                    // (dice.is_combat_roll) and this reads it.
+                    const combatBonus = f.is_combat_roll
+                        ? (this.voidSpendConfig.combat_vp_flat_bonus || 0) : 0;
                     if (combatBonus > 0) {
                         f.flat += voidSpent * combatBonus;
                     }
@@ -2948,7 +2953,8 @@
                 if (ow > 0) {
                     extras.push('Skill raised by ' + ow + ' by Otherworldliness');
                 }
-                const combatVp = (this.voidSpendConfig || {}).combat_vp_flat_bonus || 0;
+                const combatVp = f.is_combat_roll
+                    ? ((this.voidSpendConfig || {}).combat_vp_flat_bonus || 0) : 0;
                 if (v > 0 && combatVp > 0) {
                     extras.push(
                         '+' + (v * combatVp) + ' from 5th Dan (+'

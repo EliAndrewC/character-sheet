@@ -7,7 +7,7 @@ HTML on the sheet.
 
 import pytest
 
-from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply, start_new_character
+from tests.e2e.helpers import select_school, click_plus, apply_changes, create_and_apply, start_new_character, api_autosave
 
 pytestmark = [pytest.mark.sections]
 
@@ -154,12 +154,10 @@ def test_dangerous_html_is_sanitized(page, live_server_url):
     char_id = page.url.split('/characters/')[1].split('/')[0]
 
     # POST a section containing a script tag directly to the autosave endpoint
-    resp = page.request.post(
-        f"{live_server_url}/characters/{char_id}/autosave",
-        headers={"Content-Type": "application/json", "X-Test-User": "183026066498125825:eliandrewc"},
-        data='{"sections": [{"label": "Pwn", "html": "<p>safe</p><script>alert(1)</script>"}]}',
-    )
-    assert resp.ok
+    # (api_autosave names the build revision, which a bare POST would not.)
+    assert api_autosave(page, char_id, {
+        "sections": [{"label": "Pwn", "html": "<p>safe</p><script>alert(1)</script>"}],
+    }) == 200
 
     # Reload the editor — the saved section should NOT contain the script
     page.reload()

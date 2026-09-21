@@ -617,3 +617,48 @@ def test_mantis_4th_dan_gets_a_value_one_die_that_is_never_rolled():
 def test_initiative_uses_a_real_rng_by_default():
     result = execute_initiative(_character())
     assert all(1 <= d["value"] <= 10 for d in result["action_dice"])
+
+
+# ---------------------------------------------------------------------------
+# Mirumoto 5th Dan: +10 per void point, on combat rolls only
+# ---------------------------------------------------------------------------
+
+
+def _mirumoto(rank=5):
+    return _school("mirumoto_bushi", rank, skills={"sincerity": 2})
+
+
+def test_mirumoto_5th_dan_void_adds_ten_on_a_combat_roll():
+    data = _mirumoto()
+    plain = execute_roll(data, "parry", rng=_ScriptedRandom([1] * 20), void_spent=0)
+    spent = execute_roll(data, "parry", rng=_ScriptedRandom([1] * 20), void_spent=2)
+    assert spent["total"] == plain["total"] + 2 + 20      # two more 1s kept, +10 each
+    assert "+20 from 5th Dan (+10 per VP on combat rolls)" in spent["extras"]
+    # Same bullet order as the sheet: the void dice, then the 5th Dan line.
+    assert spent["extras"].index("Rolled +2k2 from 2 spent void points") < \
+        spent["extras"].index("+20 from 5th Dan (+10 per VP on combat rolls)")
+
+
+def test_mirumoto_5th_dan_void_adds_nothing_on_a_skill_roll():
+    """The bug: the sheet's generic roller added +10 to a Sincerity roll."""
+    data = _mirumoto()
+    plain = execute_roll(data, "skill:sincerity", rng=_ScriptedRandom([1] * 20))
+    spent = execute_roll(
+        data, "skill:sincerity", rng=_ScriptedRandom([1] * 20), void_spent=1,
+    )
+    assert spent["total"] == plain["total"] + 1
+    assert spent["extras"] == ["Rolled +1k1 from 1 spent void point"]
+
+
+def test_mirumoto_4th_dan_gets_no_bonus_even_on_a_combat_roll():
+    data = _mirumoto(rank=4)
+    spent = execute_roll(data, "parry", rng=_ScriptedRandom([1] * 20), void_spent=1)
+    assert not any("5th Dan" in e for e in spent["extras"])
+
+
+def test_the_sheet_and_the_server_read_the_bonus_from_one_place():
+    from app.services.void_spend import combat_vp_flat_bonus
+
+    assert combat_vp_flat_bonus(_mirumoto()) == 10
+    assert combat_vp_flat_bonus(_mirumoto(rank=4)) == 0
+    assert combat_vp_flat_bonus(_character()) == 0
