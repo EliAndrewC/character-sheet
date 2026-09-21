@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -779,3 +780,68 @@ class RollHistory(Base):
         # Newest-first within a character is the canonical list query.
         Index("ix_roll_history_char_created", "character_id", "created_at"),
     )
+
+
+class Conversation(Base):
+    """The conversation the GM currently has open with one gaming group.
+
+    Written only by the GM's ``gm-assistant`` REPL through ``/api/conversation``
+    and read by the ``/discern-honor`` slash command (see
+    ``app/services/conversations.py``). At most one row per gaming group:
+    opening a conversation under a new id replaces the group's previous one.
+
+    ``npc_ref`` is an opaque string the REPL uses to recognize its own
+    conversation after a crash. It is not a name, and it is never shown to a
+    player. Timestamps are naive UTC, like every other datetime here.
+
+    Schema note: a brand-new table, so ``create_all`` makes it on first
+    startup and ``_migrate_add_columns`` needs no entry.
+    """
+
+    __tablename__ = "conversations"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    gaming_group_id: Mapped[int] = mapped_column(
+        ForeignKey("gaming_groups.id"), nullable=False, unique=True,
+    )
+    npc_ref: Mapped[str] = mapped_column(String, default="")
+    opened_at: Mapped[datetime] = mapped_column(nullable=False)
+
+    entries: Mapped[List["ConversationDiscernHonor"]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan",
+        order_by="ConversationDiscernHonor.id",
+    )
+
+
+class ConversationDiscernHonor(Base):
+    """What one character is told when they use Discern Honor in a conversation.
+
+    ``told`` is the number the GM's tooling computed and the ONLY Honor-related
+    value this app ever holds - never a true Honor. Nothing does arithmetic
+    on it, and it is kept as its JSON literal in a TEXT column so it comes
+    back exactly as it was sent: a column declared JSON has NUMERIC affinity
+    in SQLite, which quietly turns a bare ``3.0`` into ``3``. ``asked_at`` is set by the first ``/discern-honor`` and never moves
+    again, which is how the REPL learns which characters actually asked.
+    """
+
+    __tablename__ = "conversation_discern_honor"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id"), nullable=False, index=True,
+    )
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.id"), nullable=False,
+    )
+    told_json: Mapped[str] = mapped_column("told", String, nullable=False)
+    asked_at: Mapped[Optional[datetime]] = mapped_column(default=None, nullable=True)
+
+    conversation: Mapped["Conversation"] = relationship(back_populates="entries")
+
+    @property
+    def told(self) -> Any:
+        return json.loads(self.told_json)
+
+    @told.setter
+    def told(self, value: Any) -> None:
+        self.told_json = json.dumps(value)

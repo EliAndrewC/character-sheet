@@ -21,6 +21,10 @@ is what the registration script sends to Discord):
   The GM held every other school knack and school ability back by name for a
   later feature, so a fourth must not appear here by being rollable.
 - ``/initiative``.
+- ``/discern-honor`` - NOT a roll. It reads back the number the GM's tooling
+  stored for the open conversation (``app/services/conversations.py``),
+  answers privately, and writes no ``RollHistory`` row. It goes through
+  ``run_private_command``, never ``run_command``.
 
 ``tests/test_discord_bot.py`` guards all of that: a future move of attack
 into ``SKILLS``, or a knack added casually, turns the gate red instead of
@@ -59,6 +63,7 @@ from sqlalchemy.orm import Session
 from app.game_data import SCHOOL_KNACKS, SKILLS
 from app.models import Character, RollHistory, User
 from app.services.auth import can_edit_character, get_all_editors
+from app.services.conversations import discern_honor_reply
 from app.services.dice import build_all_roll_formulas
 from app.services.party import party_member_data, visible_party_members
 from app.services.roll_engine import execute_initiative, execute_roll, impaired_now
@@ -103,6 +108,7 @@ OPTION_TYPE_INTEGER = 4
 
 ROLL_COMMAND = "roll"
 INITIATIVE_COMMAND = "initiative"
+DISCERN_HONOR_COMMAND = "discern-honor"
 
 #: Slash-command name -> knack id. Discord requires lowercase names with no
 #: spaces, so the commands are hyphenated while the roll keys stay
@@ -173,6 +179,14 @@ def command_definitions() -> List[Dict[str, Any]]:
     commands.append(chat(
         INITIATIVE_COMMAND,
         "Roll initiative and start your character's combat round", [],
+    ))
+    # Not a roll, and no options: which character is being read is the GM's
+    # to say (the open conversation), never the player's - an NPC option
+    # would leak the roster through autocomplete.
+    commands.append(chat(
+        DISCERN_HONOR_COMMAND,
+        "Privately learn what your character reads of this character's Honor",
+        [],
     ))
     return commands
 
@@ -331,6 +345,30 @@ def _void_suffix(activation: int, spent: int) -> str:
     if spent:
         parts.append(f"{spent} void")
     return f" ({', '.join(parts)})" if parts else ""
+
+
+def run_private_command(
+    db: Session, data: Dict[str, Any], discord_id: str,
+) -> Optional[str]:
+    """Run a command whose EVERY reply is private, or return None if
+    ``data`` is not one (the caller then hands it to ``run_command``).
+
+    ``/discern-honor`` is the only one: a character's read on somebody's
+    Honor is that character's private knowledge, so nothing is posted to
+    the channel, and it is not a roll, so nothing is written to
+    ``roll_history``. The character is resolved exactly as a roll's is,
+    edit check included - the first ask records ``asked_at``. Raises
+    ``CommandError`` like ``run_command``; the route shows that privately
+    too.
+    """
+    command_name = str((data or {}).get("name") or "").strip().lower()
+    if command_name != DISCERN_HONOR_COMMAND:
+        return None
+    character = resolve_character(db, discord_id)
+    _require_edit_access(db, character, discord_id)
+    reply = discern_honor_reply(db, character)
+    db.commit()
+    return reply
 
 
 def run_command(

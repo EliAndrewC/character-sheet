@@ -61,6 +61,7 @@ A `.env` file (gitignored) holds credentials for deployment and external service
 - `GOOGLE_CLIENT_SECRET` - Google OAuth 2.0 client secret
 - `GITHUB_TOKEN` - fine-grained GitHub PAT (contents: read/write, this repo only) that Claude Code uses to push (see "Git Workflow")
 - `ROLL_QUERY_TOKEN` - shared secret for the GM read-only API (`/api/rolls`, `/api/characters`); see "GM read-only API and Discord integration". Also a Fly secret. Unset means those endpoints 503.
+- `GM_WRITE_TOKEN` - the SEPARATE secret for the GM API's one write surface, `/api/conversation`; see "Discern Honor". Also a Fly secret. Unset means those routes 503; the read token is a 401 on them.
 - `DISCORD_BOT_TOKEN` - bot token for the "L7R Character Sheet" Discord application (registering slash commands; the interactions endpoint itself does not need it)
 - `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` - the slash-command application's snowflake and its Ed25519 `verify_key`. The public key is not a secret. Either one unset means `POST /discord/interactions` returns 503 - that is the bot's off switch.
 - `DISCORD_TEST_GUILD_ID` - guild to register slash commands into while developing ("Robot Role Call")
@@ -75,7 +76,7 @@ The following are stored as **Fly secrets** (not in `.env`):
 - `DISCORD_WHITELIST_IDS` - comma-separated Discord IDs allowed to log in
 - `ADMIN_DISCORD_IDS` - comma-separated Discord IDs with GM/admin privileges
 - `MAGIC_LOGIN_TOKENS` - also set as a Fly secret (same value as in `.env`)
-- `ROLL_QUERY_TOKEN` - also set as a Fly secret (same value as in `.env`)
+- `ROLL_QUERY_TOKEN` / `GM_WRITE_TOKEN` - also set as Fly secrets (same values as in `.env`)
 - `DISCORD_BOT_TOKEN` / `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` / `DISCORD_ROLL_CHARACTER_OVERRIDES` - also set as Fly secrets (same values as in `.env`)
 - `EXTENDED_KEEPALIVE_DISCORD_IDS` - also set as a Fly secret (same value as in `.env`)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - also set as Fly secrets (same values as in `.env`)
@@ -240,6 +241,7 @@ app/
   services/void_spend.py  - void limits, draw order, spend + school consequences (server-side)
   services/tracking.py    - tracking revision check, tracking snapshot, starting a combat round
   services/party.py    - gaming-group party lookup shared by sheet and bot
+  services/conversations.py - the GM's open conversation + the /discern-honor lookup
   templates/           - Jinja2 templates
 tests/                 - Unit test suite (pytest)
 tests/shared/          - JSON case tables run by BOTH the pytest and the Node suites
@@ -539,7 +541,7 @@ repo**), the authorization model is here (`owner_discord_id`, `editor_discord_id
 own `roll_history` row, so the image-matching problem `/api/rolls` exists to solve never arises
 for it.
 
-#### The command set (23 commands; Discord's cap is 100 per scope)
+#### The command set (24 commands; Discord's cap is 100 per scope)
 
 **Derived, never hand-maintained** - `discord_commands.command_definitions()` is what the
 registration script sends:
@@ -550,11 +552,12 @@ registration script sends:
 | one per id in `game_data.SKILLS` | `skill:<id>` | `void` |
 | `/oppose-social`, `/oppose-knowledge`, `/commune` | `knack:<id>` (`KNACK_COMMANDS`) | `void` |
 | `/initiative` | `initiative`, and starts the combat round | none |
+| `/discern-honor` | nothing - a private lookup, see "Discern Honor" | none |
 
 - `SKILLS` holds exactly the 18 non-combat skills (attack / parry are in `COMBAT_SKILLS`; iaijutsu
   is a knack), so combat is excluded **by construction**. The knack set is an explicit allow-list of
   exactly three: the GM held every other school knack and ability back by name. **A guard test**
-  (`test_the_registered_set_is_exactly_skills_plus_three_knacks_plus_two`,
+  (`test_the_registered_set_is_exactly_skills_plus_three_knacks_plus_three`,
   `test_no_combat_skill_is_reachable_through_any_command`) turns red if attack moves into `SKILLS`
   or a fourth knack appears. **Do not add combat skills, other knacks, Otherworldliness, or
   post-roll bonuses to the commands without the GM asking** - each is a separate feature he will
@@ -706,6 +709,55 @@ structured payloads - and not needing that toggle keeps this app out of Discord'
 process. Test server: "Robot Role Call", guild `1543009570157236274`. The live game channels are
 `case-of-the-mondays` (`832075590726844436`) and `a-team` (`832075722516201492`) in guild
 `745421621829042297`.
+
+### Discern Honor (`/discern-honor` and `/api/conversation`)
+
+The spec is `discord-design/discern-honor-requirements.md` (from gm-assistant, feature 212; its
+status block records what was built and the deviations). Discern Honor has no dice roll: the GM
+tells the player a number. The true Honor lives on Obsidian Portal, which only gm-assistant can
+read, and only the GM's REPL knows which NPC is being talked to. So **the REPL computes what each
+PC with the knack would be told and gives this app ONLY those told values; `/discern-honor` is a
+lookup.** The command computes nothing, so asking twice in one conversation cannot give two
+answers - the GM's explicit requirement. The REPL polls back which PCs asked and records only those.
+
+- **No true Honor value is ever sent here, and nothing does arithmetic on `told`.** If a change
+  needs either, the design has gone wrong - stop and say so. `told` is stored as its JSON literal
+  in a TEXT column (`ConversationDiscernHonor.told_json`) because a column declared JSON has NUMERIC
+  affinity in SQLite and quietly turns a bare `3.0` into `3`.
+- **`/api/conversation` is the GM API's one WRITE surface and has its own secret, `GM_WRITE_TOKEN`.**
+  `ROLL_QUERY_TOKEN` stays exactly as read-only as it was: presented to `PUT` / `DELETE` it is a
+  401, and with `GM_WRITE_TOKEN` unset those routes 503 even though the read token is configured.
+  `GET` accepts either. The write token is not accepted by `/api/rolls` or `/api/characters`.
+  **Do not add another write route under the read token.**
+- `PUT /api/conversation` (`conversation_id`, `group` = a `gaming_groups.id` as on `/api/rolls`,
+  `npc_ref`, `opened_at` with an offset, `discern_honor: [{character_id, told}]`). **The id that is
+  already open PRESERVES every existing entry's `told` and `asked_at`** and only adds characters not
+  yet present - a retried or crash-resumed open can never change a number a player has already been
+  shown. A new id replaces the group's conversation outright. One conversation per group
+  (`conversations.gaming_group_id` is unique). Everything is validated before any row is touched.
+- `GET /api/conversation?group=<id>` -> `{"conversation": {...}}` with `asked_at` per entry, or
+  `{"conversation": null}`. `DELETE /api/conversation/{id}` closes; 404 for an unknown id.
+- **`npc_ref` is opaque and is never shown to a player** - an NPC's record name can be a name the
+  players have not learned. The command takes no options for the same reason: an NPC option would
+  leak the roster through autocomplete.
+- **Every reply is ephemeral, success included, and nothing is written to `roll_history`.** It is
+  answered inline as a type-4 message (no deferral, no card) through
+  `discord_commands.run_private_command`, never `run_command`. The character is resolved exactly as
+  the roll commands do, edit check included. Replies, in order: no knack (school or foreign, rank
+  0 / absent); no open conversation; open but no entry ("the GM will have to tell you this one");
+  the told value. **The success reply is a function of `told` alone** - it names no NPC and says
+  nothing about accuracy, how many conversations there have been, or finality - and only the FIRST
+  successful ask sets `asked_at`. No "you already asked" scolding.
+- **Expiry is lazy, 12 hours from `opened_at`** (`CONVERSATION_TTL`): the REPL can die without
+  closing anything, and the failure to avoid is answering about an NPC who left the scene
+  yesterday. An expired conversation is neither served nor returned; the row stays until replaced.
+
+```bash
+fly secrets set GM_WRITE_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
+```
+
+The same value goes into `.env` and into gm-assistant's `development-secrets.ini`. Tests:
+`tests/test_conversations.py`.
 
 ## Style & Design Preferences
 

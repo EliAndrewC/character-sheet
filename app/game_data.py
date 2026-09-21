@@ -997,7 +997,7 @@ _KNACKS_LIST: List[SchoolKnack] = [
             "No roll required; passive ability."
         ),
         rules_text=(
-            "By engaging another character in conversation you may gain insight into that character's Honor.  When you use this knack the GM tells you that character's honor + 0.5 * (1k1 - 0.5).  After each conversation past the first, you get a more accurate idea of their honor, and the GM tells you a number which is 0.X closer to the truth, where X is your rank in this knack."
+            "By engaging another character in conversation you may gain insight into that character's Honor.  When you use this knack the GM tells you that character's honor + 0.5 * (1k1 - 5).  After each conversation past the first, you get a more accurate idea of their honor, and the GM tells you a number which is 0.X closer to the truth, where X is your rank in this knack."
         ),
     ),
     SchoolKnack(
