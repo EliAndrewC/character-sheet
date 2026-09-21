@@ -54,8 +54,12 @@
 > 11. **Expired rows are not deleted**, only ignored; the next `PUT` for the group replaces them.
 >     An entry whose character is later deleted is returned as stored.
 >
-> **Not yet done by this session**: setting `GM_WRITE_TOKEN` as a Fly secret, deploying, and
-> registering the command. Part 4 cannot run until the GM has done those.
+> **Deployed 2026-09-21**: `GM_WRITE_TOKEN` is set as a Fly secret, the app is deployed, and
+> `/discern-honor` is registered in the test guild and globally (global takes about an hour to
+> appear). Checked against the live app: `GET` with either token is 200, `PUT` / `DELETE` with the
+> read token are 401, the write token on `/api/characters` is 401. The one step left is the GM
+> copying `GM_WRITE_TOKEN` from this repo's `.env` into gm-assistant's `development-secrets.ini`;
+> then Part 4 can run.
 
 ---
 
