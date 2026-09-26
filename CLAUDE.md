@@ -808,6 +808,23 @@ The opt-in is server-rendered as `data-extended-keepalive="1"` on `<html>` by `e
 
 Pure decision logic (`shouldKeepAlive` and the `inSessionWindow` / `inActivityWindow` predicates, DST handling) is unit-tested in `tests/js/keepalive.test.js` and takes everything it needs as arguments; the mutable activity state lives in the impure layer and reaches the predicates through `currentOptions()`. The server half is covered by `tests/test_keepalive.py` and the browser wiring by `tests/e2e/test_keepalive.py` (mark `keepalive`).
 
+## Diagnostics: logs and client telemetry
+
+Built after a player's tab crashed mid-session (2026-09-21) and the logs could not say whose tab it was or whether the app was to blame. Everything lands in the ordinary app log - no third-party service, no S3.
+
+- **Where the logs are:** `/data/logs/app.log` on the Fly volume, rotated at UTC midnight, **60 days** kept (`app/log_config.py`). Read them with `fly ssh console -a l7r-character-sheet -C "cat /data/logs/app.log.2026-09-22"` (the file is named for the UTC day it covers - an evening session in New York spills into the next UTC date). A normal day is 30-300 KB.
+- **The access line is ours, not uvicorn's** (`app/access_log.py`, a pure ASGI middleware outside `AuthMiddleware`; uvicorn's is muted in `log_config`): `<Fly-Client-IP> "GET /characters/14" 200 12ms user=<discord_id>(<display name>)`. Behind Fly every peer address is the proxy (`172.16.7.106`), which is why the real one comes from `Fly-Client-IP`. Magic-login UUIDs and OAuth `code`/`state` are redacted (`redact_path`). `ACCESS_LOG=off` silences it (the clicktest server sets it).
+- **Build id:** `services/telemetry.build_id()` - the tag of `FLY_IMAGE_REF` (new per `fly deploy`, unchanged by `fly secrets set`), `APP_BUILD_ID` to override, `dev` locally. Logged at startup, sent as `X-App-Build` on every response, rendered as `data-build` on `<html>`.
+- **`static/js/telemetry.js`** (the first script in `base.html`, not deferred, so it is listening before anything can throw):
+  - uncaught errors / unhandled rejections -> `POST /client-log` via `sendBeacon` (cookie included, so the line names the user); at most 5 per page load, each message once; Alpine expression errors carry `expression`.
+  - **dead tabs:** each page keeps `l7r.tab.<id>` in localStorage (heartbeat every 30s, removed on `pagehide`). The next page load asks the others over a `BroadcastChannel` who is alive; an entry nobody answers for is reported as `unclean_exit` with uptime, time since last seen, visibility and heap first/last/peak. A tab the browser had frozen can be misreported; if it wakes and finds its entry gone it sends `resumed`, which marks the earlier report a false alarm. `document.wasDiscarded` is reported as `discarded`.
+  - **memory:** keepalive.js's ping carries `?tab=&up=&build=&heap=&vis=` (heap in MB, Chromium only), so the access log shows a leak as a number climbing through a game night. The ping only runs in the keepalive windows, which is when it matters.
+  - **new versions:** a response (the keepalive ping, or any HTMX request) whose `X-App-Build` differs from the page's `data-build` shows `#update-banner` ("Reload" / "Later"). It never reloads by itself - the viewer may be mid-roll or mid-sentence. Stale tabs cannot clobber data anyway (`tracking_rev` / `build_rev`); the banner just makes staleness visible.
+- **Chrome crash reports:** pages carry `Reporting-Endpoints: default="/client-reports"`; Chrome POSTs `crash` reports there (with `reason: "oom"` / `"unresponsive"` when known) even if the tab is never reopened. They are sent WITHOUT cookies, so they name the URL, not the user. Other report types are dropped.
+- **Grep for:** `client-error`, `client-rejection`, `client-unclean_exit`, `client-discarded`, `client-resumed`, `browser-crash`, `/keepalive?`, `Starting build`.
+- Both report endpoints are public, touch no DB, cap the body (16 KB / 64 KB), share a process-wide throttle (60/min), and write free text as JSON so a message cannot forge a log line. The privacy page describes all of this; **keep it in step if what is logged changes.**
+- Tests: `tests/test_telemetry.py`, `tests/js/telemetry.test.js`, `tests/e2e/test_telemetry.py` (mark `telemetry`; includes a real renderer crash via CDP `Page.crash`).
+
 ## Database Backups
 
 Automated S3 backups run on app startup via a background thread. The system:

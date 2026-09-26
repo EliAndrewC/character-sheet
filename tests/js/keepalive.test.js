@@ -205,3 +205,44 @@ test("start schedules a 60s interval and returns the handle", () => {
     globalThis.fetch = origFetch;
   }
 });
+
+// ---------------------------------------------------------------------------
+// telemetry.js rides along on the ping: a memory sample in the query, and a
+// look at the reply's X-App-Build header.
+// ---------------------------------------------------------------------------
+
+test("tick appends the telemetry query and hands the reply to onResponse", async () => {
+  const calls = [];
+  const seen = [];
+  const reply = { headers: { get: () => "b2" } };
+  const fetchFn = (url) => { calls.push(url); return Promise.resolve(reply); };
+  const sent = K.tick(nyAug2026(0, 20, 0), fetchFn, undefined, {
+    query: "tab=t&up=5",
+    onResponse: (r) => seen.push(r),
+  });
+  assert.equal(sent, true);
+  assert.equal(calls[0], "/keepalive?tab=t&up=5");
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(seen, [reply]);
+});
+
+test("tick with empty extras pings the bare URL", async () => {
+  const calls = [];
+  K.tick(nyAug2026(0, 20, 0), (url) => { calls.push(url); return Promise.resolve({}); }, undefined, {});
+  assert.deepEqual(calls, ["/keepalive"]);
+});
+
+test("telemetryExtras is null without telemetry.js, and wires it when present", () => {
+  const orig = globalThis.L7RTelemetry;
+  try {
+    delete globalThis.L7RTelemetry;
+    assert.equal(K.telemetryExtras(), null);
+    globalThis.L7RTelemetry = {};
+    assert.equal(K.telemetryExtras(), null);
+    const noteResponse = () => {};
+    globalThis.L7RTelemetry = { currentSampleQuery: () => "tab=x", noteResponse };
+    assert.deepEqual(K.telemetryExtras(), { query: "tab=x", onResponse: noteResponse });
+  } finally {
+    globalThis.L7RTelemetry = orig;
+  }
+});

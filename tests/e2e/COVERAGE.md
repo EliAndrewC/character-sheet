@@ -1588,6 +1588,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `permissions` | Edit/delete visibility, non-editor | `test_permissions.py` |
 | `banners` | Draft status banners | `test_banners.py` |
 | `keepalive` | Fly Keep-alive Pinger | `test_keepalive.py` |
+| `telemetry` | Client diagnostics: error reports, dead-tab detection, memory samples, new-version banner | `test_telemetry.py` |
 | `pcp` | Player Character Points (confirm modal, reroll/free-raise/reroll-10s, void refresh, XP category, undo, read-only) | `test_pcp.py` |
 | `status_display` | Status section on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
 | `tracking` | Wounds, void points, per-adventure, concurrent writers | `test_tracking.py`, `test_tracking_advanced.py`, `test_tracking_concurrency.py`, `test_light_wounds.py`, `test_sheet_advanced.py` |
@@ -2058,6 +2059,23 @@ Per-account opt-in: while a listed viewer has a page open, pings continue for an
 - [x] An hour after the last interaction the pings stop (a forgotten tab goes quiet) - `test_keepalive.py::test_an_hour_after_the_last_interaction_the_pings_stop`
 - [x] Clicking restarts the hour, and pings resume - `test_keepalive.py::test_clicking_restarts_the_activity_window`
 - [x] An ordinary viewer's off-night tab is still silent (the opt-in changes nothing for them) - `test_keepalive.py::test_off_night_is_still_silent_for_an_ordinary_viewer`
+
+## Client Diagnostics (mark: `telemetry`; base.html, static/js/telemetry.js, POST /client-log)
+
+Pure decisions (limiter, dead-tab detection, heap tracking, sample query, stale-build check) are pinned in `tests/js/telemetry.test.js`; the telemetry query and response hook on the keepalive ping in `tests/js/keepalive.test.js`; the access line, headers and both report endpoints in `tests/test_telemetry.py`. The e2e server runs as build `e2e-build`.
+
+- [x] Every page renders `data-build`, loads telemetry.js, and registers its tab in localStorage - `test_telemetry.py::test_page_carries_its_build_and_registers_its_tab`
+- [x] An uncaught error is POSTed to `/client-log` with message, stack, page and build - `test_telemetry.py::test_uncaught_error_is_reported`
+- [x] An unhandled promise rejection is reported - `test_telemetry.py::test_unhandled_rejection_is_reported`
+- [x] An Alpine expression error carries the offending expression - `test_telemetry.py::test_alpine_expression_error_carries_the_expression`
+- [x] The same error repeated is reported once - `test_telemetry.py::test_repeated_errors_are_reported_once`
+- [x] A tab killed by a real renderer crash (CDP `Page.crash`) is reported as `unclean_exit` by the next page, once - `test_telemetry.py::test_a_crashed_tab_is_reported_by_the_next_page`
+- [x] A tab still open (answers the probe) and a page that navigated away are NOT reported - `test_telemetry.py::test_open_and_closed_tabs_are_not_reported`
+- [x] The live keepalive ping carries tab id, uptime, build and heap MB - `test_telemetry.py::test_keepalive_ping_carries_the_memory_sample`
+- [x] No banner while the server's `X-App-Build` matches the page - `test_telemetry.py::test_no_banner_while_the_build_matches`
+- [x] A newer build shows the update banner; "Later" hides it for the rest of the page's life - `test_telemetry.py::test_new_build_shows_the_banner_and_later_dismisses_it`
+- [x] "Reload" reloads the page - `test_telemetry.py::test_reload_button_reloads_the_page`
+- [x] The banner fits a 375px phone screen with both buttons visible and no horizontal overflow - `test_telemetry.py::test_banner_fits_a_phone_screen`
 
 ## Professions (mark: `professions`)
 

@@ -5,8 +5,11 @@
 
    `data-extended-keepalive` opts this viewer into keepalive.js's activity
    window (see app/main.py extended_keepalive_enabled). Page-level flags the
-   server decides go here, on <html>, alongside the theme. #}
-<html lang="en"{% if dark_mode_enabled(request) %} class="dark"{% endif %}{% if extended_keepalive_enabled(request) %} data-extended-keepalive="1"{% endif %}>
+   server decides go here, on <html>, alongside the theme.
+
+   `data-build` is the deploy this page was rendered by; telemetry.js offers a
+   reload when a later response's X-App-Build names a newer one. #}
+<html lang="en"{% if dark_mode_enabled(request) %} class="dark"{% endif %}{% if extended_keepalive_enabled(request) %} data-extended-keepalive="1"{% endif %} data-build="{{ app_build_id() }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,6 +24,11 @@
        only etag/last-modified, so without a versioned URL browsers can keep an
        old copy via heuristic caching. Mirrors the ?v= on the JS assets below. #}
     <link rel="stylesheet" href="/static/css/app.css?v={{ static_v('css/app.css') }}">
+    {# Diagnostics: reports uncaught errors and tabs that died without closing
+       to /client-log, and notices a new deploy. FIRST script, and not
+       deferred, so it is listening before anything else can throw. See
+       app/services/telemetry.py. #}
+    <script src="/static/js/telemetry.js?v={{ static_v('js/telemetry.js') }}"></script>
     <script src="/static/js/htmx.min.js"></script>
     {# Pure roll-math helpers (window.L7RRollMath). Loaded before Alpine so the
        sheet's components can call it. Logic lives here (unit-testable) rather
@@ -511,6 +519,20 @@
         Database backups offline: {{ get_backup_error() }}
     </div>
     {% endif %}
+
+    {# Shown by telemetry.js when the server has been redeployed since this
+       page loaded. Never reloads by itself: the viewer may be mid-roll or
+       mid-sentence in the editor. #}
+    <div id="update-banner" hidden role="status"
+         class="fixed top-3 left-1/2 -translate-x-1/2 z-[70] w-[calc(100%-2rem)] max-w-md">
+        <div class="bg-white border border-accent/40 shadow-lg rounded-lg px-4 py-3 text-sm text-ink flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span class="flex-1 min-w-[12rem]">A new version of the character sheet is available. Reload when you are at a good stopping point.</span>
+            <span class="flex gap-2 ml-auto">
+                <button type="button" data-update-reload class="btn-primary px-3 py-1.5 rounded text-sm font-medium">Reload</button>
+                <button type="button" data-update-dismiss class="btn-ghost px-3 py-1.5 rounded text-sm font-medium">Later</button>
+            </span>
+        </div>
+    </div>
 
     <main class="max-w-6xl mx-auto px-4 pt-6 {% block main_pb %}pb-6{% endblock %}">
         {% block content %}{% endblock %}

@@ -71,15 +71,24 @@ class TestHandlerInstallation:
         captured = capsys.readouterr()
         assert "stderr line" in captured.err
 
-    def test_uvicorn_loggers_get_the_file_handler(self, tmp_path):
+    def test_uvicorn_error_logger_gets_the_file_handler(self, tmp_path):
         """Uvicorn's loggers don't propagate to root by default, so we
-        attach our file handler directly. Otherwise its access logs
-        would never make it to the persistent file."""
+        attach our file handler directly. Otherwise its startup / shutdown
+        lines would never make it to the persistent file."""
+        log_config.configure_logging()
+        logging.getLogger("uvicorn.error").info("Started server process [1]")
+        _flush_handlers()
+        contents = _read_app_log(tmp_path)
+        assert "Started server process [1]" in contents
+
+    def test_uvicorn_access_log_is_muted(self, tmp_path):
+        """``app.access_log`` writes the access line (with the user and the
+        real client address); uvicorn's own would just double the log."""
         log_config.configure_logging()
         logging.getLogger("uvicorn.access").info("GET /foo 200")
         _flush_handlers()
-        contents = _read_app_log(tmp_path)
-        assert "GET /foo 200" in contents
+        assert "GET /foo 200" not in _read_app_log(tmp_path)
+        assert logging.getLogger("uvicorn.access").disabled is True
 
     def test_repeated_calls_do_not_multiply_handlers(self):
         log_config.configure_logging()
@@ -93,7 +102,7 @@ class TestHandlerInstallation:
 
 
 class TestRotationConfig:
-    def test_daily_midnight_with_15_backups(self):
+    def test_daily_midnight_with_60_backups(self):
         log_config.configure_logging()
         file_handlers = [
             h for h in log_config._INSTALLED_HANDLERS
@@ -102,7 +111,7 @@ class TestRotationConfig:
         assert len(file_handlers) == 1
         h = file_handlers[0]
         assert h.when == "MIDNIGHT"
-        assert h.backupCount == 15
+        assert h.backupCount == 60
         assert h.utc is True
 
 

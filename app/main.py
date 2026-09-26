@@ -22,17 +22,20 @@ from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
 from app.routes import (
     art, auth, characters, discord, gm_api, google_sheets, import_char, names,
-    pages, rolls,
+    pages, rolls, telemetry,
 )
+from app.access_log import AccessLogMiddleware
 from app.game_data import RING_NAMES, SCHOOL_RING_KNACK_IDS
 from app.services.auth import get_extended_keepalive_ids, is_admin
 from app.services.import_rate_limit import import_enabled
+from app.services.telemetry import build_id
 
 log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    log.info("Starting build %s", build_id())
     init_db()
     _seed_campaign_players()
     threading.Thread(target=_check_and_backup, daemon=True).start()
@@ -108,6 +111,9 @@ def extended_keepalive_enabled(request) -> bool:
 
 
 templates.env.globals["extended_keepalive_enabled"] = extended_keepalive_enabled
+# Rendered as ``data-build`` on <html>; telemetry.js compares it with the
+# ``X-App-Build`` header of later responses to notice a deploy.
+templates.env.globals["app_build_id"] = build_id
 
 # Static files
 # Ensure correct font MIME types - Python's mimetypes doesn't know woff2 by
@@ -343,6 +349,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(AuthMiddleware)
+# Added after AuthMiddleware so it wraps it: the user is known by the time
+# the access line is written.
+app.add_middleware(AccessLogMiddleware)
 
 # Routes
 app.include_router(pages.router)
@@ -355,6 +364,7 @@ app.include_router(names.router)
 app.include_router(rolls.router)
 app.include_router(gm_api.router)
 app.include_router(discord.router)
+app.include_router(telemetry.router)
 
 
 # Global backup status (read by routes for admin banner)

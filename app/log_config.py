@@ -4,8 +4,8 @@ Logs go to two sinks:
 
   1. ``stderr`` — preserves ``fly logs`` live-tail behavior.
   2. ``$LOG_DIR/app.log`` on the persistent volume, rotated at UTC
-     midnight, 15 days retained — gives a window for diagnosing bug
-     reports after the fact.
+     midnight, 60 days retained — gives a window for diagnosing bug
+     reports after the fact (a normal day is well under a megabyte).
 
 Without this, ``logging.getLogger(...)`` calls scattered across the
 app land in Fly's short-lived live buffer and disappear within hours,
@@ -34,12 +34,17 @@ _LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)s %(message)s"
 # also for any hot-reload path during dev.
 _INSTALLED_HANDLERS: list[logging.Handler] = []
 
-# Uvicorn ships logs through these named loggers. Both have their
-# parent's propagation configured such that attaching our handler at
-# each leaf gives exactly one emission per record - attaching to
-# ``uvicorn`` as well duplicates ``uvicorn.error`` lines because that
-# child propagates up to it.
-_UVICORN_LOGGERS = ("uvicorn.access", "uvicorn.error")
+# Uvicorn ships its server lifecycle lines through ``uvicorn.error``, which
+# does not propagate to root, so our file handler is attached to it
+# directly. Attaching to ``uvicorn`` as well would duplicate them, since
+# that child propagates up to it.
+_UVICORN_LOGGERS = ("uvicorn.error",)
+
+# Uvicorn's own access log is muted: ``app.access_log`` writes a better
+# line (real client address, the signed-in user, timing), and keeping both
+# would double the log. ``disabled`` rather than removing handlers, because
+# uvicorn configures this logger before the app is imported.
+_MUTED_LOGGERS = ("uvicorn.access",)
 
 
 def _remove_previously_installed() -> None:
@@ -65,6 +70,8 @@ def configure_logging() -> None:
 
     root = logging.getLogger()
     root.setLevel(logging.INFO)
+    for name in _MUTED_LOGGERS:
+        logging.getLogger(name).disabled = True
     formatter = logging.Formatter(_LOG_FORMAT)
 
     stderr_handler = logging.StreamHandler(sys.stderr)
@@ -78,7 +85,7 @@ def configure_logging() -> None:
         file_handler = logging.handlers.TimedRotatingFileHandler(
             log_dir / "app.log",
             when="midnight",
-            backupCount=15,
+            backupCount=60,
             encoding="utf-8",
             utc=True,
         )
@@ -88,9 +95,9 @@ def configure_logging() -> None:
 
         # Uvicorn configures its own loggers and does not propagate to
         # root, so attach our file handler directly. Without this its
-        # access/error lines never make it to the persistent file -
-        # and those are exactly the lines you want when chasing "what
-        # request did the user make right before the bug?".
+        # startup / shutdown / error lines never reach the persistent
+        # file - and a restart mid-session is exactly what you want to
+        # see when chasing a bug report.
         for name in _UVICORN_LOGGERS:
             logging.getLogger(name).addHandler(file_handler)
     except OSError as e:

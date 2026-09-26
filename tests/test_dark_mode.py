@@ -147,14 +147,14 @@ class TestDarkClassRendering:
         client.cookies.set("dark_mode", "1")
         resp = client.get("/")
         assert resp.status_code == 200
-        assert '<html lang="en" class="dark">' in resp.text
+        assert '<html lang="en" class="dark" data-build="dev">' in resp.text
 
     def test_no_dark_class_without_cookie(self, client):
         client.cookies.set("dark_mode", "0")
         resp = client.get("/")
         assert resp.status_code == 200
         assert 'class="dark"' not in resp.text
-        assert '<html lang="en">' in resp.text
+        assert '<html lang="en" data-build="dev">' in resp.text
 
     def test_stylesheet_is_cache_busted(self, client):
         """app.css must be versioned so a rebuilt stylesheet (e.g. new dark-mode

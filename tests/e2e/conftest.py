@@ -93,6 +93,12 @@ def live_server_url():
     # Opt the ``page`` fixture's user in (and nobody else) so the clicktests
     # can see both sides of the gate.
     env["EXTENDED_KEEPALIVE_DISCORD_IDS"] = "183026066498125825"
+    # A fixed build id, so the telemetry clicktests can play "the server was
+    # redeployed" by answering with a different X-App-Build.
+    env["APP_BUILD_ID"] = "e2e-build"
+    # The app writes its own access line (app/access_log.py), which
+    # uvicorn's --no-access-log below does not reach.
+    env["ACCESS_LOG"] = "off"
     # Keep the Gemini API offline for clicktests; the stub returns canned
     # responses based on markers in the uploaded document. See
     # app/services/import_llm.py::_stub_response_for.

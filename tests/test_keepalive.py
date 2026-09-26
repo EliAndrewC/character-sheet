@@ -116,4 +116,4 @@ def test_the_flag_does_not_disturb_the_dark_mode_class(client, monkeypatch):
     """Both page-level flags live on <html>; neither should eat the other."""
     monkeypatch.setenv(ENV_VAR, VIEWER_ID)
     html = client.get("/", cookies={"dark_mode": "1"}).text
-    assert '<html lang="en" class="dark" data-extended-keepalive="1">' in html
+    assert '<html lang="en" class="dark" data-extended-keepalive="1" data-build="dev">' in html

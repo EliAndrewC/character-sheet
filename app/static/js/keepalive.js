@@ -82,10 +82,21 @@
 
   // One timer tick: ping if either window is open. Returns true if a ping
   // was sent. `fetchFn` is injectable for tests.
-  function tick(date, fetchFn, opts) {
+  //
+  // `extras` is how telemetry.js rides along (see telemetryExtras): `query`
+  // is appended to the URL (this page's memory sample, so the access log
+  // shows a leak climbing through a game night), and `onResponse` sees the
+  // reply (whose X-App-Build header reveals a deploy since this page loaded).
+  function tick(date, fetchFn, opts, extras) {
     if (!shouldKeepAlive(date, opts)) return false;
+    var url = extras && extras.query ? URL + "?" + extras.query : URL;
+    var onResponse = extras && extras.onResponse;
     try {
-      fetchFn(URL, { cache: "no-store", credentials: "same-origin" }).catch(function () {});
+      fetchFn(url, { cache: "no-store", credentials: "same-origin" })
+        .then(function (resp) {
+          if (onResponse) onResponse(resp);
+        })
+        .catch(function () {});
     } catch (e) {
       /* a failed ping is harmless - the next tick retries */
     }
@@ -135,6 +146,13 @@
     return true;
   }
 
+  // The telemetry hooks for `tick`, or null when telemetry.js is absent.
+  function telemetryExtras() {
+    var T = globalThis.L7RTelemetry;
+    if (!T || typeof T.currentSampleQuery !== "function") return null;
+    return { query: T.currentSampleQuery(), onResponse: T.noteResponse };
+  }
+
   function start() {
     if (typeof setInterval !== "function" || typeof fetch !== "function") return null;
     if (typeof document !== "undefined") {
@@ -145,7 +163,7 @@
     // restarts the hour.
     noteInteraction();
     return setInterval(function () {
-      tick(new Date(), fetch, currentOptions());
+      tick(new Date(), fetch, currentOptions(), telemetryExtras());
     }, INTERVAL_MS);
   }
 
@@ -160,6 +178,7 @@
     inActivityWindow: inActivityWindow,
     shouldKeepAlive: shouldKeepAlive,
     tick: tick,
+    telemetryExtras: telemetryExtras,
     currentOptions: currentOptions,
     noteInteraction: noteInteraction,
     enableExtended: enableExtended,
