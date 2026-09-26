@@ -425,6 +425,33 @@ class TestPublishStatus:
         assert c.has_unpublished_changes is False
         assert c.publish_status == "published"
 
+    def test_snapshot_missing_any_empty_valued_key_does_not_flip(self, db):
+        """Structural guard for the test above. Every key ``to_dict``
+        emits through an ``or []`` / ``or {}`` / ``or ""`` fallback will
+        be absent from snapshots published before its column existed, so
+        each needs an entry in ``has_unpublished_changes``'s defaults.
+        Listing the keys by hand is what let ``profession`` and
+        ``profession_abilities`` slip through: every character published
+        before professions shipped showed "Draft changes" with no edit.
+        This drops each empty-valued key in turn, so a new column is
+        covered the moment it is added to ``to_dict``."""
+        c = self._published(db)
+        full = dict(c.published_state)
+        empty_keys = [
+            k for k, v in full.items()
+            if v in ([], {}, "", False, 0) and v is not None
+        ]
+        assert "profession" in empty_keys
+        assert "profession_abilities" in empty_keys
+        flipped = []
+        for key in empty_keys:
+            snap = dict(full)
+            snap.pop(key)
+            c.published_state = snap
+            if c.has_unpublished_changes:
+                flipped.append(key)
+        assert flipped == [], flipped
+
 
 class TestAgeMetadata:
     """Age is metadata, not a stat. It persists, the editor can read/write
