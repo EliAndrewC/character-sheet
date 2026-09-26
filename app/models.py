@@ -423,8 +423,15 @@ class Character(Base):
         # state with no real edit. Every list/dict/bool field that
         # ``to_dict`` returns through an ``or`` fallback needs a
         # default of the same shape here.
+        # ``test_snapshot_missing_any_empty_valued_key_does_not_flip``
+        # fails if a key is missing here. ``profession`` /
+        # ``profession_abilities`` were once missing, and every character
+        # published before professions shipped showed "Draft changes".
         defaults = {"campaign_advantages": [], "campaign_disadvantages": [],
                     "advantage_details": {},
+                    "school_ring_choice": "", "skills": {}, "knacks": {},
+                    "advantages": [], "disadvantages": [], "earned_xp": 0,
+                    "profession": "", "profession_abilities": {},
                     "attack": 1, "parry": 1, "rank_locked": False,
                     "current_light_wounds": 0, "current_serious_wounds": 0,
                     "current_void_points": 0, "current_temp_void_points": 0,
