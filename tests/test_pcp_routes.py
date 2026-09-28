@@ -310,3 +310,13 @@ class TestPcpSheetRender:
         assert resp.status_code == 200
         assert 'data-testid="pcp-editor-line"' in resp.text
         assert 'pcpCount: 3' in resp.text
+
+
+def test_the_pcp_service_refuses_an_unknown_use(client):
+    import pytest
+    from app.services.pcp import PcpRefused, spend_pcp
+    cid = _seed_clean_published(client)
+    s = client._test_session_factory()
+    with pytest.raises(PcpRefused):
+        spend_pcp(s, s.get(Character, cid), "juggle", OWNER)
+    s.close()

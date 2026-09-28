@@ -35,9 +35,12 @@ from app.services.tracking import (
     claimed_rev_from,
     is_build_stale,
     is_stale,
+    set_serious_wounds,
     stale_build_response_body,
     tracking_snapshot,
 )
+from app.services.adventure_state import sanitize_adventure_state
+from app.services.tracking_ops import OpRefused, apply_op
 from app.services.versions import (
     compute_diff_summary,
     compute_version_diff,
@@ -47,7 +50,7 @@ from app.services.versions import (
     stringify_version_diff_entries,
 )
 from app.services.xp import editor_xp_view, pcp_next_cost, pcp_total_cost
-from app.services.nights_rest import _void_max
+from app.services.pcp import PCP_USE_LABELS, PcpRefused, spend_pcp
 
 router = APIRouter(prefix="/characters", dependencies=[Depends(prefetch_body), Depends(npc_guard)])
 
@@ -1643,14 +1646,6 @@ async def discard_changes_route(
 # the other three are roll effects (the dice work happens client-side - the
 # server only records the escalating XP cost by bumping pcp_count and
 # publishing a version). See rules/10-player_character_points.md.
-_PCP_USE_LABELS = {
-    "reroll": "reroll a roll",
-    "reroll_tens": "reroll 10s while impaired",
-    "free_raise": "a free raise",
-    "void_refresh": "refresh a void point",
-}
-
-
 @router.post("/{char_id}/spend-pcp")
 async def spend_pcp_route(
     request: Request, char_id: int, db: Session = Depends(get_db)
@@ -1687,48 +1682,20 @@ async def spend_pcp_route(
     except Exception:
         pass
     use = body.get("use")
-    if use not in _PCP_USE_LABELS:
+    if use not in PCP_USE_LABELS:
         return JSONResponse({"error": "Invalid PCP use"}, status_code=400)
-
-    if character.publish_status != "published":
-        return JSONResponse(
-            {"error": "Apply or discard your pending changes before "
-                      "spending a Player Character Point."},
-            status_code=409,
-        )
-
-    new_count = (character.pcp_count or 0) + 1
-    character.pcp_count = new_count
-    cost = pcp_total_cost(new_count) - pcp_total_cost(new_count - 1)  # = new_count
-
-    void_max = _void_max(character)
-    if use == "void_refresh":
-        character.current_void_points = min(
-            void_max, (character.current_void_points or 0) + 1
-        )
-
-    summary = (
-        f"Spent Player Character Point #{new_count} ({cost} XP): "
-        f"{_PCP_USE_LABELS[use]}"
-    )
-    version = publish_character(
-        character, db, summary=summary, author_discord_id=user["discord_id"],
-    )
+    try:
+        spent = spend_pcp(db, character, use, user["discord_id"])
+    except PcpRefused as exc:
+        return JSONResponse({"error": str(exc)}, status_code=409)
     db.commit()
 
-    return JSONResponse({
-        "status": "spent",
-        "use": use,
-        "pcp_count": new_count,
-        "pcp_total_cost": pcp_total_cost(new_count),
-        "pcp_next_cost": pcp_next_cost(new_count),
-        "version_number": version.version_number,
-        "current_void_points": character.current_void_points,
-        "void_max": void_max,
+    return JSONResponse(dict(
+        spent, status="spent",
         # A void refresh moves the tracking revision; the tab that asked for
         # it adopts the new one so its next save is not refused as stale.
-        "tracking_rev": character.tracking_rev or 0,
-    })
+        tracking_rev=character.tracking_rev or 0,
+    ))
 
 
 @router.post("/{char_id}/undo-pcp")
@@ -2014,6 +1981,40 @@ def get_version_diff(
 # ---------------------------------------------------------------------------
 
 
+@router.post("/{char_id}/track/op")
+async def track_op(request: Request, char_id: int, db: Session = Depends(get_db)):
+    """One tracking OPERATION (server-rolls-design 4.2): ``{"op", "args"}``.
+
+    The server applies the rules and answers with the new snapshot, which
+    the tab adopts. Unlike ``/track`` (a whole-state write) an operation
+    names no revision and is never refused as stale: two operations compose.
+    A refusal is a 400 carrying the current snapshot, so the tab can resync.
+    """
+    user = getattr(request.state, "user", None)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    character = db.query(Character).filter(Character.id == char_id).first()
+    if not character:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    owner = db.query(User).filter(User.discord_id == character.owner_discord_id).first()
+    all_editors = get_all_editors(
+        character.editor_discord_ids or [],
+        owner.granted_account_ids or [] if owner else [],
+    )
+    if not can_edit_character(user["discord_id"], character.owner_discord_id, all_editors):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    body = await request.json()
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Expected a JSON object"}, status_code=400)
+    try:
+        apply_op(character, str(body.get("op") or ""), body.get("args") or {})
+    except OpRefused as exc:
+        return JSONResponse({"error": str(exc), "tracking": tracking_snapshot(character)},
+                            status_code=400)
+    db.commit()
+    return JSONResponse({"status": "ok", "tracking": tracking_snapshot(character)})
+
+
 @router.post("/{char_id}/track")
 async def track_state(
     request: Request, char_id: int, db: Session = Depends(get_db)
@@ -2063,23 +2064,15 @@ async def track_state(
         # ->0 (full reset of all three flags). Manual decrements that don't
         # land at 0 leave the flags untouched - they don't advance the
         # cadence; only a confirmed Night's Rest does.
-        old_sw = character.current_serious_wounds or 0
-        new_sw = max(0, int(body["current_serious_wounds"]))
-        character.current_serious_wounds = new_sw
-        if new_sw > old_sw:
-            character.sw_healing_received_new_since_rest = True
-            if old_sw == 0:
-                character.sw_healing_became_injured_since_rest = True
-        elif new_sw == 0 and old_sw > 0:
-            character.sw_healing_received_new_since_rest = False
-            character.sw_healing_became_injured_since_rest = False
-            character.sw_healing_last_rest_was_healing_night = False
+        set_serious_wounds(character, body["current_serious_wounds"])
     if "current_void_points" in body:
         character.current_void_points = max(0, int(body["current_void_points"]))
     if "current_temp_void_points" in body:
         character.current_temp_void_points = max(0, int(body["current_temp_void_points"]))
     if "adventure_state" in body:
-        character.adventure_state = body["adventure_state"]
+        # Validated against the schema (server-rolls-design 4.2): known
+        # keys, types and bounds; anything else is dropped (and logged).
+        character.adventure_state = sanitize_adventure_state(character, body["adventure_state"])
     if "action_dice" in body:
         character.action_dice = _sanitize_action_dice(body["action_dice"])
     if "precepts_pool" in body:

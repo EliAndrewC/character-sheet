@@ -1,6 +1,6 @@
 # Server-side Rolls and State Changes - Design
 
-Status: **Phase 1 done; Phase 2 next.** Decisions S1-S7 in section 8.
+Status: **Phases 1-3 done; Phase 4 in progress (server rerolls built, sheet wiring next).** Decisions S1-S7 in section 8.
 
 ## 1. Goal
 
@@ -189,16 +189,15 @@ removes the old ones.
 - [x] Clicktests: new `test_server_rolls.py`; `test_rolls.py -k "skill or ring or athletics or otherworld or kitsune or commune or void"` + `test_void_spending.py` (64), `test_readonly_rolls.py` + `test_roll_history_clicktest.py` (73 + 1 skip), freeform / bless / Xk1 / Ide / Ishi / priest-bless (43). Dice-forcing helpers moved to `tests/e2e/dice_control.py` (browser stub + the server's `X-Test-Dice` seam, test server only)
 
 ### Phase 2 - Tracking operations
-- [ ] `/track/op` with the operation set in 4.2; `adventure_state` schema
-- [ ] The tracking section's buttons (LW / SW / void / temp void / counters / toggles / resets /
-      Togashi heal / Hida trade / Kuni reflect / Absorb Void) use operations
-- [ ] Clicktests: `test_tracking.py`, `test_tracking_concurrency.py`, `test_light_wounds.py`,
-      `test_void_spending.py`, `test_tracking_advanced.py`
+- [x] `/track/op` with the operation set in 4.2 (`tracking_ops.py`: light wounds add/set, take serious, serious +/-, void +/- capped at max, temp void, counters, toggles, reset ability / adventure, Absorb Void, Togashi heal, Hida trade, action dice spend/unspend/annotate/clear); `adventure_state` schema (`adventure_state.py`) now applied to `/track` too; the serious-wound Night's Rest cadence lives in `tracking.set_serious_wounds` for every writer
+- [x] The tracking section's buttons (LW / SW / void / temp void / counters / toggles / resets /
+      Togashi heal / Hida trade / Kuni reflect / Absorb Void, action dice) use operations; the bridge queues them in order and a blob save waits for them
+- [x] Clicktests: `test_tracking.py`, `test_tracking_concurrency.py` (rewritten: an operation from a stale tab lands; the 409 path is provoked by a direct blob save), `test_light_wounds.py`,
+      `test_void_spending.py`, `test_tracking_advanced.py`, `test_sheet_js_errors.py`, and the school techniques touched (86)
 
 ### Phase 3 - Post-roll number actions
-- [ ] Raises, Togashi raises, Conviction (own and ally), Courtier 5th Dan, the arbitrary post-roll
-      bonus, Mirumoto points (persisted, per 5.4), with server-side undo
-- [ ] Clicktests: `test_rolls.py -k "raise or conviction"`, `test_school_abilities.py -k
+- [x] Raises, Togashi raises, Conviction, Courtier 5th Dan on server-made rolls: `POST /roll/{session}/act` enforces the per-roll caps and pools (simulate mode counts its own spends), keeps the session total and the history row, and undoes server-side (S5); the buttons update at once and snap back on a refusal (S2). The session-less windows (attack, wound check, duel) spend the same pools through the `counter` operation until their phases. Ally Conviction, the arbitrary post-roll bonus and Mirumoto points belong to the attack / parry windows and move with Phases 6-7
+- [x] Clicktests: `test_rolls.py -k "raise or conviction"`, `test_school_abilities.py -k
       "togashi or courtier or mirumoto or priest"`
 
 ### Phase 4 - Rerolls

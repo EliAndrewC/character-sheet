@@ -1,0 +1,254 @@
+"""Tracking operations: the sheet's state changes, applied by the server
+(server-rolls-design 4.2, Phase 2).
+
+The tracking section used to change its own copy of the state and post the
+whole blob to ``/track``. Each of its buttons is now an operation here: the
+tab says what happened ("take 1 serious wound", "spend Absorb Void"), the
+server checks it against the rules and the character, applies it, and the
+tab adopts the snapshot it answers with. An operation never answers 409
+(audit B9) - two operations compose; ``prefetch_body`` keeps each atomic.
+
+``apply_op`` raises ``OpRefused`` before changing anything.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Callable, Dict
+
+from app.models import Character
+from app.services.per_adventure import per_adventure_abilities
+from app.services.tracking import set_serious_wounds
+from app.services.void_spend import (
+    VoidSpendRefused, apply_void_spend, plan_void_spend, school_dan, void_limits,
+)
+
+BANK_KEYS = (
+    "akodo_banked_bonuses", "hiruma_banked_attack_bonus", "bayushi_banked_feint_raise",
+    "banked_wc_excess", "matsu_banked_wc_bonus", "matsu_banked_wc_bonuses",
+    "ide_banked_tn_reduce", "hida_banked_wc_bonus",
+)
+MANTIS_ROUND_KEYS = (
+    "mantis_posture_phase", "mantis_posture_history",
+    "mantis_offensive_3rd_dan_accum", "mantis_defensive_3rd_dan_accum",
+)
+MAX_LABEL = 500
+
+
+class OpRefused(ValueError):
+    """An operation the rules or the character's state cannot take."""
+
+
+def _int(args: Dict[str, Any], key: str) -> int:
+    try:
+        return int(args.get(key))
+    except (TypeError, ValueError):
+        raise OpRefused(f"{key} must be a whole number") from None
+
+
+def _delta(args: Dict[str, Any]) -> int:
+    delta = _int(args, "delta")
+    if delta not in (-1, 1):
+        raise OpRefused("delta must be 1 or -1")
+    return delta
+
+
+def _ability(character: Character, ability_id: Any, kind: str) -> Dict[str, Any]:
+    for a in per_adventure_abilities(character):
+        if a["id"] == ability_id and a["type"] == kind:
+            return a
+    raise OpRefused(f"{character.name} has no {ability_id} {kind}")
+
+
+def _state(character: Character) -> Dict[str, Any]:
+    return dict(character.adventure_state or {})
+
+
+def _dice(character: Character, args: Dict[str, Any]):
+    dice = [dict(d) for d in (character.action_dice or [])]
+    i = _int(args, "index")
+    if not 0 <= i < len(dice):
+        raise OpRefused("no such action die")
+    return dice, i
+
+
+# ---------------------------------------------------------------------------
+# Operations
+# ---------------------------------------------------------------------------
+
+def _light_wounds(c: Character, args: Dict[str, Any]) -> None:
+    mode, value = args.get("mode"), _int(args, "value")
+    if mode == "add":
+        if value < 1:
+            raise OpRefused("add at least 1 light wound")
+        c.current_light_wounds = (c.current_light_wounds or 0) + value
+    elif mode == "set":
+        if value < 0:
+            raise OpRefused("light wounds cannot be negative")
+        c.current_light_wounds = value
+    else:
+        raise OpRefused("mode must be add or set")
+
+
+def _take_serious(c: Character, args: Dict[str, Any]) -> None:
+    """Take serious wounds and clear the light wounds (the light-wound
+    modal's "take serious wounds", and a passed wound check's choice)."""
+    count = _int(args, "count")
+    if count < 1:
+        raise OpRefused("take at least 1 serious wound")
+    set_serious_wounds(c, (c.current_serious_wounds or 0) + count)
+    c.current_light_wounds = 0
+
+
+def _serious_wounds(c: Character, args: Dict[str, Any]) -> None:
+    set_serious_wounds(c, (c.current_serious_wounds or 0) + _delta(args))
+
+
+def _void(c: Character, args: Dict[str, Any]) -> None:
+    top = void_limits(c.to_dict())["void_max"]
+    c.current_void_points = max(0, min(top, (c.current_void_points or 0) + _delta(args)))
+
+
+def _temp_void(c: Character, args: Dict[str, Any]) -> None:
+    c.current_temp_void_points = max(0, (c.current_temp_void_points or 0) + _delta(args))
+
+
+def _counter(c: Character, args: Dict[str, Any]) -> None:
+    ability = _ability(c, args.get("id"), "counter")
+    state = _state(c)
+    key = ability["id"] + "_used"
+    state[key] = max(0, min(ability["max"], int(state.get(key, 0) or 0) + _delta(args)))
+    c.adventure_state = state
+
+
+def _toggle(c: Character, args: Dict[str, Any]) -> None:
+    ability = _ability(c, args.get("id"), "toggle")
+    state = _state(c)
+    state[ability["id"]] = bool(args.get("value"))
+    c.adventure_state = state
+
+
+def _reset_ability(c: Character, args: Dict[str, Any]) -> None:
+    ability_id = args.get("id")
+    ability = next((a for a in per_adventure_abilities(c) if a["id"] == ability_id), None)
+    if ability is None:
+        raise OpRefused(f"{c.name} has no {ability_id}")
+    state = _state(c)
+    if ability["type"] == "counter":
+        state[ability_id + "_used"] = 0
+    else:
+        state[ability_id] = False
+    c.adventure_state = state
+
+
+def _reset_adventure(c: Character, args: Dict[str, Any]) -> None:
+    """Every per-adventure counter and toggle, the action dice, the precepts
+    pool, every banked bonus and the Mantis round tracker."""
+    state = _state(c)
+    for a in per_adventure_abilities(c):
+        if a["type"] == "counter":
+            state[a["id"] + "_used"] = 0
+        else:
+            state[a["id"]] = False
+    for key in BANK_KEYS + MANTIS_ROUND_KEYS:
+        state.pop(key, None)
+    c.adventure_state = state
+    c.action_dice = []
+    c.precepts_pool = []
+
+
+def _absorb_void(c: Character, args: Dict[str, Any]) -> None:
+    """Absorb Void: a void point for one use of the pool (and its undo)."""
+    delta = _delta(args)
+    ability = _ability(c, "absorb_void", "counter")
+    state = _state(c)
+    used = int(state.get("absorb_void_used", 0) or 0)
+    if delta > 0 and used >= ability["max"]:
+        raise OpRefused("Absorb Void is used up")
+    if delta < 0 and used <= 0:
+        raise OpRefused("no Absorb Void to undo")
+    state["absorb_void_used"] = used + delta
+    c.adventure_state = state
+    top = void_limits(c.to_dict())["void_max"]
+    c.current_void_points = max(0, min(top, (c.current_void_points or 0) + delta))
+
+
+def _togashi_heal(c: Character, args: Dict[str, Any]) -> None:
+    """Togashi Ise Zumi 5th Dan: a void point heals 2 serious wounds."""
+    if c.school != "togashi_ise_zumi" or school_dan(c.to_dict()) < 5:
+        raise OpRefused(f"{c.name} cannot heal serious wounds with void")
+    if (c.current_serious_wounds or 0) < 2:
+        raise OpRefused("needs at least 2 serious wounds")
+    try:
+        plan = plan_void_spend(c, 0, activation_cost=1, roll_label="the 5th Dan heal")
+    except VoidSpendRefused as exc:
+        raise OpRefused(str(exc)) from None
+    apply_void_spend(c, plan)
+    set_serious_wounds(c, (c.current_serious_wounds or 0) - 2)
+
+
+def _hida_trade(c: Character, args: Dict[str, Any]) -> None:
+    """Hida Bushi 4th Dan: take 2 serious wounds to clear the light wounds."""
+    if c.school != "hida_bushi" or school_dan(c.to_dict()) < 4:
+        raise OpRefused(f"{c.name} cannot trade serious wounds for light wounds")
+    if (c.current_light_wounds or 0) <= 0:
+        raise OpRefused("no light wounds to clear")
+    set_serious_wounds(c, (c.current_serious_wounds or 0) + 2)
+    c.current_light_wounds = 0
+
+
+def _action_die(c: Character, args: Dict[str, Any]) -> None:
+    dice, i = _dice(c, args)
+    action = args.get("action")
+    label = str(args.get("label") or "")[:MAX_LABEL]
+    if action == "spend":
+        if dice[i].get("spent"):
+            raise OpRefused("that action die is already spent")
+        dice[i]["spent"] = True
+        dice[i].pop("spent_by", None)
+        if label:
+            dice[i]["spent_by"] = label
+    elif action == "unspend":
+        dice[i]["spent"] = False
+        dice[i].pop("spent_by", None)
+    elif action == "annotate":
+        if label:
+            dice[i]["spent_by"] = label
+        else:
+            dice[i].pop("spent_by", None)
+    else:
+        raise OpRefused("action must be spend, unspend or annotate")
+    c.action_dice = dice
+
+
+def _clear_action_dice(c: Character, args: Dict[str, Any]) -> None:
+    c.action_dice = []
+    state = _state(c)
+    for key in MANTIS_ROUND_KEYS:
+        state.pop(key, None)
+    c.adventure_state = state
+
+
+OPS: Dict[str, Callable[[Character, Dict[str, Any]], None]] = {
+    "light_wounds": _light_wounds,
+    "take_serious": _take_serious,
+    "serious_wounds": _serious_wounds,
+    "void": _void,
+    "temp_void": _temp_void,
+    "counter": _counter,
+    "toggle": _toggle,
+    "reset_ability": _reset_ability,
+    "reset_adventure": _reset_adventure,
+    "absorb_void": _absorb_void,
+    "togashi_heal": _togashi_heal,
+    "hida_trade": _hida_trade,
+    "action_die": _action_die,
+    "clear_action_dice": _clear_action_dice,
+}
+
+
+def apply_op(character: Character, op: str, args: Dict[str, Any]) -> None:
+    if op not in OPS:
+        raise OpRefused(f"unknown operation {op!r}")
+    if not isinstance(args, dict):
+        raise OpRefused("args must be an object")
+    OPS[op](character, args)

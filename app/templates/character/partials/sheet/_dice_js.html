@@ -238,6 +238,7 @@
             rollError: '',
             _serverRollRequest: null,
             _serverSessionId: null,
+            _serverSessionMode: null,
             title: '',
             formula: null,
             formulaText: '',
@@ -2496,6 +2497,7 @@
                 this.rollMenuOpen = false;
                 this.owHoverRow = null;
                 this.parryHoverRow = null;
+                this._serverSessionId = null;
                 // Reset the copy-as-image state so the button hides while
                 // the animation runs and reappears once the new render
                 // lands. ``_rollImageReqId`` is bumped here so any
@@ -2696,6 +2698,7 @@
                     ? `${this.formula.rolled}k${this.formula.kept} + ${this.formula.flat}`
                     : `${this.formula.rolled}k${this.formula.kept}`;
                 this._serverSessionId = data.session_id;
+                this._serverSessionMode = data.mode;
                 await this.runRoll({serverDice: data.dice, historyId: data.history_id});
             },
 
@@ -4040,22 +4043,70 @@
             canUndoRaise() {
                 return this.raisesSpentThisRoll > 0;
             },
-            spendRaise() {
+            // A post-roll action on the server-made roll in the result panel
+            // (server-rolls-design Phase 3). The display has already changed
+            // (S2); a refusal returns false so the caller puts it back.
+            async _act(action, args) {
+                const t = window._trackingBridge;
+                if (!this._serverSessionId || !t) return true;
+                let data = null, ok = false;
+                try {
+                    const resp = await fetch('/characters/' + t._charId + '/roll/' + this._serverSessionId + '/act', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({action: action, args: args || {}}),
+                    });
+                    data = await resp.json().catch(() => null);
+                    ok = resp.ok;
+                    if (!ok && t._showOpError) t._showOpError((data && data.error) || 'That could not be applied.');
+                } catch (e) {
+                    if (t._showOpError) t._showOpError('Could not reach the server - that was not applied.');
+                }
+                if (data && data.tracking && t.canEdit && this._serverSessionMode === 'live') {
+                    t.adoptServerState(data.tracking, false);
+                    this.advRaisesConfig.used = t.getCount('adventure_raises') || 0;
+                }
+                return ok;
+            },
+            // The session-less flows (attack, wound check, duel - still rolled in
+            // the browser) spend their pools through a tracking operation.
+            _poolStep(poolId, delta) {
+                const t = window._trackingBridge;
+                if (!t || !t.op || !t.canEdit) return;
+                // Shown at once (the availability checks read it); the
+                // operation's answer replaces it with the server's count.
+                const key = poolId + '_used';
+                t.adventureState = { ...t.adventureState, [key]: Math.max(0, (t.adventureState[key] || 0) + delta) };
+                t.op('counter', {id: poolId, delta: delta});
+            },
+            _onServerRoll(target) {
+                return !!this._serverSessionId && !target;
+            },
+
+            async spendRaise() {
                 if (!this.canSpendRaise()) return;
                 this.raisesSpentThisRoll++;
                 this.baseTotal += 5;
                 this.advRaisesConfig.used++;
-                if (window._trackingBridge) {
-                    window._trackingBridge.setCount('adventure_raises', this.advRaisesConfig.used);
+                if (this._onServerRoll()) {
+                    if (!(await this._act('raise'))) {
+                        this.raisesSpentThisRoll--; this.baseTotal -= 5; this.advRaisesConfig.used--;
+                    }
+                } else {
+                    this._poolStep('adventure_raises', 1);
                 }
             },
-            undoRaise() {
+            async undoRaise() {
                 if (!this.canUndoRaise()) return;
                 this.raisesSpentThisRoll--;
                 this.baseTotal -= 5;
                 this.advRaisesConfig.used--;
-                if (window._trackingBridge) {
-                    window._trackingBridge.setCount('adventure_raises', this.advRaisesConfig.used);
+                if (this._onServerRoll()) {
+                    if (!(await this._act('undo_raise'))) {
+                        this.raisesSpentThisRoll++; this.baseTotal += 5; this.advRaisesConfig.used++;
+                    }
+                } else {
+                    this._poolStep('adventure_raises', -1);
                 }
             },
 
@@ -4087,10 +4138,12 @@
                 if (target === 'duel-contested') this.duelContestedRoll += 1;
                 if (target === 'duel-strike') this.duelStrikeRoll += 1;
                 if (target === 'duel-damage') this.duelDamageTotal += 1;
-                const t = window._trackingBridge;
-                if (t) {
-                    const used = (t.getCount('conviction') || 0);
-                    t.setCount('conviction', used + 1);
+                if (this._onServerRoll(target)) {
+                    this._act('conviction').then(ok => {
+                        if (!ok) { this.convictionSpentThisRoll--; this.baseTotal -= 1; }
+                    });
+                } else {
+                    this._poolStep('conviction', 1);
                 }
                 if (target === 'attack' && typeof this._atkUpdateHitState === 'function') {
                     this._atkUpdateHitState();
@@ -4109,10 +4162,12 @@
                 if (target === 'duel-contested') this.duelContestedRoll -= 1;
                 if (target === 'duel-strike') this.duelStrikeRoll -= 1;
                 if (target === 'duel-damage') this.duelDamageTotal -= 1;
-                const t = window._trackingBridge;
-                if (t) {
-                    const used = (t.getCount('conviction') || 0);
-                    t.setCount('conviction', Math.max(0, used - 1));
+                if (this._onServerRoll(target)) {
+                    this._act('undo_conviction').then(ok => {
+                        if (!ok) { this.convictionSpentThisRoll++; this.baseTotal += 1; }
+                    });
+                } else {
+                    this._poolStep('conviction', -1);
                 }
                 if (target === 'attack' && typeof this._atkUpdateHitState === 'function') {
                     this._atkUpdateHitState();
@@ -4143,24 +4198,24 @@
             canSpendTogashiRaise() {
                 return this.togashiRaisesSpentThisRoll < this.togashiRaisesPerRollCap();
             },
-            spendTogashiRaise() {
+            async spendTogashiRaise() {
                 if (!this.canSpendTogashiRaise()) return;
                 this.togashiRaisesSpentThisRoll++;
                 this.baseTotal += 5;
-                const t = window._trackingBridge;
-                if (t) {
-                    t.setCount('togashi_daily_athletics_raises',
-                        (t.getCount('togashi_daily_athletics_raises') || 0) + 1);
+                if (this._onServerRoll()) {
+                    if (!(await this._act('togashi_raise'))) { this.togashiRaisesSpentThisRoll--; this.baseTotal -= 5; }
+                } else {
+                    this._poolStep('togashi_daily_athletics_raises', 1);
                 }
             },
-            undoTogashiRaise() {
+            async undoTogashiRaise() {
                 if (this.togashiRaisesSpentThisRoll <= 0) return;
                 this.togashiRaisesSpentThisRoll--;
                 this.baseTotal -= 5;
-                const t = window._trackingBridge;
-                if (t) {
-                    t.setCount('togashi_daily_athletics_raises',
-                        Math.max(0, (t.getCount('togashi_daily_athletics_raises') || 0) - 1));
+                if (this._onServerRoll()) {
+                    if (!(await this._act('undo_togashi_raise'))) { this.togashiRaisesSpentThisRoll++; this.baseTotal += 5; }
+                } else {
+                    this._poolStep('togashi_daily_athletics_raises', -1);
                 }
             },
 
@@ -6233,7 +6288,7 @@
                 this.atkRaisesSpent++;
                 this.baseTotal += 5;
                 this.atkRollTotal += 5;
-                if (t?.setCount) t.setCount('adventure_raises', used + 1);
+                this._poolStep('adventure_raises', 1);
                 this._atkUpdateHitState();
             },
 
@@ -6244,7 +6299,7 @@
                 this.atkRaisesSpent--;
                 this.baseTotal -= 5;
                 this.atkRollTotal -= 5;
-                if (t?.setCount) t.setCount('adventure_raises', Math.max(0, used - 1));
+                this._poolStep('adventure_raises', -1);
                 this._atkUpdateHitState();
             },
 
@@ -6259,8 +6314,7 @@
                 this.atkRollTotal += 5;
                 const t = window._trackingBridge;
                 if (t) {
-                    t.setCount('togashi_daily_athletics_raises',
-                        (t.getCount('togashi_daily_athletics_raises') || 0) + 1);
+                    this._poolStep('togashi_daily_athletics_raises', 1);
                 }
                 this._atkUpdateHitState();
             },
@@ -6272,8 +6326,7 @@
                 this.atkRollTotal -= 5;
                 const t = window._trackingBridge;
                 if (t) {
-                    t.setCount('togashi_daily_athletics_raises',
-                        Math.max(0, (t.getCount('togashi_daily_athletics_raises') || 0) - 1));
+                    this._poolStep('togashi_daily_athletics_raises', -1);
                 }
                 this._atkUpdateHitState();
             },
@@ -6699,7 +6752,7 @@
                 this.wcMargin = wc.margin;
                 this.wcSeriousWounds = wc.seriousWounds;
                 // Deduct the raise from tracking
-                if (t?.setCount) t.setCount('adventure_raises', raisesUsed + 1);
+                this._poolStep('adventure_raises', 1);
             },
 
             wcSpendMatsuBonus(idx) {
@@ -6744,7 +6797,7 @@
                 this.wcPassed = wc.passed;
                 this.wcMargin = wc.margin;
                 this.wcSeriousWounds = wc.seriousWounds;
-                if (t?.setCount) t.setCount('adventure_raises', Math.max(0, raisesUsed - 1));
+                this._poolStep('adventure_raises', -1);
             },
 
             applyWoundCheckFailure() {

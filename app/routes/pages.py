@@ -47,7 +47,7 @@ from app.services.dark_secret import (
 from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.roll_sessions import server_rolled
-from app.services.special_rolls import can_bless, xk1_ability
+from app.services.special_rolls import can_bless, performs_impaired_ritual, xk1_ability
 from app.services.party import (
     party_member_dan,
     party_member_data,
@@ -599,17 +599,14 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     # with Priest 5th Dan conviction, Priest 3rd Dan precepts sharing and the
     # party-effect layer generally - a self entry leaking into those would be
     # a subtle and hard-to-spot bug.
-    def _performs_impaired_ritual(c) -> bool:
-        return c.school == "priest" or holds_ability(c, "priest_ignore_penalties")
-
     party_priests = []
-    if _performs_impaired_ritual(character):
+    if performs_impaired_ritual(character):
         party_priests.append({
             "priest_id": character.id, "name": character.name, "is_self": True,
         })
     if character.gaming_group_id:
         for p in party_chars:
-            if _performs_impaired_ritual(p):
+            if performs_impaired_ritual(p):
                 party_priests.append({
                     "priest_id": p.id, "name": p.name, "is_self": False,
                 })

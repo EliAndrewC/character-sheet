@@ -1386,10 +1386,11 @@ The Suzume family of the Sparrow clan is drawn from Crane Doji Artisans and merc
 
 ### Concurrent writers (tracking revision; `_tracking_js.html` save / adoptServerState, tracking.html notice)
 
-- [x] A save from a tab that has not seen another tab's change is refused (409) instead of overwriting it; the tab adopts the server's values (the other tab's void spend is NOT refunded), its own change is not applied, the "changed somewhere else" notice appears, and none of it reloads the page → `test_tracking_concurrency.py::test_stale_save_is_refused_and_the_tab_recovers_without_reload`
+- [x] A tracking OPERATION (a tracking-section button) from a tab that missed another tab's change still lands, and the tab catches up in the same reply - no notice, no reload → `test_tracking_concurrency.py::test_an_operation_from_a_tab_that_missed_a_change_still_lands`
+- [x] A whole-state save (the flows not yet moved to operations) from a tab that has not seen another tab's change is refused (409) instead of overwriting it; the tab adopts the server's values (the other tab's void spend is NOT refunded), its own change is not applied, the "changed somewhere else" notice appears, and none of it reloads the page → `test_tracking_concurrency.py::test_stale_save_is_refused_and_the_tab_recovers_without_reload`
 - [x] After recovering, the tab's next save lands, and both tabs' changes survive a reload → `test_tracking_concurrency.py::test_after_recovering_the_tab_can_save_again`
 - [x] The stale notice has a working dismiss button → `test_tracking_concurrency.py::test_stale_notice_can_be_dismissed`
-- [x] Clicks made while a save is in flight are queued, not dropped: three rapid SW + clicks against a slowed /track all persist, with no stale notice → `test_tracking_concurrency.py::test_rapid_clicks_all_persist`
+- [x] Clicks made while an operation is in flight are queued in order, not dropped: three rapid SW + clicks against a slowed /track/op all persist, with no stale notice → `test_tracking_concurrency.py::test_rapid_clicks_all_persist`
 - [x] The stale notice stays inside a 375px viewport with no horizontal overflow → `test_tracking_concurrency.py::test_stale_notice_fits_a_phone_screen`
 
 ## Character Sheet — Skill Roll Display
@@ -2182,6 +2183,7 @@ The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the 
 - [x] The dice and total shown are the server's; the tab adopts the history row the server wrote - `test_server_rolls.py::test_the_dice_shown_are_the_servers`
 - [x] A failed request shows an error and Retry; Retry re-sends the same `request_id` - `test_server_rolls.py::test_a_failed_roll_offers_retry_with_the_same_request`
 - [x] A non-editor's roll is made in simulate mode and records nothing - `test_server_rolls.py::test_a_non_editor_rolls_on_the_server_without_changing_anything`
+- [x] A 3rd Dan raise on a server-made roll shows at once, is applied by the server (pool and recorded total), and survives a reload - `test_server_rolls.py::test_a_raise_on_a_server_roll_is_applied_by_the_server`
 
 ---
 

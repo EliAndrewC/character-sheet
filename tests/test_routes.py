@@ -3698,7 +3698,13 @@ class TestTrackState:
         assert char.current_void_points == 2
 
     def test_track_adventure_state(self, client):
-        cid = _seed_character(client, name="Adventure Test")
+        # A Lucky Ikoma Bard at 3rd Dan: the Lucky toggle and the 3rd Dan
+        # raise counter (2 x bragging = 4) are keys this character has.
+        cid = _seed_character(
+            client, name="Adventure Test", school="ikoma_bard", advantages=["lucky"],
+            knacks={"discern_honor": 3, "oppose_knowledge": 3, "oppose_social": 3},
+            skills={"bragging": 2},
+        )
         resp = client.post(
             f"/characters/{cid}/track",
             json={"adventure_state": {"lucky_used": True, "adventure_raises_used": 3}},
@@ -3707,6 +3713,20 @@ class TestTrackState:
         char = query_db(client).filter(Character.id == cid).first()
         assert char.adventure_state["lucky_used"] is True
         assert char.adventure_state["adventure_raises_used"] == 3
+
+    def test_track_adventure_state_is_validated(self, client):
+        """server-rolls-design 4.2: unknown keys are dropped, counters are
+        clamped to the character's own maximum."""
+        cid = _seed_character(
+            client, name="Schema Test", school="ikoma_bard",
+            knacks={"discern_honor": 3, "oppose_knowledge": 3, "oppose_social": 3},
+            skills={"bragging": 2},
+        )
+        client.post(f"/characters/{cid}/track", json={"adventure_state": {
+            "adventure_raises_used": 99, "lucky_used": True, "made_up": 1,
+        }})
+        char = query_db(client).filter(Character.id == cid).first()
+        assert char.adventure_state == {"adventure_raises_used": 4}
 
     def test_track_nonexistent_404(self, client):
         resp = client.post("/characters/999/track", json={"current_light_wounds": 1})
@@ -4488,10 +4508,9 @@ class TestConvictionResetButtonPosition:
         assert resp.status_code == 200
         text = resp.text
         reset_idx = text.find('data-action="reset-ability-conviction"')
-        # The increment button uses `setCount('conviction', Math.min(...`
-        # and the decrement button uses `setCount('conviction', Math.max(...`.
-        inc_idx = text.find("setCount('conviction', Math.min")
-        dec_idx = text.find("setCount('conviction', Math.max")
+        # The +/- buttons are tracking operations (server-rolls-design 4.2).
+        inc_idx = text.find("stepCounter('conviction', 1)")
+        dec_idx = text.find("stepCounter('conviction', -1)")
         assert reset_idx != -1, "Conviction reset button should be rendered"
         assert inc_idx != -1
         assert dec_idx != -1
@@ -5770,7 +5789,10 @@ class TestResetAdventureClearsActionDice:
         cid = _seed_character(client, name="ResetClearsAD")
         resp = client.get(f"/characters/{cid}")
         body = self._reset_adventure_body(resp.text)
-        assert "this.actionDice = []" in body
+        # The reset is a server operation now (server-rolls-design 4.2); the
+        # op itself clearing the action dice is pinned in
+        # tests/test_tracking_ops.py::test_reset_adventure_clears_everything_per_adventure.
+        assert "this.op('reset_adventure')" in body
 
     def test_hasAnythingSpent_considers_action_dice(self, client):
         """If only action dice are present (no other per-adventure state),

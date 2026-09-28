@@ -11,6 +11,15 @@
             <span>This sheet was changed somewhere else, so it has been brought up to date. Your last change here was not applied - check the numbers and make it again if you still want it.</span>
             <button type="button" @click="staleNotice = false" class="text-parchment/70 hover:text-parchment font-bold" aria-label="Dismiss">&times;</button>
         </div>
+        {# A tracking operation the server refused or could not receive
+           (server-rolls-design 4.2). The sheet already shows the server's
+           numbers by the time this paints. #}
+        <div x-show="opError" x-cloak x-transition.opacity
+             data-testid="tracking-op-error" role="alert"
+             class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-2rem)] bg-ink text-parchment dark-surface text-sm rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
+            <span x-text="opError"></span>
+            <button type="button" @click="opError = ''" class="text-parchment/70 hover:text-parchment font-bold" aria-label="Dismiss">&times;</button>
+        </div>
         <div class="flex flex-col md:flex-row gap-10">
         <!-- Wounds & Void (left column) -->
         <div class="flex-1 min-w-0 space-y-3">
@@ -123,13 +132,13 @@
                 <div class="text-sm text-ink/60">Serious Wounds</div>
                 <div class="flex items-center gap-2">
                     {% if viewer_can_edit %}
-                    <button @click="seriousWounds = Math.max(0, seriousWounds - 1); save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } }))"
+                    <button @click="op('serious_wounds', {delta: -1})"
                             :disabled="seriousWounds <= 0"
                             class="btn-pip">-</button>
                     {% endif %}
                     <span class="text-lg font-bold w-8 text-center" x-text="seriousWounds"></span>
                     {% if viewer_can_edit %}
-                    <button @click="seriousWounds++; save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } }))"
+                    <button @click="op('serious_wounds', {delta: 1})"
                             class="btn-pip">+</button>
                     {% endif %}
                 </div>
@@ -159,13 +168,13 @@
                 </div>
                 <div class="flex items-center gap-2">
                     {% if viewer_can_edit %}
-                    <button @click="voidPoints = Math.max(0, voidPoints - 1); save()"
+                    <button @click="op('void', {delta: -1})"
                             :disabled="voidPoints <= 0"
                             class="btn-pip">-</button>
                     {% endif %}
                     <span class="text-lg font-bold w-8 text-center" x-text="voidPoints"></span>
                     {% if viewer_can_edit %}
-                    <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); save()"
+                    <button @click="op('void', {delta: 1})"
                             :disabled="voidPoints >= voidMax"
                             class="btn-pip">+</button>
                     {% endif %}
@@ -176,14 +185,14 @@
                 <div class="text-sm text-ink/60">Temp Void</div>
                 <div class="flex items-center gap-2">
                     {% if viewer_can_edit %}
-                    <button @click="tempVoidPoints = Math.max(0, tempVoidPoints - 1); save()"
+                    <button @click="op('temp_void', {delta: -1})"
                             :disabled="tempVoidPoints <= 0"
                             data-action="temp-vp-minus"
                             class="btn-pip">-</button>
                     {% endif %}
                     <span class="text-lg font-bold w-8 text-center" x-text="tempVoidPoints"></span>
                     {% if viewer_can_edit %}
-                    <button @click="tempVoidPoints++; save()"
+                    <button @click="op('temp_void', {delta: 1})"
                             data-action="temp-vp-plus"
                             class="btn-pip">+</button>
                     {% endif %}
@@ -194,14 +203,14 @@
             {% if school_abilities.get('togashi_heal_sw') or school_abilities.get('hida_trade_sw') %}
             <div class="flex flex-wrap gap-2 mt-2">
                 {% if school_abilities.get('togashi_heal_sw') %}
-                <button @click="if (anyVPAvailable() > 0 && seriousWounds >= 2) { if (tempVoidPoints > 0) { tempVoidPoints--; } else if (voidPoints > 0) { voidPoints--; } else { setCount('worldliness', getCount('worldliness') + 1); } seriousWounds = Math.max(0, seriousWounds - 2); save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } })); }"
+                <button @click="if (anyVPAvailable() > 0 && seriousWounds >= 2) op('togashi_heal')"
                         :disabled="anyVPAvailable() <= 0 || seriousWounds < 2"
                         class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                     Spend 1 VP to heal 2 SW
                 </button>
                 {% endif %}
                 {% if school_abilities.get('hida_trade_sw') %}
-                <button @click="if (lightWounds > 0) { seriousWounds += 2; lightWounds = 0; save(); window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: seriousWounds } })); }"
+                <button @click="if (lightWounds > 0) op('hida_trade')"
                         :disabled="lightWounds <= 0"
                         class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                     Take 2 SW to reset LW to 0
@@ -409,7 +418,7 @@
                     <input type="number" x-model.number="kuniLW" min="0" placeholder="LW taken"
                            class="w-20 border rounded px-2 py-1 text-sm text-center">
                     <button type="button"
-                            @click="const t = window._trackingBridge; if (t && kuniLW > 0 && t.canEdit) { const extra = Math.floor(kuniLW / 2); t.lightWounds += extra; t.save(); } reflected = true;"
+                            @click="const t = window._trackingBridge; const extra = Math.floor(kuniLW / 2); if (t && extra > 0 && t.canEdit) { t.op('light_wounds', {mode: 'add', value: extra}); } reflected = true;"
                             :disabled="kuniLW <= 0"
                             class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 disabled:opacity-30 border border-accent/30">
                         Reflect
@@ -856,13 +865,13 @@
                            Disabled when voidPoints is already at max (no spent
                            VP to recover) so the button can't generate an
                            inert use. setCount triggers the persist. #}
-                        <button @click="voidPoints = Math.min(voidMax, voidPoints + 1); setCount('absorb_void', Math.min({{ ability.max }}, getCount('absorb_void') + 1))"
+                        <button @click="op('absorb_void', {delta: 1})"
                                 :disabled="getCount('absorb_void') >= {{ ability.max }} || voidPoints >= voidMax"
                                 data-action="use-absorb-void"
                                 title="Use Absorb Void to regain 1 spent void point"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
                         {% else %}
-                        <button @click="setCount('{{ ability.id }}', Math.min({{ ability.max }}, getCount('{{ ability.id }}') + 1))"
+                        <button @click="stepCounter('{{ ability.id }}', 1)"
                                 :disabled="getCount('{{ ability.id }}') >= {{ ability.max }}"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
                         {% endif %}
@@ -873,13 +882,13 @@
                         {% if ability.id == 'absorb_void' %}
                         {# Undo a prior use of Absorb Void: refund the use AND
                            re-spend the void point that was regained. #}
-                        <button @click="voidPoints = Math.max(0, voidPoints - 1); setCount('absorb_void', Math.max(0, getCount('absorb_void') - 1))"
+                        <button @click="op('absorb_void', {delta: -1})"
                                 :disabled="getCount('absorb_void') <= 0"
                                 data-action="undo-absorb-void"
                                 title="Undo: refund this use and re-spend the void point"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
                         {% else %}
-                        <button @click="setCount('{{ ability.id }}', Math.max(0, getCount('{{ ability.id }}') - 1))"
+                        <button @click="stepCounter('{{ ability.id }}', -1)"
                                 :disabled="getCount('{{ ability.id }}') <= 0"
                                 class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
                         {% endif %}
@@ -895,11 +904,11 @@
                               class="text-xs"></span>
                         {% if viewer_can_edit %}
                         <button x-show="!getToggle('{{ ability.id }}')"
-                                @click="setToggle('{{ ability.id }}', true)"
+                                @click="flipToggle('{{ ability.id }}', true)"
                                 data-action="toggle-{{ ability.id }}-on"
                                 class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded">Mark as used</button>
                         <button x-show="getToggle('{{ ability.id }}')" x-cloak
-                                @click="setToggle('{{ ability.id }}', false)"
+                                @click="flipToggle('{{ ability.id }}', false)"
                                 data-action="toggle-{{ ability.id }}-off"
                                 class="text-xs bg-ink/10 hover:bg-ink/20 px-2 py-0.5 rounded">Undo</button>
                         {% endif %}

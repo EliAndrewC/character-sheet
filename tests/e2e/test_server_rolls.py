@@ -67,3 +67,22 @@ def test_a_non_editor_rolls_on_the_server_without_changing_anything(page, page_n
     _wait_for_roll_result(page_nonadmin)
     body = answers[0].json()
     assert body["mode"] == "simulate" and body["history_id"] is None
+
+
+def test_a_raise_on_a_server_roll_is_applied_by_the_server(page, live_server_url):
+    """Phase 3: the raise shows at once, and the server applies it - the
+    pool count and the recorded total both move."""
+    from tests.e2e.test_rolls import _create_3rd_dan_courtier
+    _create_3rd_dan_courtier(page, live_server_url, "ServerRaise")
+    acts = []
+    page.on("response", lambda r: acts.append(r) if r.url.endswith("/act") else None)
+    page.locator('[data-roll-key="skill:manipulation"]').click()
+    _wait_for_roll_result(page)
+    before = _roller_data(page)["total"]
+    page.locator('[data-action="spend-raise"]').click()
+    page.wait_for_function("() => window._trackingBridge.getCount('adventure_raises') === 1", timeout=5000)
+    assert _roller_data(page)["total"] == before + 5
+    assert acts and acts[-1].json()["total"] == before + 5
+    # The spend is the server's, so it survives a reload.
+    page.reload()
+    page.wait_for_function("() => window._trackingBridge.getCount('adventure_raises') === 1", timeout=5000)

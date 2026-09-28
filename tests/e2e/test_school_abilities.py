@@ -10625,24 +10625,13 @@ def _make_kitsune(page, live_server_url, name, dan=1, picks=None, **kwargs):
     }""")
     if picks is not None:
         # Use the autosave API directly; this is the persisted state apply
-        # will read. After the API call we sync the frontend Alpine model
-        # with what the server now has, so a subsequent save (during apply)
-        # doesn't overwrite our picks with the empty front-end value.
+        # will read. The write moves the build revision, so the open editor
+        # is reloaded onto it - otherwise its next autosave is refused as
+        # stale and Apply Changes waits on the conflict prompt.
         char_id = _extract_char_id(page)
         _set_technique_choices(page, char_id, {"third_dan_skill_choices": picks})
-        page.evaluate(f"""() => {{
-            const els = document.querySelectorAll('[x-data]');
-            for (const el of els) {{
-                const d = window.Alpine && window.Alpine.$data(el);
-                if (d && d.techniqueChoices !== undefined) {{
-                    d.techniqueChoices = Object.assign(
-                        {{}}, d.techniqueChoices,
-                        {{third_dan_skill_choices: {picks!r}}}
-                    );
-                    return;
-                }}
-            }}
-        }}""")
+        page.reload()
+        page.wait_for_selector('input[name="name"]')
     apply_changes(page, "Kitsune setup")
 
 

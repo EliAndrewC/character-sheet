@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db, prefetch_body
 from app.models import Character, RollHistory, User
+from app.models import RollSession as RollSessionModel
 from app.services.npcs import npc_guard
 from app.services.auth import (
     can_edit_character,
@@ -402,16 +403,54 @@ async def make_roll(request: Request, char_id: int, db: Session = Depends(get_db
     if live:
         grants = (owner.granted_account_ids or []) if owner else []
         record, is_owner_roll = should_record_roll(viewer, character, grants)
-    rng = None
-    if os.environ.get("TEST_AUTH_BYPASS") == "true" and request.headers.get("x-test-dice"):
-        rng = roll_sessions.scripted_rng_from_header(request.headers["x-test-dice"])
     try:
         result = roll_sessions.start_roll(
             db, character, str(body.get("roll_key") or ""), body,
             viewer=viewer, live=live, record=record, is_owner_roll=is_owner_roll,
-            request_id=body.get("request_id") or None, rng=rng,
+            request_id=body.get("request_id") or None, rng=_test_rng(request),
         )
     except roll_sessions.RollRefused as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
+    db.commit()
+    return JSONResponse(result)
+
+
+def _test_rng(request: Request):
+    """The clicktest server's scripted dice (``X-Test-Dice``), else None."""
+    if os.environ.get("TEST_AUTH_BYPASS") == "true" and request.headers.get("x-test-dice"):
+        return roll_sessions.scripted_rng_from_header(request.headers["x-test-dice"])
+    return None
+
+
+@router.post("/{char_id}/roll/{session_id}/act")
+async def act_on_roll(request: Request, char_id: int, session_id: str,
+                      db: Session = Depends(get_db)):
+    """A post-roll action on a roll the server made (server-rolls-design
+    Phases 3-4): ``{"action", "args"}`` - raise / conviction / togashi_raise
+    (and their ``undo_`` forms), ``courtier_5th`` with ``{"on"}``, and the
+    rerolls in ``roll_sessions.REROLLS``. The
+    session's mode was fixed when it was rolled: a live session spends the
+    pools, a simulated one never does. Only the viewer who rolled may act."""
+    user = getattr(request.state, "user", None)
+    viewer = user["discord_id"] if user else None
+    session = db.get(RollSessionModel, session_id)
+    if session is None or session.character_id != char_id or session.viewer_discord_id != viewer:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    character = db.get(Character, char_id)
+    body = await request.json()
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Expected a JSON object"}, status_code=400)
+    action = str(body.get("action") or "")
+    # A reroll rolls dice, so an anonymous visitor's counts against the
+    # same limit as their rolls.
+    if (not user and action in roll_sessions.REROLLS
+            and not roll_sessions.anonymous_allowed(_client_address(request))):
+        return JSONResponse({"error": "Too many rolls - try again in a minute"}, status_code=429)
+    try:
+        result = roll_sessions.act(db, session, character, action, body.get("args") or {},
+                                   rng=_test_rng(request))
+    except roll_sessions.RollRefused as exc:
+        return JSONResponse({"error": str(exc), "tracking": roll_sessions.tracking_snapshot(character)},
+                            status_code=400)
     db.commit()
     return JSONResponse(result)

@@ -392,15 +392,45 @@ def execute_roll(
         rng,
         freed_tens=formula.get("wave_man_freed_dice") or 0,
     )
+    label = formula.get("label") or roll_key
+    spend_extras = _spend_bullets(label, activation, void_spent, overflow, combat_vp)
+    if out is not None:
+        out["formula"] = dict(formula, void_spent=void_spent, void_overflow_bonus=overflow)
+        out["dice"] = dice["in_order"]
+        out["spend_extras"] = list(spend_extras)
+    payload: Dict[str, Any] = {"title": label, "formula": _formula_text(formula)}
+    payload.update(score_roll(character_data, formula, dice["in_order"], spend_extras))
+    return payload
+
+
+def split_kept(cells: List[Dict[str, Any]], kept: int):
+    """``(kept, dropped)``: the cells sorted ascending, the highest ``kept``
+    kept - the same split ``roll_dice`` makes."""
+    dice = sorted(cells, key=lambda d: d["value"])
+    split = len(dice) - max(0, min(int(kept or 0), len(dice)))
+    return dice[split:], dice[:split]
+
+
+def score_roll(
+    character_data: Dict[str, Any], formula: Dict[str, Any],
+    cells: List[Dict[str, Any]], extras: List[str],
+) -> Dict[str, Any]:
+    """The dice-derived half of a roll's payload, from its dice.
+
+    Shared by a first roll and by every reroll the sheet makes on the server
+    (server-rolls-design Phase 4), so a rerolled pool is scored exactly as
+    the first one was: keep the highest, add the flat, Shosuro 5th Dan's
+    lowest three, the no-reroll note, the total cap.
+    """
+    kept, dropped = split_kept(cells, formula.get("kept") or 0)
+    kept_sum = sum(d["value"] for d in kept)
     # The payload's ``total`` is the CAPPED figure (matching the sheet's
     # ``cappedTotal()``), but the alternative rows are measured against the
     # UNCAPPED base - that is how the modal decides which rows still say
     # something once a ceiling is in play.
-    base_total = dice["kept_sum"] + (formula.get("flat") or 0)
-
-    label = formula.get("label") or roll_key
-    extras = _spend_bullets(label, activation, void_spent, overflow, combat_vp)
-    all_cells = dice["kept"] + dice["dropped"]
+    base_total = kept_sum + (formula.get("flat") or 0)
+    extras = list(extras)
+    all_cells = kept + dropped
     if _adds_lowest_three(character_data):
         lowest = sum(sorted(c["value"] for c in all_cells)[:3])
         if lowest > 0:
@@ -415,22 +445,15 @@ def execute_roll(
     if total != base_total:
         source = formula.get("max_total_source") or "a disadvantage"
         extras.append(f"Capped at {max_total} by {source} (rolled {base_total})")
-
-    if out is not None:
-        out["formula"] = dict(formula, void_spent=void_spent, void_overflow_bonus=overflow)
-        out["dice"] = dice["in_order"]
-    payload: Dict[str, Any] = {
-        "title": label,
-        "formula": _formula_text(formula),
-        "kept": [{"parts": d["parts"]} for d in dice["kept"]],
-        "dropped": [{"parts": d["parts"]} for d in dice["dropped"]],
+    return {
+        "kept": [{"parts": d["parts"]} for d in kept],
+        "dropped": [{"parts": d["parts"]} for d in dropped],
         "bonuses": _bonuses_for_payload(formula),
         "extras": extras,
-        "kept_sum": dice["kept_sum"],
+        "kept_sum": kept_sum,
         "total": total,
         "alternatives": _alternatives_for_payload(formula, base_total),
     }
-    return payload
 
 
 # ---------------------------------------------------------------------------

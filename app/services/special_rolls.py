@@ -22,6 +22,12 @@ BLESS_RITUALS = {
 FREEFORM_MAX_DICE = 30
 
 
+def performs_impaired_ritual(character: Any) -> bool:
+    """The sick-or-impaired ritual: the Priest school has every ritual; a
+    profession character has it only if they learned it."""
+    return character.school == "priest" or holds_ability(character, "priest_ignore_penalties")
+
+
 def can_bless(character: Any, ritual: str) -> bool:
     """A Priest has every ritual; a profession character holds it or not."""
     if ritual not in BLESS_RITUALS:

@@ -367,7 +367,7 @@
                     <label x-show="formula?.courtier_5th_dan_optional > 0" x-cloak
                            class="flex items-center gap-2 text-sm mt-2 cursor-pointer">
                         <input type="checkbox" x-model="courtier5thApplied"
-                               @change="if (courtier5thApplied) { baseTotal += formula.courtier_5th_dan_optional; } else { baseTotal -= formula.courtier_5th_dan_optional; }"
+                               @change="if (courtier5thApplied) { baseTotal += formula.courtier_5th_dan_optional; } else { baseTotal -= formula.courtier_5th_dan_optional; } if (_onServerRoll()) { const on = courtier5thApplied; _act('courtier_5th', {on: on}).then(ok => { if (!ok) { courtier5thApplied = !on; baseTotal += (on ? -1 : 1) * formula.courtier_5th_dan_optional; } }); }"
                                class="rounded text-accent">
                         <span>Courtier 5th Dan: +<span x-text="formula?.courtier_5th_dan_optional"></span> (this is a TN/contested roll)</span>
                     </label>

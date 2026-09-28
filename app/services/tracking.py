@@ -43,6 +43,28 @@ PER_ROUND_STATE_KEYS = (
 )
 
 
+def set_serious_wounds(character: Character, new_sw: int) -> None:
+    """Set serious wounds, keeping the Night's Rest healing cadence flags.
+
+    0 -> positive sets both "received new" and "became injured"; a rise
+    from a positive count sets "received new" only; landing on 0 clears all
+    three. A decrease that does not reach 0 leaves them alone - only a
+    confirmed Night's Rest advances the cadence. Every writer of serious
+    wounds (``/track``, the tracking operations) goes through this.
+    """
+    old_sw = character.current_serious_wounds or 0
+    new_sw = max(0, int(new_sw))
+    character.current_serious_wounds = new_sw
+    if new_sw > old_sw:
+        character.sw_healing_received_new_since_rest = True
+        if old_sw == 0:
+            character.sw_healing_became_injured_since_rest = True
+    elif new_sw == 0 and old_sw > 0:
+        character.sw_healing_received_new_since_rest = False
+        character.sw_healing_became_injured_since_rest = False
+        character.sw_healing_last_rest_was_healing_night = False
+
+
 def tracking_snapshot(character: Character) -> Dict[str, Any]:
     """The tracking state a sheet tab holds, plus the revision it is at."""
     return {

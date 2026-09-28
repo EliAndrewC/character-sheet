@@ -183,6 +183,11 @@
                 // player their sheet was brought up to date under them.
                 staleNotice: false,
                 _staleNoticeTimer: null,
+                // A tracking operation the server refused, or could not be
+                // sent (server-rolls-design 4.2); cleared after a while.
+                opError: '',
+                _opErrorTimer: null,
+                _opChain: null,
                 showResetModal: false,
                 // Night's Rest state. Populated by openNightsRestModal()
                 // from the server's /nights-rest/preview response so the
@@ -232,6 +237,40 @@
                 // Resolves once no tracking save is in flight or queued, so
                 // a server operation that moves tracking_rev (a server roll's
                 // void spend) is not raced by this tab's own pending save.
+                // Apply one tracking OPERATION on the server and adopt the
+                // snapshot it answers with (server-rolls-design 4.2). Ops run
+                // one at a time, in order, after any blob save in flight.
+                // Non-editors never get here (their buttons are hidden), and
+                // like every other bridge writer it returns early for them.
+                op(name, args) {
+                    if (!this.canEdit) return Promise.resolve(null);
+                    const run = async () => {
+                        await this.whenSaved();
+                        let data = null;
+                        try {
+                            const resp = await fetch('/characters/' + this._charId + '/track/op', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                keepalive: true,
+                                body: JSON.stringify({op: name, args: args || {}}),
+                            });
+                            data = await resp.json().catch(() => null);
+                            if (!resp.ok) this._showOpError((data && data.error) || 'That change could not be saved.');
+                        } catch (e) {
+                            this._showOpError('Could not reach the server - that change was not saved.');
+                        }
+                        if (data && data.tracking) this.adoptServerState(data.tracking, false);
+                        return data;
+                    };
+                    this._opChain = (this._opChain || Promise.resolve()).then(run, run);
+                    return this._opChain;
+                },
+                _showOpError(message) {
+                    this.opError = message;
+                    clearTimeout(this._opErrorTimer);
+                    this._opErrorTimer = setTimeout(() => { this.opError = ''; }, 8000);
+                },
+
                 async whenSaved() {
                     for (let i = 0; i < 200 && (this._saving || this._savePending); i++) {
                         await new Promise(r => setTimeout(r, 25));
@@ -255,6 +294,9 @@
                     // happened to follow. Queue exactly one follow-up instead.
                     if (this._saving) { this._savePending = true; return; }
                     this._saving = true;
+                    // A whole-state save must not race a queued operation:
+                    // the op would move the revision and refuse this save.
+                    if (this._opChain) await this._opChain.catch(() => null);
                     // Notify the Impaired indicator so it updates reactively
                     window.dispatchEvent(new CustomEvent('wound-changed', {
                         detail: { serious: this.seriousWounds }
@@ -445,10 +487,8 @@
                 },
                 clearActionDice() {
                     if (!this.canEdit) return;
-                    this.actionDice = [];
                     this.actionMenuOpen = null;
-                    this.resetMantisRound();
-                    this.save();
+                    this.op('clear_action_dice');
                 },
                 async rollPreceptsPool() {
                     // Priest 3rd Dan: roll X dice (X = precepts skill rank),
@@ -541,23 +581,14 @@
                     this.actionMenuOpen = this.actionMenuOpen === i ? null : i;
                 },
                 spendActionDie(i) {
-                    if (!this.canEdit) return;
-                    if (this.actionDice[i]) {
-                        this.actionDice[i].spent = true;
-                        // Manual spend has no known action context.
-                        delete this.actionDice[i].spent_by;
-                        this.actionMenuOpen = null;
-                        this.save();
-                    }
+                    if (!this.canEdit || !this.actionDice[i]) return;
+                    this.actionMenuOpen = null;
+                    this.op('action_die', {index: i, action: 'spend'});
                 },
                 unspendActionDie(i) {
-                    if (!this.canEdit) return;
-                    if (this.actionDice[i]) {
-                        this.actionDice[i].spent = false;
-                        delete this.actionDice[i].spent_by;
-                        this.actionMenuOpen = null;
-                        this.save();
-                    }
+                    if (!this.canEdit || !this.actionDice[i]) return;
+                    this.actionMenuOpen = null;
+                    this.op('action_die', {index: i, action: 'unspend'});
                 },
                 // Returns the index of the die that was spent, or -1 if none
                 // were available. An optional spentBy label is attached.
@@ -573,9 +604,11 @@
                         const d = this.actionDice[i];
                         if (d.spent) continue;
                         if (!isAthletics && d.athletics_only) continue;
+                        // Shown at once (the caller reads the die back); the
+                        // server's answer confirms it.
                         d.spent = true;
                         if (spentBy) d.spent_by = spentBy;
-                        this.save();
+                        this.op('action_die', {index: i, action: 'spend', label: spentBy || ''});
                         return i;
                     }
                     return -1;
@@ -592,7 +625,7 @@
                     d.spent = true;
                     if (spentBy) d.spent_by = spentBy;
                     this.actionMenuOpen = null;
-                    this.save();
+                    this.op('action_die', {index: i, action: 'spend', label: spentBy || ''});
                     return true;
                 },
                 annotateActionDie(i, spentBy) {
@@ -603,7 +636,7 @@
                     } else {
                         delete this.actionDice[i].spent_by;
                     }
-                    this.save();
+                    this.op('action_die', {index: i, action: 'annotate', label: spentBy || ''});
                 },
                 // Picks the action die to spend for a Mantis 3rd Dan technique
                 // invocation from the attack-result or tracking-section button.
@@ -771,13 +804,18 @@
                     this.save();
                 },
 
-                resetAbility(id) {
+                async resetAbility(id) {
                     if (!this.canEdit) return;
-                    const ability = (this.perAdventure || []).find(a => a.id === id);
-                    if (!ability) return;
-                    if (ability.type === 'counter') this.adventureState[id + '_used'] = 0;
-                    if (ability.type === 'toggle') this.adventureState[id] = false;
-                    this.save();
+                    await this.op('reset_ability', {id: id});
+                    window.dispatchEvent(new CustomEvent('adventure-state-changed'));
+                },
+                // The per-adventure tracker's +/- and toggle buttons.
+                async stepCounter(id, delta) {
+                    await this.op('counter', {id: id, delta: delta});
+                    window.dispatchEvent(new CustomEvent('adventure-state-changed'));
+                },
+                async flipToggle(id, value) {
+                    await this.op('toggle', {id: id, value: value});
                     window.dispatchEvent(new CustomEvent('adventure-state-changed'));
                 },
 
@@ -826,47 +864,14 @@
                     return items;
                 },
 
-                resetAdventure() {
-                    for (const a of this.perAdventure) {
-                        if (a.type === 'counter') this.adventureState[a.id + '_used'] = 0;
-                        if (a.type === 'toggle') this.adventureState[a.id] = false;
-                    }
-                    // Wipe any leftover action dice from a prior combat round.
-                    this.actionDice = [];
-                    this.actionMenuOpen = null;
-                    // Priest 3rd Dan precepts pool is per-adventure state.
-                    this.preceptsPool = [];
+                async resetAdventure() {
                     const precTray = document.getElementById('dice-animation-precepts');
                     if (precTray) precTray.innerHTML = '';
-                    // Clear all combat-session bonuses
-                    this.akodoBankedBonuses = [];
-                    this.bayushiBankedFeintRaise = 0;
-                    this.hirumaBankedAttackBonus = 0;
-                    this.hidaBankedWcBonus = 0;
-                    this.bankedWcExcess = [];
-                    this.matsuBankedWcBonuses = [];
                     this.mirumotoRoundPoints = 0;
-                    // Also clear diceRoller combat state if available
-                    if (window._diceRoller) {
-                        window._diceRoller.akodoBankedBonuses = this.akodoBankedBonuses;
-                        window._diceRoller.akodoSpentThisRoll = 0;
-                        window._diceRoller.hirumaBankedAttackBonus = 0;
-                        window._diceRoller.bayushiBankedFeintRaise = 0;
-                        window._diceRoller.bankedWcExcess = this.bankedWcExcess;
-                        window._diceRoller.matsuBankedWcBonuses = [];
-                        window._diceRoller.ideBankedTnReduce = 0;
-                        window._diceRoller.hidaBankedWcBonus = 0;
-                    }
-                    // Clear persisted banked bonuses from adventureState
-                    delete this.adventureState.akodo_banked_bonuses;
-                    delete this.adventureState.hiruma_banked_attack_bonus;
-                    delete this.adventureState.bayushi_banked_feint_raise;
-                    delete this.adventureState.banked_wc_excess;
-                    delete this.adventureState.matsu_banked_wc_bonus;
-                    delete this.adventureState.matsu_banked_wc_bonuses;
-                    delete this.adventureState.ide_banked_tn_reduce;
-                    delete this.adventureState.hida_banked_wc_bonus;
-                    this.save();
+                    if (window._diceRoller) window._diceRoller.akodoSpentThisRoll = 0;
+                    // adoptServerState (via op) rebuilds the counters, the banks and
+                    // the dice roller's copies of them.
+                    await this.op('reset_adventure');
                     window.dispatchEvent(new CustomEvent('adventure-state-changed'));
                 },
 
@@ -932,54 +937,45 @@
                 lwNewTotal: '',
                 lwSetValue: '',
 
-                lwTakeSeriousAndReset() {
-                    if (this.canEdit) {
-                        this.seriousWounds += this.lwSeriousCount;
-                        this.lightWounds = 0;
-                    }
+                async lwTakeSeriousAndReset() {
+                    const count = this.lwSeriousCount;
                     this.lwPlusModal = false;
                     this.lwSeriousCount = 1;
-                    this.save();
+                    if (this.canEdit) await this.op('take_serious', {count: count});
                 },
-                lwAddToTotal() {
+                async lwAddToTotal() {
                     const add = parseInt(this.lwAddAmount) || 0;
-                    if (add > 0 && this.canEdit) { this.lightWounds += add; }
                     this.lwPlusModal = false;
                     this.lwAddAmount = '';
-                    this.save();
-                    // For editors the WC modal reads the post-mutation
-                    // lightWounds; for non-editors we pass the entered
-                    // amount via event detail so the WC roll runs against
-                    // it without ever touching the displayed counter.
+                    if (add > 0 && this.canEdit) await this.op('light_wounds', {mode: 'add', value: add});
+                    // A non-editor walks the wound check against the amount they
+                    // entered; the sheet's light wounds do not move.
                     const wcLW = this.canEdit ? this.lightWounds : add;
                     if (wcLW > 0) {
                         window.dispatchEvent(new CustomEvent('open-wound-check', { detail: { amount: wcLW } }));
                     }
                 },
-                lwSetToTotal() {
+                async lwSetToTotal() {
                     const val = parseInt(this.lwNewTotal);
                     const valid = !isNaN(val) && val >= 0;
-                    if (valid && this.canEdit) { this.lightWounds = val; }
                     this.lwPlusModal = false;
                     this.lwNewTotal = '';
-                    this.save();
+                    if (valid && this.canEdit) await this.op('light_wounds', {mode: 'set', value: val});
                     const wcLW = this.canEdit ? this.lightWounds : (valid ? val : 0);
                     if (wcLW > 0) {
                         window.dispatchEvent(new CustomEvent('open-wound-check', { detail: { amount: wcLW } }));
                     }
                 },
                 lwResetToZero() {
-                    if (this.canEdit) { this.lightWounds = 0; }
                     this.lwMinusMenu = false;
-                    this.save();
+                    if (this.canEdit) this.op('light_wounds', {mode: 'set', value: 0});
                 },
                 lwSetViaModal() {
                     const val = parseInt(this.lwSetValue);
-                    if (!isNaN(val) && val >= 0 && this.canEdit) { this.lightWounds = val; }
                     this.lwSetModal = false;
                     this.lwMinusMenu = false;
                     this.lwSetValue = '';
-                    this.save();
+                    if (!isNaN(val) && val >= 0 && this.canEdit) this.op('light_wounds', {mode: 'set', value: val});
                 },
             };
         }

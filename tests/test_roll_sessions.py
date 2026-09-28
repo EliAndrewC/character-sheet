@@ -410,3 +410,426 @@ def test_scripted_rng_parsing():
     assert rs.scripted_rng_from_header(" , ") is None
     rng = rs.scripted_rng_from_header("12,0")
     assert (rng.randint(1, 10), rng.randint(1, 10)) == (10, 1)  # clamped
+
+
+# ---------------------------------------------------------------------------
+# Post-roll actions (Phase 3)
+# ---------------------------------------------------------------------------
+
+def _act(client, cid, sid, action, headers=PLAYER, **args):
+    return client.post(f"/characters/{cid}/roll/{sid}/act",
+                       json={"action": action, "args": args}, headers=headers)
+
+
+def _ikoma(client, **kw):
+    # 3rd Dan Ikoma Bard: bragging raises, 2 per roll, 4 per adventure
+    return _char(client, school="ikoma_bard", school_ring_choice="Water", ring_water=3,
+                 knacks={"discern_honor": 3, "oppose_knowledge": 3, "oppose_social": 3},
+                 skills={"bragging": 2}, **kw)
+
+
+def test_raises_add_five_respect_the_caps_and_undo(client):
+    cid = _ikoma(client)
+    data = _roll(client, cid, roll_key="skill:bragging").json()
+    base, sid = data["total"], data["session_id"]
+    r1 = _act(client, cid, sid, "raise").json()
+    assert r1["total"] == base + 5
+    assert r1["tracking"]["adventure_state"]["adventure_raises_used"] == 1
+    assert _act(client, cid, sid, "raise").json()["total"] == base + 10
+    over = _act(client, cid, sid, "raise")
+    assert over.status_code == 400 and "no more" in over.json()["error"]
+    back = _act(client, cid, sid, "undo_raise").json()
+    assert back["total"] == base + 5 and back["tracking"]["adventure_state"]["adventure_raises_used"] == 1
+    s = client._test_session_factory()
+    row = s.get(RollHistory, data["history_id"])
+    assert row.payload["total"] == base + 5
+    assert {"label": "3rd Dan free raise", "amount": 5, "post_roll": True} in row.payload["bonuses"]
+    s.close()
+    _act(client, cid, sid, "undo_raise")
+    assert _act(client, cid, sid, "undo_raise").status_code == 400
+
+
+def test_raises_need_the_pool(client):
+    cid = _ikoma(client, adventure_state={"adventure_raises_used": 4})
+    sid = _roll(client, cid, roll_key="skill:bragging").json()["session_id"]
+    resp = _act(client, cid, sid, "raise")
+    assert resp.status_code == 400 and "left" in resp.json()["error"]
+
+
+def test_simulated_spends_count_against_the_pool_but_never_persist(client):
+    cid = _ikoma(client, adventure_state={"adventure_raises_used": 3})
+    sid = _roll(client, cid, roll_key="skill:bragging", headers=OTHER).json()["session_id"]
+    assert _act(client, cid, sid, "raise", headers=OTHER).status_code == 200
+    assert _act(client, cid, sid, "raise", headers=OTHER).status_code == 400  # 1 was left
+    assert _get(client, cid).adventure_state["adventure_raises_used"] == 3
+
+
+def test_conviction(client):
+    cid = _char(client, school="brotherhood_of_shinsei_monk", school_ring_choice="Water", ring_water=3,
+                knacks={"conviction": 2, "otherworldliness": 1, "worldliness": 1}, skills={"etiquette": 1})
+    data = _roll(client, cid).json()
+    sid = data["session_id"]
+    assert _act(client, cid, sid, "conviction").json()["total"] == data["total"] + 1
+    _act(client, cid, sid, "conviction")
+    assert _act(client, cid, sid, "conviction").status_code == 400  # rank 2 per roll
+    assert _get(client, cid).adventure_state["conviction_used"] == 2
+
+
+def test_togashi_raises_only_on_athletics(client):
+    cid = _char(client, school="togashi_ise_zumi", school_ring_choice="Void", ring_void=3,
+                knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3}, skills={"precepts": 1, "etiquette": 1})
+    sid = _roll(client, cid, roll_key="athletics:Fire").json()["session_id"]
+    assert _act(client, cid, sid, "togashi_raise").status_code == 200
+    assert _act(client, cid, sid, "togashi_raise").status_code == 400  # precepts 1 per roll
+    assert _act(client, cid, sid, "undo_togashi_raise").status_code == 200
+    other = _roll(client, cid).json()["session_id"]
+    assert _act(client, cid, other, "togashi_raise").status_code == 400
+
+
+def test_courtier_5th_toggles(client, monkeypatch):
+    cid = _char(client)
+    real = rs.build_all_roll_formulas
+
+    def with_courtier(*a, **k):
+        f = real(*a, **k)
+        f["skill:etiquette"] = dict(f["skill:etiquette"], courtier_5th_dan_optional=7)
+        return f
+    monkeypatch.setattr(rs, "build_all_roll_formulas", with_courtier)
+    data = _roll(client, cid).json()
+    sid = data["session_id"]
+    assert _act(client, cid, sid, "courtier_5th", on=True).json()["total"] == data["total"] + 7
+    assert _act(client, cid, sid, "courtier_5th", on=True).json()["total"] == data["total"] + 7
+    assert _act(client, cid, sid, "courtier_5th", on=False).json()["total"] == data["total"]
+    monkeypatch.setattr(rs, "build_all_roll_formulas", real)
+    plain = _roll(client, cid).json()["session_id"]
+    resp = _act(client, cid, plain, "courtier_5th", on=True)
+    assert resp.status_code == 400 and "Courtier" in resp.json()["error"]
+
+
+def test_act_errors(client):
+    cid = _char(client)
+    sid = _roll(client, cid).json()["session_id"]
+    assert _act(client, cid, sid, "juggle").status_code == 400
+    assert _act(client, cid, "nope", "raise").status_code == 404
+    assert _act(client, cid, sid, "raise", headers=OTHER).status_code == 404  # not their roll
+    assert client.post(f"/characters/{cid}/roll/{sid}/act", json=[1], headers=PLAYER).status_code == 400
+    assert _act(client, cid, sid, "raise").status_code == 400  # no raises on this roll
+
+
+def test_a_raise_the_formula_allows_still_needs_a_pool(client, monkeypatch):
+    cid = _char(client)
+    real = rs.build_all_roll_formulas
+
+    def raises(*a, **k):
+        f = real(*a, **k)
+        f["skill:etiquette"] = dict(f["skill:etiquette"], adventure_raises_max_per_roll=2)
+        return f
+    monkeypatch.setattr(rs, "build_all_roll_formulas", raises)
+    sid = _roll(client, cid).json()["session_id"]
+    resp = _act(client, cid, sid, "raise")
+    assert resp.status_code == 400 and "left" in resp.json()["error"]
+
+
+# ---------------------------------------------------------------------------
+# Rerolls (Phase 4)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def scripted(monkeypatch):
+    """Dice named by the X-Test-Dice header (the clicktest seam)."""
+    monkeypatch.setenv("TEST_AUTH_BYPASS", "true")
+
+    def headers(values, base=PLAYER):
+        return {**base, "X-Test-Dice": values}
+    return headers
+
+
+def _values(answer):
+    return sorted(d["value"] for d in answer["dice"])
+
+
+def _row(client, history_id):
+    s = client._test_session_factory()
+    payload = s.get(RollHistory, history_id).payload
+    s.close()
+    return payload
+
+
+def _published(client, **kw):
+    cid = _char(client, **kw)
+    s = client._test_session_factory()
+    c = s.get(Character, cid)
+    c.published_state = c.to_dict()
+    s.commit()
+    s.close()
+    return cid
+
+
+def test_lucky_rerolls_keeps_the_higher_and_is_spent(client, scripted):
+    cid = _char(client, advantages=["lucky"])
+    first = _roll(client, cid, headers=scripted("2")).json()
+    up = _act(client, cid, first["session_id"], "lucky_reroll", headers=scripted("9")).json()
+    assert set(_values(up)) == {9} and up["total"] > first["total"]
+    pair = up["payload"]["lucky"]
+    assert pair["kept"] == "reroll" and pair["source"] == "lucky"
+    assert pair["original"]["total"] == first["total"] and pair["reroll"]["total"] == up["total"]
+    assert "Lucky reroll used" in up["payload"]["extras"]
+    assert up["tracking"]["adventure_state"]["lucky_used"] is True
+    row = _row(client, first["history_id"])
+    assert row["total"] == up["total"] and row["lucky"]["kept"] == "reroll"
+    # One reroll per roll, and Lucky once per adventure.
+    again = _act(client, cid, first["session_id"], "lucky_reroll", headers=scripted("9"))
+    assert again.status_code == 400 and "already been rerolled" in again.json()["error"]
+    other = _roll(client, cid).json()["session_id"]
+    assert "already been used" in _act(client, cid, other, "lucky_reroll").json()["error"]
+
+
+def test_a_lower_reroll_leaves_the_original_standing(client, scripted):
+    cid = _char(client, advantages=["lucky"])
+    first = _roll(client, cid, headers=scripted("9")).json()
+    down = _act(client, cid, first["session_id"], "lucky_reroll", headers=scripted("1")).json()
+    assert set(_values(down)) == {9} and down["total"] == first["total"]
+    assert down["payload"]["lucky"]["kept"] == "original"
+    assert down["payload"]["lucky"]["reroll"]["total"] < first["total"]
+    assert "Lucky reroll used" in down["payload"]["extras"]
+
+
+def test_a_reroll_keeps_the_bonuses_already_taken(client, scripted):
+    cid = _ikoma(client, advantages=["lucky"])
+    first = _roll(client, cid, roll_key="skill:bragging", headers=scripted("2")).json()
+    sid = first["session_id"]
+    _act(client, cid, sid, "raise")
+    up = _act(client, cid, sid, "lucky_reroll", headers=scripted("9")).json()
+    kept_sum = up["payload"]["kept_sum"]
+    assert up["total"] == first["total"] - first["payload"]["kept_sum"] + kept_sum + 5
+    assert {"label": "3rd Dan free raise", "amount": 5, "post_roll": True} in up["payload"]["bonuses"]
+    assert up["payload"]["lucky"]["original"]["total"] == first["total"] + 5
+
+
+def test_lucky_needs_the_advantage_and_simulates_without_spending(client, scripted):
+    plain = _char(client)
+    sid = _roll(client, plain).json()["session_id"]
+    assert "not Lucky" in _act(client, plain, sid, "lucky_reroll").json()["error"]
+    cid = _char(client, advantages=["lucky"])
+    sid = _roll(client, cid, headers=OTHER).json()["session_id"]
+    assert _act(client, cid, sid, "lucky_reroll", headers=OTHER).status_code == 200
+    assert not (_get(client, cid).adventure_state or {}).get("lucky_used")
+
+
+def test_pcp_reroll_spends_a_point_and_shares_the_lock(client, scripted):
+    cid = _published(client, advantages=["lucky"])
+    first = _roll(client, cid, headers=scripted("2")).json()
+    sid = first["session_id"]
+    paid = _act(client, cid, sid, "pcp_reroll", headers=scripted("9")).json()
+    assert paid["pcp"]["pcp_count"] == 1 and paid["pcp"]["use"] == "reroll"
+    assert paid["payload"]["lucky"]["source"] == "pcp"
+    assert "Player Character Point reroll used" in paid["payload"]["extras"]
+    assert _get(client, cid).pcp_count == 1
+    assert _act(client, cid, sid, "lucky_reroll").status_code == 400  # the shared lock
+
+
+def test_pcp_needs_a_clean_published_character_and_simulation_is_free(client, scripted):
+    draft = _char(client, is_published=False)
+    sid = _roll(client, draft).json()["session_id"]
+    resp = _act(client, draft, sid, "pcp_reroll")
+    assert resp.status_code == 400 and "pending changes" in resp.json()["error"]
+    assert _act(client, draft, sid, "pcp_reroll").status_code == 400  # nothing was locked
+    assert not _get(client, draft).pcp_count
+    cid = _char(client)
+    sim = _roll(client, cid, headers=OTHER).json()["session_id"]
+    answer = _act(client, cid, sim, "pcp_reroll", headers=OTHER).json()
+    assert "pcp" not in answer and not _get(client, cid).pcp_count
+
+
+def test_pcp_free_raise_once_per_roll(client):
+    cid = _published(client)
+    first = _roll(client, cid).json()
+    sid = first["session_id"]
+    raised = _act(client, cid, sid, "pcp_free_raise").json()
+    assert raised["total"] == first["total"] + 5 and raised["pcp"]["use"] == "free_raise"
+    assert {"label": "Player Character Point free raise", "amount": 5, "post_roll": True} \
+        in raised["payload"]["bonuses"]
+    assert _act(client, cid, sid, "pcp_free_raise").status_code == 400
+
+
+def _impaired(client, **kw):
+    kw.setdefault("current_serious_wounds", 2)  # Earth 2
+    return _published(client, **kw)
+
+
+def test_pcp_rerolls_an_impaired_rolls_tens(client, scripted):
+    cid = _impaired(client)
+    first = _roll(client, cid, headers=scripted("10,3")).json()
+    assert first["formula"]["no_reroll_reason"] == "impaired"
+    tens = sum(1 for d in first["dice"] if d["value"] == 10)
+    done = _act(client, cid, first["session_id"], "pcp_reroll_tens", headers=scripted("4")).json()
+    assert sum(1 for d in done["dice"] if d["parts"] == [10, 4]) == tens
+    assert done["pcp"]["use"] == "reroll_tens"
+    assert "Rerolled 10s while impaired by spending a Player Character Point" in done["payload"]["extras"]
+    again = _act(client, cid, first["session_id"], "pcp_reroll_tens")
+    assert again.status_code == 400 and "already" in again.json()["error"]
+
+
+def test_only_an_impaired_rolls_standing_tens_reroll(client, scripted):
+    healthy = _published(client)
+    sid = _roll(client, healthy, headers=scripted("10")).json()["session_id"]
+    assert "Impaired" in _act(client, healthy, sid, "pcp_reroll_tens").json()["error"]
+    hurt = _impaired(client)
+    sid = _roll(client, hurt, headers=scripted("3")).json()["session_id"]
+    assert "no 10" in _act(client, hurt, sid, "pcp_reroll_tens").json()["error"]
+
+
+def test_the_priest_ritual_rerolls_the_tens_for_self_and_party(client, scripted):
+    from app.models import GamingGroup
+    s = client._test_session_factory()
+    g = GamingGroup(name="Ritual Group")
+    s.add(g)
+    s.commit()
+    gid = g.id
+    s.close()
+    priest = _char(client, name="Brother", school="priest", school_ring_choice="Water",
+                   knacks={"conviction": 1, "otherworldliness": 1, "pontificate": 1}, gaming_group_id=gid)
+    ally = _impaired(client, gaming_group_id=gid)
+    first = _roll(client, ally, headers=scripted("10,3")).json()
+    sid = first["session_id"]
+    assert "cannot perform" in _act(client, ally, sid, "priest_ritual", priest_id=ally).json()["error"]
+    assert "character id" in _act(client, ally, sid, "priest_ritual", priest_id="x").json()["error"]
+    done = _act(client, ally, sid, "priest_ritual", priest_id=priest, headers=scripted("6")).json()
+    assert 10 not in _values(done) and done["payload"]["kept_sum"] >= first["payload"]["kept_sum"] - 20
+    assert "Impaired 10s rerolled (Brother performed the ritual)" in done["payload"]["extras"]
+    # A priest may bless themselves.
+    own = _roll(client, priest, headers=scripted("10"), **{}).json()
+    s = client._test_session_factory()
+    c = s.get(Character, priest)
+    c.current_serious_wounds = 2
+    s.commit()
+    s.close()
+    own = _roll(client, priest, headers=scripted("10")).json()
+    assert _act(client, priest, own["session_id"], "priest_ritual", priest_id=priest).status_code == 200
+
+
+def _merchant(client, dan=1, **kw):
+    kw.setdefault("current_void_points", 2)
+    return _char(client, school="merchant", school_ring_choice="Water", ring_water=3,
+                 knacks={"discern_honor": dan, "oppose_knowledge": dan, "worldliness": dan},
+                 skills={"etiquette": 2, "commerce": 2}, **kw)
+
+
+def test_the_business_reroll_costs_a_void_point(client, scripted):
+    cid = _char(client, school="", profession="profession", knacks={}, current_void_points=1,
+                profession_abilities={"merchant_void_reroll": 1}, advantages=["lucky"])
+    first = _roll(client, cid, headers=scripted("2")).json()
+    sid = first["session_id"]
+    done = _act(client, cid, sid, "merchant_reroll", headers=scripted("9")).json()
+    assert done["payload"]["lucky"]["source"] == "merchant"
+    assert done["tracking"]["current_void_points"] == 0
+    assert _act(client, cid, sid, "lucky_reroll").status_code == 400  # the shared lock
+    broke = _roll(client, cid).json()["session_id"]
+    resp = _act(client, cid, broke, "merchant_reroll")
+    assert resp.status_code == 400 and _get(client, cid).current_void_points == 0
+    plain = _char(client)
+    sid = _roll(client, plain).json()["session_id"]
+    assert "business" in _act(client, plain, sid, "merchant_reroll").json()["error"]
+
+
+def test_a_simulated_business_reroll_checks_the_pool_net_of_the_roll(client):
+    cid = _char(client, school="", profession="profession", knacks={}, current_void_points=1,
+                profession_abilities={"merchant_void_reroll": 1})
+    sid = _roll(client, cid, headers=OTHER, void=1).json()["session_id"]  # the only point
+    assert _act(client, cid, sid, "merchant_reroll", headers=OTHER).status_code == 400
+    sid = _roll(client, cid, headers=OTHER).json()["session_id"]
+    assert _act(client, cid, sid, "merchant_reroll", headers=OTHER).status_code == 200
+    assert _get(client, cid).current_void_points == 1
+
+
+def test_merchant_5th_dan_rerolls_chosen_dice(client, scripted):
+    cid = _merchant(client, dan=5)
+    first = _roll(client, cid, roll_key="skill:commerce", headers=scripted("1,2,9")).json()
+    sid = first["session_id"]
+    assert "sum to at least 5" in _act(client, cid, sid, "merchant_5th", values=[1, 2]).json()["error"]
+    assert "no 7" in _act(client, cid, sid, "merchant_5th", values=[7]).json()["error"]
+    assert "at least one" in _act(client, cid, sid, "merchant_5th", values=[]).json()["error"]
+    done = _act(client, cid, sid, "merchant_5th", values=[1], headers=scripted("8")).json()
+    assert done["formula"]["merchant_5th_dan_used"] is True
+    delta = done["formula"]["merchant_5th_dan_bonus"]
+    assert done["total"] == first["total"] + delta
+    assert f"{delta:+d} from Merchant 5th Dan reroll" in done["payload"]["extras"]
+    assert "already" in _act(client, cid, sid, "merchant_5th", values=[2]).json()["error"]
+    low = _merchant(client, dan=4)
+    sid = _roll(client, low).json()["session_id"]
+    assert "5th Dan" in _act(client, low, sid, "merchant_5th", values=[1]).json()["error"]
+
+
+def test_merchant_spends_void_after_the_roll(client, scripted):
+    cid = _merchant(client)
+    first = _roll(client, cid, headers=scripted("5")).json()
+    sid = first["session_id"]
+    more = _act(client, cid, sid, "merchant_vp", headers=scripted("7")).json()
+    assert len(more["dice"]) == len(first["dice"]) + 1
+    assert more["formula"]["rolled"] == first["formula"]["rolled"] + 1
+    assert more["formula"]["merchant_vp_spent"] == 1 and more["tracking"]["current_void_points"] == 1
+    assert more["total"] == first["total"] + 7
+    assert "1 void point spent after the roll (Merchant)" in more["payload"]["extras"]
+    assert f"{more['formula']['rolled']}k" in more["payload"]["formula"]
+    plain = _char(client)
+    sid = _roll(client, plain).json()["session_id"]
+    assert "after the roll" in _act(client, plain, sid, "merchant_vp").json()["error"]
+
+
+def test_merchant_void_after_the_roll_obeys_the_cap_and_10k10(client, scripted, monkeypatch):
+    cid = _merchant(client, current_void_points=5)
+    sid = _roll(client, cid, void=2).json()["session_id"]  # cap is Void 2
+    resp = _act(client, cid, sid, "merchant_vp")
+    assert resp.status_code == 400 and "at most 2" in resp.json()["error"]
+    sid = _roll(client, cid, roll_key="freeform", rolled=10, kept=10).json()["session_id"]
+    capped = _act(client, cid, sid, "merchant_vp").json()
+    # 11k11 is 10k12 is 10k10 + 4, as for any void point past 10k10.
+    assert len(capped["dice"]) == 10 and capped["formula"]["flat"] == 4
+
+
+def _togashi(client, **kw):
+    return _char(client, school="togashi_ise_zumi", school_ring_choice="Void", ring_void=3,
+                 knacks={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
+                 skills={"precepts": 2, "etiquette": 1, "sincerity": 2}, **kw)
+
+
+def test_togashi_4th_dan_takes_the_new_result_and_keeps_the_raises(client, scripted):
+    cid = _togashi(client)
+    first = _roll(client, cid, roll_key="athletics:Fire", headers=scripted("9")).json()
+    sid = first["session_id"]
+    _act(client, cid, sid, "togashi_raise")
+    down = _act(client, cid, sid, "togashi_4th", headers=scripted("1")).json()
+    assert set(_values(down)) == {1} and down["total"] == down["payload"]["kept_sum"] \
+        + first["total"] - first["payload"]["kept_sum"] + 5
+    assert down["payload"]["togashi_original_total"] == first["total"] + 5
+    assert "Togashi reroll used" in down["payload"]["extras"]
+    assert _act(client, cid, sid, "togashi_4th").status_code == 400  # once
+    s = client._test_session_factory()
+    assert s.query(RollHistory).filter(RollHistory.character_id == cid).count() == 1
+    s.close()
+
+
+def test_togashi_4th_dan_only_on_contested_rolls(client):
+    cid = _togashi(client, advantages=["lucky"])
+    sid = _roll(client, cid, roll_key="skill:etiquette").json()["session_id"]
+    assert "cannot take" in _act(client, cid, sid, "togashi_4th").json()["error"]
+    sid = _roll(client, cid, roll_key="skill:sincerity").json()["session_id"]
+    _act(client, cid, sid, "lucky_reroll")
+    assert _act(client, cid, sid, "togashi_4th").status_code == 400
+    low = _char(client, school="togashi_ise_zumi", school_ring_choice="Void",
+                knacks={"athletics": 3, "conviction": 3, "dragon_tattoo": 3})
+    sid = _roll(client, low, roll_key="ring:Fire").json()["session_id"]
+    assert "4th Dan" in _act(client, low, sid, "togashi_4th").json()["error"]
+
+
+def test_anonymous_rerolls_are_rate_limited(client, monkeypatch):
+    cid = _char(client, advantages=["lucky"])
+    with TestClient(app) as anon:
+        data = _roll(anon, cid, headers={}).json()
+        url = f"/characters/{cid}/roll/{data['session_id']}/act"
+        assert anon.post(url, json={"action": "lucky_reroll", "args": {}}).status_code == 200
+        monkeypatch.setattr(rs, "anonymous_allowed", lambda *a, **k: False)
+        resp = anon.post(url, json={"action": "lucky_reroll", "args": {}})
+        assert resp.status_code == 429
+        resp = anon.post(url, json={"action": "raise", "args": {}})
+        assert resp.status_code == 400  # not a reroll: no limit, just no raises
