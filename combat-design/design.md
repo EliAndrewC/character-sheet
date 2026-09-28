@@ -1,161 +1,237 @@
 # GM Combat Tracker and Generated NPCs - Design
 
-Status: **requirements gathering.** Nothing is implemented. The open questions in section 6 must be answered
-before Phase 1 starts. Once they are, their answers get folded into sections 3-5 and the question list shrinks.
+Status: **requirements gathering, round 2.** Nothing is implemented. Section 7 lists the questions still open;
+Phase 1 does not start until the GM signs off on this document.
 
 ## 1. Goal
 
 The GM wants one screen, per gaming group, for running a fight:
 
-- every PC in the group, with their **current initiative (action dice)**, **light wounds** and **serious wounds**, kept current as the players act on their own sheets;
-- the **NPCs they are fighting** on the same screen, whose rolls the GM makes from it. The GM never rolls for PCs.
+- every PC in the group, with their **action dice**, **light wounds** and **serious wounds**, kept current as the players act on their own sheets;
+- the **NPCs they are fighting** on the same screen. The GM acts for them with **quick-roll buttons on the tracker itself**: click an NPC's action die and choose what it is spent on (attack, parry, ...). The GM never rolls for PCs.
 
-The NPCs have to be **generated**, not hand-built: "the party is fighting six Wave Men with 40-80 earned XP" should produce six usable combatants. Their builds must follow **the combat simulator's current XP progression** (`l7r/simulator`, deployed at <https://l7r-combat-sim.fly.dev/>). That repo is where questions like "when does a parry school take Air from 5 to 6" get answered, and this app must pick up its answers **without code changes here**.
+The NPCs are **generated**, not hand-built: "the party is fighting six Wave Men with about 50 earned XP" produces six usable combatants.
+- **Their builds follow the combat simulator's current XP progression** (`l7r/simulator`, <https://l7r-combat-sim.fly.dev/>). That repo is where questions like "when does a parry school take Air from 5 to 6" get answered, and this app picks up its answers without code changes here.
+- **They are real `Character` rows**, so they go through the same rules code as PCs.
+- **Players never see them**, and they never appear on the home page.
 
-The NPCs are real `Character` rows, so they go through the same rules code as PCs and no parallel rules system is needed. They are never visible to players, and they never clutter the home page.
+## 2. Decisions so far (GM, round 1)
 
-## 2. What exists today
+| # | decision |
+|---|---|
+| D1 | The simulator's profession-ability count (`(xp - 100) // 15 + 1`) is a **simulator bug**. This app's rule (1 ability at 150 total XP, +1 per 15) is correct. Fix it in the simulator. |
+| D2 | **Earned XP** is always on top of the starting 150: "50 earned" = 200 total. The GM always gives figures in earned XP. |
+| D3 | **Freshness:** "as of this app's last deploy" is fine. What matters is a smooth dev loop while we change the simulator as part of this work. |
+| D4 | **Each NPC draws its own XP.** The build is otherwise the simulator's. |
+| D5 | **XP entry:** the GM either types an **exact** earned XP, or (usually) a **base** in steps of 50, to which is added **5 x an exploding d10**. A 10 rerolls and adds, so 10, 10, 2 gives +110 (22 x 5). |
+| D6 | **Combat share is not fixed at 75%.** The GM sets a target, for the whole encounter or per NPC. Each NPC varies around it with the spread we measured from real characters (`analysis/CombatVsNonCombatXP.md`), and the GM can override it for one NPC (e.g. a bruiser boss). |
+| D7 | **Quick-roll buttons on the tracker.** Damage and wound-check math move to the server. This matches the long-term direction: the browser should kick off server actions through an API that other clients can call too. |
+| D8 | **NPCs can be archived** after a fight and brought back later, optionally having **gained XP** in between. |
+| D9 | **At 2 x Earth serious wounds the GM chooses "unconscious" or "dead".** It depends on the weapon (fists vs swords), which the app does not know. |
+| D10 | **Names are suggested the way gm-assistant does it:** from its name pool, excluding names already used in the campaign and names too similar to them. |
+| D11 | **No round or phase pointer.** The tracker lists every combatant's action dice and wounds; the GM calls phases aloud. Explicit phase ticking may come later, for per-phase abilities. |
 
-### In the simulator (`/host-l7r-repo/simulator`)
+## 3. What exists today
+
+### Simulator (`/host-l7r-repo/simulator`, repo `claude-guided-l7r-combat-simulator`, public on GitHub)
 
 - **The generator:** `simulation/templates/generator.py::generate_template(school_key, total_xp, priorities=None) -> (CharacterConfig, breakdown)`.
-  - It is **deterministic** and has no seed or variance knob.
-  - It works at any XP, not only the pre-generated `XP_TIERS`.
-- **How it spends XP:**
-  - It spends `COMBAT_XP_FRACTION = 0.75` of total XP on combat, walking a per-school priority list (`simulation/templates/strategies.py::SCHOOL_PRIORITIES`) greedily.
-  - It leaves the other 25% **unspent and unassigned**, which is what we want here.
-  - The progression is **Python tables, not data files**.
-- **Coverage:** 27 schools/professions. There are no Mantis Wave-Treader, Kitsune Warden, Suzume Overseer, Shugenja or Worker builds. Advantages and disadvantages are always empty.
-- **Reuse cost:**
-  - It imports cheaply (about 0.09 s; pure Python plus `pyyaml`; no Streamlit).
-  - It is **not an installable package**: `pyproject.toml` has no `[project]` table.
-  - The Fly site is Streamlit and has **no JSON endpoint**.
-- **Its ids differ from `app/game_data.py` almost everywhere:**
-  - Schools, e.g. `kakita` vs `kakita_duelist` and `monk` vs `brotherhood_of_shinsei_monk`.
-  - Knacks use spaces, e.g. `"double attack"` vs `double_attack`.
-  - All ten Wave Man ability names differ, e.g. `"missed attack bonus"` vs `wave_man_miss_raise`.
-- **Rules conflict:** the simulator allows `(xp - 100) // 15 + 1` profession abilities, which is **4 at 150 XP**. This app allows 1 at 150 XP plus 1 every 15 XP. See Q1.
+  - Deterministic, works at any XP.
+  - Spends `COMBAT_XP_FRACTION = 0.75` of total XP greedily down a per-school priority list (`simulation/templates/strategies.py::SCHOOL_PRIORITIES`).
+  - Leaves the rest unspent and unassigned, which is what we want.
+  - Higher XP never gives lower stats, which makes "the returning NPC gained XP" simply a re-generation at the new total.
+- **Not installable:** `pyproject.toml` has no `[project]` table.
+  - The generator imports `web.models.CharacterConfig`. A top-level `web` package would be an unwelcome thing to install into this app's environment, so `CharacterConfig` (or the generator's output type) should move under `simulation`.
+- **No JSON API:** the deployed site is Streamlit.
+- **Coverage gaps:** there are no builds for Mantis Wave-Treader, Kitsune Warden, Suzume Overseer, Shugenja or Worker.
+- **Its ids differ from `app/game_data.py`:**
+  - Schools: `kakita` vs `kakita_duelist`, `monk` vs `brotherhood_of_shinsei_monk`.
+  - Knacks: `"double attack"` vs `double_attack`.
+  - All ten Wave Man ability names, e.g. `"missed attack bonus"` vs `wave_man_miss_raise`.
+- **Its own CLAUDE.md** sets these rules: TDD, ruff, strict mypy, 100% coverage, and **"never run `git push` yourself"**.
 
-### In this app
+### gm-assistant (`/host-l7r-repo/gm-assistant`, public on GitHub, deployed as `l7r-gm-assistant.fly.dev`, sleeps when idle)
 
-- **No NPC concept.** The GM's NPCs are ordinary characters they own; hidden ones still appear on the GM's own index.
-- **About 8 sites list characters** and each would need an NPC filter:
-  - `index`, `group_summary`, `group_dark_secret_map`, `group_money` / `group_money_award`
-  - `party.visible_party_members`, which feeds party effects on the sheet and in the bot
-  - `/api/characters`, `/api/rolls`
-  - `discord_commands.resolve_character`
-- **Only initiative rolls on the server** (`roll_engine.execute_initiative` + `tracking.start_combat_round`).
-  - Attack, parry and wound-check *dice* can be rolled server-side by `execute_roll`.
-  - **Damage assembly and wound-check pass/fail/serious-wound math exist only in the browser**: `_dice_js.html` plus `roll_math.js`.
-- **Nothing updates live.** A tab learns of another writer only through a 409 on its next save. `/api/characters` already exposes a `current` block (wounds, void, action dice, `tracking_rev`) for polling, but it is bearer-token-authed rather than session-authed.
-- **Unspent XP is legal.** The sheet shows "Unspent: N" and only overspending warns.
+- **Name picking:**
+  - `webapp/chargen/namepool.py::pick_name(gender, pool, used, avoid, peasant)` picks over gendered given-name pools (`pool-male.jsonl`, `pool-female.jsonl`).
+  - `webapp/chargen/similarity.py` has the rules: edit distance <= 1 or a prefix match against used names. Within one batch, it also rejects the same first letter and rhymes.
+- **The used-name set is only available inside gm-assistant.** It combines:
+  - Obsidian Portal (an OAuth API behind gm-assistant's secrets),
+  - lineage tags,
+  - a manual list,
+  - a scrape of **this app's public index**.
+- **No endpoint returns suggested names.** `/chargen/generate` needs a Discord session. The deployed copy's used-name cache is a snapshot taken at deploy time.
 
-## 3. Proposed architecture (draft - pending section 6)
+### This app
 
-### 3.1 Getting builds from the simulator: import it as a library
+- **No NPC concept.** About 8 sites list characters: `index`, `group_summary`, the dark-secret map, `group_money` / award, `party.visible_party_members`, `/api/characters`, `/api/rolls`, and `discord_commands.resolve_character`.
+- **Split between server and browser:**
+  - The server builds every roll's **formula** (`build_all_roll_formulas`), which is where the rules live.
+  - It can **roll** any single formula (`roll_engine.execute_roll`) and initiative. These two were added for the Discord bot, the first client other than the sheet.
+  - **Damage assembly and the wound-check outcome (pass/fail, serious wounds) are computed only in the browser**, in `_dice_js.html` and `roll_math.js`, because the sheet began as a single interactive page.
+- **Nothing updates live.** `/api/characters` has a pollable `current` block, but it is bearer-token-authed.
+- **Unspent XP is legal.** The editor already computes a GM-only **XP profile** (`xp_profile()` in `services/xp.py`, bands in `game_data.XP_PROFILE_BANDS`) using the same combat categorization as the analysis.
 
-Options considered:
+## 4. Architecture
 
-| option | picks up progression changes | cost / risk |
-|---|---|---|
-| **A. Install the simulator as a Python package** (git dependency, built into the Docker image) | on the next deploy of this app, **no code change here** | a small `[project]` table in the simulator's `pyproject.toml`; a deploy is still needed to pick up changes |
-| B. Add a JSON endpoint to the simulator, call it over HTTP | immediately | the simulator's Fly machine must be awake mid-session (cold boot); a Streamlit app is an awkward host for an API; a second service to keep up |
-| C. Re-implement the greedy loop here, read their tables | never automatically | exactly the duplication the GM wants to avoid |
-| D. Read the pre-generated tier YAMLs | on deploy | only 7 XP tiers; cannot do "earned 55" |
+### 4.1 The simulator as a library (D3)
 
-**Recommendation: A.**
-- `requirements.txt` pins the simulator to a git ref. `main` is an option, but see Q3.
-- A thin adapter, `app/services/npc_generator.py`, calls `generate_template` and translates the resulting `CharacterConfig` into `Character` fields.
-- **The only coupling is an id-mapping table** (schools, knacks, profession abilities, rings). A unit test walks every simulator school and fails loudly if the simulator grows a school, knack or ability this table cannot map. That makes drift a red test rather than a silently wrong NPC.
-- Pull request for the simulator repo: add `[project]` metadata. Optionally, promote `COMBAT_XP_FRACTION` to a keyword argument on `generate_template` so the "how much goes on combat" knob can be tuned per encounter without forking anything. See Q5.
+- **In the simulator repo:**
+  - Add `[project]` packaging that exports `simulation` only (move `CharacterConfig` under it).
+  - Make `generate_template` take a `combat_xp_fraction` argument, defaulting to today's constant.
+  - Fix the profession-ability count (D1).
+- **Local development:** `pip install -e /host-l7r-repo/simulator`, so a change in the simulator is live here immediately. No bump, no copy.
+- **Deploys:** `requirements.txt` installs `git+https://github.com/EliAndrewC/claude-guided-l7r-combat-simulator@main`, so each deploy of this app takes the simulator's latest pushed `main`. The resolved commit is recorded on every generated NPC ("built with simulator `abc1234`") so an odd build can be traced.
+- **The adapter:** `app/services/npc_generator.py` translates the simulator's output to `Character` fields through **one id-mapping table**. A guard test walks every simulator school, knack and ability, and fails if one maps to nothing and is not explicitly listed as unsupported. Drift becomes a red test, never a silently wrong NPC.
 
-### 3.2 NPCs and encounters
+### 4.2 Generating an NPC
 
-- **NPCs are `Character` rows with `is_npc = True`**, owned by the GM, `is_hidden = True`, attached to an **encounter**. `is_npc` is a new column, so it also needs a migration entry.
-- **One shared helper, e.g. `visible_to_listings()`, excludes NPCs from all ~8 listing sites.** A guard test in the spirit of `test_the_registered_set_is_exactly...` checks that every `Character` query in `routes/` goes through it.
-- **A new `Encounter` model:** `id`, `gaming_group_id`, `name`, `created_at`, `status` (active / ended). NPCs point to it with `encounter_id`.
-- **An encounter is created from one or more generation requests.** A request is school, count, XP range, optional name stem, and knobs (Q4/Q5). For example "6 x Wave Man, earned 40-80".
-- **NPC sheets are GM-only:** `GET /characters/{id}` returns 404 for anyone else, admins included only as the GM. They are never recorded as party members, never reachable from Discord, and never included in `/api/*`. `/api/*` inclusion is Q9.
-- **Ending an encounter** either deletes its NPCs or archives them. See Q7.
+**Inputs per NPC:** school, earned XP (exact, or base + roll), combat-share target, optional per-NPC combat-share override, name.
 
-### 3.3 The tracker page
+1. **Earned XP (D5).**
+   - An exact value is used as-is.
+   - Otherwise it is `base + 5 x exploding_d10()`. The mean bonus is about 30.5 XP, and one NPC in a hundred gets +100 or more.
+   - `total_xp = 150 + earned` (D2).
+2. **Combat share (D6).**
+   - `share = target + (a deviation drawn from the measured characters)`, clamped to a sane band.
+   - The measured deviations are the 19 characters in the analysis, each minus their median (74.1%), which gives offsets from -20.9 to +16.9 points.
+   - Resampling the real data keeps its actual shape: a tight cluster near the middle with a few far-out "faces" and "pure fighters". It assumes no bell curve.
+   - The default target is the median. An override replaces the draw entirely.
+   - The table lives in `game_data.py` beside `XP_PROFILE_BANDS`, and the analysis script regenerates it.
+3. **Build:** `generate_template(sim_school, total_xp, combat_xp_fraction=share)`, then translation (4.1).
+   - Stored on the NPC: school, earned XP, the XP roll, the share, and the simulator commit. These are its **generation parameters**, so it can be regenerated at a higher XP later (D8).
+4. **Name (D10):** see 4.5.
 
-- **`GET /groups/{id}/combat`**, admin-only, modelled on `group_money` / the Dark Secret map.
-  - PC cards: name, action dice (spent / unspent), LW, SW / max SW, current void, TN to be hit.
-  - NPC cards: the same fields.
-- **Live updates by polling** a new session-authed, admin-only `GET /groups/{id}/combat/state`. It returns each combatant's `tracking_rev` and current state and is polled every few seconds, with an integer compare to skip no-op redraws. It uses no SSE and no websockets (single uvicorn worker, Fly auto-stop).
-- **NPC actions:** see Q10, the biggest open decision. The draft recommendation is to do it in phases:
-  1. First, each NPC card opens that NPC's **real sheet** in a side panel or tab. The GM rolls with the full sheet modals and exact PC rules, with zero duplication.
-  2. Later, add quick-roll buttons on the tracker itself (initiative, attack, parry, damage, wound check), backed by the server roller. This needs damage and wound-check math moved to Python with a shared case table in `tests/shared/`, per the "rules in both JS and Python" rule.
-- **A "roll initiative for all NPCs" button** reuses `execute_initiative` + `start_combat_round`, the same code `/initiative` uses.
+### 4.3 NPCs, encounters, archive
 
-## 4. Things that deliberately stay out
+**NPC characters.**
+- An NPC is a `Character` with `is_npc = True` (new column plus a migration entry), owned by the GM, `is_hidden = True`.
+- **One helper excludes NPCs from every listing site**, and a guard test makes new listing sites use it.
+- **Only the GM can open an NPC sheet.** For anyone else, the NPC is never a party member and can never be resolved from Discord.
 
-- **The GM does not roll for PCs from this page.** PCs roll on their sheets or in Discord; the tracker only reads their state.
-- **No player-visible NPC data.** Players do not see stats, sheets or rolls. What gets posted to Discord is Q8.
-- **No new rules engine.** Every rule comes from `build_all_roll_formulas` and the existing sheet code; every build decision comes from the simulator.
+**Encounters.** An `Encounter` model has `id`, `gaming_group_id`, `name`, `status` (active / ended) and `created_at`. NPCs join an encounter through a link table, because an archived NPC can fight again in a later encounter.
 
-## 5. Phases
+**NPC state.** An NPC's per-fight status is `fighting`, `unconscious` or `dead`. Reaching 2 x Earth serious wounds prompts the GM to pick one (D9); the others stay GM-settable.
 
-Each phase ends with unit tests green at 100% coverage, targeted clicktests passing, a commit and a deploy, per `CLAUDE.md`.
+**Ending an encounter** archives its NPCs to a GM-only **NPC roster** (per group). From the roster the GM can add an archived NPC to a new encounter, optionally with **gained earned XP**. That re-runs the generator with the NPC's stored school and share, and because progression is monotonic the new build only adds to the old one. Dead NPCs stay in the roster, marked dead. Deleting from the roster is explicit.
+
+### 4.4 Server-side combat actions (D7)
+
+**New server endpoints, session-authed and GM-only for NPCs:**
+- attack (by type) against a chosen PC's TN,
+- parry against a given attack total,
+- damage,
+- apply light wounds + wound check,
+- keep light wounds / take a serious wound,
+- initiative for one or all NPCs.
+
+**The rules are still not re-implemented.**
+- Formulas come from `build_all_roll_formulas`, and dice from `roll_engine`.
+- The damage and wound-check arithmetic now in `roll_math.js` gets a Python twin: excess-to-extra-dice, failed-parry reduction, the 10k10 cap and Wave Man rounding for damage; pass/fail and serious-wound count for the wound check.
+- The twin is pinned to a shared case table in `tests/shared/`, per the "rules in both JS and Python" rule.
+
+**Scope.** This project builds the server API and the tracker uses it. **Moving the sheet itself onto these endpoints is a separate, later project** (see Q4). The sheet's modals carry many mid-roll choices, and migrating them is its own large piece of work.
+
+**Mid-roll choices for NPCs.**
+- Automatic bonuses are applied, as they already are for the bot.
+- Pre-roll void is a picker on the button.
+- Discretionary post-roll choices (spend void on a wound check, free raises) are a small prompt in the result.
+- Anything more exotic falls back to opening the NPC's full sheet, which already handles everything.
+
+### 4.5 Names (D10)
+
+The used-name data (Obsidian Portal) is only reachable from gm-assistant, so **the name picking stays there**. This app asks for names; it does not copy gm-assistant's rules.
+
+- **gm-assistant grows a small token-authed JSON endpoint:** `GET /api/names?gender=&count=&peasant=&avoid=`. It refreshes its used-name cache when stale, then returns `count` names that pass both the used-name check and the within-batch check.
+- **This app calls it** when the GM generates an encounter, and pre-fills each NPC's name. The GM can edit it or ask for another. If gm-assistant is asleep or down, names fall back to "Wave Man 1..N".
+- **Generated NPC names must count as "used" too.** gm-assistant learns this app's names by scraping the public index, which NPCs are deliberately absent from. So NPC names reach it through `/api/characters`, flagged `is_npc` (see Q10).
+
+### 4.6 The tracker page
+
+- **`GET /groups/{id}/combat`, GM-only.**
+- **Cards:**
+  - PC cards: name, action dice (spent / unspent), LW, SW / max SW, TN to be hit.
+  - NPC cards: the same, plus void, status, and clickable action dice (D11).
+- **Live updates by polling** a GM-only `GET /groups/{id}/combat/state` every few seconds, which compares `tracking_rev` to skip redraws.
+- **Clicking an NPC action die** opens a menu: attack (type, target PC), parry, other. The result shows in place, the die is marked spent, and wounds update.
+- **Encounter builder on the same page:** rows of "N x school, XP, combat target", then generate, and names are fetched.
+
+## 5. Out of scope
+
+- The GM rolling for PCs.
+- Player-visible NPC data of any kind (pending Q9).
+- A new rules engine: every rule comes from `build_all_roll_formulas` and every build from the simulator.
+- Moving the sheet's own modals onto the new server endpoints (a later project).
+
+## 6. Phases
+
+Each phase ends with tests green at 100% coverage in every repo it touches, targeted clicktests passing, commits and a deploy.
 
 ### Phase 0 - Requirements (current)
-- [x] Survey the simulator generator and this app's combat surfaces
-- [x] Draft this document
-- [ ] GM answers section 6; fold the answers into sections 3-5
-- [ ] Final review of this document with the GM before any code
+- [x] Survey the simulator, gm-assistant and this app
+- [x] Draft this document; fold in GM round 1 answers
+- [ ] GM answers section 7
+- [ ] GM signs off on this document
 
-### Phase 1 - Simulator as a dependency
-- [ ] Simulator repo: add `[project]` packaging; (maybe) `combat_xp_fraction` keyword on `generate_template`
-- [ ] Add a pinned git dependency here; confirm the Docker build and the 512 MB machine are fine
-- [ ] `npc_generator.py`: `CharacterConfig` -> `Character` fields, with id-mapping tables
-- [ ] Guard test: every simulator school / knack / ability maps, or is explicitly listed as unsupported
-- [ ] Unit tests: a few schools across the XP range produce valid characters (validation clean apart from "unspent")
+### Phase 1 - Simulator as a library (simulator repo + this repo)
+- [ ] Simulator: fix the profession-ability count (D1), with a test
+- [ ] Simulator: `[project]` packaging exporting `simulation` only; move `CharacterConfig` under it
+- [ ] Simulator: `combat_xp_fraction` argument on `generate_template`
+- [ ] Here: git dependency in `requirements.txt`; editable install for local dev; Docker build check on 512 MB
+- [ ] Here: `npc_generator.py` + id-mapping table + guard test
+- [ ] Here: XP roll (D5) and combat-share draw (D6), with its table generated by the analysis script
+- [ ] Unit tests: several schools across XP produce characters whose validation is clean apart from unspent XP
 
-### Phase 2 - NPC characters and encounters
-- [ ] `is_npc`, `encounter_id` columns + migration entries; `Encounter` model
-- [ ] Listing helper and filter at every listing site; guard test
-- [ ] NPC sheet 404 for non-GM; no party effects; no Discord resolution; `/api` per Q9
-- [ ] Suppress PC-only validation noise on NPC sheets (age, lineage, ...)
-- [ ] Encounter create / end / delete routes (admin-only), generation from requests with variance per Q4
+### Phase 2 - NPC characters, encounters, roster
+- [ ] `is_npc` + generation-parameter columns + migrations; `Encounter` and link models
+- [ ] Listing helper at every listing site + guard test
+- [ ] NPC sheet GM-only; no party effects; no Discord resolution; `/api` per Q10
+- [ ] Suppress PC-only validation noise on NPC sheets
+- [ ] Encounter create / end; roster; return-with-gained-XP; unconscious / dead status
 
-### Phase 3 - The tracker page (read-only)
-- [ ] `/groups/{id}/combat` + `/combat/state` polling endpoint, admin-only
-- [ ] PC and NPC cards (action dice, LW, SW / max, void, TN to hit)
-- [ ] Encounter builder UI on the page
-- [ ] Clicktests + `COVERAGE.md`; responsive checks
+### Phase 3 - Names (gm-assistant repo + this repo)
+- [ ] gm-assistant: token-authed `/api/names`, with a cache refresh
+- [ ] Here: client with a fallback; NPCs on `/api/characters` flagged `is_npc`
 
-### Phase 4 - GM acting for NPCs
-- [ ] Per Q10: side-panel NPC sheet (first) and / or tracker quick-rolls
-- [ ] Roll-initiative-for-all-NPCs
-- [ ] Applying damage to an NPC (LW entry -> wound check)
+### Phase 4 - Server combat actions
+- [ ] Python damage + wound-check math, with a shared case table against `roll_math.js`
+- [ ] Endpoints listed in 4.4, GM-only for NPCs, recording per Q10
 
-### Phase 5 - Later / maybe
-- [ ] Server-side damage + wound-check math with `tests/shared/` case tables (only if Q10 needs it)
-- [ ] Phase / turn order view (Q11)
-- [ ] Variance knobs beyond XP range (Q5)
+### Phase 5 - The tracker page
+- [ ] Page + state polling endpoint; PC and NPC cards
+- [ ] Action-die menu driving the Phase 4 endpoints; result display; spent dice
+- [ ] Encounter builder; 2 x Earth prompt; archive
+- [ ] Clicktests + `COVERAGE.md`; responsive checks; deploy
 
-## 6. Open questions for the GM
+### Later
+- [ ] Explicit phase ticking, for per-phase abilities (D11)
+- [ ] The sheet's own modals calling the server combat API
 
-**Rules and the simulator**
+## 7. Open questions (round 2)
 
-1. **Profession ability count conflict.** Simulator: `(xp - 100) // 15 + 1` gives 4 abilities at 150 XP and 14 at 300. This app: 1 at 150 XP, then 1 every 15 XP. Which is right? The wrong one should be fixed in its own repo, not papered over here.
-2. **XP meaning.** "A Wave Man with 50 earned XP" means `generate_template(total_xp = 150 + 50)`, correct? And the range you give me is always *earned* XP?
-3. **How current is "latest"?** Is "the progression in effect as of this app's last deploy" good enough, or must a push to the simulator reach live NPC generation with no redeploy here? The second pushes us to option B (an HTTP service) and its cold-boot problem.
+**Process**
 
-**Generation and variance**
+1. **Pushing to the other repos.** The simulator's CLAUDE.md says never `git push`, and this container has no SSH key for its remote anyway. Proposal: I commit in the simulator (and gm-assistant) and you push. Does gm-assistant have the same rule?
 
-4. **Variance, v1.** Proposal: each NPC in a group draws its own XP uniformly from the range, and the build is otherwise the simulator's deterministic one. Is that enough to start with?
-5. **Tuning knobs.** You mentioned "what percentage of XP goes to skills". Should the combat fraction (simulator default 75%) be a per-encounter knob? Any others, such as "sometimes swap two adjacent priorities" via the simulator's `variants.py` transforms?
-6. **Schools the simulator lacks** (Mantis Wave-Treader, Kitsune Warden, Suzume Overseer, Shugenja, Worker): leave them unavailable as NPCs until the simulator has builds for them?
-7. **NPC lifetime.** When an encounter ends, delete its NPCs, or archive them so a recurring villain can reappear? Should a generated NPC ever be "promoted" to a permanent, hand-editable GM character?
-8. **Names.** Auto-name them ("Wave Man 1..6"), let you supply a stem ("Bandit"), or both?
+**Generation**
 
-**Visibility**
+2. **Exact vs base XP.** Proposal: the XP field has a "roll extra" checkbox, on by default. Typing 50 with it checked means "50 + roll"; unchecked means exactly 50. (The alternative is to infer it from "is it a multiple of 50", which is implicit.)
+3. **Combat-share clamp.** Resampling the measured deviations around a target can go past 91% (e.g. a target of 85 plus the Jimen offset). Clamp to 50%-95%?
+4. **Sheet migration.** Confirm that moving the sheet's own roll modals onto the new server API is a separate later project, not part of this one.
+5. **Name details.** Gender: the GM picks per row, or random? Peasant or samurai: from the school (Wave Man = peasant pool?), or the GM picks? Family names for samurai NPCs: skip for now (given name only), or draw from the school's clan families?
+6. **Returning NPCs.** When an archived NPC comes back, are they healed and rested (full void, no wounds)? Proposal: yes, always.
+7. **Schools the simulator lacks** (Mantis Wave-Treader, Kitsune Warden, Suzume Overseer, Shugenja, Worker): unavailable as NPCs until the simulator has builds for them?
 
-9. **The GM API and gm-assistant.** Should NPCs appear in `/api/characters` and `/api/rolls` (flagged `is_npc`), or be invisible there too? Should their rolls be recorded in `roll_history` at all?
-10. **How you act for an NPC** (the biggest decision). (a) Open the NPC's full sheet in a panel, so every rule is already there. (b) Compact quick-roll buttons on the tracker, which is faster at the table but needs damage and wound-check math ported to Python. (c) (a) first, then (b). Recommendation: (c).
-11. **Turn order.** Do you want the tracker to show the round as phases 1-10, with who acts in each phase and a "current phase" pointer? Or is a table of each combatant's action dice enough to start?
-12. **What players see.** Anything? For example, nothing at all; or an NPC's roll posted to the Discord channel as a card with no stats; or "Bandit 3: Heavily Wounded" descriptors on the group page.
-13. **Which PCs are on the tracker.** Every non-hidden PC in the group, or do you pick who is in this fight?
-14. **Beyond LW / SW / initiative.** Void points, TN to be hit, Dan, per-round flags (e.g. a Mantis's state)? Is showing more for NPCs than for PCs fine?
+**At the table**
+
+8. **NPC attacks a PC.** Proposal:
+   - The GM picks the target PC, and the server compares against that PC's TN to be hit.
+   - The player parries on their own sheet and says whether it worked; the GM clicks "parried" or "not parried".
+   - The tracker rolls damage (including the failed-parry reduction from the PC's parry skill, which it knows) and shows the number for the GM to tell the player.
+   - The player enters it on their sheet, which starts their wound check.
+   - The tracker does **not** write wounds onto a PC. OK?
+9. **PC attacks an NPC.** The GM types the PC's attack total and, if the NPC parries, clicks parry on an NPC die. On a hit, the GM types the damage; the server adds light wounds, rolls the NPC's wound check, and the GM chooses keep-LW or take-SW. Should keep-LW / take-SW instead follow the simulator's wound-check strategy automatically, with an override?
+10. **Records.** Should NPC rolls go into `roll_history`, and should NPCs appear in `/api/rolls` / `/api/characters` flagged `is_npc`? gm-assistant needs NPC names from somewhere (4.5).
+11. **What players see.** Nothing at all? Or, e.g., an NPC dice card in Discord with no stats, or "Bandit 3: down" on the group page?
+12. **Which PCs appear.** Every non-hidden PC in the group, or does the GM choose who is in this fight?
+13. **More per-card detail.** Void, TN to be hit, Dan, per-round flags? More for NPCs than for PCs is fine?
