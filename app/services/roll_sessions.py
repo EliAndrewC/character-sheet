@@ -41,6 +41,10 @@ from app.services.attack_rolls import (
     attack_flags, attack_outcome, build_attack, current_posture, offensive_count,
 )
 from app.services.combat_math import damage_flags
+from app.services.duels import (
+    DUEL_KEYS, KAKITA_5TH, duel_damage_pool, kakita_5th_damage_pool, kakita_5th_formula,
+    restart_bonus, weapon_dice,
+)
 from app.services.tracking import set_serious_wounds
 from app.services.wound_checks import (
     akodo_banked_bonus, build_wound_check, daidoji_counterattack, wound_check_flags,
@@ -112,7 +116,8 @@ def server_rolled(roll_key: str) -> bool:
         return True
     if not roll_key or roll_key.startswith("initiative"):
         return False
-    if roll_key in PARRY_KEYS or roll_key in ("attack", "athletics:attack", "wound_check"):
+    if roll_key in PARRY_KEYS or roll_key in ("attack", "athletics:attack", "wound_check", KAKITA_5TH) \
+            or roll_key in DUEL_KEYS:
         return True
     kind = roll_key.split(":", 1)[0]
     return kind in ("skill", "knack", "ring", "athletics")
@@ -207,10 +212,20 @@ def start_roll(
             raise RollRefused(f"no void, otherworldliness or ring swap on a {roll_key} roll")
         formula, record_key, activation = _special(character, char_data, roll_key, choices)
     else:
-        formula = build_all_roll_formulas(char_data, party_members=party).get(roll_key)
+        all_formulas = build_all_roll_formulas(char_data, party_members=party)
+        formula = all_formulas.get(DUEL_KEYS.get(roll_key, roll_key))
+        if roll_key == KAKITA_5TH:
+            if void or ow or choices.get("kitsune_swap"):
+                raise RollRefused("the Kakita 5th Dan contest takes no void")
+            try:
+                formula = kakita_5th_formula(character, all_formulas, choices)
+            except ValueError as exc:
+                raise RollRefused(str(exc)) from None
         if not formula:
             raise RollRefused(f"{character.name} has no {roll_key} roll")
         formula = dict(formula)
+        if roll_key in DUEL_KEYS:
+            formula = _duel_formula(roll_key, formula, choices, void, ow)
     label = formula.get("label") or roll_key
 
     # A parry declared before the attack is rolled: +5.
@@ -322,6 +337,11 @@ def start_roll(
     if effective.get("is_attack_type"):
         _after_attack_roll(character, session, consumes, live)
         _write_payload(db, session)
+    if roll_key in DUEL_KEYS or roll_key == KAKITA_5TH:
+        _duel_state(session)
+        if roll_key == KAKITA_5TH and live:
+            # Once per combat round, latched the moment the contest is rolled.
+            character.adventure_state = dict(character.adventure_state or {}, kakita_5th_dan_used=True)
     if roll_key == "wound_check":
         if live:
             state = dict(character.adventure_state or {})
@@ -425,6 +445,8 @@ def _initiative_fields(session: RollSession) -> Dict[str, Any]:
         out["attack"] = choices["attack"]
     if "wc" in choices:
         out["wc"] = choices["wc"]
+    if "duel" in choices:
+        out["duel"] = choices["duel"]
     return out
 
 
@@ -580,6 +602,8 @@ def act(db: Session, session: RollSession, character: Character, action: str,
         _attack_state(character, session)
     if session.roll_key == "wound_check":
         _wc_state(session)
+    if session.roll_key in DUEL_KEYS:
+        _duel_state(session)
     _write_payload(db, session)
     db.flush()
     return dict(extra, **_initiative_fields(session), **{
@@ -944,7 +968,8 @@ REROLLS = {
 # Parry and feint (Phase 6): the result panel's choices
 # ---------------------------------------------------------------------------
 
-_AKODO_VP_KEYS = ("parry", "athletics:parry", "knack:feint", "knack:iaijutsu", "knack:iaijutsu:evaluate")
+_AKODO_VP_KEYS = ("parry", "athletics:parry", "knack:feint", "knack:iaijutsu", "knack:iaijutsu:evaluate",
+                  "iaijutsu:contested")
 
 
 def _flags(character: Character) -> Dict[str, Any]:
@@ -1557,3 +1582,115 @@ def _wc_resolve(db, session, character, args, rng):
 
 REROLLS.update({"wc_resolve": _wc_resolve})
 UNDOABLE.update({"wc_vp": _wc_vp, "matsu_bank": _matsu_bank, "wc_excess": _wc_excess})
+
+
+
+# ---------------------------------------------------------------------------
+# The iaijutsu duel and Kakita 5th Dan (Phase 9)
+# ---------------------------------------------------------------------------
+
+def _duel_formula(roll_key, formula, choices, void, ow):
+    """The contested roll or the strike, with the duel's restart bonus. The
+    strike takes no void and never rerolls 10s; its opponent's TN is judged."""
+    try:
+        bonus = restart_bonus(choices)
+    except ValueError as exc:
+        raise RollRefused(str(exc)) from None
+    if bonus:
+        formula["flat"] = (formula.get("flat") or 0) + bonus
+        formula["bonuses"] = list(formula.get("bonuses") or []) + [{"label": "duel restart", "amount": bonus}]
+    formula["label"] = "Iaijutsu Contested" if roll_key == "iaijutsu:contested" else "Iaijutsu Strike"
+    if roll_key == "iaijutsu:strike":
+        if void or ow or choices.get("kitsune_swap"):
+            raise RollRefused("no void may be spent on the strike")
+        try:
+            formula["opponent_tn"] = max(0, int(choices.get("opponent_tn") or 0))
+        except (TypeError, ValueError):
+            raise RollRefused("opponent_tn must be a whole number") from None
+        formula.update(reroll_tens=False, no_reroll_reason="iaijutsu_strike")
+    return formula
+
+
+def _duel_state(session: RollSession) -> None:
+    """The strike's hit and excess over the opponent's TN (recomputed after
+    Conviction and rerolls)."""
+    f = session.formula or {}
+    if session.roll_key != "iaijutsu:strike":
+        session.choices = dict(session.choices or {}, duel={"total": _session_total(session)})
+        return
+    excess = _session_total(session) - int(f.get("opponent_tn") or 0)
+    session.choices = dict(session.choices or {}, duel={"hit": excess >= 0, "excess": excess})
+
+
+def _child_damage(db, session, character, key, label, rolled, kept, flat, rng, extras):
+    """A damage roll chained to its parent, recorded, as a session of its own."""
+    data = character.to_dict()
+    dformula = {"label": label, "rolled": rolled, "kept": kept, "flat": flat, "reroll_tens": True,
+                "is_damage_roll": True, "bonuses": [], "damage_parts": list(extras),
+                "void_spent": 0, "void_overflow_bonus": 0}
+    dice = roll_dice(rolled, kept, True, rng)["in_order"] if rolled and kept else []
+    scored = score_roll(data, dformula, dice, list(extras))
+    payload = dict(scored, title=label, formula=_formula_text(dformula))
+    history_id = None
+    choices = session.choices or {}
+    if session.mode == "live" and choices.get("record"):
+        row = RollHistory(character_id=character.id, roll_key=key,
+                          actor_discord_id=session.viewer_discord_id,
+                          is_owner_roll=bool(choices.get("is_owner_roll")),
+                          impaired_at_roll=impaired_now(data), payload=payload)
+        db.add(row)
+        db.flush()
+        history_id = row.id
+    child = RollSession(
+        id=secrets.token_hex(16), character_id=character.id, viewer_discord_id=session.viewer_discord_id,
+        mode=session.mode, roll_key=key, formula=dformula, dice=dice, payload=payload, actions=[],
+        choices={"base_total": scored["total"], "record": choices.get("record"),
+                 "is_owner_roll": choices.get("is_owner_roll"), "parent": session.id},
+        history_id=history_id,
+    )
+    db.add(child)
+    db.flush()
+    _add_flag(session, "damage", session_id=child.id)
+    return {"damage": _answer(child, character)}
+
+
+def _duel_damage(db, session, character, args, rng):
+    """The strike's damage, when it hit: a die per point of excess."""
+    if session.roll_key != "iaijutsu:strike":
+        raise RollRefused("duel damage is only for a strike")
+    _duel_state(session)
+    duel = session.choices["duel"]
+    if not duel["hit"]:
+        raise RollRefused("only a strike that hit rolls damage")
+    _once(session, "damage", "the damage roll")
+    try:
+        weapon = weapon_dice(args)
+    except ValueError as exc:
+        raise RollRefused(str(exc)) from None
+    base = build_all_roll_formulas(character.to_dict()).get("knack:iaijutsu") or {}
+    pool = duel_damage_pool(base, weapon, duel["excess"])
+    extras = [f"{weapon[0]}k{weapon[1]} weapon", f"+{max(0, duel['excess'])}k0 from the strike's excess"]
+    return _child_damage(db, session, character, "iaijutsu:damage", "Iaijutsu Damage",
+                         pool["rolled"], pool["kept"], pool["flat"], rng, extras)
+
+
+def _kakita_5th_damage(db, session, character, args, rng):
+    """Kakita 5th Dan's damage: +/- a rolled die per 5 the contest was won or
+    lost by. Recorded (settles 5.5)."""
+    if session.roll_key != KAKITA_5TH:
+        raise RollRefused("this damage is only for the Kakita 5th Dan contest")
+    _once(session, "damage", "the damage roll")
+    try:
+        weapon = weapon_dice(args)
+        opponent = int(args.get("opponent_roll") or 0)
+    except (TypeError, ValueError):
+        raise RollRefused("the opponent's roll and weapon dice must be whole numbers") from None
+    pool = kakita_5th_damage_pool(session.formula or {}, weapon, _session_total(session) - opponent)
+    extras = [f"{weapon[0]}k{weapon[1]} weapon", f"{pool['adjust']:+d}k0 from the contest"]
+    if pool["rolled"] <= 0 or pool["kept"] <= 0:
+        pool.update(rolled=0, kept=0)
+    return _child_damage(db, session, character, "kakita_5th_dan:damage", "Kakita 5th Dan damage",
+                         pool["rolled"], pool["kept"], pool["flat"], rng, extras)
+
+
+REROLLS.update({"duel_damage": _duel_damage, "kakita_5th_damage": _kakita_5th_damage})

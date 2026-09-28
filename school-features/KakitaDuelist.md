@@ -97,4 +97,4 @@
 - Cancelling via the × before rolling does NOT consume the once-per-round flag (checked post-damage-roll only).
 
 **General contested-roll skill-gap bonus:** for every rank by which the Kakita's iaijutsu exceeds the opponent's picked skill (iaijutsu when they have it, attack when they don't), the player gains +5 flat (one free raise). This is a general contested-roll rule that currently only surfaces on the 5th Dan modal; future contested-roll flows should use the same `_kakita5thContestSkillBonus` math pattern.
-
+- **Server (server-rolls-design Phase 9):** the contest is the `kakita_5th_dan` roll session (`duels.kakita_5th_formula` adds the three bonuses from the modal's inputs); the server refuses it once `adventure_state.kakita_5th_dan_used` is set and sets it the moment the contest is rolled. The damage is the `kakita_5th_damage` action, a child session recorded as `kakita_5th_dan:damage`. Tests: `tests/test_duel_rolls.py`, `tests/e2e/test_server_rolls.py::test_kakita_5th_dan_is_latched_by_the_server`.

@@ -71,6 +71,14 @@
                 </div>
 
                 {# ── CONTESTED ROLLING ── #}
+                {# The server could not make the roll (S6): error and Retry. #}
+                <div x-show="duelPhase === 'error'" x-cloak class="space-y-3 text-center py-4" data-testid="duel-error">
+                    <p class="text-sm text-red-700" x-text="duelError"></p>
+                    <button type="button" @click="retryServerDuel()" data-testid="duel-retry"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">Retry</button>
+                </div>
+                <div x-show="rerollError && duelPhase.endsWith('-result')" x-cloak data-testid="duel-reroll-error"
+                     class="bg-red-50 border border-red-300 rounded p-2 text-xs text-red-800" x-text="rerollError"></div>
                 <div x-show="duelPhase === 'contested-rolling' || duelPhase === 'strike-rolling' || duelPhase === 'damage-rolling'" x-cloak>
                     <div id="dice-animation-duel"
                          class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>

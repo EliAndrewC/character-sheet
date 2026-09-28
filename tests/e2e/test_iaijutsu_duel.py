@@ -596,8 +596,10 @@ def test_duel_strike_result_has_copy_as_image_button(page, live_server_url):
 
 
 def _mock_dice_low(page):
-    """Mock dice to always roll 1 (deterministic totals)."""
-    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.0")
+    """Dice always roll 1 (deterministic totals) - in the browser and on the
+    server, which rolls the duel now."""
+    from tests.e2e.dice_control import force_dice
+    force_dice(page, [1])
 
 
 def _duel_state(page, *fields):

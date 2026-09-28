@@ -1,6 +1,6 @@
 # Server-side Rolls and State Changes - Design
 
-Status: **Phases 1-8 done; Phase 9 next.** Decisions S1-S7 in section 8.
+Status: **Phases 1-9 done; Phase 10 next.** Decisions S1-S7 in section 8.
 
 ## 1. Goal
 
@@ -289,9 +289,18 @@ removes the old ones.
       initiative)"` (40); four tests that set banks or pools only on the tab fixed
 
 ### Phase 9 - Duel and Kakita 5th Dan
-- [ ] The duel's contested / strike / damage as chained sessions; Kakita 5th Dan contest and damage
-      (recorded); the once-per-round latch enforced
-- [ ] Clicktests: `test_iaijutsu_duel.py`, `test_school_abilities.py -k kakita`
+- [x] The duel's contested / strike / damage as chained sessions; Kakita 5th Dan contest and damage
+      (recorded); the once-per-round latch enforced. `iaijutsu:contested` (void allowed, the
+      restart bonus a choice) and `iaijutsu:strike` (no void, no rerolled 10s, judged against the
+      opponent's TN) are session rolls under the keys the sheet recorded them as; `duel_damage`
+      rolls the strike's damage as a child session (`iaijutsu:damage`). `kakita_5th_dan` builds the
+      contest from its inputs (`duels.kakita_5th_formula`), refuses once the round's use is spent
+      and latches it the moment it is rolled; `kakita_5th_damage` is recorded as
+      `kakita_5th_dan:damage` (settles the rest of 5.5). The opponent's duel damage is a
+      `light_wounds` operation
+- [x] Clicktests: `-k "(duel or kakita or iaijutsu or k5) and not test_school_abilities"` (36) and
+      `test_school_abilities.py -k "duel or kakita or iaijutsu or k5"` (80); the duel's dice mock and
+      the Kakita 5th Dan tests now wait for / force the server's roll
 
 ### Phase 10 - Precepts pool and retirement
 - [ ] Precepts pool roll and swaps (own and ally) as operations

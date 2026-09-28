@@ -2198,6 +2198,8 @@ The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the 
 - [x] A failed attack request shows the attack modal's error and Retry, which re-sends the same request - `test_server_rolls.py::test_a_failed_attack_request_offers_retry`
 - [x] The wound check is rolled by the server against the character's light wounds; a failure with nothing to spend applies itself on the server and survives a reload - `test_server_rolls.py::test_a_failed_wound_check_is_rolled_and_applied_by_the_server`
 - [x] A failed wound-check request shows the modal's error and Retry, which re-sends the same request - `test_server_rolls.py::test_a_failed_wound_check_request_offers_retry`
+- [x] The duel's contested roll and strike are made by the server; the strike's hit / excess and the recorded row are the server's - `test_server_rolls.py::test_the_duels_rolls_are_the_servers`
+- [x] Kakita 5th Dan's contest is made by the server, which latches the once-per-round use (survives a reload) - `test_server_rolls.py::test_kakita_5th_dan_is_latched_by_the_server`
 
 ---
 

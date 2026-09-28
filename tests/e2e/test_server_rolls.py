@@ -385,3 +385,42 @@ def test_a_failed_wound_check_request_offers_retry(page, live_server_url):
     page.locator('[data-testid="wc-retry"]').click()
     page.wait_for_function("() => window._diceRoller.wcPhase === 'result'", timeout=10000)
     assert len(seen) == 2 and seen[0]["request_id"] == seen[1]["request_id"]
+
+
+# ---------------------------------------------------------------------------
+# The duel and Kakita 5th Dan (Phase 9)
+# ---------------------------------------------------------------------------
+
+def test_the_duels_rolls_are_the_servers(page, live_server_url):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    from tests.e2e.test_iaijutsu_duel import _create_duelist, _walk_to_strike_result
+    _create_duelist(page, live_server_url, "ServerDuel")
+    sent = _rolls(page)
+    answers = []
+    page.on("response", lambda r: answers.append(r) if r.url.endswith("/roll") else None)
+    force_dice(page, [9])
+    _walk_to_strike_result(page, 10)
+    restore_dice(page)
+    keys = [json.loads(r.post_data)["roll_key"] for r in sent]
+    assert keys == ["iaijutsu:contested", "iaijutsu:strike"]
+    strike = answers[-1].json()
+    state = page.evaluate("() => ({roll: window._diceRoller.duelStrikeRoll, hit: window._diceRoller.duelStrikeHit,"
+                          " excess: window._diceRoller.duelStrikeExcess})")
+    assert state == {"roll": strike["total"], "hit": strike["duel"]["hit"], "excess": strike["duel"]["excess"]}
+    assert page.evaluate("() => window._diceRoller._rollHistoryId") == strike["history_id"]
+
+
+def test_kakita_5th_dan_is_latched_by_the_server(page, live_server_url):
+    from tests.e2e.test_school_abilities import _make_kakita_dan_5
+    _make_kakita_dan_5(page, live_server_url, "ServerKakita5")
+    answers = []
+    page.on("response", lambda r: answers.append(r) if r.url.endswith("/roll") else None)
+    page.locator('[data-action="kakita-5th-dan-contest"]').click()
+    page.wait_for_selector('[data-modal="kakita-5th-dan"]', state="visible", timeout=5000)
+    page.locator('[data-modal="kakita-5th-dan"] [data-action="kakita-5th-roll"]').click()
+    page.wait_for_function("() => window._diceRoller.k5Phase === 'result'", timeout=10000)
+    body = answers[-1].json()
+    assert page.evaluate("() => window._diceRoller.k5RollTotal") == body["total"]
+    page.wait_for_function("() => window._trackingBridge.kakita5thDanUsed === true", timeout=5000)
+    page.reload()
+    page.wait_for_function("() => window._trackingBridge.kakita5thDanUsed === true", timeout=5000)

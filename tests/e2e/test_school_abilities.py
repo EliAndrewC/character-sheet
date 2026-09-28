@@ -4927,6 +4927,7 @@ def test_kakita_5th_dan_roll_applies_bonuses(page, live_server_url):
     page.locator('[data-action="kakita-5th-defender-phase"]').select_option("10")
     _mock_dice_high(page)
     page.locator('[data-action="kakita-5th-roll"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'result'", timeout=10000)
     _restore_dice(page)
     state = page.evaluate("""() => ({
         phase: window._diceRoller?.k5Phase,
@@ -4947,9 +4948,11 @@ def test_kakita_5th_dan_damage_scales_up_when_won_by_5(page, live_server_url):
     page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
     _mock_dice_high(page)
     page.locator('[data-action="kakita-5th-roll"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'result'", timeout=10000)
     roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
     page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total - 10))
     page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'damage-result'", timeout=10000)
     _restore_dice(page)
     adjust = page.evaluate("() => window._diceRoller?.k5DamageDiceAdjust")
     assert adjust == 2
@@ -4964,9 +4967,11 @@ def test_kakita_5th_dan_damage_scales_down_when_lost_by_5(page, live_server_url)
     page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
     _mock_dice_low(page)
     page.locator('[data-action="kakita-5th-roll"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'result'", timeout=10000)
     roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
     page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total + 10))
     page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'damage-result'", timeout=10000)
     _restore_dice(page)
     adjust = page.evaluate("() => window._diceRoller?.k5DamageDiceAdjust")
     assert adjust == -2
@@ -4979,9 +4984,11 @@ def test_kakita_5th_dan_damage_unchanged_when_diff_under_5(page, live_server_url
     page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
     _mock_dice_high(page)
     page.locator('[data-action="kakita-5th-roll"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'result'", timeout=10000)
     roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
     page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total - 4))
     page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'damage-result'", timeout=10000)
     _restore_dice(page)
     adjust = page.evaluate("() => window._diceRoller?.k5DamageDiceAdjust")
     assert adjust == 0
@@ -4995,9 +5002,11 @@ def test_kakita_5th_dan_button_disabled_after_use_until_next_initiative(page, li
     page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
     _mock_dice_high(page)
     page.locator('[data-action="kakita-5th-roll"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'result'", timeout=10000)
     roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
     page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total - 20))
     page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'damage-result'", timeout=10000)
     _restore_dice(page)
     page.locator('[data-modal="kakita-5th-dan"] button:has-text("Close")').click()
     assert page.locator('[data-action="kakita-5th-dan-contest"]').is_disabled()
@@ -5028,9 +5037,11 @@ def test_kakita_5th_dan_modal_inherits_4th_dan_damage_bonus(page, live_server_ur
     page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
     _mock_dice_high(page)
     page.locator('[data-action="kakita-5th-roll"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'result'", timeout=10000)
     roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
     page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total))
     page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'damage-result'", timeout=10000)
     _restore_dice(page)
     flat = page.evaluate("() => window._diceRoller?.k5DamageFlat")
     assert flat >= 5
@@ -5115,6 +5126,7 @@ def test_kakita_5th_dan_contest_skill_bonus_shown_in_prebonus_and_breakdown(page
     assert prebonus == 5 + 11
     _mock_dice_high(page)
     page.locator('[data-action="kakita-5th-roll"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'result'", timeout=10000)
     _restore_dice(page)
     state = page.evaluate("""() => ({
         contest_skill: window._diceRoller?.k5ContestSkillBonus,
@@ -5134,23 +5146,26 @@ def test_kakita_5th_dan_contest_skill_bonus_shown_in_prebonus_and_breakdown(page
 
 
 def test_kakita_5th_dan_uses_rollandanimate_for_contest(page, live_server_url):
-    """The contest roll routes through rollAndAnimate so animation + sound
-    preferences apply. With animation disabled (test default), the path
+    """The contest roll's (server) dice are animated through animateDice so
+    animation + sound preferences apply. With animation disabled (test default), the path
     still returns dice synchronously; this test monkey-patches to verify
     rollAndAnimate is the one called."""
     _make_kakita_dan_5(page, live_server_url, "Kakita5RAA")
     page.locator('[data-action="kakita-5th-dan-contest"]').click()
     page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
+    # The server rolls the dice; the tab animates them through animateDice,
+    # so the animation and sound preferences still apply.
     page.evaluate("""() => {
         window._k5RAACalls = 0;
-        const orig = window.L7RDice.rollAndAnimate;
-        window.L7RDice.rollAndAnimate = async (...args) => {
+        const orig = window.L7RDice.animateDice;
+        window.L7RDice.animateDice = async (...args) => {
             window._k5RAACalls += 1;
             return orig.apply(window.L7RDice, args);
         };
     }""")
     _mock_dice_high(page)
     page.locator('[data-action="kakita-5th-roll"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'result'", timeout=10000)
     # Wait for phase to settle to 'result' (the roll is async now).
     page.wait_for_function(
         "() => window._diceRoller?.k5Phase === 'result'", timeout=5000)
@@ -5212,9 +5227,11 @@ def test_kakita_5th_dan_used_flag_persists_through_reload(page, live_server_url)
     page.wait_for_selector('[data-modal="kakita-5th-dan"]', state='visible', timeout=5000)
     _mock_dice_high(page)
     page.locator('[data-action="kakita-5th-roll"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'result'", timeout=10000)
     roll_total = page.evaluate("() => window._diceRoller?.k5RollTotal")
     page.locator('[data-action="kakita-5th-opponent-roll"]').fill(str(roll_total))
     page.locator('[data-action="kakita-5th-roll-damage"]').click()
+    page.wait_for_function("() => window._diceRoller?.k5Phase === 'damage-result'", timeout=10000)
     _restore_dice(page)
     page.wait_for_timeout(500)  # save round-trip
     page.reload()

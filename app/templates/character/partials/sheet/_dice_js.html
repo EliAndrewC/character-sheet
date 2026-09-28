@@ -249,6 +249,10 @@
             atkCourtierVpTaken: false,
             _atkAkodoStack: [],
             _wcRequest: null,
+            _duelRequest: null,
+            _duelErrorKind: null,
+            duelError: '',
+            k5Error: '',
             wcError: '',
             _wcMatsuStack: [],
             _wcExcessStack: [],
@@ -905,12 +909,26 @@
             },
             // ---- Duel contested panel ----
             canPcpRerollTensDuelContested() { return this._pcpCanRerollTensHere(); },
-            requestPcpRerollDuelContested() { this._pcpReroll(() => this._rerollDuelContestedCore()); },
-            requestPcpRaiseDuelContested() { this._pcpFreeRaise(this._pcpFlowDuelContested()); },
-            requestPcpRerollTensDuelContested() { this._pcpRerollTens(this._pcpFlowDuelContested()); },
+            requestPcpRerollDuelContested() { this._pcpRerollOn('duel-contested', () => this._rerollDuelContestedCore()); },
+            requestPcpRaiseDuelContested() {
+                if (this._onServerRoll('duel-contested')) return this._pcpServerRaise(() => {
+                    this.duelContestedRoll = this.baseTotal;
+                });
+                this._pcpFreeRaise(this._pcpFlowDuelContested());
+            },
+            requestPcpRerollTensDuelContested() {
+                if (this._onServerRoll('duel-contested')) return this._pcpServerTens();
+                this._pcpRerollTens(this._pcpFlowDuelContested());
+            },
             // ---- Duel strike panel (no reroll-10s: strike excluded by rule) ----
-            requestPcpRerollDuelStrike() { this._pcpReroll(() => this._rerollDuelStrikeCore()); },
-            requestPcpRaiseDuelStrike() { this._pcpFreeRaise(this._pcpFlowDuelStrike()); },
+            requestPcpRerollDuelStrike() { this._pcpRerollOn('duel-strike', () => this._rerollDuelStrikeCore()); },
+            requestPcpRaiseDuelStrike() {
+                if (this._onServerRoll('duel-strike')) return this._pcpServerRaise(() => {
+                    this.duelStrikeRoll = this.baseTotal;
+                    this._duelUpdateStrikeState();
+                });
+                this._pcpFreeRaise(this._pcpFlowDuelStrike());
+            },
             // ---- Damage panels (reroll only) ----
             requestPcpRerollDamage() { this._pcpRerollOn('damage', () => this._rerollDamageCore()); },
             // A PCP reroll / free raise / reroll-10s on a roll the server
@@ -942,7 +960,7 @@
                     return {server: true};
                 });
             },
-            requestPcpRerollDuelDamage() { this._pcpReroll(() => this._rerollDuelDamageCore()); },
+            requestPcpRerollDuelDamage() { this._pcpRerollOn('duel-damage', () => this._rerollDuelDamageCore()); },
 
             async _rerollDice(rolled, rerollTens, trayId) {
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
@@ -1099,6 +1117,12 @@
 
             async useLuckyDuelContested() {
                 if (!this.canUseLucky()) return;
+                if (this._onServerRoll('duel-contested')) {
+                    this.luckyUsedThisRoll = true;
+                    this._rerollSource = 'lucky';
+                    if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
+                    return;
+                }
                 window._trackingBridge.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
                 this._rerollSource = 'lucky';
@@ -1130,6 +1154,12 @@
 
             async useLuckyDuelStrike() {
                 if (!this.canUseLucky()) return;
+                if (this._onServerRoll('duel-strike')) {
+                    this.luckyUsedThisRoll = true;
+                    this._rerollSource = 'lucky';
+                    if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
+                    return;
+                }
                 window._trackingBridge.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
                 this._rerollSource = 'lucky';
@@ -1166,6 +1196,12 @@
 
             async useLuckyDuelDamage() {
                 if (!this.canUseLucky()) return;
+                if (this._onServerRoll('duel-damage')) {
+                    this.luckyUsedThisRoll = true;
+                    this._rerollSource = 'lucky';
+                    if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
+                    return;
+                }
                 window._trackingBridge.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
                 this._rerollSource = 'lucky';
@@ -4286,6 +4322,9 @@
                 const setPhase = (rolling) => {
                     if (kind === 'attack') this.atkPhase = rolling ? 'rolling' : 'result';
                     else if (kind === 'wc') this.wcPhase = rolling ? 'rolling' : 'result';
+                    else if (kind === 'duel-contested') this.duelPhase = rolling ? 'contested-rolling' : 'contested-result';
+                    else if (kind === 'duel-strike') this.duelPhase = rolling ? 'strike-rolling' : 'strike-result';
+                    else if (kind === 'duel-damage') this.duelPhase = rolling ? 'damage-rolling' : 'damage-result';
                     else if (kind === 'damage') this.atkPhase = rolling ? 'damage-rolling' : 'damage-result';
                     else this.phase = rolling ? 'rolling' : 'done';
                 };
@@ -4318,7 +4357,8 @@
                         ? (n) => window.L7RDice.playDiceSound(n) : null;
                     await window.L7RDice.animateDice(
                         fresh, !!data.formula.reroll_tens, this.prefs.dice_animation_enabled, playSound,
-                        kind === 'roll' ? undefined : (kind === 'wc' ? 'dice-animation-wc' : 'dice-animation-atk'));
+                        kind === 'roll' ? undefined : (kind === 'wc' ? 'dice-animation-wc'
+                            : (kind.startsWith('duel') ? 'dice-animation-duel' : 'dice-animation-atk')));
                 }
                 this._adoptServerResult(data);
                 setPhase(false);
@@ -4327,6 +4367,8 @@
                     this._adoptAttackOutcome(data.attack);
                     this._annotateSpentActionDie(this._describeAttackForDie(false));
                     this._prerenderRollImage(this._buildAttackImagePayload());
+                } else if (kind.startsWith('duel')) {
+                    this._adoptDuelResult(kind, data);
                 } else if (kind === 'wc') {
                     this.wcRollTotal = this.baseTotal;
                     this._adoptWcOutcome(data.wc);
@@ -5124,26 +5166,8 @@
             },
 
             async duelRollContested() {
-                const f = { ...this.formulas['knack:iaijutsu'] };
-                // Add duel restart bonus
-                f.flat += this.duelRestartBonus;
-                // Add void spending
-                const voidCount = this.duelVoidSelected;
-                if (voidCount > 0) {
-                    f.rolled += voidCount;
-                    f.kept += voidCount;
-                    f.void_spent = voidCount;
-                    const _cap = window.L7RRollMath.applyDiceCap(f.rolled, f.kept, f.flat);
-                    f.rolled = _cap.rolled; f.kept = _cap.kept; f.flat = _cap.flat;
-                    // Mirumoto 5th Dan: +10 per VP on combat rolls
-                    const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
-                    if (combatBonus > 0) {
-                        f.flat += voidCount * combatBonus;
-                    }
-                    const options = this.computeVoidOptions();
-                    if (options[voidCount - 1]) this.deductVoidPoints(options[voidCount - 1]);
-                }
-
+                // The SERVER makes the duel's rolls (server-rolls-design
+                // Phase 9): contested, strike and damage are chained sessions.
                 this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
@@ -5152,24 +5176,84 @@
                 this.convictionSpentThisRoll = 0;
                 this.akodoPostRollVpSpent = 0;
                 this.akodoPostRollVpSources = [];
-                this.duelPhase = 'contested-rolling';
-                this.formula = f;
+                this._duelRequest = {
+                    roll_key: 'iaijutsu:contested',
+                    void: this.duelVoidSelected || 0,
+                    restart_bonus: this.duelRestartBonus || 0,
+                    request_id: this._newRequestId(),
+                };
+                await this._runServerDuel('duel-contested');
+            },
+
+            // One of the duel's rolls, made by the server; ``kind`` is
+            // duel-contested or duel-strike.
+            async _runServerDuel(kind) {
+                const req = this._duelRequest;
+                const t = window._trackingBridge;
+                const rollingPhase = kind === 'duel-contested' ? 'contested-rolling' : 'strike-rolling';
+                this.duelPhase = rollingPhase;
+                this.duelError = '';
+                this._duelErrorKind = kind;
+                if (t && t.canEdit && typeof t.whenSaved === 'function') await t.whenSaved();
+                if (t && t.canEdit && t._opChain) await t._opChain.catch(() => null);
+                let data = null;
+                try {
+                    const resp = await fetch('/characters/' + t._charId + '/roll', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(req),
+                    });
+                    data = await resp.json().catch(() => null);
+                    if (!resp.ok || !data || !data.dice) {
+                        this.duelPhase = 'error';
+                        this.duelError = (data && data.error) || 'The roll could not be made.';
+                        return;
+                    }
+                } catch (e) {
+                    this.duelPhase = 'error';
+                    this.duelError = 'Could not reach the server. Check your connection and retry.';
+                    return;
+                }
+                if (t.canEdit && data.mode === 'live' && data.tracking) t.adoptServerState(data.tracking, false);
+                this._serverSessionId = data.session_id;
+                this._serverSessionMode = data.mode;
+                this._serverSessionKind = kind;
+                this.formula = { ...data.formula };
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
-                const dice = await window.L7RDice.rollAndAnimate(
-                    f.rolled, f.reroll_tens, this.prefs.dice_animation_enabled, playSound, 'dice-animation-duel'
-                );
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(f.kept, sorted.length);
-                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
-                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.baseTotal = this.keptSum + f.flat;
-                this.duelContestedRoll = this.baseTotal;
-                this.duelContestedDone = true;
-                this.duelPhase = 'contested-result';
-                this._prerenderRollImage(this._buildDuelContestedImagePayload());
-                this._saveRollHistoryCreate();
+                await window.L7RDice.animateDice(data.dice, !!data.formula.reroll_tens,
+                    this.prefs.dice_animation_enabled, playSound, 'dice-animation-duel');
+                this._adoptServerResult(data);
+                this._adoptDuelResult(kind, data);
+                this._rollHistoryReqId++;
+                this._rollHistoryId = data.history_id || null;
+                this._rollHistoryPendingPayload = null;
+                this._lastRollHistorySig = this._rollHistoryId
+                    ? JSON.stringify(this._currentRollHistoryPayload().payload) : '';
+            },
+
+            retryServerDuel() {
+                if (this._duelRequest) this._runServerDuel(this._duelErrorKind);
+            },
+
+            // The duel panel's fields from a server roll of ``kind``.
+            _adoptDuelResult(kind, data) {
+                if (kind === 'duel-contested') {
+                    this.duelContestedRoll = this.baseTotal;
+                    this.duelContestedDone = true;
+                    this.duelPhase = 'contested-result';
+                    this._prerenderRollImage(this._buildDuelContestedImagePayload());
+                } else if (kind === 'duel-strike') {
+                    this.duelStrikeRoll = this.baseTotal;
+                    const d = data.duel || {};
+                    this.duelStrikeHit = !!d.hit;
+                    this.duelStrikeExcess = d.excess || 0;
+                    this.duelPhase = 'strike-result';
+                    this._prerenderRollImage(this._buildDuelStrikeImagePayload());
+                } else {
+                    this.duelDamageTotal = this.baseTotal;
+                    this.duelPhase = 'damage-result';
+                    this._prerenderRollImage(this._buildDuelDamageImagePayload());
+                }
             },
 
             duelProceedToFocusStrike() {
@@ -5273,34 +5357,19 @@
             },
 
             async duelRollStrike() {
-                const f = { ...this.formulas['knack:iaijutsu:strike'] };
-                f.flat += this.duelRestartBonus;
                 this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
                 this.luckyOriginalWasHigher = false;
                 this.luckyRollPair = null;
                 this.convictionSpentThisRoll = 0;
-                this.duelPhase = 'strike-rolling';
-                this.formula = f;
-                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
-                    ? (n) => window.L7RDice.playDiceSound(n) : null;
-                const dice = await window.L7RDice.rollAndAnimate(
-                    f.rolled, false, this.prefs.dice_animation_enabled, playSound, 'dice-animation-duel'
-                );
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(f.kept, sorted.length);
-                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
-                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.baseTotal = this.keptSum + f.flat;
-                this.duelStrikeRoll = this.baseTotal;
-                const excess = this.duelStrikeRoll - this.duelOpponentTN;
-                this.duelStrikeHit = excess >= 0;
-                this.duelStrikeExcess = excess;
-                this.duelPhase = 'strike-result';
-                this._prerenderRollImage(this._buildDuelStrikeImagePayload());
-                this._saveRollHistoryCreate();
+                this._duelRequest = {
+                    roll_key: 'iaijutsu:strike',
+                    restart_bonus: this.duelRestartBonus || 0,
+                    opponent_tn: this.duelOpponentTN,
+                    request_id: this._newRequestId(),
+                };
+                await this._runServerDuel('duel-strike');
             },
 
             duelComputeDamage() {
@@ -5321,7 +5390,6 @@
             },
 
             async duelRollDamage() {
-                const dmg = this.duelComputeDamage();
                 this.luckyUsedThisRoll = false; this.pcpRerollUsedThisRoll = false; this.pcpRaisesSpentThisRoll = 0; this.pcpTensRerolledThisRoll = false;
                 this.togashiRerollUsed = false;
                 this.courtier5thApplied = false;
@@ -5329,20 +5397,25 @@
                 this.luckyRollPair = null;
                 this.convictionSpentThisRoll = 0;
                 this.duelPhase = 'damage-rolling';
+                const ok = await this._act('duel_damage', {
+                    weapon_rolled: this.duelWeaponRolled, weapon_kept: this.duelWeaponKept,
+                });
+                const dmg = ok && this._lastAct ? this._lastAct.damage : null;
+                if (!dmg) { this.duelPhase = 'strike-result'; return; }
+                this._serverSessionId = dmg.session_id;
+                this._serverSessionKind = 'duel-damage';
+                this.formula = { ...dmg.formula };
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
-                const dice = await window.L7RDice.rollAndAnimate(
-                    dmg.rolled, true, this.prefs.dice_animation_enabled, playSound, 'dice-animation-duel'
-                );
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(dmg.kept, sorted.length);
-                this.finalDice = sorted.map((d, i) => ({ value: d.value, kept: i >= sorted.length - keptCount }));
-                this.keptDice = sorted.filter((_, i) => i >= sorted.length - keptCount);
-                this.keptSum = this.keptDice.reduce((s, d) => s + d.value, 0);
-                this.duelDamageTotal = this.keptSum + dmg.flat;
-                this.duelPhase = 'damage-result';
-                this._prerenderRollImage(this._buildDuelDamageImagePayload());
-                this._saveRollHistoryCreate();
+                await window.L7RDice.animateDice(dmg.dice, true, this.prefs.dice_animation_enabled,
+                    playSound, 'dice-animation-duel');
+                this._adoptServerResult(dmg);
+                this._adoptDuelResult('duel-damage', dmg);
+                this._rollHistoryReqId++;
+                this._rollHistoryId = dmg.history_id || null;
+                this._rollHistoryPendingPayload = null;
+                this._lastRollHistorySig = this._rollHistoryId
+                    ? JSON.stringify(this._currentRollHistoryPayload().payload) : '';
             },
 
             duelApplyOpponentRoll() {
@@ -5365,9 +5438,9 @@
             duelApplyOpponentDamage() {
                 const dmg = parseInt(this.duelOpponentDamage || '0');
                 const t = window._trackingBridge;
-                if (t && t.canEdit) {
+                if (t && t.canEdit && dmg > 0) {
                     t.lightWounds += dmg;
-                    t.save();
+                    t.op('light_wounds', {mode: 'add', value: dmg});
                 }
                 // Close duel modal and open wound check modal. Editors see
                 // the WC modal pre-populated with their new (post-mutation)
@@ -5707,111 +5780,94 @@
                 return bonus;
             },
 
-            async _kakita5thRollDiceTray(rolled, rerollTens, trayId) {
-                // Thin wrapper around rollAndAnimate so the 5th Dan modal
-                // animates and plays sound when the player has those prefs
-                // enabled - matching every other dice-roll in the app.
+            async rollKakita5thDanContest() {
+                // The SERVER makes the contest (and latches the once-per-round
+                // use the moment it is rolled - Phase 9).
+                const t = window._trackingBridge;
+                this.k5Phase = 'rolling';
+                this.k5Error = '';
+                if (t && t.canEdit && t._opChain) await t._opChain.catch(() => null);
+                let data = null;
+                try {
+                    const resp = await fetch('/characters/' + t._charId + '/roll', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            roll_key: 'kakita_5th_dan',
+                            opponent_has_iaijutsu: !!this.k5OpponentHasIaijutsu,
+                            defender_phase: parseInt(this.k5DefenderPhase, 10) || 0,
+                            opponent_skill_rank: parseInt(this.k5OpponentSkillRank, 10) || 0,
+                            request_id: this._newRequestId(),
+                        }),
+                    });
+                    data = await resp.json().catch(() => null);
+                    if (!resp.ok || !data || !data.dice) {
+                        this.k5Phase = 'pre';
+                        this.k5Error = (data && data.error) || 'The contest could not be made.';
+                        return;
+                    }
+                } catch (e) {
+                    this.k5Phase = 'pre';
+                    this.k5Error = 'Could not reach the server. Check your connection and retry.';
+                    return;
+                }
+                if (t.canEdit && data.mode === 'live' && data.tracking) t.adoptServerState(data.tracking, false);
+                this._serverSessionId = data.session_id;
+                this._serverSessionMode = data.mode;
+                this._serverSessionKind = 'k5';
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
-                return window.L7RDice.rollAndAnimate(
-                    rolled, rerollTens, this.prefs.dice_animation_enabled,
-                    playSound, trayId,
-                );
-            },
-
-            async rollKakita5thDanContest() {
-                const f = this._kakita5thIaijutsuFormula();
-                if (!f) return;
-                let rolled = f.rolled || 0;
-                let kept = f.kept || 0;
-                let flat = f.flat || 0;
-                // Opponent-has-no-iaijutsu: +5 free raise to the character.
-                this.k5NoIaijutsuBonus = this.k5OpponentHasIaijutsu ? 0 : 5;
-                flat += this.k5NoIaijutsuBonus;
-                // 3rd Dan bonus with attacker_phase = 0.
-                const x = this.schoolAbilities.kakita_3rd_dan_defender_phase_bonus_x || 0;
-                const def = parseInt(this.k5DefenderPhase, 10);
-                this.k5KakitaBonus = x > 0 && Number.isFinite(def)
-                    ? window.L7RRollMath.kakitaDefenderPhaseBonus(x, def, 0) : 0;
-                flat += this.k5KakitaBonus;
-                // Contested-roll skill comparison: +5 per rank Kakita's own
-                // iaijutsu exceeds the opponent's picked skill.
-                this.k5ContestSkillBonus = this._kakita5thContestSkillBonus();
-                flat += this.k5ContestSkillBonus;
-                this.k5Phase = 'rolling';
-                const dice = await this._kakita5thRollDiceTray(
-                    rolled, !!f.reroll_tens, 'dice-animation-k5');
-                // Keep the highest ``kept`` dice.
-                const sorted = dice
-                    .map((d, i) => ({...d, idx: i}))
-                    .sort((a, b) => a.value - b.value);
-                const keptIdx = new Set(
-                    sorted.slice(sorted.length - kept).map(d => d.idx));
-                this.k5RollDice = dice.map((d, i) => ({
-                    value: d.value, kept: keptIdx.has(i),
-                }));
-                const keptSum = dice.reduce(
-                    (s, d, i) => s + (keptIdx.has(i) ? d.value : 0), 0);
-                this.k5RollTotal = keptSum + flat;
-                this.k5FormulaText = flat > 0
-                    ? `${rolled}k${kept} + ${flat}`
-                    : `${rolled}k${kept}`;
+                await window.L7RDice.animateDice(data.dice, !!data.formula.reroll_tens,
+                    this.prefs.dice_animation_enabled, playSound, 'dice-animation-k5');
+                const bonus = (label) => (data.payload.bonuses || []).find(b => b.label === label)?.amount || 0;
+                this.k5NoIaijutsuBonus = bonus('opponent has no iaijutsu');
+                this.k5KakitaBonus = bonus('Kakita 3rd Dan (phase 0)');
+                this.k5ContestSkillBonus = bonus('contested skill');
+                const kept = data.payload.kept.map(c => c.parts.reduce((a, b) => a + b, 0));
+                const dropped = data.payload.dropped.map(c => c.parts.reduce((a, b) => a + b, 0));
+                this.k5RollDice = dropped.map(v => ({value: v, kept: false}))
+                    .concat(kept.map(v => ({value: v, kept: true})));
+                this.k5RollTotal = data.total;
+                const f = data.formula;
+                this.k5FormulaText = f.flat > 0 ? `${f.rolled}k${f.kept} + ${f.flat}` : `${f.rolled}k${f.kept}`;
                 this.k5Phase = 'result';
                 this._prerenderRollImage(this._buildKakita5thImagePayload());
-                this._saveRollHistoryCreate();
+                this._rollHistoryReqId++;
+                this._rollHistoryId = data.history_id || null;
+                this._rollHistoryPendingPayload = null;
+                this._lastRollHistorySig = this._rollHistoryId
+                    ? JSON.stringify(this._currentRollHistoryPayload().payload) : '';
             },
 
             async rollKakita5thDanDamage() {
-                const f = this._kakita5thIaijutsuFormula();
-                if (!f) return;
-                // Base damage: weapon + iaijutsu damage metadata. Matches
-                // the attack modal's default damage shape.
-                const weaponRolled = parseInt(this.k5WeaponRolled, 10) || 0;
-                const weaponKept = parseInt(this.k5WeaponKept, 10) || 0;
-                const ringVal = f.damage_ring_val || 0;
-                const extraRolled = f.damage_extra_rolled || 0;
-                const extraKept = f.damage_extra_kept || 0;
-                this.k5DamageFlat = f.damage_flat_bonus || 0;
-                // Contest scaling: +/- floor(diff / 5) rolled dice.
-                const diff = this.k5RollTotal - (parseInt(this.k5OpponentRoll, 10) || 0);
-                this.k5DamageDiceAdjust = window.L7RRollMath.damageDiceContestAdjust(diff);
-                this.k5DamageRolled = Math.max(0,
-                    weaponRolled + extraRolled + ringVal + this.k5DamageDiceAdjust);
-                this.k5DamageKept = Math.max(0, weaponKept + extraKept);
-                // Rolls cap at 10k10 per L7R standards.
-                if (this.k5DamageRolled > 10) { this.k5DamageKept += (this.k5DamageRolled - 10); this.k5DamageRolled = 10; }
-                if (this.k5DamageKept > 10) { this.k5DamageFlat += 2 * (this.k5DamageKept - 10); this.k5DamageKept = 10; }
-                if (this.k5DamageRolled <= 0 || this.k5DamageKept <= 0) {
-                    this.k5DamageDice = [];
-                    this.k5DamageTotal = this.k5DamageFlat;
-                    this.k5Phase = 'damage-result';
-                    this._markKakita5thUsed();
-                    return;
-                }
                 this.k5Phase = 'damage-rolling';
-                const dice = await this._kakita5thRollDiceTray(
-                    this.k5DamageRolled, true, 'dice-animation-k5-damage');
-                const sorted = dice
-                    .map((d, i) => ({...d, idx: i}))
-                    .sort((a, b) => a.value - b.value);
-                const keptIdx = new Set(
-                    sorted.slice(sorted.length - this.k5DamageKept).map(d => d.idx));
-                this.k5DamageDice = dice.map((d, i) => ({
-                    value: d.value, kept: keptIdx.has(i),
-                }));
-                const keptSum = dice.reduce(
-                    (s, d, i) => s + (keptIdx.has(i) ? d.value : 0), 0);
-                this.k5DamageTotal = keptSum + this.k5DamageFlat;
+                const ok = await this._act('kakita_5th_damage', {
+                    opponent_roll: parseInt(this.k5OpponentRoll, 10) || 0,
+                    weapon_rolled: parseInt(this.k5WeaponRolled, 10) || 0,
+                    weapon_kept: parseInt(this.k5WeaponKept, 10) || 0,
+                });
+                const dmg = ok && this._lastAct ? this._lastAct.damage : null;
+                if (!dmg) { this.k5Phase = 'result'; return; }
+                const f = dmg.formula;
+                this.k5DamageRolled = f.rolled;
+                this.k5DamageKept = f.kept;
+                this.k5DamageFlat = f.flat || 0;
+                const adj = (f.damage_parts || []).find(p => p.endsWith('from the contest')) || '0';
+                this.k5DamageDiceAdjust = parseInt(adj, 10) || 0;
+                if (dmg.dice.length) {
+                    await this._kakita5thAnimate(dmg.dice, 'dice-animation-k5-damage');
+                }
+                const kept = dmg.payload.kept.map(c => c.parts.reduce((a, b) => a + b, 0));
+                const dropped = dmg.payload.dropped.map(c => c.parts.reduce((a, b) => a + b, 0));
+                this.k5DamageDice = dropped.map(v => ({value: v, kept: false}))
+                    .concat(kept.map(v => ({value: v, kept: true})));
+                this.k5DamageTotal = dmg.total;
                 this.k5Phase = 'damage-result';
-                this._markKakita5thUsed();
             },
 
-            _markKakita5thUsed() {
-                const t = window._trackingBridge;
-                if (!t) return;
-                t.kakita5thDanUsed = true;
-                t.adventureState.kakita_5th_dan_used = true;
-                t.save();
+            async _kakita5thAnimate(dice, trayId) {
+                const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                    ? (n) => window.L7RDice.playDiceSound(n) : null;
+                return window.L7RDice.animateDice(dice, true, this.prefs.dice_animation_enabled, playSound, trayId);
             },
 
             atkIsDoubleAttack() {
@@ -6141,6 +6197,7 @@
                     this.akodoPostRollVpSpent++;
                     this.baseTotal += 5;
                     if (atk) { this.atkRollTotal += 5; this._atkUpdateHitState(); }
+                    if (mode === 'duel-contested') this.duelContestedRoll += 5;
                     this._act('akodo_vp').then(ok => {
                         if (ok) return;
                         this.akodoPostRollVpSources.pop(); this.akodoPostRollVpSpent--; this.baseTotal -= 5;
@@ -6181,6 +6238,7 @@
                     this.akodoPostRollVpSpent--;
                     this.baseTotal -= 5;
                     if (atk) { this.atkRollTotal -= 5; this._atkUpdateHitState(); }
+                    if (mode === 'duel-contested') this.duelContestedRoll -= 5;
                     this._act('undo_akodo_vp').then(ok => {
                         if (ok) return;
                         this.akodoPostRollVpSources.push('server'); this.akodoPostRollVpSpent++; this.baseTotal += 5;
