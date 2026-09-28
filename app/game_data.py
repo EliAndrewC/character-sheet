@@ -91,6 +91,18 @@ XP_PROFILE_BANDS: "Dict[str, object]" = {
     "knacks": {"developing": (22.0, 26.0), "veteran": (18.0, 19.0)},
 }
 
+# The combat share of every real character measured in
+# analysis/CombatVsNonCombatXP.md (each character's final state, n=19),
+# as fractions. The GM's NPC generator (services/npc_generator.py) draws an
+# NPC's combat share as target + (one of these - their median), clamped to
+# [min, max] of this list (combat-design/design.md D6/D14). Regenerate with
+# ``PYTHONPATH=. python3 analysis/xp_profile_ranges.py --npc-combat-shares``;
+# tests/test_npc_generator.py fails if this drifts from the analysis.
+NPC_COMBAT_SHARE_SAMPLES: List[float] = [
+    0.532, 0.587, 0.596, 0.654, 0.67, 0.67, 0.693, 0.699, 0.715, 0.741,
+    0.742, 0.745, 0.747, 0.775, 0.785, 0.796, 0.819, 0.824, 0.91,
+]
+
 
 def skill_raise_cost(new_rank: int, is_advanced: bool) -> int:
     """Return XP cost to raise a skill (or knack) to *new_rank*."""

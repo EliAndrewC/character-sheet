@@ -13,6 +13,12 @@ character (the population a GM would calibrate an NPC against).
 
 Run:  PYTHONPATH=. python3 analysis/xp_profile_ranges.py
 (needs xlrd for the .xls ledgers)
+
+      PYTHONPATH=. python3 analysis/xp_profile_ranges.py --npc-combat-shares
+prints NPC_COMBAT_SHARE_SAMPLES for app/game_data.py: the final-state combat
+shares the GM's NPC generator resamples around its target
+(combat-design/design.md D6/D14). tests/test_npc_generator.py fails if the
+table in game_data drifts from what this computes.
 """
 
 from __future__ import annotations
@@ -223,7 +229,35 @@ def band(values):
     return p33, p67
 
 
+def final_state_records(live_recs=None, past=None):
+    """Each distinct character's FINAL state: the live party as it is now,
+    plus every past-campaign PC at its end (or beginning, when that is all
+    there is - Masumune died at creation)."""
+    if live_recs is None:
+        live_recs = live_records()
+    if past is None:
+        past = odt_records() + ledger_records()
+    finals = list(live_recs)
+    by_name = {}
+    for r in past:
+        by_name.setdefault(r["name"], {})[r["phase"]] = r
+    for name, phases in by_name.items():
+        finals.append(phases.get("end", phases.get("beginning")))
+    return finals
+
+
+def npc_combat_share_samples():
+    """Sorted combat shares (fractions, 3 dp) of every final-state character."""
+    return sorted(round(prof(r)[0] / 100.0, 3) for r in final_state_records())
+
+
 def main():
+    if "--npc-combat-shares" in sys.argv[1:]:
+        print("NPC_COMBAT_SHARE_SAMPLES: List[float] = [")
+        for v in npc_combat_share_samples():
+            print(f"    {v},")
+        print("]")
+        return
     live_recs = live_records()
     past = odt_records() + ledger_records()
 
@@ -246,17 +280,7 @@ def main():
         print(row(r))
 
     # ranges + bands over each distinct character's FINAL state
-    finals = list(live_recs)
-    seen = set()
-    for r in past:
-        if r["phase"] in ("end", "beginning") and r["name"] not in seen:
-            pass
-    # pick end state if present else beginning (Masumune/Tozasu handled by name)
-    by_name = {}
-    for r in past:
-        by_name.setdefault(r["name"], {})[r["phase"]] = r
-    for name, phases in by_name.items():
-        finals.append(phases.get("end", phases.get("beginning")))
+    finals = final_state_records(live_recs, past)
 
     print(f"\n### Ranges and suggested bands (over each character's final state, "
           f"n={len(finals)})\n")

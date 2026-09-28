@@ -29,12 +29,24 @@ WORKDIR /app
 #   antiword - legacy Microsoft .doc extraction (import-design §6)
 #   libmagic1 - file-type detection for uploaded documents
 #   libcairo2 - cairosvg backend for the dice-roll "copy as image" card
+#   git - installs the combat simulator from GitHub (below)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends antiword libmagic1 libcairo2 \
+    && apt-get install -y --no-install-recommends antiword libmagic1 libcairo2 git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# The combat simulator's character generator (l7r-combat-simulator), which
+# builds the GM's NPCs from its current XP progression
+# (combat-design/design.md 4.1). Each deploy takes the simulator's latest
+# pushed `master`: ADD-ing GitHub's "latest commit" response busts this layer's
+# cache exactly when master moves, so an unchanged simulator is not refetched
+# and a changed one is never served stale. The installed commit is recorded
+# by pip and stamped on every generated NPC.
+ADD https://api.github.com/repos/EliAndrewC/claude-guided-l7r-combat-simulator/commits/master /tmp/simulator-master.json
+RUN pip install --no-cache-dir "l7r-combat-simulator @ git+https://github.com/EliAndrewC/claude-guided-l7r-combat-simulator@master" \
+    && rm /tmp/simulator-master.json
 
 COPY . .
 

@@ -28,11 +28,14 @@ The dev environment is the `docker.io/docker/sandbox-templates:claude-code` cont
 sudo apt-get install -y libmagic1 antiword libcairo2  # system deps for the importer + dice-card PNG renderer
 pip install --break-system-packages -r requirements.txt
 pip install --break-system-packages reportlab         # test-only: used to build PDF fixtures in tests/test_import_llm.py
+pip install --break-system-packages -e /host-l7r-repo/simulator   # the combat simulator's NPC generator (see below)
 playwright install chromium
 playwright install-deps chromium
 ```
 
 `libmagic1` is required by `python-magic` (importer format detection) and `antiword` is required by the `.doc` ingest path in `app/services/import_ingest.py`. `libcairo2` is required by `cairocffi`/`CairoSVG`, used by the dice-card PNG renderer; without it `tests/test_dice_card.py` errors out at collection time. All three are missing from `requirements.txt` because they are system packages; without them `app.main` fails to import and large portions of the unit suite never run. `reportlab` is a dev-only dependency (PDF fixtures); it is not imported by `app/` at runtime, so it lives outside `requirements.txt`.
+
+The combat simulator (`l7r-combat-simulator`, package `simulation`) generates the GM's NPCs (see "GM combat tracker and generated NPCs"). It is deliberately NOT in `requirements.txt`: locally it is an **editable install of the checkout** at `/host-l7r-repo/simulator`, so a change there is live here at once; without that mount, `pip install "l7r-combat-simulator @ git+https://github.com/EliAndrewC/claude-guided-l7r-combat-simulator@master"`. The Dockerfile installs the simulator's latest pushed `master` on every deploy, in its own cache-busted layer. `app.services.npc_generator` imports it at module load, so without it `app.main` fails to import.
 
 If `apt-get install` can't find the packages, run `sudo apt-get update` first (a fresh container may have a stale package index).
 
