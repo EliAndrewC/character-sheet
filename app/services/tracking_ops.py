@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict
 
 from app.models import Character
+from app.services.parry_feint import parry_feint_flags
 from app.services.per_adventure import per_adventure_abilities
 from app.services.tracking import set_serious_wounds
 from app.services.void_spend import (
@@ -149,7 +150,7 @@ def _reset_adventure(c: Character, args: Dict[str, Any]) -> None:
             state[a["id"] + "_used"] = 0
         else:
             state[a["id"]] = False
-    for key in BANK_KEYS + MANTIS_ROUND_KEYS:
+    for key in BANK_KEYS + MANTIS_ROUND_KEYS + ("mirumoto_round_points",):
         state.pop(key, None)
     c.adventure_state = state
     c.action_dice = []
@@ -228,6 +229,20 @@ def _clear_action_dice(c: Character, args: Dict[str, Any]) -> None:
     c.adventure_state = state
 
 
+def _mirumoto_points(c: Character, args: Dict[str, Any]) -> None:
+    """Mirumoto 3rd Dan's points left this round: +/-1, or ``reset`` to full.
+    (Spent on an attack still rolled in the browser; a parry spends them
+    through its roll session.)"""
+    flags = parry_feint_flags(c.to_dict())
+    if not flags["mirumoto_round_points"]:
+        raise OpRefused(f"{c.name} has no 3rd Dan round points")
+    top = flags["mirumoto_round_points_max"]
+    state = _state(c)
+    left = int(state.get("mirumoto_round_points") or 0)
+    state["mirumoto_round_points"] = top if args.get("reset") else max(0, min(top, left + _delta(args)))
+    c.adventure_state = state
+
+
 OPS: Dict[str, Callable[[Character, Dict[str, Any]], None]] = {
     "light_wounds": _light_wounds,
     "take_serious": _take_serious,
@@ -243,6 +258,7 @@ OPS: Dict[str, Callable[[Character, Dict[str, Any]], None]] = {
     "hida_trade": _hida_trade,
     "action_die": _action_die,
     "clear_action_dice": _clear_action_dice,
+    "mirumoto_points": _mirumoto_points,
 }
 
 

@@ -61,8 +61,8 @@ def fresh_limits():
     ("skill:etiquette", True), ("knack:iaijutsu", True), ("ring:Fire", True),
     ("athletics:Water", True), ("initiative", True), ("initiative:athletics", True),
     ("initiative:other", False),
-    ("parry", False), ("athletics:parry", False), ("athletics:attack", False),
-    ("knack:feint", False), ("knack:feint:athletics", False), ("attack", False),
+    ("parry", True), ("athletics:parry", True), ("athletics:attack", False),
+    ("knack:feint", True), ("knack:feint:athletics", True), ("attack", False),
     ("wound_check", False), ("", False),
 ])
 def test_server_rolled(key, expected):
@@ -163,7 +163,8 @@ def test_hidden_character_is_not_found(client):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("body,message", [
-    ({"roll_key": "parry"}, "not rolled on the server"),
+    ({"roll_key": "athletics:attack"}, "not rolled on the server"),
+    ({"predeclared": True}, "only a parry"),
     ({"roll_key": "initiative", "void": 1}, "without spending void"),
     ({"roll_key": "initiative:athletics"}, "has no initiative:athletics roll"),
     ({"roll_key": "skill:underworld_nonsense"}, "has no skill:underworld_nonsense roll"),
@@ -922,3 +923,207 @@ def test_initiative_refuses_bonuses_and_partial_rerolls(client):
                 profession_abilities={"merchant_void_reroll": 1})
     sid = _roll(client, biz, roll_key="initiative").json()["session_id"]
     assert "initiative" in _act(client, biz, sid, "merchant_reroll").json()["error"]
+
+
+# ---------------------------------------------------------------------------
+# Parry and feint (Phase 6)
+# ---------------------------------------------------------------------------
+
+def _school(client, school, dan=1, ring="Water", **kw):
+    from app.game_data import SCHOOLS
+    knacks = dict({k: dan for k in SCHOOLS[school].school_knacks}, **kw.pop("knacks", {}))
+    kw.setdefault("skills", {})
+    kw.setdefault("attack", 2)
+    return _char(client, school=school, school_ring_choice=ring, knacks=knacks, **kw)
+
+
+def test_a_predeclared_parry_adds_five(client, scripted):
+    cid = _school(client, "akodo_bushi")
+    plain = _roll(client, cid, roll_key="parry", headers=scripted("5")).json()
+    pre = _roll(client, cid, roll_key="parry", predeclared=True, headers=scripted("5")).json()
+    assert pre["total"] == plain["total"] + 5
+    assert {"label": "predeclared parry", "amount": 5} in pre["payload"]["bonuses"]
+
+
+def test_mirumoto_parry_hooks_and_round_points(client):
+    cid = _school(client, "mirumoto_bushi", dan=3, current_temp_void_points=0)
+    init = _roll(client, cid, roll_key="initiative").json()
+    assert "Mirumoto 3rd Dan points refreshed for the new combat round" in init["notes"]
+    assert _get(client, cid).adventure_state["mirumoto_round_points"] == 4  # 2 x attack 2
+    data = _roll(client, cid, roll_key="parry").json()
+    assert "Gained 1 temp void point from the parry (Mirumoto)" in data["notes"]
+    assert data["tracking"]["current_temp_void_points"] == 1
+    sid = data["session_id"]
+    up = _act(client, cid, sid, "mirumoto_point").json()
+    assert up["total"] == data["total"] + 2
+    assert up["tracking"]["adventure_state"]["mirumoto_round_points"] == 3
+    back = _act(client, cid, sid, "undo_mirumoto_point").json()
+    assert back["total"] == data["total"] and back["tracking"]["adventure_state"]["mirumoto_round_points"] == 4
+    assert "undo" in _act(client, cid, sid, "undo_mirumoto_point").json()["error"]
+    # An athletics parry gets neither the temp point nor the round points.
+    ath = _roll(client, cid, roll_key="athletics:parry")
+    if ath.status_code == 200:
+        assert not ath.json()["notes"]
+        assert _act(client, cid, ath.json()["session_id"], "mirumoto_point").status_code == 400
+
+
+def test_mirumoto_points_run_out_and_simulate_counts_its_own(client):
+    cid = _school(client, "mirumoto_bushi", dan=3, adventure_state={"mirumoto_round_points": 1})
+    sid = _roll(client, cid, roll_key="parry", headers=OTHER).json()["session_id"]
+    assert _act(client, cid, sid, "mirumoto_point", headers=OTHER).status_code == 200
+    assert "left" in _act(client, cid, sid, "mirumoto_point", headers=OTHER).json()["error"]
+    assert _get(client, cid).adventure_state["mirumoto_round_points"] == 1
+    other = _school(client, "akodo_bushi")
+    sid = _roll(client, other, roll_key="parry").json()["session_id"]
+    assert _act(client, other, sid, "mirumoto_point").status_code == 400
+
+
+def test_shinjo_3rd_dan_parry_lowers_the_unspent_dice(client):
+    cid = _school(client, "shinjo_bushi", dan=3,
+                  action_dice=[{"value": 5, "spent": True}, {"value": 7, "spent": False}])
+    data = _roll(client, cid, roll_key="parry").json()
+    assert "Unspent action dice lowered by 2 (Shinjo 3rd Dan)" in data["notes"]
+    assert _get(client, cid).action_dice == [{"value": 5, "spent": True}, {"value": 5, "spent": False}]
+
+
+def test_shinjo_phase_bonus_and_5th_dan_bank(client, scripted):
+    cid = _school(client, "shinjo_bushi", dan=5)
+    data = _roll(client, cid, roll_key="parry", headers=scripted("5")).json()
+    sid = data["session_id"]
+    held = _act(client, cid, sid, "shinjo_phase", phase=6, die_value=2).json()
+    assert held["total"] == data["total"] + 8
+    assert _act(client, cid, sid, "shinjo_phase", phase=1, die_value=2).json()["total"] == data["total"]
+    assert "whole numbers" in _act(client, cid, sid, "shinjo_phase", phase="x").json()["error"]
+    bank = _act(client, cid, sid, "shinjo_bank", opponent=data["total"] - 3).json()
+    assert bank["banked"] == 3
+    assert bank["tracking"]["adventure_state"]["banked_wc_excess"] == [3]
+    assert "already" in _act(client, cid, sid, "shinjo_bank", opponent=0).json()["error"]
+    none = _roll(client, cid, roll_key="parry").json()["session_id"]
+    assert _act(client, cid, none, "shinjo_bank", opponent=999).json()["banked"] == 0
+    assert "whole number" in _act(client, cid, _roll(client, cid, roll_key="parry").json()["session_id"],
+                                  "shinjo_bank", opponent="x").json()["error"]
+    other = _school(client, "akodo_bushi")
+    osid = _roll(client, other, roll_key="parry").json()["session_id"]
+    assert _act(client, other, osid, "shinjo_bank").status_code == 400
+    assert _act(client, other, osid, "shinjo_phase", phase=3).status_code == 400
+
+
+def test_hiruma_parry_banks_for_the_next_attack(client):
+    cid = _school(client, "hiruma_scout", dan=3)
+    _roll(client, cid, roll_key="parry")
+    _roll(client, cid, roll_key="parry")
+    assert _get(client, cid).adventure_state["hiruma_banked_attack_bonus"] == 8
+
+
+def test_feint_hooks(client):
+    ide = _school(client, "ide_diplomat", current_temp_void_points=0)
+    data = _roll(client, ide, roll_key="knack:feint").json()
+    assert data["tracking"]["current_temp_void_points"] == 1
+    sid = data["session_id"]
+    assert _act(client, ide, sid, "ide_bank").json()["tracking"]["adventure_state"]["ide_banked_tn_reduce"] == 10
+    assert "already" in _act(client, ide, sid, "ide_bank").json()["error"]
+    bay = _school(client, "bayushi_bushi", dan=4)
+    _roll(client, bay, roll_key="knack:feint")
+    assert _get(client, bay).adventure_state["bayushi_banked_feint_raise"] == 5
+    akodo = _school(client, "akodo_bushi", current_temp_void_points=0)
+    sid = _roll(client, akodo, roll_key="knack:feint").json()["session_id"]
+    assert _act(client, akodo, sid, "akodo_feint", succeeded=True).json()["gained"] == 4
+    assert _act(client, akodo, sid, "akodo_feint", succeeded=False).status_code == 400
+    assert _get(client, akodo).current_temp_void_points == 4
+    sid = _roll(client, akodo, roll_key="knack:feint").json()["session_id"]
+    assert _act(client, akodo, sid, "akodo_feint").json()["gained"] == 1
+    assert _act(client, ide, sid if False else _roll(client, ide, roll_key="knack:feint").json()["session_id"],
+                "akodo_feint").status_code == 400
+    psid = _roll(client, ide, roll_key="parry").json()["session_id"]
+    assert _act(client, ide, psid, "ide_bank").status_code == 400
+
+
+def test_simulated_feint_hooks_change_nothing(client):
+    cid = _school(client, "akodo_bushi", current_temp_void_points=0)
+    data = _roll(client, cid, roll_key="knack:feint", headers=OTHER).json()
+    assert data["notes"] == []
+    assert _act(client, cid, data["session_id"], "akodo_feint", headers=OTHER, succeeded=True).json()["gained"] == 4
+    ide = _school(client, "ide_diplomat")
+    sid = _roll(client, ide, roll_key="knack:feint", headers=OTHER).json()["session_id"]
+    _act(client, ide, sid, "ide_bank", headers=OTHER)
+    assert _get(client, cid).current_temp_void_points == 0
+    assert not (_get(client, ide).adventure_state or {}).get("ide_banked_tn_reduce")
+
+
+def test_akodo_4th_dan_void_raise_draws_and_refunds(client):
+    cid = _school(client, "akodo_bushi", dan=4, current_void_points=1, current_temp_void_points=1)
+    data = _roll(client, cid, roll_key="parry").json()
+    sid = data["session_id"]
+    one = _act(client, cid, sid, "akodo_vp").json()
+    assert one["total"] == data["total"] + 5 and one["tracking"]["current_temp_void_points"] == 0
+    two = _act(client, cid, sid, "akodo_vp").json()
+    assert two["tracking"]["current_void_points"] == 0 and two["total"] == data["total"] + 10
+    assert "void" in _act(client, cid, sid, "akodo_vp").json()["error"]
+    back = _act(client, cid, sid, "undo_akodo_vp").json()
+    assert back["tracking"]["current_void_points"] == 1
+    back = _act(client, cid, sid, "undo_akodo_vp").json()
+    assert back["tracking"]["current_temp_void_points"] == 1 and back["total"] == data["total"]
+    assert "undo" in _act(client, cid, sid, "undo_akodo_vp").json()["error"]
+    plain = _roll(client, cid).json()["session_id"]
+    assert _act(client, cid, plain, "akodo_vp").status_code == 400
+
+
+def test_akodo_4th_dan_raise_from_worldliness_and_in_simulation(client):
+    cid = _school(client, "akodo_bushi", dan=4, current_void_points=0, current_temp_void_points=0,
+                  foreign_knacks={"worldliness": 1})
+    sid = _roll(client, cid, roll_key="parry").json()["session_id"]
+    got = _act(client, cid, sid, "akodo_vp").json()
+    assert got["tracking"]["adventure_state"]["worldliness_used"] == 1
+    back = _act(client, cid, sid, "undo_akodo_vp").json()
+    assert back["tracking"]["adventure_state"]["worldliness_used"] == 0
+    sim = _school(client, "akodo_bushi", dan=4, current_void_points=1)
+    sid = _roll(client, sim, roll_key="parry", headers=OTHER).json()["session_id"]
+    assert _act(client, sim, sid, "akodo_vp", headers=OTHER).status_code == 200
+    assert _act(client, sim, sid, "akodo_vp", headers=OTHER).status_code == 400
+    assert _act(client, sim, sid, "undo_akodo_vp", headers=OTHER).status_code == 200
+    assert _get(client, sim).current_void_points == 1
+
+
+def test_shiba_and_bayushi_damage_rolls_are_recorded(client, scripted):
+    shiba = _school(client, "shiba_bushi", dan=3)
+    sid = _roll(client, shiba, roll_key="parry").json()["session_id"]
+    dmg = _act(client, shiba, sid, "sub_damage", headers=scripted("6")).json()["sub_damage"]
+    assert dmg["label"] == "Shiba 3rd Dan parry damage (4k1)" and dmg["total"] == 6
+    row = _row(client, dmg["history_id"])
+    assert row["total"] == 6 and row["title"].startswith("Shiba")
+    assert "already" in _act(client, shiba, sid, "sub_damage").json()["error"]
+    bay = _school(client, "bayushi_bushi", dan=3, current_void_points=2, ring_void=2)
+    sid = _roll(client, bay, roll_key="knack:feint", void=1).json()["session_id"]
+    dmg = _act(client, bay, sid, "sub_damage").json()["sub_damage"]
+    assert dmg["label"] == "Bayushi 3rd Dan feint damage (3k2)" and dmg["kept"] == 2
+    plain = _school(client, "akodo_bushi")
+    sid = _roll(client, plain, roll_key="parry").json()["session_id"]
+    assert "no damage" in _act(client, plain, sid, "sub_damage").json()["error"]
+    sim = _roll(client, shiba, roll_key="parry", headers=OTHER).json()["session_id"]
+    assert _act(client, shiba, sim, "sub_damage", headers=OTHER).json()["sub_damage"]["history_id"] is None
+
+
+def test_mirumoto_points_op_and_reset(client):
+    from app.services.tracking_ops import OpRefused, apply_op
+    cid = _school(client, "mirumoto_bushi", dan=3)
+    s = client._test_session_factory()
+    c = s.get(Character, cid)
+    apply_op(c, "mirumoto_points", {"reset": True})
+    assert c.adventure_state["mirumoto_round_points"] == 4
+    apply_op(c, "mirumoto_points", {"delta": -1})
+    apply_op(c, "mirumoto_points", {"delta": 1})
+    apply_op(c, "mirumoto_points", {"delta": 1})
+    assert c.adventure_state["mirumoto_round_points"] == 4
+    apply_op(c, "reset_adventure", {})
+    assert "mirumoto_round_points" not in c.adventure_state
+    other = s.get(Character, _school(client, "akodo_bushi"))
+    with pytest.raises(OpRefused):
+        apply_op(other, "mirumoto_points", {"delta": 1})
+    s.close()
+
+
+def test_the_schema_bounds_mirumoto_points():
+    from app.services.adventure_state import sanitize_adventure_state
+    c = Character(name="M", school="mirumoto_bushi", school_ring_choice="Void",
+                  knacks={"counterattack": 3, "double_attack": 3, "iaijutsu": 3}, attack=2)
+    assert sanitize_adventure_state(c, {"mirumoto_round_points": 99}) == {"mirumoto_round_points": 4}

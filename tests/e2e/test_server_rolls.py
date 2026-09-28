@@ -203,3 +203,83 @@ def test_lucky_on_initiative_replaces_the_action_dice(page, live_server_url):
     assert set(rerolled) == {8} and set(first) == {2}
     assert page.evaluate("() => window._trackingBridge.actionDice.map(d => d.value)") == rerolled
     assert page.evaluate("() => window._diceRoller.luckyPrevActionDice") == first
+
+
+# ---------------------------------------------------------------------------
+# Parry and feint (Phase 6)
+# ---------------------------------------------------------------------------
+
+def _rolls(page):
+    seen = []
+    page.on("request", lambda r: seen.append(r) if r.url.endswith("/roll") and r.method == "POST" else None)
+    return seen
+
+
+def test_a_predeclared_parry_is_rolled_by_the_server(page, live_server_url):
+    from tests.e2e.test_rolls import _open_parry_modal
+    _create_roller(page, live_server_url, "ServerParry")
+    sent = _rolls(page)
+    _open_parry_modal(page)
+    page.locator('[data-testid="parry-predeclared"]').check()
+    page.locator('[data-action="roll-parry-go"]').click()
+    _wait_for_roll_result(page)
+    body = json.loads(sent[-1].post_data)
+    assert body["roll_key"] == "parry" and body["predeclared"] is True
+    bonuses = page.evaluate("() => window._diceRoller.formula.bonuses.map(b => b.label)")
+    assert "predeclared parry" in bonuses
+
+
+def test_mirumoto_parry_hooks_and_points_are_the_servers(page, live_server_url):
+    from tests.e2e.test_rolls import _open_parry_modal
+    from tests.e2e.test_school_abilities import _create_char
+    _create_char(page, live_server_url, "ServerMirumoto", "mirumoto_bushi",
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
+    page.evaluate("async () => { const t = window._trackingBridge; t.voidPoints = 0; t.tempVoidPoints = 0;"
+                  " await t.save(); await t.whenSaved(); }")
+    page.locator('[data-roll-key="initiative"]').click()
+    page.wait_for_function("() => window._diceRoller.phase === 'done'", timeout=10000)
+    page.wait_for_function("() => window._trackingBridge.mirumotoRoundPoints === 2", timeout=5000)
+    page.locator('[data-modal="dice-roller"] button:has-text("Close")').first.click()
+    _open_parry_modal(page)
+    page.locator('[data-action="roll-parry-go"]').click()
+    _wait_for_roll_result(page)
+    # The server's Mirumoto hook: one temp void point for the parry.
+    page.wait_for_function("() => window._trackingBridge.tempVoidPoints === 1", timeout=5000)
+    before = _roller_data(page)["total"]
+    page.locator('[data-action="mirumoto-point-spend"]').click()
+    page.wait_for_function("() => window._trackingBridge.mirumotoRoundPoints === 1", timeout=5000)
+    assert _roller_data(page)["total"] == before + 2
+    page.reload()
+    page.wait_for_function("() => window._trackingBridge.mirumotoRoundPoints === 1"
+                           " && window._trackingBridge.tempVoidPoints === 1", timeout=5000)
+
+
+def test_akodo_feint_void_points_are_granted_by_the_server(page, live_server_url):
+    from tests.e2e.test_school_abilities import _create_char, _roll_via_menu_or_direct
+    _create_char(page, live_server_url, "ServerAkodoFeint", "akodo_bushi")
+    page.evaluate("async () => { const t = window._trackingBridge; t.voidPoints = 0; t.tempVoidPoints = 0;"
+                  " await t.save(); await t.whenSaved(); }")
+    _roll_via_menu_or_direct(page, "knack:feint")
+    page.locator('[data-action="akodo-feint-succeeded"]').click()
+    page.wait_for_function("() => window._trackingBridge.tempVoidPoints === 4", timeout=5000)
+    assert not page.locator('[data-action="akodo-feint-failed"]').is_visible()
+    page.reload()
+    page.wait_for_function("() => window._trackingBridge.tempVoidPoints === 4", timeout=5000)
+
+
+def test_shiba_parry_damage_is_rolled_by_the_server(page, live_server_url):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    from tests.e2e.test_rolls import _open_parry_modal
+    from tests.e2e.test_school_abilities import _create_char
+    _create_char(page, live_server_url, "ServerShiba", "shiba_bushi",
+                 knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
+    seen = _acts(page)
+    _open_parry_modal(page)
+    page.locator('[data-action="roll-parry-go"]').click()
+    _wait_for_roll_result(page)
+    force_dice(page, [7])
+    page.locator('[data-action="shiba-parry-damage"]').click()
+    page.wait_for_function("() => window._diceRoller.phase === 'sub-damage-result'", timeout=10000)
+    restore_dice(page)
+    body = seen[-1].json()["sub_damage"]
+    assert body["total"] == 7 and page.evaluate("() => window._diceRoller.subDamageTotal") == 7

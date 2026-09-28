@@ -2190,6 +2190,10 @@ The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the 
 - [x] PCP reroll-10s explodes only an Impaired server roll's 10s, and the server spends the PCP - `test_pcp.py::test_reroll_tens_explodes_only_the_tens`
 - [x] Initiative is rolled by the server: the sheet shows the server's action dice, the round starts with them, and they survive a reload - `test_server_rolls.py::test_initiative_is_rolled_by_the_server_and_starts_the_round`
 - [x] Lucky on a server initiative replaces the action dice with the reroll and shows the original set - `test_server_rolls.py::test_lucky_on_initiative_replaces_the_action_dice`
+- [x] A predeclared parry goes to the server as a roll choice and its +5 comes back on the formula - `test_server_rolls.py::test_a_predeclared_parry_is_rolled_by_the_server`
+- [x] Mirumoto: initiative fills the 3rd Dan points on the server, a parry grants the temp void point there, and a point spent in the result panel is persisted (survives a reload) - `test_server_rolls.py::test_mirumoto_parry_hooks_and_points_are_the_servers`
+- [x] Akodo feint "Succeeded" grants 4 temp void points on the server, the choice closes, and it survives a reload - `test_server_rolls.py::test_akodo_feint_void_points_are_granted_by_the_server`
+- [x] Shiba 3rd Dan parry damage is rolled (and recorded) by the server - `test_server_rolls.py::test_shiba_parry_damage_is_rolled_by_the_server`
 
 ---
 

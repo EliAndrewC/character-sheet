@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from app.models import Character
+from app.services.parry_feint import parry_feint_flags
 from app.services.void_spend import school_dan
 
 
@@ -40,6 +41,7 @@ PER_ROUND_STATE_KEYS = (
     "mantis_offensive_3rd_dan_accum",
     "mantis_defensive_3rd_dan_accum",
     "kakita_5th_dan_used",
+    "mirumoto_round_points",
 )
 
 
@@ -129,9 +131,7 @@ def start_combat_round(
     is left alone. A Priest at 5th Dan also gets their conviction back.
     Returns the player-facing notes about what refreshed. Does not commit.
 
-    (Mirumoto 3rd Dan's round points also refresh each round on the sheet,
-    but they are tab-local and never persisted, so there is nothing here to
-    reset - a tab that loads after this runs already starts them at full.)
+    Mirumoto 3rd Dan's round points are refilled here too.
     """
     notes: List[str] = []
     dice: List[Dict[str, Any]] = []
@@ -144,8 +144,15 @@ def start_combat_round(
         dice.append(entry)
     character.action_dice = dice
     state = dict(character.adventure_state or {})
+    mirumoto_before = int(state.get("mirumoto_round_points") or 0)
     for key in PER_ROUND_STATE_KEYS:
         state.pop(key, None)
+    # Mirumoto 3rd Dan: 2X points to spend this round (S4: persisted).
+    flags = parry_feint_flags(character.to_dict())
+    if flags["mirumoto_round_points"]:
+        state["mirumoto_round_points"] = flags["mirumoto_round_points_max"]
+        if mirumoto_before < flags["mirumoto_round_points_max"]:
+            notes.append("Mirumoto 3rd Dan points refreshed for the new combat round")
     if conviction_refreshes_each_round(character.to_dict()) and state.get(
         "conviction_used"
     ):

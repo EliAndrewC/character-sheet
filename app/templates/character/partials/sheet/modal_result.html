@@ -499,13 +499,13 @@
                          class="bg-parchment rounded p-2 text-sm">
                         <div class="flex items-center gap-2">
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { if (t.canEdit) { t.mirumotoRoundPoints--; } mirumotoPointsSpentThisRoll++; baseTotal += 2; }"
+                                    @click="spendMirumotoPoint('roll')" data-action="mirumoto-point-spend"
                                     :disabled="(window._trackingBridge?.mirumotoRoundPoints || 0) <= 0"
                                     class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
                                 Spend 3rd Dan Point (+2)
                             </button>
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { if (t.canEdit) { t.mirumotoRoundPoints++; } mirumotoPointsSpentThisRoll--; baseTotal -= 2; }"
+                                    @click="undoMirumotoPoint('roll')" data-action="mirumoto-point-undo"
                                     :disabled="mirumotoPointsSpentThisRoll <= 0"
                                     class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
                                 Undo
@@ -587,17 +587,17 @@
                     </div>
 
                     {# Akodo Special: feint grants temp VP (4 on success, 1 on failure) #}
-                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.akodo_temp_vp_on_feint" x-cloak
+                    <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.akodo_temp_vp_on_feint && !akodoFeintDone" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <div class="font-medium mb-1">Akodo Feint - Temp VP</div>
                         <div class="flex gap-2">
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 4; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
+                                    @click="akodoFeintVp(true)" data-action="akodo-feint-succeeded"
                                     class="bg-success hover:bg-success-dark text-white px-3 py-1 rounded text-xs">
                                 Succeeded (+4 temp VP)
                             </button>
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.closest('div[class*=bg-accent]').remove();"
+                                    @click="akodoFeintVp(false)" data-action="akodo-feint-failed"
                                     class="bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded text-xs">
                                 Failed (+1 temp VP)
                             </button>
@@ -619,10 +619,10 @@
                     {# Ide Special: feint -> lower target TN by 10 #}
                     <div x-show="phase === 'done' && currentRollKey === 'knack:feint' && schoolAbilities.ide_feint_tn_reduce" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
-                        <button type="button"
-                                @click="ideBankedTnReduce += 10; $el.disabled = true; $el.textContent = 'Banked -10 TN for next attack'; window._trackingBridge?.saveBankedBonuses();"
-                                class="btn-primary px-3 py-1 rounded text-xs">
-                            Bank -10 TN on target (Ide Special)
+                        <button type="button" data-action="ide-bank-tn"
+                                @click="ideBankTn()" :disabled="ideBankedThisRoll"
+                                class="btn-primary px-3 py-1 rounded text-xs disabled:opacity-60"
+                                x-text="ideBankedThisRoll ? 'Banked -10 TN for next attack' : 'Bank -10 TN on target (Ide Special)'">
                         </button>
                     </div>
 
@@ -788,6 +788,7 @@
                         <div class="text-xs text-ink/60 mb-1">Shiba 3rd Dan: parry deals <span x-text="schoolAbilities.shiba_parry_damage_rolled"></span>k1 damage (no ring/TN bonus).</div>
                         <button type="button"
                                 @click="const r = schoolAbilities.shiba_parry_damage_rolled; rollSubDamage(r, 1, 'Shiba 3rd Dan parry damage (' + r + 'k1)');"
+                                data-action="shiba-parry-damage"
                                 class="btn-primary px-3 py-1 rounded text-xs">
                             Roll Parry Damage
                         </button>
@@ -957,7 +958,7 @@
                             <button type="button"
                                     :disabled="shinjoParryBankedThisRoll !== null"
                                     data-action="shinjo-bank-parry-excess"
-                                    @click="const banked = window.L7RRollMath.bankExcess(baseTotal, shinjoParryOpponentRoll || 0); if (banked > 0) { bankedWcExcess.push({amount: banked, spent: false}); } shinjoParryBankedThisRoll = banked; window._trackingBridge?.saveBankedBonuses();"
+                                    @click="shinjoBankExcess()"
                                     class="btn-primary px-3 py-1 rounded text-xs disabled:opacity-50">
                                 <span x-show="shinjoParryBankedThisRoll === null">Bank Excess</span>
                                 <span x-show="shinjoParryBankedThisRoll !== null && shinjoParryBankedThisRoll > 0"

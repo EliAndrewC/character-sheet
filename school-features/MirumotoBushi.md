@@ -49,7 +49,8 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `mirumoto_round_points: true` and `mirumoto_round_points_max: 2*attack_skill`. Client: tracking section shows a per-round points counter with +/- and Reset. "Spend 3rd Dan Point (+2)" button appears on attack and parry roll results. Points can be spent for +2 flat on the roll.
-- Pool is auto-refilled to max when the character rolls initiative (new combat round), with a "Mirumoto 3rd Dan points refreshed for the new combat round" message in the initiative result modal. See `_resetPerRoundAbilities` in `app/templates/character/sheet.html`. No message appears when the pool was already full.
+- Pool is auto-refilled to max when the character rolls initiative (new combat round), with a "Mirumoto 3rd Dan points refreshed for the new combat round" message in the initiative result modal. No message appears when the pool was already full.
+- **Persisted (server-rolls-design Phase 6, GM decision S4):** the points left are `adventure_state["mirumoto_round_points"]`, refilled by `tracking.start_combat_round`, cleared by the adventure reset and Night's Rest. A parry spends them through its roll session (`mirumoto_point` / `undo_mirumoto_point`); the attack (browser-rolled until Phase 7) and the tracking section's +/- / Reset use the `mirumoto_points` operation. A reload or second tab no longer refills them. The Special's temp void point on a parry is applied by the server (`parry_feint.apply_post_roll_hooks`). Tests: `tests/test_roll_sessions.py::test_mirumoto_*`, `tests/e2e/test_server_rolls.py::test_mirumoto_parry_hooks_and_points_are_the_servers`.
 
 **Questions (ANSWERED):**
 - X = attack skill rank. So 2 * attack_skill points per round.

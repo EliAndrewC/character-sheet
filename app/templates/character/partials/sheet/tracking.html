@@ -224,16 +224,16 @@
                 <div class="text-sm text-ink/60">3rd Dan Points <span class="text-xs">(per round)</span></div>
                 <div class="flex items-center gap-2">
                     {% if viewer_can_edit %}
-                    <button @click="mirumotoRoundPoints = Math.max(0, mirumotoRoundPoints - 1)"
+                    <button @click="stepMirumoto(-1)" data-action="mirumoto-points-minus"
                             :disabled="mirumotoRoundPoints <= 0"
                             class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">-</button>
                     {% endif %}
                     <span class="text-lg font-bold w-6 text-center" x-text="mirumotoRoundPoints"></span>
                     {% if viewer_can_edit %}
-                    <button @click="mirumotoRoundPoints = Math.min(mirumotoRoundPointsMax, mirumotoRoundPoints + 1)"
+                    <button @click="stepMirumoto(1)" data-action="mirumoto-points-plus"
                             :disabled="mirumotoRoundPoints >= mirumotoRoundPointsMax"
                             class="w-6 h-6 rounded bg-ink/10 hover:bg-ink/20 disabled:opacity-30 text-xs font-bold">+</button>
-                    <button @click="mirumotoRoundPoints = mirumotoRoundPointsMax"
+                    <button @click="resetMirumoto()" data-action="mirumoto-points-reset"
                             class="text-xs text-accent hover:underline ml-1">Reset</button>
                     {% endif %}
                 </div>

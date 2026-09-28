@@ -1,6 +1,6 @@
 # Server-side Rolls and State Changes - Design
 
-Status: **Phases 1-5 done; Phase 6 next.** Decisions S1-S7 in section 8.
+Status: **Phases 1-6 done; Phase 7 next.** Decisions S1-S7 in section 8.
 
 ## 1. Goal
 
@@ -232,13 +232,22 @@ removes the old ones.
       173 tests, over the guard)
 
 ### Phase 6 - Parry and feint
-- [ ] Parry (predeclared, interrupt, athletics), feint, and their hooks: Mirumoto temp void, Shinjo
+- [x] Parry (predeclared, interrupt, athletics), feint, and their hooks: Mirumoto temp void, Shinjo
       decrement and bank, Hiruma bank, feint temp void, Akodo feint, Bayushi and Ide banks, and the
-      Shiba and Bayushi sub-damage rolls (recorded, per 5.5)
-- [ ] Mirumoto 3rd Dan round points persisted in `adventure_state`, spent on the session and
-      cleared by `start_combat_round` (S4, settles 5.4)
-- [ ] Clicktests: `test_rolls.py -k "parry or feint"`, `test_school_abilities.py -k "shiba or
-      bayushi or ide or akodo"`
+      Shiba and Bayushi sub-damage rolls (recorded, per 5.5). Parry / athletics parry / feint are
+      session rolls; `predeclared` is a roll choice (+5). The hooks a live roll triggers by itself
+      are `parry_feint.apply_post_roll_hooks`; the result panel's choices are session actions
+      (`akodo_feint`, `ide_bank`, `shinjo_bank`, `shinjo_phase`, `sub_damage`, and `akodo_vp` -
+      Akodo 4th Dan, now through `apply_void_spend`, settling 5.3 for the dice roller, iaijutsu
+      included). One flag definition, `parry_feint_flags`, feeds the sheet and the server. The
+      roll waits for the queued action-die spend
+- [x] Mirumoto 3rd Dan round points persisted in `adventure_state` (`mirumoto_round_points`),
+      refilled by `start_combat_round`, spent on a parry session (`mirumoto_point`) or, for the
+      browser-rolled attack until Phase 7, the `mirumoto_points` operation; the tracking section's
+      buttons are operations too (S4, settles 5.4)
+- [x] Clicktests: `-k "parry or feint"` across e2e (67), and `-k "(mirumoto or shinjo or hiruma or
+      shiba or bayushi or ide_ or akodo) and not (parry or feint)"` (83); five tests that set
+      tracking only on the tab were fixed
 
 ### Phase 7 - Attack and damage
 - [ ] The attack modal's situational inputs as the roll's choices; banked-bonus consumption;

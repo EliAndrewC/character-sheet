@@ -5791,15 +5791,18 @@ def test_shinjo_3rd_dan_parry_decrements_unspent_dice(page, live_server_url):
     assert api_autosave(page, cid, {"attack": 2}) == 200
     page.reload()
     page.wait_for_selector('#roll-formulas', state='attached', timeout=5000)
-    page.evaluate("""() => {
+    page.evaluate("""async () => {
         const t = window._trackingBridge;
         t.actionDice = [
             {value: 3, spent: false},
             {value: 5, spent: false},
             {value: 7, spent: false},
         ];
+        await t.save();
+        await t.whenSaved();
     }""")
     _roll_via_menu_or_direct(page, "parry")
+    page.wait_for_function("() => (window._trackingBridge.actionDice[0] || {}).spent === true", timeout=5000)
     # Parry auto-spent the lowest unspent die (value 3, index 0); the other
     # two get decremented by attack=2.
     dice = page.evaluate("() => window._trackingBridge.actionDice")
@@ -5813,14 +5816,17 @@ def test_shinjo_below_3rd_dan_no_parry_decrement(page, live_server_url):
     """Shinjo 2nd Dan: no auto-decrement after parry (the 3rd Dan gate)."""
     _create_char(page, live_server_url, "Shinjo2Par", "shinjo_bushi",
                  knack_overrides={"double_attack": 2, "iaijutsu": 2, "lunge": 2})
-    page.evaluate("""() => {
+    page.evaluate("""async () => {
         const t = window._trackingBridge;
         t.actionDice = [
             {value: 3, spent: false},
             {value: 5, spent: false},
         ];
+        await t.save();
+        await t.whenSaved();
     }""")
     _roll_via_menu_or_direct(page, "parry")
+    page.wait_for_function("() => (window._trackingBridge.actionDice[0] || {}).spent === true", timeout=5000)
     dice = page.evaluate("() => window._trackingBridge.actionDice")
     assert dice[1] == {"value": 5, "spent": False}
 
@@ -5975,10 +5981,8 @@ def test_ide_5th_dan_subtract_grants_temp_vp(page, live_server_url):
                  skill_overrides={"tact": 2})
     sa = _get_school_abilities(page)
     assert sa.get("ide_temp_vp_on_spend") is True
-    # Give VP
-    page.evaluate("window._trackingBridge.voidPoints = 1")
-    page.evaluate("window._trackingBridge.tempVoidPoints = 0")
-    page.wait_for_timeout(200)
+    # Give VP (saved: the server makes the spend)
+    save_tracking(page, voidPoints=1, tempVoidPoints=0)
     # Click subtract button
     subtract_btn = page.locator('button:has-text("Spend 1 VP to subtract")')
     subtract_btn.wait_for(state="visible", timeout=5000)
@@ -7069,8 +7073,10 @@ def test_akodo_4th_dan_vp_on_passed_wound_check(page, live_server_url):
     """Akodo 4th Dan: Spend VP (+5) button appears on PASSED wound check to increase margin."""
     _create_char(page, live_server_url, "Akodo4VP", "akodo_bushi",
                  knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
-    # Give VP and small light wounds so WC passes easily with mocked high dice
-    page.evaluate("window._trackingBridge.voidPoints = 3")
+    # Give VP (saved - the light-wound operation below adopts the server's
+    # state) and small light wounds so WC passes easily with mocked high dice
+    save_tracking(page, voidPoints=2)
+    vp_before = page.evaluate("window._trackingBridge.voidPoints")
     page.locator('[data-action="lw-plus"]').click()
     page.wait_for_selector('input[placeholder="Amount"]', timeout=10000)
     page.fill('input[placeholder="Amount"]', "5")
@@ -7123,7 +7129,7 @@ def test_akodo_4th_dan_vp_on_passed_wound_check(page, live_server_url):
     assert undo_btn.count() > 0, "Undo VP button must appear after spending"
     # VP should have decreased
     vp = page.evaluate("window._trackingBridge.voidPoints")
-    assert vp == 2, f"VP should be 2 after spending 1, got {vp}"
+    assert vp == vp_before - 1, f"VP should be {vp_before - 1} after spending 1, got {vp}"
 
 
 def test_akodo_4th_dan_vp_on_failed_wound_check(page, live_server_url):
@@ -7916,9 +7922,8 @@ def test_mirumoto_3rd_dan_initiative_no_message_when_pool_full(page, live_server
     """No refresh message when the per-round pool was already at max."""
     _create_char(page, live_server_url, "MiruInitFull", "mirumoto_bushi",
                  knack_overrides={"counterattack": 3, "double_attack": 3, "iaijutsu": 3})
-    page.evaluate(
-        "() => { const t = window._trackingBridge; t.mirumotoRoundPoints = t.mirumotoRoundPointsMax; }"
-    )
+    # Filled on the server (the points are persisted, S4).
+    page.evaluate("async () => { const t = window._trackingBridge; t.resetMirumoto(); await t._opChain; }")
     page.locator('[data-roll-key="initiative"]').click()
     _wait_roll_done(page)
     assert not _init_reset_messages(page).is_visible()

@@ -127,7 +127,7 @@
                 tempVoidPoints: {{ character.current_temp_void_points or 0 }},
                 adventureState: {{ (adventure_state or {})|tojson }},
                 perAdventure: {{ per_adventure|tojson }},
-                mirumotoRoundPoints: 0,
+                mirumotoRoundPoints: ({{ (adventure_state or {})|tojson }}).mirumoto_round_points || 0,
                 mirumotoRoundPointsMax: {{ school_abilities.get('mirumoto_round_points_max', 0) }},
                 akodoBankedBonuses: ({{ (adventure_state or {})|tojson }}).akodo_banked_bonuses
                     ? ({{ (adventure_state or {})|tojson }}).akodo_banked_bonuses.map(a => ({amount: a, spent: false}))
@@ -376,6 +376,7 @@
                     this.offensive3rdDanAccum = as.mantis_offensive_3rd_dan_accum || 0;
                     this.defensive3rdDanAccum = as.mantis_defensive_3rd_dan_accum || 0;
                     this.kakita5thDanUsed = !!as.kakita_5th_dan_used;
+                    this.mirumotoRoundPoints = as.mirumoto_round_points || 0;
                     // The dice roller keeps its own copies of the banked
                     // bonuses (and shares three arrays by reference).
                     const dr = window._diceRoller;
@@ -494,6 +495,17 @@
                     this.kakita5thDanUsed = false;
                     delete this.adventureState.kakita_5th_dan_used;
                     this.save();
+                },
+                // Mirumoto 3rd Dan points, stepped or refilled by hand.
+                stepMirumoto(delta) {
+                    if (!this.canEdit) return;
+                    this.mirumotoRoundPoints = Math.max(0, Math.min(this.mirumotoRoundPointsMax, this.mirumotoRoundPoints + delta));
+                    this.op('mirumoto_points', {delta: delta});
+                },
+                resetMirumoto() {
+                    if (!this.canEdit) return;
+                    this.mirumotoRoundPoints = this.mirumotoRoundPointsMax;
+                    this.op('mirumoto_points', {reset: true});
                 },
                 clearActionDice() {
                     if (!this.canEdit) return;

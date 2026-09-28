@@ -47,6 +47,7 @@ from app.services.dark_secret import (
 from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.roll_sessions import server_rolled
+from app.services.parry_feint import parry_feint_flags
 from app.services.special_rolls import can_bless, performs_impaired_ritual, xk1_ability
 from app.services.party import (
     party_member_dan,
@@ -742,6 +743,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # The damage-roll flags (Otaku / Brotherhood / Mirumoto / Ikoma 4th
         # Dan, Bayushi Special), shared with the server's NPC damage roll.
         **damage_flags(char_dict),
+        **parry_feint_flags(char_dict),
         # Matsu 5th Dan: defender LW reset to 15 after dealing serious wounds
         "matsu_lw_reset_15": character.school == "matsu_bushi" and dan >= 5,
         # Akodo 5th Dan: spend VP after damage to deal 10 LW per VP back
@@ -775,11 +777,8 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Yogo Warden Special: gain temp VP when taking serious wounds
         "yogo_temp_vp_on_sw": character.school == "yogo_warden",
         # Mirumoto Special: gain temp VP after any parry roll
-        "mirumoto_temp_vp_on_parry": character.school == "mirumoto_bushi",
         # Akodo Special: gain 4 temp VP on successful feint, 1 on unsuccessful
-        "akodo_temp_vp_on_feint": character.school == "akodo_bushi",
         # Bayushi 4th Dan: free raise on future attack after any feint
-        "bayushi_post_feint_raise": character.school == "bayushi_bushi" and dan >= 4,
         # Otaku 5th Dan: trade 10 rolled damage dice for 1 auto serious wound
         "otaku_trade_dice_for_sw": character.school == "otaku_bushi" and dan >= 5,
         # Kitsune Warden 4th Dan: 10-dice floor on athletics rolls (the
@@ -808,15 +807,11 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Isawa Duelist 5th Dan: bank wound check excess for future wound check
         "isawa_bank_wc_excess": character.school == "isawa_duelist" and dan >= 5,
         # Shinjo 5th Dan: bank parry excess for future wound check
-        "shinjo_bank_parry_excess": character.school == "shinjo_bushi" and dan >= 5,
         # Feint knack: 1 temp VP on successful feint (non-Akodo feint schools).
         # Schools listed here have feint in their school_knacks; if you add or
         # remove feint from a school's knack list in game_data.py, update this
         # set too.
-        "feint_temp_vp": character.school in ("bayushi_bushi", "yogo_warden", "ide_diplomat"),
         # Hiruma 3rd Dan: bank +2*attack for next attack and damage after parry
-        "hiruma_post_parry_bonus": character.school == "hiruma_scout" and dan >= 3,
-        "hiruma_post_parry_amount": 2 * attack_skill if character.school == "hiruma_scout" and dan >= 3 else 0,
         # Hiruma 3rd Dan: post-parry free interrupt lunge (display note).
         # The lunge is made without the normal lunge penalty. Not mechanized -
         # it requires combat-phase tracking, so the player executes it manually.
@@ -827,7 +822,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # wound-check case is handled separately via voidSpendConfig.wc_vp_free_raise
         # (which Yogo Warden 4th Dan shares); this flag is Akodo-only and drives
         # the attack and dice-roller result modals.
-        "akodo_combat_vp_free_raise": character.school == "akodo_bushi" and dan >= 4,
         # Akodo 3rd Dan: bank wound check excess * attack for attack bonus
         "akodo_wc_attack_bonus": character.school == "akodo_bushi" and dan >= 3,
         "akodo_attack_skill": attack_skill if character.school == "akodo_bushi" and dan >= 3 else 0,
@@ -836,15 +830,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Togashi 4th Dan: reroll any contested roll after seeing result
         "togashi_reroll_contested": character.school == "togashi_ise_zumi" and dan >= 4,
         # Ide Special: feint -> lower target TN by 10
-        "ide_feint_tn_reduce": character.school == "ide_diplomat",
         # Hiruma 5th Dan: attacker deals 10 fewer LW after parry (display note)
         "hiruma_parry_reduce_lw": character.school == "hiruma_scout" and dan >= 5,
         # Bayushi 3rd Dan: feints deal Xk1 damage
-        "bayushi_feint_damage": character.school == "bayushi_bushi" and dan >= 3,
-        "bayushi_feint_damage_rolled": attack_skill if character.school == "bayushi_bushi" and dan >= 3 else 0,
         # Shiba 3rd Dan: parries deal (2X)k1 damage
-        "shiba_parry_damage": character.school == "shiba_bushi" and dan >= 3,
-        "shiba_parry_damage_rolled": 2 * attack_skill if character.school == "shiba_bushi" and dan >= 3 else 0,
         # Daidoji 3rd Dan: X free raises to wound check from counterattack
         "daidoji_counterattack_raises": character.school == "daidoji_yojimbo" and dan >= 3,
         "daidoji_counterattack_raises_amount": attack_skill if character.school == "daidoji_yojimbo" and dan >= 3 else 0,
@@ -869,8 +858,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Kitsuki 5th Dan: reduce target rings (display note)
         "kitsuki_reduce_rings": character.school == "kitsuki_magistrate" and dan >= 5,
         # Mirumoto 3rd Dan: 2X points per round
-        "mirumoto_round_points": character.school == "mirumoto_bushi" and dan >= 3,
-        "mirumoto_round_points_max": 2 * attack_skill if character.school == "mirumoto_bushi" and dan >= 3 else 0,
         # Priest 5th Dan: conviction pool refreshes after each combat round
         # (drives the per-round reset fired by initiative rolls).
         "priest_round_conviction_refresh": conviction_refreshes_each_round(char_dict),
@@ -944,9 +931,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Shinjo Bushi 3rd Dan: after a parry, all unspent action dice are
         # decreased by X (attack skill). A non-zero value enables the client's
         # auto-decrement hook; zero means the character is below 3rd Dan.
-        "shinjo_3rd_dan_parry_decrement": (
-            attack_skill if character.school == "shinjo_bushi" and dan >= 3 else 0
-        ),
         # Kakita Duelist Special Ability: 10s on initiative are Phase 0. The
         # dice roller reads the initiative formula's own ``kakita_phase_zero``
         # flag; this ability flag lets the client gate Kakita-only UI bits

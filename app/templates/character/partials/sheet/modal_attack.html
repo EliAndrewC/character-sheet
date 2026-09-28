@@ -810,13 +810,13 @@
                         <div x-show="schoolAbilities.mirumoto_round_points && ((window._trackingBridge?.mirumotoRoundPoints || 0) > 0 || mirumotoPointsSpentThisRoll > 0)" x-cloak class="mt-2 pt-2 border-t border-success/30">
                             <div class="flex items-center gap-2 text-sm">
                                 <button type="button"
-                                        @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { if (t.canEdit) { t.mirumotoRoundPoints--; } mirumotoPointsSpentThisRoll++; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState(); }"
+                                        @click="spendMirumotoPoint('attack')"
                                         :disabled="(window._trackingBridge?.mirumotoRoundPoints || 0) <= 0"
                                         class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
                                     Spend 3rd Dan Point (+2)
                                 </button>
                                 <button type="button"
-                                        @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { if (t.canEdit) { t.mirumotoRoundPoints++; } mirumotoPointsSpentThisRoll--; atkRollTotal -= 2; baseTotal -= 2; _atkUpdateHitState(); }"
+                                        @click="undoMirumotoPoint('attack')"
                                         :disabled="mirumotoPointsSpentThisRoll <= 0"
                                         class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
                                     Undo
@@ -1013,13 +1013,13 @@
                              class="mt-2 pt-2 border-t border-red-200">
                             <div class="flex items-center gap-2 text-sm">
                                 <button type="button"
-                                        @click="const t = window._trackingBridge; if (t && t.mirumotoRoundPoints > 0) { if (t.canEdit) { t.mirumotoRoundPoints--; } mirumotoPointsSpentThisRoll++; atkRollTotal += 2; baseTotal += 2; _atkUpdateHitState(); }"
+                                        @click="spendMirumotoPoint('attack')"
                                         :disabled="(window._trackingBridge?.mirumotoRoundPoints || 0) <= 0"
                                         class="btn-primary px-3 py-1 rounded text-sm disabled:opacity-30">
                                     Spend 3rd Dan Point (+2)
                                 </button>
                                 <button type="button"
-                                        @click="const t = window._trackingBridge; if (t && mirumotoPointsSpentThisRoll > 0) { if (t.canEdit) { t.mirumotoRoundPoints++; } mirumotoPointsSpentThisRoll--; atkRollTotal -= 2; baseTotal -= 2; _atkUpdateHitState(); }"
+                                        @click="undoMirumotoPoint('attack')"
                                         :disabled="mirumotoPointsSpentThisRoll <= 0"
                                         class="btn-secondary px-3 py-1 rounded text-sm disabled:opacity-30">
                                     Undo

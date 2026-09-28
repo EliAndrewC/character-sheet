@@ -12,7 +12,8 @@ The keys, by kind:
   character has (``per_adventure_abilities``), 0..that counter's max;
 - per-adventure toggles: ``<id>`` for every toggle the character has, bool;
 - banked bonuses: lists of amounts, or single amounts;
-- Mantis Wave-Treader's per-round posture tracker; Kakita 5th Dan's latch.
+- Mantis Wave-Treader's per-round posture tracker; Kakita 5th Dan's latch;
+  Mirumoto 3rd Dan's points left this round.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
+from app.services.parry_feint import parry_feint_flags
 from app.services.per_adventure import per_adventure_abilities
 
 log = logging.getLogger(__name__)
@@ -61,6 +63,8 @@ def sanitize_adventure_state(character: Any, state: Any) -> Dict[str, Any]:
             out[key] = [_amount(v) for v in items if isinstance(v, (int, float))][:MAX_LIST]
         elif key in BANK_AMOUNTS:
             out[key] = _amount(value)
+        elif key == "mirumoto_round_points":
+            out[key] = _amount(value, parry_feint_flags(character.to_dict())["mirumoto_round_points_max"])
         elif key == "mantis_posture_phase":
             out[key] = _amount(value, 11) or 1
         elif key == "mantis_posture_history":

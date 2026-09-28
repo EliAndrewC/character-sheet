@@ -240,6 +240,10 @@
             _serverRollRequest: null,
             _serverSessionId: null,
             _serverDice: null,
+            _lastAct: null,
+            _predeclaredNext: false,
+            akodoFeintDone: false,
+            ideBankedThisRoll: false,
             _serverSessionMode: null,
             title: '',
             formula: null,
@@ -333,7 +337,7 @@
                 const messages = [];
                 const t = window._trackingBridge;
                 if (!t || !t.canEdit) return messages;
-                if (this.schoolAbilities.mirumoto_round_points) {
+                if (this.schoolAbilities.mirumoto_round_points && !serverRound) {
                     const max = t.mirumotoRoundPointsMax || 0;
                     if ((t.mirumotoRoundPoints || 0) < max) {
                         t.mirumotoRoundPoints = max;
@@ -2418,6 +2422,8 @@
                 // per combat).
                 this.shinjoParryBankedThisRoll = null;
                 this.shinjoParryOpponentRoll = 0;
+                this.akodoFeintDone = false;
+                this.ideBankedThisRoll = false;
                 const eligible = formula?.shinjo_phase_bonus_attack
                         && this.schoolAbilities?.shinjo_phase_bonus;
                 if (!eligible) {
@@ -2458,6 +2464,12 @@
                 const delta = newBonus - (this.shinjoParryBonusApplied || 0);
                 this.baseTotal += delta;
                 this.shinjoParryBonusApplied = newBonus;
+                if (this._onServerRoll()) {
+                    this._act('shinjo_phase', {
+                        phase: parseInt(this.shinjoParryPhase, 10) || 0,
+                        die_value: this.shinjoParryDieValue || 0,
+                    });
+                }
                 if (this.formula) {
                     const phase = parseInt(this.shinjoParryPhase, 10) || 0;
                     this.formula.shinjo_phase_bonus = newBonus;
@@ -2496,6 +2508,13 @@
             },
 
             executeRollWithExtraFlat(key, voidSpent, option, extraFlat, reason, useKitsuneSwap = false) {
+                // The server adds the predeclared parry's +5 as a choice of
+                // the roll it makes (Phase 6).
+                if (reason === 'predeclared parry' && this.formulas[key]?.server_rolled) {
+                    this._predeclaredNext = true;
+                    this.executeRoll(key, voidSpent, option, 0, useKitsuneSwap);
+                    return;
+                }
                 this.rollMenuOpen = false;
                 this.parryHoverRow = null;
                 if (this._keyAutoSpendsAction(key)) this._autoSpendActionDie(this._initialSpendLabel(key), this._isAthleticsActionKey(key));
@@ -2626,8 +2645,10 @@
                         void: voidSpent > 0 && option ? voidSpent : 0,
                         otherworldliness: owSpent || 0,
                         kitsune_swap: !!(useKitsuneSwap && f.kitsune_swap_to_ring),
+                        predeclared: !!this._predeclaredNext,
                         request_id: this._newRequestId(),
                     };
+                    this._predeclaredNext = false;
                     this.formula = f;
                     this.title = f.label;
                     this.formulaText = f.flat > 0 ? `${f.rolled}k${f.kept} + ${f.flat}` : `${f.rolled}k${f.kept}`;
@@ -2744,6 +2765,10 @@
                     return;
                 }
                 if (t.canEdit && typeof t.whenSaved === 'function') await t.whenSaved();
+                // A parry / feint spends its action die by an operation just
+                // before the roll; the roll must land after it (Shinjo 3rd
+                // Dan lowers only the dice still unspent).
+                if (t.canEdit && t._opChain) await t._opChain.catch(() => null);
                 let data = null;
                 try {
                     const resp = await fetch('/characters/' + t._charId + '/roll', {
@@ -3015,6 +3040,10 @@
                     this._postRollHooksFired = true;
                     const t = window._trackingBridge;
                     const key = this.currentRollKey;
+                    // A roll the server made had these hooks applied there
+                    // (parry_feint.apply_post_roll_hooks); the tab adopted
+                    // the result with the roll's tracking snapshot.
+                    if (!opts.serverDice) {
                     // Mirumoto Special: gain 1 temp VP after any parry roll
                     // (editor-only: a non-editor walking through the parry
                     // sees the roll compute, but the auto-grant doesn't
@@ -3063,6 +3092,7 @@
                         this.bayushiBankedFeintRaise += 5;
                         if (t) t.bayushiBankedFeintRaise = this.bayushiBankedFeintRaise;
                         t?.saveBankedBonuses();
+                    }
                     }
 
                     // If this roll auto-spent an action die (parry/feint),
@@ -4154,6 +4184,7 @@
                     if (t._showOpError) t._showOpError('Could not reach the server - that was not applied.');
                 }
                 this._adoptActAnswer(data);
+                this._lastAct = ok ? data : null;
                 return ok;
             },
             // What every act answer carries for the sheet: the persisted
@@ -4374,6 +4405,80 @@
                 if (target === 'wc') this._wcUpdateMargin();
                 if (target === 'duel-strike') this._duelUpdateStrikeState();
                 if (target === 'attack' || target === 'damage') this._refreshAttackDieTooltip();
+            },
+            // Mirumoto 3rd Dan: +2 per point spent on a parry or attack.
+            // A server-made parry spends it through its session; an attack
+            // (still rolled in the browser) through the tracking operation.
+            async spendMirumotoPoint(target) {
+                const t = window._trackingBridge;
+                if (!t || (t.mirumotoRoundPoints || 0) <= 0) return;
+                this._mirumotoStep(target, 1);
+                if (target === 'roll' && this._onServerRoll()) {
+                    if (!(await this._act('mirumoto_point'))) this._mirumotoStep(target, -1);
+                } else if (t.canEdit) {
+                    t.op('mirumoto_points', {delta: -1});
+                }
+            },
+            async undoMirumotoPoint(target) {
+                const t = window._trackingBridge;
+                if (!t || this.mirumotoPointsSpentThisRoll <= 0) return;
+                this._mirumotoStep(target, -1);
+                if (target === 'roll' && this._onServerRoll()) {
+                    if (!(await this._act('undo_mirumoto_point'))) this._mirumotoStep(target, 1);
+                } else if (t.canEdit) {
+                    t.op('mirumoto_points', {delta: 1});
+                }
+            },
+            _mirumotoStep(target, n) {
+                const t = window._trackingBridge;
+                this.mirumotoPointsSpentThisRoll += n;
+                this.baseTotal += 2 * n;
+                if (t && t.canEdit) t.mirumotoRoundPoints -= n;
+                if (target === 'attack') {
+                    this.atkRollTotal += 2 * n;
+                    this._atkUpdateHitState();
+                }
+            },
+            // Akodo Special: a feint's temp void points, 4 on success, 1 on
+            // failure.
+            async akodoFeintVp(succeeded) {
+                if (this.akodoFeintDone) return;
+                this.akodoFeintDone = true;
+                const t = window._trackingBridge;
+                if (this._onServerRoll()) {
+                    if (!(await this._act('akodo_feint', {succeeded: !!succeeded}))) this.akodoFeintDone = false;
+                } else if (t && t.canEdit) {
+                    t.tempVoidPoints += succeeded ? 4 : 1;
+                    t.save();
+                }
+            },
+            // Ide Special: bank -10 to the target's TN for the next attack.
+            async ideBankTn() {
+                if (this.ideBankedThisRoll) return;
+                this.ideBankedThisRoll = true;
+                if (this._onServerRoll()) {
+                    if (!(await this._act('ide_bank'))) this.ideBankedThisRoll = false;
+                } else {
+                    this.ideBankedTnReduce += 10;
+                    window._trackingBridge?.saveBankedBonuses();
+                }
+            },
+            // Shinjo 5th Dan: bank this parry's excess over the attack roll.
+            async shinjoBankExcess() {
+                if (this.shinjoParryBankedThisRoll !== null) return;
+                if (this._onServerRoll()) {
+                    this.shinjoParryBankedThisRoll = 0;
+                    if (await this._act('shinjo_bank', {opponent: this.shinjoParryOpponentRoll || 0})) {
+                        this.shinjoParryBankedThisRoll = this._lastAct.banked;
+                    } else {
+                        this.shinjoParryBankedThisRoll = null;
+                    }
+                    return;
+                }
+                const banked = window.L7RRollMath.bankExcess(this.baseTotal, this.shinjoParryOpponentRoll || 0);
+                if (banked > 0) this.bankedWcExcess.push({amount: banked, spent: false});
+                this.shinjoParryBankedThisRoll = banked;
+                window._trackingBridge?.saveBankedBonuses();
             },
             _duelUpdateStrikeState() {
                 // Hit / excess feed the damage step (extra dice), so they
@@ -4767,9 +4872,26 @@
 
             async rollSubDamage(rolled, kept, label) {
                 this.subDamageLabel = label;
-                this.phase = 'sub-damage-rolling';
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
+                if (this._onServerRoll()) {
+                    // The server rolls it and records it (5.5).
+                    this.phase = 'sub-damage-rolling';
+                    const ok = await this._act('sub_damage');
+                    const sd = ok && this._lastAct ? this._lastAct.sub_damage : null;
+                    if (!sd) { this.phase = 'done'; return; }
+                    const shown = await window.L7RDice.animateDice(
+                        sd.dice, true, this.prefs.dice_animation_enabled, playSound, 'dice-animation');
+                    const sorted = [...shown].sort((a, b) => a.value - b.value);
+                    this.subDamageDice = sorted.map((d, i) => ({
+                        value: d.value, kept: i >= sorted.length - Math.min(sd.kept, sorted.length),
+                    }));
+                    this.subDamageLabel = sd.label;
+                    this.subDamageTotal = sd.total;
+                    this.phase = 'sub-damage-result';
+                    return;
+                }
+                this.phase = 'sub-damage-rolling';
                 const dice = await window.L7RDice.rollAndAnimate(
                     rolled, true,
                     this.prefs.dice_animation_enabled, playSound, 'dice-animation'
@@ -5823,6 +5945,15 @@
             akodoVpSpend(mode) {
                 const t = window._trackingBridge;
                 if (!t || (t.anyVPAvailable?.() || 0) <= 0) return;
+                if (mode === 'roll' && this._onServerRoll()) {
+                    this.akodoPostRollVpSources.push('server');
+                    this.akodoPostRollVpSpent++;
+                    this.baseTotal += 5;
+                    this._act('akodo_vp').then(ok => {
+                        if (!ok) { this.akodoPostRollVpSources.pop(); this.akodoPostRollVpSpent--; this.baseTotal -= 5; }
+                    });
+                    return;
+                }
                 let src;
                 if ((t.tempVoidPoints || 0) > 0) src = 'temp';
                 else if ((t.voidPoints || 0) > 0) src = 'regular';
@@ -5850,6 +5981,15 @@
 
             akodoVpUndo(mode) {
                 if ((this.akodoPostRollVpSpent || 0) <= 0) return;
+                if (mode === 'roll' && this._onServerRoll()) {
+                    this.akodoPostRollVpSources.pop();
+                    this.akodoPostRollVpSpent--;
+                    this.baseTotal -= 5;
+                    this._act('undo_akodo_vp').then(ok => {
+                        if (!ok) { this.akodoPostRollVpSources.push('server'); this.akodoPostRollVpSpent++; this.baseTotal += 5; }
+                    });
+                    return;
+                }
                 const t = window._trackingBridge;
                 const src = this.akodoPostRollVpSources.pop();
                 if (t && t.canEdit) {
