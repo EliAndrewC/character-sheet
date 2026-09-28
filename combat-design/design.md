@@ -251,7 +251,7 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 ### To finish (needs the GM)
 - [x] Push the simulator commits (`d75e505`..`86d21d4`, pushed with the simulator's own `GITHUB_TOKEN`) and deploy this app with `scripts/deploy.sh`.
 - [x] Turn on name suggestions: `names_token` added to gm-assistant's secrets, gm-assistant deployed through `make deploy` (1863 tests, 100% coverage), and `GET /api/names` answers live (401 without the token). This app's `GM_ASSISTANT_URL` / `GM_ASSISTANT_NAMES_TOKEN` are staged Fly secrets that take effect with the next deploy.
-- [ ] Review the three new progression lists (Phase 2).
+- [x] Review the three new progression lists (Phase 2) - approved by the GM 2026-09-28.
 
 ### Later
 - [ ] Explicit phase ticking, for per-phase abilities (D11)
