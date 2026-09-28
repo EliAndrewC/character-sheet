@@ -217,7 +217,10 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 - [x] Mantis Wave-Treader: stub school class (D25) + priorities via `school-progression-designer` (simulator `e7961e6`)
 - [x] Kitsune Warden: same (default ring Fire, per the designer)
 - [x] Suzume Overseer: same
-- [ ] GM reviews each progression's rationale (in `strategies.py` comments; used meanwhile)
+- [ ] GM reviews each progression's rationale (in `strategies.py` comments; used meanwhile). The choices to approve or overrule:
+  - **Mantis Wave-Treader** - default school ring **Fire** (both offensive-posture clauses boost attack and damage). Attack leads every tier (it is X in both 3rd Dan clauses), parry kept level (defensive posture adds to TN to be hit), **Water 3** is the first bought ring (four clauses touch wound checks), Dan-5 skills before the rank-3 rings, then Void / Earth / Air. No non-combat skill bought.
+  - **Kitsune Warden** - default school ring **Fire** over Water (the ring swap cannot reach damage or iaijutsu, so a native Fire ring covers what the swap cannot). Iaijutsu first among knacks, **precepts to 5** out of the combat budget (3rd Dan's X), Earth 3 at Dan 3, then Void / Water / Air, Earth 4 in the 20-XP ring tier.
+  - **Suzume Overseer** - Water (fixed). **Precepts to 5** first (3rd Dan's X, 1st Dan die), worldliness leads the knacks (void points are lowest ring + worldliness, and the special ability spends void after the roll), attack before parry, the four non-Water rings raised together so the lowest ring rises.
 
 **Found while building Phases 1-2:**
 - **Hiruma Scout is stale in the simulator.** The rules swapped counterattack for lunge (l7r `48410d9`), including the 3rd Dan interrupt, and the simulator still uses counterattack. It is left out of the NPC list (`UNSUPPORTED_SIM_KEYS`) and recorded in the simulator's BACKLOG. It is a combat-mechanics change, so it goes through the simulator's per-school workflow.
