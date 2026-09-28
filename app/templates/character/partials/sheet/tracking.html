@@ -375,7 +375,7 @@
                     {% if school_abilities.get('priest_bless_research') %}
                     <div class="tooltip-trigger relative inline-block self-start" data-bless-research>
                         <button type="button"
-                                @click="window._diceRoller?.rollBless('Bless research')"
+                                @click="window._diceRoller?.rollBless('research')"
                                 data-action="bless-research"
                                 class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
                             Bless research
@@ -388,7 +388,7 @@
                     {% if school_abilities.get('priest_bless_topic') %}
                     <div class="tooltip-trigger relative inline-block self-start" data-bless-conversation>
                         <button type="button"
-                                @click="window._diceRoller?.rollBless('Bless conversation topic')"
+                                @click="window._diceRoller?.rollBless('topic')"
                                 data-action="bless-conversation"
                                 class="px-2 py-1 text-xs rounded bg-accent/10 hover:bg-accent/20 border border-accent/30">
                             Bless conversation topic

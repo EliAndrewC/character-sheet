@@ -22,6 +22,14 @@
                      id="dice-animation"
                      class="mb-4 min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>
 
+                {# The server could not make the roll (no browser fallback,
+                   server-rolls-design S6). Retry re-sends the same request. #}
+                <div x-show="phase === 'error'" x-cloak class="space-y-3 text-center py-4" data-testid="roll-error">
+                    <p class="text-sm text-red-700" x-text="rollError"></p>
+                    <button type="button" @click="retryServerRoll()" data-testid="roll-retry"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">Retry</button>
+                </div>
+
                 {# Result panel (visible when phase === 'done') #}
                 <div x-show="phase === 'done'" x-cloak class="space-y-3">
                     {# Formula header (e.g. "10k7 + 11") #}

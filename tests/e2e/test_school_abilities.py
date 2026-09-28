@@ -1,6 +1,9 @@
 """E2E: School-specific ability UI - buttons, banked bonuses, display notes."""
 
 import pytest
+
+from tests.e2e.dice_control import force_dice, restore_dice
+from tests.e2e.helpers import save_tracking
 from tests.e2e.helpers import select_school, click_plus, click_minus, apply_changes, start_new_character, dismiss_wc_modal, api_autosave
 
 pytestmark = [pytest.mark.rolls]
@@ -118,32 +121,23 @@ def _wait_attack_result(page):
 
 
 def _mock_dice_high(page):
-    """Mock dice to always roll 7 (high enough to hit, avoids reroll-10 complications).
-
-    Overrides Math.random to return 0.6 which maps to floor(0.6*10)+1 = 7.
-    """
-    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.6")
+    """Force every die to 7 (browser and server; see dice_control)."""
+    force_dice(page, 7)
 
 
 def _mock_dice_low(page):
-    """Mock dice to always roll 1 (guaranteed miss/fail).
-
-    Overrides Math.random to return 0.0 which maps to floor(0.0*10)+1 = 1.
-    """
-    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.0")
+    """Force every die to 1 (browser and server; see dice_control)."""
+    force_dice(page, 1)
 
 
 def _mock_dice_ten(page):
-    """Mock dice to always roll 10 (for testing Phase 0 etc).
-
-    Overrides Math.random to return 0.9 which maps to floor(0.9*10)+1 = 10.
-    """
-    page.evaluate("window._origRandom = Math.random; Math.random = () => 0.9")
+    """Force every die to 10 (browser and server; see dice_control)."""
+    force_dice(page, 10)
 
 
 def _restore_dice(page):
     """Restore normal random dice."""
-    page.evaluate("if (window._origRandom) Math.random = window._origRandom")
+    restore_dice(page)
 
 
 def _get_formula(page, key):
@@ -4001,22 +3995,9 @@ def test_kakita_phase_0_behavioral(page, live_server_url):
 
 
 def _mock_dice_sequence(page, values):
-    """Install a Math.random stub that produces the given d10 results in
-    order. Each value ``v`` comes back as ``Math.floor(Math.random()*10)+1``,
-    so we feed ``(v-1)/10 + epsilon`` so the floor lands on ``v-1`` and the
-    final roll is ``v``. Dice-roll paths that call Math.random for any other
-    purpose will also see these values, so use short sequences and restore."""
-    seq = [((v - 1) / 10) + 0.001 for v in values]
-    page.evaluate(f"""() => {{
-        window._origRandom = Math.random;
-        const seq = {seq!r};
-        let i = 0;
-        Math.random = () => {{
-            const v = seq[i % seq.length];
-            i++;
-            return v;
-        }};
-    }}""")
+    """Force the given d10 results in order, cycling (browser and server;
+    see dice_control)."""
+    force_dice(page, list(values))
 
 
 def test_kakita_initiative_keeps_10_over_higher_lower_dice(page, live_server_url):
@@ -5908,7 +5889,7 @@ def test_ide_3rd_dan_subtract_behavioral(page, live_server_url):
                  knack_overrides={"double_attack": 3, "feint": 3, "worldliness": 3},
                  skill_overrides={"tact": 2})
     # Give VP
-    page.evaluate("window._trackingBridge.voidPoints = 1")
+    save_tracking(page, voidPoints=1)
     page.wait_for_timeout(200)
     vp_before = page.evaluate("window._trackingBridge.voidPoints")
     assert vp_before == 1
@@ -6054,8 +6035,7 @@ def test_ide_3rd_dan_subtract_spends_worldliness_vp(page, live_server_url):
                  knack_overrides={"double_attack": 3, "feint": 3, "worldliness": 3},
                  skill_overrides={"tact": 2})
     # No regular or temp VP, only worldliness available (rank 3 = 3 uses)
-    page.evaluate("window._trackingBridge.voidPoints = 0")
-    page.evaluate("window._trackingBridge.tempVoidPoints = 0")
+    save_tracking(page, voidPoints=0, tempVoidPoints=0)
     page.wait_for_timeout(200)
     worldliness_before = page.evaluate("window._trackingBridge.getCount('worldliness')")
     assert worldliness_before == 0
@@ -7833,7 +7813,7 @@ def test_ishi_3rd_dan_add_roll(page, live_server_url):
                  knack_overrides={"absorb_void": 3, "kharmic_spin": 3, "otherworldliness": 3},
                  skill_overrides={"precepts": 2})
     cid = int(re.search(r"/characters/(\d+)", page.url).group(1))
-    page.evaluate("window._trackingBridge.voidPoints = 1")
+    save_tracking(page, voidPoints=1)
     page.wait_for_timeout(200)
     btn = page.locator('button:has-text("Spend 1 VP to add")')
     btn.click()

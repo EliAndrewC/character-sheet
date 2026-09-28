@@ -8,6 +8,8 @@ rules/09-professions.md; see profession-design/design.md.
 
 import pytest
 
+from tests.e2e.dice_control import force_dice, restore_dice
+
 from tests.e2e.helpers import (
     apply_changes,
     click_plus,
@@ -21,14 +23,12 @@ pytestmark = pytest.mark.professions
 
 
 def _mock_dice(page, value):
-    """Force every d10 to roll ``value`` (1-10)."""
-    page.evaluate(
-        f"window._origRandom = Math.random; Math.random = () => {(value - 1) / 10 + 0.01:.3f}"
-    )
+    """Force every d10 to roll ``value`` (1-10), browser and server."""
+    force_dice(page, value)
 
 
 def _restore_dice(page):
-    page.evaluate("if (window._origRandom) Math.random = window._origRandom")
+    restore_dice(page)
 
 
 def _editor(page, live_server_url, name="Wave Man"):

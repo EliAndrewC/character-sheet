@@ -94,6 +94,7 @@ def roll_dice(
             while die["parts"][-1] == 10 and len(die["parts"]) < MAX_CHAIN:
                 die["parts"].append(rng.randint(1, 10))
             die["value"] = sum(die["parts"])
+    in_order = list(dice)
     dice.sort(key=lambda d: d["value"])
     keep_count = max(0, min(int(kept), len(dice)))
     split = len(dice) - keep_count
@@ -102,6 +103,8 @@ def roll_dice(
         "kept": kept_dice,
         "dropped": dice[:split],
         "kept_sum": sum(d["value"] for d in kept_dice),
+        # Every die in the order it was rolled, for the sheet's animation.
+        "in_order": in_order,
     }
 
 
@@ -316,6 +319,7 @@ def execute_roll(
     rng: Optional[random.Random] = None,
     void_spent: int = 0,
     formula: Optional[Dict[str, Any]] = None,
+    out: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Roll ``roll_key`` for a character and build the result payload.
 
@@ -344,6 +348,11 @@ def execute_roll(
     is nothing to ask about, and it IS applied here. Skipping it would
     make the same roll come out differently depending on whether it was
     made on the sheet or through a slash command.
+
+    ``out``, when given, receives the effective formula (after the void
+    dice, the cap and the combat bonus) as ``out["formula"]`` and every die
+    in roll order as ``out["dice"]`` - what the sheet needs to animate and
+    display a roll the server made.
     """
     if formula is None:
         formula = build_all_roll_formulas(
@@ -407,6 +416,9 @@ def execute_roll(
         source = formula.get("max_total_source") or "a disadvantage"
         extras.append(f"Capped at {max_total} by {source} (rolled {base_total})")
 
+    if out is not None:
+        out["formula"] = dict(formula, void_spent=void_spent, void_overflow_bonus=overflow)
+        out["dice"] = dice["in_order"]
     payload: Dict[str, Any] = {
         "title": label,
         "formula": _formula_text(formula),

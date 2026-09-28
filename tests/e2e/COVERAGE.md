@@ -1590,6 +1590,7 @@ python3 -m pytest tests/e2e/ -m "skills or rings" --browser chromium
 | `keepalive` | Fly Keep-alive Pinger | `test_keepalive.py` |
 | `telemetry` | Client diagnostics: error reports, dead-tab detection, memory samples, new-version banner | `test_telemetry.py` |
 | `combat` | GM combat tracker, generated NPCs, public combat page, combat rolls view | `test_combat.py` |
+| `server_rolls` | Rolls the server makes for the sheet: server dice, error + Retry, simulate mode | `test_server_rolls.py` |
 | `pcp` | Player Character Points (confirm modal, reroll/free-raise/reroll-10s, void refresh, XP category, undo, read-only) | `test_pcp.py` |
 | `status_display` | Status section on sheet | `test_sheet_display.py`, `test_sheet_advanced.py` |
 | `tracking` | Wounds, void points, per-adventure, concurrent writers | `test_tracking.py`, `test_tracking_advanced.py`, `test_tracking_concurrency.py`, `test_light_wounds.py`, `test_sheet_advanced.py` |
@@ -2173,6 +2174,14 @@ The combat page is public (design D27): the GM gets the tracker, everyone else t
 - [x] Rebuild (earned XP + combat %) and rename an NPC from its card - `test_combat.py::test_rebuild_and_rename_an_npc`
 - [x] Combat rolls view lists the fight's rolls and filters PC / NPC - `test_combat.py::test_combat_rolls_view_filters_npc_rolls`
 - [x] No JS errors and no horizontal overflow at phone width - `test_combat.py::test_combat_page_has_no_js_errors_and_fits_a_phone`
+
+## Server-made Rolls (mark: `server_rolls`; server-rolls-design; POST /characters/{id}/roll)
+
+The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the Xk1 3rd Dan roll, freeform so far - one phase at a time) and records the roll; the tab animates the server's dice. Clicktests force dice through `tests/e2e/dice_control.py`, which scripts the server roller via `X-Test-Dice`.
+
+- [x] The dice and total shown are the server's; the tab adopts the history row the server wrote - `test_server_rolls.py::test_the_dice_shown_are_the_servers`
+- [x] A failed request shows an error and Retry; Retry re-sends the same `request_id` - `test_server_rolls.py::test_a_failed_roll_offers_retry_with_the_same_request`
+- [x] A non-editor's roll is made in simulate mode and records nothing - `test_server_rolls.py::test_a_non_editor_rolls_on_the_server_without_changing_anything`
 
 ---
 

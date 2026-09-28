@@ -6,6 +6,7 @@ else's history); viewing + editing (annotation, hide/unhide) is open
 to any editor.
 """
 
+import os
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -21,6 +22,7 @@ from app.services.auth import (
     get_admin_ids,
     get_all_editors,
 )
+from app.services import roll_sessions
 from app.services.roll_descriptions import label_for_roll
 from app.services.rolls_history import (
     coerce_action_die_spent,
@@ -362,3 +364,54 @@ async def unhide_roll(
     db: Session = Depends(get_db),
 ):
     return _set_hidden(request, char_id, roll_id, db, False)
+
+
+# ---------------------------------------------------------------------------
+# POST /characters/{char_id}/roll - the server makes the roll
+# ---------------------------------------------------------------------------
+
+
+def _client_address(request: Request) -> str:
+    return (request.headers.get("fly-client-ip")
+            or (request.client.host if request.client else "") or "unknown")
+
+
+@router.post("/{char_id}/roll")
+async def make_roll(request: Request, char_id: int, db: Session = Depends(get_db)):
+    """Roll on the server (server-rolls-design 4.1; decisions S1, S6).
+
+    Anyone who can see the sheet may roll: an editor LIVE (spends apply,
+    and the roll is recorded under ``should_record_roll``), anyone else in
+    SIMULATE mode (Read-only Roll Mode - nothing about the character
+    changes). Anonymous visitors are rate-limited. Body:
+    ``{"roll_key", "void", "otherworldliness", "kitsune_swap", "request_id"}``
+    (a retry with the same ``request_id`` gets the same roll back).
+    """
+    user = getattr(request.state, "user", None)
+    character, owner = _load_character(db, char_id)
+    if character is None or not _viewer_can_see_character(user, character, owner):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    if not user and not roll_sessions.anonymous_allowed(_client_address(request)):
+        return JSONResponse({"error": "Too many rolls - try again in a minute"}, status_code=429)
+    body = await request.json()
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Expected a JSON object"}, status_code=400)
+    viewer = user["discord_id"] if user else None
+    live = bool(user) and _require_editor(user, character, owner)
+    record, is_owner_roll = (False, False)
+    if live:
+        grants = (owner.granted_account_ids or []) if owner else []
+        record, is_owner_roll = should_record_roll(viewer, character, grants)
+    rng = None
+    if os.environ.get("TEST_AUTH_BYPASS") == "true" and request.headers.get("x-test-dice"):
+        rng = roll_sessions.scripted_rng_from_header(request.headers["x-test-dice"])
+    try:
+        result = roll_sessions.start_roll(
+            db, character, str(body.get("roll_key") or ""), body,
+            viewer=viewer, live=live, record=record, is_owner_roll=is_owner_roll,
+            request_id=body.get("request_id") or None, rng=rng,
+        )
+    except roll_sessions.RollRefused as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    db.commit()
+    return JSONResponse(result)

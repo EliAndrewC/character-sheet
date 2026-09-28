@@ -238,6 +238,11 @@
                 </div>
 
                 {# ROLLING phase: dice animation #}
+                <div x-show="ffPhase === 'error'" x-cloak class="space-y-3 text-center py-4" data-testid="ff-roll-error">
+                    <p class="text-sm text-red-700" x-text="ffError"></p>
+                    <button type="button" @click="_ffRunServer()" data-testid="ff-roll-retry"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">Retry</button>
+                </div>
                 <div x-show="ffPhase === 'rolling'" x-cloak
                      id="dice-animation-ff"
                      class="min-h-[80px] flex flex-wrap gap-3 items-start justify-center"></div>

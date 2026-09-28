@@ -7,6 +7,7 @@
  *   rollOneDie(rerollTens)                     -> {parts:int[], value:int}
  *   rollAllDice(rolled, rerollTens)            -> [{parts, value}, ...]
  *   rollAndAnimate(rolled, rerollTens, anim)   -> Promise<dice[]>
+ *   animateDice(dice, rerollTens, anim)        -> Promise<dice[]> (dice rolled by the server)
  *   playDiceSound(numDice)
  */
 
@@ -120,7 +121,15 @@
     const SETTLE_MS = 2000;
 
     async function rollAndAnimate(rolled, rerollTens, animate, playSound, trayId, onDiceReady) {
-        const dice = rollAllDice(rolled, rerollTens);
+        return animateDice(rollAllDice(rolled, rerollTens), rerollTens, animate, playSound, trayId, onDiceReady);
+    }
+
+    // Animate dice that were rolled elsewhere - the server rolls every die
+    // the sheet shows (server-rolls-design), and this plays them. ``dice``
+    // is the ``[{parts, value}, ...]`` shape rollOneDie produces, which is
+    // also what POST /characters/{id}/roll answers with.
+    async function animateDice(dice, rerollTens, animate, playSound, trayId, onDiceReady) {
+        const rolled = dice.length;
         // The dice are final the instant they're generated - the
         // animation is purely cosmetic. Hand them to the caller now (via
         // onDiceReady) so it can start expensive follow-up work, like
@@ -290,6 +299,7 @@
         rollOneDie,
         rollAllDice,
         rollAndAnimate,
+        animateDice,
         playDiceSound,
     };
 })();

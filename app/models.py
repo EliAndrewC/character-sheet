@@ -964,3 +964,40 @@ class EncounterAction(Base):
     )
     detail: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=None)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class RollSession(Base):
+    """One roll the SERVER made for the character sheet (server-rolls-design 4.1).
+
+    Every die is rolled here; the browser only animates what it is handed.
+    A session records what was rolled and how (the effective formula, the
+    pre-roll choices, the dice in roll order), and - once post-roll actions
+    move to the server - the actions applied to it. ``mode`` is ``live``
+    (an editor: spends persist, the roll may be recorded) or ``simulate``
+    (Read-only Roll Mode: a non-editor or anonymous visitor walks the roll
+    and nothing about the character changes). ``history_id`` links the
+    ``RollHistory`` row the server wrote from this session, when the roll is
+    one that is recorded. Sessions are reaped after ``SESSION_TTL``.
+
+    Schema note: a brand-new table, so ``create_all`` makes it and
+    ``_migrate_add_columns`` needs no entry.
+    """
+
+    __tablename__ = "roll_sessions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    viewer_discord_id: Mapped[Optional[str]] = mapped_column(String, default=None, nullable=True)
+    mode: Mapped[str] = mapped_column(String, default="live")
+    roll_key: Mapped[str] = mapped_column(String, nullable=False)
+    choices: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
+    formula: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
+    dice: Mapped[Optional[List[Any]]] = mapped_column(JSON, default=list)
+    payload: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
+    actions: Mapped[Optional[List[Any]]] = mapped_column(JSON, default=list)
+    history_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("roll_history.id", ondelete="SET NULL"), nullable=True, default=None,
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), index=True)

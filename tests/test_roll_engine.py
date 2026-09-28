@@ -93,7 +93,7 @@ def test_roll_dice_kept_is_clamped_to_the_pool():
 
 def test_roll_dice_zero_dice():
     got = roll_dice(0, 2, False, _ScriptedRandom([]))
-    assert got == {"kept": [], "dropped": [], "kept_sum": 0}
+    assert got == {"kept": [], "dropped": [], "kept_sum": 0, "in_order": []}
 
 
 def test_roll_dice_pool_is_bounded():

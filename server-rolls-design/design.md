@@ -1,6 +1,6 @@
 # Server-side Rolls and State Changes - Design
 
-Status: **requirements settled (decisions S1-S7, section 8); Phase 1 in progress.**
+Status: **Phase 1 done; Phase 2 next.** Decisions S1-S7 in section 8.
 
 ## 1. Goal
 
@@ -180,14 +180,13 @@ removes the old ones.
 - [x] GM signs off
 
 ### Phase 1 - Foundations and the generic roll
-- [ ] `RollSession` model (+ reaping), the `roll` and `act` endpoints, live vs simulated, recording
-      from the session (`should_record_roll`, `skill_rank`)
-- [ ] `dice.js`: `animateDice` for server dice
-- [ ] `runRoll` flows through the server: skills, knacks, rings, athletics, bless, freeform, the
-      Xk1 void roll; pre-roll void, Otherworldliness, Kitsune swap, extra flat, Commune activation
-- [ ] Simulate mode for non-editors and anonymous visitors (per Q1)
-- [ ] Clicktests: `test_rolls.py -k "skill or ring or athletics or freeform or bless"`,
-      `test_readonly_rolls.py`, `test_roll_history_clicktest.py`
+- [x] `RollSession` model (+ reaping), the `roll` endpoint (the `act` endpoint arrives with the first post-roll actions, Phase 3), live vs simulated, recording
+      from the session (`should_record_roll`, `skill_rank`); retry-safe `request_id`
+- [x] `dice.js`: `animateDice` for server dice
+- [x] `runRoll` flows through the server: skills, knacks, rings, athletics, bless, freeform, the
+      Xk1 void roll; pre-roll void, Otherworldliness, Kitsune swap, Commune activation (extra flat is the predeclared parry's, Phase 6). `server_rolled` is stamped on every formula so the sheet reads it rather than keeping a list; bless / Xk1 / freeform rules live in `special_rolls.py` for both the buttons and the server
+- [x] Simulate mode for non-editors and anonymous visitors (S1; anonymous rate-limited 60/min per address). Fixed 5.6 on the way: the sheet's `viewer_can_edit` is now `can_edit_character`, so live-vs-simulate matches the sheet
+- [x] Clicktests: new `test_server_rolls.py`; `test_rolls.py -k "skill or ring or athletics or otherworld or kitsune or commune or void"` + `test_void_spending.py` (64), `test_readonly_rolls.py` + `test_roll_history_clicktest.py` (73 + 1 skip), freeform / bless / Xk1 / Ide / Ishi / priest-bless (43). Dice-forcing helpers moved to `tests/e2e/dice_control.py` (browser stub + the server's `X-Test-Dice` seam, test server only)
 
 ### Phase 2 - Tracking operations
 - [ ] `/track/op` with the operation set in 4.2; `adventure_state` schema

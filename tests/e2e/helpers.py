@@ -238,3 +238,17 @@ def api_autosave(page, char_id, body):
     so reload it before driving the editor again.
     """
     return page.evaluate(_API_AUTOSAVE_JS, [str(char_id), body])
+
+
+def save_tracking(page, **fields):
+    """Set tracking-bridge fields (voidPoints=1, tempVoidPoints=0, ...) AND
+    save them, waiting until the save lands. The server is authoritative for
+    spends now (server-rolls-design), so a test that only changes the tab's
+    copy tests nothing."""
+    assigns = "; ".join(f"t.{k} = {v!r}" for k, v in fields.items())
+    page.evaluate(f"""async () => {{
+        const t = window._trackingBridge;
+        {assigns};
+        await t.save();
+        await t.whenSaved();
+    }}""")

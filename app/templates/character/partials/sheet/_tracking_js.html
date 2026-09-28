@@ -229,6 +229,15 @@
                     } catch (e) { return {}; }
                 })(),
 
+                // Resolves once no tracking save is in flight or queued, so
+                // a server operation that moves tracking_rev (a server roll's
+                // void spend) is not raced by this tab's own pending save.
+                async whenSaved() {
+                    for (let i = 0; i < 200 && (this._saving || this._savePending); i++) {
+                        await new Promise(r => setTimeout(r, 25));
+                    }
+                },
+
                 async save() {
                     // Read-only viewers get an in-memory shim: no POST, but
                     // the Impaired indicator still fires so local wound-state

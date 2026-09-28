@@ -46,6 +46,8 @@ from app.services.dark_secret import (
 )
 from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
+from app.services.roll_sessions import server_rolled
+from app.services.special_rolls import can_bless, xk1_ability
 from app.services.party import (
     party_member_dan,
     party_member_data,
@@ -504,12 +506,18 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     user = getattr(request.state, "user", None)
     user_id = user["discord_id"] if user else None
 
-    # Determine if viewer can edit
-    from app.services.auth import can_view_drafts
+    # Determine if viewer can edit. The same rule every tracking and roll
+    # write enforces (can_edit_character: owner, admin, account grant, or a
+    # character-level editor) - it used to be can_view_drafts, which left a
+    # character-level editor on a read-only sheet the server would have
+    # accepted their writes for (server-rolls-design 5.6).
     from app.models import User as UserModel
     owner = db.query(UserModel).filter(UserModel.discord_id == character.owner_discord_id).first()
     owner_granted = owner.granted_account_ids or [] if owner else []
-    viewer_can_edit = can_view_drafts(user_id, character.owner_discord_id, owner_granted)
+    viewer_can_edit = can_edit_character(
+        user_id, character.owner_discord_id,
+        get_all_editors(character.editor_discord_ids or [], owner_granted),
+    )
 
     # Hidden characters are invisible by URL too - non-editors get a 404
     # rather than a "you don't have access" leak.
@@ -669,6 +677,11 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
 
     # Pre-compute every roll formula needed by the click-to-roll UI on the sheet.
     roll_formulas = build_all_roll_formulas(char_dict, party_members=party_members_data)
+    # Which of these rolls the SERVER makes (POST /characters/{id}/roll);
+    # the sheet reads the flag rather than keeping its own list
+    # (server-rolls-design; grows phase by phase).
+    for _key, _formula in roll_formulas.items():
+        _formula["server_rolled"] = server_rolled(_key)
     is_impaired_now = is_impaired(char_dict)
 
     # Viewer's dice preferences (default both on if missing)
@@ -873,14 +886,8 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Two separate rituals, so two flags: a profession character who
         # learned only one gets only that button. A Priest school character
         # has all ten rituals and so gets both, as before.
-        "priest_bless_topic": (
-            character.school == "priest"
-            or holds_ability(character, "priest_conversation_blessing")
-        ),
-        "priest_bless_research": (
-            character.school == "priest"
-            or holds_ability(character, "priest_research_blessing")
-        ),
+        "priest_bless_topic": can_bless(character, "topic"),
+        "priest_bless_research": can_bless(character, "research"),
         # Priest 3rd Dan: precepts dice pool (X dice, X = precepts skill rank)
         # rolled at the start of combat; any pool die can swap into any rolled
         # die on attack/parry/damage/wound_check rolls. Persists across combat
@@ -892,10 +899,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         ),
         # Ide Diplomat 3rd Dan: spend VP to subtract Xk1 from someone's roll
         "ide_subtract_roll": character.school == "ide_diplomat" and dan >= 3,
-        "ide_subtract_x": (char_dict.get("skills") or {}).get("tact", 0) if character.school == "ide_diplomat" and dan >= 3 else 0,
+        "ide_subtract_x": (xk1_ability(char_dict) or {}).get("x", 0) if character.school == "ide_diplomat" else 0,
         # Isawa Ishi 3rd Dan: spend VP to add Xk1 to someone's roll
         "ishi_add_roll": character.school == "isawa_ishi" and dan >= 3,
-        "ishi_add_x": (char_dict.get("skills") or {}).get("precepts", 0) if character.school == "isawa_ishi" and dan >= 3 else 0,
+        "ishi_add_x": (xk1_ability(char_dict) or {}).get("x", 0) if character.school == "isawa_ishi" else 0,
         # Kuni Witch Hunter 5th Dan: reflect damage
         "kuni_reflect_damage": character.school == "kuni_witch_hunter" and dan >= 5,
         # Hida 5th Dan: bank counterattack excess for wound check bonus
