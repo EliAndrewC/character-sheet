@@ -70,6 +70,7 @@ A `.env` file (gitignored) holds credentials for deployment and external service
 - `DISCORD_TEST_GUILD_ID` - guild to register slash commands into while developing ("Robot Role Call")
 - `DISCORD_ROLL_CHARACTER_OVERRIDES` - optional `discord_id:character_id` pins for slash-command rolls, same format as `MAGIC_LOGIN_TOKENS`
 - `EXTENDED_KEEPALIVE_DISCORD_IDS` - comma-separated discord ids whose open tabs keep the Fly machine warm for an hour after their last interaction (see "Fly Keep-alive Pinger"). Empty by default.
+- `GM_ASSISTANT_URL` / `GM_ASSISTANT_NAMES_TOKEN` - where generated NPCs get suggested names (gm-assistant's `GET /api/names`, e.g. `https://l7r-gm-assistant.fly.dev`) and the bearer token it expects (its `[character_sheet] names_token`). Either unset means numbered fallback names ("Wave Man 1..N"). Also Fly secrets.
 
 Values with spaces or special characters must be quoted (e.g. `KEY="value with spaces"`). Load before deploying: `set -a && source .env && set +a`
 
@@ -82,6 +83,7 @@ The following are stored as **Fly secrets** (not in `.env`):
 - `ROLL_QUERY_TOKEN` / `GM_WRITE_TOKEN` - also set as Fly secrets (same values as in `.env`)
 - `DISCORD_BOT_TOKEN` / `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` / `DISCORD_ROLL_CHARACTER_OVERRIDES` - also set as Fly secrets (same values as in `.env`)
 - `EXTENDED_KEEPALIVE_DISCORD_IDS` - also set as a Fly secret (same value as in `.env`)
+- `GM_ASSISTANT_URL` / `GM_ASSISTANT_NAMES_TOKEN` - also set as Fly secrets (same values as in `.env`)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - also set as Fly secrets (same values as in `.env`)
 - `S3_BACKUP_BUCKET` - S3 bucket name for database backups (e.g. `l7r-character-sheet-backups`)
 - `S3_BACKUP_REGION` - AWS region (default: `us-east-1`)
@@ -245,10 +247,17 @@ app/
   services/tracking.py    - tracking revision check, tracking snapshot, starting a combat round
   services/party.py    - gaming-group party lookup shared by sheet and bot
   services/conversations.py - the GM's open conversation + the /discern-honor lookup
+  routes/combat.py     - the combat page (public) + the GM's encounter / NPC / action routes
+  services/npc_generator.py - NPC builds from the combat simulator (XP roll, combat share, id mapping)
+  services/npcs.py     - NPC characters, encounters, roster, npc_guard
+  services/combat_actions.py - NPC attack / parry / damage / wound check / rounds, on the server
+  services/combat_math.py    - Python twin of roll_math.js's attack/damage/wound-check arithmetic
+  services/combat_view.py    - the GM's tracker state and the allow-listed public state
   templates/           - Jinja2 templates
 tests/                 - Unit test suite (pytest)
 tests/shared/          - JSON case tables run by BOTH the pytest and the Node suites
 discord-design/        - slash-command requirements (from gm-assistant) + the front-end / concurrency audit
+combat-design/         - the GM combat tracker + generated NPCs design, decisions D1-D33 and phase checklist
 tests/e2e/             - E2E clicktests (Playwright)
 ```
 
@@ -324,6 +333,19 @@ Almost all of them are **conditional free raises**, declared in `PROFESSION_ALTE
 - **The ability text is checked against the rules file by a test.** `rules/09-professions.md` has been reworded twice mid-build (the Wave Man's third ability, then five Worker/Merchant ones), so `test_stored_ability_text_matches_the_rules_file` parses the markdown at test time. It skips when `/host-l7r-repo` is not mounted.
 
 Clicktests for all of the above are `tests/e2e/test_professions.py` (mark: `professions`).
+
+## GM combat tracker and generated NPCs
+
+The design, every GM decision (D1-D33) and the phase checklist are in `combat-design/design.md`; this is the production summary.
+
+- **One public page per group, `/groups/{id}/combat`**, linked from the group page. The GM (logged in as admin) gets the tracker; everyone else, logged in or not, gets the public view. The public view is rendered from `combat_view.public_state()`, built field by field from an allow-list: NPC name, wounds, whether it is down, this round's actions with the roll's TOTAL and outcome, and last round's action count; every visible PC's wounds and remaining action dice. **Never** an NPC's dice, void, phases, remaining actions, stats, or how a total was reached. `tests/test_combat_actions.py` pins the key sets - a new field there must be a deliberate decision. The page polls `/combat/state` every 4s and redraws only when `rev` moves.
+- **NPCs are real `Character` rows (`is_npc`), built by the combat simulator.** `npc_generator.build_npc()` calls the simulator's `generate_template` (its per-school XP progression is used as-is - never re-derive it here) and only translates ids. The GM gives earned XP (on top of 150) as an exact value or a base + 5 x an exploding d10, and a combat-share target; each NPC draws its share as target + one real character's deviation from the median (`game_data.NPC_COMBAT_SHARE_SAMPLES`, regenerated by `analysis/xp_profile_ranges.py --npc-combat-shares`, clamped to the measured min/max). The rest of the XP is left unspent, on purpose. Guard tests fail if the simulator grows a school this app cannot map, or if an offered school's knacks / ring disagree with `game_data` (Hiruma Scout is left out, `UNSUPPORTED_SIM_KEYS`, until the simulator catches up with the rules' counterattack -> lunge swap).
+- **An NPC never reaches a player.** Its `gaming_group_id` stays NULL (every group / party / Discord query excludes it by construction) and `npc_group_id` names its roster's group. `npcs.npc_guard` is a router dependency on every router with `/characters/{char_id}` routes and 404s an NPC for anyone but an admin; a test fails if a `{char_id}` route is registered without it. The home page filters `is_npc`; `/api/characters` and `/api/rolls` include NPCs flagged `is_npc` (gm-assistant counts their names as used). `tests/test_npcs.py::test_every_character_listing_site_is_classified` fails when a new character-listing query appears - decide how it treats NPCs and add it there.
+- **Every NPC action resolves on the server** (`combat_actions.py`): formulas from `build_all_roll_formulas`, dice and void from `roll_engine` / `void_spend` (the Discord path), rounds from `start_combat_round`, damage and wound-check arithmetic from `combat_math.py` - the Python twin of `roll_math.js`, pinned with it by `tests/shared/combat_math_cases.json`. `combat_math.damage_flags()` is also what the sheet's `schoolAbilities` spreads, so the browser and the server read one definition. **Nothing is ever written to a PC**: an NPC attack is checked against the target's TN to be hit (editable), the GM relays it, the player parries on their own sheet or with physical dice, and the GM reads out the damage. NPC rolls are always recorded (`roll_history`), and `/groups/{id}/combat/rolls` shows every roll made during a fight.
+- **One fight per group** (`Encounter`); "New round" rolls initiative for the NPCs only. Ending a fight keeps its NPCs in the roster; bringing one back heals and rests it and can add gained XP (re-generated through `never_below`, since some simulator lists are not monotonic between tiers). At 2 x Earth serious wounds the GM picks unconscious or dead.
+- **Names** come from gm-assistant's `GET /api/names` (`services/npc_names.py`; male only, peasant pool for Wave Men, samurai-eligible otherwise), fetched BEFORE a generate request touches the database. Any failure - unset `GM_ASSISTANT_URL` / `GM_ASSISTANT_NAMES_TOKEN`, asleep past the 12s timeout, an error - falls back to "Wave Man 1..N".
+- **Simulator dependency:** editable install locally; the Dockerfile installs its latest pushed `master` in a cache-busted layer, so **a deploy needs the simulator's commits pushed to GitHub**. Each NPC records the simulator commit that built it (`npc_generation.simulator`).
+- Tests: `tests/test_npc_generator.py`, `tests/test_npcs.py`, `tests/test_combat_math.py`, `tests/test_combat_actions.py`; clicktests `tests/e2e/test_combat.py` (mark `combat`).
 
 ## Google Sheets Export
 

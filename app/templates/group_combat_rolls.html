@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}L7R - {{ group.name }} combat rolls{% endblock %}
+
+{% block nav_center %}<a href="/groups/{{ group.id }}/combat" class="pointer-events-auto hover:underline" data-testid="combat-nav-link">{{ group.name }} Combat</a> Rolls{% endblock %}
+
+{% block nav_new_character %}{% endblock %}
+
+{% block content %}
+{# The GM's combat rolls view (combat-design/design.md D21): every roll made
+   during one fight, PCs' and NPCs', in order, filterable to NPCs only, for
+   eyeballing whether the dice ran hot or cold. GM-only. #}
+<div x-data="{ show: 'all' }" class="space-y-4 max-w-4xl mx-auto" data-testid="combat-rolls">
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <form method="get" class="flex items-end gap-2">
+            <div>
+                <label class="block text-xs font-medium mb-1">Fight</label>
+                <select name="encounter" onchange="this.form.submit()" data-testid="rolls-fight"
+                        class="border rounded px-2 py-1.5 text-sm">
+                    {% for f in fights %}
+                    <option value="{{ f.id }}" {% if chosen and f.id == chosen.id %}selected{% endif %}>
+                        {{ f.name }} ({{ f.started_at.strftime('%Y-%m-%d') }}{% if f.status == 'active' %}, in progress{% endif %})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+        <div class="flex gap-1 text-sm" role="group" aria-label="Filter">
+            <button type="button" @click="show = 'all'" data-testid="rolls-filter-all"
+                    :class="show === 'all' ? 'btn-primary' : 'btn-ghost'" class="px-3 py-1 rounded">All</button>
+            <button type="button" @click="show = 'npc'" data-testid="rolls-filter-npc"
+                    :class="show === 'npc' ? 'btn-primary' : 'btn-ghost'" class="px-3 py-1 rounded">NPCs</button>
+            <button type="button" @click="show = 'pc'" data-testid="rolls-filter-pc"
+                    :class="show === 'pc' ? 'btn-primary' : 'btn-ghost'" class="px-3 py-1 rounded">PCs</button>
+        </div>
+    </div>
+
+    {% if not fights %}
+    <p class="text-sm text-ink/60" data-testid="rolls-empty">No fights yet.</p>
+    {% elif not rows %}
+    <p class="text-sm text-ink/60" data-testid="rolls-empty">No rolls recorded in this fight.</p>
+    {% else %}
+    <div class="bg-white rounded-lg shadow border border-ink/10 divide-y divide-ink/10">
+        {% for r in rows %}
+        <div class="px-3 py-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm"
+             data-testid="roll-row" data-kind="{{ 'npc' if r.is_npc else 'pc' }}"
+             x-show="show === 'all' || show === '{{ 'npc' if r.is_npc else 'pc' }}'">
+            <span class="text-xs text-ink/50 w-14">{{ r.at.strftime('%H:%M') }}</span>
+            <span class="font-medium {{ 'text-accent' if r.is_npc else 'text-ink' }}">{{ r.character }}</span>
+            <span class="text-ink/70">{{ r.title }}</span>
+            {% if r.show_total and r.total is not none %}<span class="font-bold">{{ r.total }}</span>{% endif %}
+            <span class="text-xs text-ink/60">
+                {% for v in r.kept %}<span class="font-semibold">{{ v }}</span>{% if not loop.last %} {% endif %}{% endfor %}
+                {% if r.dropped %}<span class="text-ink/40">({% for v in r.dropped %}{{ v }}{% if not loop.last %} {% endif %}{% endfor %})</span>{% endif %}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -418,6 +418,7 @@ _LISTING_SITES = {
     "app/services/import_rate_limit.py": "the user's own imports",
     "app/services/party.py": "same gaming group",
     "app/services/npcs.py": "the NPC roster itself",
+    "app/services/combat_view.py": "the group's PCs (gaming_group_id, is_npc excluded) and an encounter's NPCs",
     "app/routes/gm_api.py": "every character, NPCs flagged is_npc",
     "app/routes/pages.py": "index filters is_npc; the rest are by gaming_group_id",
 }

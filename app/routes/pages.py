@@ -32,6 +32,8 @@ from app.game_data import (
 )
 from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
 from app.services.npcs import npc_guard
+from app.services.combat_math import damage_flags
+from app.services.per_adventure import per_adventure_abilities
 from app.services.auth import can_edit_character, can_view_drafts, format_editor_list_text, get_admin_ids, get_all_editors, is_admin
 from app.services.dark_secret import (
     DARK_SECRET_ID,
@@ -689,72 +691,11 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         if roll.rolled > 0:
             skill_rolls[sid] = roll
 
-    # Compute per-adventure abilities
-    per_adventure = []
+    # Per-adventure abilities (3rd Dan raises, Lucky, knack pools, ...),
+    # shared with the GM's combat tracker (app/services/per_adventure.py).
+    per_adventure = per_adventure_abilities(character)
     advantages = character.advantages or []
     disadvantages = character.disadvantages or []
-
-    # 3rd Dan free raises
-    tech_bonuses = SCHOOL_TECHNIQUE_BONUSES.get(character.school, {})
-    if dan >= 3 and tech_bonuses.get("third_dan"):
-        t3 = tech_bonuses["third_dan"]
-        source_skill = t3["source_skill"]
-        source_rank = (character.skills or {}).get(source_skill, 0)
-        if source_rank > 0:
-            skill_name = SKILLS[source_skill].name if source_skill in SKILLS else source_skill
-            per_adventure.append({
-                "id": "adventure_raises",
-                "name": f"3rd Dan Free Raises ({skill_name})",
-                "type": "counter",
-                "max": 2 * source_rank,
-            })
-
-    # Lucky / Unlucky
-    if "lucky" in advantages:
-        per_adventure.append({"id": "lucky_used", "name": "Lucky (re-roll)", "type": "toggle"})
-    if "unlucky" in disadvantages:
-        per_adventure.append({"id": "unlucky_used", "name": "Unlucky (GM penalty)", "type": "toggle"})
-
-    # Spendable knacks: conviction, otherworldliness, worldliness, absorb_void.
-    # Conviction and otherworldliness both give 2X points per day (X = rank);
-    # worldliness and absorb_void pools are X. Conviction is marked per_day so
-    # the tracker shows a dedicated "reset" button. Foreign-knack copies grant
-    # the same pool (e.g. "if you take Worldliness, you get the Worldliness
-    # pool") - absorb_void is supernatural so it can't be a foreign knack.
-    # Absorb Void is per-adventure by default (Kitsune Warden uses it that
-    # way); the Isawa Ishi special ability overrides it to per-day so the
-    # pool resets with a full night's rest alongside the school's VP regen.
-    for knack_id in ("conviction", "otherworldliness", "worldliness", "absorb_void"):
-        info = char_knacks.get(knack_id) or char_foreign_knacks.get(knack_id)
-        if info:
-            knack_rank = info["rank"]
-            knack_name = info["data"].name
-            pool_max = knack_rank * 2 if knack_id in ("otherworldliness", "conviction") else knack_rank
-            entry = {
-                "id": knack_id,
-                "name": knack_name,
-                "type": "counter",
-                "max": pool_max,
-            }
-            if knack_id == "conviction":
-                entry["per_day"] = True
-            if knack_id == "absorb_void" and character.school == "isawa_ishi":
-                entry["per_day"] = True
-            per_adventure.append(entry)
-
-    # Togashi 3rd Dan: daily pool of 4X athletics free raises (X = precepts).
-    # Per-day pool, so gets a dedicated reset button in addition to the
-    # per-adventure reset.
-    if character.school == "togashi_ise_zumi" and dan >= 3:
-        precepts_rank = (character.skills or {}).get("precepts", 0)
-        if precepts_rank > 0:
-            per_adventure.append({
-                "id": "togashi_daily_athletics_raises",
-                "name": "Daily Athletics Raises",
-                "type": "counter",
-                "max": 4 * precepts_rank,
-                "per_day": True,
-            })
 
     # Void points max and the per-roll spend cap. Computed by the void-spend
     # service, which is also what a server-side spend (a Discord roll
@@ -788,6 +729,9 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Warden 3rd Dan light-wound heal, Matsu 3rd Dan banked wound-check
         # bonus). Shared with the server-side spend so both apply one set.
         **spend_consequences(char_dict),
+        # The damage-roll flags (Otaku / Brotherhood / Mirumoto / Ikoma 4th
+        # Dan, Bayushi Special), shared with the server's NPC damage roll.
+        **damage_flags(char_dict),
         # Matsu 5th Dan: defender LW reset to 15 after dealing serious wounds
         "matsu_lw_reset_15": character.school == "matsu_bushi" and dan >= 5,
         # Akodo 5th Dan: spend VP after damage to deal 10 LW per VP back
@@ -795,8 +739,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Isawa Duelist 3rd Dan: trade -5 TN for +3*attack on attack
         "isawa_tn_trade": character.school == "isawa_duelist" and dan >= 3,
         "isawa_tn_trade_bonus": 3 * attack_skill if character.school == "isawa_duelist" and dan >= 3 else 0,
-        # Otaku 4th Dan: lunge always rolls extra damage die even if parried
-        "otaku_lunge_extra_die": character.school == "otaku_bushi" and dan >= 4,
         # Otaku 4th Dan: after lunging, the usual lunge penalty (attackers
         # gain a free raise on their next attack against the lunger this
         # round) is suppressed. Display note only — the lunge attacker-raise
@@ -820,8 +762,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "matsu_near_miss": character.school == "matsu_bushi" and dan >= 4,
         # Ide 4th Dan: +1 VP nightly regen (display only)
         "ide_extra_vp_regen": character.school == "ide_diplomat" and dan >= 4,
-        # Brotherhood 4th Dan: failed parries don't lower rolled damage dice
-        "brotherhood_parry_no_reduce": character.school == "brotherhood_of_shinsei_monk" and dan >= 4,
         # Yogo Warden Special: gain temp VP when taking serious wounds
         "yogo_temp_vp_on_sw": character.school == "yogo_warden",
         # Mirumoto Special: gain temp VP after any parry roll
@@ -832,8 +772,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "bayushi_post_feint_raise": character.school == "bayushi_bushi" and dan >= 4,
         # Otaku 5th Dan: trade 10 rolled damage dice for 1 auto serious wound
         "otaku_trade_dice_for_sw": character.school == "otaku_bushi" and dan >= 5,
-        # Ikoma 4th Dan: 10-dice floor on damage for unparried attacks without extra kept
-        "ikoma_10_dice_floor": character.school == "ikoma_bard" and dan >= 4,
         # Kitsune Warden 4th Dan: 10-dice floor on athletics rolls (the
         # (2*Ring)k(Ring) formula and athletics-attack/parry combat formulas).
         # Rolled count only - kept stays at the ring value. Wired up in
@@ -857,14 +795,10 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         "kitsune_warden_school_ring": (
             character.school_ring_choice or "" if character.school == "kitsune_warden" else ""
         ),
-        # Mirumoto 4th Dan: failed parries vs double attacks preserve auto SW; vs regular halve reduction
-        "mirumoto_parry_modifier": character.school == "mirumoto_bushi" and dan >= 4,
         # Isawa Duelist 5th Dan: bank wound check excess for future wound check
         "isawa_bank_wc_excess": character.school == "isawa_duelist" and dan >= 5,
         # Shinjo 5th Dan: bank parry excess for future wound check
         "shinjo_bank_parry_excess": character.school == "shinjo_bushi" and dan >= 5,
-        # Bayushi Special: +1k1 per VP spent on attack damage
-        "bayushi_vp_damage": character.school == "bayushi_bushi",
         # Feint knack: 1 temp VP on successful feint (non-Akodo feint schools).
         # Schools listed here have feint in their school_knacks; if you add or
         # remove feint from a school's knack list in game_data.py, update this

@@ -200,7 +200,7 @@ Status: **requirements complete; Phase 1 in progress.** All open questions are a
 
 Each phase ends with tests green at 100% coverage in every repo it touches, targeted clicktests, commits, pushes, and a deploy where there is UI.
 
-### Phase 0 - Requirements (current)
+### Phase 0 - Requirements
 - [x] Survey the simulator, gm-assistant and this app
 - [x] Fold in GM answers, rounds 1 and 2
 - [x] GM answers rounds 3 and 4
@@ -222,27 +222,27 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 **Found while building Phases 1-2:**
 - **Hiruma Scout is stale in the simulator.** The rules swapped counterattack for lunge (l7r `48410d9`), including the 3rd Dan interrupt, and the simulator still uses counterattack. It is left out of the NPC list (`UNSUPPORTED_SIM_KEYS`) and recorded in the simulator's BACKLOG. It is a combat-mechanics change, so it goes through the simulator's per-school workflow.
 - **Several existing simulator lists are not monotonic between tiers** (a stat can drop a rank at, say, 160 XP vs 150). The three new lists are monotonic, and a test checks it in 10-XP steps. A returning NPC is re-generated through `never_below()`, so it never comes back weaker.
-- **Deploys need the simulator commits pushed.** They are committed in `/host-l7r-repo/simulator`, and this container cannot push there.
+- **Deploys need the simulator commits pushed.** They are committed in `/host-l7r-repo/simulator` (`d75e505`, `e7961e6`, `3e9fec9`), and this container cannot push there.
 
 ### Phase 3 - NPC characters, encounters, roster
-- [ ] `is_npc` + generation-parameter columns + migrations; `Encounter`, link and `EncounterAction` models
-- [ ] Listing helper at every listing site + guard test
-- [ ] NPC sheet GM-only; no party effects; no Discord resolution; `/api/characters` flags `is_npc`
-- [ ] Suppress PC-only validation noise on NPC sheets
-- [ ] Encounter create / end; roster; return healed with gained XP; unconscious / dead
+- [x] `is_npc` + generation-parameter columns + migrations; `Encounter`, link and `EncounterAction` models
+- [x] Listing sites: NPCs keep `gaming_group_id` NULL (group / party / Discord queries exclude them by construction), the home page filters `is_npc`; a census test fails on any new unclassified listing query
+- [x] NPC sheet GM-only (`npc_guard` on every `{char_id}` router, test-enforced); no party effects; no Discord resolution; `/api/characters` and `/api/rolls` flag `is_npc`
+- [x] Suppress PC-only validation noise on NPC sheets
+- [x] Encounter create / end; roster; return healed with gained XP; unconscious / dead
 
 ### Phase 4 - Names
-- [ ] gm-assistant, in its session clone (D24): token-authed `/api/names` (male, peasant or samurai, cache refresh, batch rules)
-- [ ] Here: client with a fallback
+- [x] gm-assistant, in its session clone (D24): token-authed `/api/names` (male, peasant or samurai, cache refresh, batch rules) - gm-assistant spec 213, commits `aa4a384d` / `109e3750`, pushed. It also now reads this app's `/api/characters` so NPC names count as used. **Off until the GM sets `names_token` and deploys gm-assistant** (see 4.6).
+- [x] Here: client with a fallback (`services/npc_names.py`; names fetched before the handler's read-modify-write)
 
 ### Phase 5 - Server combat actions
-- [ ] Python damage + wound-check math, with a shared case table against `roll_math.js`
-- [ ] Endpoints in 4.4, action log, rounds, recording
+- [x] Python damage + wound-check math (`combat_math.py`), with a shared case table against `roll_math.js` (`tests/shared/combat_math_cases.json`); the damage school flags moved to one `damage_flags()` the sheet also reads
+- [x] Endpoints in 4.4 (`combat_actions.py`, `routes/combat.py`), action log, rounds, recording
 
 ### Phase 6 - Views
-- [ ] GM tracker: cards, action-die menu, encounter builder, 2 x Earth prompt, archive
-- [ ] Public view of the combat page, linked from the group page (allow-listed payload, totals only)
-- [ ] Combat rolls view
+- [x] GM tracker: cards (with remaining per-adventure bonuses, shared with the sheet via `per_adventure.py`), action-die menu, encounter builder, 2 x Earth prompt, archive
+- [x] Public view of the combat page, linked from the group page (allow-listed payload, totals only)
+- [x] Combat rolls view
 - [ ] Clicktests + `COVERAGE.md`; responsive checks; deploy
 
 ### Later

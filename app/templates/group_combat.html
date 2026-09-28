@@ -1,0 +1,553 @@
+{% extends "base.html" %}
+
+{% block title %}L7R - {{ group.name }} combat{% endblock %}
+
+{% block nav_center %}<a href="/groups/{{ group.id }}" class="pointer-events-auto hover:underline" data-testid="group-nav-link">{{ group.name }}</a> Combat{% endblock %}
+
+{% block nav_new_character %}{% endblock %}
+
+{% block content %}
+{# The combat page (combat-design/design.md 4.5). Public (D27): the GM gets
+   the tracker, everyone else the public view, which is rendered from an
+   allow-listed payload (app/services/combat_view.public_state) - nothing
+   about an NPC beyond its name, wounds, being down, and this round's
+   actions with their totals ever reaches a player's browser. #}
+<div x-data='combatPage({{ group.id }}, {{ gm | tojson }}, {{ state | tojson }}, {{ npc_types | tojson }}, {{ share | tojson }}, {{ weapons | tojson }})'
+     x-init="start()"
+     class="space-y-5 max-w-6xl mx-auto" data-testid="combat-page">
+
+    {# ---------------- Header ---------------- #}
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+            <h1 class="text-xl font-bold text-ink truncate" data-testid="combat-title"
+                x-text="state.encounter ? state.encounter.name : 'No fight in progress'"></h1>
+            <p x-show="state.encounter" class="text-sm text-ink/60" data-testid="combat-round"
+               x-text="state.encounter?.round ? 'Round ' + state.encounter.round : 'Not started - no round rolled yet'"></p>
+        </div>
+        <template x-if="gm">
+            <div class="flex flex-wrap items-center gap-2">
+                <template x-if="state.encounter">
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" @click="newRound()" :disabled="busy"
+                                data-testid="new-round-btn"
+                                class="btn-primary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-40">New round</button>
+                        <button type="button" @click="endFight()" :disabled="busy"
+                                data-testid="end-fight-btn"
+                                class="btn-secondary px-3 py-1.5 rounded text-sm font-medium disabled:opacity-40">End fight</button>
+                    </div>
+                </template>
+                <a :href="'/groups/' + groupId + '/combat/rolls'" data-testid="combat-rolls-link"
+                   class="text-sm text-accent hover:underline">Combat rolls</a>
+            </div>
+        </template>
+    </div>
+
+    <p x-show="error" x-cloak class="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"
+       data-testid="combat-error" x-text="error"></p>
+
+    {# ---------------- GM: start a fight ---------------- #}
+    <template x-if="gm && !state.encounter">
+        <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3" data-testid="start-fight">
+            <h2 class="font-bold text-ink">Start a fight</h2>
+            <div class="flex flex-wrap items-end gap-2">
+                <div class="flex-1 min-w-[12rem]">
+                    <label class="block text-xs font-medium mb-1">Name</label>
+                    <input type="text" x-model="fightName" maxlength="80" placeholder="e.g. Bandits on the road"
+                           data-testid="fight-name" class="w-full border rounded px-2 py-1.5 text-sm">
+                </div>
+                <button type="button" @click="startFight(false)" :disabled="busy" data-testid="start-fight-btn"
+                        class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">Start</button>
+            </div>
+        </section>
+    </template>
+
+    {# ---------------- Combatants ---------------- #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {# PCs #}
+        <section class="space-y-3" data-testid="pc-section">
+            <h2 class="font-bold text-ink">Player characters</h2>
+            <p x-show="state.pcs.length === 0" class="text-sm text-ink/60">No visible characters in this group.</p>
+            <template x-for="pc in state.pcs" :key="'pc' + pc.id">
+                <div class="bg-white rounded-lg shadow border border-ink/10 p-3 space-y-2" :data-testid="'pc-card-' + pc.id">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-semibold text-ink truncate" x-text="pc.name"></span>
+                        <span x-show="gm && pc.impaired" class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">Impaired</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1" :data-testid="'pc-dice-' + pc.id">
+                        <template x-for="(d, i) in pc.action_dice" :key="i">
+                            <span class="inline-flex items-center justify-center w-7 h-7 rounded text-sm font-bold"
+                                  :class="d.spent ? 'bg-ink/10 text-ink/40 line-through' : 'bg-ink text-parchment dark-surface'"
+                                  x-text="d.value"></span>
+                        </template>
+                        <span x-show="pc.action_dice.length === 0" class="text-xs text-ink/50">No action dice</span>
+                    </div>
+                    <div class="text-sm text-ink/80 flex flex-wrap gap-x-4 gap-y-1">
+                        <span><span class="text-ink/50">LW</span> <b :data-testid="'pc-lw-' + pc.id" x-text="pc.light_wounds"></b></span>
+                        <span><span class="text-ink/50">SW</span> <b :data-testid="'pc-sw-' + pc.id" x-text="pc.serious_wounds"></b><template x-if="gm"><span class="text-ink/50" x-text="' / ' + pc.max_serious_wounds"></span></template></span>
+                        <template x-if="gm">
+                            <span><span class="text-ink/50">Void</span> <b x-text="voidText(pc)"></b></span>
+                        </template>
+                        <template x-if="gm">
+                            <span><span class="text-ink/50">TN</span> <b x-text="pc.tn_to_be_hit"></b></span>
+                        </template>
+                    </div>
+                    <template x-if="gm && pc.bonuses.length">
+                        <div class="text-xs text-ink/60 flex flex-wrap gap-x-3" :data-testid="'pc-bonuses-' + pc.id">
+                            <template x-for="b in pc.bonuses" :key="b.id">
+                                <span x-text="bonusText(b)"></span>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </section>
+
+        {# NPCs #}
+        <section class="space-y-3" data-testid="npc-section">
+            <h2 class="font-bold text-ink">Opponents</h2>
+            <p x-show="state.encounter && state.npcs.length === 0" class="text-sm text-ink/60">No opponents yet.</p>
+            <template x-for="npc in state.npcs" :key="'npc' + npc.id">
+                <div class="bg-white rounded-lg shadow border border-ink/10 p-3 space-y-2"
+                     :class="npc.down || (npc.status && npc.status !== 'fighting') ? 'opacity-60' : ''"
+                     :data-testid="'npc-card-' + npc.id">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="min-w-0">
+                            <span class="font-semibold text-ink truncate" :data-testid="'npc-name-' + npc.id" x-text="npc.name"></span>
+                            <template x-if="gm">
+                                <span class="block text-xs text-ink/60" x-text="npc.type + ', ' + npc.earned_xp + ' earned XP, ' + pct(npc.combat_share) + '% combat'"></span>
+                            </template>
+                        </div>
+                        <template x-if="!gm && npc.down">
+                            <span class="text-xs px-2 py-0.5 rounded bg-ink/10 text-ink/70" :data-testid="'npc-down-' + npc.id">Down</span>
+                        </template>
+                        <template x-if="gm">
+                            <select class="border rounded px-1 py-0.5 text-xs" :value="npc.status"
+                                    :data-testid="'npc-status-' + npc.id"
+                                    @change="setStatus(npc, $event.target.value)">
+                                <option value="fighting">Fighting</option>
+                                <option value="unconscious">Unconscious</option>
+                                <option value="dead">Dead</option>
+                            </select>
+                        </template>
+                    </div>
+
+                    {# GM: clickable action dice #}
+                    <template x-if="gm">
+                        <div class="flex flex-wrap items-center gap-1" :data-testid="'npc-dice-' + npc.id">
+                            <template x-for="(d, i) in npc.action_dice" :key="i">
+                                <button type="button" :disabled="d.spent || busy"
+                                        @click="openMenu(npc, i)"
+                                        :data-testid="'npc-die-' + npc.id + '-' + i"
+                                        class="inline-flex items-center justify-center w-7 h-7 rounded text-sm font-bold"
+                                        :class="d.spent ? 'bg-ink/10 text-ink/40 line-through' : 'bg-accent text-white hover:opacity-80'"
+                                        x-text="d.value"></button>
+                            </template>
+                            <span x-show="npc.action_dice.length === 0" class="text-xs text-ink/50">No action dice</span>
+                            <button type="button" @click="rollInitiative(npc)" :disabled="busy"
+                                    :data-testid="'npc-init-' + npc.id"
+                                    class="btn-ghost text-xs px-2 py-0.5 rounded">Roll initiative</button>
+                        </div>
+                    </template>
+
+                    <div class="text-sm text-ink/80 flex flex-wrap gap-x-4 gap-y-1">
+                        <span><span class="text-ink/50">LW</span> <b :data-testid="'npc-lw-' + npc.id" x-text="npc.light_wounds"></b></span>
+                        <span><span class="text-ink/50">SW</span> <b :data-testid="'npc-sw-' + npc.id" x-text="npc.serious_wounds"></b><template x-if="gm"><span class="text-ink/50" x-text="' / ' + npc.max_serious_wounds"></span></template></span>
+                        <template x-if="gm">
+                            <span><span class="text-ink/50">Void</span> <b :data-testid="'npc-void-' + npc.id" x-text="voidText(npc)"></b></span>
+                        </template>
+                        <template x-if="gm">
+                            <span><span class="text-ink/50">TN</span> <b x-text="npc.tn_to_be_hit"></b></span>
+                        </template>
+                        <span x-show="gm && npc.impaired" class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">Impaired</span>
+                    </div>
+
+                    <template x-if="gm && npc.bonuses.length">
+                        <div class="text-xs text-ink/60 flex flex-wrap gap-x-3">
+                            <template x-for="b in npc.bonuses" :key="b.id">
+                                <span x-text="bonusText(b)"></span>
+                            </template>
+                        </div>
+                    </template>
+
+                    {# Public: this round's actions (totals only) and last round's count #}
+                    <template x-if="!gm">
+                        <div class="text-xs text-ink/70 space-y-0.5" :data-testid="'npc-actions-' + npc.id">
+                            <template x-for="(a, i) in npc.actions_this_round" :key="i">
+                                <div x-text="publicActionText(a)"></div>
+                            </template>
+                            <div x-show="npc.actions_last_round !== null" class="text-ink/50"
+                                 :data-testid="'npc-last-round-' + npc.id"
+                                 x-text="'Last round: ' + npc.actions_last_round + ' action' + (npc.actions_last_round === 1 ? '' : 's')"></div>
+                        </div>
+                    </template>
+
+                    <template x-if="gm">
+                        <div class="flex flex-wrap gap-2 pt-1">
+                            <button type="button" @click="openDialog('damage', npc)" :data-testid="'npc-took-damage-' + npc.id"
+                                    class="btn-danger-soft text-xs px-2 py-1 rounded">Took damage</button>
+                            <button type="button" @click="openDialog('adjust', npc)" :data-testid="'npc-adjust-' + npc.id"
+                                    class="btn-ghost text-xs px-2 py-1 rounded">Adjust</button>
+                            <button type="button" @click="openDialog('rebuild', npc)" :data-testid="'npc-rebuild-' + npc.id"
+                                    class="btn-ghost text-xs px-2 py-1 rounded">Rebuild</button>
+                            <button type="button" @click="openDialog('rename', npc)" :data-testid="'npc-rename-' + npc.id"
+                                    class="btn-ghost text-xs px-2 py-1 rounded">Rename</button>
+                            <a :href="npc.sheet_url" target="_blank" class="text-xs text-accent hover:underline self-center">Sheet</a>
+                            <button type="button" @click="removeNpc(npc)" :data-testid="'npc-remove-' + npc.id"
+                                    class="btn-ghost text-xs px-2 py-1 rounded">Leave fight</button>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </section>
+    </div>
+
+    {# ---------------- GM: add opponents ---------------- #}
+    <template x-if="gm && state.encounter">
+        <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3" data-testid="builder">
+            <h2 class="font-bold text-ink">Add opponents</h2>
+            <p class="text-xs text-ink/60">
+                Each NPC rolls its own extra XP (5 x a d10, 10s reroll and add) unless "roll extra" is off,
+                and varies its combat share around the target the way real characters do
+                (<span x-text="share.min"></span>-<span x-text="share.max"></span>%).
+            </p>
+            <template x-for="(row, i) in rows" :key="i">
+                <div class="flex flex-wrap items-end gap-2 border-t border-ink/10 pt-2" :data-testid="'builder-row-' + i">
+                    <div class="min-w-[10rem] flex-1">
+                        <label class="block text-xs font-medium mb-1">Type</label>
+                        <select x-model="row.npc_type" class="w-full border rounded px-2 py-1.5 text-sm" :data-testid="'row-type-' + i">
+                            <template x-for="t in npcTypes" :key="t.id">
+                                <option :value="t.id" x-text="t.label" :selected="t.id === row.npc_type"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="w-16">
+                        <label class="block text-xs font-medium mb-1">How many</label>
+                        <input type="number" min="1" max="30" x-model.number="row.count" :data-testid="'row-count-' + i"
+                               class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                    </div>
+                    <div class="w-24">
+                        <label class="block text-xs font-medium mb-1">Earned XP</label>
+                        <input type="number" min="0" step="5" x-model.number="row.earned_xp" :data-testid="'row-xp-' + i"
+                               class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                    </div>
+                    <label class="flex items-center gap-1 text-xs pb-2">
+                        <input type="checkbox" x-model="row.roll_extra" :data-testid="'row-roll-' + i"> Roll extra
+                    </label>
+                    <div class="w-24">
+                        <label class="block text-xs font-medium mb-1">Combat %</label>
+                        <input type="number" :min="share.min" :max="share.max" x-model.number="row.combat_target"
+                               :data-testid="'row-share-' + i" class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                    </div>
+                    <label class="flex items-center gap-1 text-xs pb-2" title="Use exactly this combat %, no variation">
+                        <input type="checkbox" x-model="row.exact_share" :data-testid="'row-exact-share-' + i"> Exact %
+                    </label>
+                    <button type="button" x-show="rows.length > 1" @click="rows.splice(i, 1)"
+                            class="btn-ghost text-xs px-2 py-1.5 rounded">Remove</button>
+                </div>
+            </template>
+            <div class="flex flex-wrap gap-2">
+                <button type="button" @click="addRow()" data-testid="add-row-btn"
+                        class="btn-secondary px-3 py-1.5 rounded text-sm">Another row</button>
+                <button type="button" @click="generate()" :disabled="busy" data-testid="generate-btn"
+                        class="btn-primary px-4 py-1.5 rounded text-sm font-medium disabled:opacity-40">Generate</button>
+            </div>
+        </section>
+    </template>
+
+    {# ---------------- GM: roster ---------------- #}
+    <template x-if="gm">
+        <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-3" data-testid="roster">
+            <div class="flex items-center justify-between">
+                <h2 class="font-bold text-ink">NPC roster</h2>
+                <button type="button" @click="loadRoster()" data-testid="roster-load-btn"
+                        class="btn-ghost text-xs px-2 py-1 rounded" x-text="roster === null ? 'Show' : 'Refresh'"></button>
+            </div>
+            <template x-if="roster !== null">
+                <div class="space-y-2">
+                    <p x-show="roster.length === 0" class="text-sm text-ink/60">Nobody yet.</p>
+                    <template x-for="r in roster" :key="'r' + r.id">
+                        <div class="flex flex-wrap items-center gap-2 text-sm border-t border-ink/10 pt-2" :data-testid="'roster-row-' + r.id">
+                            <span class="font-medium flex-1 min-w-[8rem] truncate" x-text="r.name"></span>
+                            <span class="text-xs text-ink/60" x-text="r.type + ', ' + r.earned_xp + ' XP, ' + r.status"></span>
+                            <template x-if="!r.in_fight && state.encounter">
+                                <span class="flex items-center gap-1">
+                                    <input type="number" min="0" step="5" x-model.number="r.gained" placeholder="+XP"
+                                           :data-testid="'roster-gained-' + r.id" class="w-16 border rounded px-1 py-0.5 text-xs text-right">
+                                    <button type="button" @click="bringBack(r)" :data-testid="'roster-back-' + r.id"
+                                            class="btn-primary text-xs px-2 py-1 rounded">Bring back</button>
+                                </span>
+                            </template>
+                            <span x-show="r.in_fight" class="text-xs text-success">In this fight</span>
+                            <button type="button" @click="deleteNpc(r)" :data-testid="'roster-delete-' + r.id"
+                                    class="btn-danger-soft text-xs px-2 py-1 rounded">Delete</button>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </section>
+    </template>
+
+    {# ---------------- GM: action log ---------------- #}
+    <template x-if="gm && state.encounter && state.actions.length">
+        <section class="bg-white rounded-lg shadow border border-ink/10 p-4 space-y-1" data-testid="action-log">
+            <h2 class="font-bold text-ink mb-1">Actions</h2>
+            <template x-for="a in state.actions.slice().reverse()" :key="'a' + a.id">
+                <div class="text-sm text-ink/80" x-text="gmActionText(a)"></div>
+            </template>
+        </section>
+    </template>
+
+    {# ---------------- GM: dialogs ---------------- #}
+    <template x-if="gm && dlg">
+        <div class="fixed inset-0 bg-ink/60 z-50 flex items-center justify-center p-4"
+             @keydown.escape.window="closeDialog()" @click.self="closeDialog()">
+            <div class="bg-white rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto p-4 space-y-3"
+                 data-testid="combat-dialog">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-ink" x-text="dialogTitle()"></h3>
+                    <button type="button" @click="closeDialog()" class="text-ink/50 hover:text-ink" aria-label="Close">&times;</button>
+                </div>
+                <p x-show="dlg.error" class="text-sm text-red-700" data-testid="dialog-error" x-text="dlg.error"></p>
+
+                {# Action menu for a die #}
+                <template x-if="dlg.kind === 'menu'">
+                    <div class="space-y-2">
+                        <p class="text-sm text-ink/70" x-text="'Phase ' + dieValue() + ' action'"></p>
+                        <div class="grid grid-cols-1 gap-2">
+                            <template x-for="atk in dlg.npc.attacks" :key="atk.key">
+                                <button type="button" @click="chooseAttack(atk)" :data-testid="'menu-attack-' + atk.key"
+                                        class="btn-primary px-3 py-2 rounded text-sm text-left" x-text="atk.label"></button>
+                            </template>
+                            <button type="button" @click="dlg.kind = 'parry'" data-testid="menu-parry"
+                                    class="btn-secondary px-3 py-2 rounded text-sm text-left">Parry</button>
+                            <button type="button" @click="dlg.kind = 'other'" data-testid="menu-other"
+                                    class="btn-ghost px-3 py-2 rounded text-sm text-left">Something else</button>
+                        </div>
+                    </div>
+                </template>
+
+                {# Attack: pick the target, then the TN (pre-filled, editable) #}
+                <template x-if="dlg.kind === 'attack' && dlg.step === 'target'">
+                    <div class="space-y-2">
+                        <p class="text-sm text-ink/70">Who is being attacked?</p>
+                        <template x-for="pc in state.pcs" :key="'t' + pc.id">
+                            <button type="button" @click="chooseTarget(pc)" :data-testid="'target-' + pc.id"
+                                    class="w-full btn-secondary px-3 py-2 rounded text-sm text-left"
+                                    x-text="pc.name + ' (TN ' + pc.tn_to_be_hit + ')'"></button>
+                        </template>
+                        <button type="button" @click="chooseTarget(null)" data-testid="target-other"
+                                class="w-full btn-ghost px-3 py-2 rounded text-sm text-left">Someone else</button>
+                    </div>
+                </template>
+                <template x-if="dlg.kind === 'attack' && dlg.step === 'roll'">
+                    <div class="space-y-3">
+                        <div class="flex gap-3">
+                            <div class="w-24">
+                                <label class="block text-xs font-medium mb-1">TN to hit</label>
+                                <input type="number" min="0" x-model.number="dlg.tn" data-testid="attack-tn"
+                                       class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                            </div>
+                            <div class="w-24">
+                                <label class="block text-xs font-medium mb-1">Void</label>
+                                <input type="number" min="0" :max="dlg.npc.void + dlg.npc.temp_void" x-model.number="dlg.void"
+                                       data-testid="attack-void" class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                            </div>
+                        </div>
+                        <button type="button" @click="rollAttack()" :disabled="busy" data-testid="attack-roll-btn"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">Roll attack</button>
+                    </div>
+                </template>
+                <template x-if="dlg.kind === 'attack' && dlg.step === 'result'">
+                    <div class="space-y-3" data-testid="attack-result">
+                        <p class="text-lg font-bold" :class="dlg.result.hit ? 'text-success' : 'text-ink/60'"
+                           x-text="dlg.result.total + ' vs TN ' + dlg.result.tn + (dlg.result.hit ? ' - hit' : ' - miss')"></p>
+                        <template x-if="dlg.result.hit && dlg.damage === null">
+                            <div class="space-y-2">
+                                <p class="text-xs text-ink/60">Tell the player the roll; they decide whether to parry.</p>
+                                <div class="flex flex-wrap gap-2 text-sm">
+                                    <label class="flex items-center gap-1"><input type="radio" value="none" x-model="dlg.parry" data-testid="parry-none"> No parry</label>
+                                    <label class="flex items-center gap-1"><input type="radio" value="failed" x-model="dlg.parry" data-testid="parry-failed"> Failed parry</label>
+                                    <label class="flex items-center gap-1"><input type="radio" value="parried" x-model="dlg.parry" data-testid="parry-parried"> Parried</label>
+                                </div>
+                                <div class="flex gap-3" x-show="dlg.parry !== 'parried'">
+                                    <div class="w-24" x-show="dlg.parry === 'failed'">
+                                        <label class="block text-xs font-medium mb-1">Their parry</label>
+                                        <input type="number" min="0" x-model.number="dlg.parrySkill" data-testid="parry-skill"
+                                               class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                                    </div>
+                                    <div class="w-32">
+                                        <label class="block text-xs font-medium mb-1">Weapon</label>
+                                        <select x-model="dlg.weapon" data-testid="weapon" class="w-full border rounded px-2 py-1.5 text-sm">
+                                            <template x-for="w in weapons" :key="w">
+                                                <option :value="w" x-text="w" :selected="w === dlg.weapon"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button type="button" @click="rollDamage()" :disabled="busy" data-testid="damage-roll-btn"
+                                        class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40"
+                                        x-text="dlg.parry === 'parried' ? 'Record the parry' : 'Roll damage'"></button>
+                            </div>
+                        </template>
+                        <template x-if="dlg.damage !== null">
+                            <p class="text-lg font-bold" data-testid="damage-result"
+                               x-text="dlg.damage === 'parried' ? 'Parried - no damage' : dlg.damage + ' damage'"></p>
+                        </template>
+                    </div>
+                </template>
+
+                {# Parry #}
+                <template x-if="dlg.kind === 'parry'">
+                    <div class="space-y-3">
+                        <template x-if="dlg.result === null">
+                            <div class="space-y-3">
+                                <div class="flex flex-wrap gap-3">
+                                    <div class="w-28">
+                                        <label class="block text-xs font-medium mb-1">Attack roll</label>
+                                        <input type="number" min="0" x-model.number="dlg.attackTotal" data-testid="parry-attack-total"
+                                               class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                                    </div>
+                                    <div class="w-24">
+                                        <label class="block text-xs font-medium mb-1">Void</label>
+                                        <input type="number" min="0" x-model.number="dlg.void" data-testid="parry-void"
+                                               class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium mb-1">Attacker</label>
+                                    <select x-model="dlg.attacker" data-testid="parry-attacker" class="w-full border rounded px-2 py-1.5 text-sm">
+                                        <option value="">(not recorded)</option>
+                                        <template x-for="pc in state.pcs" :key="'pa' + pc.id">
+                                            <option :value="pc.id" x-text="pc.name"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <label class="flex items-center gap-1 text-sm">
+                                    <input type="checkbox" x-model="dlg.predeclared" data-testid="parry-predeclared"> Declared before the attack (+5)
+                                </label>
+                                <label class="flex items-center gap-1 text-sm">
+                                    <input type="checkbox" x-model="dlg.interrupt" data-testid="parry-interrupt"> Interrupt (spends a second die)
+                                </label>
+                                <template x-if="dlg.interrupt">
+                                    <select x-model.number="dlg.secondDie" data-testid="parry-second-die" class="border rounded px-2 py-1.5 text-sm">
+                                        <template x-for="(d, i) in dlg.npc.action_dice" :key="'sd' + i">
+                                            <option :value="i" x-show="!d.spent && i !== dlg.die" x-text="'Phase ' + d.value"></option>
+                                        </template>
+                                    </select>
+                                </template>
+                                <button type="button" @click="rollParry()" :disabled="busy" data-testid="parry-roll-btn"
+                                        class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">Roll parry</button>
+                            </div>
+                        </template>
+                        <template x-if="dlg.result !== null">
+                            <p class="text-lg font-bold" data-testid="parry-result"
+                               :class="dlg.result.success ? 'text-success' : 'text-ink/60'"
+                               x-text="dlg.result.total + (dlg.result.success ? ' - parried' : ' - failed')"></p>
+                        </template>
+                    </div>
+                </template>
+
+                {# Something else #}
+                <template x-if="dlg.kind === 'other'">
+                    <div class="space-y-3">
+                        <input type="text" x-model="dlg.label" maxlength="80" placeholder="e.g. Moves, Feint prep, Guards"
+                               data-testid="other-label" class="w-full border rounded px-2 py-1.5 text-sm">
+                        <button type="button" @click="doOther()" :disabled="busy" data-testid="other-btn"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">Spend the die</button>
+                    </div>
+                </template>
+
+                {# Took damage: wound check, then keep-or-take (D20) and down (D9) #}
+                <template x-if="dlg.kind === 'damage'">
+                    <div class="space-y-3">
+                        <template x-if="dlg.result === null">
+                            <div class="space-y-3">
+                                <div class="flex gap-3">
+                                    <div class="w-28">
+                                        <label class="block text-xs font-medium mb-1">Damage</label>
+                                        <input type="number" min="1" x-model.number="dlg.amount" data-testid="damage-amount"
+                                               class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                                    </div>
+                                    <div class="w-24">
+                                        <label class="block text-xs font-medium mb-1">Void</label>
+                                        <input type="number" min="0" x-model.number="dlg.void" data-testid="damage-void"
+                                               class="w-full border rounded px-2 py-1.5 text-sm text-right">
+                                    </div>
+                                </div>
+                                <button type="button" @click="takeDamage()" :disabled="busy" data-testid="wound-check-btn"
+                                        class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">Roll wound check</button>
+                            </div>
+                        </template>
+                        <template x-if="dlg.result !== null">
+                            <div class="space-y-2" data-testid="wound-check-result">
+                                <p class="text-lg font-bold" x-text="woundCheckText()"></p>
+                                <template x-if="dlg.result.choice_needed && !dlg.chosen">
+                                    <div class="flex gap-2">
+                                        <button type="button" @click="keepLightWounds()" data-testid="keep-lw-btn"
+                                                class="btn-secondary px-3 py-1.5 rounded text-sm">Keep light wounds</button>
+                                        <button type="button" @click="takeSeriousWound()" data-testid="take-sw-btn"
+                                                class="btn-danger px-3 py-1.5 rounded text-sm">Take a serious wound</button>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                {# Down at 2 x Earth serious wounds (D9) #}
+                <template x-if="dlg.kind === 'down'">
+                    <div class="space-y-3" data-testid="down-prompt">
+                        <p class="text-sm" x-text="dlg.npc.name + ' has taken twice their Earth in serious wounds.'"></p>
+                        <div class="flex gap-2">
+                            <button type="button" @click="setStatus(dlg.npc, 'unconscious', true)" data-testid="down-unconscious"
+                                    class="btn-secondary px-3 py-1.5 rounded text-sm">Unconscious</button>
+                            <button type="button" @click="setStatus(dlg.npc, 'dead', true)" data-testid="down-dead"
+                                    class="btn-danger px-3 py-1.5 rounded text-sm">Dead</button>
+                        </div>
+                    </div>
+                </template>
+
+                {# Manual correction #}
+                <template x-if="dlg.kind === 'adjust'">
+                    <div class="space-y-3">
+                        <div class="flex gap-3">
+                            <div class="w-20"><label class="block text-xs font-medium mb-1">LW</label>
+                                <input type="number" min="0" x-model.number="dlg.light" data-testid="adjust-lw" class="w-full border rounded px-2 py-1.5 text-sm text-right"></div>
+                            <div class="w-20"><label class="block text-xs font-medium mb-1">SW</label>
+                                <input type="number" min="0" x-model.number="dlg.serious" data-testid="adjust-sw" class="w-full border rounded px-2 py-1.5 text-sm text-right"></div>
+                            <div class="w-20"><label class="block text-xs font-medium mb-1">Void</label>
+                                <input type="number" min="0" x-model.number="dlg.voidPts" data-testid="adjust-void" class="w-full border rounded px-2 py-1.5 text-sm text-right"></div>
+                        </div>
+                        <button type="button" @click="saveAdjust()" :disabled="busy" data-testid="adjust-save-btn"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">Save</button>
+                    </div>
+                </template>
+
+                {# Per-NPC overrides after generation #}
+                <template x-if="dlg.kind === 'rebuild'">
+                    <div class="space-y-3">
+                        <div class="flex gap-3">
+                            <div class="w-28"><label class="block text-xs font-medium mb-1">Earned XP</label>
+                                <input type="number" min="0" step="5" x-model.number="dlg.earned" data-testid="rebuild-xp" class="w-full border rounded px-2 py-1.5 text-sm text-right"></div>
+                            <div class="w-28"><label class="block text-xs font-medium mb-1">Combat %</label>
+                                <input type="number" :min="share.min" :max="share.max" x-model.number="dlg.share" data-testid="rebuild-share" class="w-full border rounded px-2 py-1.5 text-sm text-right"></div>
+                        </div>
+                        <button type="button" @click="saveRebuild()" :disabled="busy" data-testid="rebuild-save-btn"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">Rebuild</button>
+                    </div>
+                </template>
+
+                <template x-if="dlg.kind === 'rename'">
+                    <div class="space-y-3">
+                        <input type="text" x-model="dlg.name" maxlength="80" data-testid="rename-input" class="w-full border rounded px-2 py-1.5 text-sm">
+                        <button type="button" @click="saveRename()" :disabled="busy" data-testid="rename-save-btn"
+                                class="btn-primary px-4 py-2 rounded text-sm font-medium disabled:opacity-40">Save</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
+</div>
+
+<script src="/static/js/combat_page.js?v={{ static_v('js/combat_page.js') }}"></script>
+{% endblock %}

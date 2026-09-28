@@ -1,0 +1,52 @@
+{
+  "_comment": "ONE table of cases for the attack / damage / wound-check arithmetic that exists in BOTH roll_math.js (the sheet's modals) and app/services/combat_math.py (the GM combat tracker's server-side NPC rolls). Run by tests/js/shared_cases.test.js and tests/test_combat_math.py. Add a case here, never in only one suite.",
+  "excess_to_extra_dice": [
+    {"name": "no excess", "args": [0], "want": 0},
+    {"name": "negative excess", "args": [-7], "want": 0},
+    {"name": "just under a die", "args": [4], "want": 0},
+    {"name": "one die", "args": [5], "want": 1},
+    {"name": "floors", "args": [19], "want": 3}
+  ],
+  "attack_effective_tn": [
+    {"name": "plain attack", "args": [20, false], "want": 20},
+    {"name": "double attack +20", "args": [20, true], "want": 40}
+  ],
+  "failed_parry_dice_reduction": [
+    {"name": "full", "args": [5, 3, "full"], "want": 2},
+    {"name": "full never negative", "args": [2, 4, "full"], "want": 0},
+    {"name": "half rounds down", "args": [5, 3, "half"], "want": 4},
+    {"name": "none", "args": [5, 3, "none"], "want": 5}
+  ],
+  "wound_check_result": [
+    {"name": "exactly passes", "args": [20, 20, false], "want": {"passed": true, "margin": 0, "seriousWounds": 0}},
+    {"name": "passes with room", "args": [31, 20, false], "want": {"passed": true, "margin": 11, "seriousWounds": 0}},
+    {"name": "fails by 1", "args": [19, 20, false], "want": {"passed": false, "margin": 1, "seriousWounds": 1}},
+    {"name": "fails by 10", "args": [10, 20, false], "want": {"passed": false, "margin": 10, "seriousWounds": 2}},
+    {"name": "fails by 25", "args": [5, 30, false], "want": {"passed": false, "margin": 25, "seriousWounds": 3}},
+    {"name": "Bayushi halves the margin's base", "args": [10, 30, true], "want": {"passed": false, "margin": 5, "seriousWounds": 1}},
+    {"name": "Bayushi halved below the roll still fails", "args": [18, 30, true], "want": {"passed": false, "margin": 0, "seriousWounds": 1}}
+  ],
+  "wave_man_weapon_floor": [
+    {"name": "no copies", "args": [2, 0], "want": 2},
+    {"name": "one copy", "args": [2, 1], "want": 3},
+    {"name": "capped at 4", "args": [3, 2], "want": 4},
+    {"name": "katana unchanged", "args": [4, 2], "want": 4}
+  ],
+  "wave_man_round_damage": [
+    {"name": "no copies", "args": [14, 0], "want": 14},
+    {"name": "rounds up", "args": [14, 1], "want": 15},
+    {"name": "multiple of 5 gains 3", "args": [15, 1], "want": 18},
+    {"name": "two copies chain", "args": [14, 2], "want": 18},
+    {"name": "two copies from a multiple", "args": [15, 2], "want": 20}
+  ],
+  "wave_man_miss_raise": [
+    {"name": "already hits", "args": [25, 20, 2], "want": {"total": 25, "raisesUsed": 0, "hit": true}},
+    {"name": "one raise lands it", "args": [17, 20, 2], "want": {"total": 22, "raisesUsed": 1, "hit": true}},
+    {"name": "not enough copies", "args": [5, 20, 2], "want": {"total": 15, "raisesUsed": 2, "hit": false}}
+  ],
+  "wave_man_failed_parry_dice": [
+    {"name": "gives back 2 per copy", "args": [5, 1], "want": 2},
+    {"name": "never more than removed", "args": [1, 2], "want": 1},
+    {"name": "no copies", "args": [4, 0], "want": 0}
+  ]
+}
