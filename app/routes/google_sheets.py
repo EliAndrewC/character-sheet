@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session as DBSession
 from app.database import get_db
 from app.game_data import SCHOOL_KNACKS, SCHOOLS, SKILLS, effective_knack_ring
 from app.models import Character, User as UserModel
-from app.services.auth import can_view_drafts
+from app.services.npcs import npc_guard
+from app.services.auth import can_view_drafts, is_admin
 from app.services.dark_secret import details_for_viewer
 from app.services.rolls import compute_skill_roll
 from app.services.sheets import create_spreadsheet
@@ -22,7 +23,7 @@ from app.services.xp import calculate_xp_breakdown
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/auth/google")
+router = APIRouter(prefix="/auth/google", dependencies=[Depends(npc_guard)])
 
 GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -175,7 +176,9 @@ async def google_callback(
 
     # Load character and compute derived data
     character = db.query(Character).filter(Character.id == char_id).first()
-    if not character:
+    # The char id comes from a cookie, out of npc_guard's reach: an NPC does
+    # not exist for anyone but an admin (app/services/npcs.py).
+    if not character or (character.is_npc and not is_admin(user["discord_id"])):
         return _error_redirect("not_found")
 
     char_dict = character.to_dict()

@@ -1631,4 +1631,13 @@ def validate_character(character_data: dict) -> List[str]:
             f"XP ({available})."
         )
 
+    if character_data.get("is_npc"):
+        # A generated NPC is not a PC: it has no age or lineage, and a Wave
+        # Man NPC draws only on Wave Man abilities, so it can run out of them
+        # while the pooled allowance says there are more to take.
+        errors = [e for e in errors if e not in _NPC_EXEMPT_WARNINGS
+                  and not e.endswith(("unclaimed profession pick.", "unclaimed profession picks."))]
     return errors
+
+
+_NPC_EXEMPT_WARNINGS = frozenset({"Age is not set.", "Lineage is not set."})

@@ -40,11 +40,12 @@ from app.services import (
 )
 from app.services.art_face_detect import detect_face
 from app.services.art_image import HEADSHOT_ASPECT_RATIO
+from app.services.npcs import npc_guard
 from app.services.auth import can_edit_character, get_all_editors
 
 log = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(npc_guard)])
 
 
 def _templates():

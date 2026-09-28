@@ -16,6 +16,7 @@ from app.game_data import (
     ring_max,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User
+from app.services.npcs import npc_guard
 from app.services.auth import can_edit_character, can_view_drafts, get_admin_ids, get_all_editors
 from app.services.dark_secret import (
     DARK_SECRET_ID,
@@ -48,7 +49,7 @@ from app.services.versions import (
 from app.services.xp import editor_xp_view, pcp_next_cost, pcp_total_cost
 from app.services.nights_rest import _void_max
 
-router = APIRouter(prefix="/characters", dependencies=[Depends(prefetch_body)])
+router = APIRouter(prefix="/characters", dependencies=[Depends(prefetch_body), Depends(npc_guard)])
 
 
 def _templates():

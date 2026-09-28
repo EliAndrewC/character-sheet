@@ -242,6 +242,7 @@ def _serialize_roll(
         "updated_at": _iso_utc(row.updated_at),
         "character_id": row.character_id,
         "character_name": character.name,
+        "is_npc": bool(character.is_npc),
         "gaming_group_id": character.gaming_group_id,
         "gaming_group_name": group.name if group else None,
         "owner_discord_id": character.owner_discord_id,
@@ -430,6 +431,10 @@ async def list_characters(request: Request, db: Session = Depends(get_db)):
         out.append({
             "id": c.id,
             "name": c.name,
+            # A GM-generated NPC (combat-design/design.md 4.6): listed so
+            # gm-assistant counts its name as used; npc_group_id is its group.
+            "is_npc": bool(c.is_npc),
+            "npc_group_id": c.npc_group_id,
             "owner_discord_id": c.owner_discord_id,
             "editor_discord_ids": list(c.editor_discord_ids or []),
             "gaming_group_id": c.gaming_group_id,

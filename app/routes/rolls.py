@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db, prefetch_body
 from app.models import Character, RollHistory, User
+from app.services.npcs import npc_guard
 from app.services.auth import (
     can_edit_character,
     can_view_drafts,
@@ -32,7 +33,8 @@ from app.services.rolls_history import (
 
 
 router = APIRouter(
-    prefix="/characters", tags=["rolls"], dependencies=[Depends(prefetch_body)],
+    prefix="/characters", tags=["rolls"],
+    dependencies=[Depends(prefetch_body), Depends(npc_guard)],
 )
 
 

@@ -3026,7 +3026,9 @@ class TestVersionDiffEndpoint:
         from app.database import get_db
         from sqlalchemy.orm import sessionmaker
         cid, v2_id = self._make_char_with_versions(client)
-        SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+        # The anonymous client shares the fixture's connection (a separate
+        # in-memory engine would have no tables for npc_guard to read).
+        SessionLocal = client._test_session_factory
         def _override_db():
             session = SessionLocal()
             try:

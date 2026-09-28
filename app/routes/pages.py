@@ -31,6 +31,7 @@ from app.game_data import (
     PROFESSIONS,
 )
 from app.models import Character, CharacterVersion, GamingGroup, User as UserModel
+from app.services.npcs import npc_guard
 from app.services.auth import can_edit_character, can_view_drafts, format_editor_list_text, get_admin_ids, get_all_editors, is_admin
 from app.services.dark_secret import (
     DARK_SECRET_ID,
@@ -76,7 +77,7 @@ from app.services.xp import (
     validate_character,
 )
 
-router = APIRouter(dependencies=[Depends(prefetch_body)])
+router = APIRouter(dependencies=[Depends(prefetch_body), Depends(npc_guard)])
 
 
 def _templates():
@@ -108,7 +109,12 @@ def index(request: Request, db: Session = Depends(get_db)):
     user = getattr(request.state, "user", None)
     user_id = user["discord_id"] if user else None
 
-    all_characters = db.query(Character).order_by(Character.updated_at.desc()).all()
+    # Generated NPCs never appear here, not even for the GM: they live in
+    # each group's NPC roster (combat-design/design.md).
+    all_characters = (
+        db.query(Character).filter(Character.is_npc.is_not(True))
+        .order_by(Character.updated_at.desc()).all()
+    )
     all_groups = db.query(GamingGroup).order_by(GamingGroup.name).all()
 
     # Build owner display name lookup AND collect grants in one pass so we

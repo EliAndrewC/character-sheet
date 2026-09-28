@@ -21,7 +21,7 @@ configure_logging()
 from app.database import init_db, SessionLocal
 from app.models import Session as AuthSession, User
 from app.routes import (
-    art, auth, characters, discord, gm_api, google_sheets, import_char, names,
+    art, auth, characters, combat, discord, gm_api, google_sheets, import_char, names,
     pages, rolls, telemetry,
 )
 from app.access_log import AccessLogMiddleware
@@ -355,6 +355,7 @@ app.add_middleware(AccessLogMiddleware)
 
 # Routes
 app.include_router(pages.router)
+app.include_router(combat.router)
 app.include_router(characters.router)
 app.include_router(auth.router)
 app.include_router(google_sheets.router)
