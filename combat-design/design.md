@@ -1,6 +1,6 @@
 # GM Combat Tracker and Generated NPCs - Design
 
-Status: **requirements gathering, round 3.** Nothing is implemented. Section 8 lists the questions still open;
+Status: **requirements gathering, round 4.** Nothing is implemented. Section 8 lists the questions still open;
 Phase 1 does not start until the GM signs off on this document.
 
 ## 1. Goal
@@ -10,7 +10,7 @@ Phase 1 does not start until the GM signs off on this document.
 - every PC in the group, with their **action dice**, **wounds**, **void points** and **discretionary bonuses** (3rd Dan free raises and the like), kept current as the players act on their own sheets;
 - the **NPCs they are fighting** on the same screen. The GM acts for them with **quick-roll buttons**: click an NPC's action die and choose what it is spent on (attack, parry, ...). The GM never rolls for PCs.
 
-**The players' view.** The group page shows each NPC's wounds, whether it is down, the actions it has taken this round, and how many actions it took last round. It never shows what the NPC still has available.
+**The players' view.** A public combat page, linked from the group page, shows each NPC's wounds, whether it is down, the actions it has taken this round with each roll's **total only**, and how many actions it took last round. It never shows what the NPC still has available or how a total was reached.
 
 **Generated NPCs.** They are generated, not hand-built: "the party is fighting six Wave Men with about 50 earned XP" produces six usable combatants.
 - **Their builds follow the combat simulator's current XP progression** (`l7r/simulator`). That repo is where questions like "when does a parry school take Air from 5 to 6" get answered.
@@ -51,6 +51,19 @@ Phase 1 does not start until the GM signs off on this document.
 | D21 | **NPC rolls are recorded, and there is a combat rolls view:** every roll made during the encounter, PC and NPC, in order, with a filter to NPC-only. It is for eyeballing whether the NPCs rolled above or below average. |
 | D22 | **Players see, per NPC:** the actions it has taken this round, its wounds, whether it is down, and **after the first full round, how many actions it took last round**. That count is how players infer "one more action left" without learning its phase or whether it is available. **Players never see** remaining action dice, void or any stat. |
 | D23 | **Nothing goes to Discord for now.** Combat is too interactive for slash commands: probability charts and chained decisions. Attacks and wound checks will likely never be Discord commands. |
+
+### Round 3
+
+| # | decision |
+|---|---|
+| D24 | **Git for the other repos.** gm-assistant: work in its session clone (`.clones/combat`, after this session's name) and land through its `scripts/sync-with-main.sh`, which also pushes to GitHub with gm-assistant's own token. Simulator: commit on its `master` following its conventions; **the GM pushes** until credentials exist here. |
+| D25 | **Stub schools are fine** for Mantis Wave-Treader, Kitsune Warden and Suzume Overseer: enough for the progression code to build them, marked as not usable in simulator fights. Full mechanics go on the simulator's backlog. |
+| D26 | **Names:** Wave Men always from the **peasant** pool. Samurai-school NPCs get a **samurai-eligible personal name only**; the GM types a full name if one is ever needed. |
+| D27 | **The players' view is its own page**, linked from the group page like Money, and it is **public**. Logged in as the GM you get the tracker controls; everyone else, logged in or not, gets the same public view. |
+| D28 | **Players see the NPC's real name.** For a mystery, the GM types a name like "Bandit 2" instead of using a generated one. |
+| D29 | **Players see each NPC roll's total** ("attack: 52"), never how it was reached: no dice, no 10s, no void spent, no breakdown of bonuses. They cannot see NPC roll history; the GM screen-shares if they want to. |
+| D30 | **Every visible PC in the group** is on the tracker. |
+| D31 | **"New round" rolls initiative for the NPCs only.** Players roll their own. |
 
 ## 3. What exists today
 
@@ -148,15 +161,16 @@ Phase 1 does not start until the GM signs off on this document.
 
 ### 4.5 Views
 
-**The GM's tracker, `GET /groups/{id}/combat` (GM-only).**
-- **Cards:** PC and NPC cards with action dice (spent / unspent), LW, SW / max, void, discretionary bonuses remaining, and TN to be hit. NPC cards add status and clickable action dice.
+**The GM's tracker (the GM's view of `GET /groups/{id}/combat`).**
+- **Cards:** every visible PC in the group (D30), and PC and NPC cards with action dice (spent / unspent), LW, SW / max, void, discretionary bonuses remaining, and TN to be hit. NPC cards add status and clickable action dice.
 - **Encounter builder:** rows of "N x school, XP (+ roll extra), combat target", with per-NPC overrides after generation. Names are fetched for the rows.
 - **Live updates:** polls a GM-only state endpoint every few seconds, comparing `tracking_rev` and encounter state to skip redraws.
 
-**The players' view, a combat section on `/groups/{id}`** (see Q4 for who can see it).
-- **Per NPC:** display name, LW / SW, down or not, this round's actions (kind and target), and last round's action count.
-- **Never:** dice, void, phases or stats.
-- **Live updates:** polls its own endpoint, whose payload is built from an allow-list so a new field cannot leak by accident.
+**One URL, two views: `GET /groups/{id}/combat` (D27).** It is public. The GM, when logged in, gets the tracker described above; everyone else gets the public view. The group page links to it, the way it links to Money.
+- **Public view, per NPC:** name (D28), LW / SW, down or not, this round's actions (kind, target and roll **total** - D29), and last round's action count (D22).
+- **Never in the public view:** dice, void, phases, remaining actions, stats, how a total was reached, or roll history.
+- **Live updates:** the public view polls its own endpoint. Its payload is built from an **allow-list**, so a field added later cannot leak by accident, and a test asserts the exact key set.
+- **PCs in the public view:** see Q1.
 
 **The combat rolls view (D21), per encounter.**
 - **Contents:** every `roll_history` row between `started_at` and `ended_at` from the group's PCs and the encounter's NPCs, in order.
@@ -164,7 +178,7 @@ Phase 1 does not start until the GM signs off on this document.
 
 ### 4.6 Names (D10, D16)
 
-- **The used-name data is only reachable from gm-assistant**, so picking stays there. It gets a token-authed `GET /api/names?count=&peasant=`, male pool only. The endpoint refreshes the used-name cache when stale and applies both the used-name and within-batch rules.
+- **The used-name data is only reachable from gm-assistant**, so picking stays there. It gets a token-authed `GET /api/names?count=&peasant=`, male pool only. `peasant=true` for Wave Men; `peasant=false` (samurai-eligible) for school NPCs, given name only (D26). The endpoint refreshes the used-name cache when stale and applies both the used-name and within-batch rules.
 - **In this app:** the builder pre-fills names, and the GM can edit one or ask for another. If gm-assistant is asleep or down, names fall back to "Wave Man 1..N".
 - **NPC names reach gm-assistant's used-name set through `/api/characters`**, flagged `is_npc`. The public-index scrape cannot see them.
 
@@ -195,7 +209,7 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 - [ ] Here: XP roll (D5) and combat-share draw with clamp (D6, D14); table generated by the analysis script
 
 ### Phase 2 - New simulator schools (D18)
-- [ ] Mantis Wave-Treader: school class (scope per Q2) + priorities via `school-progression-designer`
+- [ ] Mantis Wave-Treader: stub school class (D25) + priorities via `school-progression-designer`
 - [ ] Kitsune Warden: same
 - [ ] Suzume Overseer: same
 - [ ] GM reviews each progression's rationale before it is used
@@ -208,7 +222,7 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 - [ ] Encounter create / end; roster; return healed with gained XP; unconscious / dead
 
 ### Phase 4 - Names
-- [ ] gm-assistant: token-authed `/api/names` (male, cache refresh, batch rules)
+- [ ] gm-assistant, in its session clone (D24): token-authed `/api/names` (male, peasant or samurai, cache refresh, batch rules)
 - [ ] Here: client with a fallback
 
 ### Phase 5 - Server combat actions
@@ -217,7 +231,7 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 
 ### Phase 6 - Views
 - [ ] GM tracker: cards, action-die menu, encounter builder, 2 x Earth prompt, archive
-- [ ] Players' combat section on the group page (allow-listed payload)
+- [ ] Public view of the combat page, linked from the group page (allow-listed payload, totals only)
 - [ ] Combat rolls view
 - [ ] Clicktests + `COVERAGE.md`; responsive checks; deploy
 
@@ -230,18 +244,10 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 
 - Round 1: Q1-Q3, Q10, Q11.
 - Round 2: exact vs base XP (D13), clamp (D14), sheet migration (D15), returning NPCs (D17), missing schools (D18), NPC attacks (D19), keep-LW vs take-SW (D20), records (D21), player visibility (D22, D23), card detail (D23 / 4.5).
+- Round 3: git (D24), stub schools (D25), names (D26), public combat page (D27), real names (D28), roll totals only (D29), every visible PC (D30), new round (D31).
 
-## 8. Open questions (round 3)
+## 8. Open questions (round 4)
 
-1. **Push credentials in this container.** Both repos' remotes are SSH, and this container has no `~/.ssh`. Either mount or copy a key in, or give me fine-grained HTTPS tokens for those two repos (added to `.env` like `GITHUB_TOKEN`). Without one of those, I can commit but not push.
-2. **Scope of the three new simulator schools.** The simulator's generator builds characters through a school class, so each needs at least a skeleton: school ring, knacks, Dan ring raise and discount. Two options:
-   - **(a)** "Build-only" skeletons plus designed priority lists, marked in the simulator as not yet simulatable in fights. This is all this feature needs.
-   - **(b)** Full implementations of their combat mechanics through the simulator's per-school speckit workflow, with a GM review after each school.
-
-   Recommendation: (a) now, with (b) queued in the simulator's backlog.
-3. **Names: caste and family.** Wave Men from the peasant pool? For samurai-school NPCs, draw a family name from the school's clan, or use a given name only?
-4. **Who sees the players' combat section.** The group page is public today, anonymous visitors included. Show the combat section only to logged-in viewers? Only to members of that group (owners of its PCs) plus the GM?
-5. **NPC display name for players.** The GM-assigned name, or a separate player-facing label ("Bandit 2") that the GM can reveal as the name once the PCs learn it?
-6. **"Actions taken" detail for players.** Kind and target only ("attacked Yudai"), or also the outcome (hit / miss / damage)? The players witnessed the outcome, so it is not secret, but it adds noise.
-7. **Which PCs appear on the tracker.** Every non-hidden PC in the group, or does the GM pick who is in this fight? (Unanswered from round 2.)
-8. **New round.** Confirm that "New round" is a GM click that rolls initiative for all NPCs. Should it also reset the display of PC action dice, or leave PCs entirely to their own sheets? Proposal: leave them to their sheets.
+1. **PCs on the public page.** Does the public view list the PCs too - their wounds and remaining action dice - so the table can see the whole fight? Or is it NPCs only, since each player already has their own sheet? Proposal: show PCs' wounds and action dice. That is no secret from the other players, and it makes the page usable on a shared screen.
+2. **One fight at a time?** Proposal: at most one active encounter per group. Starting another ends the current one, after a confirmation. When nothing is active, the public page says "No fight in progress".
+3. **Sign-off.** With 1 and 2 settled, is this document ready for Phase 1? Or is there anything you want to revisit first?
