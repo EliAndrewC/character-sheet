@@ -59,7 +59,8 @@ def fresh_limits():
 
 @pytest.mark.parametrize("key,expected", [
     ("skill:etiquette", True), ("knack:iaijutsu", True), ("ring:Fire", True),
-    ("athletics:Water", True), ("initiative", False), ("initiative:athletics", False),
+    ("athletics:Water", True), ("initiative", True), ("initiative:athletics", True),
+    ("initiative:other", False),
     ("parry", False), ("athletics:parry", False), ("athletics:attack", False),
     ("knack:feint", False), ("knack:feint:athletics", False), ("attack", False),
     ("wound_check", False), ("", False),
@@ -162,7 +163,9 @@ def test_hidden_character_is_not_found(client):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("body,message", [
-    ({"roll_key": "initiative"}, "not rolled on the server"),
+    ({"roll_key": "parry"}, "not rolled on the server"),
+    ({"roll_key": "initiative", "void": 1}, "without spending void"),
+    ({"roll_key": "initiative:athletics"}, "has no initiative:athletics roll"),
     ({"roll_key": "skill:underworld_nonsense"}, "has no skill:underworld_nonsense roll"),
     ({"roll_key": "knack:lunge"}, "has no knack:lunge roll"),
     ({"void": 5}, "at most"),
@@ -833,3 +836,89 @@ def test_anonymous_rerolls_are_rate_limited(client, monkeypatch):
         assert resp.status_code == 429
         resp = anon.post(url, json={"action": "raise", "args": {}})
         assert resp.status_code == 400  # not a reroll: no limit, just no raises
+
+
+# ---------------------------------------------------------------------------
+# Initiative (Phase 5)
+# ---------------------------------------------------------------------------
+
+def test_initiative_starts_the_round_and_records(client, scripted):
+    cid = _char(client, adventure_state={"kakita_5th_dan_used": True, "mantis_posture_phase": 2},
+                action_dice=[{"value": 9, "spent": True}])
+    data = _roll(client, cid, roll_key="initiative", headers=scripted("7,3,5")).json()
+    assert data["formula"]["is_initiative"] and data["total"] == 0
+    values = [d["value"] for d in data["action_dice"]]
+    assert values == sorted(values) and len(values) == data["formula"]["kept"]
+    c = _get(client, cid)
+    assert [d["value"] for d in c.action_dice] == values and not any(d["spent"] for d in c.action_dice)
+    assert "kakita_5th_dan_used" not in c.adventure_state and "mantis_posture_phase" not in c.adventure_state
+    row = _row(client, data["history_id"])
+    assert row["show_total"] is False and [k["parts"][0] for k in row["kept"]] == values
+    assert data["tracking"]["action_dice"] == c.action_dice
+
+
+def test_simulated_initiative_changes_nothing(client):
+    cid = _char(client, action_dice=[{"value": 9, "spent": True}])
+    data = _roll(client, cid, roll_key="initiative", headers=OTHER).json()
+    assert data["mode"] == "simulate" and data["action_dice"] and data["history_id"] is None
+    assert _get(client, cid).action_dice == [{"value": 9, "spent": True}]
+
+
+def test_priest_5th_dan_gets_conviction_back(client):
+    cid = _char(client, school="priest", school_ring_choice="Water",
+                knacks={"conviction": 5, "otherworldliness": 5, "pontificate": 5},
+                adventure_state={"conviction_used": 3})
+    data = _roll(client, cid, roll_key="initiative").json()
+    assert "Conviction pool refreshed for the new combat round" in data["notes"]
+    assert _get(client, cid).adventure_state["conviction_used"] == 0
+
+
+def test_togashi_initiative_variants(client, scripted):
+    cid = _togashi(client)
+    normal = _roll(client, cid, roll_key="initiative", headers=scripted("4")).json()
+    extra = [d for d in normal["action_dice"] if d.get("athletics_only")]
+    assert len(extra) == 1 and extra[0]["value"] == 4
+    ath = _roll(client, cid, roll_key="initiative:athletics").json()
+    assert ath["action_dice"] and all(d["athletics_only"] for d in ath["action_dice"])
+
+
+def test_lucky_on_initiative_takes_the_reroll_and_restarts_the_round(client, scripted):
+    cid = _char(client, advantages=["lucky"])
+    first = _roll(client, cid, roll_key="initiative", headers=scripted("2")).json()
+    sid = first["session_id"]
+    s = client._test_session_factory()
+    c = s.get(Character, cid)
+    c.action_dice = [dict(d, spent=True) for d in c.action_dice]
+    s.commit()
+    s.close()
+    worse = _act(client, cid, sid, "lucky_reroll", headers=scripted("9")).json()
+    assert [d["value"] for d in worse["action_dice"]] == [9] * len(first["action_dice"])
+    pair = worse["payload"]["lucky"]
+    assert pair["kept"] == "reroll" and pair["original"]["show_total"] is False
+    assert [d["value"] for d in pair["original"]["action_dice"]] == [2] * len(first["action_dice"])
+    c = _get(client, cid)
+    assert [d["value"] for d in c.action_dice] == [9] * len(first["action_dice"])
+    assert not any(d["spent"] for d in c.action_dice)
+    assert _row(client, first["history_id"])["lucky"]["kept"] == "reroll"
+
+
+def test_a_simulated_initiative_reroll_leaves_the_round_alone(client):
+    cid = _char(client, advantages=["lucky"], action_dice=[{"value": 9, "spent": True}])
+    sid = _roll(client, cid, roll_key="initiative", headers=OTHER).json()["session_id"]
+    assert _act(client, cid, sid, "lucky_reroll", headers=OTHER).json()["action_dice"]
+    assert _get(client, cid).action_dice == [{"value": 9, "spent": True}]
+
+
+def test_initiative_refuses_bonuses_and_partial_rerolls(client):
+    cid = _merchant(client, dan=5, current_serious_wounds=2)
+    sid = _roll(client, cid, roll_key="initiative").json()["session_id"]
+    for action, args in (("raise", {}), ("conviction", {}), ("pcp_free_raise", {}),
+                         ("pcp_reroll_tens", {}), ("merchant_5th", {"values": [1]}),
+                         ("merchant_vp", {}), ("priest_ritual", {"priest_id": cid})):
+        resp = _act(client, cid, sid, action, **args)
+        assert resp.status_code == 400, action
+        assert "initiative" in resp.json()["error"], action
+    biz = _char(client, school="", profession="profession", knacks={},
+                profession_abilities={"merchant_void_reroll": 1})
+    sid = _roll(client, biz, roll_key="initiative").json()["session_id"]
+    assert "initiative" in _act(client, biz, sid, "merchant_reroll").json()["error"]

@@ -40,10 +40,10 @@ from app.services.pcp import PcpRefused, spend_pcp
 from app.services.professions import holds_ability
 from app.services.roll_engine import (
     _formula_text, _spend_bullets, apply_dice_cap, execute_roll, impaired_now, roll_dice,
-    roll_one_die, score_roll,
+    roll_initiative_dice, roll_one_die, score_initiative, score_roll,
 )
 from app.services.rolls_history import skill_rank_for_roll
-from app.services.tracking import tracking_snapshot
+from app.services.tracking import start_combat_round, tracking_snapshot
 from app.services.void_spend import (
     VoidSpendRefused, apply_void_spend, plan_void_spend, school_dan, void_limits,
 )
@@ -96,6 +96,8 @@ SPECIAL_KEYS = ("bless", "spend_vp_xk1", "freeform")
 def server_rolled(roll_key: str) -> bool:
     """Whether the sheet's roll for this key is made here yet (Phase 1)."""
     if roll_key in SPECIAL_KEYS:
+        return True
+    if roll_key in ("initiative", "initiative:athletics"):
         return True
     if not roll_key or roll_key.startswith("initiative"):
         return False
@@ -183,6 +185,12 @@ def start_roll(
     ow = _count(choices, "otherworldliness")
     char_data = character.to_dict()
     party = party_member_data(visible_party_members(db, character, viewer))
+    if roll_key.startswith("initiative"):
+        if void or ow or choices.get("kitsune_swap"):
+            raise RollRefused("initiative is rolled without spending void points")
+        return _start_initiative(db, character, roll_key, char_data, party, viewer=viewer,
+                                 live=live, record=record, is_owner_roll=is_owner_roll,
+                                 rng=rng, request_id=request_id)
     record_key = roll_key
     activation = 0
     if roll_key in SPECIAL_KEYS:
@@ -286,6 +294,44 @@ def start_roll(
     return _answer(session, character)
 
 
+def _start_initiative(db: Session, character: Character, roll_key: str, char_data, party, *,
+                      viewer, live, record, is_owner_roll, rng, request_id) -> Dict[str, Any]:
+    """Initiative (either Togashi variant): roll, turn the kept dice into
+    action dice, and - live - start the combat round (``start_combat_round``,
+    the same definition the Discord /initiative command uses) and record."""
+    formula = build_all_roll_formulas(char_data, party_members=party).get(roll_key)
+    if not formula:
+        raise RollRefused(f"{character.name} has no {roll_key} roll")
+    formula = dict(formula, void_spent=0, void_overflow_bonus=0)
+    dice = roll_initiative_dice(formula, rng or random.SystemRandom())
+    scored = score_initiative(formula, dice["main"], dice["extra"])
+    notes: list = []
+    history_id = None
+    if live:
+        notes = start_combat_round(character, scored["action_dice"])
+        if record:
+            row = RollHistory(
+                character_id=character.id, roll_key=roll_key, actor_discord_id=viewer,
+                is_owner_roll=is_owner_roll, impaired_at_roll=impaired_now(char_data),
+                payload=scored["payload"],
+            )
+            db.add(row)
+            db.flush()
+            history_id = row.id
+    reap(db)
+    session = RollSession(
+        id=request_id or secrets.token_hex(16), character_id=character.id, viewer_discord_id=viewer,
+        mode="live" if live else "simulate", roll_key=roll_key,
+        choices={"extra": dice["extra"], "action_dice": scored["action_dice"], "notes": notes,
+                 "base_total": 0},
+        formula=formula, dice=dice["main"], payload=scored["payload"], actions=[],
+        history_id=history_id,
+    )
+    db.add(session)
+    db.flush()
+    return _answer(session, character)
+
+
 def _special(character: Character, char_data: Dict[str, Any], roll_key: str,
              choices: Dict[str, Any]):
     """``(formula, key to record, activation void cost)`` for the rolls that
@@ -316,7 +362,7 @@ def _special(character: Character, char_data: Dict[str, Any], roll_key: str,
 
 
 def _answer(session: RollSession, character: Character) -> Dict[str, Any]:
-    return {
+    return dict(_initiative_fields(session), **{
         "session_id": session.id,
         "mode": session.mode,
         "formula": session.formula,
@@ -325,7 +371,15 @@ def _answer(session: RollSession, character: Character) -> Dict[str, Any]:
         "payload": session.payload,
         "history_id": session.history_id,
         "tracking": tracking_snapshot(character),
-    }
+    })
+
+
+def _initiative_fields(session: RollSession) -> Dict[str, Any]:
+    """An initiative roll's action dice and round-start notes."""
+    if not (session.formula or {}).get("is_initiative"):
+        return {}
+    choices = session.choices or {}
+    return {"action_dice": choices.get("action_dice", []), "notes": choices.get("notes", [])}
 
 
 # ---------------------------------------------------------------------------
@@ -423,6 +477,8 @@ def act(db: Session, session: RollSession, character: Character, action: str,
     if action in REROLLS:
         extra = REROLLS[action](db, session, character, args, rng or random.SystemRandom())
         actions = list(session.actions or [])
+    elif (session.formula or {}).get("is_initiative"):
+        raise RollRefused("initiative takes no bonuses")
     elif name == "courtier_5th":
         amount = int((session.formula or {}).get("courtier_5th_dan_optional") or 0)
         if amount <= 0:
@@ -461,7 +517,7 @@ def act(db: Session, session: RollSession, character: Character, action: str,
     session.actions = actions
     _write_payload(db, session)
     db.flush()
-    return dict(extra, **{
+    return dict(extra, **_initiative_fields(session), **{
         "session_id": session.id,
         "total": session.payload["total"],
         "payload": session.payload,
@@ -525,6 +581,9 @@ def _plural_points(n: int) -> str:
 
 def _rescore(character: Character, session: RollSession, cells: list) -> None:
     """Put ``cells`` on the session and rescore it (the actions carry over)."""
+    if (session.formula or {}).get("is_initiative"):
+        _rescore_initiative(character, session, cells)
+        return
     session.dice = cells
     scored = score_roll(character.to_dict(), session.formula or {}, cells,
                         _extras(character, session))
@@ -532,8 +591,27 @@ def _rescore(character: Character, session: RollSession, cells: list) -> None:
     session.choices = dict(session.choices or {}, base_total=scored["total"])
 
 
+def _rescore_initiative(character: Character, session: RollSession, cells: list) -> None:
+    """New initiative dice are new action dice: a live reroll starts the
+    round over with them (the reroll replaces the first set)."""
+    choices = dict(session.choices or {})
+    scored = score_initiative(session.formula or {}, cells, choices.get("extra") or [])
+    session.dice = cells
+    session.payload = dict(session.payload or {}, **scored["payload"])
+    choices["action_dice"] = scored["action_dice"]
+    if session.mode == "live":
+        choices["notes"] = list(choices.get("notes") or []) + [
+            n for n in start_combat_round(character, scored["action_dice"])
+            if n not in (choices.get("notes") or [])]
+    session.choices = choices
+
+
 def _half(session: RollSession) -> Dict[str, Any]:
     p = session.payload or {}
+    if (session.formula or {}).get("is_initiative"):
+        return {"kept": p.get("kept", []), "dropped": p.get("dropped", []), "total": 0,
+                "show_total": False, "action_dice": [
+                    {"value": d["value"]} for d in (session.choices or {}).get("action_dice", [])]}
     return {"kept": p.get("kept", []), "dropped": p.get("dropped", []),
             "total": _session_total(session), "show_total": True}
 
@@ -546,7 +624,9 @@ def _keep_higher(character: Character, session: RollSession, cells: list, source
     original = _half(session)
     _rescore(character, session, cells)
     reroll = _half(session)
-    keep_reroll = reroll["total"] >= original["total"]
+    # Initiative has no total to compare: the reroll stands.
+    keep_reroll = (bool((session.formula or {}).get("is_initiative"))
+                   or reroll["total"] >= original["total"])
     if not keep_reroll:
         session.dice, session.payload, session.choices = before[0], before[1], before[2]
         # The original dice stand, but the note that a reroll happened is new.
@@ -559,6 +639,10 @@ def _keep_higher(character: Character, session: RollSession, cells: list, source
 
 def _whole(session: RollSession, rng) -> list:
     f = session.formula or {}
+    if f.get("is_initiative"):
+        dice = roll_initiative_dice(f, rng)
+        session.choices = dict(session.choices or {}, extra=dice["extra"])
+        return dice["main"]
     return roll_dice(f.get("rolled") or 0, f.get("kept") or 0, bool(f.get("reroll_tens")),
                      rng, freed_tens=f.get("wave_man_freed_dice") or 0)["in_order"]
 
@@ -595,8 +679,14 @@ def _void_point(db: Session, session: RollSession, character: Character, label: 
         raise RollRefused(str(exc)) from None
 
 
+def _not_on_initiative(session: RollSession, what: str) -> None:
+    if (session.formula or {}).get("is_initiative"):
+        raise RollRefused(f"{what} cannot be used on initiative")
+
+
 def _impaired_tens(session: RollSession) -> list:
     f = session.formula or {}
+    _not_on_initiative(session, "rerolling 10s")
     if f.get("no_reroll_reason") != "impaired" or f.get("is_unskilled"):
         raise RollRefused("only an Impaired roll's 10s can be rerolled")
     tens = [i for i, d in enumerate(session.dice or []) if d["value"] == 10]
@@ -638,6 +728,7 @@ def _pcp_reroll(db, session, character, args, rng):
 
 
 def _pcp_free_raise(db, session, character, args, rng):
+    _not_on_initiative(session, "a free raise")
     if _flag(session, "pcp_raise"):
         raise RollRefused("a Player Character Point free raise has already been taken on this roll")
     paid = _pcp(db, session, character, "free_raise")
@@ -683,6 +774,7 @@ def _merchant_reroll(db, session, character, args, rng):
     higher total stands."""
     if not holds_ability(character, "merchant_void_reroll"):
         raise RollRefused(f"{character.name} cannot reroll a business roll")
+    _not_on_initiative(session, "the business reroll")
     _check_lock(session)
     _void_point(db, session, character, "the business reroll")
     _add_flag(session, "merchant_reroll")
@@ -696,6 +788,7 @@ def _merchant_5th(db, session, character, args, rng):
     (dice of one value are interchangeable)."""
     if character.school != "merchant" or school_dan(character.to_dict()) < 5:
         raise RollRefused(f"{character.name} has no Merchant 5th Dan reroll")
+    _not_on_initiative(session, "the Merchant 5th Dan reroll")
     if _flag(session, "merchant_5th"):
         raise RollRefused("the Merchant 5th Dan reroll has already been used on this roll")
     values = args.get("values")
@@ -728,6 +821,7 @@ def _merchant_vp(db, session, character, args, rng):
     (a new die), within the roll's usual per-roll void cap."""
     if character.school not in ("merchant", "suzume_overseer"):
         raise RollRefused(f"{character.name} cannot spend void points after the roll")
+    _not_on_initiative(session, "a void point after the roll")
     f = dict(session.formula or {})
     cap = void_limits(character.to_dict())["cap"]
     if int(f.get("void_spent") or 0) + 1 > cap:

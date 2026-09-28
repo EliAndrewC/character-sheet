@@ -509,26 +509,50 @@ def execute_initiative(
     ).get("initiative")
     if not formula:  # pragma: no cover - every character has an initiative formula
         return None
+    dice = roll_initiative_dice(formula, rng)
+    scored = score_initiative(formula, dice["main"], dice["extra"])
+    return {"payload": scored["payload"], "action_dice": scored["action_dice"]}
 
-    kakita = bool(formula.get("kakita_phase_zero"))
+
+def roll_initiative_dice(formula: Dict[str, Any], rng) -> Dict[str, List[Dict[str, Any]]]:
+    """Initiative's dice in roll order: ``main`` (never rerolling 10s,
+    rules/03-combat.md) and ``extra`` - the Togashi's separate athletics-only
+    die, when the formula has one."""
     count = max(0, min(int(formula.get("rolled") or 0), MAX_DICE))
-    # Initiative never rerolls 10s (rules/03-combat.md).
-    cells = [roll_one_die(False, rng) for _ in range(count)]
+    main = [roll_one_die(False, rng) for _ in range(count)]
+    extra = [roll_one_die(False, rng)] if formula.get("togashi_athletics_extra_die") else []
+    return {"main": main, "extra": extra}
+
+
+def score_initiative(
+    formula: Dict[str, Any], cells: List[Dict[str, Any]],
+    extra: Sequence[Dict[str, Any]] = (),
+) -> Dict[str, Any]:
+    """Initiative dice -> ``{"payload", "action_dice"}``.
+
+    Keeps the LOWEST dice (a Kakita's 10 sorts first, as Phase 0), turns
+    them into action dice (``initiative_action_values``), then adds the
+    Togashi's athletics-only die (``extra``) or marks every die
+    athletics-only for the all-athletics variant, and the Mantis 4th Dan
+    die. ``payload`` is the dice-card / ``RollHistory`` shape the sheet
+    builds in ``_buildInitiativeImagePayload`` (KEPT row = the action dice,
+    ``show_total: false``).
+    """
+    kakita = bool(formula.get("kakita_phase_zero"))
     # Stable sort, so ties fall to roll order exactly as the sheet's
     # ``a.idx - b.idx`` tiebreak has them.
-    cells.sort(key=lambda c: initiative_sort_value(c["value"], kakita))
-    keep = max(0, min(int(formula.get("kept") or 0), len(cells)))
-    kept, dropped = cells[:keep], cells[keep:]
-    dropped.sort(key=lambda c: c["value"])
+    ordered = sorted(cells, key=lambda c: initiative_sort_value(c["value"], kakita))
+    keep = max(0, min(int(formula.get("kept") or 0), len(ordered)))
+    kept, dropped = ordered[:keep], ordered[keep:]
+    dropped = sorted(dropped, key=lambda c: c["value"])
 
+    athletics_only = bool(formula.get("togashi_athletics_only"))
     action_dice: List[Dict[str, Any]] = [
-        {"value": value}
+        dict({"value": value}, **({"athletics_only": True} if athletics_only else {}))
         for value in initiative_action_values([c["value"] for c in kept], formula)
     ]
-    if formula.get("togashi_athletics_extra_die"):
-        action_dice.append({
-            "value": roll_one_die(False, rng)["value"], "athletics_only": True,
-        })
+    for die in extra:
+        action_dice.append({"value": die["value"], "athletics_only": True})
     if formula.get("mantis_4th_dan_athletics_die"):
         # Never rolled - always 1.
         action_dice.append(

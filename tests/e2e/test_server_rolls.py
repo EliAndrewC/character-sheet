@@ -160,3 +160,46 @@ def test_togashi_4th_dan_reroll_is_one_server_roll(page, live_server_url):
     assert shown["historyId"] == first["historyId"]  # still the one recorded roll
     banner = page.locator('text=Togashi 4th Dan rerolled')
     assert banner.is_visible() and str(first["total"]) in banner.text_content()
+
+
+# ---------------------------------------------------------------------------
+# Initiative (Phase 5)
+# ---------------------------------------------------------------------------
+
+def test_initiative_is_rolled_by_the_server_and_starts_the_round(page, live_server_url):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    _create_roller(page, live_server_url, "ServerInit")
+    answers = []
+    page.on("response", lambda r: answers.append(r) if r.url.endswith("/roll") else None)
+    force_dice(page, [3])
+    page.locator('[data-roll-key="initiative"]').click()
+    page.wait_for_function("() => window._diceRoller.phase === 'done'", timeout=10000)
+    restore_dice(page)
+    body = answers[0].json()
+    assert body["formula"]["is_initiative"] and body["action_dice"]
+    values = [d["value"] for d in body["action_dice"]]
+    assert page.evaluate("() => window._diceRoller.actionDice.map(d => d.value)") == values
+    assert page.evaluate("() => window._trackingBridge.actionDice.map(d => d.value)") == values
+    page.reload()
+    page.wait_for_function(
+        f"() => JSON.stringify(window._trackingBridge.actionDice.map(d => d.value)) === '{json.dumps(values, separators=(',', ':'))}'",
+        timeout=5000)
+
+
+def test_lucky_on_initiative_replaces_the_action_dice(page, live_server_url):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    from tests.e2e.test_pcp import _create_roller as _pcp_roller
+    _pcp_roller(page, live_server_url, "ServerInitLucky", advantages=("lucky",))
+    seen = _acts(page)
+    force_dice(page, [2])
+    page.locator('[data-roll-key="initiative"]').click()
+    page.wait_for_function("() => window._diceRoller.phase === 'done'", timeout=10000)
+    first = page.evaluate("() => window._diceRoller.actionDice.map(d => d.value)")
+    force_dice(page, [8])
+    page.locator('[data-action="use-lucky"]').click()
+    body = _done_after(page, seen, 1)
+    restore_dice(page)
+    rerolled = [d["value"] for d in body["action_dice"]]
+    assert set(rerolled) == {8} and set(first) == {2}
+    assert page.evaluate("() => window._trackingBridge.actionDice.map(d => d.value)") == rerolled
+    assert page.evaluate("() => window._diceRoller.luckyPrevActionDice") == first

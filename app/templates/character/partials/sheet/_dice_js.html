@@ -326,7 +326,10 @@
             // the first place (the spend handlers are gated on canEdit), so
             // there's nothing to refresh and no informational message to
             // surface in the initiative modal.
-            _resetPerRoundAbilities() {
+            // ``serverRound``: the server starts the round for a roll it
+            // makes (and says what refreshed), so only the tab-local
+            // Mirumoto points are refreshed here.
+            _resetPerRoundAbilities(serverRound) {
                 const messages = [];
                 const t = window._trackingBridge;
                 if (!t || !t.canEdit) return messages;
@@ -337,7 +340,7 @@
                         messages.push('Mirumoto 3rd Dan points refreshed for the new combat round');
                     }
                 }
-                if (this.schoolAbilities.priest_round_conviction_refresh) {
+                if (this.schoolAbilities.priest_round_conviction_refresh && !serverRound) {
                     if ((t.getCount ? t.getCount('conviction') : 0) > 0) {
                         t.setCount('conviction', 0);
                         messages.push('Conviction pool refreshed for the new combat round');
@@ -2611,7 +2614,7 @@
                     f.kitsune_swap_to_ring = f.kitsune_swap.kitsune_swap_to_ring;
                 }
                 this.perRoundResetMessages = f.is_initiative
-                    ? this._resetPerRoundAbilities() : [];
+                    ? this._resetPerRoundAbilities(!!f.server_rolled) : [];
                 this._captureShinjoParryDieValue(f);
 
                 // The SERVER makes this roll (server-rolls-design): it checks
@@ -2770,7 +2773,11 @@
                 this._serverSessionId = data.session_id;
                 this._serverSessionMode = data.mode;
                 this._serverDice = data.dice;
-                await this.runRoll({serverDice: data.dice, historyId: data.history_id});
+                if (data.notes) {
+                    this.perRoundResetMessages = [...(this.perRoundResetMessages || []), ...data.notes];
+                }
+                await this.runRoll({serverDice: data.dice, historyId: data.history_id,
+                                    serverActionDice: data.action_dice});
             },
 
             retryServerRoll() {
@@ -2935,7 +2942,20 @@
 
                 // Initiative: compute action dice with school effects
                 this.actionDice = [];
-                if (isInit) {
+                if (isInit && opts.serverActionDice) {
+                    // The server turned the dice into action dice and, for an
+                    // editor, started the round with them (the tab already
+                    // adopted that state). The Togashi's separate athletics
+                    // die is shown appearing after the main dice, as before.
+                    const extra = opts.serverActionDice.filter(
+                        d => d.athletics_only && !d.mantis_4th_dan && !this.formula.togashi_athletics_only);
+                    if (extra.length) {
+                        await window.L7RDice.animateDice(
+                            extra.map(d => ({value: d.value, parts: [d.value]})), false,
+                            this.prefs.dice_animation_enabled, playSound);
+                    }
+                    this.actionDice = opts.serverActionDice.map(d => ({ ...d }));
+                } else if (isInit) {
                     // Hiruma 4th Dan (-2, min 1), Shinjo 4th Dan (highest
                     // := 1) and Kakita (10 -> Phase 0), in that order. The
                     // arithmetic lives in roll_math.js because the server
@@ -4190,7 +4210,8 @@
                 }
                 this._adoptServerResult(data);
                 this.phase = 'done';
-                this._prerenderRollImage(this._buildRollImagePayload());
+                this._prerenderRollImage(this.formula?.is_initiative
+                    ? this._buildInitiativeImagePayload() : this._buildRollImagePayload());
                 this._patchRollHistoryNow();
                 return data;
             },
@@ -4199,6 +4220,16 @@
                 this._serverDice = data.dice;
                 this.formula = { ...this.formula, ...data.formula };
                 const p = data.payload || {};
+                if (this.formula.is_initiative) {
+                    // A reroll of initiative: new action dice (the server
+                    // restarted the round with them); the old set stays on
+                    // show beside them.
+                    this.luckyPrevActionDice = (this.actionDice || []).map(d => d.value);
+                    this._computeResultState(data.dice, this.formula.kept, this.formula.flat);
+                    this.actionDice = (data.action_dice || []).map(d => ({ ...d }));
+                    if (p.lucky) this.luckyRollPair = p.lucky;
+                    return;
+                }
                 const cell = c => ({ value: c.parts.reduce((a, b) => a + b, 0), parts: c.parts });
                 this.keptDice = (p.kept || []).map(cell);
                 this.unkeptDice = (p.dropped || []).map(cell);

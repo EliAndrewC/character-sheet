@@ -1,6 +1,6 @@
 # Server-side Rolls and State Changes - Design
 
-Status: **Phases 1-4 done; Phase 5 next.** Decisions S1-S7 in section 8.
+Status: **Phases 1-5 done; Phase 6 next.** Decisions S1-S7 in section 8.
 
 ## 1. Goal
 
@@ -216,15 +216,27 @@ removes the old ones.
       "merchant or hida or togashi"`, `test_professions.py -k "merchant or wave"`
 
 ### Phase 5 - Initiative and rounds
-- [ ] Initiative (both Togashi variants), rerolls on initiative, Merchant 5th keep-lowest, round
-      start, action-die operations
-- [ ] Clicktests: `test_rolls.py -k initiative`, `test_school_abilities.py -k "kakita or shinjo or
-      hiruma or mantis"`
+- [x] Initiative (both Togashi variants), rerolls on initiative, Merchant 5th keep-lowest, round
+      start, action-die operations: `initiative` / `initiative:athletics` are session rolls
+      (`roll_sessions._start_initiative`); `roll_engine.roll_initiative_dice` + `score_initiative`
+      are shared with the Discord command, which now also marks every die of the all-athletics
+      variant. A live roll starts the round with `tracking.start_combat_round` (Priest 5th Dan
+      conviction, per-round state) and records; Lucky / PCP rerolls take the new set and restart
+      the round. Initiative refuses bonuses and the partial rerolls (Merchant 5th Dan is never
+      offered on initiative, so its keep-lowest branch goes with the browser code in Phase 10).
+      Action-die operations were Phase 2. Mirumoto round points are persisted with their spends
+      in Phase 6
+- [x] Clicktests: `-k "initiative or action_di or round"` across e2e (83), and
+      `test_school_abilities.py -k "(kakita or shinjo or hiruma or mantis or togashi) and
+      (initiative or phase_0 or round or posture or 4th_dan ...)"` (the whole-school selection is
+      173 tests, over the guard)
 
 ### Phase 6 - Parry and feint
 - [ ] Parry (predeclared, interrupt, athletics), feint, and their hooks: Mirumoto temp void, Shinjo
       decrement and bank, Hiruma bank, feint temp void, Akodo feint, Bayushi and Ide banks, and the
       Shiba and Bayushi sub-damage rolls (recorded, per 5.5)
+- [ ] Mirumoto 3rd Dan round points persisted in `adventure_state`, spent on the session and
+      cleared by `start_combat_round` (S4, settles 5.4)
 - [ ] Clicktests: `test_rolls.py -k "parry or feint"`, `test_school_abilities.py -k "shiba or
       bayushi or ide or akodo"`
 

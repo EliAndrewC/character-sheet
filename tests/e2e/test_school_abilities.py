@@ -4269,11 +4269,15 @@ def test_kakita_phase_zero_attack_spends_the_clicked_die(page, live_server_url):
     _create_char(page, live_server_url, "KakitaP0Spend", "kakita_duelist",
                  knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
     # Two dice: a Phase-0 die at index 0 and a regular die at index 1.
-    page.evaluate("""() => {
-        window._trackingBridge.actionDice = [
+    # Saved, not just set on the tab: spending a die is a server operation.
+    page.evaluate("""async () => {
+        const t = window._trackingBridge;
+        t.actionDice = [
             {value: 0, spent: false},
             {value: 5, spent: false},
         ];
+        await t.save();
+        await t.whenSaved();
     }""")
     # Open the Phase-0 die's menu and pick Iaijutsu Attack.
     page.locator(
@@ -4283,6 +4287,7 @@ def test_kakita_phase_zero_attack_spends_the_clicked_die(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
     page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
     _wait_attack_result(page)
+    page.wait_for_function("() => window._trackingBridge.actionDice[0]?.spent === true", timeout=5000)
     state = page.evaluate("""() => window._trackingBridge.actionDice.map(d => ({
         value: d.value, spent: d.spent,
     }))""")
@@ -9917,6 +9922,9 @@ def test_mantis_4th_dan_die_spendable(page, live_server_url):
         const i = t.actionDice.findIndex(d => d.mantis_4th_dan);
         t.spendActionDie(i);
     }""")
+    page.wait_for_function(
+        "() => (window._trackingBridge.actionDice || []).some(d => d.mantis_4th_dan && d.spent)",
+        timeout=5000)
     state = page.evaluate("""() => {
         const d = (window._trackingBridge?.actionDice || [])
             .find(x => x.mantis_4th_dan);

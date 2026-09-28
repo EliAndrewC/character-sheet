@@ -2188,6 +2188,8 @@ The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the 
 - [x] A refused reroll shows its error in the result modal and leaves the dice, total and the Lucky button as they were - `test_server_rolls.py::test_a_refused_reroll_says_so_and_changes_nothing`
 - [x] Togashi 4th Dan reroll on a server-made roll takes the new (lower) result, keeps the one history row, and shows the discarded original - `test_server_rolls.py::test_togashi_4th_dan_reroll_is_one_server_roll`
 - [x] PCP reroll-10s explodes only an Impaired server roll's 10s, and the server spends the PCP - `test_pcp.py::test_reroll_tens_explodes_only_the_tens`
+- [x] Initiative is rolled by the server: the sheet shows the server's action dice, the round starts with them, and they survive a reload - `test_server_rolls.py::test_initiative_is_rolled_by_the_server_and_starts_the_round`
+- [x] Lucky on a server initiative replaces the action dice with the reroll and shows the original set - `test_server_rolls.py::test_lucky_on_initiative_replaces_the_action_dice`
 
 ---
 
