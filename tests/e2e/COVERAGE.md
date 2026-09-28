@@ -2194,6 +2194,8 @@ The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the 
 - [x] Mirumoto: initiative fills the 3rd Dan points on the server, a parry grants the temp void point there, and a point spent in the result panel is persisted (survives a reload) - `test_server_rolls.py::test_mirumoto_parry_hooks_and_points_are_the_servers`
 - [x] Akodo feint "Succeeded" grants 4 temp void points on the server, the choice closes, and it survives a reload - `test_server_rolls.py::test_akodo_feint_void_points_are_granted_by_the_server`
 - [x] Shiba 3rd Dan parry damage is rolled (and recorded) by the server - `test_server_rolls.py::test_shiba_parry_damage_is_rolled_by_the_server`
+- [x] The attack goes to the server with the modal's TN; the sheet shows the server's total, hit and extra dice; "Make Damage Roll" rolls the damage on the server and adopts its history row - `test_server_rolls.py::test_the_attack_and_its_damage_are_the_servers`
+- [x] A failed attack request shows the attack modal's error and Retry, which re-sends the same request - `test_server_rolls.py::test_a_failed_attack_request_offers_retry`
 
 ---
 

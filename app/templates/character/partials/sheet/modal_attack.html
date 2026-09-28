@@ -408,6 +408,15 @@
                 </div>
 
                 {# ── ATTACK RESULT ── #}
+                {# The server could not make the attack (S6): error and Retry. #}
+                <div x-show="atkPhase === 'error'" x-cloak class="space-y-3 text-center py-4" data-testid="attack-error">
+                    <p class="text-sm text-red-700" x-text="atkError"></p>
+                    <button type="button" @click="retryServerAttack()" data-testid="attack-retry"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">Retry</button>
+                </div>
+                <div x-show="rerollError && (atkPhase === 'result' || atkPhase === 'damage-result')" x-cloak
+                     data-testid="attack-reroll-error"
+                     class="bg-red-50 border border-red-300 rounded p-2 text-xs text-red-800" x-text="rerollError"></div>
                 <div x-show="atkPhase === 'result'" x-cloak class="space-y-3">
                     {# Kitsune Warden Special Ability annotation #}
                     <div x-show="formula?.kitsune_swap_to_ring" x-cloak
@@ -607,7 +616,7 @@
                         <div class="text-xs text-amber-700 mb-2">Kept dice are bold. Unkept dice are dimmed. Rerolling an unkept die may change which dice are kept.</div>
                         <div class="flex gap-2">
                             <button type="button"
-                                    @click="(async () => { hidaRerollPhase = 'rerolling'; atkPhase = 'rerolling'; const allDice = [...finalDice]; const rerollTens = formula.reroll_tens || (schoolAbilities.hida_reroll && !formula.reroll_tens); const newDice = await _rerollDice(hidaRerollSelections.length, rerollTens, 'dice-animation-atk'); const sortedSel = [...hidaRerollSelections].sort((a,b)=>a-b); sortedSel.forEach((idx, j) => { allDice[idx] = { value: newDice[j].value, kept: false }; }); const sorted = allDice.map((d,i) => ({value: d.value, origIdx: i})).sort((a,b) => a.value - b.value); const keptCount = formula.kept; sorted.forEach((d,i) => { allDice[d.origIdx].kept = i >= sorted.length - keptCount; }); finalDice = allDice; keptDice = allDice.filter(d => d.kept); keptSum = keptDice.reduce((s,d) => s + d.value, 0); baseTotal = keptSum + formula.flat; atkRollTotal = baseTotal; atkRaisesSpent = 0; _atkUpdateHitState(); hidaRerollPhase = 'done'; atkPhase = 'result'; })()"
+                                    @click="hidaRerollConfirm()" data-action="hida-reroll-confirm"
                                     :disabled="hidaRerollSelections.length === 0"
                                     class="btn-primary px-3 py-1 rounded text-xs disabled:opacity-30">
                                 Reroll <span x-text="hidaRerollSelections.length"></span> dice
@@ -832,13 +841,13 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <template x-for="(b, i) in akodoBankedBonuses" :key="'akb'+i">
                                     <button x-show="!b.spent" type="button"
-                                            @click="akodoBankedBonuses[i].spent = true; akodoSpentThisRoll += b.amount; atkRollTotal += b.amount; baseTotal += b.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses();"
+                                            @click="atkAkodoBankSpend(i)" data-action="akodo-bank-spend"
                                             class="btn-primary px-2 py-1 rounded text-xs">
                                         Apply +<span x-text="b.amount"></span>
                                     </button>
                                 </template>
                                 <button type="button" x-show="akodoSpentThisRoll > 0"
-                                        @click="const last = [...akodoBankedBonuses].reverse().find(b => b.spent); if (last) { last.spent = false; akodoSpentThisRoll -= last.amount; atkRollTotal -= last.amount; baseTotal -= last.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses(); }"
+                                        @click="atkAkodoBankUndo()" data-action="akodo-bank-undo"
                                         class="btn-secondary px-2 py-1 rounded text-xs">
                                     Undo
                                 </button>
@@ -851,12 +860,12 @@
                             <div class="text-sm font-medium mb-1">Bayushi 4th Dan - Banked Feint Raises</div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <button x-show="bayushiBankedFeintRaise > 0" type="button"
-                                        @click="bayushiBankedFeintRaise -= 5; bayushiRaisesSpentThisRoll += 5; atkRollTotal += 5; baseTotal += 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        @click="atkBayushiSpend(1)" data-action="bayushi-raise-spend"
                                         class="btn-primary px-2 py-1 rounded text-xs">
                                     Apply +5 (<span x-text="bayushiBankedFeintRaise / 5"></span> remaining)
                                 </button>
                                 <button type="button" x-show="bayushiRaisesSpentThisRoll > 0"
-                                        @click="bayushiBankedFeintRaise += 5; bayushiRaisesSpentThisRoll -= 5; atkRollTotal -= 5; baseTotal -= 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        @click="atkBayushiSpend(-1)" data-action="bayushi-raise-undo"
                                         class="btn-secondary px-2 py-1 rounded text-xs">
                                     Undo
                                 </button>
@@ -868,7 +877,7 @@
                              class="mt-2 pt-2 border-t border-success/30">
                             <label class="flex items-center gap-2 text-sm cursor-pointer">
                                 <input type="checkbox" x-model="atkIsawaTnTrade"
-                                       @change="const amt = schoolAbilities.isawa_tn_trade_bonus || 0; if (atkIsawaTnTrade) { atkRollTotal += amt; baseTotal += amt; } else { atkRollTotal -= amt; baseTotal -= amt; } _atkUpdateHitState();"
+                                       @change="atkIsawaToggle()" data-action="isawa-trade"
                                        class="rounded border-ink/30">
                                 <span>Isawa 3rd Dan: +<span x-text="schoolAbilities.isawa_tn_trade_bonus || 0"></span> on this attack (-5 TN to be hit)</span>
                             </label>
@@ -878,9 +887,10 @@
                         <div x-show="schoolAbilities.courtier_temp_vp_on_hit" x-cloak
                              class="mt-2 bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t && t.canEdit) { t.tempVoidPoints += 1; t.save(); } $el.disabled = true; $el.textContent = 'Gained 1 temp VP';"
+                                    @click="atkCourtierVp()" :disabled="atkCourtierVpTaken" data-action="courtier-vp"
                                     class="bg-success hover:bg-success-dark text-white px-3 py-1 rounded text-xs">
-                                Gain 1 temp VP (Courtier 4th Dan - once per target)
+                                <span x-show="!atkCourtierVpTaken">Gain 1 temp VP (Courtier 4th Dan - once per target)</span>
+                                <span x-show="atkCourtierVpTaken" x-cloak>Gained 1 temp VP</span>
                             </button>
                         </div>
 
@@ -906,7 +916,7 @@
                             </span>
                         </label>
 
-                        <button type="button" @click="rollDamage()"
+                        <button type="button" @click="rollDamage()" data-action="roll-damage"
                                 class="mt-3 btn-primary px-4 py-2 rounded text-sm font-medium">
                             Make Damage Roll
                         </button>
@@ -968,13 +978,13 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <template x-for="(b, i) in akodoBankedBonuses" :key="'akbm'+i">
                                     <button x-show="!b.spent" type="button"
-                                            @click="akodoBankedBonuses[i].spent = true; akodoSpentThisRoll += b.amount; atkRollTotal += b.amount; baseTotal += b.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses();"
+                                            @click="atkAkodoBankSpend(i)" data-action="akodo-bank-spend"
                                             class="btn-primary px-2 py-1 rounded text-xs">
                                         Apply +<span x-text="b.amount"></span>
                                     </button>
                                 </template>
                                 <button type="button" x-show="akodoSpentThisRoll > 0"
-                                        @click="const last = [...akodoBankedBonuses].reverse().find(b => b.spent); if (last) { last.spent = false; akodoSpentThisRoll -= last.amount; atkRollTotal -= last.amount; baseTotal -= last.amount; _atkUpdateHitState(); window._trackingBridge?.saveBankedBonuses(); }"
+                                        @click="atkAkodoBankUndo()" data-action="akodo-bank-undo"
                                         class="btn-secondary px-2 py-1 rounded text-xs">
                                     Undo
                                 </button>
@@ -986,12 +996,12 @@
                             <div class="text-sm font-medium mb-1">Bayushi 4th Dan - Banked Feint Raises</div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <button x-show="bayushiBankedFeintRaise > 0" type="button"
-                                        @click="bayushiBankedFeintRaise -= 5; bayushiRaisesSpentThisRoll += 5; atkRollTotal += 5; baseTotal += 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        @click="atkBayushiSpend(1)" data-action="bayushi-raise-spend"
                                         class="btn-primary px-2 py-1 rounded text-xs">
                                     Apply +5 (<span x-text="bayushiBankedFeintRaise / 5"></span> remaining)
                                 </button>
                                 <button type="button" x-show="bayushiRaisesSpentThisRoll > 0"
-                                        @click="bayushiBankedFeintRaise += 5; bayushiRaisesSpentThisRoll -= 5; atkRollTotal -= 5; baseTotal -= 5; _atkUpdateHitState(); if(window._trackingBridge) window._trackingBridge.bayushiBankedFeintRaise = bayushiBankedFeintRaise; window._trackingBridge?.saveBankedBonuses();"
+                                        @click="atkBayushiSpend(-1)" data-action="bayushi-raise-undo"
                                         class="btn-secondary px-2 py-1 rounded text-xs">
                                     Undo
                                 </button>
@@ -1003,7 +1013,7 @@
                              class="mt-2 pt-2 border-t border-red-200">
                             <label class="flex items-center gap-2 text-sm cursor-pointer">
                                 <input type="checkbox" x-model="atkIsawaTnTrade"
-                                       @change="const amt = schoolAbilities.isawa_tn_trade_bonus || 0; if (atkIsawaTnTrade) { atkRollTotal += amt; baseTotal += amt; } else { atkRollTotal -= amt; baseTotal -= amt; } _atkUpdateHitState();"
+                                       @change="atkIsawaToggle()" data-action="isawa-trade"
                                        class="rounded border-ink/30">
                                 <span>Isawa 3rd Dan: +<span x-text="schoolAbilities.isawa_tn_trade_bonus || 0"></span> on this attack (-5 TN to be hit)</span>
                             </label>

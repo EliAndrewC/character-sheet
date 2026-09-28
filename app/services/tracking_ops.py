@@ -16,6 +16,8 @@ from __future__ import annotations
 from typing import Any, Callable, Dict
 
 from app.models import Character
+from app.services.attack_rolls import attack_flags
+from app.services.wound_checks import wound_check_flags
 from app.services.parry_feint import parry_feint_flags
 from app.services.per_adventure import per_adventure_abilities
 from app.services.tracking import set_serious_wounds
@@ -243,6 +245,86 @@ def _mirumoto_points(c: Character, args: Dict[str, Any]) -> None:
     c.adventure_state = state
 
 
+def _mantis_posture(c: Character, args: Dict[str, Any]) -> None:
+    """Mantis Wave-Treader Special: declare this phase's posture."""
+    if c.school != "mantis_wave_treader":
+        raise OpRefused(f"{c.name} does not take postures")
+    kind = args.get("type")
+    if kind not in ("offensive", "defensive"):
+        raise OpRefused("type must be offensive or defensive")
+    state = _state(c)
+    phase = int(state.get("mantis_posture_phase") or 1)
+    if phase > 10:
+        raise OpRefused("every phase of this round already has a posture")
+    state["mantis_posture_history"] = list(state.get("mantis_posture_history") or []) + [kind]
+    state["mantis_posture_phase"] = phase + 1
+    c.adventure_state = state
+
+
+def _mantis_3rd_dan(c: Character, args: Dict[str, Any]) -> None:
+    """Mantis 3rd Dan: spend an action die for +X on the posture's rolls for
+    the rest of the round. The die is ``index`` if given, else the 4th Dan
+    bonus die, else the highest unspent regular die."""
+    side = args.get("side")
+    if side not in ("offensive", "defensive"):
+        raise OpRefused("side must be offensive or defensive")
+    flags = attack_flags(c.to_dict())
+    if not flags["mantis_3rd_dan_" + side] or not flags["mantis_3rd_dan_x"]:
+        raise OpRefused(f"{c.name} has no Mantis 3rd Dan technique")
+    dice = [dict(d) for d in (c.action_dice or [])]
+    if args.get("index") is not None:
+        i = _int(args, "index")
+        if not 0 <= i < len(dice) or dice[i].get("spent"):
+            raise OpRefused("that action die cannot be spent")
+    else:
+        fourth = [j for j, d in enumerate(dice) if not d.get("spent") and d.get("mantis_4th_dan")]
+        regular = [j for j, d in enumerate(dice) if not d.get("spent") and not d.get("athletics_only")]
+        if fourth:
+            i = fourth[0]
+        elif regular:
+            i = max(regular, key=lambda j: (int(dice[j].get("value") or 0), -j))
+        else:
+            raise OpRefused("no action die left to spend")
+    dice[i]["spent"] = True
+    dice[i]["spent_by"] = f"Mantis 3rd Dan ({side})"
+    c.action_dice = dice
+    state = _state(c)
+    key = f"mantis_{side}_3rd_dan_accum"
+    state[key] = int(state.get(key) or 0) + flags["mantis_3rd_dan_x"]
+    c.adventure_state = state
+
+
+def _kakita_interrupt(c: Character, args: Dict[str, Any]) -> None:
+    """Kakita Duelist Phase 0 interrupt: the two highest unspent regular
+    action dice pay for it."""
+    if c.school != "kakita_duelist":
+        raise OpRefused(f"{c.name} has no Phase 0 interrupt")
+    dice = [dict(d) for d in (c.action_dice or [])]
+    free = sorted((j for j, d in enumerate(dice) if not d.get("spent") and not d.get("athletics_only")),
+                  key=lambda j: -int(dice[j].get("value") or 0))
+    if len(free) < 2:
+        raise OpRefused("the interrupt needs two unspent action dice")
+    for j in free[:2]:
+        dice[j]["spent"] = True
+        dice[j]["spent_by"] = "Kakita Phase 0 interrupt"
+    c.action_dice = dice
+
+
+def _akodo_reflect(c: Character, args: Dict[str, Any]) -> None:
+    """Akodo 5th Dan: void points spent after taking damage (10 light wounds
+    back per point). Drawn like any spend, with its school consequences."""
+    if not wound_check_flags(c.to_dict())["akodo_reflect_damage"]:
+        raise OpRefused(f"{c.name} cannot reflect damage")
+    count = _int(args, "count")
+    if count < 1:
+        raise OpRefused("spend at least 1 void point")
+    try:
+        plan = plan_void_spend(c, 0, activation_cost=count, roll_label="the 5th Dan reflect")
+    except VoidSpendRefused as exc:
+        raise OpRefused(str(exc)) from None
+    apply_void_spend(c, plan)
+
+
 OPS: Dict[str, Callable[[Character, Dict[str, Any]], None]] = {
     "light_wounds": _light_wounds,
     "take_serious": _take_serious,
@@ -259,6 +341,10 @@ OPS: Dict[str, Callable[[Character, Dict[str, Any]], None]] = {
     "action_die": _action_die,
     "clear_action_dice": _clear_action_dice,
     "mirumoto_points": _mirumoto_points,
+    "mantis_posture": _mantis_posture,
+    "mantis_3rd_dan": _mantis_3rd_dan,
+    "kakita_interrupt": _kakita_interrupt,
+    "akodo_reflect": _akodo_reflect,
 }
 
 

@@ -47,6 +47,8 @@ from app.services.dark_secret import (
 from app.data import shosuro_lowest_3_avg
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.roll_sessions import server_rolled
+from app.services.attack_rolls import attack_flags
+from app.services.wound_checks import wound_check_flags
 from app.services.parry_feint import parry_feint_flags
 from app.services.special_rolls import can_bless, performs_impaired_ritual, xk1_ability
 from app.services.party import (
@@ -577,8 +579,9 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         for p in party_chars:
             p_dan = party_member_dan(p)
             # Check if this party member is a Daidoji with 3rd Dan counterattack raises
-            if p.school == "daidoji_yojimbo" and p_dan >= 3:
-                p_attack = (p.skills or {}).get("attack", 1)
+            p_flags = wound_check_flags(p.to_dict())
+            if p_flags["daidoji_counterattack_raises"]:
+                p_attack = p_flags["daidoji_counterattack_raises_amount"]
                 daidoji_counterattack_party.append({
                     "name": p.name,
                     "raises": p_attack,
@@ -717,17 +720,14 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
     worldliness_max = void_limits_now["worldliness_max"]
     # Mirumoto 5th Dan: VP provides +10 on combat rolls (in addition to +1k1)
     mirumoto_5th_dan_bonus = combat_vp_flat_bonus(char_dict)
-    # Akodo 4th Dan: VP on wound checks also gives a free raise (+5 each)
-    akodo_4th_dan_wc_raise = character.school == "akodo_bushi" and dan >= 4
-    # Yogo Warden 4th Dan: VP on wound checks also gives a free raise (+5 each)
-    yogo_4th_dan_wc_raise = character.school == "yogo_warden" and dan >= 4
 
     attack_skill = char_dict.get("attack", 1)
     void_spend_config = {
         "cap": void_spend_cap,
         "worldliness_max": worldliness_max,
         "combat_vp_flat_bonus": mirumoto_5th_dan_bonus,
-        "wc_vp_free_raise": akodo_4th_dan_wc_raise or yogo_4th_dan_wc_raise,
+        # Akodo / Yogo 4th Dan: VP after a wound check is a free raise (+5 each)
+        "wc_vp_free_raise": wound_check_flags(char_dict)["wc_vp_free_raise"],
     }
 
     # School-specific ability flags for client-side conditional UI
@@ -744,13 +744,12 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Dan, Bayushi Special), shared with the server's NPC damage roll.
         **damage_flags(char_dict),
         **parry_feint_flags(char_dict),
+        **attack_flags(char_dict),
+        **wound_check_flags(char_dict),
         # Matsu 5th Dan: defender LW reset to 15 after dealing serious wounds
         "matsu_lw_reset_15": character.school == "matsu_bushi" and dan >= 5,
         # Akodo 5th Dan: spend VP after damage to deal 10 LW per VP back
-        "akodo_reflect_damage": character.school == "akodo_bushi" and dan >= 5,
         # Isawa Duelist 3rd Dan: trade -5 TN for +3*attack on attack
-        "isawa_tn_trade": character.school == "isawa_duelist" and dan >= 3,
-        "isawa_tn_trade_bonus": 3 * attack_skill if character.school == "isawa_duelist" and dan >= 3 else 0,
         # Otaku 4th Dan: after lunging, the usual lunge penalty (attackers
         # gain a free raise on their next attack against the lunger this
         # round) is suppressed. Display note only — the lunge attacker-raise
@@ -771,16 +770,13 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             if character.school == "shosuro_actor" and dan >= 5 else {}
         ),
         # Matsu 4th Dan: miss by <20 on double attack = hit with no extra damage
-        "matsu_near_miss": character.school == "matsu_bushi" and dan >= 4,
         # Ide 4th Dan: +1 VP nightly regen (display only)
         "ide_extra_vp_regen": character.school == "ide_diplomat" and dan >= 4,
         # Yogo Warden Special: gain temp VP when taking serious wounds
-        "yogo_temp_vp_on_sw": character.school == "yogo_warden",
         # Mirumoto Special: gain temp VP after any parry roll
         # Akodo Special: gain 4 temp VP on successful feint, 1 on unsuccessful
         # Bayushi 4th Dan: free raise on future attack after any feint
         # Otaku 5th Dan: trade 10 rolled damage dice for 1 auto serious wound
-        "otaku_trade_dice_for_sw": character.school == "otaku_bushi" and dan >= 5,
         # Kitsune Warden 4th Dan: 10-dice floor on athletics rolls (the
         # (2*Ring)k(Ring) formula and athletics-attack/parry combat formulas).
         # Rolled count only - kept stays at the ring value. Wired up in
@@ -805,7 +801,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
             character.school_ring_choice or "" if character.school == "kitsune_warden" else ""
         ),
         # Isawa Duelist 5th Dan: bank wound check excess for future wound check
-        "isawa_bank_wc_excess": character.school == "isawa_duelist" and dan >= 5,
         # Shinjo 5th Dan: bank parry excess for future wound check
         # Feint knack: 1 temp VP on successful feint (non-Akodo feint schools).
         # Schools listed here have feint in their school_knacks; if you add or
@@ -823,10 +818,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # (which Yogo Warden 4th Dan shares); this flag is Akodo-only and drives
         # the attack and dice-roller result modals.
         # Akodo 3rd Dan: bank wound check excess * attack for attack bonus
-        "akodo_wc_attack_bonus": character.school == "akodo_bushi" and dan >= 3,
-        "akodo_attack_skill": attack_skill if character.school == "akodo_bushi" and dan >= 3 else 0,
         # Courtier 4th Dan: temp VP after successful attack or manipulation
-        "courtier_temp_vp_on_hit": character.school == "courtier" and dan >= 4,
         # Togashi 4th Dan: reroll any contested roll after seeing result
         "togashi_reroll_contested": character.school == "togashi_ise_zumi" and dan >= 4,
         # Ide Special: feint -> lower target TN by 10
@@ -835,11 +827,7 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Bayushi 3rd Dan: feints deal Xk1 damage
         # Shiba 3rd Dan: parries deal (2X)k1 damage
         # Daidoji 3rd Dan: X free raises to wound check from counterattack
-        "daidoji_counterattack_raises": character.school == "daidoji_yojimbo" and dan >= 3,
-        "daidoji_counterattack_raises_amount": attack_skill if character.school == "daidoji_yojimbo" and dan >= 3 else 0,
         # Hida 3rd Dan: reroll 2X on counterattack, X on other attacks
-        "hida_reroll": character.school == "hida_bushi" and dan >= 3,
-        "hida_reroll_x": attack_skill if character.school == "hida_bushi" and dan >= 3 else 0,
         # Togashi 3rd Dan: 4X daily athletics raises (X = precepts skill)
         "togashi_daily_athletics_raises": character.school == "togashi_ise_zumi" and dan >= 3,
         "togashi_daily_raises_max": 4 * (char_dict.get("skills") or {}).get("precepts", 0) if character.school == "togashi_ise_zumi" and dan >= 3 else 0,
@@ -890,23 +878,18 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # Kuni Witch Hunter 5th Dan: reflect damage
         "kuni_reflect_damage": character.school == "kuni_witch_hunter" and dan >= 5,
         # Hida 5th Dan: bank counterattack excess for wound check bonus
-        "hida_counterattack_wc_bonus": character.school == "hida_bushi" and dan >= 5,
         # Mantis Wave-Treader Special: per-phase posture tracker (buttons + current-posture line).
         # Mechanical effects (attack/damage/wound-check/TN bonuses) land in later phases.
         "mantis_posture_tracking": character.school == "mantis_wave_treader",
         # Mantis Wave-Treader 5th Dan: per-round accumulator (+1 per declared
         # offensive posture to attack/damage; +1 per declared defensive posture
         # to wound checks and TN). Derived client-side from postureHistory.
-        "mantis_posture_accumulation": character.school == "mantis_wave_treader" and dan >= 5,
         # Mantis Wave-Treader 3rd Dan offensive: after an attack roll made
         # during an offensive-posture phase, spend one action die for +X
         # attack/damage for the rest of the round (X = attack skill).
-        "mantis_3rd_dan_offensive": character.school == "mantis_wave_treader" and dan >= 3,
-        "mantis_3rd_dan_x": attack_skill if character.school == "mantis_wave_treader" and dan >= 3 else 0,
         # Mantis Wave-Treader 3rd Dan defensive: after seeing an attack roll
         # made against you in a defensive-posture phase, spend one action die
         # for +X wound-check / TN for the rest of the round.
-        "mantis_3rd_dan_defensive": character.school == "mantis_wave_treader" and dan >= 3,
         # Togashi Ise Zumi treats Athletics attacks/parries as a standard
         # variant of the regular attack/parry, so those options appear in
         # the Attack and Parry roll menus and on every action die's menu.
@@ -927,7 +910,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # number of phases the spent action die was held. The client collects
         # the current phase from the player at roll time and looks up the die
         # that will be spent to compute the bonus.
-        "shinjo_phase_bonus": character.school == "shinjo_bushi",
         # Shinjo Bushi 3rd Dan: after a parry, all unspent action dice are
         # decreased by X (attack skill). A non-zero value enables the client's
         # auto-decrement hook; zero means the character is below 3rd Dan.
@@ -942,9 +924,6 @@ def view_character(request: Request, char_id: int, db: Session = Depends(get_db)
         # defender's next action, where X is the attack skill. Non-zero only
         # when 3rd Dan (X = attack skill); zero means the control stays
         # hidden on the attack modal.
-        "kakita_3rd_dan_defender_phase_bonus_x": (
-            attack_skill if character.school == "kakita_duelist" and dan >= 3 else 0
-        ),
         # Kakita Duelist 5th Dan: once per combat round at phase 0, make a
         # contested iaijutsu roll against an opponent. Damage scales +/- 1
         # rolled die per 5-point gap. The client renders a dedicated modal.

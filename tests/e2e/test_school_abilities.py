@@ -4657,13 +4657,16 @@ def test_kakita_interrupt_button_spends_two_highest_dice(page, live_server_url):
     lower dice and already-spent dice are untouched."""
     _create_char(page, live_server_url, "KakitaIntSpend", "kakita_duelist",
                  knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
-    page.evaluate("""() => {
-        window._trackingBridge.actionDice = [
+    page.evaluate("""async () => {
+        const t = window._trackingBridge;
+        t.actionDice = [
             {value: 2, spent: false},
             {value: 5, spent: false},
             {value: 8, spent: false},
             {value: 4, spent: true},
         ];
+        await t.save();
+        await t.whenSaved();
     }""")
     page.locator('[data-action="kakita-phase-zero-interrupt"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
@@ -4743,12 +4746,15 @@ def test_kakita_interrupt_rolling_does_not_spend_a_third_die(page, live_server_u
     action die - the 2 highest were the full cost."""
     _create_char(page, live_server_url, "KakitaIntNo3rdDie", "kakita_duelist",
                  knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
-    page.evaluate("""() => {
-        window._trackingBridge.actionDice = [
+    page.evaluate("""async () => {
+        const t = window._trackingBridge;
+        t.actionDice = [
             {value: 2, spent: false},
             {value: 5, spent: false},
             {value: 8, spent: false},
         ];
+        await t.save();
+        await t.whenSaved();
     }""")
     page.locator('[data-action="kakita-phase-zero-interrupt"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
@@ -4797,10 +4803,13 @@ def test_kakita_interrupt_persists_after_modal_close(page, live_server_url):
     per the rules - the cost is paid on declaration)."""
     _create_char(page, live_server_url, "KakitaIntNoRefund", "kakita_duelist",
                  knack_overrides={"double_attack": 1, "iaijutsu": 1, "lunge": 1})
-    page.evaluate("""() => {
-        window._trackingBridge.actionDice = [
+    page.evaluate("""async () => {
+        const t = window._trackingBridge;
+        t.actionDice = [
             {value: 5, spent: false}, {value: 8, spent: false},
         ];
+        await t.save();
+        await t.whenSaved();
     }""")
     page.locator('[data-action="kakita-phase-zero-interrupt"]').click()
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=5000)
@@ -7239,11 +7248,14 @@ def test_hiruma_3rd_dan_parry_then_attack_behavioral(page, live_server_url):
     _create_char(page, live_server_url, "Hiruma3FB", "hiruma_scout",
                  knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
     # Inject a banked bonus directly (avoids parry roll timing issues)
-    page.evaluate("""
+    # Saved, not just set on the tab: the server spends the bank.
+    page.evaluate("""async () => {
         window._diceRoller.hirumaBankedAttackBonus = 4;
-        if (window._trackingBridge) window._trackingBridge.hirumaBankedAttackBonus = 4;
-    """)
-    page.wait_for_timeout(200)
+        const t = window._trackingBridge;
+        t.hirumaBankedAttackBonus = 4;
+        t.saveBankedBonuses();
+        await t.whenSaved();
+    }""")
     # Bonus should show in tracking section
     page.locator('text="Banked Post-Parry Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked Post-Parry Bonuses"').is_visible()
@@ -11784,7 +11796,7 @@ def test_akodo_4th_dan_attack_vp_ignores_per_roll_cap(page, live_server_url):
     _wait_alpine(page)
     assert page.evaluate("() => window._diceRoller.voidSpendConfig.cap") == 2
     # Stock the bridge with plenty of temp VP so availability isn't the limiter.
-    page.evaluate("() => { window._trackingBridge.tempVoidPoints = 5; }")
+    save_tracking(page, tempVoidPoints=5)
     _open_attack_modal_and_roll(page, "attack")
     before_total = page.evaluate("() => window._diceRoller.atkRollTotal")
     for _ in range(3):

@@ -36,7 +36,15 @@ from app.services import special_rolls
 from app.services.dice import build_all_roll_formulas, is_impaired
 from app.services.party import party_member_data, visible_party_members
 from app.services.per_adventure import per_adventure_abilities
+from app.services import combat_math as cm
+from app.services.attack_rolls import (
+    attack_flags, attack_outcome, build_attack, current_posture, offensive_count,
+)
 from app.services.combat_math import damage_flags
+from app.services.tracking import set_serious_wounds
+from app.services.wound_checks import (
+    akodo_banked_bonus, build_wound_check, daidoji_counterattack, wound_check_flags,
+)
 from app.services.parry_feint import PARRY_KEYS, apply_post_roll_hooks, is_feint, parry_feint_flags
 from app.services.pcp import PcpRefused, spend_pcp
 from app.services.professions import holds_ability
@@ -104,9 +112,7 @@ def server_rolled(roll_key: str) -> bool:
         return True
     if not roll_key or roll_key.startswith("initiative"):
         return False
-    if roll_key == "athletics:attack":
-        return False
-    if roll_key in PARRY_KEYS:
+    if roll_key in PARRY_KEYS or roll_key in ("attack", "athletics:attack", "wound_check"):
         return True
     kind = roll_key.split(":", 1)[0]
     return kind in ("skill", "knack", "ring", "athletics")
@@ -227,6 +233,13 @@ def start_roll(
         )
         label = formula["label"]
 
+    # An attack: the modal's situational inputs, and the banks it spends.
+    consumes: list = []
+    if formula.get("is_attack_type"):
+        formula, consumes = _start_attack(character, formula, choices)
+    if roll_key == "wound_check":
+        formula, consumes = _start_wound_check(db, character, formula, choices, viewer, live, void, ow)
+
     # Otherworldliness: +1 rolled die per point, up to the roll's capacity
     # and the pool; spending any on an unskilled roll grants the skill for
     # this roll, so its 10s reroll - unless the character is Impaired.
@@ -288,7 +301,7 @@ def start_roll(
             row = RollHistory(
                 character_id=character.id, roll_key=record_key, actor_discord_id=viewer,
                 is_owner_roll=is_owner_roll, impaired_at_roll=impaired_now(char_data),
-                payload=payload,
+                payload=payload, tn=effective.get("attack_tn"),
             )
             db.add(row)
             db.flush()
@@ -302,9 +315,20 @@ def start_roll(
                  "ritual": choices.get("ritual"), "rolled": choices.get("rolled"),
                  "kept": choices.get("kept"), "reroll_tens": choices.get("reroll_tens"),
                  "predeclared": bool(choices.get("predeclared")), "notes": notes,
-                 "record": record, "is_owner_roll": is_owner_roll},
+                 "record": record, "is_owner_roll": is_owner_roll,
+                 "base_total": payload["total"]},
         formula=effective, dice=out["dice"], payload=payload, actions=[], history_id=history_id,
     )
+    if effective.get("is_attack_type"):
+        _after_attack_roll(character, session, consumes, live)
+        _write_payload(db, session)
+    if roll_key == "wound_check":
+        if live:
+            state = dict(character.adventure_state or {})
+            for key in consumes:
+                state.pop(key, None)
+            character.adventure_state = state
+        _wc_state(session)
     db.add(session)
     db.flush()
     return _answer(session, character)
@@ -397,6 +421,10 @@ def _initiative_fields(session: RollSession) -> Dict[str, Any]:
     out: Dict[str, Any] = {"notes": choices.get("notes") or []}
     if (session.formula or {}).get("is_initiative"):
         out["action_dice"] = choices.get("action_dice", [])
+    if "attack" in choices:
+        out["attack"] = choices["attack"]
+    if "wc" in choices:
+        out["wc"] = choices["wc"]
     return out
 
 
@@ -461,17 +489,22 @@ _ACTION_LABELS = {"raise": "3rd Dan free raise", "togashi_raise": "Athletics rai
                   "conviction": "Conviction", "courtier_5th": "Courtier 5th Dan",
                   "pcp_raise": "Player Character Point free raise",
                   "mirumoto": "Mirumoto 3rd Dan points", "akodo_vp": "Akodo 4th Dan void raises",
-                  "shinjo_phase": "Shinjo phases held"}
+                  "shinjo_phase": "Shinjo phases held",
+                  "isawa": "Isawa 3rd Dan (-5 TN to be hit)", "wave_man": "Wave Man miss raises",
+                  "akodo_bank": "Akodo 3rd Dan banked bonus", "bayushi_raise": "Bayushi 4th Dan banked raise",
+                  "post_bonus": "post-roll bonus",
+                  "wc_vp": "void points after the roll (4th Dan)", "matsu_bank": "Matsu 3rd Dan banked bonus",
+                  "wc_excess": "banked wound check excess"}
 
 
 def _write_payload(db: Session, session: RollSession) -> None:
     """The session's payload (and its history row) with the actions shown."""
     payload = dict(session.payload or {})
     base_bonuses = [b for b in payload.get("bonuses", []) if not b.get("post_roll")]
-    for kind, count in _counts(session).items():
-        amount = next(a.get("amount", 0) for a in session.actions if a["kind"] == kind)
+    for kind in _counts(session):
+        amount = sum(a.get("amount", 0) * a.get("count", 1) for a in session.actions if a["kind"] == kind)
         if amount:
-            base_bonuses.append({"label": _ACTION_LABELS[kind], "amount": amount * count, "post_roll": True})
+            base_bonuses.append({"label": _ACTION_LABELS[kind], "amount": amount, "post_roll": True})
     payload["bonuses"] = base_bonuses
     payload["total"] = _session_total(session)
     session.payload = payload
@@ -493,6 +526,11 @@ def act(db: Session, session: RollSession, character: Character, action: str,
     undo = action.startswith("undo_")
     name = action[5:] if undo else action
     extra: Dict[str, Any] = {}
+    if choices.get("resolved"):
+        raise RollRefused("this wound check is already resolved")
+    if (session.formula or {}).get("iaijutsu_strike") and name in (
+            "raise", "togashi_raise", "wc_vp", "matsu_bank", "wc_excess", "pcp_free_raise"):
+        raise RollRefused("only Conviction may be spent on an iaijutsu strike's wound check")
 
     if action in REROLLS:
         extra = REROLLS[action](db, session, character, args, rng or random.SystemRandom())
@@ -538,6 +576,10 @@ def act(db: Session, session: RollSession, character: Character, action: str,
         raise RollRefused(f"unknown action {action!r}")
 
     session.actions = actions
+    if _is_attack(session):
+        _attack_state(character, session)
+    if session.roll_key == "wound_check":
+        _wc_state(session)
     _write_payload(db, session)
     db.flush()
     return dict(extra, **_initiative_fields(session), **{
@@ -612,6 +654,10 @@ def _rescore(character: Character, session: RollSession, cells: list) -> None:
                         _extras(character, session))
     session.payload = dict(session.payload or {}, **scored)
     session.choices = dict(session.choices or {}, base_total=scored["total"])
+    if _is_attack(session):
+        _attack_state(character, session, redo_w1=True)
+    if session.roll_key == "wound_check":
+        _wc_state(session)
 
 
 def _rescore_initiative(character: Character, session: RollSession, cells: list) -> None:
@@ -912,7 +958,7 @@ def _once(session: RollSession, kind: str, what: str) -> None:
 
 def _mirumoto_point(db, session, character, args, rng, undo=False):
     """Mirumoto 3rd Dan: +2 per point, from the points left this round."""
-    if not _flags(character)["mirumoto_round_points"] or session.roll_key != "parry":
+    if not _flags(character)["mirumoto_round_points"] or not (session.roll_key == "parry" or _is_attack(session)):
         raise RollRefused("no 3rd Dan points on this roll")
     spent = sum(1 for a in session.actions or [] if a["kind"] == "mirumoto")
     if undo:
@@ -938,42 +984,10 @@ def _akodo_vp(db, session, character, args, rng, undo=False):
     """Akodo 4th Dan: a void point after the roll for +5 on a combat roll -
     not bound by the per-roll cap. Drawn (and consequences applied) like any
     spend; undo returns the point to the pool it came from."""
-    if not _flags(character)["akodo_combat_vp_free_raise"] or session.roll_key not in _AKODO_VP_KEYS:
+    if not _flags(character)["akodo_combat_vp_free_raise"] or not (
+            session.roll_key in _AKODO_VP_KEYS or _is_attack(session)):
         raise RollRefused("no Akodo 4th Dan void raise on this roll")
-    mine = [i for i, a in enumerate(session.actions or []) if a["kind"] == "akodo_vp"]
-    live = session.mode == "live"
-    if undo:
-        if not mine:
-            raise RollRefused("no Akodo 4th Dan raise to undo")
-        actions = list(session.actions)
-        entry = actions.pop(mine[-1])
-        session.actions = actions
-        if live:
-            if entry["source"] == "temp":
-                character.current_temp_void_points = (character.current_temp_void_points or 0) + 1
-            elif entry["source"] == "regular":
-                character.current_void_points = (character.current_void_points or 0) + 1
-            else:
-                state = dict(character.adventure_state or {})
-                state["worldliness_used"] = max(0, int(state.get("worldliness_used") or 0) - 1)
-                character.adventure_state = state
-        return {}
-    try:
-        if live:
-            plan = plan_void_spend(character, 0, activation_cost=1, roll_label="the 4th Dan raise")
-            apply_void_spend(character, plan)
-            a = plan.activation
-            source = "temp" if a.from_temp else ("regular" if a.from_regular else "worldliness")
-        else:
-            f = session.formula or {}
-            plan_void_spend(character, 0, activation_cost=int(f.get("void_spent") or 0)
-                            + int(f.get("void_activation_cost") or 0) + len(mine) + 1,
-                            roll_label="the 4th Dan raise")
-            source = "simulated"
-    except VoidSpendRefused as exc:
-        raise RollRefused(str(exc)) from None
-    session.actions = list(session.actions or []) + [{"kind": "akodo_vp", "amount": 5, "source": source}]
-    return {}
+    return _void_raise(session, character, undo, "akodo_vp", "the 4th Dan raise")
 
 
 def _akodo_feint(db, session, character, args, rng):
@@ -1084,3 +1098,462 @@ REROLLS.update({
 })
 # Actions with an undo form (the number buttons with their own rules).
 UNDOABLE = {"mirumoto_point": _mirumoto_point, "akodo_vp": _akodo_vp}
+
+
+
+# ---------------------------------------------------------------------------
+# Attacks (Phase 7)
+# ---------------------------------------------------------------------------
+
+def _is_attack(session: RollSession) -> bool:
+    return bool((session.formula or {}).get("is_attack_type"))
+
+
+def attack_specs(character: Character) -> list:
+    """The Attack specializations the modal offers as +10 boxes."""
+    return [{"text": s.get("text") or ""} for s in (character.specializations or [])
+            if "attack" in (s.get("skills") or [])]
+
+
+def _attack_state(character: Character, session: RollSession, redo_w1: bool = False) -> Dict[str, Any]:
+    """Judge the attack at its current total (Wave Man W1 is re-applied when
+    the dice changed) and keep the result on the session."""
+    f = session.formula or {}
+    flags = attack_flags(character.to_dict())
+    if redo_w1:
+        session.actions = [a for a in session.actions or [] if a["kind"] != "wave_man"]
+        copies = int(f.get("wave_man_miss_raise") or 0)
+        eff = attack_outcome(f, 0)["effective_tn"]
+        total = _session_total(session)
+        if copies and total < eff:
+            used = cm.wave_man_miss_raise(total, eff, copies)["raises_used"]
+            if used:
+                session.actions = session.actions + [{"kind": "wave_man", "amount": 5 * used}]
+    raised = sum(a["amount"] for a in session.actions or [] if a["kind"] == "wave_man")
+    out = attack_outcome(f, _session_total(session), raised, flags["matsu_near_miss"])
+    out["wave_man_raises"] = raised // 5
+    session.choices = dict(session.choices or {}, attack=out)
+    return out
+
+
+def _start_attack(character: Character, formula: Dict[str, Any], choices: Dict[str, Any]):
+    try:
+        built = build_attack(character, formula, choices, attack_specs(character))
+    except ValueError as exc:
+        raise RollRefused(str(exc)) from None
+    return built["formula"], built["consumes"]
+
+
+def _after_attack_roll(character: Character, session: RollSession, consumes: list, live: bool) -> None:
+    """What making the attack does: the Isawa trade (on by default, the
+    player may take it back), the banks it spends, Hida 5th Dan's bank."""
+    flags = attack_flags(character.to_dict())
+    if flags["isawa_tn_trade"] and flags["isawa_tn_trade_bonus"]:
+        session.actions = list(session.actions or []) + [
+            {"kind": "isawa", "amount": flags["isawa_tn_trade_bonus"]}]
+    pre_w1 = _session_total(session)
+    out = _attack_state(character, session, redo_w1=True)
+    if not live:
+        return
+    state = dict(character.adventure_state or {})
+    for key in consumes:
+        state.pop(key, None)
+    excess = pre_w1 - out["effective_tn"]
+    if (flags["hida_counterattack_wc_bonus"] and out["hit"]
+            and (session.formula or {}).get("attack_variant") == "counterattack" and excess > 0):
+        state["hida_banked_wc_bonus"] = int(state.get("hida_banked_wc_bonus") or 0) + excess
+    character.adventure_state = state
+
+
+def _attack_only(session: RollSession, what: str) -> None:
+    if not _is_attack(session):
+        raise RollRefused(f"{what} is only for an attack")
+
+
+def _akodo_bank(db, session, character, args, rng, undo=False):
+    """Akodo 3rd Dan: spend a banked wound-check bonus on this attack."""
+    _attack_only(session, "an Akodo banked bonus")
+    if not attack_flags(character.to_dict())["akodo_wc_attack_bonus"]:
+        raise RollRefused(f"{character.name} has no Akodo banked bonuses")
+    mine = [i for i, a in enumerate(session.actions or []) if a["kind"] == "akodo_bank"]
+    live = session.mode == "live"
+    state = dict(character.adventure_state or {})
+    bank = list(state.get("akodo_banked_bonuses") or [])
+    if undo:
+        if not mine:
+            raise RollRefused("no banked bonus to put back")
+        actions = list(session.actions)
+        entry = actions.pop(mine[-1])
+        session.actions = actions
+        if live:
+            state["akodo_banked_bonuses"] = bank + [entry["amount"]]
+            character.adventure_state = state
+        return {}
+    try:
+        amount = int(args.get("amount"))
+    except (TypeError, ValueError):
+        raise RollRefused("amount must be a whole number") from None
+    used = 0 if live else sum(1 for i in mine if session.actions[i]["amount"] == amount)
+    if bank.count(amount) - used <= 0:
+        raise RollRefused(f"no banked +{amount} to spend")
+    if live:
+        bank.remove(amount)
+        state["akodo_banked_bonuses"] = bank
+        character.adventure_state = state
+    session.actions = list(session.actions or []) + [{"kind": "akodo_bank", "amount": amount}]
+    return {}
+
+
+def _bayushi_raise(db, session, character, args, rng, undo=False):
+    """Bayushi 4th Dan: spend a feint's banked free raise on this attack."""
+    _attack_only(session, "a Bayushi banked raise")
+    mine = sum(1 for a in session.actions or [] if a["kind"] == "bayushi_raise")
+    live = session.mode == "live"
+    state = dict(character.adventure_state or {})
+    banked = int(state.get("bayushi_banked_feint_raise") or 0)
+    if undo:
+        if not mine:
+            raise RollRefused("no banked raise to put back")
+        actions = list(session.actions)
+        actions.pop(max(i for i, a in enumerate(actions) if a["kind"] == "bayushi_raise"))
+        session.actions = actions
+        delta = 5
+    else:
+        if banked - (0 if live else 5 * mine) < 5:
+            raise RollRefused("no banked raise to spend")
+        session.actions = list(session.actions or []) + [{"kind": "bayushi_raise", "amount": 5}]
+        delta = -5
+    if live:
+        state["bayushi_banked_feint_raise"] = banked + delta
+        character.adventure_state = state
+    return {}
+
+
+def _isawa(db, session, character, args, rng):
+    """Isawa 3rd Dan: the TN trade is on by default; the player may take it
+    back (or put it back) after seeing the roll."""
+    _attack_only(session, "the Isawa trade")
+    flags = attack_flags(character.to_dict())
+    if not flags["isawa_tn_trade"]:
+        raise RollRefused(f"{character.name} has no Isawa trade")
+    session.actions = [a for a in session.actions or [] if a["kind"] != "isawa"]
+    if args.get("on"):
+        session.actions = session.actions + [{"kind": "isawa", "amount": flags["isawa_tn_trade_bonus"]}]
+    return {}
+
+
+def _post_bonus(db, session, character, args, rng):
+    """A bonus the GM grants after the roll: the modal's "post-roll bonus"."""
+    _attack_only(session, "a post-roll bonus")
+    try:
+        amount = max(-999, min(999, int(args.get("amount") or 0)))
+    except (TypeError, ValueError):
+        raise RollRefused("amount must be a whole number") from None
+    session.actions = [a for a in session.actions or [] if a["kind"] != "post_bonus"]
+    if amount:
+        session.actions = session.actions + [{"kind": "post_bonus", "amount": amount}]
+    return {}
+
+
+def _courtier_vp(db, session, character, args, rng):
+    """Courtier 4th Dan: a temp void point after a successful attack."""
+    _attack_only(session, "the Courtier void point")
+    if not attack_flags(character.to_dict())["courtier_temp_vp_on_hit"]:
+        raise RollRefused(f"{character.name} gains no void point from an attack")
+    if not _attack_state(character, session)["hit"]:
+        raise RollRefused("only a successful attack gives the void point")
+    _once(session, "courtier_vp", "the Courtier void point")
+    _add_flag(session, "courtier_vp")
+    if session.mode == "live":
+        character.current_temp_void_points = (character.current_temp_void_points or 0) + 1
+    return {}
+
+
+def _hida_reroll(db, session, character, args, rng):
+    """Hida 3rd Dan: reroll up to X dice (2X on a counterattack, half when
+    Impaired); the new dice explode. Every bonus on the roll stays (S3,
+    settling 5.2)."""
+    _attack_only(session, "the Hida reroll")
+    flags = attack_flags(character.to_dict())
+    if not flags["hida_reroll"]:
+        raise RollRefused(f"{character.name} has no Hida 3rd Dan reroll")
+    _once(session, "hida_reroll", "the Hida reroll")
+    is_counter = (session.formula or {}).get("attack_variant") == "counterattack"
+    top = 2 * flags["hida_reroll_x"] if is_counter else flags["hida_reroll_x"]
+    if is_impaired(character.to_dict()):
+        top = -(-top // 2)
+    values = args.get("values")
+    if not isinstance(values, list) or not values:
+        raise RollRefused("choose at least one die")
+    if len(values) > top:
+        raise RollRefused(f"at most {top} dice may be rerolled")
+    cells = [dict(d) for d in session.dice or []]
+    chosen: list = []
+    for v in values:
+        i = next((j for j, d in enumerate(cells) if d["value"] == v and j not in chosen), None)
+        if i is None:
+            raise RollRefused(f"there is no {v} to reroll")
+        chosen.append(i)
+    for i in chosen:
+        cells[i] = roll_one_die(True, rng)
+    _add_flag(session, "hida_reroll")
+    _rescore(character, session, cells)
+    return {}
+
+
+def _damage(db, session, character, args, rng):
+    """Roll the damage for a hit: a session of its own (so it can be rerolled
+    and take Conviction), built by the one damage assembler, recorded as
+    ``<attack key>:damage``."""
+    _attack_only(session, "damage")
+    if args.get("tn") is not None:
+        # The TN may be corrected after the roll; the hit is judged at it.
+        try:
+            session.formula = dict(session.formula, attack_tn=max(0, int(args["tn"])))
+        except (TypeError, ValueError):
+            raise RollRefused("tn must be a whole number") from None
+    out = _attack_state(character, session)
+    if not out["hit"]:
+        raise RollRefused("only a hit rolls damage")
+    _once(session, "damage", "the damage roll")
+    f = session.formula or {}
+    data = character.to_dict()
+    flags = attack_flags(data)
+    try:
+        parry_skill = max(0, min(10, int(args.get("parry_skill") or 0)))
+        weapon = (max(0, min(10, int(args.get("weapon_rolled", 4)))),
+                  max(1, min(10, int(args.get("weapon_kept", 2)))))
+    except (TypeError, ValueError):
+        raise RollRefused("parry skill and weapon dice must be whole numbers") from None
+    trade = 0
+    if args.get("trade"):
+        if not flags["otaku_trade_dice_for_sw"]:
+            raise RollRefused(f"{character.name} cannot trade damage dice")
+        trade = 10
+    state = character.adventure_state or {}
+    extra_flats = []
+    if current_posture(state) == "offensive":
+        extra_flats.append(("offensive posture", 5))
+    if flags["mantis_posture_accumulation"] and offensive_count(state):
+        extra_flats.append(("Mantis 5th Dan (offensive posture count)", offensive_count(state)))
+    accum = int(state.get("mantis_offensive_3rd_dan_accum") or 0)
+    if flags["mantis_3rd_dan_offensive"] and accum:
+        extra_flats.append(("Mantis 3rd Dan (offensive)", accum))
+    pool = cm.damage_pool(
+        f, extra_dice=out["extra_dice"], failed_parry=bool(args.get("failed_parry")),
+        parry_skill=parry_skill, flags=damage_flags(data), weapon_dice=weapon,
+        extra_flats=tuple(extra_flats), wave_man_recover=bool(args.get("wave_man_recover", True)),
+        trade_dice=trade,
+    )
+    variant = (f.get("attack_variant") or "attack").replace("_", " ").title()
+    dformula = {
+        "label": f"{variant} damage", "rolled": pool["rolled"], "kept": pool["kept"],
+        "flat": pool["flat"], "reroll_tens": True, "is_damage_roll": True, "bonuses": [],
+        "damage_parts": pool["parts"], "void_spent": 0, "void_overflow_bonus": 0,
+        "wave_man_round_damage": f.get("wave_man_round_damage") or 0,
+        "shosuro_5th_dan": bool(f.get("shosuro_5th_dan")), "traded_for_sw": bool(trade),
+    }
+    dice = roll_dice(pool["rolled"], pool["kept"], True, rng)["in_order"]
+    scored = score_roll(data, dformula, dice, list(pool["parts"]))
+    payload = dict(scored, title=dformula["label"], formula=_formula_text(dformula))
+    key = session.roll_key + ":damage"
+    history_id = None
+    choices = session.choices or {}
+    if session.mode == "live" and choices.get("record"):
+        row = RollHistory(character_id=character.id, roll_key=key,
+                          actor_discord_id=session.viewer_discord_id,
+                          is_owner_roll=bool(choices.get("is_owner_roll")),
+                          impaired_at_roll=impaired_now(data), payload=payload)
+        db.add(row)
+        db.flush()
+        history_id = row.id
+    child = RollSession(
+        id=secrets.token_hex(16), character_id=character.id, viewer_discord_id=session.viewer_discord_id,
+        mode=session.mode, roll_key=key, formula=dformula, dice=dice, payload=payload, actions=[],
+        choices={"base_total": scored["total"], "record": choices.get("record"),
+                 "is_owner_roll": choices.get("is_owner_roll"), "parent": session.id},
+        history_id=history_id,
+    )
+    db.add(child)
+    db.flush()
+    _add_flag(session, "damage", session_id=child.id)
+    return {"damage": _answer(child, character)}
+
+
+REROLLS.update({
+    "isawa": _isawa,
+    "post_bonus": _post_bonus,
+    "courtier_vp": _courtier_vp,
+    "hida_reroll": _hida_reroll,
+    "damage": _damage,
+})
+UNDOABLE.update({"akodo_bank": _akodo_bank, "bayushi_raise": _bayushi_raise})
+
+
+
+# ---------------------------------------------------------------------------
+# Wound checks (Phase 8)
+# ---------------------------------------------------------------------------
+
+def _start_wound_check(db, character, formula, choices, viewer, live, void, ow):
+    strike = bool(choices.get("strike"))
+    if strike and (void or ow or choices.get("kitsune_swap")):
+        raise RollRefused("an iaijutsu strike's wound check takes no void and no ring swap")
+    lw = int(character.current_light_wounds or 0)
+    if not live and choices.get("light_wounds"):
+        # A test-drive against a scenario amount (Read-only Roll Mode).
+        lw = _count(choices, "light_wounds")
+    if lw <= 0:
+        raise RollRefused(f"{character.name} has no light wounds to check")
+    daidoji = None
+    if choices.get("daidoji"):
+        daidoji = daidoji_counterattack(character, visible_party_members(db, character, viewer))
+        if daidoji is None:
+            raise RollRefused("no Daidoji counterattacked this hit")
+    built = build_wound_check(character, formula, lw, strike=strike, daidoji=daidoji)
+    return built["formula"], built["consumes"]
+
+
+def _wc_state(session: RollSession) -> Dict[str, Any]:
+    f = session.formula or {}
+    out = cm.wound_check_result(_session_total(session), int(f.get("light_wounds") or 0),
+                                bool(f.get("bayushi_5th_dan_half_lw")))
+    out["light_wounds"] = int(f.get("light_wounds") or 0)
+    session.choices = dict(session.choices or {}, wc=out)
+    return out
+
+
+def _wc_only(session: RollSession, what: str) -> None:
+    if session.roll_key != "wound_check":
+        raise RollRefused(f"{what} is only for a wound check")
+
+
+def _void_raise(session, character, undo, kind, what):
+    """A void point after the roll for +5, drawn in the usual order with its
+    school consequences; undo returns it to the pool it came from."""
+    mine = [i for i, a in enumerate(session.actions or []) if a["kind"] == kind]
+    live = session.mode == "live"
+    if undo:
+        if not mine:
+            raise RollRefused(f"no {what} to undo")
+        actions = list(session.actions)
+        entry = actions.pop(mine[-1])
+        session.actions = actions
+        if live:
+            if entry["source"] == "temp":
+                character.current_temp_void_points = (character.current_temp_void_points or 0) + 1
+            elif entry["source"] == "regular":
+                character.current_void_points = (character.current_void_points or 0) + 1
+            else:
+                state = dict(character.adventure_state or {})
+                state["worldliness_used"] = max(0, int(state.get("worldliness_used") or 0) - 1)
+                character.adventure_state = state
+        return {}
+    try:
+        if live:
+            plan = plan_void_spend(character, 0, activation_cost=1, roll_label=what)
+            apply_void_spend(character, plan)
+            a = plan.activation
+            source = "temp" if a.from_temp else ("regular" if a.from_regular else "worldliness")
+        else:
+            f = session.formula or {}
+            plan_void_spend(character, 0, activation_cost=int(f.get("void_spent") or 0)
+                            + int(f.get("void_activation_cost") or 0) + len(mine) + 1, roll_label=what)
+            source = "simulated"
+    except VoidSpendRefused as exc:
+        raise RollRefused(str(exc)) from None
+    session.actions = list(session.actions or []) + [{"kind": kind, "amount": 5, "source": source}]
+    return {}
+
+
+def _wc_vp(db, session, character, args, rng, undo=False):
+    """Akodo / Yogo 4th Dan: +5 per void point spent after a wound check."""
+    _wc_only(session, "a 4th Dan void raise")
+    if not wound_check_flags(character.to_dict())["wc_vp_free_raise"]:
+        raise RollRefused(f"{character.name} has no 4th Dan void raise on wound checks")
+    return _void_raise(session, character, undo, "wc_vp", "the 4th Dan raise")
+
+
+def _spend_bank(session, character, args, undo, kind, key, what):
+    """Spend (or put back) one amount from a banked list in adventure_state."""
+    mine = [i for i, a in enumerate(session.actions or []) if a["kind"] == kind]
+    live = session.mode == "live"
+    state = dict(character.adventure_state or {})
+    bank = list(state.get(key) or [])
+    if undo:
+        if not mine:
+            raise RollRefused(f"no {what} to put back")
+        actions = list(session.actions)
+        entry = actions.pop(mine[-1])
+        session.actions = actions
+        if live:
+            state[key] = bank + [entry["amount"]]
+            character.adventure_state = state
+        return {}
+    try:
+        amount = int(args.get("amount"))
+    except (TypeError, ValueError):
+        raise RollRefused("amount must be a whole number") from None
+    used = 0 if live else sum(1 for i in mine if session.actions[i]["amount"] == amount)
+    if bank.count(amount) - used <= 0:
+        raise RollRefused(f"no {what} of +{amount} to spend")
+    if live:
+        bank.remove(amount)
+        state[key] = bank
+        character.adventure_state = state
+    session.actions = list(session.actions or []) + [{"kind": kind, "amount": amount}]
+    return {}
+
+
+def _matsu_bank(db, session, character, args, rng, undo=False):
+    """Matsu 3rd Dan: a bonus banked by a void point, spent on a wound check."""
+    _wc_only(session, "a Matsu banked bonus")
+    return _spend_bank(session, character, args, undo, "matsu_bank", "matsu_banked_wc_bonuses",
+                       "Matsu banked bonus")
+
+
+def _wc_excess(db, session, character, args, rng, undo=False):
+    """A banked excess (Isawa 5th Dan wound check, Shinjo 5th Dan parry)."""
+    _wc_only(session, "a banked excess")
+    return _spend_bank(session, character, args, undo, "wc_excess", "banked_wc_excess",
+                       "banked excess")
+
+
+def _wc_resolve(db, session, character, args, rng):
+    """The wound check's outcome, applied: ``fail`` (take the serious
+    wounds), or on a pass ``keep`` (keep the light wounds - Isawa 5th Dan and
+    Akodo 3rd Dan bank the margin) or ``take_sw`` (1 serious wound, light
+    wounds back to 0). A Yogo Warden gains a temp void point per serious
+    wound taken."""
+    _wc_only(session, "resolving")
+    out = _wc_state(session)
+    choice = args.get("choice")
+    if choice == "fail" and out["passed"]:
+        raise RollRefused("a passed wound check is not a failure")
+    if choice in ("keep", "take_sw") and not out["passed"]:
+        raise RollRefused("a failed wound check takes its serious wounds")
+    if choice not in ("fail", "keep", "take_sw"):
+        raise RollRefused("choice must be fail, keep or take_sw")
+    session.choices = dict(session.choices or {}, resolved=choice)
+    if session.mode != "live":
+        return {"resolved": choice}
+    flags = wound_check_flags(character.to_dict())
+    taken = out["serious_wounds"] if choice == "fail" else (1 if choice == "take_sw" else 0)
+    if taken:
+        set_serious_wounds(character, (character.current_serious_wounds or 0) + taken)
+        character.current_light_wounds = 0
+        if flags["yogo_temp_vp_on_sw"]:
+            character.current_temp_void_points = (character.current_temp_void_points or 0) + taken
+    elif out["margin"] > 0:
+        state = dict(character.adventure_state or {})
+        if flags["isawa_bank_wc_excess"]:
+            state["banked_wc_excess"] = list(state.get("banked_wc_excess") or []) + [out["margin"]]
+        bonus = akodo_banked_bonus(out["margin"], flags["akodo_attack_skill"])
+        if bonus:
+            state["akodo_banked_bonuses"] = list(state.get("akodo_banked_bonuses") or []) + [bonus]
+        character.adventure_state = state
+    return {"resolved": choice}
+
+
+REROLLS.update({"wc_resolve": _wc_resolve})
+UNDOABLE.update({"wc_vp": _wc_vp, "matsu_bank": _matsu_bank, "wc_excess": _wc_excess})

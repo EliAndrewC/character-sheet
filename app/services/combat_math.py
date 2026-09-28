@@ -122,23 +122,35 @@ def damage_pool(
     failed_parry: bool = False,
     parry_skill: int = 0,
     flags: Dict[str, bool] | None = None,
+    weapon_dice: tuple | None = None,
+    extra_flats: tuple = (),
+    wave_man_recover: bool = True,
+    trade_dice: int = 0,
 ) -> Dict[str, Any]:
     """The damage roll for a hit: ``{"rolled", "kept", "flat", "parts"}``,
     after the 10k10 cap. ``formula`` is the attack formula (its damage_*
     fields and attack_variant); ``flags`` are the attacker's school flags
-    (``damage_flags``)."""
+    (``damage_flags``).
+
+    The one damage assembler (server-rolls-design 5.8) - the GM's NPCs and
+    the sheet's attacks both use it. The sheet adds: ``weapon_dice`` (its
+    weapon inputs, overriding the named ``weapon``), ``extra_flats``
+    (``(label, amount)`` - the Mantis postures and accumulators),
+    ``wave_man_recover`` (W9 is the player's to claim) and ``trade_dice``
+    (Otaku 5th Dan: dice traded for a serious wound, never below 2)."""
     from app.services.roll_engine import apply_dice_cap
 
     flags = flags or {}
     variant = formula.get("attack_variant") or "attack"
     is_lunge, is_double = variant == "lunge", variant == "double_attack"
-    base_rolled, base_kept = WEAPONS.get(weapon, WEAPONS["katana"])
+    base_rolled, base_kept = weapon_dice or WEAPONS.get(weapon, WEAPONS["katana"])
     wm_weapon = wave_man_weapon_floor(base_rolled, formula.get("wave_man_weapon_dice") or 0)
     ring_val = formula.get("damage_ring_val") or 2
     ring_name = formula.get("damage_ring_name") or "Fire"
     extra_r = formula.get("damage_extra_rolled") or 0
     extra_k = formula.get("damage_extra_kept") or 0
     flat = formula.get("damage_flat_bonus") or 0
+    hiruma = formula.get("hiruma_parry_bonus") or 0
     if flags.get("bayushi_vp_damage"):
         spent = formula.get("void_spent") or 0
         extra_r += spent
@@ -166,7 +178,7 @@ def damage_pool(
             parts.append(f"-{parry_skill}k0 from failed parry")
         total_extra = failed_parry_dice_reduction(total_extra, parry_skill, mode)
         recovered = wave_man_failed_parry_dice(parry_skill, formula.get("wave_man_failed_parry_dice") or 0)
-        if recovered:
+        if recovered and wave_man_recover:
             total_extra += recovered
             parts.append(f"+{recovered}k0 recovered from Wave Man")
         if is_lunge and flags.get("otaku_lunge_extra_die"):
@@ -176,10 +188,21 @@ def damage_pool(
         parts.append(f"+{wm_weapon - base_rolled}k0 weapon dice from Wave Man")
     if flat:
         parts.append(f"+{flat} flat")
+    if hiruma:
+        # Hiruma 3rd Dan: the post-parry bank adds to damage as well.
+        parts.append(f"+{hiruma} from Hiruma post-parry bonus")
+        flat += hiruma
+    for label, amount in extra_flats:
+        parts.append(f"+{amount} flat from {label}")
+        flat += amount
     rolled = wm_weapon + ring_val + extra_r + total_extra
     if flags.get("ikoma_10_dice_floor") and not failed_parry and rolled < 10:
         parts.append(f"rolled {rolled} -> 10 (4th Dan, unparried)")
         rolled = 10
+    if trade_dice:
+        traded = max(2, rolled - trade_dice)
+        parts.append(f"-{rolled - traded}k0 traded for a serious wound (5th Dan)")
+        rolled = traded
     capped = apply_dice_cap(rolled, base_kept + extra_k, flat)
     if capped["overflow_flat"]:
         parts.append(f"+{capped['overflow_flat']} from rolling above 10k10")

@@ -283,3 +283,60 @@ def test_shiba_parry_damage_is_rolled_by_the_server(page, live_server_url):
     restore_dice(page)
     body = seen[-1].json()["sub_damage"]
     assert body["total"] == 7 and page.evaluate("() => window._diceRoller.subDamageTotal") == 7
+
+
+# ---------------------------------------------------------------------------
+# Attack and damage (Phase 7)
+# ---------------------------------------------------------------------------
+
+def test_the_attack_and_its_damage_are_the_servers(page, live_server_url):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    from tests.e2e.test_attack_modal import _create_attacker, _roll_attack_and_wait, _wait_alpine
+    _create_attacker(page, live_server_url, "ServerAttack")
+    _wait_alpine(page)
+    sent = _rolls(page)
+    answers = []
+    page.on("response", lambda r: answers.append(r) if r.url.endswith("/roll") else None)
+    acts = _acts(page)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=5000)
+    page.locator('[data-modal="attack"] select:visible').first.select_option("5")
+    force_dice(page, [9])
+    _roll_attack_and_wait(page)
+    body = json.loads(sent[-1].post_data)
+    assert body["roll_key"] == "attack" and isinstance(body["tn"], int)
+    attack = answers[-1].json()
+    state = page.evaluate("() => ({total: window._diceRoller.atkRollTotal, hit: window._diceRoller.atkHit,"
+                          " extra: window._diceRoller.atkExtraDice})")
+    assert state == {"total": attack["total"], "hit": attack["attack"]["hit"],
+                     "extra": attack["attack"]["extra_dice"]}
+    assert attack["attack"]["hit"]
+    force_dice(page, [6])
+    page.locator('[data-action="roll-damage"]').click()
+    page.wait_for_function("() => window._diceRoller.atkPhase === 'damage-result'", timeout=10000)
+    restore_dice(page)
+    damage = acts[-1].json()["damage"]
+    assert page.evaluate("() => window._diceRoller.atkDamageTotal") == damage["total"]
+    assert page.evaluate("() => window._diceRoller._rollHistoryId") == damage["history_id"]
+
+
+def test_a_failed_attack_request_offers_retry(page, live_server_url):
+    from tests.e2e.test_attack_modal import _create_attacker, _wait_alpine
+    _create_attacker(page, live_server_url, "ServerAttackRetry")
+    _wait_alpine(page)
+    seen = []
+
+    def handler(route):
+        seen.append(json.loads(route.request.post_data))
+        if len(seen) == 1:
+            route.abort()
+        else:
+            route.continue_()
+    page.route("**/roll", handler)
+    page.locator('[data-roll-key="attack"]').click()
+    page.wait_for_selector('[data-modal="attack"]', state="visible", timeout=5000)
+    page.locator('[data-modal="attack"] [data-action="roll-attack"]').click()
+    page.locator('[data-testid="attack-retry"]').wait_for(state="visible", timeout=5000)
+    page.locator('[data-testid="attack-retry"]').click()
+    page.wait_for_function("() => window._diceRoller.atkPhase === 'result'", timeout=10000)
+    assert len(seen) == 2 and seen[0]["request_id"] == seen[1]["request_id"]

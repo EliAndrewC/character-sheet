@@ -579,7 +579,7 @@
                     this.adventureState.mantis_posture_phase = this.posturePhase;
                     this.adventureState.mantis_posture_history = this.postureHistory;
                     this._dispatchMantisPostureChanged(type);
-                    this.save();
+                    this.op('mantis_posture', {type: type});
                 },
                 resetMantisRound() {
                     // Zeros the Mantis per-round posture tracker and any
@@ -699,7 +699,8 @@
                     this.offensive3rdDanAccum = (this.offensive3rdDanAccum || 0) + amount;
                     this.adventureState.mantis_offensive_3rd_dan_accum = this.offensive3rdDanAccum;
                     this._dispatchMantisPostureChanged(this.currentPosture());
-                    this.save();
+                    // The server picks the same die by the same rule.
+                    this.op('mantis_3rd_dan', {side: 'offensive'});
                     return true;
                 },
                 incrementMantis3rdDanDefensive(amount) {
@@ -715,7 +716,7 @@
                     this.defensive3rdDanAccum = (this.defensive3rdDanAccum || 0) + amount;
                     this.adventureState.mantis_defensive_3rd_dan_accum = this.defensive3rdDanAccum;
                     this._dispatchMantisPostureChanged(this.currentPosture());
-                    this.save();
+                    this.op('mantis_3rd_dan', {side: 'defensive'});
                     return true;
                 },
                 // Kakita Phase 0 Interrupt: spend the two highest unspent
@@ -744,7 +745,7 @@
                         d.spent = true;
                         d.spent_by = 'Kakita Phase 0 interrupt';
                     }
-                    this.save();
+                    this.op('kakita_interrupt');
                     return true;
                 },
                 kakitaPhase0Interrupt() {
@@ -776,7 +777,7 @@
                     this.actionMenuOpen = null;
                     this.actionMenuHoverRow = null;
                     this._dispatchMantisPostureChanged(this.currentPosture());
-                    this.save();
+                    this.op('mantis_3rd_dan', {side: posture, index: i});
                     return true;
                 },
 

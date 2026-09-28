@@ -1,6 +1,6 @@
 # Server-side Rolls and State Changes - Design
 
-Status: **Phases 1-6 done; Phase 7 next.** Decisions S1-S7 in section 8.
+Status: **Phases 1-7 done; Phase 8 in progress (server half built).** Decisions S1-S7 in section 8.
 
 ## 1. Goal
 
@@ -250,14 +250,28 @@ removes the old ones.
       tracking only on the tab were fixed
 
 ### Phase 7 - Attack and damage
-- [ ] The attack modal's situational inputs as the roll's choices; banked-bonus consumption;
-      Isawa trade; Mantis postures; W1; Matsu near miss; Doji; Kakita phases
-- [ ] The attack window's rerolls on the session: Lucky / PCP (reroll, free raise, reroll 10s),
-      Hida 3rd Dan chosen-dice reroll keeping every bonus (S3, settles 5.2)
-- [ ] Damage through `combat_math.damage_pool` (one assembler, per 5.8), Otaku 5th Dan trade,
-      Hiruma post-parry, Mantis accumulators
-- [ ] Clicktests: `test_attack_modal.py`, `test_school_abilities.py -k "<school>"` per school
-      touched
+- [x] The attack modal's situational inputs as the roll's choices; banked-bonus consumption;
+      Isawa trade; Mantis postures; W1; Matsu near miss; Doji; Kakita phases. Every attack variant is
+      a session roll. `attack_rolls.build_attack` turns the inputs (TN, extra bonus, specialization
+      boxes, Doji / Shinjo / Kakita phases, the spent die) plus what the server knows (the Mantis
+      postures and accumulators, the Hiruma / Ide banks it spends) into the rolled formula;
+      `attack_outcome` is the hit, Matsu's near miss, W1 and the extra dice, re-judged after every
+      action. The Isawa trade is an action (on by default). One flag definition, `attack_flags`.
+      Mantis postures, the Mantis 3rd Dan spends and the Kakita interrupt are tracking operations
+- [x] Damage through `combat_math.damage_pool` (one assembler, per 5.8), Otaku 5th Dan trade,
+      Hiruma post-parry, Mantis accumulators: `damage_pool` grew the sheet's inputs (weapon dice,
+      extra flats, W9 claim, trade) and the Hiruma bonus; W4's rounding is part of `score_roll`.
+      Damage is a child session (`damage` action), recorded as `<attack key>:damage`, with its own
+      Lucky / PCP rerolls and Conviction
+- [x] The attack window's rerolls on the session: Lucky / PCP (reroll, free raise, reroll 10s),
+      Hida 3rd Dan chosen-dice reroll keeping every bonus (S3, settles 5.2). Plus the panel's
+      choices: raises, Togashi raises, Conviction, Mirumoto points, Akodo 4th Dan void raise, Akodo
+      3rd Dan and Bayushi 4th Dan banks, the post-roll bonus, the Courtier void point
+- [x] Clicktests: `-k "(attack or damage or mantis or kakita) and not test_school_abilities"`,
+      `test_school_abilities.py -k "attack or damage"`, and `-k "(mantis or kakita) and (posture or
+      interrupt or 3rd_dan or phase_0) and not (attack or damage)"`. Nine tests fixed: most set
+      state only on the tab; the Lucky pair tests now force the server's dice; a TN corrected after
+      the roll is sent with the damage roll and the server re-judges at it
 
 ### Phase 8 - Wound check
 - [ ] Wound check, post-roll void (with consequences, per 5.3), keep / take, auto-fail, banks

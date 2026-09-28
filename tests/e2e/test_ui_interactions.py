@@ -968,6 +968,8 @@ def _stub_low_reroll(page):
             }
         }
     }""")
+    # Rerolls of a roll the server made take their dice from the server.
+    page.set_extra_http_headers({"X-Test-Dice": "1"})
 
 
 def test_lucky_auto_uses_higher_on_attack(page, live_server_url):
@@ -979,6 +981,8 @@ def test_lucky_auto_uses_higher_on_attack(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("15")
+    from tests.e2e.dice_control import force_dice
+    force_dice(page, [9])
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     before = page.evaluate("""() => {
@@ -1106,6 +1110,8 @@ def test_lucky_keeps_reroll_when_higher_attack(page, live_server_url):
     page.wait_for_selector('[data-modal="attack"]', state='visible', timeout=3000)
     modal = page.locator('[data-modal="attack"]')
     modal.locator('select:visible').select_option("15")
+    from tests.e2e.dice_control import force_dice
+    force_dice(page, [2])
     modal.locator('[data-action="roll-attack"]').click()
     _wait_attack_result(page)
     before_total = page.evaluate("""() => {
@@ -1132,6 +1138,7 @@ def test_lucky_keeps_reroll_when_higher_attack(page, live_server_url):
             }
         }
     }""")
+    force_dice(page, [9])  # the server's reroll
     modal.locator('button:has-text("Use Lucky"):visible').first.click()
     _wait_attack_result(page)
     after = page.evaluate("""() => {

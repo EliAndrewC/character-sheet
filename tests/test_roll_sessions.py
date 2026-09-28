@@ -61,9 +61,9 @@ def fresh_limits():
     ("skill:etiquette", True), ("knack:iaijutsu", True), ("ring:Fire", True),
     ("athletics:Water", True), ("initiative", True), ("initiative:athletics", True),
     ("initiative:other", False),
-    ("parry", True), ("athletics:parry", True), ("athletics:attack", False),
-    ("knack:feint", True), ("knack:feint:athletics", True), ("attack", False),
-    ("wound_check", False), ("", False),
+    ("parry", True), ("athletics:parry", True), ("athletics:attack", True),
+    ("knack:feint", True), ("knack:feint:athletics", True), ("attack", True),
+    ("wound_check", True), ("damage", False), ("", False),
 ])
 def test_server_rolled(key, expected):
     assert rs.server_rolled(key) is expected
@@ -163,7 +163,7 @@ def test_hidden_character_is_not_found(client):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("body,message", [
-    ({"roll_key": "athletics:attack"}, "not rolled on the server"),
+    ({"roll_key": "damage"}, "not rolled on the server"),
     ({"predeclared": True}, "only a parry"),
     ({"roll_key": "initiative", "void": 1}, "without spending void"),
     ({"roll_key": "initiative:athletics"}, "has no initiative:athletics roll"),

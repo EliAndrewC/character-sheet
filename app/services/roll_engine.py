@@ -436,6 +436,15 @@ def score_roll(
         if lowest > 0:
             base_total += lowest
             extras.append(f"+{lowest} from 5th Dan (lowest 3 dice added to result)")
+    # W4 (Wave Man): damage rounds up to the next multiple of 5 (+3 if it
+    # already is one), once per copy, after every other bonus.
+    copies = formula.get("wave_man_round_damage") if formula.get("is_damage_roll") else 0
+    if copies:
+        from app.services.combat_math import wave_man_round_damage
+        rounded = wave_man_round_damage(base_total, copies)
+        if rounded != base_total:
+            extras.append(f"Wave Man: {base_total} rounded to {rounded}")
+            base_total = rounded
     # A roll whose 10s did not explode has to say so on the card.
     note = _no_reroll_note(formula, all_cells)
     if note:

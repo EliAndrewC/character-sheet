@@ -270,3 +270,64 @@ def test_schema_rejects_a_non_dict():
     assert sanitize_adventure_state(Character(name="x"), ["nope"]) == {}
     assert sanitize_adventure_state(Character(name="x"), {"mantis_posture_history": "x"}) == {
         "mantis_posture_history": []}
+
+
+# ---------------------------------------------------------------------------
+# Mantis postures, Mantis 3rd Dan, the Kakita interrupt (Phase 7)
+# ---------------------------------------------------------------------------
+
+def _mantis(client, dan=3, **kw):
+    return _char(client, school="mantis_wave_treader", school_ring_choice="Water", attack=2,
+                 knacks={"athletics": dan, "iaijutsu": dan, "worldliness": dan}, **kw)
+
+
+def test_mantis_postures_run_to_phase_ten(client):
+    cid = _mantis(client)
+    assert _op(client, cid, "mantis_posture", type="offensive").status_code == 200
+    state = _op(client, cid, "mantis_posture", type="defensive").json()["tracking"]["adventure_state"]
+    assert state["mantis_posture_history"] == ["offensive", "defensive"] and state["mantis_posture_phase"] == 3
+    assert _op(client, cid, "mantis_posture", type="sideways").status_code == 400
+    full = _mantis(client, adventure_state={"mantis_posture_phase": 11})
+    assert "every phase" in _op(client, full, "mantis_posture", type="offensive").json()["error"]
+    other = _char(client)
+    assert _op(client, other, "mantis_posture", type="offensive").status_code == 400
+
+
+def test_mantis_3rd_dan_spends_the_right_die(client):
+    dice = [{"value": 2, "spent": False}, {"value": 8, "spent": False},
+            {"value": 1, "spent": False, "athletics_only": True, "mantis_4th_dan": True}]
+    cid = _mantis(client, dan=4, action_dice=dice)
+    t = _op(client, cid, "mantis_3rd_dan", side="offensive").json()["tracking"]
+    assert t["action_dice"][2]["spent"] and t["adventure_state"]["mantis_offensive_3rd_dan_accum"] == 2
+    t = _op(client, cid, "mantis_3rd_dan", side="defensive").json()["tracking"]
+    assert t["action_dice"][1]["spent_by"] == "Mantis 3rd Dan (defensive)"
+    t = _op(client, cid, "mantis_3rd_dan", side="offensive", index=0).json()["tracking"]
+    assert t["action_dice"][0]["spent"] and t["adventure_state"]["mantis_offensive_3rd_dan_accum"] == 4
+    assert "no action die" in _op(client, cid, "mantis_3rd_dan", side="offensive").json()["error"]
+    assert "cannot be spent" in _op(client, cid, "mantis_3rd_dan", side="offensive", index=0).json()["error"]
+    assert _op(client, cid, "mantis_3rd_dan", side="up").status_code == 400
+    low = _mantis(client, dan=2, action_dice=dice)
+    assert "no Mantis" in _op(client, low, "mantis_3rd_dan", side="offensive").json()["error"]
+
+
+def test_kakita_interrupt_spends_the_two_highest(client):
+    dice = [{"value": 3, "spent": False}, {"value": 9, "spent": False}, {"value": 6, "spent": False},
+            {"value": 10, "spent": False, "athletics_only": True}]
+    cid = _char(client, school="kakita_duelist", knacks={"double_attack": 1, "iaijutsu": 1, "lunge": 1},
+                action_dice=dice)
+    t = _op(client, cid, "kakita_interrupt").json()["tracking"]
+    assert [d["spent"] for d in t["action_dice"]] == [False, True, True, False]
+    assert "two unspent" in _op(client, cid, "kakita_interrupt").json()["error"]
+    other = _char(client)
+    assert _op(client, other, "kakita_interrupt").status_code == 400
+
+
+def test_akodo_5th_dan_reflect_spends_void(client):
+    cid = _char(client, knacks={"double_attack": 5, "feint": 5, "iaijutsu": 5},
+                current_void_points=2, current_temp_void_points=1)
+    t = _op(client, cid, "akodo_reflect", count=2).json()["tracking"]
+    assert (t["current_temp_void_points"], t["current_void_points"]) == (0, 1)
+    assert "at least 1" in _op(client, cid, "akodo_reflect", count=0).json()["error"]
+    assert "reflect" in _op(client, cid, "akodo_reflect", count=5).json()["error"]
+    low = _char(client)
+    assert "cannot reflect" in _op(client, low, "akodo_reflect", count=1).json()["error"]
