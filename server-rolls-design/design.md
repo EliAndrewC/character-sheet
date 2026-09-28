@@ -1,7 +1,6 @@
 # Server-side Rolls and State Changes - Design
 
-Status: **requirements gathering.** Nothing is implemented. Section 8 lists the open questions;
-Phase 1 does not start until the GM signs off.
+Status: **requirements settled (decisions S1-S7, section 8); Phase 1 in progress.**
 
 ## 1. Goal
 
@@ -177,8 +176,8 @@ removes the old ones.
 ### Phase 0 - Requirements
 - [x] Inventory the roll flows, reroll mechanics, post-roll actions and state writes
 - [x] Draft this document
-- [ ] GM answers section 8
-- [ ] GM signs off
+- [x] GM answers section 8 (2026-09-28)
+- [x] GM signs off
 
 ### Phase 1 - Foundations and the generic roll
 - [ ] `RollSession` model (+ reaping), the `roll` and `act` endpoints, live vs simulated, recording
@@ -254,26 +253,14 @@ removes the old ones.
 - **New rules.** Behavior changes only where section 5 settles an inconsistency.
 - **New Discord commands.** They would become easy, but each one is a separate GM decision.
 
-## 8. Open questions
+## 8. Decisions (GM, 2026-09-28)
 
-1. **Test-driving (Read-only Roll Mode).**
-   - Logged-in non-editors: roll on the server in simulate mode? Recommended: yes.
-   - **Anonymous visitors:** an unauthenticated, rate-limited simulate endpoint? Or should they keep
-     browser dice? Recommendation: server for everyone, so there is one path.
-2. **Latency.** Is a short wait after each post-roll click (under the dice animation for a roll,
-   about 0.1 s for a raise) acceptable? Or should the buttons update the display optimistically and
-   reconcile with the server's answer? Recommendation: no optimism for rolls and rerolls; optimistic
-   display only for the pure +/- raise and Conviction buttons, corrected on the reply.
-3. **The section 5 inconsistencies.** Recommendation:
-   - fix 5.3, 5.5, 5.6, 5.7 and 5.8 as bugs;
-   - persist Mirumoto's points (5.4), clearing them at round start;
-   - GM ruling needed on 5.1: does a Togashi 4th Dan reroll keep the raises and void already spent
-     on the first roll? Proposal: yes, it rerolls the dice only;
-   - GM ruling needed on 5.2: does a Hida 3rd Dan reroll keep Conviction, Shosuro and raises?
-     Proposal: yes, same shape.
-4. **Undo.** Keep the undo on every post-roll action (it exists today)? Proposal: yes, as a
-   server-side undo of the session's last matching action, until the roll is closed.
-5. **Losing the connection mid-roll.** With no browser fallback, a failed request shows an error
-   and a retry. OK?
-6. **Deploy cadence.** A deploy per phase means some rolls are server-side and some are not for a
-   while, invisible to players except as fixed inconsistencies. OK?
+| # | decision |
+|---|---|
+| S1 | **One path.** Everyone rolls on the server: editors live, and logged-in non-editors and anonymous visitors in simulate mode (the anonymous path rate-limited). No browser dice for anyone, "otherwise we're just duplicating effort." |
+| S2 | **Latency plan accepted.** Rolls and rerolls always wait for the server, under the dice animation. The pure +/- raise and Conviction buttons show their effect at once and are corrected by the server's answer. |
+| S3 | **Rerolls always keep bonuses.** A reroll replaces dice and nothing else; raises, void, Conviction and every other bonus already applied stay. This settles 5.1 (Togashi 4th Dan) and 5.2 (Hida 3rd Dan) and applies to every reroll mechanic. |
+| S4 | **The other section 5 items are fixed as bugs**; Mirumoto's round points are persisted and cleared at round start (5.4). |
+| S5 | **Undo stays** on every post-roll action, as a server-side undo on the roll session. |
+| S6 | **No browser fallback.** If the server cannot be reached, the roll shows an error and a Retry button. |
+| S7 | **A deploy per phase**, with old and new paths side by side until Phase 10. |
