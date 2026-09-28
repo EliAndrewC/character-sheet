@@ -245,6 +245,11 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 - [x] Combat rolls view
 - [ ] Clicktests + `COVERAGE.md`; responsive checks; deploy
 
+### To finish (needs the GM)
+- [ ] Push the simulator commits (`d75e505`, `e7961e6`, `3e9fec9`, `86d21d4`), then deploy this app - no token here can push the simulator repo (this repo's `GITHUB_TOKEN` is a fine-grained PAT scoped to `character-sheet`; it gets a 403 there). Deploying first would install GitHub's old simulator, and NPC generation would fail.
+- [ ] Turn on name suggestions: put the `GM_ASSISTANT_NAMES_TOKEN` value from this repo's `.env` into gm-assistant's `webapp/development-secrets.ini` as `[character_sheet] names_token`, and deploy gm-assistant. This app's side is done: `GM_ASSISTANT_URL` / `GM_ASSISTANT_NAMES_TOKEN` are in `.env` and staged as Fly secrets, so they take effect on the next deploy.
+- [ ] Review the three new progression lists (Phase 2).
+
 ### Later
 - [ ] Explicit phase ticking, for per-phase abilities (D11)
 - [ ] The sheet's own roll windows calling the server API (D15)
