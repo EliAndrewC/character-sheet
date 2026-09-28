@@ -24,6 +24,7 @@ from __future__ import annotations
 import functools
 import importlib.metadata
 import json
+import os
 import random
 import statistics
 import subprocess
@@ -198,9 +199,14 @@ def draw_combat_share(target: float, rng: random.Random) -> float:
 def simulator_version() -> str:
     """The simulator commit this process builds with, for NPC provenance.
 
-    A deploy installs from GitHub, which records the commit; a dev checkout
-    installed editable is asked for its HEAD directly.
+    A deploy installs a copy of the simulator's committed HEAD and is told
+    its commit through ``SIMULATOR_COMMIT`` (scripts/deploy.sh); a checkout
+    installed editable is asked for its HEAD directly; a GitHub install
+    records it in pip's metadata.
     """
+    stamp = os.environ.get("SIMULATOR_COMMIT", "").strip()
+    if stamp:
+        return stamp
     try:
         dist = importlib.metadata.distribution("l7r-combat-simulator")
     except importlib.metadata.PackageNotFoundError:

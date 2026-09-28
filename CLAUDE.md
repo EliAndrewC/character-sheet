@@ -35,7 +35,7 @@ playwright install-deps chromium
 
 `libmagic1` is required by `python-magic` (importer format detection) and `antiword` is required by the `.doc` ingest path in `app/services/import_ingest.py`. `libcairo2` is required by `cairocffi`/`CairoSVG`, used by the dice-card PNG renderer; without it `tests/test_dice_card.py` errors out at collection time. All three are missing from `requirements.txt` because they are system packages; without them `app.main` fails to import and large portions of the unit suite never run. `reportlab` is a dev-only dependency (PDF fixtures); it is not imported by `app/` at runtime, so it lives outside `requirements.txt`.
 
-The combat simulator (`l7r-combat-simulator`, package `simulation`) generates the GM's NPCs (see "GM combat tracker and generated NPCs"). It is deliberately NOT in `requirements.txt`: locally it is an **editable install of the checkout** at `/host-l7r-repo/simulator`, so a change there is live here at once; without that mount, `pip install "l7r-combat-simulator @ git+https://github.com/EliAndrewC/claude-guided-l7r-combat-simulator@master"`. The Dockerfile installs the simulator's latest pushed `master` on every deploy, in its own cache-busted layer. `app.services.npc_generator` imports it at module load, so without it `app.main` fails to import.
+The combat simulator (`l7r-combat-simulator`, package `simulation`) generates the GM's NPCs (see "GM combat tracker and generated NPCs"). It is deliberately NOT in `requirements.txt`: locally it is an **editable install of the checkout** at `/host-l7r-repo/simulator`, so a change there is live here at once; without that mount, `pip install "l7r-combat-simulator @ git+https://github.com/EliAndrewC/claude-guided-l7r-combat-simulator@master"`. Deploys bundle it from the same checkout: `scripts/deploy.sh` exports the simulator's committed `HEAD` into the gitignored `build-simulator/` and the Dockerfile installs that copy (see Deployment). `app.services.npc_generator` imports it at module load, so without it `app.main` fails to import.
 
 If `apt-get install` can't find the packages, run `sudo apt-get update` first (a fresh container may have a stale package index).
 
@@ -344,7 +344,7 @@ The design, every GM decision (D1-D33) and the phase checklist are in `combat-de
 - **Every NPC action resolves on the server** (`combat_actions.py`): formulas from `build_all_roll_formulas`, dice and void from `roll_engine` / `void_spend` (the Discord path), rounds from `start_combat_round`, damage and wound-check arithmetic from `combat_math.py` - the Python twin of `roll_math.js`, pinned with it by `tests/shared/combat_math_cases.json`. `combat_math.damage_flags()` is also what the sheet's `schoolAbilities` spreads, so the browser and the server read one definition. **Nothing is ever written to a PC**: an NPC attack is checked against the target's TN to be hit (editable), the GM relays it, the player parries on their own sheet or with physical dice, and the GM reads out the damage. NPC rolls are always recorded (`roll_history`), and `/groups/{id}/combat/rolls` shows every roll made during a fight.
 - **One fight per group** (`Encounter`); "New round" rolls initiative for the NPCs only. Ending a fight keeps its NPCs in the roster; bringing one back heals and rests it and can add gained XP (re-generated through `never_below`, since some simulator lists are not monotonic between tiers). At 2 x Earth serious wounds the GM picks unconscious or dead.
 - **Names** come from gm-assistant's `GET /api/names` (`services/npc_names.py`; male only, peasant pool for Wave Men, samurai-eligible otherwise), fetched BEFORE a generate request touches the database. Any failure - unset `GM_ASSISTANT_URL` / `GM_ASSISTANT_NAMES_TOKEN`, asleep past the 12s timeout, an error - falls back to "Wave Man 1..N".
-- **Simulator dependency:** editable install locally; the Dockerfile installs its latest pushed `master` in a cache-busted layer, so **a deploy needs the simulator's commits pushed to GitHub**. Each NPC records the simulator commit that built it (`npc_generation.simulator`).
+- **Simulator dependency:** editable install locally; deploys bundle the simulator checkout's committed `HEAD` (`scripts/deploy.sh`, which also passes the commit as `SIMULATOR_COMMIT`), exactly as every other file in the image comes from this machine. Uncommitted simulator edits never ship. Each NPC records the simulator commit that built it (`npc_generation.simulator`).
 - Tests: `tests/test_npc_generator.py`, `tests/test_npcs.py`, `tests/test_combat_math.py`, `tests/test_combat_actions.py`; clicktests `tests/e2e/test_combat.py` (mark `combat`).
 
 ## Google Sheets Export
@@ -813,12 +813,14 @@ The Fly CLI is not pre-installed in the sandbox container. Install it and authen
 curl -L https://fly.io/install.sh | sh
 export PATH="$HOME/.fly/bin:$PATH"
 fly auth login                          # interactive login (requires browser or token)
-fly deploy
+scripts/deploy.sh                       # NOT a bare `fly deploy` - see below
 ```
+
+**Deploy with `scripts/deploy.sh`.** It exports the combat simulator's committed `HEAD` (`/host-l7r-repo/simulator`, or `SIMULATOR_DIR`) into the gitignored `build-simulator/`, loads `.env` (for `FLY_API_TOKEN`), and runs `fly deploy --build-arg SIMULATOR_COMMIT=<commit>`; extra arguments pass through. A bare `fly deploy` fails at the Dockerfile's `COPY build-simulator`, on purpose - an image without the simulator cannot generate NPCs.
 
 Requires a persistent volume named `l7r_data` mounted at `/data`. The `DATABASE_URL` env var is set to `/data/l7r.db` in fly.toml. The VM is configured for 512MB RAM (shared CPU) to accommodate boto3 imports for the backup system.
 
-`fly deploy` builds the multi-stage `Dockerfile`: the `cssbuild` stage compiles the purged Tailwind stylesheet (see "Styling / CSS build") and the runtime stage copies it in, so each deploy ships a stylesheet matching that deploy's templates - no manual CSS step. `.dockerignore` keeps `.env`, `.git`, `bin/`, and dev DBs out of the image.
+The deploy builds the multi-stage `Dockerfile` on Fly's remote builder from this machine's files (the build context is uploaded; nothing is cloned from GitHub): the `cssbuild` stage compiles the purged Tailwind stylesheet (see "Styling / CSS build") and the runtime stage copies it in, so each deploy ships a stylesheet matching that deploy's templates - no manual CSS step. `.dockerignore` keeps `.env`, `.git`, `bin/`, and dev DBs out of the image.
 
 ## Fly Keep-alive Pinger
 

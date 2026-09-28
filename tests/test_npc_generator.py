@@ -359,3 +359,13 @@ def test_version_when_not_installed(monkeypatch, fresh_version):
         raise importlib.metadata.PackageNotFoundError(name)
     monkeypatch.setattr(importlib.metadata, "distribution", missing)
     assert gen.simulator_version() == "unknown"
+
+
+def test_version_from_the_deploy_stamp(monkeypatch, fresh_version):
+    """A deploy installs the simulator from a copy of its committed HEAD
+    (scripts/deploy.sh), which has no git history; the script passes the
+    commit in as SIMULATOR_COMMIT."""
+    monkeypatch.setenv("SIMULATOR_COMMIT", "3e9fec9095db")
+    monkeypatch.setattr(importlib.metadata, "distribution",
+                        lambda name: pytest.fail("the stamp wins without asking pip"))
+    assert gen.simulator_version() == "3e9fec9095db"
