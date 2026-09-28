@@ -703,17 +703,15 @@ def test_wc_post_roll_vp_with_worldliness(page, live_server_url):
     # Create Akodo 4th Dan (has wc_vp_free_raise)
     _create_char(page, live_server_url, "AkodoWL", "akodo_bushi",
                  knack_overrides={"double_attack": 4, "feint": 4, "iaijutsu": 4})
-    # Inject worldliness into perAdventure and voidSpendConfig so the character
-    # has worldliness VP even though Akodo doesn't normally get it
-    page.evaluate("""() => {
-        const t = window._trackingBridge;
-        t.perAdventure.push({ id: 'worldliness', type: 'counter', label: 'Worldliness', max: 3 });
-        window._diceRoller.voidSpendConfig.worldliness_max = 3;
-    }""")
+    # Give the character real Worldliness (a foreign knack) - the server
+    # draws the point, so a pool faked on the tab would not be spent.
+    from tests.e2e.helpers import api_autosave, save_tracking
+    cid = int(page.url.split("/characters/")[1].split("/")[0].split("?")[0])
+    assert api_autosave(page, cid, {"foreign_knacks": {"worldliness": 1}}) == 200
+    page.reload()
+    page.wait_for_selector('[data-action="lw-plus"]', timeout=5000)
     # Set regular=0, temp=0 so only worldliness is available
-    page.evaluate("window._trackingBridge.voidPoints = 0")
-    page.evaluate("window._trackingBridge.tempVoidPoints = 0")
-    page.wait_for_timeout(200)
+    save_tracking(page, voidPoints=0, tempVoidPoints=0)
     _add_lw_and_open_wc(page, 30)
     _roll_wc(page)
     # Spend VP (+5) button should be visible. Wait for the result-modal x-show
@@ -730,9 +728,8 @@ def test_wc_post_roll_vp_with_worldliness(page, live_server_url):
         return 0;
     }""")
     spend_btn.first.click()
-    page.wait_for_timeout(300)
-    # Worldliness counter should have incremented
-    assert page.evaluate("window._trackingBridge.getCount('worldliness')") == 1
+    # Worldliness counter should have incremented (the server's answer)
+    page.wait_for_function("() => window._trackingBridge.getCount('worldliness') === 1", timeout=5000)
     total_after = page.evaluate("""() => {
         const els = document.querySelectorAll('[x-data]');
         for (const el of els) {

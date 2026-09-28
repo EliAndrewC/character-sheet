@@ -340,3 +340,48 @@ def test_a_failed_attack_request_offers_retry(page, live_server_url):
     page.locator('[data-testid="attack-retry"]').click()
     page.wait_for_function("() => window._diceRoller.atkPhase === 'result'", timeout=10000)
     assert len(seen) == 2 and seen[0]["request_id"] == seen[1]["request_id"]
+
+
+# ---------------------------------------------------------------------------
+# Wound check (Phase 8)
+# ---------------------------------------------------------------------------
+
+def test_a_failed_wound_check_is_rolled_and_applied_by_the_server(page, live_server_url):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    from tests.e2e.test_ui_interactions import _add_lw_and_open_wc, _roll_wc
+    _create_roller(page, live_server_url, "ServerWC")
+    answers = []
+    page.on("response", lambda r: answers.append(r) if r.url.endswith("/roll") else None)
+    _add_lw_and_open_wc(page, 45)
+    force_dice(page, [1])
+    _roll_wc(page)
+    restore_dice(page)
+    body = answers[-1].json()
+    assert body["wc"]["light_wounds"] == 45 and not body["wc"]["passed"]
+    wounds = body["wc"]["serious_wounds"]
+    assert page.evaluate("() => window._diceRoller.wcSeriousWounds") == wounds
+    # Nothing to spend on it, so the failure applies itself - on the server.
+    page.wait_for_function(f"() => window._trackingBridge.seriousWounds === {wounds}"
+                           " && window._trackingBridge.lightWounds === 0", timeout=5000)
+    page.reload()
+    page.wait_for_function(f"() => window._trackingBridge.seriousWounds === {wounds}", timeout=5000)
+
+
+def test_a_failed_wound_check_request_offers_retry(page, live_server_url):
+    from tests.e2e.test_ui_interactions import _add_lw_and_open_wc
+    _create_roller(page, live_server_url, "ServerWCRetry")
+    seen = []
+
+    def handler(route):
+        seen.append(json.loads(route.request.post_data))
+        if len(seen) == 1:
+            route.abort()
+        else:
+            route.continue_()
+    _add_lw_and_open_wc(page, 10)
+    page.route("**/roll", handler)
+    page.locator('[data-action="roll-wound-check-go"]').click()
+    page.locator('[data-testid="wc-retry"]').wait_for(state="visible", timeout=5000)
+    page.locator('[data-testid="wc-retry"]').click()
+    page.wait_for_function("() => window._diceRoller.wcPhase === 'result'", timeout=10000)
+    assert len(seen) == 2 and seen[0]["request_id"] == seen[1]["request_id"]

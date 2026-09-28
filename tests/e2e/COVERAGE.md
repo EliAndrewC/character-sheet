@@ -2196,6 +2196,8 @@ The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the 
 - [x] Shiba 3rd Dan parry damage is rolled (and recorded) by the server - `test_server_rolls.py::test_shiba_parry_damage_is_rolled_by_the_server`
 - [x] The attack goes to the server with the modal's TN; the sheet shows the server's total, hit and extra dice; "Make Damage Roll" rolls the damage on the server and adopts its history row - `test_server_rolls.py::test_the_attack_and_its_damage_are_the_servers`
 - [x] A failed attack request shows the attack modal's error and Retry, which re-sends the same request - `test_server_rolls.py::test_a_failed_attack_request_offers_retry`
+- [x] The wound check is rolled by the server against the character's light wounds; a failure with nothing to spend applies itself on the server and survives a reload - `test_server_rolls.py::test_a_failed_wound_check_is_rolled_and_applied_by_the_server`
+- [x] A failed wound-check request shows the modal's error and Retry, which re-sends the same request - `test_server_rolls.py::test_a_failed_wound_check_request_offers_retry`
 
 ---
 

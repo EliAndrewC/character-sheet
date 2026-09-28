@@ -7295,12 +7295,16 @@ def test_isawa_duelist_5th_dan_bank_excess_behavioral(page, live_server_url):
     _create_char(page, live_server_url, "IsawaD5FB", "isawa_duelist",
                  knack_overrides={"double_attack": 5, "iaijutsu": 5, "lunge": 5})
     # Inject banked excesses as individual entries (simulates two passed wound checks)
-    page.evaluate("""
+    # Saved, not just set on the tab: the server spends the bank.
+    page.evaluate("""async () => {
         const entry1 = {amount: 8, spent: false};
         const entry2 = {amount: 12, spent: false};
-        window._trackingBridge.bankedWcExcess.push(entry1, entry2);
-        window._diceRoller.bankedWcExcess = window._trackingBridge.bankedWcExcess;
-    """)
+        const t = window._trackingBridge;
+        t.bankedWcExcess.push(entry1, entry2);
+        window._diceRoller.bankedWcExcess = t.bankedWcExcess;
+        t.saveBankedBonuses();
+        await t.whenSaved();
+    }""")
     # Wait for the x-show reveal of the banked-bonuses tracking block rather
     # than a fixed sleep that races the Alpine render under full-suite load.
     banked = page.locator('text="Banked 5th Dan Wound Check Bonuses"')
@@ -7363,12 +7367,15 @@ def test_matsu_3rd_dan_vp_wc_bonus_behavioral(page, live_server_url):
     _create_char(page, live_server_url, "Matsu3FB", "matsu_bushi",
                  knack_overrides={"double_attack": 3, "iaijutsu": 3, "lunge": 3})
     # Inject banked bonuses directly (3 * attack_skill=1 = 3 per VP, simulate 2 VP = two +3 bonuses)
-    page.evaluate("""
+    # Saved, not just set on the tab: the server spends the bank.
+    page.evaluate("""async () => {
         const bonuses = [{amount: 3, spent: false}, {amount: 3, spent: false}];
         window._diceRoller.matsuBankedWcBonuses = bonuses;
-        if (window._trackingBridge) window._trackingBridge.matsuBankedWcBonuses = bonuses;
-    """)
-    page.wait_for_timeout(200)
+        const t = window._trackingBridge;
+        t.matsuBankedWcBonuses = bonuses;
+        t.saveBankedBonuses();
+        await t.whenSaved();
+    }""")
     # Should show in tracking section
     page.locator('text="Banked Wound Check Bonuses"').wait_for(state="visible", timeout=5000)
     assert page.locator('text="Banked Wound Check Bonuses"').is_visible()

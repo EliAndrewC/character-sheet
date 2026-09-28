@@ -1,6 +1,6 @@
 # Server-side Rolls and State Changes - Design
 
-Status: **Phases 1-7 done; Phase 8 in progress (server half built).** Decisions S1-S7 in section 8.
+Status: **Phases 1-8 done; Phase 9 next.** Decisions S1-S7 in section 8.
 
 ## 1. Goal
 
@@ -274,10 +274,19 @@ removes the old ones.
       the roll is sent with the damage roll and the server re-judges at it
 
 ### Phase 8 - Wound check
-- [ ] Wound check, post-roll void (with consequences, per 5.3), keep / take, auto-fail, banks
-      (Isawa, Akodo, Matsu, Hida), Akodo 5th reflect, Yogo temp void
-- [ ] Clicktests: `test_wound_check.py`, `test_light_wounds.py`, `test_school_abilities.py -k
-      "yogo or akodo or matsu or isawa"`
+- [x] Wound check, post-roll void (with consequences, per 5.3), keep / take, auto-fail, banks
+      (Isawa, Akodo, Matsu, Hida), Akodo 5th reflect, Yogo temp void. The check is a session roll
+      against the character's persisted light wounds (a non-editor's test-drive names its own
+      amount); `wound_checks.build_wound_check` adds the Mantis defensive bonuses, the Hida bank it
+      spends, Doji 5th Dan and a Daidoji counterattack; `wc_resolve` applies the outcome (the Night's
+      Rest cadence included, via `set_serious_wounds`). An iaijutsu strike's check takes only
+      Conviction. The Akodo 5th Dan reflect is a tracking operation. `wound_check_flags` is the one
+      flag definition (it also fixed the party Daidoji's raises, which read a skill that does not
+      exist and was always 1)
+- [x] Clicktests: `-k "wound or wc or light_wound or serious"` across e2e (79), and
+      `test_school_abilities.py -k "(yogo or akodo or matsu or isawa or hida or daidoji) and not
+      (wound or wc or light_wound or serious or attack or damage or parry or feint or
+      initiative)"` (40); four tests that set banks or pools only on the tab fixed
 
 ### Phase 9 - Duel and Kakita 5th Dan
 - [ ] The duel's contested / strike / damage as chained sessions; Kakita 5th Dan contest and damage

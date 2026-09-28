@@ -163,6 +163,14 @@
                 </div>
 
                 {# ── RESULT: pass/fail + discretionary bonuses ── #}
+                {# The server could not make the wound check (S6): error and Retry. #}
+                <div x-show="wcPhase === 'error'" x-cloak class="space-y-3 text-center py-4" data-testid="wc-error">
+                    <p class="text-sm text-red-700" x-text="wcError"></p>
+                    <button type="button" @click="retryServerWoundCheck()" data-testid="wc-retry"
+                            class="btn-primary px-4 py-2 rounded text-sm font-medium">Retry</button>
+                </div>
+                <div x-show="rerollError && wcPhase === 'result'" x-cloak data-testid="wc-reroll-error"
+                     class="bg-red-50 border border-red-300 rounded p-2 text-xs text-red-800" x-text="rerollError"></div>
                 <div x-show="wcPhase === 'result'" x-cloak class="space-y-3">
                     {# Kitsune Warden Special Ability annotation #}
                     <div x-show="formula?.kitsune_swap_to_ring" x-cloak
@@ -262,13 +270,13 @@
                             <div class="flex flex-wrap items-center gap-2">
                                 <button type="button"
                                         x-show="(window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
-                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) src = 'temp'; else if ((t.voidPoints || 0) > 0) src = 'regular'; else src = 'worldliness'; if (t.canEdit) { if (src === 'temp') t.tempVoidPoints--; else if (src === 'regular') t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); t.save(); } wcPostRollVpSources.push(src); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; wcMargin = wcRollTotal - wcLightWounds;"
+                                        @click="wcVpStep(1)"
                                         class="bg-success hover:bg-success-dark text-white px-3 py-1.5 rounded text-sm font-medium">
                                     Spend VP (+5)
                                 </button>
                                 <button type="button"
                                         x-show="wcPostRollVpSpent > 0"
-                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (t.canEdit) { if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); } wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; wcMargin = wcRollTotal - wcLightWounds; }"
+                                        @click="wcVpStep(-1)"
                                         class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
                                     Undo VP
                                 </button>
@@ -345,27 +353,27 @@
                                 </button>
                                 <template x-for="(b, i) in bankedWcExcess" :key="'wce'+i">
                                     <button x-show="!b.spent" type="button"
-                                            @click="bankedWcExcess[i].spent = true; wcExcessSpentThisRoll += b.amount; baseTotal += b.amount; wcRollTotal += b.amount; const wc = window.L7RRollMath.woundCheckResult(wcRollTotal, wcLightWounds, formulas['wound_check']?.bayushi_5th_dan_half_lw); wcPassed = wc.passed; wcMargin = wc.margin; wcSeriousWounds = wc.seriousWounds; window._trackingBridge?.saveBankedBonuses();"
+                                            @click="wcExcessSpend(i)"
                                             class="btn-primary px-3 py-1.5 rounded text-sm font-medium">
                                         Apply +<span x-text="b.amount"></span> (5th Dan bonus)
                                     </button>
                                 </template>
                                 <button type="button"
                                         x-show="wcExcessSpentThisRoll > 0"
-                                        @click="const last = [...bankedWcExcess].reverse().find(b => b.spent); if (last) { last.spent = false; wcExcessSpentThisRoll -= last.amount; baseTotal -= last.amount; wcRollTotal -= last.amount; const wc = window.L7RRollMath.woundCheckResult(wcRollTotal, wcLightWounds, formulas['wound_check']?.bayushi_5th_dan_half_lw); wcPassed = wc.passed; wcMargin = wc.margin; wcSeriousWounds = wc.seriousWounds; window._trackingBridge?.saveBankedBonuses(); }"
+                                        @click="wcExcessUndo()"
                                         class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
                                     Undo
                                 </button>
                                 {# Akodo/Yogo 4th Dan: spend VP post-roll for +5 each #}
                                 <button type="button"
                                         x-show="voidSpendConfig.wc_vp_free_raise && (window._trackingBridge?.anyVPAvailable?.() || 0) > 0"
-                                        @click="const t = window._trackingBridge; if (!t) return; let src; if ((t.tempVoidPoints || 0) > 0) src = 'temp'; else if ((t.voidPoints || 0) > 0) src = 'regular'; else src = 'worldliness'; if (t.canEdit) { if (src === 'temp') t.tempVoidPoints--; else if (src === 'regular') t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); t.save(); } wcPostRollVpSources.push(src); wcPostRollVpSpent++; baseTotal += 5; wcRollTotal += 5; const wc = window.L7RRollMath.woundCheckResult(wcRollTotal, wcLightWounds, formulas['wound_check']?.bayushi_5th_dan_half_lw); wcPassed = wc.passed; wcMargin = wc.margin; wcSeriousWounds = wc.seriousWounds;"
+                                        @click="wcVpStep(1)"
                                         class="btn-primary px-3 py-1.5 rounded text-sm font-medium">
                                     Spend VP (+5)
                                 </button>
                                 <button type="button"
                                         x-show="wcPostRollVpSpent > 0"
-                                        @click="const t = window._trackingBridge; if (t) { const src = wcPostRollVpSources.pop(); if (t.canEdit) { if (src === 'temp') t.tempVoidPoints++; else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1)); else t.voidPoints++; t.save(); } wcPostRollVpSpent--; baseTotal -= 5; wcRollTotal -= 5; const wc = window.L7RRollMath.woundCheckResult(wcRollTotal, wcLightWounds, formulas['wound_check']?.bayushi_5th_dan_half_lw); wcPassed = wc.passed; wcMargin = wc.margin; wcSeriousWounds = wc.seriousWounds; }"
+                                        @click="wcVpStep(-1)"
                                         class="btn-secondary px-3 py-1.5 rounded text-sm font-medium">
                                     Undo VP
                                 </button>
@@ -467,7 +475,7 @@
                                    :max="Math.floor(wcLightWounds / 10) || 1"
                                    class="w-16 border rounded px-2 py-1 text-sm text-center">
                             <button type="button"
-                                    @click="const t = window._trackingBridge; if (t && akodoReflectVP > 0 && (t.anyVPAvailable?.() || 0) >= akodoReflectVP && t.canEdit) { for (let i = 0; i < akodoReflectVP; i++) { if ((t.tempVoidPoints || 0) > 0) t.tempVoidPoints--; else if ((t.voidPoints || 0) > 0) t.voidPoints--; else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1); } t.save(); } akodoReflectVP = 0;"
+                                    @click="akodoReflect()"
                                     :disabled="akodoReflectVP <= 0"
                                     class="btn-primary px-3 py-1 rounded text-sm font-medium disabled:opacity-30">
                                 Reflect <span x-text="(akodoReflectVP || 0) * 10"></span> LW

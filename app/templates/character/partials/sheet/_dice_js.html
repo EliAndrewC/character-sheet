@@ -248,6 +248,10 @@
             akodoFeintDone: false,
             atkCourtierVpTaken: false,
             _atkAkodoStack: [],
+            _wcRequest: null,
+            wcError: '',
+            _wcMatsuStack: [],
+            _wcExcessStack: [],
             ideBankedThisRoll: false,
             _serverSessionMode: null,
             title: '',
@@ -891,8 +895,14 @@
                 this._pcpRerollTens(this._pcpFlowAttack());
             },
             // ---- Wound check panel (no reroll-10s: WC always rerolls 10s) ----
-            requestPcpRerollWoundCheck() { this._pcpReroll(() => this._rerollWoundCheckCore()); },
-            requestPcpRaiseWoundCheck() { this._pcpFreeRaise(this._pcpFlowWoundCheck()); },
+            requestPcpRerollWoundCheck() { this._pcpRerollOn('wc', () => this._rerollWoundCheckCore()); },
+            requestPcpRaiseWoundCheck() {
+                if (this._onServerRoll('wc')) return this._pcpServerRaise(() => {
+                    this.wcRollTotal = this.baseTotal;
+                    this._wcRecompute();
+                });
+                this._pcpFreeRaise(this._pcpFlowWoundCheck());
+            },
             // ---- Duel contested panel ----
             canPcpRerollTensDuelContested() { return this._pcpCanRerollTensHere(); },
             requestPcpRerollDuelContested() { this._pcpReroll(() => this._rerollDuelContestedCore()); },
@@ -944,6 +954,12 @@
 
             async useLuckyWoundCheck() {
                 if (!this.canUseLucky()) return;
+                if (this._onServerRoll('wc')) {
+                    this.luckyUsedThisRoll = true;
+                    this._rerollSource = 'lucky';
+                    if (!(await this._serverReroll('lucky_reroll', {}, true))) this.luckyUsedThisRoll = false;
+                    return;
+                }
                 window._trackingBridge.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
                 this._rerollSource = 'lucky';
@@ -4254,6 +4270,7 @@
                 }
                 if (data.pcp && t._adoptPcp) t._adoptPcp(data.pcp);
                 if (data.attack && this._serverSessionKind === 'attack') this._adoptAttackOutcome(data.attack);
+                if (data.wc && this._serverSessionKind === 'wc') this._adoptWcOutcome(data.wc);
             },
             // A reroll on the server-made roll in the result panel (Phase 4):
             // the server rolls the new dice and rescores the roll, keeping
@@ -4268,6 +4285,7 @@
                 const kind = this._serverSessionKind || 'roll';
                 const setPhase = (rolling) => {
                     if (kind === 'attack') this.atkPhase = rolling ? 'rolling' : 'result';
+                    else if (kind === 'wc') this.wcPhase = rolling ? 'rolling' : 'result';
                     else if (kind === 'damage') this.atkPhase = rolling ? 'damage-rolling' : 'damage-result';
                     else this.phase = rolling ? 'rolling' : 'done';
                 };
@@ -4300,7 +4318,7 @@
                         ? (n) => window.L7RDice.playDiceSound(n) : null;
                     await window.L7RDice.animateDice(
                         fresh, !!data.formula.reroll_tens, this.prefs.dice_animation_enabled, playSound,
-                        kind === 'roll' ? undefined : 'dice-animation-atk');
+                        kind === 'roll' ? undefined : (kind === 'wc' ? 'dice-animation-wc' : 'dice-animation-atk'));
                 }
                 this._adoptServerResult(data);
                 setPhase(false);
@@ -4309,6 +4327,10 @@
                     this._adoptAttackOutcome(data.attack);
                     this._annotateSpentActionDie(this._describeAttackForDie(false));
                     this._prerenderRollImage(this._buildAttackImagePayload());
+                } else if (kind === 'wc') {
+                    this.wcRollTotal = this.baseTotal;
+                    this._adoptWcOutcome(data.wc);
+                    this._prerenderRollImage(this._buildWoundCheckImagePayload());
                 } else if (kind === 'damage') {
                     this._adoptDamageResult(data);
                     this._annotateSpentActionDie(this._describeAttackForDie(true));
@@ -6851,190 +6873,193 @@
             },
 
             async rollWoundCheck() {
-                const voidCount = this.wcIsStrike ? 0 : this.wcVoidSelected;
-                const formula = { ...this.formulas['wound_check'] };
-                // Kitsune Warden Special Ability: swap the WC ring (Water)
-                // for the school ring when the modal checkbox is checked.
-                // Iaijutsu strikes (wcIsStrike) bypass this - the formula
-                // builder doesn't attach kitsune_swap on iaijutsu paths.
-                if (this.wcKitsuneSwap && formula.kitsune_swap && !this.wcIsStrike) {
-                    formula.rolled = formula.kitsune_swap.rolled;
-                    formula.kept = formula.kitsune_swap.kept;
-                    formula.label = formula.kitsune_swap.label;
-                    formula.kitsune_swap_from_ring = formula.kitsune_swap.kitsune_swap_from_ring;
-                    formula.kitsune_swap_to_ring = formula.kitsune_swap.kitsune_swap_to_ring;
-                }
+                // The SERVER makes the wound check (server-rolls-design
+                // Phase 8): it adds the bonuses it knows (Mantis defensive
+                // postures, the Hida bank it spends, Doji 5th Dan, a Daidoji
+                // counterattack) and judges the result.
                 this.convictionSpentThisRoll = 0;
                 this.togashiRaisesSpentThisRoll = 0;
                 this.priestAllySpentThisRoll = {};
                 this.preceptsPoolSwapBonuses = [];
-
-                // Mantis Wave-Treader Special: defensive posture at wound-check
-                // time adds +5 and labels the bonus in bonus_sources.
-                if (window._trackingBridge?.currentPosture?.() === 'defensive') {
-                    formula.flat = (formula.flat || 0) + 5;
-                    if (!formula.bonus_sources) formula.bonus_sources = [];
-                    formula.bonus_sources = [...formula.bonus_sources, '+5 from defensive posture'];
-                }
-                // Mantis Wave-Treader 5th Dan: per-round accumulator of +N to
-                // wound checks where N is the count of defensive postures.
-                if (this.schoolAbilities.mantis_posture_accumulation) {
-                    const _mantisWcAcc = window._trackingBridge?.defensivePhaseCount?.() || 0;
-                    if (_mantisWcAcc > 0) {
-                        formula.flat = (formula.flat || 0) + _mantisWcAcc;
-                        if (!formula.bonus_sources) formula.bonus_sources = [];
-                        formula.bonus_sources = [...formula.bonus_sources,
-                            `+${_mantisWcAcc} from Mantis 5th Dan (defensive posture count)`];
-                    }
-                }
-                // Mantis Wave-Treader 3rd Dan defensive: per-round accumulator
-                // set via the Tracking-section button. Applies to wound checks.
-                if (this.schoolAbilities.mantis_3rd_dan_defensive) {
-                    const _mantis3rdWc = window._trackingBridge?.defensive3rdDanAccum || 0;
-                    if (_mantis3rdWc > 0) {
-                        formula.flat = (formula.flat || 0) + _mantis3rdWc;
-                        if (!formula.bonus_sources) formula.bonus_sources = [];
-                        formula.bonus_sources = [...formula.bonus_sources,
-                            `+${_mantis3rdWc} from Mantis 3rd Dan (defensive)`];
-                    }
-                }
-
-                // Iaijutsu strike: no reroll. Discretionary bonuses are
-                // banned on strike wound checks EXCEPT the character's own
-                // Conviction (rules quirk) - so recompute the discretionary
-                // flag from conviction alone, dropping raises, banked
-                // bonuses, post-roll VP, and priest-ally conviction.
+                this._wcMatsuStack = [];
+                this._wcExcessStack = [];
+                // Iaijutsu strike: discretionary bonuses are banned EXCEPT
+                // the character's own Conviction (rules quirk).
                 if (this.wcIsStrike) {
-                    formula.reroll_tens = false;
-                    formula.no_reroll_reason = 'iaijutsu_strike';
                     this.wcHasDiscretionary =
                         (this.convictionConfig.rank || 0) > 0
                         && this.convictionPoolAvail() > 0;
                 }
+                const f = this.formulas['wound_check'] || {};
+                this._wcRequest = {
+                    roll_key: 'wound_check',
+                    void: this.wcIsStrike ? 0 : (this.wcVoidSelected || 0),
+                    kitsune_swap: !!(this.wcKitsuneSwap && f.kitsune_swap && !this.wcIsStrike),
+                    strike: !!this.wcIsStrike,
+                    daidoji: !!(this.wcDaidojiCounterattack && this.daidojiCounterattackData),
+                    light_wounds: this.wcLightWounds,
+                    request_id: this._newRequestId(),
+                };
+                await this._runServerWoundCheck();
+            },
 
-                // Add void spending
-                if (voidCount > 0) {
-                    formula.rolled += voidCount;
-                    formula.kept += voidCount;
-                    formula.void_spent = voidCount;
-                    const _cap = window.L7RRollMath.applyDiceCap(formula.rolled, formula.kept, formula.flat);
-                    formula.rolled = _cap.rolled; formula.kept = _cap.kept; formula.flat = _cap.flat;
-                    if (_cap.overflowFlat > 0) formula.void_overflow_bonus = _cap.overflowFlat;
-                    // Mirumoto 5th Dan: +10 per VP on combat rolls (wound checks are combat rolls)
-                    const combatBonus = this.voidSpendConfig.combat_vp_flat_bonus || 0;
-                    if (combatBonus > 0) {
-                        formula.flat += voidCount * combatBonus;
-                    }
-                    // Akodo 4th Dan / Yogo Warden 4th Dan: VP free raises on wound checks
-                    // are now handled POST-ROLL via the discretionary section buttons
-                    // Deduct void
-                    const options = this.computeVoidOptions();
-                    if (options[voidCount - 1]) this.deductVoidPoints(options[voidCount - 1]);
-                }
-
-                // Hida 5th Dan: apply banked counterattack bonus
-                if (this.hidaBankedWcBonus > 0) {
-                    const hidaBonus = this.hidaBankedWcBonus;
-                    formula.flat += hidaBonus;
-                    formula.hida_counterattack_bonus = hidaBonus;
-                    if (!formula.bonus_sources) formula.bonus_sources = [];
-                    formula.bonus_sources.push('+' + hidaBonus + ' from Hida 5th Dan counterattack excess');
-                    this.hidaBankedWcBonus = 0;
-                    if (window._trackingBridge) window._trackingBridge.hidaBankedWcBonus = 0;
-                    window._trackingBridge?.saveBankedBonuses();
-                }
-
-                // Doji Artisan 5th Dan: auto-apply bonus from light wounds
-                if (formula.doji_5th_dan_wc) {
-                    const dojiBonus = window.L7RRollMath.bonusPer5Over10(this.wcLightWounds);
-                    if (dojiBonus > 0) {
-                        formula.flat += dojiBonus;
-                        formula.doji_5th_dan_bonus = dojiBonus;
-                        if (!formula.bonus_sources) formula.bonus_sources = [];
-                        formula.bonus_sources.push('+' + dojiBonus + ' from Doji 5th Dan');
-                    }
-                }
-
-                // Daidoji 3rd Dan: counterattack free raises
-                if (this.wcDaidojiCounterattack && this.daidojiCounterattackData) {
-                    const bonus = this.daidojiCounterattackData.bonus;
-                    formula.flat += bonus;
-                    formula.daidoji_counterattack_bonus = bonus;
-                    formula.daidoji_counterattack_raises = this.daidojiCounterattackData.raises;
-                    if (!formula.bonus_sources) formula.bonus_sources = [];
-                    formula.bonus_sources.push('+' + bonus + ' from Daidoji counterattack (' + this.daidojiCounterattackData.raises + ' free raises)');
-                }
-
-                // Roll the dice
+            async _runServerWoundCheck() {
+                const req = this._wcRequest;
+                const t = window._trackingBridge;
                 this.wcPhase = 'rolling';
+                this.wcError = '';
+                if (t && t.canEdit && typeof t.whenSaved === 'function') await t.whenSaved();
+                if (t && t.canEdit && t._opChain) await t._opChain.catch(() => null);
+                let data = null;
+                try {
+                    const resp = await fetch('/characters/' + t._charId + '/roll', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(req),
+                    });
+                    data = await resp.json().catch(() => null);
+                    if (!resp.ok || !data || !data.dice) {
+                        this.wcPhase = 'error';
+                        this.wcError = (data && data.error) || 'The wound check could not be made.';
+                        return;
+                    }
+                } catch (e) {
+                    this.wcPhase = 'error';
+                    this.wcError = 'Could not reach the server. Check your connection and retry.';
+                    return;
+                }
+                if (t.canEdit && data.mode === 'live' && data.tracking) t.adoptServerState(data.tracking, false);
+                this._serverSessionId = data.session_id;
+                this._serverSessionMode = data.mode;
+                this._serverSessionKind = 'wc';
+                this.formula = { ...this.formulas['wound_check'], ...data.formula };
                 const playSound = this.prefs.dice_sound_enabled && window.L7RDice
                     ? (n) => window.L7RDice.playDiceSound(n) : null;
-                const dice = await window.L7RDice.rollAndAnimate(
-                    formula.rolled, formula.reroll_tens,
-                    this.prefs.dice_animation_enabled, playSound,
-                    'dice-animation-wc'
-                );
-
-                // Keep highest dice (normal roll, not initiative)
-                const sorted = [...dice].sort((a, b) => a.value - b.value);
-                const keptCount = Math.min(formula.kept, sorted.length);
-                const keptDice = sorted.slice(sorted.length - keptCount);
-                let rollTotal = keptDice.reduce((s, d) => s + d.value, 0) + formula.flat;
-
-                // Shosuro Actor 5th Dan: add sum of lowest 3 dice (post-roll)
-                this.shosuroLowest3Bonus = 0;
-                if (formula.shosuro_5th_dan) {
-                    const allValues = sorted.map(d => d.value);
-                    const lowest3 = allValues.slice(0, Math.min(3, allValues.length));
-                    this.shosuroLowest3Bonus = lowest3.reduce((s, v) => s + v, 0);
-                    rollTotal += this.shosuroLowest3Bonus;
-                }
-
-                // Conviction: carry forward any points already spent.
-                if (this.convictionSpentThisRoll > 0) {
-                    rollTotal += this.convictionSpentThisRoll;
-                }
-                // Priest 5th Dan ally conviction persists across rerolls.
-                rollTotal += this.totalPriestAllySpentThisRoll();
-
-                // Store result
-                this.formula = formula;
-                this.finalDice = sorted.map((d, i) => ({
-                    value: d.value,
-                    kept: i >= sorted.length - keptCount
-                }));
-                this.keptDice = keptDice;
-                this.unkeptDice = sorted.slice(0, sorted.length - keptCount);
-                this.keptSum = keptDice.reduce((s, d) => s + d.value, 0);
-                this.baseTotal = rollTotal;
-
-                const lw = this.wcLightWounds;
-                const effectiveTotal = rollTotal;
-                this.wcRollTotal = effectiveTotal;
+                await window.L7RDice.animateDice(data.dice, !!data.formula.reroll_tens,
+                    this.prefs.dice_animation_enabled, playSound, 'dice-animation-wc');
+                this._adoptServerResult(data);
+                this.wcRollTotal = this.baseTotal;
                 this.wcRaisesSpent = 0;
-
-                const wc = window.L7RRollMath.woundCheckResult(effectiveTotal, lw, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
-                this.wcPassed = wc.passed;
-                this.wcMargin = wc.margin;
-                this.wcSeriousWounds = wc.seriousWounds;
-                if (!wc.passed) {
-                    this.wcBayushiHalfLw = !!this.formulas['wound_check']?.bayushi_5th_dan_half_lw;
-                }
-
+                this._adoptWcOutcome(data.wc);
                 this.wcResultApplied = false;
                 this.wcResultChoice = '';
                 this.wcPhase = 'result';
                 this._prerenderRollImage(this._buildWoundCheckImagePayload());
-                this._saveRollHistoryCreate();
-
-                // Auto-apply if failed with no discretionary bonuses. (For
-                // strike wound checks wcHasDiscretionary was recomputed
-                // above to mean "own conviction available" - when it's set,
-                // the player gets the spend-conviction window before the
-                // failure is applied.)
+                this._rollHistoryReqId++;
+                this._rollHistoryId = data.history_id || null;
+                this._rollHistoryPendingPayload = null;
+                this._lastRollHistorySig = this._rollHistoryId
+                    ? JSON.stringify(this._currentRollHistoryPayload().payload) : '';
+                // Auto-apply a failure with nothing left to spend on it.
                 if (!this.wcPassed && !this.wcHasDiscretionary) {
                     this.applyWoundCheckFailure();
                 }
+            },
+
+            retryServerWoundCheck() {
+                if (this._wcRequest) this._runServerWoundCheck();
+            },
+
+            // The server's judgement of the wound check at its current total.
+            _adoptWcOutcome(o) {
+                if (!o) return;
+                this.wcPassed = o.passed;
+                this.wcMargin = o.margin;
+                this.wcSeriousWounds = o.serious_wounds;
+                if (!o.passed) this.wcBayushiHalfLw = !!this.formulas['wound_check']?.bayushi_5th_dan_half_lw;
+            },
+            _wcRecompute() {
+                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, this.wcLightWounds,
+                    this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
+                this.wcPassed = wc.passed;
+                this.wcMargin = wc.margin;
+                this.wcSeriousWounds = wc.seriousWounds;
+            },
+            // Akodo / Yogo 4th Dan: +5 per void point after the check (n = 1
+            // to spend, -1 to take one back).
+            wcVpStep(n) {
+                const t = window._trackingBridge;
+                if (!t) return;
+                if (n < 0 && (this.wcPostRollVpSpent || 0) <= 0) return;
+                if (this._onServerRoll('wc')) {
+                    this.wcPostRollVpSpent += n;
+                    this.baseTotal += 5 * n;
+                    this.wcRollTotal += 5 * n;
+                    this._wcRecompute();
+                    this._act(n > 0 ? 'wc_vp' : 'undo_wc_vp').then(ok => {
+                        if (ok) return;
+                        this.wcPostRollVpSpent -= n; this.baseTotal -= 5 * n; this.wcRollTotal -= 5 * n;
+                        this._wcRecompute();
+                    });
+                    return;
+                }
+                if (n > 0) {
+                    let src;
+                    if ((t.tempVoidPoints || 0) > 0) src = 'temp';
+                    else if ((t.voidPoints || 0) > 0) src = 'regular';
+                    else src = 'worldliness';
+                    if (t.canEdit) {
+                        if (src === 'temp') t.tempVoidPoints--;
+                        else if (src === 'regular') t.voidPoints--;
+                        else t.setCount('worldliness', (t.getCount('worldliness') || 0) + 1);
+                        t.save();
+                    }
+                    this.wcPostRollVpSources.push(src);
+                } else {
+                    const src = this.wcPostRollVpSources.pop();
+                    if (t.canEdit) {
+                        if (src === 'temp') t.tempVoidPoints++;
+                        else if (src === 'worldliness') t.setCount('worldliness', Math.max(0, (t.getCount('worldliness') || 0) - 1));
+                        else t.voidPoints++;
+                        t.save();
+                    }
+                }
+                this.wcPostRollVpSpent += n;
+                this.baseTotal += 5 * n;
+                this.wcRollTotal += 5 * n;
+                this._wcRecompute();
+            },
+            // A banked excess (Isawa 5th Dan / Shinjo 5th Dan) spent on the check.
+            wcExcessSpend(i) {
+                const b = this.bankedWcExcess[i];
+                if (!b || b.spent) return;
+                b.spent = true;
+                this.wcExcessSpentThisRoll += b.amount;
+                this.baseTotal += b.amount;
+                this.wcRollTotal += b.amount;
+                this._wcRecompute();
+                if (this._onServerRoll('wc')) {
+                    this._wcExcessStack.push(b.amount);
+                    this._act('wc_excess', {amount: b.amount});
+                } else {
+                    window._trackingBridge?.saveBankedBonuses();
+                }
+            },
+            wcExcessUndo() {
+                let amount;
+                if (this._onServerRoll('wc')) {
+                    amount = this._wcExcessStack.pop();
+                    if (amount === undefined) return;
+                    this._act('undo_wc_excess');
+                } else {
+                    const last = [...this.bankedWcExcess].reverse().find(b => b.spent);
+                    if (!last) return;
+                    last.spent = false;
+                    amount = last.amount;
+                    window._trackingBridge?.saveBankedBonuses();
+                }
+                this.wcExcessSpentThisRoll -= amount;
+                this.baseTotal -= amount;
+                this.wcRollTotal -= amount;
+                this._wcRecompute();
+            },
+            // Akodo 5th Dan: void points spent to reflect damage.
+            akodoReflect() {
+                const t = window._trackingBridge;
+                const n = this.akodoReflectVP || 0;
+                if (t && n > 0 && (t.anyVPAvailable?.() || 0) >= n && t.canEdit) {
+                    t.op('akodo_reflect', {count: n});
+                }
+                this.akodoReflectVP = 0;
             },
 
             wcSpendRaise() {
@@ -7047,12 +7072,16 @@
                 this.wcRaisesSpent++;
                 this.baseTotal += 5;
                 this.wcRollTotal += 5;
+                if (this._onServerRoll('wc')) {
+                    this.advRaisesConfig.used++;
+                    this._act('raise');
+                }
                 const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, this.wcLightWounds, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
                 this.wcPassed = wc.passed;
                 this.wcMargin = wc.margin;
                 this.wcSeriousWounds = wc.seriousWounds;
                 // Deduct the raise from tracking
-                this._poolStep('adventure_raises', 1);
+                if (!this._onServerRoll('wc')) this._poolStep('adventure_raises', 1);
             },
 
             wcSpendMatsuBonus(idx) {
@@ -7062,15 +7091,27 @@
                 this.wcMatsuBonusApplied += b.amount;
                 this.baseTotal += b.amount;
                 this.wcRollTotal += b.amount;
-                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, this.wcLightWounds, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
-                this.wcPassed = wc.passed;
-                this.wcMargin = wc.margin;
-                this.wcSeriousWounds = wc.seriousWounds;
-                window._trackingBridge?.saveBankedBonuses();
+                this._wcRecompute();
+                if (this._onServerRoll('wc')) {
+                    this._wcMatsuStack.push(b.amount);
+                    this._act('matsu_bank', {amount: b.amount});
+                } else {
+                    window._trackingBridge?.saveBankedBonuses();
+                }
             },
 
             wcUndoMatsuBonus() {
                 if (this.wcMatsuBonusApplied <= 0) return;
+                if (this._onServerRoll('wc')) {
+                    const amount = this._wcMatsuStack.pop();
+                    if (amount === undefined) return;
+                    this.wcMatsuBonusApplied -= amount;
+                    this.baseTotal -= amount;
+                    this.wcRollTotal -= amount;
+                    this._wcRecompute();
+                    this._act('undo_matsu_bank');
+                    return;
+                }
                 const last = [...this.matsuBankedWcBonuses].reverse().find(b => b.spent);
                 if (!last) return;
                 last.spent = false;
@@ -7093,16 +7134,25 @@
                 this.wcRaisesSpent--;
                 this.baseTotal -= 5;
                 this.wcRollTotal -= 5;
-                const wc = window.L7RRollMath.woundCheckResult(this.wcRollTotal, this.wcLightWounds, this.formulas['wound_check']?.bayushi_5th_dan_half_lw);
-                this.wcPassed = wc.passed;
-                this.wcMargin = wc.margin;
-                this.wcSeriousWounds = wc.seriousWounds;
-                this._poolStep('adventure_raises', -1);
+                this._wcRecompute();
+                if (this._onServerRoll('wc')) this._act('undo_raise');
+                else this._poolStep('adventure_raises', -1);
             },
 
             applyWoundCheckFailure() {
                 const t = window._trackingBridge;
                 if (!t || this.wcResultApplied) return;
+                if (this._onServerRoll('wc')) {
+                    // The server takes the serious wounds (and a Yogo's temp
+                    // void points); the tab adopts its state.
+                    this.wcResultApplied = true;
+                    this.wcResultChoice = 'failure_applied';
+                    this._act('wc_resolve', {choice: 'fail'}).then(() => {
+                        window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
+                    });
+                    this._flushRollHistoryUpdate();
+                    return;
+                }
                 // Non-editors: the WC walk-through is informational only -
                 // never mutate the bridge's lightWounds / seriousWounds /
                 // tempVoidPoints. The save shim already rejects the POST,
@@ -7129,7 +7179,9 @@
                 // Non-editors get no banked-bonus side effects (those would
                 // bloat the priest/ally's adventureState without permission).
                 const t = window._trackingBridge;
-                if (t?.canEdit) {
+                if (this._onServerRoll('wc')) {
+                    this._act('wc_resolve', {choice: 'keep'});
+                } else if (t?.canEdit) {
                     if (this.schoolAbilities.isawa_bank_wc_excess && this.wcPassed && this.wcMargin > 0) {
                         this.bankedWcExcess.push({ amount: this.wcMargin, spent: false });
                     }
@@ -7149,7 +7201,11 @@
                 // Non-editors: no mutation of the displayed sheet state.
                 const t = window._trackingBridge;
                 if (!t) return;
-                if (t.canEdit) {
+                if (this._onServerRoll('wc')) {
+                    this._act('wc_resolve', {choice: 'take_sw'}).then(() => {
+                        window.dispatchEvent(new CustomEvent('wound-changed', { detail: { serious: t.seriousWounds } }));
+                    });
+                } else if (t.canEdit) {
                     t.seriousWounds += 1;
                     if (this.schoolAbilities.yogo_temp_vp_on_sw) {
                         t.tempVoidPoints += 1;
