@@ -349,6 +349,24 @@ class Character(Base):
         default=None,
     )
 
+    # GM-generated NPC (combat-design/design.md 4.3). An NPC is a real
+    # character, so every rule applies to it, but it is never a party member
+    # and never listed: ``gaming_group_id`` stays NULL, so every group and
+    # party query excludes it by construction, and ``npc_group_id`` names the
+    # group whose NPC roster holds it. Only admins can open anything under
+    # /characters/{id} for an NPC (``app.services.npcs.npc_guard``). Metadata,
+    # NOT versioned: ``is_npc`` is in to_dict() for the validator (NPCs skip
+    # PC-only warnings) and in the draft diff's skip set.
+    is_npc: Mapped[bool] = mapped_column(default=False)
+    npc_group_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("gaming_groups.id", ondelete="SET NULL"),
+        nullable=True,
+        default=None,
+    )
+    # How the generator built it (npc_generator.build_npc()["generation"]),
+    # kept so a returning NPC can be re-generated at a higher XP (D8).
+    npc_generation: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=None)
+
     # Character art. Metadata only - NOT versioned. Deliberately excluded
     # from to_dict() so changing art never flips the character into Draft
     # status. Writes go directly to this row via the dedicated art endpoints.
@@ -413,7 +431,7 @@ class Character(Base):
                 "sw_healing_received_new_since_rest",
                 "sw_healing_became_injured_since_rest",
                 "sw_healing_last_rest_was_healing_night",
-                "google_sheet_id"} | METADATA_FIELDS
+                "google_sheet_id", "is_npc"} | METADATA_FIELDS
         # Default values for keys that may be absent from older
         # snapshots. Without an entry here, ``published_state.get(key,
         # None)`` returns None for keys that didn't exist when the
@@ -521,6 +539,7 @@ class Character(Base):
             "lineage": self.lineage or "",
             "owner_discord_id": self.owner_discord_id,
             "editor_discord_ids": self.editor_discord_ids or [],
+            "is_npc": bool(self.is_npc),
             "school": self.school,
             "school_ring_choice": self.school_ring_choice,
             "profession": self.profession or "",
@@ -852,3 +871,96 @@ class ConversationDiscernHonor(Base):
     @told.setter
     def told(self, value: Any) -> None:
         self.told_json = json.dumps(value)
+
+
+class Encounter(Base):
+    """One fight a gaming group is having (combat-design/design.md 4.3).
+
+    At most one is ``active`` per group at a time (D33); ending it moves its
+    NPCs into the group's roster. ``current_round`` counts the GM's "New
+    round" clicks (0 until the first), which is what lets the public view
+    say how many actions an NPC took last round (D22).
+
+    Schema note: a brand-new table, so ``create_all`` makes it and
+    ``_migrate_add_columns`` needs no entry.
+    """
+
+    __tablename__ = "encounters"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    gaming_group_id: Mapped[int] = mapped_column(
+        ForeignKey("gaming_groups.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    name: Mapped[str] = mapped_column(String, default="")
+    status: Mapped[str] = mapped_column(String, default="active")  # active | ended
+    current_round: Mapped[int] = mapped_column(default=0)
+    # Bumped on every change a viewer of the combat page should see (a new
+    # round, an NPC added or downed, an action logged), so the page's poll
+    # can skip redraws with an integer compare, like tracking_rev.
+    rev: Mapped[int] = mapped_column(default=0)
+    started_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    ended_at: Mapped[Optional[datetime]] = mapped_column(default=None, nullable=True)
+
+    npcs: Mapped[List["EncounterNpc"]] = relationship(
+        back_populates="encounter", cascade="all, delete-orphan",
+        order_by="EncounterNpc.id",
+    )
+
+
+class EncounterNpc(Base):
+    """An NPC taking part in an encounter, with its status in that fight.
+
+    A link row rather than a column on the character, because an archived
+    NPC can come back for a later encounter (D8). ``status`` is ``fighting``,
+    ``unconscious`` or ``dead``; the GM picks the last two at 2 x Earth
+    serious wounds (D9).
+    """
+
+    __tablename__ = "encounter_npcs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    encounter_id: Mapped[int] = mapped_column(
+        ForeignKey("encounters.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    status: Mapped[str] = mapped_column(String, default="fighting")
+    joined_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    encounter: Mapped["Encounter"] = relationship(back_populates="npcs")
+    character: Mapped["Character"] = relationship()
+
+
+class EncounterAction(Base):
+    """One action the GM took for an NPC (D22): an attack, a parry, ...
+
+    ``kind``, ``label``, ``target_character_id``, ``total`` and ``round`` are
+    what the PUBLIC combat view may show - a roll's total, never how it was
+    reached (D29). ``detail`` is GM-only (dice, void spent, hit / miss, ...)
+    and ``roll_history_id`` links to the recorded roll for the GM's combat
+    rolls view. An interrupt parry spends two dice but is one action, which
+    is what the players saw.
+    """
+
+    __tablename__ = "encounter_actions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    encounter_id: Mapped[int] = mapped_column(
+        ForeignKey("encounters.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), nullable=False,
+    )
+    round: Mapped[int] = mapped_column(default=0)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    label: Mapped[str] = mapped_column(String, default="")
+    target_character_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL"), nullable=True, default=None,
+    )
+    total: Mapped[Optional[int]] = mapped_column(default=None, nullable=True)
+    roll_history_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("roll_history.id", ondelete="SET NULL"), nullable=True, default=None,
+    )
+    detail: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=None)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
