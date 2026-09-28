@@ -1,6 +1,6 @@
 # GM Combat Tracker and Generated NPCs - Design
 
-Status: **requirements complete; Phase 1 in progress.** All open questions are answered (section 7).
+Status: **built and deployed** (2026-09-28). All phases done; the only open item is the GM's review of the three new simulator progression lists (Phase 2).
 
 ## 1. Goal
 
@@ -243,7 +243,7 @@ Each phase ends with tests green at 100% coverage in every repo it touches, targ
 - [x] GM tracker: cards (with remaining per-adventure bonuses, shared with the sheet via `per_adventure.py`), action-die menu, encounter builder, 2 x Earth prompt, archive
 - [x] Public view of the combat page, linked from the group page (allow-listed payload, totals only)
 - [x] Combat rolls view
-- [ ] Clicktests + `COVERAGE.md`; responsive checks; deploy
+- [x] Clicktests + `COVERAGE.md`; responsive checks; deployed 2026-09-28 (`scripts/deploy.sh`, simulator `86d21d43a80a`), verified live: public combat page 200, NPC generation on the production machine, gm-assistant names
 
 ### To finish (needs the GM)
 - [x] Push the simulator commits (`d75e505`..`86d21d4`, pushed with the simulator's own `GITHUB_TOKEN`) and deploy this app with `scripts/deploy.sh`.
