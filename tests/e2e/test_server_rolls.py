@@ -86,3 +86,77 @@ def test_a_raise_on_a_server_roll_is_applied_by_the_server(page, live_server_url
     # The spend is the server's, so it survives a reload.
     page.reload()
     page.wait_for_function("() => window._trackingBridge.getCount('adventure_raises') === 1", timeout=5000)
+
+
+# ---------------------------------------------------------------------------
+# Rerolls (Phase 4)
+# ---------------------------------------------------------------------------
+
+def _acts(page):
+    seen = []
+    page.on("response", lambda r: seen.append(r) if r.url.endswith("/act") else None)
+    return seen
+
+
+def _done_after(page, seen, n):
+    page.wait_for_function("() => window._diceRoller.phase === 'done'", timeout=10000)
+    page.wait_for_timeout(100)
+    assert len(seen) >= n
+    return seen[-1].json()
+
+
+def test_lucky_rerolls_on_the_server_and_the_sheet_shows_its_dice(page, live_server_url):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    from tests.e2e.test_pcp import _create_roller as _pcp_roller, _roll_bragging
+    _pcp_roller(page, live_server_url, "ServerLucky", advantages=("lucky",))
+    seen = _acts(page)
+    force_dice(page, [2])
+    _roll_bragging(page)
+    force_dice(page, [9])
+    page.locator('[data-action="use-lucky"]').click()
+    body = _done_after(page, seen, 1)
+    restore_dice(page)
+    shown = _roller_data(page)
+    assert shown["dice"] == sorted(d["value"] for d in body["dice"]) and set(shown["dice"]) == {9}
+    assert shown["total"] == body["total"]
+    assert body["payload"]["lucky"]["kept"] == "reroll"
+    assert page.locator('[data-testid="lucky-pair-banner"]:visible').is_visible()
+    # The server spent Lucky: it stays spent after a reload.
+    page.reload()
+    page.wait_for_function("() => window._trackingBridge.getToggle('lucky_used') === true", timeout=5000)
+
+
+def test_a_refused_reroll_says_so_and_changes_nothing(page, live_server_url):
+    from tests.e2e.test_pcp import _create_roller as _pcp_roller, _roll_bragging
+    _pcp_roller(page, live_server_url, "RefusedLucky", advantages=("lucky",))
+    _roll_bragging(page)
+    before = _roller_data(page)
+    page.route("**/act", lambda route: route.fulfill(
+        status=400, content_type="application/json", body=json.dumps({"error": "Not today."})))
+    page.locator('[data-action="use-lucky"]').click()
+    page.locator('[data-testid="reroll-error"]').wait_for(state="visible", timeout=5000)
+    assert "Not today." in page.locator('[data-testid="reroll-error"]').text_content()
+    after = _roller_data(page)
+    assert after["dice"] == before["dice"] and after["total"] == before["total"]
+    assert page.locator('[data-action="use-lucky"]').is_visible()  # still available
+
+
+def test_togashi_4th_dan_reroll_is_one_server_roll(page, live_server_url):
+    from tests.e2e.dice_control import force_dice, restore_dice
+    from tests.e2e.test_school_abilities import _create_char, _roll_via_menu_or_direct
+    _create_char(page, live_server_url, "ServerTogashi", "togashi_ise_zumi",
+                 knack_overrides={"athletics": 4, "conviction": 4, "dragon_tattoo": 4},
+                 skill_overrides={"bragging": 1})
+    seen = _acts(page)
+    force_dice(page, [9])
+    _roll_via_menu_or_direct(page, "skill:bragging")
+    first = _roller_data(page)
+    force_dice(page, [1])
+    page.locator('[data-action="togashi-4th-reroll"]').click()
+    body = _done_after(page, seen, 1)
+    restore_dice(page)
+    shown = _roller_data(page)
+    assert set(shown["dice"]) == {1} and shown["total"] == body["total"] < first["total"]
+    assert shown["historyId"] == first["historyId"]  # still the one recorded roll
+    banner = page.locator('text=Togashi 4th Dan rerolled')
+    assert banner.is_visible() and str(first["total"]) in banner.text_content()

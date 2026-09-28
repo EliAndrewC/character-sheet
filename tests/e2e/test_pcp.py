@@ -193,40 +193,37 @@ def test_reroll_tens_gating(page, live_server_url):
 
 def test_reroll_tens_explodes_only_the_tens(page, live_server_url):
     """Reroll-10s is NOT a full reroll: it keeps every die and only explodes
-    the 10s (adding the reroll). The canonical example: 7k4 [10,10,10,6,5,3,2]
-    (=36) with each 10 rerolling to 6 -> 16,16,16 kept with the 6 -> 54."""
+    the 10s (adding the reroll). The server does it on the roll it made: an
+    Impaired roll of 10s and 3s, each 10 then rerolling to a 6."""
+    from tests.e2e.dice_control import force_dice, restore_dice
+    from tests.e2e.helpers import save_tracking
     _create_roller(page, live_server_url, "PcpTensExec")
+    save_tracking(page, seriousWounds=5)  # impaired
+    force_dice(page, [10, 3])
     _roll_bragging(page)
-    # Force a deterministic impaired 7k4 with three 10s, and make every reroll
-    # a 6 (Math.random 0.5 -> face 6, so no further explosion).
-    page.evaluate("""() => {
-        const d = window._diceRoller;
-        window._trackingBridge.seriousWounds = 5;  // impaired
-        d.formula = { rolled: 7, kept: 4, flat: 0, is_initiative: false, is_unskilled: false };
-        d.currentRollKey = 'skill:bragging';
-        d.finalDice = [10,10,10,6,5,3,2].map(v => ({ value: v, parts: [v], kept: false }));
-        d.keptSum = 36; d.baseTotal = 36;
-        d.pcpTensRerolledThisRoll = false;
-        d.phase = 'done'; d.open = true;
-        window.__origRandom = Math.random; Math.random = () => 0.5;
-    }""")
+    before = page.evaluate("() => window._diceRoller.finalDice.map(x => x.value).sort((a,b)=>a-b)")
+    assert 10 in before and 3 in before
+    force_dice(page, [6])
     _pcp_menu_item(page, "pcp-reroll-tens")
     page.locator('[data-modal="pcp-confirm"]').wait_for(state="visible")
     page.locator('[data-action="pcp-confirm-accept"]').click()
-    page.wait_for_function("() => window._diceRoller.pcpTensRerolledThisRoll === true", timeout=5000)
+    page.wait_for_function("() => window._diceRoller.pcpTensRerolledThisRoll === true"
+                           " && window._diceRoller.phase === 'done'"
+                           " && !window._diceRoller.finalDice.some(x => x.value === 10)", timeout=8000)
+    restore_dice(page)
     state = page.evaluate("""() => {
-        if (window.__origRandom) Math.random = window.__origRandom;
         const d = window._diceRoller;
         return {
-            keptSum: d.keptSum,
+            keptSum: d.keptSum, kept: d.formula.kept,
             vals: d.finalDice.map(x => x.value).slice().sort((a,b)=>a-b),
-            // the exploded dice show their chain via parts
-            explodedParts: d.finalDice.filter(x => x.parts && x.parts.length > 1).map(x => x.parts),
+            explodedParts: [...d.keptDice, ...d.unkeptDice].filter(x => x.parts.length > 1).map(x => x.parts),
+            pcp: window._trackingBridge.pcpCount,
         };
     }""")
-    assert state["keptSum"] == 54                  # 16 + 16 + 16 + 6
-    assert state["vals"] == [2, 3, 5, 6, 16, 16, 16]  # non-10 dice untouched
-    assert state["explodedParts"] == [[10, 6], [10, 6], [10, 6]]  # 10 + reroll
+    assert state["vals"] == sorted(16 if v == 10 else v for v in before)  # non-10 dice untouched
+    assert state["explodedParts"] == [[10, 6]] * before.count(10)          # 10 + reroll
+    assert state["keptSum"] == sum(state["vals"][-state["kept"]:])
+    assert state["pcp"] == 1  # the server spent it
 
 
 def test_void_refresh_spends_pcp_and_regains_point(page, live_server_url):

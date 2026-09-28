@@ -2184,6 +2184,10 @@ The server rolls the sheet's dice (skills, knacks, rings, athletics, bless, the 
 - [x] A failed request shows an error and Retry; Retry re-sends the same `request_id` - `test_server_rolls.py::test_a_failed_roll_offers_retry_with_the_same_request`
 - [x] A non-editor's roll is made in simulate mode and records nothing - `test_server_rolls.py::test_a_non_editor_rolls_on_the_server_without_changing_anything`
 - [x] A 3rd Dan raise on a server-made roll shows at once, is applied by the server (pool and recorded total), and survives a reload - `test_server_rolls.py::test_a_raise_on_a_server_roll_is_applied_by_the_server`
+- [x] Lucky rerolls a server-made roll on the server: the sheet shows the server's dice and total, the pair banner appears, and Lucky stays spent after a reload - `test_server_rolls.py::test_lucky_rerolls_on_the_server_and_the_sheet_shows_its_dice`
+- [x] A refused reroll shows its error in the result modal and leaves the dice, total and the Lucky button as they were - `test_server_rolls.py::test_a_refused_reroll_says_so_and_changes_nothing`
+- [x] Togashi 4th Dan reroll on a server-made roll takes the new (lower) result, keeps the one history row, and shows the discarded original - `test_server_rolls.py::test_togashi_4th_dan_reroll_is_one_server_roll`
+- [x] PCP reroll-10s explodes only an Impaired server roll's 10s, and the server spends the PCP - `test_pcp.py::test_reroll_tens_explodes_only_the_tens`
 
 ---
 

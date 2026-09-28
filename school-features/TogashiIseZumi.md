@@ -62,6 +62,7 @@
 - Reroll is now implemented.
   - Server: `app/routes/pages.py` passes `togashi_reroll_contested: true` in school_abilities.
   - Client: shows "Reroll (Togashi 4th Dan)" button after any roll result. Uses the same reroll mechanism as Lucky (saves previous result, compares).
+  - Server-made rolls (server-rolls-design Phase 4): the button posts `togashi_4th` to `POST /characters/{id}/roll/{session}/act` (`roll_sessions._togashi_4th`). The server rerolls the whole roll, the new result stands, every raise / Conviction already taken carries over (GM ruling S3), and it stays ONE roll with one history row. Refused on initiative, damage, etiquette, heraldry, parry and after Lucky. Tests: `tests/test_roll_sessions.py::test_togashi_4th_dan_*`, `tests/e2e/test_server_rolls.py::test_togashi_4th_dan_reroll_is_one_server_roll`.
 
 **Questions (ANSWERED):**
 - Despite the rules text saying "any Ring", the Togashi should always use Void for their 4th Dan raise (same as their school ring). The standard 4th Dan behavior is correct for this school.

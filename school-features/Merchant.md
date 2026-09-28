@@ -13,6 +13,7 @@
 
 **Status:** Fully implemented.
 - Server: `app/routes/pages.py` passes `merchant_post_roll_vp: true`. Client: after any non-initiative roll, shows VP spending buttons. Each VP adds +1k1 and the roll is re-executed with the additional dice.
+- Server-made rolls (server-rolls-design Phase 4): each click posts `merchant_vp` to the roll session's `act` endpoint (`roll_sessions._merchant_vp`). The server draws the point (school consequences included), adds one die (or +2 past 10k10) and rescores. The per-roll void cap counts every point on the roll, pre-roll ones included.
 
 **Implementation:** `app/game_data.py` (definition), `app/routes/pages.py` (merchant_post_roll_vp flag), `app/templates/character/sheet.html` (post-roll VP buttons).
 
@@ -85,3 +86,4 @@
 - Server gating: `merchant_5th_dan_reroll` flag in `app/routes/pages.py` when `school == "merchant"` and `dan >= 5`.
 - Client: `merchant5thStart` / `merchant5thToggle` / `merchant5thConfirm` on the dice roller in `app/templates/character/sheet.html`. Users select dice via the post-roll selection UI; the confirm button is disabled until the selected-sum constraint is satisfied. Delta is displayed as a bullet ("+N from Merchant 5th Dan reroll").
 - Interacts with the Merchant Special (post-roll VP spending) in any order; both operate on the same pool and share the `merchant_5th_dan_used` flag for once-per-roll enforcement.
+- Server-made rolls (Phase 4): `merchant_5th` with the chosen dice's `values` (dice of one value are interchangeable); `roll_sessions._merchant_5th` checks the sum rule and once-per-roll, rerolls those dice and records the delta. Tests: `tests/test_roll_sessions.py::test_merchant_5th_dan_rerolls_chosen_dice`.

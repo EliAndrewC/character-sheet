@@ -1,6 +1,6 @@
 # Server-side Rolls and State Changes - Design
 
-Status: **Phases 1-3 done; Phase 4 in progress (server rerolls built, sheet wiring next).** Decisions S1-S7 in section 8.
+Status: **Phases 1-4 done; Phase 5 next.** Decisions S1-S7 in section 8.
 
 ## 1. Goal
 
@@ -201,10 +201,18 @@ removes the old ones.
       "togashi or courtier or mirumoto or priest"`
 
 ### Phase 4 - Rerolls
-- [ ] One reroll primitive (whole roll, chosen dice, explode 10s, add a die) and the shared lock
-- [ ] Lucky, PCP (reroll / free raise / reroll 10s), Merchant (business, 5th Dan, +1k1), the Priest
-      ritual, Togashi 4th Dan, Hida 3rd Dan, Wave Man W5 (per 5.1, 5.2)
-- [ ] Clicktests: `test_pcp.py`, `test_rolls.py -k lucky`, `test_school_abilities.py -k
+- [x] One reroll primitive (whole roll, chosen dice, explode 10s, add a die) and the shared lock:
+      `REROLLS` in `roll_sessions.py`, scored by `roll_engine.score_roll` exactly as a first roll is.
+      Every reroll keeps the actions already taken (S3); Lucky / PCP / business share one lock and keep
+      the higher total, recorded as `payload.lucky`
+- [x] Lucky, PCP (reroll / free raise / reroll 10s; the PCP spend is `services/pcp.py`, shared with
+      `/spend-pcp`), Merchant (business, 5th Dan, +1k1 - its cap now counts the roll's pre-roll void
+      too), the Priest ritual (self or a visible party priest), Togashi 4th Dan (one roll, one history
+      row, keeps its bonuses - settles 5.1), Wave Man W5 (applied by `roll_dice` on every whole
+      reroll). **Hida 3rd Dan moves to Phase 7**: it rerolls attack dice only, and the attack is still
+      rolled in the browser until then (5.2 is settled there). The combat windows' Lucky / PCP rerolls
+      likewise move with their windows (Phases 6-9)
+- [x] Clicktests: `test_pcp.py`, `test_rolls.py -k lucky`, `test_school_abilities.py -k
       "merchant or hida or togashi"`, `test_professions.py -k "merchant or wave"`
 
 ### Phase 5 - Initiative and rounds
@@ -223,6 +231,8 @@ removes the old ones.
 ### Phase 7 - Attack and damage
 - [ ] The attack modal's situational inputs as the roll's choices; banked-bonus consumption;
       Isawa trade; Mantis postures; W1; Matsu near miss; Doji; Kakita phases
+- [ ] The attack window's rerolls on the session: Lucky / PCP (reroll, free raise, reroll 10s),
+      Hida 3rd Dan chosen-dice reroll keeping every bonus (S3, settles 5.2)
 - [ ] Damage through `combat_math.damage_pool` (one assembler, per 5.8), Otaku 5th Dan trade,
       Hiruma post-parry, Mantis accumulators
 - [ ] Clicktests: `test_attack_modal.py`, `test_school_abilities.py -k "<school>"` per school

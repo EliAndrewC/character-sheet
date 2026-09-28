@@ -236,8 +236,10 @@
             // Server-made rolls (server-rolls-design): the pending request
             // (kept for Retry), its session, and the error Retry answers.
             rollError: '',
+            rerollError: '',
             _serverRollRequest: null,
             _serverSessionId: null,
+            _serverDice: null,
             _serverSessionMode: null,
             title: '',
             formula: null,
@@ -473,6 +475,14 @@
             // restored) state is what gets stored / pasted-as-image.
             useLucky() {
                 if (!this.canUseLucky()) return;
+                if (this._onServerRoll()) {
+                    this.luckyUsedThisRoll = true;
+                    this._rerollSource = 'lucky';
+                    this._serverReroll('lucky_reroll', {}, true).then(d => {
+                        if (!d) this.luckyUsedThisRoll = false;
+                    });
+                    return;
+                }
                 const t = window._trackingBridge;
                 t.setToggle('lucky_used', true);
                 this.luckyUsedThisRoll = true;
@@ -537,6 +547,14 @@
 
             useBusinessReroll() {
                 if (!this.canUseBusinessReroll()) return;
+                if (this._onServerRoll()) {
+                    this.merchantRerollUsedThisRoll = true;
+                    this._rerollSource = 'merchant';
+                    this._serverReroll('merchant_reroll', {}, true).then(d => {
+                        if (!d) this.merchantRerollUsedThisRoll = false;
+                    });
+                    return;
+                }
                 const opt = this.businessRerollVoidOption();
                 if (!opt) return;
                 // deductVoidPoints already early-returns for a non-editor, so
@@ -623,8 +641,11 @@
                 // effect callback - spendPcp itself updates the void points.
                 this.pcpConfirm = { open: false, use: null, onAccept: null };
                 try {
-                    if (cb) await cb();
-                    await t.spendPcp(use);
+                    // On a roll the server made, the action itself spends
+                    // the PCP (and answers with it); only a browser-rolled
+                    // window posts /spend-pcp afterwards.
+                    const r = cb ? await cb() : null;
+                    if (!(r && r.server)) await t.spendPcp(use);
                 } finally {
                     this.pcpSpending = false;
                 }
@@ -641,7 +662,7 @@
                 this.openPcpConfirm('reroll', async () => {
                     this.pcpRerollUsedThisRoll = true;
                     this._rerollSource = 'pcp';
-                    await coreFn();
+                    return await coreFn();
                 });
             },
             _pcpFreeRaise(flow) {
@@ -804,10 +825,44 @@
                 };
             },
             // ---- Generic (done) panel ----
-            requestPcpReroll() { this._pcpReroll(() => this._performGenericReroll()); },
-            requestPcpRaise() { this._pcpFreeRaise(this._pcpFlowGeneric()); },
+            requestPcpReroll() {
+                if (this._onServerRoll()) {
+                    this._pcpReroll(async () => {
+                        const d = await this._serverReroll('pcp_reroll', {}, true);
+                        if (!d) this.pcpRerollUsedThisRoll = false;
+                        return {server: true};
+                    });
+                    return;
+                }
+                this._pcpReroll(() => this._performGenericReroll());
+            },
+            requestPcpRaise() {
+                if (this._onServerRoll()) {
+                    if ((this.pcpRaisesSpentThisRoll || 0) >= 1) return;
+                    this.openPcpConfirm('free_raise', async () => {
+                        this.pcpRaisesSpentThisRoll++;
+                        this.baseTotal += 5;
+                        if (!(await this._act('pcp_free_raise'))) {
+                            this.pcpRaisesSpentThisRoll--;
+                            this.baseTotal -= 5;
+                        }
+                        return {server: true};
+                    });
+                    return;
+                }
+                this._pcpFreeRaise(this._pcpFlowGeneric());
+            },
             requestPcpRerollTens() {
                 if (!this.canPcpRerollTens()) return;
+                if (this._onServerRoll()) {
+                    this.openPcpConfirm('reroll_tens', async () => {
+                        this.pcpTensRerolledThisRoll = true;
+                        const d = await this._serverReroll('pcp_reroll_tens', {}, false);
+                        if (!d) this.pcpTensRerolledThisRoll = false;
+                        return {server: true};
+                    });
+                    return;
+                }
                 this._pcpRerollTens(this._pcpFlowGeneric());
             },
             // ---- Attack panel ----
@@ -1994,7 +2049,8 @@
                 const wMax = this.voidSpendConfig.worldliness_max || 0;
                 const wAvail = wMax > 0 ? Math.max(0, wMax - (t.getCount('worldliness') || 0)) : 0;
                 const poolAvail = (t.tempVoidPoints || 0) + (t.voidPoints || 0) + wAvail;
-                const spentThisRoll = this.formula?.merchant_vp_spent || 0;
+                const spentThisRoll = this._serverSessionId
+                    ? (this.formula?.void_spent || 0) : (this.formula?.merchant_vp_spent || 0);
                 const capRemaining = (this.voidSpendConfig.cap || 0) - spentThisRoll;
                 return poolAvail > 0 && capRemaining > 0;
             },
@@ -2031,6 +2087,14 @@
 
             async merchant5thConfirm() {
                 if (!this.merchant5thCanConfirm()) return;
+                if (this._onServerRoll()) {
+                    const values = this.merchant5thSelections.map(i => this.finalDice[i]?.value);
+                    this.merchant5thPhase = 'rerolling';
+                    await this._serverReroll('merchant_5th', {values: values}, false);
+                    this.merchant5thPhase = 'idle';
+                    this.merchant5thSelections = [];
+                    return;
+                }
                 const selected = [...this.merchant5thSelections].sort((a, b) => a - b);
                 const oldKeptSum = this.keptSum;
                 // Reconstitute the pool with parts preserved (finalDice drops the
@@ -2085,6 +2149,10 @@
             async merchantSpendOneVp() {
                 const t = window._trackingBridge;
                 if (!t || !this.merchantVpStillAvailable()) return;
+                if (this._onServerRoll()) {
+                    await this._serverReroll('merchant_vp', {}, false);
+                    return;
+                }
                 // Pick source in priority order: temp > regular > worldliness
                 let opt;
                 if ((t.tempVoidPoints || 0) > 0) {
@@ -2498,6 +2566,7 @@
                 this.owHoverRow = null;
                 this.parryHoverRow = null;
                 this._serverSessionId = null;
+                this.rerollError = '';
                 // Reset the copy-as-image state so the button hides while
                 // the animation runs and reappears once the new render
                 // lands. ``_rollImageReqId`` is bumped here so any
@@ -2665,6 +2734,7 @@
                 const t = window._trackingBridge;
                 this.phase = 'rolling';
                 this.rollError = '';
+                this.rerollError = '';
                 if (!req || !t || !t._charId) {
                     this.phase = 'error';
                     this.rollError = 'This roll could not be made.';
@@ -2699,6 +2769,7 @@
                     : `${this.formula.rolled}k${this.formula.kept}`;
                 this._serverSessionId = data.session_id;
                 this._serverSessionMode = data.mode;
+                this._serverDice = data.dice;
                 await this.runRoll({serverDice: data.dice, historyId: data.history_id});
             },
 
@@ -4062,11 +4133,108 @@
                 } catch (e) {
                     if (t._showOpError) t._showOpError('Could not reach the server - that was not applied.');
                 }
-                if (data && data.tracking && t.canEdit && this._serverSessionMode === 'live') {
+                this._adoptActAnswer(data);
+                return ok;
+            },
+            // What every act answer carries for the sheet: the persisted
+            // tracking state (live rolls only - a simulated roll leaves the
+            // sheet anchored) and any PCP the action spent.
+            _adoptActAnswer(data) {
+                const t = window._trackingBridge;
+                if (!data || !t) return;
+                if (data.tracking && t.canEdit && this._serverSessionMode === 'live') {
                     t.adoptServerState(data.tracking, false);
                     this.advRaisesConfig.used = t.getCount('adventure_raises') || 0;
                 }
-                return ok;
+                if (data.pcp && t._adoptPcp) t._adoptPcp(data.pcp);
+            },
+            // A reroll on the server-made roll in the result panel (Phase 4):
+            // the server rolls the new dice and rescores the roll, keeping
+            // every bonus already taken (S3). ``whole``: animate every die
+            // (a full reroll) rather than just the ones that changed.
+            // Resolves to the answer, or null when refused (with the error
+            // shown and nothing changed).
+            async _serverReroll(action, args, whole) {
+                const t = window._trackingBridge;
+                if (!this._serverSessionId || !t) return null;
+                const before = this._serverDice || [];
+                this.rerollError = '';
+                this.phase = 'rolling';
+                let data = null;
+                try {
+                    const resp = await fetch('/characters/' + t._charId + '/roll/' + this._serverSessionId + '/act', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({action: action, args: args || {}}),
+                    });
+                    data = await resp.json().catch(() => null);
+                    if (!resp.ok) {
+                        this.rerollError = (data && data.error) || 'That reroll could not be made.';
+                        this._adoptActAnswer(data);
+                        this.phase = 'done';
+                        return null;
+                    }
+                } catch (e) {
+                    this.rerollError = 'Could not reach the server - nothing was rerolled.';
+                    this.phase = 'done';
+                    return null;
+                }
+                this._adoptActAnswer(data);
+                const fresh = whole ? data.dice : data.dice.filter(
+                    (d, i) => i >= before.length || JSON.stringify(d.parts) !== JSON.stringify(before[i].parts));
+                if (fresh.length) {
+                    const playSound = this.prefs.dice_sound_enabled && window.L7RDice
+                        ? (n) => window.L7RDice.playDiceSound(n) : null;
+                    await window.L7RDice.animateDice(
+                        fresh, !!data.formula.reroll_tens, this.prefs.dice_animation_enabled, playSound);
+                }
+                this._adoptServerResult(data);
+                this.phase = 'done';
+                this._prerenderRollImage(this._buildRollImagePayload());
+                this._patchRollHistoryNow();
+                return data;
+            },
+            // Show the session's dice and total as the server scored them.
+            _adoptServerResult(data) {
+                this._serverDice = data.dice;
+                this.formula = { ...this.formula, ...data.formula };
+                const p = data.payload || {};
+                const cell = c => ({ value: c.parts.reduce((a, b) => a + b, 0), parts: c.parts });
+                this.keptDice = (p.kept || []).map(cell);
+                this.unkeptDice = (p.dropped || []).map(cell);
+                this.finalDice = this.unkeptDice.map(d => ({ value: d.value, kept: false }))
+                    .concat(this.keptDice.map(d => ({ value: d.value, kept: true })));
+                this.keptSum = p.kept_sum || 0;
+                const all = this.finalDice.map(d => d.value).sort((a, b) => a - b);
+                this.shosuroLowest3Bonus = (this.schoolAbilities.shosuro_add_lowest_3 && !this.formula.is_initiative)
+                    ? all.slice(0, 3).reduce((a, b) => a + b, 0) : 0;
+                // Priest 5th Dan ally conviction is not on the session yet
+                // (it moves with the attack window, Phase 7); carry it over.
+                this.baseTotal = data.total + this.totalPriestAllySpentThisRoll();
+                this.formulaText = this.formula.flat > 0
+                    ? `${this.formula.rolled}k${this.formula.kept} + ${this.formula.flat}`
+                    : `${this.formula.rolled}k${this.formula.kept}`;
+                if (p.lucky) {
+                    this.luckyRollPair = p.lucky;
+                    this.luckyOriginalWasHigher = p.lucky.kept === 'original';
+                }
+                if (p.togashi_original_total !== undefined) {
+                    this.togashiOrigTotal = p.togashi_original_total;
+                }
+            },
+            // Togashi Ise Zumi 4th Dan: reroll a contested roll; the new
+            // result stands.
+            useTogashiReroll() {
+                if (this._onServerRoll()) {
+                    this.togashiRerollUsed = true;
+                    this._serverReroll('togashi_4th', {}, true).then(d => {
+                        if (!d) this.togashiRerollUsed = false;
+                    });
+                    return;
+                }
+                this.togashiOrigTotal = this.baseTotal;
+                this.togashiRerollUsed = true;
+                this.runRoll();
             },
             // The session-less flows (attack, wound check, duel - still rolled in
             // the browser) spend their pools through a tracking operation.
@@ -6879,6 +7047,10 @@
                 // spends (raises, Conviction, Mirumoto round points, etc.)
                 // made before clicking the button carry through unchanged.
                 if (!this.formula || this.formula.no_reroll_reason !== 'impaired') return;
+                if (this._onServerRoll()) {
+                    await this._serverReroll('priest_ritual', {priest_id: priest.priest_id}, false);
+                    return;
+                }
                 // Rebuild the parts-preserving pool from kept + unkept
                 // (finalDice drops the exploded-parts array).
                 const pool = [...(this.unkeptDice || []), ...(this.keptDice || [])]

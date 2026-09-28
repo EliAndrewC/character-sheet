@@ -442,17 +442,27 @@
                         });
                         if (!resp.ok) return false;
                         const data = await resp.json();
-                        this.pcpXpRemaining -= (data.pcp_total_cost - prevCost);
-                        this.pcpCount = data.pcp_count;
+                        this._adoptPcp(data, prevCost);
                         if (use === 'void_refresh') {
                             this.voidPoints = data.current_void_points;
                         }
                         // The refresh moved the tracking revision server-side;
                         // this tab made the change, so it has seen it.
                         if (typeof data.tracking_rev === 'number') this._rev = data.tracking_rev;
-                        window.dispatchEvent(new CustomEvent('pcp-spent', { detail: data }));
                         return true;
                     } catch (e) { return false; }
+                },
+                // A PCP the server spent (``/spend-pcp``, or a PCP reroll /
+                // free raise on a roll the server made): the count, the XP
+                // left, and the XP Summary's live figures.
+                _adoptPcp(data, prevCost) {
+                    if (prevCost === undefined) {
+                        prevCost = window.L7RRollMath
+                            ? window.L7RRollMath.pcpTotalCost(this.pcpCount) : 0;
+                    }
+                    this.pcpXpRemaining -= (data.pcp_total_cost - prevCost);
+                    this.pcpCount = data.pcp_count;
+                    window.dispatchEvent(new CustomEvent('pcp-spent', { detail: data }));
                 },
 
                 setActionDice(dice) {

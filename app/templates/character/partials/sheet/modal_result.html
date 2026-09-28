@@ -32,6 +32,11 @@
 
                 {# Result panel (visible when phase === 'done') #}
                 <div x-show="phase === 'done'" x-cloak class="space-y-3">
+                    {# A reroll the server refused (or could not be reached for):
+                       nothing changed, the roll stands as shown. #}
+                    <div x-show="rerollError" x-cloak data-testid="reroll-error"
+                         class="bg-red-50 border border-red-300 rounded p-2 text-xs text-red-800"
+                         x-text="rerollError"></div>
                     {# Formula header (e.g. "10k7 + 11") #}
                     <div class="text-base font-mono font-bold text-ink/80" x-text="formulaText"></div>
 
@@ -697,7 +702,8 @@
                     <div x-show="phase === 'done' && schoolAbilities.togashi_reroll_contested && !luckyUsedThisRoll && !togashiRerollUsed && !formula?.is_initiative && !formula?.is_damage_roll && currentRollKey !== 'skill:etiquette' && currentRollKey !== 'skill:heraldry' && currentRollKey !== 'parry' && currentRollKey !== 'athletics:parry'" x-cloak
                          class="bg-accent/5 border border-accent/20 rounded p-2 text-sm">
                         <button type="button"
-                                @click="togashiOrigTotal = baseTotal; togashiRerollUsed = true; runRoll()"
+                                data-action="togashi-4th-reroll"
+                                @click="useTogashiReroll()"
                                 class="btn-primary px-3 py-1 rounded text-xs">
                             Reroll (Togashi 4th Dan) <span class="text-xs text-parchment/80">(only if contested)</span>
                         </button>
@@ -962,7 +968,7 @@
                     </div>
 
                     <div x-show="phase === 'done'" x-cloak class="flex justify-end flex-wrap gap-2 pt-2">
-                        <button x-show="canUseLucky()" x-cloak type="button" @click="useLucky()"
+                        <button x-show="canUseLucky()" x-cloak type="button" @click="useLucky()" data-action="use-lucky"
                                 class="btn-gold px-4 py-2 rounded text-sm font-medium">
                             Use Lucky to reroll
                         </button>
